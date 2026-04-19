@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
 import requests, base64, os, calendar, logging
+import stripe
+from slugify import slugify
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
@@ -17,6 +19,7 @@ app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = {"pool_pre_ping": True}
 db = SQLAlchemy(app)
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # ── Models ───────────────────────────────────────────────────
 class Store(db.Model):
@@ -32,6 +35,8 @@ class Store(db.Model):
     stripe_subscription_id = db.Column(db.String(60), default="")
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    trial_ends_at = db.Column(db.DateTime, nullable=True)
+    grace_ends_at = db.Column(db.DateTime, nullable=True)
 
 class User(db.Model):
     __tablename__ = "user"
