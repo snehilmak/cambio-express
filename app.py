@@ -321,7 +321,13 @@ def simplefin_claim_token(token_raw,store_id):
         return False,f"Connection error: {str(e)}"
 
 # ── Login ────────────────────────────────────────────────────
-@app.route("/",methods=["GET","POST"])
+@app.route("/")
+def landing():
+    if "user_id" in session:
+        return redirect(url_for("dashboard"))
+    return "Landing page coming soon", 200
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_id" in session: return redirect(url_for("dashboard"))
     error=None
