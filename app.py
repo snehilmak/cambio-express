@@ -261,6 +261,29 @@ def superadmin_required(f):
         return f(*a,**k)
     return d
 
+# ── Trial Status ─────────────────────────────────────────────
+def get_trial_status(store):
+    """Return trial status string for the given store.
+
+    Returns: "exempt" | "active" | "expiring_soon" | "grace" | "expired"
+    """
+    if store is None:
+        return "exempt"
+    if store.plan in ("basic", "pro"):
+        return "exempt"
+    if store.plan == "inactive":
+        return "expired"
+    if store.trial_ends_at is None:
+        return "exempt"
+    now = datetime.utcnow()
+    if now >= store.grace_ends_at:
+        return "expired"
+    if now >= store.trial_ends_at:
+        return "grace"
+    if now >= store.trial_ends_at - timedelta(days=3):
+        return "expiring_soon"
+    return "active"
+
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
     """Returns store_id or None. Routes needing a store should call this."""
