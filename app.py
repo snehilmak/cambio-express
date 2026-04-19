@@ -744,8 +744,9 @@ def init_db():
             a.set_password(os.environ.get("ADMIN_PASSWORD","cambio2025!")); db.session.add(a); db.session.commit()
             print("✅ Demo store admin: admin / cambio2025!")
 
+init_db()
+
 if __name__=="__main__":
-    init_db()
     port=int(os.environ.get("PORT",5000))
     print(f"🚀 Cambio Express → http://0.0.0.0:{port}")
     app.run(host="0.0.0.0",port=port,debug=False)
