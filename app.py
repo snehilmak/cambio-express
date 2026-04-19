@@ -234,11 +234,22 @@ class SimpleFINConfig(db.Model):
 def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
 def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
 
+_TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout"}
+
 def login_required(f):
     @wraps(f)
-    def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("login"))
-        return f(*a,**k)
+    def d(*a, **k):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        user = current_user()
+        if user and user.role != "superadmin" and f.__name__ not in _TRIAL_EXEMPT:
+            store = current_store()
+            if store and get_trial_status(store) == "expired":
+                try:
+                    return redirect(url_for("subscribe"))
+                except Exception:
+                    return redirect("/subscribe")
+        return f(*a, **k)
     return d
 
 def admin_required(f):
@@ -283,6 +294,22 @@ def get_trial_status(store):
     if now >= store.trial_ends_at - timedelta(days=3):
         return "expiring_soon"
     return "active"
+
+@app.context_processor
+def inject_trial_context():
+    """Inject trial_status and trial_days_left into every template."""
+    user = current_user()
+    if not user:
+        return {"trial_status": "exempt", "trial_days_left": 0}
+    if user.role == "superadmin":
+        return {"trial_status": "exempt", "trial_days_left": 0}
+    store = current_store()
+    status = get_trial_status(store)
+    days_left = 0
+    if store and store.trial_ends_at:
+        delta = store.trial_ends_at - datetime.utcnow()
+        days_left = max(0, delta.days)
+    return {"trial_status": status, "trial_days_left": days_left}
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
