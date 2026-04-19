@@ -210,6 +210,36 @@ Note: update `get_trial_status` to treat `store.plan == "inactive"` as `"expired
 
 ---
 
+## Dependencies
+
+Add to `requirements.txt`:
+```
+stripe==9.12.0
+python-slugify==8.0.4
+```
+
+Add to `app.py` imports section:
+```python
+import stripe
+from slugify import slugify
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
+```
+
+---
+
+## Database Migration
+
+`app.py` uses `db.create_all()` which does **not** add columns to existing tables. The two new `Store` columns (`trial_ends_at`, `grace_ends_at`) must be added manually for any existing Render PostgreSQL database:
+
+```sql
+ALTER TABLE store ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP;
+ALTER TABLE store ADD COLUMN IF NOT EXISTS grace_ends_at TIMESTAMP;
+```
+
+Run these via the Render PostgreSQL console before deploying. New deployments on a fresh database will work automatically via `db.create_all()`.
+
+---
+
 ## Environment Variables Required
 
 | Variable | Purpose |
