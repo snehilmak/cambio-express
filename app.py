@@ -245,10 +245,7 @@ def login_required(f):
         if user and user.role != "superadmin" and f.__name__ not in _TRIAL_EXEMPT:
             store = current_store()
             if store and get_trial_status(store) == "expired":
-                try:
-                    return redirect(url_for("subscribe"))
-                except Exception:
-                    return redirect("/subscribe")
+                return redirect(url_for("subscribe"))
         return f(*a, **k)
     return d
 
@@ -393,6 +390,11 @@ def login():
 @app.route("/logout")
 def logout():
     session.clear(); return redirect(url_for("login"))
+
+@app.route("/subscribe")
+@login_required
+def subscribe():
+    return "Subscription page coming soon", 200
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
