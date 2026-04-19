@@ -387,6 +387,60 @@ def login():
         error="Invalid username or password."
     return render_template("login.html",error=error)
 
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    if "user_id" in session and request.method == "GET":
+        return redirect(url_for("dashboard"))
+    errors = {}
+    form = {}
+    if request.method == "POST":
+        store_name = request.form.get("store_name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        phone = request.form.get("phone", "").strip()
+        form = {"store_name": store_name, "email": email, "phone": phone}
+
+        if not store_name:
+            errors["store_name"] = "Store name is required."
+        if not email:
+            errors["email"] = "Email is required."
+        if not password:
+            errors["password"] = "Password is required."
+        elif len(password) < 8:
+            errors["password"] = "Password must be at least 8 characters."
+
+        if not errors:
+            existing = User.query.filter_by(username=email).filter(
+                User.store_id.isnot(None)).first()
+            if existing:
+                errors["email"] = "An account with this email already exists."
+
+        if not errors:
+            slug_base = slugify(store_name)
+            slug = slug_base
+            counter = 1
+            while Store.query.filter_by(slug=slug).first():
+                slug = f"{slug_base}-{counter}"
+                counter += 1
+            s = Store(name=store_name, slug=slug, email=email,
+                      phone=phone, plan="trial")
+            db.session.add(s)
+            db.session.flush()
+            s.trial_ends_at = datetime.utcnow() + timedelta(days=7)
+            s.grace_ends_at = s.trial_ends_at + timedelta(days=4)
+            u = User(store_id=s.id, username=email,
+                     full_name=store_name, role="admin")
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+            session["user_id"] = u.id
+            session["role"] = u.role
+            session["store_id"] = s.id
+            flash("Welcome! Your 7-day free trial has started.", "success")
+            return redirect(url_for("dashboard"))
+
+    return render_template("signup.html", errors=errors, form=form)
+
 @app.route("/logout")
 def logout():
     session.clear(); return redirect(url_for("login"))
