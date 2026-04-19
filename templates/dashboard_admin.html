@@ -1,0 +1,161 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Cambio Express{% endblock %}
+{% block page_title %}Admin Dashboard{% endblock %}
+{% block content %}
+
+<div class="stats-grid">
+  <div class="stat-card" style="--accent:#3b82f6;">
+    <div class="stat-label">Total Transfers</div>
+    <div class="stat-value">{{ total_transfers }}</div>
+    <div class="stat-sub">All time</div>
+  </div>
+  <div class="stat-card" style="--accent:#16a34a;">
+    <div class="stat-label">Today's Transfers</div>
+    <div class="stat-value">{{ today_transfers }}</div>
+    <div class="stat-sub">{{ today.strftime('%b %d, %Y') }}</div>
+  </div>
+  <div class="stat-card" style="--accent:{% if pending_ach > 0 %}#dc2626{% else %}#16a34a{% endif %};">
+    <div class="stat-label">Unreconciled ACH</div>
+    <div class="stat-value">{{ pending_ach }}</div>
+    <div class="stat-sub">{% if pending_ach > 0 %}Needs attention{% else %}All clear{% endif %}</div>
+  </div>
+  <div class="stat-card" style="--accent:{% if today_report %}#16a34a{% else %}#ea580c{% endif %};">
+    <div class="stat-label">Today's Daily Book</div>
+    <div class="stat-value" style="font-size:18px;margin-top:10px;">
+      {% if today_report %}✅ Entered{% else %}⚠️ Pending{% endif %}
+    </div>
+    <div class="stat-sub">
+      <a href="{{ url_for('daily_report', ds=today.isoformat()) }}" style="color:var(--sky);">
+        {% if today_report %}Edit report{% else %}Enter now →{% endif %}
+      </a>
+    </div>
+  </div>
+  <div class="stat-card" style="--accent:#c9973a;">
+    <div class="stat-label">SimpleFIN</div>
+    <div class="stat-value" style="font-size:18px;margin-top:10px;">
+      {% if cfg and cfg.access_url %}🟢 Connected{% else %}🔴 Not set{% endif %}
+    </div>
+    <div class="stat-sub">{% if cfg and cfg.last_synced %}Last sync: {{ cfg.last_synced.strftime('%m/%d %I:%M%p') }}{% else %}—{% endif %}</div>
+  </div>
+  {% if month_report %}
+  <div class="stat-card" style="--accent:{% if month_report.net_income >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+    <div class="stat-label">Net Income ({{ today.strftime('%b') }})</div>
+    <div class="stat-value" style="font-size:22px;">${{ '{:,.0f}'.format(month_report.net_income) }}</div>
+    <div class="stat-sub"><a href="{{ url_for('monthly_report', year=today.year, month=today.month) }}" style="color:var(--sky);">View P&L →</a></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Company Stats -->
+<div class="section-title">This Month by Company</div>
+<div class="grid-3 mb-3">
+  {% for co, stats in company_stats.items() %}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title co-{{ co.lower().replace(' ','') }}">{{ co }}</span>
+      <span class="badge badge-navy">{{ stats.count }} transfers</span>
+    </div>
+    <div class="card-body">
+      <div style="font-family:'DM Serif Display',serif; font-size:26px; color:var(--navy);">
+        ${{ '{:,.2f}'.format(stats.total) }}
+      </div>
+      <div class="text-sm text-muted mt-1">Fees: ${{ '{:,.2f}'.format(stats.fees) }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="grid-2">
+  <!-- Recent Transfers -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Recent Transfers</span>
+      <a href="{{ url_for('transfers') }}" class="btn btn-outline btn-sm">View All</a>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Sender</th><th>Co.</th><th>Amount</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          {% for t in recent_transfers %}
+          <tr>
+            <td class="mono text-sm">{{ t.send_date.strftime('%m/%d') }}</td>
+            <td>{{ t.sender_name }}</td>
+            <td><span class="co-{{ t.company.lower() }}">{{ t.company[:5] }}</span></td>
+            <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
+            <td>
+              {% set sc = {'Sent':'green','Pending':'yellow','Canceled':'red','Rejected':'red','Refunded':'orange','Re-Transferred':'orange'} %}
+              <span class="badge badge-{{ sc.get(t.status,'gray') }}">{{ t.status }}</span>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:24px;">No transfers yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ACH Batches + Bank -->
+  <div style="display:flex;flex-direction:column;gap:20px;">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Recent ACH Batches</span>
+        <a href="{{ url_for('batches') }}" class="btn btn-outline btn-sm">View All</a>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Date</th><th>Co.</th><th>ACH Amt</th><th>Variance</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for b in recent_batches %}
+            <tr>
+              <td class="mono text-sm">{{ b.ach_date.strftime('%m/%d') }}</td>
+              <td><span class="co-{{ b.company.lower() }}">{{ b.company[:5] }}</span></td>
+              <td class="mono">${{ '{:,.2f}'.format(b.ach_amount) }}</td>
+              <td class="{% if b.variance == 0 %}var-ok{% else %}var-bad{% endif %}">
+                {% if b.variance == 0 %}✓ $0{% else %}${{ '{:,.2f}'.format(b.variance) }}{% endif %}
+              </td>
+              <td>
+                {% set bc = {'Cleared':'green','Pending':'yellow','Disputed':'red','Returned':'red','Partial':'orange'} %}
+                <span class="badge badge-{{ bc.get(b.status,'gray') }}">{{ b.status }}</span>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:20px;">No batches yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Bank snapshot -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🏦 Bank Accounts</span>
+        <a href="{{ url_for('bank') }}" class="btn btn-outline btn-sm">Full View</a>
+      </div>
+      <div class="card-body">
+        {% if bank_data %}
+          {% for acct in bank_data.get('accounts', [])[:3] %}
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray2);">
+            <div>
+              <div style="font-weight:600;font-size:14px;">{{ acct.get('name','Account') }}</div>
+              <div class="text-sm text-muted">{{ acct.get('org',{}).get('name','') }}</div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--navy);">
+              ${{ '{:,.2f}'.format(acct.get('balance', 0)) }}
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="text-sm text-muted">{{ bank_error }}</div>
+          <a href="{{ url_for('bank') }}" class="btn btn-primary btn-sm mt-2" style="margin-top:14px;">Configure SimpleFIN</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

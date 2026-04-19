@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Batch {{ batch.batch_ref }} — Cambio Express{% endblock %}
+{% block page_title %}Batch Detail{% endblock %}
+{% block content %}
+
+<div class="grid-2 mb-3">
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">{{ batch.company }} — {{ batch.batch_ref }}</span>
+      <a href="{{ url_for('edit_batch', bid=batch.id) }}" class="btn btn-outline btn-sm">Edit</a>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div><div class="text-sm text-muted mb-1">ACH Date</div><strong>{{ batch.ach_date.strftime('%m/%d/%Y') }}</strong></div>
+        <div><div class="text-sm text-muted mb-1">Dates Covered</div><strong>{{ batch.transfer_dates or '—' }}</strong></div>
+        <div>
+          <div class="text-sm text-muted mb-1">Bank Debit</div>
+          <strong class="mono" style="font-size:18px;">${{ '{:,.2f}'.format(batch.ach_amount) }}</strong>
+        </div>
+        <div>
+          <div class="text-sm text-muted mb-1">Transfers Total</div>
+          <strong class="mono" style="font-size:18px;">${{ '{:,.2f}'.format(batch.transfers_total) }}</strong>
+        </div>
+        <div>
+          <div class="text-sm text-muted mb-1">Variance</div>
+          {% set var = batch.variance %}
+          <strong class="{% if var == 0 %}var-ok{% else %}var-bad{% endif %}" style="font-size:18px;">
+            {% if var == 0 %}✓ $0.00{% else %}⚠ ${{ '{:,.2f}'.format(var) }}{% endif %}
+          </strong>
+        </div>
+        <div>
+          <div class="text-sm text-muted mb-1">Status</div>
+          {% set bc = {'Cleared':'green','Pending':'yellow','Disputed':'red','Returned':'red','Partial':'orange'} %}
+          <span class="badge badge-{{ bc.get(batch.status,'gray') }}" style="font-size:13px;">{{ batch.status }}</span>
+          {% if batch.reconciled %}<span class="badge badge-green" style="font-size:13px;margin-left:6px;">✓ Reconciled</span>{% endif %}
+        </div>
+      </div>
+      {% if batch.notes %}<div class="mt-2 text-sm text-muted">{{ batch.notes }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><span class="card-title">Reconciliation Summary</span></div>
+    <div class="card-body">
+      {% set var = batch.variance %}
+      {% if var == 0 %}
+      <div style="text-align:center;padding:20px;">
+        <div style="font-size:40px;">✅</div>
+        <div style="font-size:16px;font-weight:600;color:var(--green);margin-top:8px;">Perfectly Matched</div>
+        <div class="text-sm text-muted mt-1">Bank debit equals logged transfers</div>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:20px;">
+        <div style="font-size:40px;">⚠️</div>
+        <div style="font-size:16px;font-weight:600;color:var(--red);margin-top:8px;">Variance: ${{ '{:,.2f}'.format(var) }}</div>
+        <div class="text-sm text-muted mt-1">Check for missing or mismatched transfers</div>
+      </div>
+      {% endif %}
+      <div style="margin-top:12px;padding:14px;background:var(--gray1);border-radius:8px;">
+        <div class="flex justify-between mb-1"><span class="text-sm">Bank Debit</span><span class="mono">${{ '{:,.2f}'.format(batch.ach_amount) }}</span></div>
+        <div class="flex justify-between mb-1"><span class="text-sm">Logged Transfers</span><span class="mono">${{ '{:,.2f}'.format(batch.transfers_total) }}</span></div>
+        <div class="flex justify-between" style="border-top:1px solid var(--gray2);padding-top:8px;margin-top:4px;">
+          <span class="text-sm fw-600">Difference</span>
+          <span class="mono {% if var == 0 %}var-ok{% else %}var-bad{% endif %}">${{ '{:,.2f}'.format(var) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ transfers|length }} Transfer{{ 's' if transfers|length != 1 }} in This Batch</span>
+    <a href="{{ url_for('new_transfer') }}" class="btn btn-outline btn-sm">＋ Add Transfer</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Sender</th><th>Amount</th><th>Fee</th><th>Recipient</th><th>Country</th><th>Confirm #</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for t in transfers %}
+        <tr>
+          <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
+          <td><strong>{{ t.sender_name }}</strong></td>
+          <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
+          <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
+          <td>{{ t.recipient_name }}</td>
+          <td>{{ t.country }}</td>
+          <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>
+          <td>
+            {% set sc = {'Sent':'green','Pending':'yellow','Canceled':'red','Rejected':'red','Refunded':'orange','Re-Transferred':'orange'} %}
+            <span class="badge badge-{{ sc.get(t.status,'gray') }}">{{ t.status }}</span>
+          </td>
+          <td><a href="{{ url_for('edit_transfer', tid=t.id) }}" class="btn btn-outline btn-sm">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray4);">
+          No transfers linked to this batch yet. Set the Batch ID on transfer entries to link them.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div style="margin-top:16px;"><a href="{{ url_for('batches') }}" class="btn btn-outline">← Back to Batches</a></div>
+{% endblock %}

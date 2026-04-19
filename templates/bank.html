@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Bank — Cambio Express{% endblock %}
+{% block page_title %}Bank & SimpleFIN{% endblock %}
+{% block content %}
+
+<!-- SimpleFIN config -->
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">SimpleFIN Connection</span>
+    {% if cfg and cfg.access_url %}
+    <span class="badge badge-green">🟢 Connected</span>
+    {% else %}
+    <span class="badge badge-red">🔴 Not Connected</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if cfg and cfg.access_url %}
+    <div class="text-sm text-muted mb-2">
+      Access URL configured.
+      {% if cfg.last_synced %}Last synced: {{ cfg.last_synced.strftime('%m/%d/%Y %I:%M %p') }}{% endif %}
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;">
+      <button onclick="refreshBank()" class="btn btn-primary btn-sm">🔄 Refresh Data</button>
+      <span class="text-sm text-muted">or update your access URL below</span>
+    </div>
+    {% endif %}
+
+    <div class="section-title" style="margin-top:20px;">
+      {{ 'Update SimpleFIN Token / URL' if (cfg and cfg.access_url) else 'Connect SimpleFIN' }}
+    </div>
+    <form method="POST" action="{{ url_for('bank_setup') }}" style="max-width:600px;">
+      <div class="field mb-2">
+        <label>SimpleFIN Setup Token or Access URL</label>
+        <input type="text" name="token"
+          placeholder="Paste your SimpleFIN Bridge token (base64) or access URL (https://…)">
+      </div>
+      <div class="text-sm text-muted mb-2">
+        Get your token at <strong>https://beta-bridge.simplefin.org</strong> → "Add Data Connection" → copy the Setup Token.
+        If you've already claimed it, paste the full access URL instead.
+      </div>
+      <button type="submit" class="btn btn-gold">Connect SimpleFIN</button>
+    </form>
+  </div>
+</div>
+
+<!-- Bank accounts -->
+{% if bank_data %}
+<div class="section-title">Live Account Balances</div>
+<div class="grid-3 mb-3">
+  {% for acct in bank_data.get('accounts', []) %}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title" style="font-size:14px;">{{ acct.get('name', 'Account') }}</span>
+    </div>
+    <div class="card-body">
+      <div class="text-sm text-muted mb-1">{{ acct.get('org', {}).get('name', '') }}</div>
+      <div style="font-family:'DM Serif Display',serif;font-size:28px;color:var(--navy);margin:8px 0;">
+        ${{ '{:,.2f}'.format(acct.get('balance', 0)) }}
+      </div>
+      {% if acct.get('balance-date') %}
+      <div class="text-sm text-muted">As of: {{ acct['balance-date'] }}</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Transactions -->
+{% for acct in bank_data.get('accounts', []) %}
+{% if acct.get('transactions') %}
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">{{ acct.get('name') }} — Recent Transactions</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Date</th><th>Description</th><th>Amount</th><th>Type</th></tr>
+      </thead>
+      <tbody>
+        {% for tx in acct['transactions'][:30] %}
+        {% set amt = tx.get('amount', 0) | float %}
+        <tr>
+          <td class="mono text-sm">{{ tx.get('transacted_at', tx.get('posted', ''))[:10] }}</td>
+          <td>{{ tx.get('description', tx.get('memo', '—')) }}</td>
+          <td class="mono {% if amt >= 0 %}amount-pos{% else %}amount-neg{% endif %}">
+            {{ '+' if amt >= 0 else '' }}${{ '{:,.2f}'.format(amt|abs) }}
+          </td>
+          <td>
+            {% set desc = tx.get('description','') | lower %}
+            {% if 'intermex' in desc %}<span class="badge badge-blue">Intermex</span>
+            {% elif 'maxi' in desc %}<span class="badge badge-navy">Maxi</span>
+            {% elif 'barri' in desc %}<span class="badge badge-blue">Barri</span>
+            {% elif amt < 0 %}<span class="badge badge-red">Debit</span>
+            {% else %}<span class="badge badge-green">Credit</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% elif bank_error %}
+<div class="card">
+  <div class="card-body" style="text-align:center;padding:48px;">
+    <div style="font-size:36px;margin-bottom:16px;">🏦</div>
+    <div style="font-weight:600;font-size:16px;margin-bottom:8px;">{{ bank_error }}</div>
+    <div class="text-sm text-muted">Configure your SimpleFIN connection above to see live bank data.</div>
+  </div>
+</div>
+{% endif %}
+
+<div id="refresh-status" style="display:none;" class="flash flash-success mt-2">Bank data refreshed!</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+async function refreshBank() {
+  const btn = document.querySelector('[onclick="refreshBank()"]');
+  btn.textContent = '⏳ Refreshing…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/bank/refresh');
+    if (r.ok) {
+      document.getElementById('refresh-status').style.display = 'block';
+      setTimeout(() => location.reload(), 1000);
+    } else {
+      const d = await r.json();
+      alert('Error: ' + d.error);
+    }
+  } catch(e) { alert('Network error'); }
+  finally { btn.disabled = false; btn.textContent = '🔄 Refresh Data'; }
+}
+</script>
+{% endblock %}

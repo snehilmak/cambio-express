@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}All Stores{% endblock %}
+{% block page_title %}Store Management{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-3">
+  <div class="text-sm text-muted">Manage all business subscriptions.</div>
+  <a href="{{ url_for('superadmin_new_store') }}" class="btn btn-primary">＋ Add Store</a>
+</div>
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Slug</th><th>Plan</th><th>Email</th><th>Status</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for s in stores %}
+        <tr>
+          <td><strong>{{ s.name }}</strong></td>
+          <td class="mono text-sm">{{ s.slug }}</td>
+          <td><span class="badge badge-{% if s.plan=='pro' %}navy{% elif s.plan=='basic' %}blue{% else %}yellow{% endif %}">{{ s.plan|title }}</span></td>
+          <td>{{ s.email or '—' }}</td>
+          <td>{% if s.is_active %}<span class="badge badge-green">Active</span>{% else %}<span class="badge badge-red">Inactive</span>{% endif %}</td>
+          <td class="mono text-sm">{{ s.created_at.strftime('%m/%d/%Y') }}</td>
+          <td><a href="{{ url_for('superadmin_impersonate', store_id=s.id) }}" class="btn btn-outline btn-sm">Enter Store</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" style="text-align:center;padding:32px;color:var(--gray4);">No stores yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

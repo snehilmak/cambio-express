@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Daily Book — {{ month_name }} {{ year }}{% endblock %}
+{% block page_title %}Daily Book{% endblock %}
+{% block content %}
+
+<!-- Month navigator -->
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+  <a href="{{ url_for('daily_list', month=prev_month, year=prev_year) }}" class="btn btn-outline btn-sm">← Prev</a>
+  <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--navy);">
+    {{ month_name }} {{ year }}
+  </div>
+  <a href="{{ url_for('daily_list', month=next_month, year=next_year) }}" class="btn btn-outline btn-sm">Next →</a>
+  <a href="{{ url_for('daily_list', month=today.month, year=today.year) }}" class="btn btn-outline btn-sm" style="margin-left:8px;">Today</a>
+  {% if month_report %}
+    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-gold btn-sm" style="margin-left:auto;">📊 Monthly P&L</a>
+  {% else %}
+    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-outline btn-sm" style="margin-left:auto;">📊 Start Monthly P&L</a>
+  {% endif %}
+</div>
+
+<!-- Monthly summary strip -->
+{% if month_report %}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+  <div class="stat-card" style="--accent:#16a34a;">
+    <div class="stat-label">Total Revenue</div>
+    <div class="stat-value" style="font-size:22px;">${{ '{:,.2f}'.format(month_report.total_revenue) }}</div>
+  </div>
+  <div class="stat-card" style="--accent:#dc2626;">
+    <div class="stat-label">Total Expenses</div>
+    <div class="stat-value" style="font-size:22px;">${{ '{:,.2f}'.format(month_report.total_expenses + month_report.total_purchases) }}</div>
+  </div>
+  <div class="stat-card" style="--accent:{% if month_report.net_income >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+    <div class="stat-label">Net Income</div>
+    <div class="stat-value" style="font-size:22px;">${{ '{:,.2f}'.format(month_report.net_income) }}</div>
+  </div>
+  <div class="stat-card" style="--accent:#c9973a;">
+    <div class="stat-label">Over / Short</div>
+    <div class="stat-value" style="font-size:22px;">${{ '{:,.2f}'.format(month_report.over_short) }}</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Day grid -->
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;">
+  {% for day_num in range(1, days+1) %}
+    {% set report = reports.get(day_num) %}
+    {% set ds = '%04d-%02d-%02d'|format(year, month, day_num) %}
+    {% set is_today = (today.year == year and today.month == month and today.day == day_num) %}
+    <a href="{{ url_for('daily_report', ds=ds) }}"
+       style="text-decoration:none;display:block;padding:14px;border-radius:10px;
+              border:2px solid {% if is_today %}var(--gold){% elif report %}var(--gray2){% else %}var(--gray2){% endif %};
+              background:{% if is_today %}#fffbeb{% elif report %}var(--white){% else %}var(--gray1){% endif %};
+              transition:all 0.15s;position:relative;"
+       onmouseover="this.style.borderColor='var(--sky)';this.style.background='#eff6ff'"
+       onmouseout="this.style.borderColor='{% if is_today %}var(--gold){% elif report %}var(--gray2){% else %}var(--gray2){% endif %}';
+                  this.style.background='{% if is_today %}#fffbeb{% elif report %}var(--white){% else %}var(--gray1){% endif %}'">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <span style="font-weight:700;font-size:16px;color:{% if is_today %}var(--gold){% else %}var(--navy){% endif %};">
+          {{ day_num }}
+        </span>
+        {% if report %}
+          <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:block;margin-top:3px;"></span>
+        {% endif %}
+      </div>
+      {% if report %}
+        <div style="margin-top:8px;">
+          <div style="font-size:11px;color:var(--gray4);margin-bottom:2px;">Receipts</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--green);">
+            ${{ '{:,.0f}'.format(report.total_receipts) }}
+          </div>
+          <div style="font-size:11px;color:var(--gray4);margin-top:4px;margin-bottom:2px;">Disbursed</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--red);">
+            ${{ '{:,.0f}'.format(report.total_disbursements) }}
+          </div>
+          {% if report.over_short != 0 %}
+          <div style="margin-top:4px;">
+            <span style="font-size:10px;padding:2px 6px;border-radius:4px;
+              background:{% if report.over_short > 0 %}#dcfce7{% else %}#fee2e2{% endif %};
+              color:{% if report.over_short > 0 %}var(--green){% else %}var(--red){% endif %};font-weight:600;">
+              {{ 'Over' if report.over_short > 0 else 'Short' }} ${{ '{:,.0f}'.format(report.over_short|abs) }}
+            </span>
+          </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div style="margin-top:10px;font-size:11px;color:var(--gray3);">
+          {% if day_num <= today.day or month < today.month or year < today.year %}
+            Click to enter
+          {% else %}
+            —
+          {% endif %}
+        </div>
+      {% endif %}
+    </a>
+  {% endfor %}
+</div>
+
+<div style="margin-top:20px;display:flex;align-items:center;gap:20px;font-size:12px;color:var(--gray4);">
+  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:5px;"></span>Report entered</span>
+  <span style="border:2px solid var(--gold);padding:2px 8px;border-radius:6px;color:var(--gold);">Today</span>
+  <span style="border:2px solid var(--gray2);padding:2px 8px;border-radius:6px;background:var(--gray1);">No entry</span>
+</div>
+{% endblock %}

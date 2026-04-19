@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}ACH Batches — Cambio Express{% endblock %}
+{% block page_title %}ACH Batch Reconciliation{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-3">
+  <div class="text-sm text-muted">Log each ACH debit from your bank. Variance turns green when your transfer log matches exactly.</div>
+  <a href="{{ url_for('new_batch') }}" class="btn btn-primary">＋ Log ACH Batch</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ACH Date</th><th>Company</th><th>Batch Ref</th>
+          <th>Bank Debit ($)</th><th>Transfers ($)</th><th>Variance</th>
+          <th># Transfers</th><th>Dates Covered</th><th>Status</th><th>Reconciled</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in batches %}
+        {% set var = b.variance %}
+        <tr>
+          <td class="mono text-sm">{{ b.ach_date.strftime('%m/%d/%Y') }}</td>
+          <td><span class="co-{{ b.company.lower() }}">{{ b.company }}</span></td>
+          <td class="mono text-sm">{{ b.batch_ref }}</td>
+          <td class="mono">${{ '{:,.2f}'.format(b.ach_amount) }}</td>
+          <td class="mono">${{ '{:,.2f}'.format(b.transfers_total) }}</td>
+          <td class="{% if var == 0 %}var-ok{% else %}var-bad{% endif %}">
+            {% if var == 0 %}✓ $0.00{% else %}${{ '{:,.2f}'.format(var) }}{% endif %}
+          </td>
+          <td style="text-align:center;">{{ b.transfer_count }}</td>
+          <td class="text-sm">{{ b.transfer_dates or '—' }}</td>
+          <td>
+            {% set bc = {'Cleared':'green','Pending':'yellow','Disputed':'red','Returned':'red','Partial':'orange'} %}
+            <span class="badge badge-{{ bc.get(b.status,'gray') }}">{{ b.status }}</span>
+          </td>
+          <td>
+            {% if b.reconciled %}
+            <span class="badge badge-green">✓ Yes</span>
+            {% else %}
+            <span class="badge badge-red">No</span>
+            {% endif %}
+          </td>
+          <td style="display:flex;gap:6px;padding:8px 16px;">
+            <a href="{{ url_for('batch_transfers', bid=b.id) }}" class="btn btn-outline btn-sm">Transfers</a>
+            <a href="{{ url_for('edit_batch', bid=b.id) }}" class="btn btn-outline btn-sm">Edit</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray4);">No ACH batches logged yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,736 @@
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, date
+from functools import wraps
+from calendar import monthrange
+import requests, base64, os, calendar, logging
+
+logging.basicConfig(level=logging.INFO)
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "cambio-dev-secret-change-in-prod")
+
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///cambio.db")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = {"pool_pre_ping": True}
+db = SQLAlchemy(app)
+
+# ── Models ───────────────────────────────────────────────────
+class Store(db.Model):
+    __tablename__ = "store"
+    id            = db.Column(db.Integer, primary_key=True)
+    name          = db.Column(db.String(120), nullable=False)
+    slug          = db.Column(db.String(60), unique=True, nullable=False)
+    email         = db.Column(db.String(120), default="")
+    phone         = db.Column(db.String(40), default="")
+    address       = db.Column(db.String(255), default="")
+    plan          = db.Column(db.String(30), default="trial")
+    stripe_customer_id     = db.Column(db.String(60), default="")
+    stripe_subscription_id = db.Column(db.String(60), default="")
+    is_active     = db.Column(db.Boolean, default=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+class User(db.Model):
+    __tablename__ = "user"
+    id            = db.Column(db.Integer, primary_key=True)
+    store_id      = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=True)
+    username      = db.Column(db.String(80), nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+    role          = db.Column(db.String(20), default="employee")
+    full_name     = db.Column(db.String(120), default="")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active     = db.Column(db.Boolean, default=True)
+    __table_args__ = (db.UniqueConstraint("store_id","username"),)
+    def set_password(self,pw): self.password_hash=generate_password_hash(pw)
+    def check_password(self,pw): return check_password_hash(self.password_hash,pw)
+
+class Transfer(db.Model):
+    __tablename__ = "transfer"
+    id             = db.Column(db.Integer, primary_key=True)
+    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    created_by     = db.Column(db.Integer, db.ForeignKey("user.id"))
+    send_date      = db.Column(db.Date, nullable=False)
+    company        = db.Column(db.String(30), nullable=False)
+    sender_name    = db.Column(db.String(120), nullable=False)
+    send_amount    = db.Column(db.Float, nullable=False)
+    fee            = db.Column(db.Float, default=0.0)
+    commission     = db.Column(db.Float, default=0.0)
+    recipient_name = db.Column(db.String(120), default="")
+    country        = db.Column(db.String(60), default="")
+    recipient_phone= db.Column(db.String(40), default="")
+    confirm_number = db.Column(db.String(60), default="")
+    status         = db.Column(db.String(30), default="Sent")
+    status_notes   = db.Column(db.String(255), default="")
+    batch_id       = db.Column(db.String(60), default="")
+    internal_notes = db.Column(db.String(255), default="")
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    creator        = db.relationship("User", foreign_keys=[created_by])
+    @property
+    def total_collected(self): return self.send_amount + self.fee
+
+class ACHBatch(db.Model):
+    __tablename__ = "ach_batch"
+    id             = db.Column(db.Integer, primary_key=True)
+    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    ach_date       = db.Column(db.Date, nullable=False)
+    company        = db.Column(db.String(30), nullable=False)
+    batch_ref      = db.Column(db.String(60), nullable=False)
+    ach_amount     = db.Column(db.Float, nullable=False)
+    transfer_dates = db.Column(db.String(60), default="")
+    status         = db.Column(db.String(30), default="Pending")
+    reconciled     = db.Column(db.Boolean, default=False)
+    notes          = db.Column(db.String(255), default="")
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("store_id","batch_ref"),)
+    @property
+    def transfers_total(self):
+        v=db.session.query(db.func.sum(Transfer.send_amount)).filter_by(store_id=self.store_id,batch_id=self.batch_ref).scalar()
+        return v or 0.0
+    @property
+    def variance(self): return round(self.ach_amount-self.transfers_total,2)
+    @property
+    def transfer_count(self): return Transfer.query.filter_by(store_id=self.store_id,batch_id=self.batch_ref).count()
+
+class DailyReport(db.Model):
+    __tablename__ = "daily_report"
+    id                    = db.Column(db.Integer, primary_key=True)
+    store_id              = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    report_date           = db.Column(db.Date, nullable=False)
+    taxable_sales         = db.Column(db.Float, default=0.0)
+    non_taxable           = db.Column(db.Float, default=0.0)
+    sales_tax             = db.Column(db.Float, default=0.0)
+    bill_payment_charge   = db.Column(db.Float, default=0.0)
+    phone_recargas        = db.Column(db.Float, default=0.0)
+    boost_mobile          = db.Column(db.Float, default=0.0)
+    money_transfer        = db.Column(db.Float, default=0.0)
+    money_order           = db.Column(db.Float, default=0.0)
+    check_cashing_fees    = db.Column(db.Float, default=0.0)
+    return_check_hold_fees= db.Column(db.Float, default=0.0)
+    return_check_paid_back= db.Column(db.Float, default=0.0)
+    forward_balance       = db.Column(db.Float, default=0.0)
+    from_bank             = db.Column(db.Float, default=0.0)
+    other_cash_in         = db.Column(db.Float, default=0.0)
+    rebates_commissions   = db.Column(db.Float, default=0.0)
+    cash_purchases        = db.Column(db.Float, default=0.0)
+    cash_expense          = db.Column(db.Float, default=0.0)
+    check_purchases       = db.Column(db.Float, default=0.0)
+    check_expense         = db.Column(db.Float, default=0.0)
+    outside_cash_drops    = db.Column(db.Float, default=0.0)
+    cash_deposit          = db.Column(db.Float, default=0.0)
+    checks_deposit        = db.Column(db.Float, default=0.0)
+    safe_balance          = db.Column(db.Float, default=0.0)
+    payroll_expense       = db.Column(db.Float, default=0.0)
+    other_cash_out        = db.Column(db.Float, default=0.0)
+    over_short            = db.Column(db.Float, default=0.0)
+    notes                 = db.Column(db.Text, default="")
+    updated_at            = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("store_id","report_date"),)
+    @property
+    def total_receipts(self):
+        return sum([self.taxable_sales,self.non_taxable,self.sales_tax,self.bill_payment_charge,
+            self.phone_recargas,self.boost_mobile,self.money_transfer,self.money_order,
+            self.check_cashing_fees,self.return_check_hold_fees,self.return_check_paid_back,
+            self.forward_balance,self.from_bank,self.other_cash_in,self.rebates_commissions])
+    @property
+    def total_disbursements(self):
+        return sum([self.cash_purchases,self.cash_expense,self.check_purchases,self.check_expense,
+            self.outside_cash_drops,self.cash_deposit,self.checks_deposit,
+            self.payroll_expense,self.other_cash_out])
+
+class MoneyTransferSummary(db.Model):
+    __tablename__ = "mt_summary"
+    id          = db.Column(db.Integer, primary_key=True)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    report_date = db.Column(db.Date, nullable=False)
+    company     = db.Column(db.String(40), nullable=False)
+    amount      = db.Column(db.Float, default=0.0)
+    fees        = db.Column(db.Float, default=0.0)
+    commission  = db.Column(db.Float, default=0.0)
+    __table_args__ = (db.UniqueConstraint("store_id","report_date","company"),)
+    @property
+    def individual_total(self): return self.amount+self.fees+self.commission
+
+class MonthlyFinancial(db.Model):
+    __tablename__ = "monthly_financial"
+    id                    = db.Column(db.Integer, primary_key=True)
+    store_id              = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    year                  = db.Column(db.Integer, nullable=False)
+    month                 = db.Column(db.Integer, nullable=False)
+    taxable_sales         = db.Column(db.Float, default=0.0)
+    non_taxable           = db.Column(db.Float, default=0.0)
+    bill_payment_charge   = db.Column(db.Float, default=0.0)
+    phone_recargas        = db.Column(db.Float, default=0.0)
+    boost_mobile          = db.Column(db.Float, default=0.0)
+    check_cashing_fees    = db.Column(db.Float, default=0.0)
+    return_check_hold_fees= db.Column(db.Float, default=0.0)
+    rebates_commissions   = db.Column(db.Float, default=0.0)
+    mt_commission_in_bank = db.Column(db.Float, default=0.0)
+    other_income_1        = db.Column(db.Float, default=0.0)
+    other_income_2        = db.Column(db.Float, default=0.0)
+    other_income_3        = db.Column(db.Float, default=0.0)
+    cash_purchases        = db.Column(db.Float, default=0.0)
+    check_purchases       = db.Column(db.Float, default=0.0)
+    cash_expenses         = db.Column(db.Float, default=0.0)
+    check_expenses        = db.Column(db.Float, default=0.0)
+    cash_payroll          = db.Column(db.Float, default=0.0)
+    bank_charges_210      = db.Column(db.Float, default=0.0)
+    bank_charges_230      = db.Column(db.Float, default=0.0)
+    credit_card_fees      = db.Column(db.Float, default=0.0)
+    money_order_rent      = db.Column(db.Float, default=0.0)
+    emaginenet_tech       = db.Column(db.Float, default=0.0)
+    irs_payroll_tax       = db.Column(db.Float, default=0.0)
+    texas_workforce       = db.Column(db.Float, default=0.0)
+    other_taxes           = db.Column(db.Float, default=0.0)
+    accounting_charges    = db.Column(db.Float, default=0.0)
+    return_check_gl       = db.Column(db.Float, default=0.0)
+    other_expense_1       = db.Column(db.Float, default=0.0)
+    other_expense_2       = db.Column(db.Float, default=0.0)
+    other_expense_3       = db.Column(db.Float, default=0.0)
+    other_expense_4       = db.Column(db.Float, default=0.0)
+    other_expense_5       = db.Column(db.Float, default=0.0)
+    over_short            = db.Column(db.Float, default=0.0)
+    borrowed_money_return = db.Column(db.Float, default=0.0)
+    profit_distributed    = db.Column(db.Float, default=0.0)
+    cash_carry_forward    = db.Column(db.Float, default=0.0)
+    notes                 = db.Column(db.Text, default="")
+    updated_at            = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("store_id","year","month"),)
+    @property
+    def total_revenue(self):
+        return sum([self.taxable_sales,self.non_taxable,self.bill_payment_charge,
+            self.phone_recargas,self.boost_mobile,self.check_cashing_fees,
+            self.return_check_hold_fees,self.rebates_commissions,self.mt_commission_in_bank,
+            self.other_income_1,self.other_income_2,self.other_income_3])
+    @property
+    def total_purchases(self): return self.cash_purchases+self.check_purchases
+    @property
+    def total_expenses(self):
+        return sum([self.cash_expenses,self.check_expenses,self.cash_payroll,
+            self.bank_charges_210,self.bank_charges_230,self.credit_card_fees,
+            self.money_order_rent,self.emaginenet_tech,self.irs_payroll_tax,
+            self.texas_workforce,self.other_taxes,self.accounting_charges,
+            self.return_check_gl,self.other_expense_1,self.other_expense_2,
+            self.other_expense_3,self.other_expense_4,self.other_expense_5])
+    @property
+    def net_income(self): return self.total_revenue-self.total_purchases-self.total_expenses+self.over_short
+
+class SimpleFINConfig(db.Model):
+    __tablename__ = "simplefin_config"
+    id          = db.Column(db.Integer, primary_key=True)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), unique=True, nullable=False)
+    access_url  = db.Column(db.String(500), default="")
+    last_synced = db.Column(db.DateTime, nullable=True)
+
+# ── Auth ─────────────────────────────────────────────────────
+def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
+def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
+
+def login_required(f):
+    @wraps(f)
+    def d(*a,**k):
+        if "user_id" not in session: return redirect(url_for("login"))
+        return f(*a,**k)
+    return d
+
+def admin_required(f):
+    @wraps(f)
+    def d(*a,**k):
+        if "user_id" not in session: return redirect(url_for("login"))
+        u=current_user()
+        if not u or u.role not in ("admin","superadmin"):
+            flash("Admin access required.","error"); return redirect(url_for("dashboard"))
+        return f(*a,**k)
+    return d
+
+def superadmin_required(f):
+    @wraps(f)
+    def d(*a,**k):
+        if "user_id" not in session: return redirect(url_for("login"))
+        u=current_user()
+        if not u or u.role!="superadmin":
+            flash("Superadmin access required.","error"); return redirect(url_for("dashboard"))
+        return f(*a,**k)
+    return d
+
+# ── SimpleFIN (FIXED) ────────────────────────────────────────
+def get_sfin_cfg(store_id):
+    return SimpleFINConfig.query.filter_by(store_id=store_id).first()
+
+def simplefin_fetch(store_id):
+    cfg=get_sfin_cfg(store_id)
+    if not cfg or not cfg.access_url: return None,"SimpleFIN not configured."
+    try:
+        url=cfg.access_url.rstrip("/")
+        if not url.endswith("/accounts"): url+="/accounts"
+        r=requests.get(url,timeout=20)
+        r.raise_for_status(); data=r.json()
+        cfg.last_synced=datetime.utcnow(); db.session.commit()
+        return data,None
+    except requests.exceptions.ConnectionError: return None,"Cannot connect to SimpleFIN. Check internet."
+    except requests.exceptions.Timeout: return None,"SimpleFIN timed out. Try again."
+    except requests.exceptions.HTTPError as e:
+        code=e.response.status_code
+        if code==403: return None,"SimpleFIN access denied. Your URL may be expired — generate a new token."
+        return None,f"SimpleFIN error {code}. Try reconnecting."
+    except Exception as e:
+        app.logger.error(f"SimpleFIN: {e}"); return None,f"Error: {str(e)}"
+
+def simplefin_claim_token(token_raw,store_id):
+    token_raw=token_raw.strip()
+    # Direct access URL
+    if token_raw.startswith("https://"):
+        cfg=get_sfin_cfg(store_id) or SimpleFINConfig(store_id=store_id)
+        cfg.access_url=token_raw; db.session.add(cfg); db.session.commit()
+        return True,"Access URL saved. Testing connection..."
+    # Base64 setup token
+    try:
+        clean=token_raw.replace(" ","").replace("\n","").replace("\r","")
+        pad=4-len(clean)%4
+        if pad!=4: clean+="="*pad
+        claim_url=base64.b64decode(clean).decode("utf-8").strip()
+    except Exception as e:
+        return False,f"Invalid token — make sure you copied it completely. ({e})"
+    if not claim_url.startswith("https://"):
+        return False,"Token decoded to an unexpected value. Generate a fresh token from SimpleFIN."
+    try:
+        r=requests.post(claim_url,timeout=20)
+        if r.status_code==403: return False,"This token was already used. Generate a new one at simplefin.org."
+        r.raise_for_status()
+        access_url=r.text.strip()
+        if not access_url.startswith("https://"):
+            return False,"SimpleFIN returned unexpected data. Try a new token."
+        cfg=get_sfin_cfg(store_id) or SimpleFINConfig(store_id=store_id)
+        cfg.access_url=access_url; db.session.add(cfg); db.session.commit()
+        return True,"SimpleFIN connected successfully!"
+    except requests.exceptions.HTTPError as e:
+        return False,f"SimpleFIN claim failed ({e.response.status_code}). Token may be expired."
+    except Exception as e:
+        return False,f"Connection error: {str(e)}"
+
+# ── Login ────────────────────────────────────────────────────
+@app.route("/",methods=["GET","POST"])
+def login():
+    if "user_id" in session: return redirect(url_for("dashboard"))
+    error=None
+    if request.method=="POST":
+        username=request.form.get("username","").strip()
+        u=User.query.filter_by(username=username).first()
+        if u and u.is_active and u.check_password(request.form.get("password","")):
+            session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
+            return redirect(url_for("dashboard"))
+        error="Invalid username or password."
+    return render_template("login.html",error=error)
+
+@app.route("/logout")
+def logout():
+    session.clear(); return redirect(url_for("login"))
+
+# ── Dashboard ────────────────────────────────────────────────
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    user=current_user(); store=current_store(); today=date.today()
+    month_start=date(today.year,today.month,1)
+    if user.role=="superadmin":
+        stores=Store.query.order_by(Store.created_at.desc()).all()
+        return render_template("dashboard_superadmin.html",user=user,stores=stores,today=today)
+    sid=store.id
+    if user.role=="admin":
+        total_transfers=Transfer.query.filter_by(store_id=sid).count()
+        today_transfers=Transfer.query.filter_by(store_id=sid,send_date=today).count()
+        pending_ach=ACHBatch.query.filter_by(store_id=sid,reconciled=False).count()
+        recent_transfers=Transfer.query.filter_by(store_id=sid).order_by(Transfer.created_at.desc()).limit(8).all()
+        recent_batches=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).limit(5).all()
+        company_stats={}
+        for co in ["Intermex","Maxi","Barri"]:
+            rows=Transfer.query.filter(Transfer.store_id==sid,Transfer.company==co,
+                Transfer.send_date>=month_start,Transfer.status.notin_(["Canceled","Rejected"])).all()
+            company_stats[co]={"count":len(rows),"total":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows)}
+        today_report=DailyReport.query.filter_by(store_id=sid,report_date=today).first()
+        month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=today.year,month=today.month).first()
+        cfg=get_sfin_cfg(sid)
+        bank_data,bank_error=simplefin_fetch(sid) if (cfg and cfg.access_url) else (None,None)
+        return render_template("dashboard_admin.html",user=user,store=store,today=today,
+            total_transfers=total_transfers,today_transfers=today_transfers,
+            pending_ach=pending_ach,recent_transfers=recent_transfers,recent_batches=recent_batches,
+            company_stats=company_stats,today_report=today_report,month_report=month_report,
+            bank_data=bank_data,bank_error=bank_error,cfg=cfg)
+    else:
+        my_today=Transfer.query.filter_by(store_id=sid,created_by=user.id,send_date=today).order_by(Transfer.created_at.desc()).all()
+        my_total=Transfer.query.filter_by(store_id=sid,created_by=user.id).count()
+        my_month=Transfer.query.filter(Transfer.store_id==sid,Transfer.created_by==user.id,Transfer.send_date>=month_start).count()
+        return render_template("dashboard_employee.html",user=user,store=store,today=today,
+            my_today=my_today,my_total=my_total,my_month=my_month)
+
+# ── Transfers ────────────────────────────────────────────────
+@app.route("/transfers")
+@login_required
+def transfers():
+    user=current_user(); sid=session["store_id"]
+    q=Transfer.query.filter_by(store_id=sid)
+    if user.role=="employee": q=q.filter_by(created_by=user.id)
+    company=request.args.get("company",""); status=request.args.get("status","")
+    date_from=request.args.get("date_from",""); date_to=request.args.get("date_to","")
+    if company: q=q.filter_by(company=company)
+    if status:  q=q.filter_by(status=status)
+    if date_from:
+        try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
+        except: pass
+    if date_to:
+        try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
+        except: pass
+    rows=q.order_by(Transfer.send_date.desc(),Transfer.created_at.desc()).all()
+    return render_template("transfers.html",user=user,transfers=rows,
+        company=company,status=status,date_from=date_from,date_to=date_to)
+
+@app.route("/transfers/new",methods=["GET","POST"])
+@login_required
+def new_transfer():
+    user=current_user(); sid=session["store_id"]
+    if request.method=="POST":
+        t=Transfer(store_id=sid,created_by=user.id,
+            send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
+            company=request.form["company"],sender_name=request.form["sender_name"],
+            send_amount=float(request.form.get("send_amount") or 0),
+            fee=float(request.form.get("fee") or 0),
+            commission=float(request.form.get("commission") or 0),
+            recipient_name=request.form.get("recipient_name",""),
+            country=request.form.get("country",""),
+            recipient_phone=request.form.get("recipient_phone",""),
+            confirm_number=request.form.get("confirm_number",""),
+            status=request.form.get("status","Sent"),
+            status_notes=request.form.get("status_notes",""),
+            batch_id=request.form.get("batch_id",""),
+            internal_notes=request.form.get("internal_notes",""))
+        db.session.add(t); db.session.commit()
+        flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
+    return render_template("transfer_form.html",user=user,transfer=None,today=date.today().isoformat())
+
+@app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
+@login_required
+def edit_transfer(tid):
+    user=current_user(); sid=session["store_id"]
+    t=Transfer.query.filter_by(id=tid,store_id=sid).first_or_404()
+    if user.role=="employee" and t.created_by!=user.id:
+        flash("Access denied.","error"); return redirect(url_for("transfers"))
+    if request.method=="POST":
+        t.send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date()
+        t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
+        t.send_amount=float(request.form.get("send_amount") or 0)
+        t.fee=float(request.form.get("fee") or 0)
+        t.commission=float(request.form.get("commission") or 0)
+        t.recipient_name=request.form.get("recipient_name","")
+        t.country=request.form.get("country","")
+        t.recipient_phone=request.form.get("recipient_phone","")
+        t.confirm_number=request.form.get("confirm_number","")
+        t.status=request.form.get("status","Sent")
+        t.status_notes=request.form.get("status_notes","")
+        t.batch_id=request.form.get("batch_id","")
+        t.internal_notes=request.form.get("internal_notes","")
+        t.updated_at=datetime.utcnow()
+        db.session.commit(); flash("Transfer updated.","success")
+        return redirect(url_for("transfers"))
+    return render_template("transfer_form.html",user=user,transfer=t,today=date.today().isoformat())
+
+# ── Daily Book ───────────────────────────────────────────────
+DAILY_COMPANIES=["Barri","Boost Rev.","Inter Cambio","Intermex","Maxi Transfer","Sigue","Vigo"]
+
+@app.route("/daily")
+@admin_required
+def daily_list():
+    user=current_user(); sid=session["store_id"]; today=date.today()
+    month=int(request.args.get("month",today.month)); year=int(request.args.get("year",today.year))
+    days_in_month=monthrange(year,month)[1]
+    reports={r.report_date.day:r for r in DailyReport.query.filter(
+        DailyReport.store_id==sid,
+        db.extract("year",DailyReport.report_date)==year,
+        db.extract("month",DailyReport.report_date)==month).all()}
+    month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=year,month=month).first()
+    prev_month=month-1 if month>1 else 12; prev_year=year if month>1 else year-1
+    next_month=month+1 if month<12 else 1; next_year=year if month<12 else year+1
+    return render_template("daily_list.html",user=user,year=year,month=month,
+        days=days_in_month,reports=reports,month_report=month_report,today=today,
+        month_name=calendar.month_name[month],
+        prev_month=prev_month,prev_year=prev_year,next_month=next_month,next_year=next_year)
+
+@app.route("/daily/<string:ds>",methods=["GET","POST"])
+@admin_required
+def daily_report(ds):
+    user=current_user(); sid=session["store_id"]
+    try: report_date=datetime.strptime(ds,"%Y-%m-%d").date()
+    except: flash("Invalid date.","error"); return redirect(url_for("daily_list"))
+    report=DailyReport.query.filter_by(store_id=sid,report_date=report_date).first()
+    mt_rows={r.company:r for r in MoneyTransferSummary.query.filter_by(store_id=sid,report_date=report_date).all()}
+    auto_mt={}
+    for co in ["Intermex","Maxi","Barri"]:
+        rows=Transfer.query.filter(Transfer.store_id==sid,Transfer.company==co,
+            Transfer.send_date==report_date,Transfer.status.notin_(["Canceled","Rejected"])).all()
+        auto_mt[co]={"amount":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows),
+                     "commission":sum(r.commission for r in rows),"count":len(rows)}
+    if request.method=="POST":
+        if not report: report=DailyReport(store_id=sid,report_date=report_date); db.session.add(report)
+        def fv(k): return float(request.form.get(k) or 0)
+        for field in ["taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
+            "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
+            "return_check_paid_back","forward_balance","from_bank","other_cash_in","rebates_commissions",
+            "cash_purchases","cash_expense","check_purchases","check_expense","outside_cash_drops",
+            "cash_deposit","checks_deposit","safe_balance","payroll_expense","other_cash_out","over_short"]:
+            setattr(report,field,fv(field))
+        report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
+        for co in DAILY_COMPANIES:
+            key=co.lower().replace(" ","_").replace(".","")
+            ex=mt_rows.get(co) or MoneyTransferSummary(store_id=sid,report_date=report_date,company=co)
+            ex.amount=fv(f"mt_amount_{key}"); ex.fees=fv(f"mt_fees_{key}")
+            ex.commission=fv(f"mt_commission_{key}"); db.session.add(ex)
+        db.session.commit()
+        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
+        return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
+    return render_template("daily_report.html",user=user,report_date=report_date,
+        report=report,mt_rows=mt_rows,companies=DAILY_COMPANIES,auto_mt=auto_mt)
+
+# ── Monthly P&L ──────────────────────────────────────────────
+@app.route("/monthly")
+@admin_required
+def monthly_list():
+    user=current_user(); sid=session["store_id"]
+    reports=MonthlyFinancial.query.filter_by(store_id=sid).order_by(
+        MonthlyFinancial.year.desc(),MonthlyFinancial.month.desc()).all()
+    return render_template("monthly_list.html",user=user,reports=reports,today=date.today())
+
+@app.route("/monthly/<int:year>/<int:month>",methods=["GET","POST"])
+@admin_required
+def monthly_report(year,month):
+    user=current_user(); sid=session["store_id"]
+    report=MonthlyFinancial.query.filter_by(store_id=sid,year=year,month=month).first()
+    month_start=date(year,month,1); month_end=date(year,month,monthrange(year,month)[1])
+    daily_rows=DailyReport.query.filter(DailyReport.store_id==sid,
+        DailyReport.report_date>=month_start,DailyReport.report_date<=month_end).all()
+    auto={"taxable_sales":sum(r.taxable_sales for r in daily_rows),
+          "non_taxable":sum(r.non_taxable for r in daily_rows),
+          "bill_payment_charge":sum(r.bill_payment_charge for r in daily_rows),
+          "phone_recargas":sum(r.phone_recargas for r in daily_rows),
+          "boost_mobile":sum(r.boost_mobile for r in daily_rows),
+          "check_cashing_fees":sum(r.check_cashing_fees for r in daily_rows),
+          "return_check_hold_fees":sum(r.return_check_hold_fees for r in daily_rows),
+          "rebates_commissions":sum(r.rebates_commissions for r in daily_rows),
+          "cash_purchases":sum(r.cash_purchases for r in daily_rows),
+          "check_purchases":sum(r.check_purchases for r in daily_rows),
+          "cash_expenses":sum(r.cash_expense for r in daily_rows),
+          "check_expenses":sum(r.check_expense for r in daily_rows),
+          "cash_payroll":sum(r.payroll_expense for r in daily_rows),
+          "over_short":sum(r.over_short for r in daily_rows)}
+    if request.method=="POST":
+        if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
+        def fv(k): return float(request.form.get(k) or 0)
+        for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
+            "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
+            "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
+            "cash_expenses","check_expenses","cash_payroll","bank_charges_210","bank_charges_230",
+            "credit_card_fees","money_order_rent","emaginenet_tech","irs_payroll_tax","texas_workforce",
+            "other_taxes","accounting_charges","return_check_gl","other_expense_1","other_expense_2",
+            "other_expense_3","other_expense_4","other_expense_5","over_short",
+            "borrowed_money_return","profit_distributed","cash_carry_forward"]:
+            setattr(report,f,fv(f))
+        report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
+        db.session.commit(); flash(f"P&L for {calendar.month_name[month]} {year} saved.","success")
+        return redirect(url_for("monthly_list"))
+    return render_template("monthly_report.html",user=user,year=year,month=month,
+        month_name=calendar.month_name[month],report=report,auto=auto)
+
+@app.route("/monthly/new")
+@admin_required
+def monthly_new():
+    today=date.today(); return redirect(url_for("monthly_report",year=today.year,month=today.month))
+
+# ── ACH Batches ──────────────────────────────────────────────
+@app.route("/batches")
+@admin_required
+def batches():
+    user=current_user(); sid=session["store_id"]
+    rows=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).all()
+    return render_template("batches.html",user=user,batches=rows)
+
+@app.route("/batches/new",methods=["GET","POST"])
+@admin_required
+def new_batch():
+    user=current_user(); sid=session["store_id"]
+    if request.method=="POST":
+        b=ACHBatch(store_id=sid,
+            ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date(),
+            company=request.form["company"],batch_ref=request.form["batch_ref"],
+            ach_amount=float(request.form.get("ach_amount") or 0),
+            transfer_dates=request.form.get("transfer_dates",""),
+            status=request.form.get("status","Pending"),
+            reconciled=request.form.get("reconciled")=="on",
+            notes=request.form.get("notes",""))
+        db.session.add(b); db.session.commit()
+        flash("ACH batch logged.","success"); return redirect(url_for("batches"))
+    return render_template("batch_form.html",user=user,batch=None,today=date.today().isoformat())
+
+@app.route("/batches/<int:bid>/edit",methods=["GET","POST"])
+@admin_required
+def edit_batch(bid):
+    user=current_user(); sid=session["store_id"]
+    b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
+    if request.method=="POST":
+        b.ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date()
+        b.company=request.form["company"]; b.batch_ref=request.form["batch_ref"]
+        b.ach_amount=float(request.form.get("ach_amount") or 0)
+        b.transfer_dates=request.form.get("transfer_dates","")
+        b.status=request.form.get("status","Pending")
+        b.reconciled=request.form.get("reconciled")=="on"
+        b.notes=request.form.get("notes","")
+        db.session.commit(); flash("Batch updated.","success"); return redirect(url_for("batches"))
+    return render_template("batch_form.html",user=user,batch=b,today=date.today().isoformat())
+
+@app.route("/batches/<int:bid>/transfers")
+@admin_required
+def batch_transfers(bid):
+    user=current_user(); sid=session["store_id"]
+    b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
+    rows=Transfer.query.filter_by(store_id=sid,batch_id=b.batch_ref).all()
+    return render_template("batch_detail.html",user=user,batch=b,transfers=rows)
+
+# ── Bank / SimpleFIN ─────────────────────────────────────────
+@app.route("/bank")
+@admin_required
+def bank():
+    user=current_user(); sid=session["store_id"]
+    cfg=get_sfin_cfg(sid)
+    bank_data,bank_error=simplefin_fetch(sid) if (cfg and cfg.access_url) else (None,None)
+    return render_template("bank.html",user=user,bank_data=bank_data,bank_error=bank_error,cfg=cfg)
+
+@app.route("/bank/setup",methods=["POST"])
+@admin_required
+def bank_setup():
+    sid=session["store_id"]
+    token=request.form.get("token","").strip()
+    if not token: flash("Please paste your SimpleFIN token or access URL.","error"); return redirect(url_for("bank"))
+    ok,message=simplefin_claim_token(token,sid)
+    flash(message,"success" if ok else "error")
+    return redirect(url_for("bank"))
+
+@app.route("/bank/disconnect",methods=["POST"])
+@admin_required
+def bank_disconnect():
+    cfg=get_sfin_cfg(session["store_id"])
+    if cfg: cfg.access_url=""; db.session.commit()
+    flash("SimpleFIN disconnected.","success"); return redirect(url_for("bank"))
+
+@app.route("/api/bank/refresh")
+@admin_required
+def bank_refresh():
+    data,error=simplefin_fetch(session["store_id"])
+    if error: return jsonify({"error":error}),400
+    return jsonify(data)
+
+# ── Admin Users ──────────────────────────────────────────────
+@app.route("/admin/users")
+@admin_required
+def admin_users():
+    user=current_user(); sid=session["store_id"]
+    users=User.query.filter_by(store_id=sid).all()
+    return render_template("admin_users.html",user=user,users=users)
+
+@app.route("/admin/users/new",methods=["GET","POST"])
+@admin_required
+def admin_new_user():
+    user=current_user(); sid=session["store_id"]
+    if request.method=="POST":
+        un=request.form.get("username","").strip()
+        if User.query.filter_by(store_id=sid,username=un).first():
+            flash("Username already exists.","error")
+        else:
+            u=User(store_id=sid,username=un,full_name=request.form.get("full_name",""),
+                   role=request.form.get("role","employee"))
+            u.set_password(request.form["password"]); db.session.add(u); db.session.commit()
+            flash(f"User '{u.username}' created.","success"); return redirect(url_for("admin_users"))
+    return render_template("admin_user_form.html",user=user,edit_user=None)
+
+@app.route("/admin/users/<int:uid>/edit",methods=["GET","POST"])
+@admin_required
+def admin_edit_user(uid):
+    user=current_user(); sid=session["store_id"]
+    eu=User.query.filter_by(id=uid,store_id=sid).first_or_404()
+    if request.method=="POST":
+        eu.full_name=request.form.get("full_name",""); eu.role=request.form.get("role","employee")
+        eu.is_active=request.form.get("is_active")=="on"
+        if request.form.get("password"): eu.set_password(request.form["password"])
+        db.session.commit(); flash("User updated.","success"); return redirect(url_for("admin_users"))
+    return render_template("admin_user_form.html",user=user,edit_user=eu)
+
+# ── Superadmin ───────────────────────────────────────────────
+@app.route("/superadmin/stores")
+@superadmin_required
+def superadmin_stores():
+    user=current_user(); stores=Store.query.order_by(Store.created_at.desc()).all()
+    return render_template("superadmin_stores.html",user=user,stores=stores)
+
+@app.route("/superadmin/stores/new",methods=["GET","POST"])
+@superadmin_required
+def superadmin_new_store():
+    user=current_user()
+    if request.method=="POST":
+        slug=request.form.get("slug","").strip().lower().replace(" ","-")
+        if Store.query.filter_by(slug=slug).first():
+            flash("Slug already taken.","error")
+        else:
+            s=Store(name=request.form["name"],slug=slug,email=request.form.get("email",""),
+                phone=request.form.get("phone",""),address=request.form.get("address",""),
+                plan=request.form.get("plan","trial"))
+            db.session.add(s); db.session.flush()
+            a=User(store_id=s.id,username=request.form.get("admin_username","admin"),
+                full_name=request.form.get("admin_name","Store Admin"),role="admin")
+            a.set_password(request.form.get("admin_password","changeme123!"))
+            db.session.add(a); db.session.commit()
+            flash(f"Store '{s.name}' created.","success"); return redirect(url_for("superadmin_stores"))
+    return render_template("superadmin_store_form.html",user=user,store=None)
+
+@app.route("/superadmin/impersonate/<int:store_id>")
+@superadmin_required
+def superadmin_impersonate(store_id):
+    store=Store.query.get_or_404(store_id)
+    admin=User.query.filter_by(store_id=store_id,role="admin").first()
+    if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
+    session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
+    flash(f"Viewing as {store.name}","success"); return redirect(url_for("dashboard"))
+
+# ── Stripe webhook stub ──────────────────────────────────────
+@app.route("/webhooks/stripe",methods=["POST"])
+def stripe_webhook():
+    return jsonify({"received":True}),200
+
+# ── Error handlers ───────────────────────────────────────────
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("error.html",user=current_user(),code=404,message="Page not found."),404
+
+@app.errorhandler(500)
+def server_error(e):
+    app.logger.error(f"500: {e}")
+    return render_template("error.html",user=current_user(),code=500,
+        message="Something went wrong. Please try again."),500
+
+# ── Init ─────────────────────────────────────────────────────
+def init_db():
+    with app.app_context():
+        db.create_all()
+        if not User.query.filter_by(username="superadmin",store_id=None).first():
+            sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
+            sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
+            print("✅ Superadmin: superadmin / super2025!")
+        if not Store.query.first():
+            s=Store(name="Cambio Express Lamar",slug="cambio-express-lamar",plan="pro"); db.session.add(s); db.session.flush()
+            a=User(store_id=s.id,username="admin",full_name="Store Admin",role="admin")
+            a.set_password(os.environ.get("ADMIN_PASSWORD","cambio2025!")); db.session.add(a); db.session.commit()
+            print("✅ Demo store admin: admin / cambio2025!")
+
+if __name__=="__main__":
+    init_db()
+    port=int(os.environ.get("PORT",5000))
+    print(f"🚀 Cambio Express → http://0.0.0.0:{port}")
+    app.run(host="0.0.0.0",port=port,debug=False)

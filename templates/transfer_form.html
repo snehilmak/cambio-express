@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if transfer else 'New' }} Transfer — Cambio Express{% endblock %}
+{% block page_title %}{{ 'Edit Transfer' if transfer else 'Log New Transfer' }}{% endblock %}
+{% block content %}
+
+<div style="max-width:780px;">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ 'Update transfer details' if transfer else 'Enter customer transfer details' }}</span>
+    <a href="{{ url_for('transfers') }}" class="btn btn-outline btn-sm">← Back</a>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+
+      <div class="section-title">Transfer Info</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Send Date *</label>
+          <input type="date" name="send_date" value="{{ transfer.send_date.isoformat() if transfer else today }}" required>
+        </div>
+        <div class="field">
+          <label>Company *</label>
+          <select name="company" required>
+            <option value="">Select company…</option>
+            {% for co in ['Intermex','Maxi','Barri'] %}
+            <option {% if transfer and transfer.company==co %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Send Amount ($) *</label>
+          <input type="number" name="send_amount" step="0.01" min="0"
+            value="{{ transfer.send_amount if transfer else '' }}" placeholder="0.00" required>
+        </div>
+        <div class="field">
+          <label>Fee ($)</label>
+          <input type="number" name="fee" step="0.01" min="0"
+            value="{{ transfer.fee if transfer else '' }}" placeholder="0.00">
+        </div>
+      </div>
+
+      <div class="section-title">Sender Info</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Sender Name *</label>
+          <input type="text" name="sender_name" value="{{ transfer.sender_name if transfer else '' }}"
+            placeholder="Full name" required>
+        </div>
+        <div class="field">
+          <label>Confirmation # / Reference</label>
+          <input type="text" name="confirm_number" value="{{ transfer.confirm_number if transfer else '' }}"
+            placeholder="e.g. INT-00123">
+        </div>
+      </div>
+
+      <div class="section-title">Recipient Info</div>
+      <div class="form-grid cols-3">
+        <div class="field">
+          <label>Recipient Name</label>
+          <input type="text" name="recipient_name" value="{{ transfer.recipient_name if transfer else '' }}"
+            placeholder="Full name">
+        </div>
+        <div class="field">
+          <label>Country</label>
+          <select name="country">
+            <option value="">Select…</option>
+            {% for c in ['Mexico','Guatemala','El Salvador','Honduras','Dominican Republic','Colombia','Ecuador','Peru','Other'] %}
+            <option {% if transfer and transfer.country==c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Recipient Phone</label>
+          <input type="text" name="recipient_phone" value="{{ transfer.recipient_phone if transfer else '' }}"
+            placeholder="Phone number">
+        </div>
+      </div>
+
+      <div class="section-title">Status &amp; Tracking</div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Status</label>
+          <select name="status">
+            {% for s in ['Sent','Pending','Canceled','Rejected','Refunded','Re-Transferred'] %}
+            <option {% if transfer and transfer.status==s %}selected{% elif not transfer and s=='Sent' %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Batch ID (ACH reference)</label>
+          <input type="text" name="batch_id" value="{{ transfer.batch_id if transfer else '' }}"
+            placeholder="e.g. INTX-2025-0415">
+        </div>
+        <div class="field">
+          <label>Status Notes</label>
+          <input type="text" name="status_notes" value="{{ transfer.status_notes if transfer else '' }}"
+            placeholder="e.g. Customer requested cancelation">
+        </div>
+        <div class="field">
+          <label>Internal Notes</label>
+          <input type="text" name="internal_notes" value="{{ transfer.internal_notes if transfer else '' }}"
+            placeholder="Staff-only note">
+        </div>
+      </div>
+
+      <div style="margin-top:28px;display:flex;gap:12px;">
+        <button type="submit" class="btn btn-primary">
+          {{ '💾 Save Changes' if transfer else '✅ Log Transfer' }}
+        </button>
+        <a href="{{ url_for('transfers') }}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}

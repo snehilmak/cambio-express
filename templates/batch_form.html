@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if batch else 'New' }} ACH Batch{% endblock %}
+{% block page_title %}{{ 'Edit ACH Batch' if batch else 'Log ACH Batch' }}{% endblock %}
+{% block content %}
+<div style="max-width:680px;">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ 'Update batch details' if batch else 'Enter ACH batch from your bank statement' }}</span>
+    <a href="{{ url_for('batches') }}" class="btn btn-outline btn-sm">← Back</a>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid">
+        <div class="field">
+          <label>ACH Date (bank statement) *</label>
+          <input type="date" name="ach_date" value="{{ batch.ach_date.isoformat() if batch else today }}" required>
+        </div>
+        <div class="field">
+          <label>Company *</label>
+          <select name="company" required>
+            <option value="">Select…</option>
+            {% for co in ['Intermex','Maxi','Barri'] %}
+            <option {% if batch and batch.company==co %}selected{% endif %}>{{ co }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Batch Ref / ID *</label>
+          <input type="text" name="batch_ref" value="{{ batch.batch_ref if batch else '' }}"
+            placeholder="e.g. INTX-2025-0415" required>
+        </div>
+        <div class="field">
+          <label>ACH Amount Debited ($) *</label>
+          <input type="number" name="ach_amount" step="0.01" min="0"
+            value="{{ batch.ach_amount if batch else '' }}" placeholder="0.00" required>
+        </div>
+        <div class="field">
+          <label>Transfer Dates Covered</label>
+          <input type="text" name="transfer_dates" value="{{ batch.transfer_dates if batch else '' }}"
+            placeholder="e.g. 04/10–04/14">
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select name="status">
+            {% for s in ['Pending','Cleared','Disputed','Returned','Partial'] %}
+            <option {% if batch and batch.status==s %}selected{% elif not batch and s=='Pending' %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field span-2">
+          <label>Notes</label>
+          <input type="text" name="notes" value="{{ batch.notes if batch else '' }}"
+            placeholder="Any additional notes about this batch">
+        </div>
+        <div class="field">
+          <div class="checkbox-row" style="margin-top:8px;">
+            <input type="checkbox" name="reconciled" id="recon"
+              {% if batch and batch.reconciled %}checked{% endif %}>
+            <label for="recon" style="text-transform:none;font-size:14px;letter-spacing:0;">Mark as reconciled</label>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;display:flex;gap:12px;">
+        <button type="submit" class="btn btn-primary">{{ '💾 Save' if batch else '✅ Log Batch' }}</button>
+        <a href="{{ url_for('batches') }}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}

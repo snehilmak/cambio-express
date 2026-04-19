@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Monthly P&L — Cambio Express{% endblock %}
+{% block page_title %}Monthly P&L Reports{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-3">
+  <div class="text-sm text-muted">Profit & Loss — mirrors your Financial Report sheet</div>
+  <a href="{{ url_for('monthly_new') }}" class="btn btn-primary">＋ This Month's P&L</a>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th>Total Revenue</th>
+          <th>Total Purchases</th>
+          <th>Total Expenses</th>
+          <th>Over / Short</th>
+          <th>Net Income</th>
+          <th>Last Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reports %}
+        
+        <tr>
+          <td><strong>{{ ['','January','February','March','April','May','June','July','August','September','October','November','December'][r.month] }} {{ r.year }}</strong></td>
+          <td class="mono amount-pos">${{ '{:,.2f}'.format(r.total_revenue) }}</td>
+          <td class="mono amount-neg">${{ '{:,.2f}'.format(r.total_purchases) }}</td>
+          <td class="mono amount-neg">${{ '{:,.2f}'.format(r.total_expenses) }}</td>
+          <td class="mono {% if r.over_short > 0 %}amount-pos{% elif r.over_short < 0 %}amount-neg{% endif %}">
+            ${{ '{:,.2f}'.format(r.over_short) }}
+          </td>
+          <td class="mono {% if r.net_income >= 0 %}amount-pos{% else %}amount-neg{% endif %}" style="font-weight:700;font-size:15px;">
+            ${{ '{:,.2f}'.format(r.net_income) }}
+          </td>
+          <td class="mono text-sm text-muted">{{ r.updated_at.strftime('%m/%d/%Y') }}</td>
+          <td>
+            <a href="{{ url_for('monthly_report', year=r.year, month=r.month) }}" class="btn btn-outline btn-sm">Edit</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="8" style="text-align:center;padding:40px;color:var(--gray4);">
+            No monthly reports yet.
+            <a href="{{ url_for('monthly_new') }}">Start this month →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: cambio-express
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cambio-db
+          property: connectionString
+      - key: SUPERADMIN_PASSWORD
+        value: super2025!   # CHANGE THIS after first deploy
+      - key: ADMIN_PASSWORD
+        value: cambio2025!  # CHANGE THIS after first deploy
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+databases:
+  - name: cambio-db
+    plan: free          # upgrade to starter ($7/mo) for production
+    databaseName: cambio
+    user: cambio

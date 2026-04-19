@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} Error{% endblock %}
+{% block page_title %}Error {{ code }}{% endblock %}
+{% block content %}
+<div style="text-align:center;padding:80px 40px;">
+  <div style="font-size:64px;margin-bottom:16px;">
+    {% if code == 404 %}🔍{% elif code == 500 %}⚠️{% else %}🚫{% endif %}
+  </div>
+  <div style="font-family:'DM Serif Display',serif;font-size:28px;color:var(--navy);margin-bottom:12px;">
+    {{ code }} — {% if code == 404 %}Page Not Found{% elif code == 500 %}Server Error{% else %}Access Denied{% endif %}
+  </div>
+  <div style="color:var(--gray4);font-size:15px;margin-bottom:32px;">{{ message }}</div>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
+</div>
+{% endblock %}

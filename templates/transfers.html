@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Transfers — Cambio Express{% endblock %}
+{% block page_title %}Transfer Log{% endblock %}
+{% block content %}
+
+<!-- Filters -->
+<div class="card mb-3">
+  <div class="card-body" style="padding:16px 24px;">
+    <form method="GET" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="field" style="flex:1;min-width:140px;margin:0;">
+        <label>Company</label>
+        <select name="company">
+          <option value="">All</option>
+          <option {% if company=='Intermex' %}selected{% endif %}>Intermex</option>
+          <option {% if company=='Maxi' %}selected{% endif %}>Maxi</option>
+          <option {% if company=='Barri' %}selected{% endif %}>Barri</option>
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:140px;margin:0;">
+        <label>Status</label>
+        <select name="status">
+          <option value="">All</option>
+          {% for s in ['Sent','Pending','Canceled','Rejected','Refunded','Re-Transferred'] %}
+          <option {% if status==s %}selected{% endif %}>{{ s }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="flex:1;min-width:130px;margin:0;">
+        <label>From Date</label>
+        <input type="date" name="date_from" value="{{ date_from }}">
+      </div>
+      <div class="field" style="flex:1;min-width:130px;margin:0;">
+        <label>To Date</label>
+        <input type="date" name="date_to" value="{{ date_to }}">
+      </div>
+      <button type="submit" class="btn btn-primary" style="height:42px;">Filter</button>
+      <a href="{{ url_for('transfers') }}" class="btn btn-outline" style="height:42px;">Clear</a>
+      <a href="{{ url_for('new_transfer') }}" class="btn btn-gold" style="height:42px;margin-left:auto;">＋ New Transfer</a>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ transfers|length }} Transfer{{ 's' if transfers|length != 1 }}</span>
+    {% if transfers %}
+    <span class="text-sm text-muted">
+      Total: ${{ '{:,.2f}'.format(transfers|sum(attribute='send_amount')) }}
+      &nbsp;|&nbsp; Fees: ${{ '{:,.2f}'.format(transfers|sum(attribute='fee')) }}
+    </span>
+    {% endif %}
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Sender</th>
+          <th>Company</th>
+          <th>Amount</th>
+          <th>Fee</th>
+          <th>Recipient</th>
+          <th>Country</th>
+          <th>Confirm #</th>
+          <th>Batch</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transfers %}
+        <tr>
+          <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
+          <td><strong>{{ t.sender_name }}</strong></td>
+          <td><span class="co-{{ t.company.lower() }}">{{ t.company }}</span></td>
+          <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
+          <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
+          <td>{{ t.recipient_name }}</td>
+          <td>{{ t.country }}</td>
+          <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>
+          <td class="mono text-sm">{{ t.batch_id or '—' }}</td>
+          <td>
+            {% set sc = {'Sent':'green','Pending':'yellow','Canceled':'red','Rejected':'red','Refunded':'orange','Re-Transferred':'orange'} %}
+            <span class="badge badge-{{ sc.get(t.status,'gray') }}">{{ t.status }}</span>
+          </td>
+          <td>
+            <a href="{{ url_for('edit_transfer', tid=t.id) }}" class="btn btn-outline btn-sm">Edit</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray4);">No transfers found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

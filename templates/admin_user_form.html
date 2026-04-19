@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if edit_user else 'New' }} User — Cambio Express{% endblock %}
+{% block page_title %}{{ 'Edit User' if edit_user else 'Add User' }}{% endblock %}
+{% block content %}
+<div style="max-width:500px;">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">{{ 'Update user account' if edit_user else 'Create a new user account' }}</span>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline btn-sm">← Back</a>
+  </div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="form-grid cols-1">
+        {% if not edit_user %}
+        <div class="field">
+          <label>Username *</label>
+          <input type="text" name="username" placeholder="e.g. maria.lopez" required>
+        </div>
+        {% else %}
+        <div class="field">
+          <label>Username</label>
+          <input type="text" value="{{ edit_user.username }}" disabled style="background:var(--gray1);color:var(--gray4);">
+        </div>
+        {% endif %}
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" name="full_name" value="{{ edit_user.full_name if edit_user else '' }}"
+            placeholder="Employee's full name">
+        </div>
+        <div class="field">
+          <label>Role *</label>
+          <select name="role">
+            <option value="employee" {% if not edit_user or edit_user.role=='employee' %}selected{% endif %}>Employee (Transfer only)</option>
+            <option value="admin" {% if edit_user and edit_user.role=='admin' %}selected{% endif %}>Super Admin (Full access)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Password {{ '(leave blank to keep current)' if edit_user else '*' }}</label>
+          <input type="password" name="password" placeholder="Set password"
+            {% if not edit_user %}required{% endif %}>
+        </div>
+        {% if edit_user %}
+        <div class="field">
+          <div class="checkbox-row">
+            <input type="checkbox" name="is_active" id="active" {% if edit_user.is_active %}checked{% endif %}>
+            <label for="active" style="text-transform:none;font-size:14px;letter-spacing:0;">Account is active</label>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+      <div style="margin-top:24px;display:flex;gap:12px;">
+        <button type="submit" class="btn btn-primary">{{ '💾 Save Changes' if edit_user else '✅ Create User' }}</button>
+        <a href="{{ url_for('admin_users') }}" class="btn btn-outline">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+{% endblock %}
