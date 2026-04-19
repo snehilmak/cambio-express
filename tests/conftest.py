@@ -1,6 +1,6 @@
 import os
 # Set test database BEFORE importing app so SQLAlchemy uses it
-os.environ["DATABASE_URL"] = "sqlite:///test_cambio.db"
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-ci")
 os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake_key")
 os.environ.setdefault("STRIPE_BASIC_PRICE_ID", "price_basic_test")
@@ -10,6 +10,8 @@ os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
 import pytest
 from datetime import datetime, timedelta
 from app import app as flask_app, db
+
+flask_app.config["TESTING"] = True
 
 
 def seed_test_data():
@@ -48,18 +50,17 @@ def clean_db():
 
 @pytest.fixture
 def client():
-    flask_app.config["TESTING"] = True
     return flask_app.test_client()
 
 
 @pytest.fixture
 def logged_in_client():
     """Client pre-authenticated as the test store admin."""
-    flask_app.config["TESTING"] = True
     c = flask_app.test_client()
     with flask_app.app_context():
         from app import User
         u = User.query.filter_by(username="admin@test.com").first()
+        assert u is not None, "admin@test.com user not found — did seed_test_data run?"
         uid, sid = u.id, u.store_id
     with c.session_transaction() as sess:
         sess["user_id"] = uid
