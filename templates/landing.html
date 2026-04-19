@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cambio Express — MSB Manager</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#0f1f3d;--blue:#1a4080;--mid:#2a5caa;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray1:#f5f5f7;--gray2:#e8e8ec;--gray3:#b0b4c0;--gray4:#6b7280;--dark:#1a1a2e}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--dark)}
+nav{position:sticky;top:0;z-index:100;background:var(--navy);padding:0 48px;height:64px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08)}
+.nav-brand{font-family:'DM Serif Display',serif;color:var(--gold2);font-size:20px;text-decoration:none;display:flex;flex-direction:column;line-height:1.1}
+.nav-brand span{font-family:'DM Sans',sans-serif;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1.5px;text-transform:uppercase;font-weight:400}
+.nav-links{display:flex;align-items:center;gap:28px}
+.nav-links a{color:rgba(255,255,255,0.65);text-decoration:none;font-size:13.5px;transition:color .15s}
+.nav-links a:hover{color:var(--white)}
+.nav-links .cta{background:var(--gold);color:var(--white);padding:8px 20px;border-radius:8px;font-weight:600;font-size:13px}
+.nav-links .cta:hover{background:var(--gold2);color:var(--navy)}
+.hero{background:linear-gradient(135deg,var(--navy) 0%,var(--mid) 100%);padding:100px 48px;text-align:center;color:white}
+.hero-eyebrow{font-size:11px;letter-spacing:2.5px;color:var(--gold2);text-transform:uppercase;margin-bottom:20px;font-weight:500}
+.hero h1{font-family:'DM Serif Display',serif;font-size:54px;line-height:1.15;margin-bottom:22px}
+.hero p{font-size:18px;color:rgba(255,255,255,0.72);max-width:600px;margin:0 auto 38px;line-height:1.65}
+.hero-ctas{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.btn-gold{background:var(--gold);color:white;padding:14px 32px;border-radius:10px;font-size:15px;font-weight:600;text-decoration:none;transition:background .15s}
+.btn-gold:hover{background:var(--gold2);color:var(--navy)}
+.btn-outline{background:transparent;color:white;border:1.5px solid rgba(255,255,255,0.4);padding:14px 28px;border-radius:10px;font-size:15px;font-weight:500;text-decoration:none;transition:all .15s}
+.btn-outline:hover{border-color:white;background:rgba(255,255,255,0.06)}
+.hero-note{margin-top:18px;font-size:12px;color:rgba(255,255,255,0.38);letter-spacing:.4px}
+.features{padding:88px 48px;background:var(--cream)}
+.section-eyebrow{text-align:center;font-size:11px;font-weight:600;color:var(--gold);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+.section-heading{text-align:center;font-family:'DM Serif Display',serif;font-size:36px;color:var(--navy);margin-bottom:52px}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1040px;margin:0 auto}
+.feature-card{background:var(--white);border-radius:12px;border:1px solid var(--gray2);padding:28px 24px}
+.feature-icon{font-size:30px;margin-bottom:14px}
+.feature-card h3{font-size:15px;font-weight:600;color:var(--navy);margin-bottom:8px}
+.feature-card p{font-size:13.5px;color:var(--gray4);line-height:1.65}
+.pro-badge{display:inline-block;background:var(--navy);color:var(--gold2);font-size:10px;font-weight:600;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.pricing{padding:88px 48px;background:var(--white)}
+.pricing-grid{display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:20px;max-width:920px;margin:0 auto;align-items:start}
+.plan{background:var(--gray1);border:1.5px solid var(--gray2);border-radius:14px;padding:32px 28px;position:relative}
+.plan.featured{background:var(--navy);border-color:var(--gold)}
+.plan-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 14px;border-radius:999px;white-space:nowrap}
+.plan-name{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--gray4);margin-bottom:8px}
+.plan.featured .plan-name{color:var(--gold2)}
+.plan-price{font-family:'DM Serif Display',serif;font-size:42px;color:var(--navy);line-height:1;margin-bottom:4px}
+.plan.featured .plan-price{color:white}
+.plan-period{font-size:13px;color:var(--gray4);margin-bottom:22px}
+.plan.featured .plan-period{color:rgba(255,255,255,0.5)}
+.plan-features{list-style:none;margin-bottom:28px}
+.plan-features li{font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);color:var(--dark)}
+.plan.featured .plan-features li{color:rgba(255,255,255,0.85);border-bottom-color:rgba(255,255,255,0.1)}
+.plan-features li.no{color:var(--gray3)}
+.plan.featured .plan-features li.no{color:rgba(255,255,255,0.25)}
+.plan-btn{display:block;text-align:center;padding:12px;border-radius:8px;font-size:14px;font-weight:600;text-decoration:none;transition:all .15s}
+.btn-navy{background:var(--navy);color:white}
+.btn-navy:hover{background:var(--mid)}
+.btn-border{border:1.5px solid var(--blue);color:var(--blue);background:transparent}
+.btn-border:hover{background:var(--blue);color:white}
+.btn-gold2{background:var(--gold);color:white}
+.btn-gold2:hover{background:var(--gold2);color:var(--navy)}
+footer{background:var(--navy);padding:32px 48px;display:flex;align-items:center;justify-content:space-between}
+footer p{color:rgba(255,255,255,0.35);font-size:13px}
+footer a{color:rgba(255,255,255,0.45);text-decoration:none;font-size:13px;transition:color .15s}
+footer a:hover{color:var(--gold2)}
+@media(max-width:768px){.features-grid,.pricing-grid{grid-template-columns:1fr}.hero h1{font-size:36px}.hero,.features,.pricing{padding:60px 24px}nav{padding:0 20px}}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-brand">Cambio Express<span>MSB Manager</span></a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+    <a href="/login">Login</a>
+    <a href="/signup" class="cta">Start Free Trial</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-eyebrow">Built for MSB Store Owners</div>
+  <h1>Your Business.<br>Crystal Clear.</h1>
+  <p>Stop managing your store on paper or spreadsheets. Cambio Express gives you real-time visibility into transfers, daily cash, and monthly profits.</p>
+  <div class="hero-ctas">
+    <a href="/signup" class="btn-gold">Try Free for 7 Days</a>
+    <a href="#features" class="btn-outline">Learn More ↓</a>
+  </div>
+  <p class="hero-note">No credit card required &middot; Cancel anytime</p>
+</section>
+
+<section class="features" id="features">
+  <div class="section-eyebrow">What's Included</div>
+  <div class="section-heading">Everything Your Store Needs</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <h3>Daily Books</h3>
+      <p>Track cash in/out, sales, money orders, and check cashing every day. Your daily record, always organized.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💸</div>
+      <h3>Money Transfers</h3>
+      <p>Log Intermex, Maxi, and Barri transfers with full sender and recipient detail. Find any transfer instantly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📦</div>
+      <h3>ACH Batches</h3>
+      <p>Reconcile ACH deposits against your transfer totals. Spot variances before they become problems.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <h3>Monthly P&amp;L</h3>
+      <p>Auto-populated profit &amp; loss from your daily reports. Know exactly where your money went each month.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏦</div>
+      <h3>Bank Sync <span class="pro-badge">Pro</span></h3>
+      <p>Connect via SimpleFIN to see live bank balances alongside your books. No more tab-switching.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔍</div>
+      <h3>Reports</h3>
+      <p>Filter transfers by date, company, and status. Review any time window with a click.</p>
+    </div>
+  </div>
+</section>
+
+<section class="pricing" id="pricing">
+  <div class="section-eyebrow">Simple Pricing</div>
+  <div class="section-heading">Start Free. Upgrade When Ready.</div>
+  <div class="pricing-grid">
+
+    <div class="plan">
+      <div class="plan-name">Basic</div>
+      <div class="plan-price">$20</div>
+      <div class="plan-period">per store / month</div>
+      <ul class="plan-features">
+        <li>✓ Daily books &amp; cash tracking</li>
+        <li>✓ Money transfer logging</li>
+        <li>✓ ACH batch reconciliation</li>
+        <li>✓ Monthly P&amp;L reports</li>
+        <li class="no">✗ Bank sync (Pro only)</li>
+      </ul>
+      <a href="/signup?plan=basic" class="plan-btn btn-border">Get Started</a>
+    </div>
+
+    <div class="plan featured">
+      <div class="plan-badge">MOST POPULAR</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">$30</div>
+      <div class="plan-period">per store / month</div>
+      <ul class="plan-features">
+        <li>✓ Everything in Basic</li>
+        <li>✓ SimpleFIN bank sync</li>
+        <li>✓ Live balance visibility</li>
+        <li>✓ Multi-store (coming soon)</li>
+      </ul>
+      <a href="/signup?plan=pro" class="plan-btn btn-gold2">Get Pro</a>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Free Trial</div>
+      <div class="plan-price">$0</div>
+      <div class="plan-period">7 days &middot; full Pro access</div>
+      <ul class="plan-features">
+        <li>✓ All Pro features</li>
+        <li>✓ No credit card needed</li>
+        <li>✓ Instant access</li>
+      </ul>
+      <a href="/signup" class="plan-btn btn-navy">Start Free</a>
+    </div>
+
+  </div>
+</section>
+
+<footer>
+  <p>&copy; 2026 Cambio Express. All rights reserved.</p>
+  <a href="/login">Sign In →</a>
+</footer>
+
+</body>
+</html>

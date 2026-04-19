@@ -18,6 +18,29 @@ def test_root_is_no_longer_login(client):
         assert b'name="username"' not in resp.data
 
 
+def test_landing_page_loads(client):
+    resp = client.get("/")
+    assert resp.status_code == 200
+
+def test_landing_has_headline(client):
+    resp = client.get("/")
+    assert b"Crystal Clear" in resp.data
+
+def test_landing_has_pricing(client):
+    resp = client.get("/")
+    assert b"$20" in resp.data
+    assert b"$30" in resp.data
+
+def test_landing_has_signup_link(client):
+    resp = client.get("/")
+    assert b"/signup" in resp.data
+
+def test_landing_redirects_logged_in_user(logged_in_client):
+    resp = logged_in_client.get("/", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "dashboard" in resp.headers["Location"]
+
+
 def test_store_has_trial_columns(client):
     """Store model must have trial_ends_at and grace_ends_at columns."""
     with client.application.app_context():

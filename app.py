@@ -372,7 +372,7 @@ def simplefin_claim_token(token_raw,store_id):
 def landing():
     if "user_id" in session:
         return redirect(url_for("dashboard"))
-    return "Landing page coming soon", 200
+    return render_template("landing.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
