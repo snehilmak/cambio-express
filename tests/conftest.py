@@ -42,8 +42,7 @@ def clean_db():
         db.drop_all()
         db.create_all()
         seed_test_data()
-    yield
-    with flask_app.app_context():
+        yield
         db.session.remove()
 
 
