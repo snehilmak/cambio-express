@@ -62,3 +62,11 @@ def test_expired_after_grace_end():
                trial_ends_at=datetime.utcnow() - timedelta(days=5),
                grace_ends_at=datetime.utcnow() - timedelta(days=1))
     assert get_trial_status(s) == "expired"
+
+def test_trial_set_but_no_grace_date():
+    from app import get_trial_status
+    # grace_ends_at=None should not crash
+    s = _store(plan="trial",
+               trial_ends_at=datetime.utcnow() + timedelta(days=7),
+               grace_ends_at=None)
+    assert get_trial_status(s) == "active"

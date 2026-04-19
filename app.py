@@ -276,7 +276,7 @@ def get_trial_status(store):
     if store.trial_ends_at is None:
         return "exempt"
     now = datetime.utcnow()
-    if now >= store.grace_ends_at:
+    if store.grace_ends_at is not None and now >= store.grace_ends_at:
         return "expired"
     if now >= store.trial_ends_at:
         return "grace"
