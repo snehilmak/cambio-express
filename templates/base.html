@@ -242,6 +242,7 @@ textarea { resize: vertical; min-height: 80px; }
       <div class="urole">{{ user.role }}</div>
     </div>
     <nav class="sidebar-nav">
+      {% if user.role != 'superadmin' %}
       <div class="nav-section">Main</div>
       <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <span class="icon">⬛</span> Dashboard
@@ -252,6 +253,7 @@ textarea { resize: vertical; min-height: 80px; }
       <a href="{{ url_for('new_transfer') }}" class="nav-link {% if request.endpoint == 'new_transfer' %}active{% endif %}">
         <span class="icon">＋</span> New Transfer
       </a>
+      {% endif %}
       {% if user.role == 'admin' %}
       <div class="nav-section">Daily Book</div>
       <a href="{{ url_for('daily_list') }}" class="nav-link {% if 'daily' in request.endpoint %}active{% endif %}">

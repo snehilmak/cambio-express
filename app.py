@@ -257,6 +257,10 @@ def superadmin_required(f):
     return d
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
+def require_store_context():
+    """Returns store_id or None. Routes needing a store should call this."""
+    return session.get("store_id")
+
 def get_sfin_cfg(store_id):
     return SimpleFINConfig.query.filter_by(store_id=store_id).first()
 
@@ -370,7 +374,9 @@ def dashboard():
 @app.route("/transfers")
 @login_required
 def transfers():
-    user=current_user(); sid=session["store_id"]
+    user=current_user(); sid=session.get("store_id")
+    if not sid:
+        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     q=Transfer.query.filter_by(store_id=sid)
     if user.role=="employee": q=q.filter_by(created_by=user.id)
     company=request.args.get("company",""); status=request.args.get("status","")
@@ -390,7 +396,9 @@ def transfers():
 @app.route("/transfers/new",methods=["GET","POST"])
 @login_required
 def new_transfer():
-    user=current_user(); sid=session["store_id"]
+    user=current_user(); sid=session.get("store_id")
+    if not sid:
+        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     if request.method=="POST":
         t=Transfer(store_id=sid,created_by=user.id,
             send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
@@ -413,7 +421,9 @@ def new_transfer():
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
 def edit_transfer(tid):
-    user=current_user(); sid=session["store_id"]
+    user=current_user(); sid=session.get("store_id")
+    if not sid:
+        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     t=Transfer.query.filter_by(id=tid,store_id=sid).first_or_404()
     if user.role=="employee" and t.created_by!=user.id:
         flash("Access denied.","error"); return redirect(url_for("transfers"))
@@ -711,9 +721,14 @@ def not_found(e):
 
 @app.errorhandler(500)
 def server_error(e):
-    app.logger.error(f"500: {e}")
-    return render_template("error.html",user=current_user(),code=500,
-        message="Something went wrong. Please try again."),500
+    import traceback
+    app.logger.error(f"500 error: {e}\n{traceback.format_exc()}")
+    try:
+        u = current_user()
+    except Exception:
+        u = None
+    return render_template("error.html", user=u, code=500,
+        message="Something went wrong. Please try again."), 500
 
 # ── Init ─────────────────────────────────────────────────────
 def init_db():

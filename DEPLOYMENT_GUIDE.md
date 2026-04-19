@@ -1,202 +1,157 @@
-# Cambio Express — Cloud Deployment & SaaS Setup Guide
+# Cambio Express — Cloud Deployment Guide
 
 ---
 
-## What's in This Package
-
-| File | Purpose |
-|---|---|
-| `app.py` | Main application (all bugs fixed) |
-| `requirements.txt` | Python dependencies |
-| `Procfile` | Tells cloud how to start the app |
-| `render.yaml` | One-click deploy to Render.com |
-| `railway.json` | One-click deploy to Railway.app |
-| `runtime.txt` | Pins Python version |
-| `START_SERVER.bat` | Run locally on Windows |
-| `templates/` | All HTML pages |
+## THE PROBLEM YOU SAW
+Render couldn't find `render.yaml` because the files were inside
+a subfolder in the zip. This version is fixed — all files sit at
+the root level. Follow the steps below exactly.
 
 ---
 
-## OPTION A — Deploy to Render.com (Recommended)
-**Cost: Free to start, ~$14/mo for production**
+## Step 1 — Create a GitHub Account & Repo
 
-### Step 1 — Put your code on GitHub
-1. Go to **github.com** → Sign up free → New repository
-2. Name it `cambio-express` → Create repository
-3. Download **GitHub Desktop** from desktop.github.com
-4. Clone your new repo, copy all files from this folder into it
-5. Commit and Push
-
-### Step 2 — Deploy on Render
-1. Go to **render.com** → Sign up with your GitHub account
-2. Click **"New +"** → **"Blueprint"**
-3. Connect your `cambio-express` GitHub repo
-4. Render reads your `render.yaml` automatically
-5. Click **"Apply"** — it creates the web app AND the database together
-6. Wait ~3 minutes for first deploy
-
-### Step 3 — Your app is live
-Render gives you a URL like: `https://cambio-express.onrender.com`
-
-**First login:**
-- Superadmin: `superadmin` / `super2025!`
-- Store admin: `admin` / `cambio2025!`
-
-**⚠️ Change both passwords immediately** in the Users section.
+1. Go to **github.com** → Sign Up (free)
+2. Click the **+** icon (top right) → **New repository**
+3. Name: `cambio-express`
+4. Set to **Private**
+5. Click **Create repository**
+6. Leave the browser tab open — you'll need it in Step 2
 
 ---
 
-## OPTION B — Deploy to Railway.app
-**Cost: ~$5/mo, faster cold starts than Render free tier**
+## Step 2 — Upload Your Files to GitHub
 
-1. Go to **railway.app** → Sign up with GitHub
-2. Click **"New Project"** → **"Deploy from GitHub repo"**
-3. Select `cambio-express`
-4. Railway auto-detects Python and deploys
-5. Go to **Variables** tab, add:
-   ```
-   SECRET_KEY        = (any random 32+ character string)
-   SUPERADMIN_PASSWORD = (your chosen password)
-   ADMIN_PASSWORD    = (your chosen password)
-   ```
-6. Add a **PostgreSQL** plugin from the Railway dashboard
-7. Railway auto-sets `DATABASE_URL` — no extra config needed
+**Do NOT upload the zip file itself. Extract it first.**
 
----
+### Easy method (no coding needed):
+1. Extract this zip to a folder on your computer
+2. On your new GitHub repo page, click **"uploading an existing file"**
+   (it's a small link in the middle of the page)
+3. **Drag ALL the extracted files and folders** into the upload box
+   - You should see: `app.py`, `requirements.txt`, `render.yaml`,
+     `Procfile`, `templates/` folder, etc. all at the top level
+4. Scroll down → click **"Commit changes"**
 
-## Environment Variables (Required in Production)
-
-Set these in your hosting platform's dashboard:
-
-| Variable | What It Is | Example |
-|---|---|---|
-| `SECRET_KEY` | Random secret for session security | `x9k2m...` (32+ chars) |
-| `DATABASE_URL` | Auto-set by Render/Railway | `postgresql://...` |
-| `SUPERADMIN_PASSWORD` | Your platform owner password | Strong password |
-| `ADMIN_PASSWORD` | Default password for new stores | Strong password |
-| `STRIPE_SECRET_KEY` | From Stripe dashboard | `sk_live_...` |
-| `STRIPE_WEBHOOK_SECRET` | From Stripe webhook settings | `whsec_...` |
-
-**Generate a secure SECRET_KEY** — run this in Python:
-```python
-import secrets
-print(secrets.token_hex(32))
+### Verify it worked:
+Your GitHub repo should look like this — files directly visible,
+NOT inside another folder:
+```
+cambio-express/
+├── app.py           ✅ visible at root
+├── render.yaml      ✅ visible at root
+├── requirements.txt ✅ visible at root
+├── Procfile         ✅ visible at root
+└── templates/       ✅ visible at root
 ```
 
 ---
 
-## Setting Up Stripe (Billing for Customers)
+## Step 3 — Deploy on Render.com
 
-### Step 1 — Create Stripe account
-1. Go to **stripe.com** → Create account
-2. Go to **Developers → API Keys**
-3. Copy your **Secret Key** (`sk_live_...`)
-4. Add it as `STRIPE_SECRET_KEY` environment variable
+1. Go to **render.com** → Sign Up with your GitHub account
+2. Click **"New +"** → **"Blueprint"**
+3. Click **"Connect account"** → authorize GitHub
+4. Find your `cambio-express` repo → click **"Connect"**
+5. Render finds `render.yaml` automatically → click **"Apply"**
+6. Wait 3–5 minutes for the first deploy
 
-### Step 2 — Create a Product in Stripe
-1. In Stripe → **Products** → Add Product
-2. Name: "Cambio Express Pro"
-3. Price: $X/month (recurring)
-4. Copy the **Price ID** (`price_...`)
-
-### Step 3 — Create a Payment Link
-1. In Stripe → **Payment Links** → Create
-2. Select your product/price
-3. Add a **success URL**: `https://your-app.com/dashboard`
-4. Share this link with businesses that want to subscribe
-
-### Step 4 — Enable Webhooks (so app knows when someone pays)
-1. Stripe → **Developers → Webhooks** → Add endpoint
-2. URL: `https://your-app.onrender.com/webhooks/stripe`
-3. Events to listen for:
-   - `customer.subscription.created`
-   - `customer.subscription.deleted`
-   - `customer.subscription.updated`
-4. Copy the **Signing Secret** → add as `STRIPE_WEBHOOK_SECRET`
-5. In `app.py`, uncomment the Stripe webhook handler code (see comments in file)
+Your app will be live at:
+`https://cambio-express.onrender.com`
 
 ---
 
-## Your Business Model — How to Sell to Other Stores
+## Step 4 — First Login & Setup
 
-### How it works
-- Each MSB business gets their own isolated account
-- You (superadmin) create the account for them → they pay you
-- Their employees only see their store's data
-- You can log in as any store to help them troubleshoot
-
-### Onboarding a new customer
-1. Log in as `superadmin`
-2. Go to **Platform → Stores → Add Store**
-3. Enter their business name, create their admin login
-4. Give them their login URL and credentials
-5. They log in, set up SimpleFIN, add their employees
-
-### Pricing ideas
-| Plan | Features | Price |
+| Account | Username | Password |
 |---|---|---|
-| Trial | 14 days, 1 user | Free |
-| Basic | 3 users, daily book, transfers | $49/mo |
-| Pro | Unlimited users, SimpleFIN, full P&L | $99/mo |
+| Platform Owner (you) | `superadmin` | `super2025!` |
+| Demo Store Admin | `admin` | `cambio2025!` |
+
+**Change both passwords immediately** → Users section.
 
 ---
 
-## Custom Domain (Make it look professional)
+## Step 5 — Set Environment Variables on Render
 
-### On Render:
-1. Dashboard → Your service → **Settings → Custom Domains**
-2. Add `app.cambioexpress.com` (or whatever you want)
-3. Go to your domain registrar (GoDaddy, Namecheap, etc.)
-4. Add a **CNAME record**: `app` → `cambio-express.onrender.com`
-5. Render auto-provisions SSL (HTTPS) — takes ~10 minutes
+Go to your Render service → **Environment** tab → Add:
 
----
+| Key | Value |
+|---|---|
+| `SECRET_KEY` | Any 32+ random characters (e.g. `xK9mP2...`) |
+| `SUPERADMIN_PASSWORD` | Your new superadmin password |
+| `ADMIN_PASSWORD` | Default password for new stores |
 
-## Database Backups
+To generate a good SECRET_KEY, use: https://randomkeygen.com
+(use the "256-bit WEP Keys" row)
 
-### Render (automatic):
-- Free tier: no automatic backups — export manually monthly
-- Paid tier ($7/mo): daily automatic backups
-
-### Manual backup anytime:
-In your hosting dashboard → PostgreSQL → Export → Download SQL file
-Keep a copy on Google Drive monthly.
+After adding variables → click **"Save Changes"** → Render redeploys automatically.
 
 ---
 
-## SimpleFIN — Fix for Your Error
+## Step 6 — Connect SimpleFIN (Fixed)
 
-The error you saw was caused by the setup token having incorrect base64 padding.
-The new `app.py` fixes this completely.
+The crash you had before is fully fixed. To reconnect:
 
-**How to reconnect:**
-1. Go to **beta-bridge.simplefin.org**
-2. If your old token was already claimed: click your connection → **"Rotate Access Token"**
-3. Copy the new access URL (starts with `https://`) — paste the full URL directly
-4. OR generate a fresh setup token and paste that
-
-**Paste the full access URL if you have it** — this is the most reliable method
-and skips the base64 step entirely.
+1. Log in as store admin → **Bank / SimpleFIN**
+2. Go to **beta-bridge.simplefin.org**
+3. **Recommended:** If you already have a connection, click it →
+   copy the **Access URL** (starts with `https://`) → paste that directly
+4. If you need a fresh token: click "Add Data Connection" →
+   copy the Setup Token → paste it in the app
 
 ---
 
-## Security Checklist Before Going Live
+## Adding New Customer Stores
 
-- [ ] Change `superadmin` password from default
-- [ ] Change `admin` password from default
-- [ ] Set a real `SECRET_KEY` (32+ random chars)
-- [ ] Enable HTTPS (automatic on Render/Railway)
-- [ ] Set up Stripe in live mode (not test mode)
-- [ ] Test SimpleFIN connection with a real token
-- [ ] Do a test transfer and verify it saves correctly
+1. Log in as `superadmin`
+2. Dashboard → **All Stores** → **Add Store**
+3. Fill in business name, create their admin login
+4. Give them the URL and their credentials
+5. They log in and set up their own SimpleFIN + employees
 
 ---
 
-## Support & Next Steps
+## Setting Up Stripe (When Ready to Charge Customers)
 
-Future features you can add:
-- **Email notifications** when ACH hits (use SendGrid — free tier)
-- **PDF daily reports** (exportable version of daily book)
-- **Multi-location** per store (one admin, multiple branches)
-- **Stripe ACH** for collecting subscription fees automatically
-- **SMS alerts** for employees when transfer status changes (Twilio)
+1. Create account at **stripe.com**
+2. Go to **Developers → API Keys** → copy Secret Key
+3. In Render → Environment → add `STRIPE_SECRET_KEY = sk_live_...`
+4. In Stripe → **Webhooks** → Add endpoint:
+   URL: `https://your-app.onrender.com/webhooks/stripe`
+   Events: `customer.subscription.created`, `customer.subscription.deleted`
+5. Copy the Webhook Signing Secret → add as `STRIPE_WEBHOOK_SECRET`
+6. In `app.py`, find the `stripe_webhook` function and uncomment
+   the handler code (it's clearly marked)
+
+---
+
+## Custom Domain
+
+1. Buy a domain (Namecheap ~$10/yr)
+2. Render → Your Service → **Settings → Custom Domains → Add**
+3. Enter your domain (e.g. `app.cambioexpress.com`)
+4. In Namecheap DNS settings, add:
+   `CNAME  app  →  cambio-express.onrender.com`
+5. SSL/HTTPS is automatic — takes ~10 minutes
+
+---
+
+## Suggested Pricing
+
+| Plan | Price | Features |
+|---|---|---|
+| Trial | Free 14 days | 1 admin, 2 employees |
+| Basic | $49/mo | 1 location, 5 employees |
+| Pro | $99/mo | Unlimited employees, SimpleFIN, full P&L |
+
+---
+
+## Logins Summary
+
+| Role | What They See |
+|---|---|
+| `superadmin` | All stores, can enter any store, platform overview |
+| `admin` (store) | Full daily book, P&L, bank data, ACH batches, all employee transfers |
+| `employee` | Only their own transfers, today's view |
+
