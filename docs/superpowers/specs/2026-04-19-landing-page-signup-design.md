@@ -23,14 +23,17 @@ Add a public-facing marketing landing page at `/` and a self-service signup flow
 
 ## Route Changes
 
-| Route | Before | After |
-|---|---|---|
-| `/` | Login page | Public landing page |
-| `/login` | (new) | Login page (moved from `/`) |
-| `/signup` | (new) | Self-service signup form |
-| `/subscribe` | (new) | Plan selection → Stripe Checkout |
+| Route | Methods | Before | After |
+|---|---|---|---|
+| `/` | GET | Login page | Public landing page |
+| `/login` | GET, POST | (moved from `/`) | Login page |
+| `/signup` | GET, POST | (new) | Self-service signup form |
+| `/subscribe` | GET | (new) | Plan selection page |
+| `/subscribe/checkout` | POST | (new) | Creates Stripe Checkout Session, redirects to Stripe |
+| `/subscribe/success` | GET | (new) | Post-payment confirmation page |
+| `/webhooks/stripe` | POST | Stub | Full Stripe event handler |
 
-All internal redirects using `url_for("login")` must be updated to `url_for("login")` pointing to the new `/login` route.
+All internal `redirect(url_for("login"))` calls throughout `app.py` must be updated to point to the new `/login` route name.
 
 ---
 
@@ -47,7 +50,7 @@ All internal redirects using `url_for("login")` must be updated to `url_for("log
 - Headline: **"Your Business. Crystal Clear."**
 - Subtext: "Stop managing your store on paper or spreadsheets. DineroSync gives you real-time visibility into transfers, daily cash, and monthly profits."
 - Primary CTA: **"Try Free for 7 Days"** → `/signup` (gold button)
-- Secondary CTA: **"Learn More ↓"** → anchor to features (outline button)
+- Secondary CTA: **"Learn More ↓"** → anchor to features section (outline button)
 - Below CTAs: "No credit card required · Cancel anytime"
 - Background: navy-to-blue gradient matching existing brand (`--navy` → `--blue`)
 
@@ -72,7 +75,7 @@ Three cards, Pro highlighted as "Most Popular":
 | Basic | $20 / month | All features except bank sync |
 | **Pro** *(highlighted)* | **$30 / month** | Everything + SimpleFIN bank sync + multi-store (coming soon) |
 
-Each card has a CTA button. Trial CTA → `/signup`. Basic/Pro CTAs → `/signup` (plan pre-selected in query param, used post-trial on subscribe page).
+Each card has a CTA button. Trial CTA → `/signup`. Basic/Pro CTAs → `/signup` (plan pre-selected in query param, used on subscribe page after trial).
 
 ### Footer
 - © 2026 Cambio Express
@@ -85,19 +88,24 @@ Each card has a CTA button. Trial CTA → `/signup`. Basic/Pro CTAs → `/signup
 ### Form Fields
 | Field | Required | Notes |
 |---|---|---|
-| Store Name | Yes | Stored as `Store.name`; slug auto-generated |
-| Email | Yes | Stored as `Store.email`; used as admin username |
+| Store Name | Yes | Stored as `Store.name`; slug auto-generated via `slugify()` |
+| Email | Yes | Stored as `Store.email`; used as admin `User.username` |
 | Password | Yes | Min 8 chars |
 | Phone | No | Stored as `Store.phone` |
 
-### On Submit
-1. Validate required fields; show inline errors on failure
-2. Check email not already registered (unique on `User.username`)
+### On Submit (POST)
+1. Validate required fields; re-render form with inline errors on failure
+2. Check email uniqueness: query `User.query.filter_by(username=email).filter(User.store_id != None).first()` — if found, show "An account with this email already exists"
 3. Create `Store(name=..., slug=slugify(name), email=..., phone=..., plan="trial")`
-4. Create `User(store_id=store.id, username=email, role="admin", full_name=store_name)`
+4. `db.session.flush()` to get `store.id`
 5. Set `store.trial_ends_at = datetime.utcnow() + timedelta(days=7)`
-6. Log user in (set session) → redirect to `/dashboard`
-7. No Stripe API call at this step
+6. Set `store.grace_ends_at = store.trial_ends_at + timedelta(days=4)`
+7. Create `User(store_id=store.id, username=email, role="admin", full_name=store_name)`
+8. `user.set_password(password)`
+9. `db.session.commit()`
+10. Set session: `session["user_id"]`, `session["role"]`, `session["store_id"]`
+11. Redirect to `/dashboard`
+12. No Stripe API call at this step
 
 ---
 
@@ -107,61 +115,98 @@ Add two new columns to the `Store` model:
 
 ```python
 trial_ends_at = db.Column(db.DateTime, nullable=True)
-grace_ends_at = db.Column(db.DateTime, nullable=True)  # = trial_ends_at + 4 days
+grace_ends_at = db.Column(db.DateTime, nullable=True)  # trial_ends_at + 4 days
 ```
 
-`grace_ends_at` is set at signup alongside `trial_ends_at`.
+Both are `nullable=True` to support:
+- Stores created by superadmin (no trial — treated as permanently active)
+- Existing stores in the database before this feature was added
 
 ---
 
 ## Trial & Grace Period Enforcement
 
-A helper function `get_trial_status(store)` returns one of:
-- `"active"` — trial in progress, no banner
-- `"expiring_soon"` — within 3 days of trial_ends_at, show yellow banner
-- `"grace"` — past trial_ends_at but within grace_ends_at, show red banner
-- `"expired"` — past grace_ends_at, soft lock
+### `get_trial_status(store)` helper
 
-A `check_trial` decorator (or logic inside `login_required`) runs on every protected route:
-- `"expiring_soon"` → inject yellow banner via flash or template variable
-- `"grace"` → inject red banner
-- `"expired"` → redirect to `/subscribe`
+Returns one of four values:
 
-Stores on `"basic"` or `"pro"` plan (i.e., active Stripe subscription) skip all trial checks.
-Superadmin skips all trial checks.
+| Status | Condition |
+|---|---|
+| `"exempt"` | `store.trial_ends_at is None` OR `store.plan in ("basic", "pro")` |
+| `"active"` | `now < trial_ends_at - 3 days` |
+| `"expiring_soon"` | `trial_ends_at - 3 days <= now < trial_ends_at` |
+| `"grace"` | `trial_ends_at <= now < grace_ends_at` |
+| `"expired"` | `now >= grace_ends_at` |
 
----
+Superadmin (role = `"superadmin"`) always returns `"exempt"` without checking the store.
 
-## Subscribe Page (`/subscribe`)
+### Enforcement
 
-Shown when trial is expired (hard redirect) or accessible any time via banner CTA.
+Add `trial_status` to every `@login_required` route's template context (or use a `@app.context_processor`):
 
-- Displays Basic ($20/mo) vs Pro ($30/mo) side-by-side
-- User clicks a plan → POST to `/subscribe/checkout` with `plan=basic|pro`
-- Server creates a Stripe Checkout Session:
-  - Mode: `subscription`
-  - Line item: the corresponding Stripe Price ID (configured via env vars `STRIPE_BASIC_PRICE_ID`, `STRIPE_PRO_PRICE_ID`)
-  - `success_url`: `/subscribe/success`
-  - `cancel_url`: `/subscribe`
-- Redirect user to Stripe-hosted checkout URL
+- `"expiring_soon"` → yellow banner in `base.html`: "Your trial ends in X days — [Choose a plan]"
+- `"grace"` → red banner in `base.html`: "Your trial has ended — [Upgrade now] to keep access"
+- `"expired"` → redirect to `/subscribe` before rendering any page
+- `"exempt"` or `"active"` → no banner, normal access
 
 ---
 
-## Stripe Webhook (`/webhooks/stripe`)
+## Subscribe Page (`/subscribe`) — GET
 
-Currently a stub. Implement handler for:
+Shown on redirect when expired, or accessible any time via banner CTA. Requires login.
+
+- Displays Basic ($20/mo) vs Pro ($30/mo) side-by-side (same pricing card style as landing page)
+- Each card has a form with a hidden `plan` field (`basic` or `pro`) that POSTs to `/subscribe/checkout`
+
+---
+
+## Subscribe Checkout (`/subscribe/checkout`) — POST
+
+Requires login. Reads `plan=basic|pro` from form data.
+
+Creates a Stripe Checkout Session:
+- `mode="subscription"`
+- `line_items`: one item using `STRIPE_BASIC_PRICE_ID` or `STRIPE_PRO_PRICE_ID` env var
+- `metadata={"store_id": str(store.id)}` — used by webhook to identify the store
+- If `store.stripe_customer_id` exists, pass `customer=store.stripe_customer_id` to reuse the Stripe customer
+- `success_url`: `url_for("subscribe_success", _external=True)`
+- `cancel_url`: `url_for("subscribe", _external=True)`
+
+Redirect user to `session.url` (Stripe-hosted checkout page).
+
+---
+
+## Subscribe Success (`/subscribe/success`) — GET
+
+Requires login. Shown after Stripe redirects back.
+
+- Display a "Payment received — activating your account" confirmation message
+- **Do not** update `store.plan` here — wait for the webhook (Stripe guarantees webhook delivery even if the user closes the tab)
+- If `store.plan` is already updated (webhook arrived first), show "You're all set — welcome to [Basic/Pro]!"
+- Poll or show a simple "refresh in a moment" message if plan is still `"trial"`
+
+---
+
+## Stripe Webhook (`/webhooks/stripe`) — POST
+
+Verify signature using `STRIPE_WEBHOOK_SECRET`. Return 400 on invalid signature.
 
 **`checkout.session.completed`**
-- Retrieve the subscription from Stripe
-- Match to store via `stripe_customer_id` or metadata
-- Update `store.plan = "basic"` or `"pro"`
-- Save `store.stripe_customer_id`, `store.stripe_subscription_id`
+1. Read `store_id` from `event.data.object.metadata["store_id"]`
+2. Look up `Store.query.get(store_id)`
+3. Retrieve full subscription from Stripe: `stripe.Subscription.retrieve(session.subscription)`
+4. Determine plan from the Price ID: match against `STRIPE_BASIC_PRICE_ID` / `STRIPE_PRO_PRICE_ID`
+5. Update `store.plan`, `store.stripe_customer_id`, `store.stripe_subscription_id`
+6. Commit
 
 **`customer.subscription.deleted`**
-- Revert `store.plan = "trial"` (or a new `"inactive"` status)
-- Show upgrade prompt
+1. Find store by `stripe_subscription_id`
+2. Set `store.plan = "inactive"` (not `"trial"` — grace period is long past)
+3. `store.stripe_subscription_id = ""`
+4. Commit
+5. On next login, `get_trial_status` returns `"expired"` for `"inactive"` plan → redirect to `/subscribe`
 
-Webhook signature verification via `STRIPE_WEBHOOK_SECRET` env var.
+Note: update `get_trial_status` to treat `store.plan == "inactive"` as `"expired"` regardless of dates.
 
 ---
 
@@ -169,10 +214,10 @@ Webhook signature verification via `STRIPE_WEBHOOK_SECRET` env var.
 
 | Variable | Purpose |
 |---|---|
-| `STRIPE_SECRET_KEY` | Stripe API key |
-| `STRIPE_BASIC_PRICE_ID` | Stripe Price ID for Basic plan |
-| `STRIPE_PRO_PRICE_ID` | Stripe Price ID for Pro plan |
-| `STRIPE_WEBHOOK_SECRET` | Webhook signature verification |
+| `STRIPE_SECRET_KEY` | Stripe API secret key |
+| `STRIPE_BASIC_PRICE_ID` | Stripe Price ID for Basic plan ($20/mo) |
+| `STRIPE_PRO_PRICE_ID` | Stripe Price ID for Pro plan ($30/mo) |
+| `STRIPE_WEBHOOK_SECRET` | Webhook endpoint signing secret |
 
 ---
 
