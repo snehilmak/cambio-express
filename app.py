@@ -448,7 +448,44 @@ def logout():
 @app.route("/subscribe")
 @login_required
 def subscribe():
-    return "Subscription page coming soon", 200
+    user = current_user()
+    store = current_store()
+    return render_template("subscribe.html", user=user, store=store)
+
+@app.route("/subscribe/checkout", methods=["POST"])
+@login_required
+def subscribe_checkout():
+    store = current_store()
+    plan = request.form.get("plan", "").strip()
+    price_map = {
+        "basic": os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
+        "pro":   os.environ.get("STRIPE_PRO_PRICE_ID", ""),
+    }
+    if plan not in price_map or not price_map[plan]:
+        flash("Invalid plan selected.", "error")
+        return redirect(url_for("subscribe"))
+    try:
+        kwargs = dict(
+            mode="subscription",
+            line_items=[{"price": price_map[plan], "quantity": 1}],
+            metadata={"store_id": str(store.id)},
+            success_url=url_for("subscribe_success", _external=True),
+            cancel_url=url_for("subscribe", _external=True),
+        )
+        if store.stripe_customer_id:
+            kwargs["customer"] = store.stripe_customer_id
+        checkout_session = stripe.checkout.Session.create(**kwargs)
+        return redirect(checkout_session.url, code=303)
+    except stripe.error.StripeError as e:
+        app.logger.error(f"Stripe error: {e}")
+        flash("Payment service error. Please try again.", "error")
+        return redirect(url_for("subscribe"))
+
+@app.route("/subscribe/success")
+@login_required
+def subscribe_success():
+    flash("Your subscription is active. Welcome aboard!", "success")
+    return redirect(url_for("dashboard"))
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")

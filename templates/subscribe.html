@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Choose Your Plan — Cambio Express{% endblock %}
+{% block page_title %}Choose Your Plan{% endblock %}
+{% block content %}
+
+<div style="max-width:800px;margin:0 auto;text-align:center;margin-bottom:40px;">
+  <div style="font-family:'DM Serif Display',serif;font-size:28px;color:var(--navy);margin-bottom:10px;">Upgrade to keep your access</div>
+  <div style="color:var(--gray4);font-size:14px;">No contracts. Cancel anytime.</div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1.1fr;gap:24px;max-width:700px;margin:0 auto;">
+
+  <div style="background:var(--white);border:1.5px solid var(--gray2);border-radius:14px;padding:32px 28px;">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gray4);margin-bottom:8px;">Basic</div>
+    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:var(--navy);line-height:1;">$20</div>
+    <div style="font-size:13px;color:var(--gray4);margin-bottom:20px;">per store / month</div>
+    <ul style="list-style:none;margin-bottom:28px;">
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Daily books &amp; cash tracking</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Money transfer logging</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ ACH batch reconciliation</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Monthly P&amp;L reports</li>
+      <li style="font-size:13.5px;padding:7px 0;color:var(--gray3);">✗ Bank sync</li>
+    </ul>
+    <form method="POST" action="/subscribe/checkout">
+      <input type="hidden" name="plan" value="basic">
+      <button type="submit" style="width:100%;background:transparent;color:var(--blue);border:1.5px solid var(--blue);padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Choose Basic</button>
+    </form>
+  </div>
+
+  <div style="background:var(--navy);border:2px solid var(--gold);border-radius:14px;padding:32px 28px;position:relative;">
+    <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 14px;border-radius:999px;white-space:nowrap;">MOST POPULAR</div>
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold2);margin-bottom:8px;">Pro</div>
+    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:white;line-height:1;">$30</div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:20px;">per store / month</div>
+    <ul style="list-style:none;margin-bottom:28px;">
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Everything in Basic</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ SimpleFIN bank sync</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Live balance visibility</li>
+      <li style="font-size:13.5px;padding:7px 0;color:rgba(255,255,255,0.85);">✓ Multi-store (coming soon)</li>
+    </ul>
+    <form method="POST" action="/subscribe/checkout">
+      <input type="hidden" name="plan" value="pro">
+      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Choose Pro</button>
+    </form>
+  </div>
+
+</div>
+{% endblock %}
