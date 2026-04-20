@@ -78,15 +78,26 @@ class Customer(db.Model):
                             name="uq_customer_store_phone"),
     )
 
-    def to_dict(self):
-        return {
+    def to_dict(self, current_store_id=None, home_names=None):
+        """JSON payload for the autocomplete.
+
+        When `current_store_id` is passed and doesn't match this customer's
+        home store, `home_store_name` is filled from `home_names`
+        (id → name map) so the UI can label the row "from Store X".
+        """
+        d = {
             "id": self.id,
             "full_name": self.full_name,
             "dob": self.dob.isoformat() if self.dob else "",
             "address": self.address or "",
             "phone_country": self.phone_country or "",
             "phone_number": self.phone_number or "",
+            "home_store_id": self.store_id,
+            "home_store_name": "",
         }
+        if current_store_id is not None and self.store_id != current_store_id:
+            d["home_store_name"] = (home_names or {}).get(self.store_id, "")
+        return d
 
 class Transfer(db.Model):
     __tablename__ = "transfer"
@@ -1306,35 +1317,64 @@ PHONE_COUNTRY_CODES = [
     ("+233", "Ghana"),
 ]
 
+def sibling_store_ids(store_id):
+    """All store IDs that share at least one owner with the given store.
+
+    Includes the input store_id itself. Returns [store_id] when the store
+    has no Owner links (solo shop) so this is safe to call unconditionally.
+
+    Used to scope customer-directory queries: a multi-store owner should
+    see one unified customer list across all their locations, while
+    unrelated stores stay fully isolated.
+    """
+    owner_ids = [r.owner_id for r in
+                 StoreOwnerLink.query.filter_by(store_id=store_id).all()]
+    if not owner_ids:
+        return [store_id]
+    sibling_rows = (StoreOwnerLink.query
+                    .filter(StoreOwnerLink.owner_id.in_(owner_ids))
+                    .all())
+    ids = {r.store_id for r in sibling_rows}
+    ids.add(store_id)
+    return sorted(ids)
+
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
                              address="", dob=None, customer_id=None):
     """Return the Customer row for this sender, creating / updating as needed.
 
     Lookup priority:
-      1. explicit customer_id from the form (set when cashier picked from the
-         autocomplete);
-      2. (store_id, phone_country, phone_number) when a phone is provided;
-      3. otherwise create a new record.
-    Any non-empty field in the arguments overwrites the stored one — last
-    write wins so the customer record tracks the latest info the cashier saw.
+      1. explicit customer_id — only accepted if the target Customer lives
+         in one of the current store's sibling stores (owner umbrella);
+      2. (phone_country, phone_number) across the owner umbrella — a match
+         in any sibling store is reused so repeat senders get one record
+         per person per owner, not per store;
+      3. otherwise create a new record pinned to the current store_id.
+
+    Any non-empty argument overwrites the stored value — last write wins,
+    so the customer record always tracks the latest info a cashier saw
+    anywhere in the owner's portfolio.
     """
     cust = None
+    sibling_ids = sibling_store_ids(store_id)
     if customer_id:
-        cust = Customer.query.filter_by(id=customer_id, store_id=store_id).first()
+        cust = (Customer.query
+                .filter(Customer.id == customer_id,
+                        Customer.store_id.in_(sibling_ids))
+                .first())
     if cust is None and phone_number:
-        cust = Customer.query.filter_by(
-            store_id=store_id,
-            phone_country=(phone_country or "+1"),
-            phone_number=phone_number,
-        ).first()
+        cust = (Customer.query
+                .filter(Customer.store_id.in_(sibling_ids),
+                        Customer.phone_country == (phone_country or "+1"),
+                        Customer.phone_number == phone_number)
+                .first())
     if cust is None:
         cust = Customer(store_id=store_id, full_name=full_name or "",
                         phone_country=(phone_country or "+1"),
                         phone_number=phone_number or "")
         db.session.add(cust)
-    if full_name:   cust.full_name    = full_name
-    if address:     cust.address      = address
-    if dob:         cust.dob          = dob
+    if full_name:     cust.full_name     = full_name
+    if address:       cust.address       = address
+    if dob:           cust.dob           = dob
     if phone_country: cust.phone_country = phone_country
     if phone_number:  cust.phone_number  = phone_number
     cust.updated_at = datetime.utcnow()
@@ -1346,11 +1386,13 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 def api_customers_search():
     """Autocomplete endpoint for the sender field on the transfer form.
 
-    Searches by phone number OR name within the current store and returns
-    up to 10 matches. Address is not a search key — too long/ambiguous to be
-    a useful lookup — but it rides along in the result so the dropdown can
-    still auto-fill it when the cashier picks a match. Scoped via the
-    session so one store can never see another store's customers.
+    Scope: all stores under the same owner umbrella as the current session's
+    store. Standalone stores (no owner links) see only their own customers.
+    Unrelated stores can never see each other's customers.
+
+    Searches phone number OR name (not address — too noisy). 2-char minimum
+    on the query so the dropdown doesn't blast the whole directory. Address
+    rides along in each payload so the UI can auto-fill it on pick.
     """
     sid = session.get("store_id")
     if not sid:
@@ -1359,8 +1401,9 @@ def api_customers_search():
     if len(q_text) < 2:
         return jsonify([])
     like = f"%{q_text}%"
+    scope_ids = sibling_store_ids(sid)
     rows = (Customer.query
-            .filter(Customer.store_id == sid)
+            .filter(Customer.store_id.in_(scope_ids))
             .filter(db.or_(
                 Customer.phone_number.ilike(like),
                 Customer.full_name.ilike(like),
@@ -1368,7 +1411,14 @@ def api_customers_search():
             .order_by(Customer.updated_at.desc())
             .limit(10)
             .all())
-    return jsonify([c.to_dict() for c in rows])
+    # Precompute the home-store name for rows not owned by the current
+    # store so the UI can label "from Store A" on cross-store matches.
+    other_store_ids = {c.store_id for c in rows if c.store_id != sid}
+    home_names = {}
+    if other_store_ids:
+        home_names = {s.id: s.name for s in
+                      Store.query.filter(Store.id.in_(other_store_ids)).all()}
+    return jsonify([c.to_dict(current_store_id=sid, home_names=home_names) for c in rows])
 
 # ── Transfers ────────────────────────────────────────────────
 @app.route("/transfers")
