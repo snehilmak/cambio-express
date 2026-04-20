@@ -851,6 +851,75 @@ def admin_edit_user(uid):
         db.session.commit(); flash("User updated.","success"); return redirect(url_for("admin_users"))
     return render_template("admin_user_form.html",user=user,edit_user=eu)
 
+@app.route("/admin/settings", methods=["GET", "POST"])
+@admin_required
+def admin_settings():
+    user = current_user()
+    store = current_store()
+    active_tab = request.args.get("tab", "store")
+    errors = {}
+
+    if request.method == "POST":
+        form_tab = request.form.get("_tab", "store")
+        active_tab = form_tab
+
+        if form_tab == "store":
+            name = request.form.get("store_name", "").strip()
+            email = request.form.get("email", "").strip().lower()
+            phone = request.form.get("phone", "").strip()
+
+            if not name:
+                errors["store_name"] = "Store name is required."
+            if not email:
+                errors["email"] = "Email is required."
+            elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+                errors["email"] = "Enter a valid email address."
+            if not errors:
+                taken = User.query.filter(
+                    User.username == email,
+                    User.role == "admin",
+                    User.store_id != store.id
+                ).first()
+                if taken:
+                    errors["email"] = "That email is already registered to another account."
+
+            if not errors:
+                store.name = name
+                store.email = email
+                store.phone = phone
+                user.username = email
+                db.session.commit()
+                flash("Store info updated.", "success")
+                return redirect(url_for("admin_settings", tab="store"))
+
+        elif form_tab == "security":
+            current_pw = request.form.get("current_password", "")
+            new_pw = request.form.get("new_password", "")
+            confirm_pw = request.form.get("confirm_password", "")
+
+            if not user.check_password(current_pw):
+                errors["current_password"] = "Current password is incorrect."
+            elif len(new_pw) < 8:
+                errors["new_password"] = "Password must be at least 8 characters."
+            elif new_pw != confirm_pw:
+                errors["confirm_password"] = "Passwords do not match."
+
+            if not errors:
+                user.set_password(new_pw)
+                db.session.commit()
+                flash("Password updated.", "success")
+                return redirect(url_for("admin_settings", tab="security"))
+
+    employees = User.query.filter(
+        User.store_id == store.id,
+        User.id != user.id
+    ).order_by(User.full_name).all()
+
+    return render_template("admin_settings.html",
+        user=user, store=store,
+        active_tab=active_tab, errors=errors,
+        employees=employees)
+
 # ── Superadmin ───────────────────────────────────────────────
 @app.route("/superadmin/stores")
 @superadmin_required

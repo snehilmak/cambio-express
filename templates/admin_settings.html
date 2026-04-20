@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Settings — Cambio Express{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block head %}
+<style>
+.tab-bar {
+  display: flex; gap: 0; border-bottom: 2px solid var(--gray2);
+  margin-bottom: 28px;
+}
+.tab-link {
+  padding: 10px 20px; font-size: 13.5px; font-weight: 500;
+  color: var(--gray4); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  transition: all 0.15s;
+}
+.tab-link:hover { color: var(--navy); }
+.tab-link.active { color: var(--navy); border-bottom-color: var(--blue); font-weight: 600; }
+.field-error { font-size: 12px; color: var(--red); margin-top: 3px; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="tab-bar">
+  <a href="{{ url_for('admin_settings', tab='store') }}"
+     class="tab-link {% if active_tab == 'store' %}active{% endif %}">Store Info</a>
+  <a href="{{ url_for('admin_settings', tab='security') }}"
+     class="tab-link {% if active_tab == 'security' %}active{% endif %}">Security</a>
+  <a href="{{ url_for('admin_settings', tab='team') }}"
+     class="tab-link {% if active_tab == 'team' %}active{% endif %}">Team</a>
+</div>
+
+{% if active_tab == 'store' %}
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><span class="card-title">Store Info</span></div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="_tab" value="store">
+      <div class="form-grid cols-1">
+        <div class="field">
+          <label>Store Name *</label>
+          <input type="text" name="store_name" value="{{ store.name }}" required>
+          {% if errors.store_name %}<div class="field-error">{{ errors.store_name }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Contact Email *</label>
+          <input type="email" name="email" value="{{ store.email }}">
+          {% if errors.email %}<div class="field-error">{{ errors.email }}</div>{% endif %}
+          <div style="font-size:11px;color:var(--gray4);margin-top:3px;">
+            This is also your login username. Changing it takes effect immediately.
+          </div>
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input type="text" name="phone" value="{{ store.phone }}" placeholder="Optional">
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <button type="submit" class="btn btn-primary">💾 Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif active_tab == 'security' %}
+<div class="card" style="max-width:480px;">
+  <div class="card-header"><span class="card-title">Change Password</span></div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="_tab" value="security">
+      <div class="form-grid cols-1">
+        <div class="field">
+          <label>Current Password *</label>
+          <input type="password" name="current_password" required>
+          {% if errors.current_password %}<div class="field-error">{{ errors.current_password }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>New Password *</label>
+          <input type="password" name="new_password" placeholder="Min 8 characters" required>
+          {% if errors.new_password %}<div class="field-error">{{ errors.new_password }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Confirm New Password *</label>
+          <input type="password" name="confirm_password" required>
+          {% if errors.confirm_password %}<div class="field-error">{{ errors.confirm_password }}</div>{% endif %}
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <button type="submit" class="btn btn-primary">🔒 Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif active_tab == 'team' %}
+{% set login_url = url_for('login_store', slug=store.slug, _external=True) %}
+<div class="card mb-3" style="max-width:700px;">
+  <div class="card-header"><span class="card-title">Employee Login Link</span></div>
+  <div class="card-body">
+    <div style="font-size:13px;color:var(--gray4);margin-bottom:10px;">
+      Share this link with your employees so they can sign in:
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <input type="text" id="emp-url" value="{{ login_url }}" readonly
+        style="flex:1;background:var(--gray1);color:var(--dark);font-family:'JetBrains Mono',monospace;font-size:13px;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyLoginUrl()">Copy</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px;">
+  <div class="card-header">
+    <span class="card-title">Employees</span>
+    <a href="{{ url_for('admin_new_user') }}" class="btn btn-primary btn-sm">＋ Add Employee</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Full Name</th><th>Username</th><th>Role</th><th>Status</th><th>Reset Password</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        <tr>
+          <td>{{ emp.full_name or '—' }}</td>
+          <td class="mono">{{ emp.username }}</td>
+          <td>
+            {% if emp.role == 'admin' %}
+            <span class="badge badge-navy">Admin</span>
+            {% else %}
+            <span class="badge badge-blue">Employee</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if emp.is_active %}
+            <span class="badge badge-green">Active</span>
+            {% else %}
+            <span class="badge badge-red">Inactive</span>
+            {% endif %}
+          </td>
+          <td>
+            <button type="button" class="btn btn-outline btn-sm"
+              onclick="showReset({{ emp.id }}, '{{ emp.full_name or emp.username }}')">
+              Reset
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not employees %}
+        <tr><td colspan="5" style="text-align:center;color:var(--gray4);padding:24px;">
+          No employees yet. Add one to get started.
+        </td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Reset password modal -->
+<div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--white);border-radius:12px;padding:32px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--navy);margin-bottom:6px;">Reset Password</div>
+    <div id="reset-name" style="font-size:13px;color:var(--gray4);margin-bottom:20px;"></div>
+    <form id="reset-form" method="POST">
+      <div class="field" style="margin-bottom:14px;">
+        <label>New Password</label>
+        <input type="password" name="password" placeholder="Min 8 characters" required>
+      </div>
+      <div class="field" style="margin-bottom:20px;">
+        <label>Confirm Password</label>
+        <input type="password" name="confirm_password" placeholder="Repeat password" required>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button type="submit" class="btn btn-primary">Set Password</button>
+        <button type="button" class="btn btn-outline" onclick="closeReset()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+function copyLoginUrl() {
+  var el = document.getElementById('emp-url');
+  el.select();
+  document.execCommand('copy');
+  alert('Login link copied!');
+}
+function showReset(uid, name) {
+  document.getElementById('reset-name').textContent = 'Setting new password for: ' + name;
+  document.getElementById('reset-form').action = '/admin/settings/team/' + uid;
+  var modal = document.getElementById('reset-modal');
+  modal.style.display = 'flex';
+}
+function closeReset() {
+  document.getElementById('reset-modal').style.display = 'none';
+}
+</script>
+{% endblock %}
