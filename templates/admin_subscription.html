@@ -1,187 +1,113 @@
 {% extends "base.html" %}
 {% block title %}Subscription — DineroBook{% endblock %}
-{% block page_title %}Subscription{% endblock %}
+{% block page_title %}Billing &amp; Subscription{% endblock %}
 {% block head %}
 <style>
-.sub-grid {
-  display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px;
-  margin-bottom: 28px;
-}
-@media (max-width: 900px) { .sub-grid { grid-template-columns: 1fr; gap: 16px; } }
+  /* Page-only layout: plan hero + add-on cards.
+     Banners, info-rows, info-box, modal, coming-pill all live in app.css. */
 
-.plan-hero {
-  background: var(--navy); color: var(--white);
-  border-radius: 12px; padding: 28px;
-  position: relative; overflow: hidden;
-}
-.plan-hero .label {
-  font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
-  color: var(--gold2); font-weight: 600;
-}
-.plan-hero .name {
-  font-family: 'DM Serif Display', serif; font-size: 32px;
-  margin-top: 6px; line-height: 1.1;
-}
-.plan-hero .price {
-  font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 4px;
-  font-family: 'JetBrains Mono', monospace;
-}
-.plan-hero .meta {
-  margin-top: 18px; font-size: 13px; color: rgba(255,255,255,0.75);
-}
-.plan-hero .actions { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
-.plan-hero .btn-on-dark {
-  background: var(--gold); color: var(--white); border: none;
-  padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
-  font-weight: 600; cursor: pointer; text-decoration: none;
-  font-family: 'DM Sans', sans-serif;
-}
-.plan-hero .btn-on-dark:hover { background: var(--gold2); color: var(--navy); }
-.plan-hero .btn-ghost {
-  background: transparent; color: rgba(255,255,255,0.85);
-  border: 1px solid rgba(255,255,255,0.3);
-  padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
-  font-weight: 500; cursor: pointer; text-decoration: none;
-  font-family: 'DM Sans', sans-serif;
-}
-.plan-hero .btn-ghost:hover { border-color: var(--gold2); color: var(--gold2); }
+  .sub-grid {
+    display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px;
+    margin-bottom: 28px;
+  }
+  @media (max-width: 900px) { .sub-grid { grid-template-columns: 1fr; gap: 16px; } }
 
-.addon-card {
-  background: var(--white); border: 1px solid var(--gray2);
-  border-radius: 12px; padding: 22px; position: relative;
-  display: flex; flex-direction: column; gap: 10px;
-}
-[data-theme="dark"] .addon-card { background: #1a1f2e; border-color: #2a3044; }
+  /* Dark navy "current plan" hero. Uses on-dark button variants below. */
+  .plan-hero {
+    background: var(--navy); color: var(--white);
+    border-radius: 12px; padding: 28px;
+    position: relative; overflow: hidden;
+  }
+  .plan-hero .label {
+    font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--gold2); font-weight: 600;
+  }
+  .plan-hero .name {
+    font-family: 'DM Serif Display', serif; font-size: 32px;
+    margin-top: 6px; line-height: 1.1;
+  }
+  .plan-hero .price {
+    font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .plan-hero .meta {
+    margin-top: 18px; font-size: 13px; color: rgba(255,255,255,0.75);
+  }
+  .plan-hero .actions { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn-on-dark {
+    background: var(--gold); color: var(--white); border: none;
+    padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
+    font-weight: 600; cursor: pointer; text-decoration: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-on-dark:hover { background: var(--gold2); color: var(--navy); }
+  .btn-ghost {
+    background: transparent; color: rgba(255,255,255,0.85);
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
+    font-weight: 500; cursor: pointer; text-decoration: none;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-ghost:hover { border-color: var(--gold2); color: var(--gold2); }
+  .cancel-link {
+    background: transparent; color: rgba(255,255,255,0.55);
+    border: none; padding: 8px 0; font-size: 12.5px;
+    cursor: pointer; text-decoration: underline;
+    font-family: 'DM Sans', sans-serif; margin-top: 6px;
+  }
+  .cancel-link:hover { color: rgba(255,255,255,0.9); }
 
-.addon-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.addon-name {
-  font-family: 'DM Serif Display', serif; font-size: 19px;
-  color: var(--navy); line-height: 1.2;
-}
-[data-theme="dark"] .addon-name { color: #f3f4f6; }
-.addon-price {
-  font-family: 'JetBrains Mono', monospace; font-size: 13px;
-  color: var(--gray4); white-space: nowrap;
-}
-.addon-tag { font-size: 13px; color: var(--gray4); }
-.addon-desc { font-size: 13px; color: var(--dark); line-height: 1.55; }
-[data-theme="dark"] .addon-desc { color: #d1d5db; }
-.addon-foot {
-  margin-top: auto; display: flex; align-items: center;
-  justify-content: space-between; gap: 10px; padding-top: 6px;
-}
-.addon-btn {
-  background: transparent; color: var(--gray4);
-  border: 1.5px solid var(--gray2); padding: 8px 14px;
-  border-radius: 8px; font-size: 12.5px; font-weight: 600;
-  cursor: not-allowed; font-family: 'DM Sans', sans-serif;
-}
-.addon-btn.live {
-  cursor: pointer; color: var(--blue); border-color: var(--blue);
-}
-.addon-btn.live:hover { background: var(--blue); color: var(--white); }
-.coming-pill {
-  background: var(--gold); color: var(--white);
-  font-size: 10px; font-weight: 700; letter-spacing: 1px;
-  padding: 3px 10px; border-radius: 999px; text-transform: uppercase;
-}
-.gate-banner {
-  background: #fef9c3; border: 1px solid #fde047;
-  color: #713f12; border-radius: 8px; padding: 12px 16px;
-  font-size: 13px; margin-bottom: 18px;
-}
-[data-theme="dark"] .gate-banner {
-  background: #2d2410; border-color: #4a3a10; color: #fde047;
-}
-
-.retention-banner {
-  background: #fee2e2; border: 1px solid #fca5a5;
-  color: #7f1d1d; border-radius: 10px; padding: 16px 20px;
-  margin-bottom: 22px; display: flex; flex-wrap: wrap;
-  align-items: center; justify-content: space-between; gap: 12px;
-}
-.retention-banner .msg { font-size: 13.5px; line-height: 1.5; flex: 1; min-width: 240px; }
-.retention-banner .msg strong { color: #7f1d1d; }
-[data-theme="dark"] .retention-banner {
-  background: #2d1215; border-color: #7f1d1d; color: #fca5a5;
-}
-[data-theme="dark"] .retention-banner .msg strong { color: #fca5a5; }
-.retention-banner .cta {
-  background: var(--blue); color: var(--white);
-  padding: 8px 16px; border-radius: 8px; font-size: 13px;
-  font-weight: 600; text-decoration: none; white-space: nowrap;
-}
-.retention-banner .cta:hover { background: var(--mid); }
-
-.cancel-link {
-  background: transparent; color: rgba(255,255,255,0.55);
-  border: none; padding: 8px 0; font-size: 12.5px;
-  cursor: pointer; text-decoration: underline;
-  font-family: 'DM Sans', sans-serif; margin-top: 6px;
-}
-.cancel-link:hover { color: rgba(255,255,255,0.9); }
-
-.modal-backdrop {
-  position: fixed; inset: 0; background: rgba(15,31,61,0.55);
-  z-index: 200; display: none; align-items: center; justify-content: center;
-  padding: 20px;
-}
-.modal-backdrop.open { display: flex; }
-.modal-card {
-  background: var(--white); border-radius: 14px;
-  width: 100%; max-width: 460px; padding: 28px;
-  box-shadow: 0 20px 60px rgba(15,31,61,0.25);
-}
-[data-theme="dark"] .modal-card { background: #1a1f2e; }
-.modal-card h3 {
-  font-family: 'DM Serif Display', serif; font-size: 22px;
-  color: var(--navy); margin-bottom: 8px;
-}
-[data-theme="dark"] .modal-card h3 { color: #f3f4f6; }
-.modal-card p {
-  font-size: 13.5px; color: var(--dark); line-height: 1.6;
-  margin-bottom: 12px;
-}
-[data-theme="dark"] .modal-card p { color: #d1d5db; }
-.modal-card .policy-box {
-  background: var(--gray1); border-left: 3px solid var(--gold);
-  border-radius: 6px; padding: 12px 14px; font-size: 13px;
-  color: var(--dark); margin: 10px 0 18px;
-}
-[data-theme="dark"] .modal-card .policy-box {
-  background: #232838; color: #e5e7eb;
-}
-.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
-
-.info-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 10px 0; border-bottom: 1px solid var(--gray2);
-  font-size: 13.5px;
-}
-[data-theme="dark"] .info-row { border-bottom-color: #2a3044; }
-.info-row:last-child { border-bottom: none; }
-.info-row .k { color: var(--gray4); }
-.info-row .v { color: var(--dark); font-weight: 500; }
-[data-theme="dark"] .info-row .v { color: #e5e7eb; }
-.info-row .v.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  /* Add-on tiles. */
+  .addon-card {
+    background: var(--white); border: 1px solid var(--gray2);
+    border-radius: 12px; padding: 22px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  [data-theme="dark"] .addon-card { background: #1a1f2e; border-color: #2a3044; }
+  .addon-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .addon-name {
+    font-family: 'DM Serif Display', serif; font-size: 19px;
+    color: var(--navy); line-height: 1.2;
+  }
+  [data-theme="dark"] .addon-name { color: #f3f4f6; }
+  .addon-price {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    color: var(--gray4); white-space: nowrap;
+  }
+  .addon-tag  { font-size: 13px; color: var(--gray4); }
+  .addon-desc { font-size: 13px; color: var(--dark); line-height: 1.55; }
+  [data-theme="dark"] .addon-desc { color: #d1d5db; }
+  .addon-foot {
+    margin-top: auto; display: flex; align-items: center;
+    justify-content: space-between; gap: 10px; padding-top: 6px;
+  }
+  .addon-btn {
+    background: transparent; color: var(--gray4);
+    border: 1.5px solid var(--gray2); padding: 8px 14px;
+    border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    cursor: not-allowed; font-family: 'DM Sans', sans-serif;
+  }
+  .addon-btn.live { cursor: pointer; color: var(--blue); border-color: var(--blue); }
+  .addon-btn.live:hover { background: var(--blue); color: var(--white); }
 </style>
 {% endblock %}
 {% block content %}
 
+{# Retention countdown — only shown to canceled stores during the 6-month grace window. #}
 {% if store and store.plan == 'inactive' and retention_days_left is not none %}
-<div class="retention-banner">
-  <div class="msg">
+<div class="banner banner-error">
+  <div class="banner-msg">
     🗂️ Your subscription is canceled. Your store data is safe for
     <strong>{{ retention_days_left }} more day{{ 's' if retention_days_left != 1 else '' }}</strong>
     ({{ store.data_retention_until.strftime('%b %d, %Y') }}). Resubscribe before then to pick up where you left off — after that, all data is permanently deleted.
   </div>
-  <a href="{{ url_for('subscribe') }}" class="cta">Resubscribe</a>
+  <a href="{{ url_for('subscribe') }}" class="banner-cta">Resubscribe</a>
 </div>
 {% endif %}
 
 <div class="sub-grid">
 
-  <!-- Current plan -->
+  {# Current plan card (dark hero). #}
   <div class="plan-hero">
     <div class="label">Current Plan</div>
     <div class="name">{{ plan_label }}</div>
@@ -220,36 +146,19 @@
     </div>
 
     {% if has_paid_plan %}
-    <button type="button" class="cancel-link" id="openCancelModal">
-      Cancel subscription
-    </button>
+    <button type="button" class="cancel-link" id="openCancelModal">Cancel subscription</button>
     {% endif %}
   </div>
 
-  <!-- Account snapshot -->
+  {# Account / billing IDs snapshot. #}
   <div class="card">
     <div class="card-header"><span class="card-title">Account</span></div>
     <div class="card-body">
-      <div class="info-row">
-        <span class="k">Store</span>
-        <span class="v">{{ store.name }}</span>
-      </div>
-      <div class="info-row">
-        <span class="k">Billing Email</span>
-        <span class="v">{{ store.email or '—' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="k">Customer ID</span>
-        <span class="v mono">{{ store.stripe_customer_id or '—' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="k">Subscription ID</span>
-        <span class="v mono">{{ store.stripe_subscription_id or '—' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="k">Active Add-ons</span>
-        <span class="v">{{ active_addons|length }}</span>
-      </div>
+      <div class="info-row"><span class="k">Store</span>           <span class="v">{{ store.name }}</span></div>
+      <div class="info-row"><span class="k">Billing Email</span>   <span class="v">{{ store.email or '—' }}</span></div>
+      <div class="info-row"><span class="k">Customer ID</span>     <span class="v mono">{{ store.stripe_customer_id or '—' }}</span></div>
+      <div class="info-row"><span class="k">Subscription ID</span> <span class="v mono">{{ store.stripe_subscription_id or '—' }}</span></div>
+      <div class="info-row"><span class="k">Active Add-ons</span>  <span class="v">{{ active_addons|length }}</span></div>
     </div>
   </div>
 
@@ -257,11 +166,14 @@
 
 <div class="section-title">Add-ons</div>
 
+{# Gate: add-ons are paid-plan only. Trial / inactive stores see this. #}
 {% if not has_paid_plan %}
-<div class="gate-banner">
-  Add-ons require an active <strong>Basic</strong> or <strong>Pro</strong> subscription.
-  <a href="{{ url_for('subscribe') }}" style="color:inherit;text-decoration:underline;font-weight:600;">Choose a plan</a>
-  to unlock them.
+<div class="banner banner-warning">
+  <div class="banner-msg">
+    Add-ons require an active <strong>Basic</strong> or <strong>Pro</strong> subscription.
+    <a href="{{ url_for('subscribe') }}" style="color:inherit;text-decoration:underline;font-weight:600;">Choose a plan</a>
+    to unlock them.
+  </div>
 </div>
 {% endif %}
 
@@ -274,15 +186,13 @@
         <div class="addon-tag">{{ addon.tagline }}</div>
       </div>
       <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-        {% if addon.status == 'coming_soon' %}
-          <span class="coming-pill">Coming Soon</span>
-        {% endif %}
+        {% if addon.status == 'coming_soon' %}<span class="coming-pill">Coming Soon</span>{% endif %}
         <span class="addon-price">{{ addon.price_label }}</span>
       </div>
     </div>
     <div class="addon-desc">{{ addon.description }}</div>
     <div class="addon-foot">
-      <span style="font-size:12px;color:var(--gray4);">
+      <span class="text-sm text-muted">
         {% if key in active_addons %}
           <span class="badge badge-green">Active</span>
         {% else %}
@@ -292,16 +202,12 @@
       <form method="POST" action="{{ url_for('admin_subscription_toggle_addon', addon_key=key) }}">
         {% if addon.status == 'coming_soon' %}
           <button type="submit" class="addon-btn"
-                  title="This add-on isn't live yet — click to get notified.">
-            Notify Me
-          </button>
+                  title="This add-on isn't live yet — click to get notified.">Notify Me</button>
         {% elif key in active_addons %}
           <button type="submit" class="addon-btn live">Remove</button>
         {% else %}
           <button type="submit" class="addon-btn live"
-                  {% if not has_paid_plan %}disabled title="Subscribe to a plan first"{% endif %}>
-            Add
-          </button>
+                  {% if not has_paid_plan %}disabled title="Subscribe to a plan first"{% endif %}>Add</button>
         {% endif %}
       </form>
     </div>
@@ -309,16 +215,17 @@
   {% endfor %}
 </div>
 
+{# Cancel-confirmation modal: shown only to paid subscribers. #}
 {% if has_paid_plan %}
 <div class="modal-backdrop" id="cancelModal" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
   <div class="modal-card">
     <h3 id="cancelModalTitle">Before you cancel</h3>
     <p>You're about to cancel your <strong>{{ plan_label }}</strong> subscription. We hold your data so you can come back without losing a thing.</p>
-    <div class="policy-box">
+    <div class="info-box">
       <strong>Your data is safe for 6 months.</strong><br>
       Reports, transfers, batches, employees, and settings stay exactly where you left them. Resubscribe anytime within 6 months and you're right back in. After 6 months, all of this store's data is permanently deleted.
     </div>
-    <p style="font-size:12px;color:var(--gray4);">Clicking continue takes you to Stripe to confirm the cancellation.</p>
+    <p class="text-sm text-muted">Clicking continue takes you to Stripe to confirm the cancellation.</p>
     <div class="modal-actions">
       <button type="button" class="btn btn-outline" id="closeCancelModal">Keep Subscription</button>
       <form method="POST" action="{{ url_for('admin_subscription_cancel') }}" style="display:inline;">
@@ -332,17 +239,18 @@
 {% endblock %}
 {% block scripts %}
 <script>
-(function() {
-  var openBtn = document.getElementById('openCancelModal');
-  var modal = document.getElementById('cancelModal');
-  var closeBtn = document.getElementById('closeCancelModal');
-  if (!openBtn || !modal) return;
-  function open() { modal.classList.add('open'); }
-  function close() { modal.classList.remove('open'); }
-  openBtn.addEventListener('click', open);
-  if (closeBtn) closeBtn.addEventListener('click', close);
-  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
-  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
-})();
+  // Cancel confirmation modal — opens on link click, closes on backdrop / esc / Keep button.
+  (function() {
+    var openBtn  = document.getElementById('openCancelModal');
+    var modal    = document.getElementById('cancelModal');
+    var closeBtn = document.getElementById('closeCancelModal');
+    if (!openBtn || !modal) return;
+    function open()  { modal.classList.add('open'); }
+    function close() { modal.classList.remove('open'); }
+    openBtn.addEventListener('click', open);
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
+  })();
 </script>
 {% endblock %}
