@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -390,6 +390,8 @@ def login():
 @app.route("/login/<slug>", methods=["GET", "POST"])
 def login_store(slug):
     store = Store.query.filter_by(slug=slug).first_or_404()
+    if not store.is_active:
+        abort(404)
     if "user_id" in session:
         return redirect(url_for("dashboard"))
     error = None
