@@ -45,6 +45,12 @@ class Store(db.Model):
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
     companies     = db.Column(db.String(500), default="")
+    # Federal tax rate (decimal — 0.01 = 1%) applied to every transfer at
+    # save time. The transfer form treats Federal Tax as read-only and the
+    # server always recomputes from send_amount × this rate, so employees
+    # can't tamper with it. Admins override via Settings → Store if their
+    # state or vendor has a different rate.
+    federal_tax_rate = db.Column(db.Float, default=0.01, nullable=False)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both
@@ -2176,7 +2182,12 @@ def new_transfer():
             company=request.form["company"],sender_name=sender_name,
             send_amount=float(request.form.get("send_amount") or 0),
             fee=float(request.form.get("fee") or 0),
-            federal_tax=float(request.form.get("federal_tax") or 0),
+            # Federal tax is server-computed from the store's configured rate —
+            # we ignore whatever the client submitted. Employees can't edit
+            # the field in the UI either; admins change the rate via Settings.
+            federal_tax=round(
+                float(request.form.get("send_amount") or 0)
+                * (current_store().federal_tax_rate or 0), 2),
             commission=float(request.form.get("commission") or 0),
             recipient_name=request.form.get("recipient_name",""),
             country=request.form.get("country",""),
@@ -2200,7 +2211,8 @@ def new_transfer():
     return render_template("transfer_form.html", user=user, transfer=None,
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
         mt_companies=store_mt_companies(current_store()),
-        roster=_active_roster(sid), audit_entries=[])
+        roster=_active_roster(sid), audit_entries=[],
+        federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
@@ -2226,7 +2238,11 @@ def edit_transfer(tid):
         t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
         t.send_amount=float(request.form.get("send_amount") or 0)
         t.fee=float(request.form.get("fee") or 0)
-        t.federal_tax=float(request.form.get("federal_tax") or 0)
+        # Always recompute federal_tax server-side from the store rate so
+        # editing the Send Amount correctly propagates to Tax. See the
+        # matching comment in new_transfer().
+        t.federal_tax=round(
+            t.send_amount * (current_store().federal_tax_rate or 0), 2)
         t.commission=float(request.form.get("commission") or 0)
         t.recipient_name=request.form.get("recipient_name","")
         t.country=request.form.get("country","")
@@ -2281,7 +2297,8 @@ def edit_transfer(tid):
     return render_template("transfer_form.html", user=user, transfer=t,
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
         mt_companies=store_mt_companies(current_store()),
-        roster=roster, audit_entries=audit_entries)
+        roster=roster, audit_entries=audit_entries,
+        federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 # ── Daily Book ───────────────────────────────────────────────
 # Companies a new store can pick from on the settings page. The daily book
@@ -2794,6 +2811,19 @@ def admin_settings():
             name = request.form.get("store_name", "").strip()
             email = request.form.get("email", "").strip().lower()
             phone = request.form.get("phone", "").strip()
+            # Federal tax rate: input is a percentage string (e.g. "1.00" for
+            # 1%). Store as a decimal. Clamp 0–100% so an accidental "25" ≠ 25x.
+            rate_raw = (request.form.get("federal_tax_rate") or "").strip()
+            rate_decimal = store.federal_tax_rate or 0.01
+            if rate_raw:
+                try:
+                    rate_pct = float(rate_raw)
+                    if rate_pct < 0 or rate_pct > 100:
+                        errors["federal_tax_rate"] = "Enter a percent between 0 and 100."
+                    else:
+                        rate_decimal = round(rate_pct / 100.0, 6)
+                except ValueError:
+                    errors["federal_tax_rate"] = "Enter a number (e.g. 1 for 1%)."
 
             if not name:
                 errors["store_name"] = "Store name is required."
@@ -2814,6 +2844,7 @@ def admin_settings():
                 store.name = name
                 store.email = email
                 store.phone = phone
+                store.federal_tax_rate = rate_decimal
                 user.username = email
                 db.session.commit()
                 flash("Store info updated.", "success")
@@ -3610,6 +3641,9 @@ _ADDED_COLUMNS = [
     ("transfer", "employee_name",        "VARCHAR(120) DEFAULT ''"),
     ("store",    "referred_by_code_id",  "INTEGER NULL"),
     ("store",    "referee_credit_applied_at", "TIMESTAMP NULL"),
+    # Per-store federal tax rate — 0.01 = 1%. Existing stores get 0.01 via
+    # the DEFAULT; admins can change via Settings → Store.
+    ("store",    "federal_tax_rate",     "FLOAT DEFAULT 0.01 NOT NULL"),
 ]
 
 def _ensure_added_columns():
