@@ -24,8 +24,8 @@ def test_owner_invite_code_model_exists():
 def test_store_owner_link_unique_constraint():
     with flask_app.app_context():
         from app import StoreOwnerLink, User, Store
-        import sqlalchemy
         store = Store.query.filter_by(slug="test-store").first()
+        assert store is not None, "conftest must seed a store with slug='test-store'"
         owner = User(username="owner@test.com", full_name="Owner", role="owner", store_id=None)
         owner.set_password("pass1234!")
         db.session.add(owner)
