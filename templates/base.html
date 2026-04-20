@@ -82,11 +82,14 @@
       <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <span class="icon">⬛</span> Overview
       </a>
-      <a href="{{ url_for('superadmin_stores') }}" class="nav-link {% if 'superadmin' in (request.endpoint or '') %}active{% endif %}">
+      <a href="{{ url_for('superadmin_stores') }}" class="nav-link {% if request.endpoint == 'superadmin_stores' or request.endpoint == 'superadmin_new_store' or request.endpoint == 'superadmin_impersonate' %}active{% endif %}">
         <span class="icon">🏪</span> All Stores
       </a>
       <a href="{{ url_for('superadmin_new_store') }}" class="nav-link">
         <span class="icon">＋</span> Add Store
+      </a>
+      <a href="{{ url_for('superadmin_controls') }}" class="nav-link {% if request.endpoint == 'superadmin_controls' %}active{% endif %}">
+        <span class="icon">🎛️</span> Controls
       </a>
       {% endif %}
     </nav>
