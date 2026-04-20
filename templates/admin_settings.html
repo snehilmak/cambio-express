@@ -27,6 +27,8 @@
      class="tab-link {% if active_tab == 'security' %}active{% endif %}">Security</a>
   <a href="{{ url_for('admin_settings', tab='team') }}"
      class="tab-link {% if active_tab == 'team' %}active{% endif %}">Team</a>
+  <a href="{{ url_for('admin_settings', tab='owner') }}"
+     class="tab-link {% if active_tab == 'owner' %}active{% endif %}">Owner Access</a>
 </div>
 
 {% if active_tab == 'store' %}
@@ -177,6 +179,49 @@
     </form>
   </div>
 </div>
+{% elif active_tab == 'owner' %}
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><span class="card-title">Owner Access</span></div>
+  <div class="card-body">
+
+    {% if owner_link and owner_user %}
+    <!-- State: owner linked -->
+    <div style="margin-bottom:20px;padding:16px;background:var(--gray1);border-radius:8px;border:1px solid var(--gray2);">
+      <div style="font-size:13px;font-weight:600;color:var(--navy);">{{ owner_user.full_name or owner_user.username }}</div>
+      <div style="font-size:12px;color:var(--gray4);margin-top:3px;">{{ owner_user.username }} has access to this store.</div>
+    </div>
+    <form method="POST" action="{{ url_for('admin_remove_owner_access') }}"
+          onsubmit="return confirm('Remove owner access for {{ owner_user.full_name or owner_user.username }}?')">
+      <input type="hidden" name="owner_id" value="{{ owner_user.id }}">
+      <button type="submit" class="btn btn-danger btn-sm">Remove Access</button>
+    </form>
+
+    {% elif owner_invite %}
+    <!-- State: active unused code -->
+    <p style="font-size:13px;color:var(--gray4);margin-bottom:16px;">
+      Share this code with your store owner. It expires on {{ owner_invite.expires_at.strftime('%b %d, %Y') }}.
+    </p>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;">
+      <input type="text" id="owner-code" value="{{ owner_invite.code }}" readonly
+             style="flex:1;background:var(--gray1);font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;font-weight:600;text-align:center;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyOwnerCode()">Copy</button>
+    </div>
+    <form method="POST" action="{{ url_for('admin_generate_owner_code') }}">
+      <button type="submit" class="btn btn-outline btn-sm">Generate New Code</button>
+    </form>
+
+    {% else %}
+    <!-- State: no code, no owner -->
+    <p style="font-size:13px;color:var(--gray4);margin-bottom:20px;">
+      Generate an invite code to share with your store owner. The code is valid for 7 days.
+    </p>
+    <form method="POST" action="{{ url_for('admin_generate_owner_code') }}">
+      <button type="submit" class="btn btn-primary">Generate Invite Code</button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
 {% endif %}
 
 {% endblock %}
@@ -196,6 +241,12 @@ function showReset(uid, name) {
 }
 function closeReset() {
   document.getElementById('reset-modal').style.display = 'none';
+}
+function copyOwnerCode() {
+  var el = document.getElementById('owner-code');
+  el.select();
+  document.execCommand('copy');
+  alert('Invite code copied!');
 }
 </script>
 {% endblock %}

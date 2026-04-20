@@ -375,3 +375,75 @@ def test_owner_can_unlink_store(owner_with_store_client):
 def test_unlink_nonexistent_returns_404(owner_client):
     rv = owner_client.post("/owner/unlink/99999")
     assert rv.status_code == 404
+
+
+def test_admin_generate_owner_code(logged_in_client):
+    rv = logged_in_client.post("/admin/settings/owner/generate-code")
+    assert rv.status_code == 302
+    with flask_app.app_context():
+        from app import Store, OwnerInviteCode
+        store = Store.query.filter_by(slug="test-store").first()
+        code = OwnerInviteCode.query.filter_by(store_id=store.id).first()
+        assert code is not None
+        assert len(code.code) == 8
+        assert code.code == code.code.upper()
+        assert code.used_at is None
+
+
+def test_generate_code_invalidates_previous(logged_in_client):
+    logged_in_client.post("/admin/settings/owner/generate-code")
+    logged_in_client.post("/admin/settings/owner/generate-code")
+    with flask_app.app_context():
+        from app import Store, OwnerInviteCode
+        from datetime import datetime
+        store = Store.query.filter_by(slug="test-store").first()
+        active = OwnerInviteCode.query.filter(
+            OwnerInviteCode.store_id == store.id,
+            OwnerInviteCode.used_at.is_(None),
+            OwnerInviteCode.expires_at > datetime.utcnow()
+        ).all()
+        assert len(active) == 1
+
+
+def test_code_has_7_day_expiry(logged_in_client):
+    from datetime import datetime, timedelta
+    logged_in_client.post("/admin/settings/owner/generate-code")
+    with flask_app.app_context():
+        from app import Store, OwnerInviteCode
+        store = Store.query.filter_by(slug="test-store").first()
+        code = OwnerInviteCode.query.filter_by(store_id=store.id).order_by(OwnerInviteCode.created_at.desc()).first()
+        delta = code.expires_at - code.created_at
+        assert 6 <= delta.days <= 7
+
+
+def test_admin_owner_access_tab_shows_no_code_state(logged_in_client):
+    rv = logged_in_client.get("/admin/settings?tab=owner")
+    assert rv.status_code == 200
+    assert b"Generate" in rv.data or b"generate" in rv.data
+
+
+def test_admin_owner_access_tab_shows_active_code(logged_in_client):
+    logged_in_client.post("/admin/settings/owner/generate-code")
+    rv = logged_in_client.get("/admin/settings?tab=owner")
+    assert rv.status_code == 200
+
+
+def test_admin_remove_owner_access(logged_in_client):
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink
+        store = Store.query.filter_by(slug="test-store").first()
+        o = User(username="owner3@test.com", full_name="Owner3", role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o)
+        db.session.flush()
+        link = StoreOwnerLink(owner_id=o.id, store_id=store.id)
+        db.session.add(link)
+        db.session.commit()
+        oid = o.id
+    rv = logged_in_client.post("/admin/settings/owner/remove-access", data={"owner_id": oid})
+    assert rv.status_code == 302
+    with flask_app.app_context():
+        from app import Store, StoreOwnerLink
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=oid).first()
+        assert link is None

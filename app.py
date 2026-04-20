@@ -1118,10 +1118,24 @@ def admin_settings():
         User.id != user.id
     ).order_by(User.full_name).all()
 
+    now = datetime.utcnow()
+    owner_invite = OwnerInviteCode.query.filter(
+        OwnerInviteCode.store_id == store.id,
+        OwnerInviteCode.used_at.is_(None),
+        OwnerInviteCode.expires_at > now
+    ).order_by(OwnerInviteCode.created_at.desc()).first()
+
+    owner_link = StoreOwnerLink.query.filter_by(store_id=store.id).first()
+    owner_user = db.session.get(User, owner_link.owner_id) if owner_link else None
+
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
-        employees=employees)
+        employees=employees,
+        owner_invite=owner_invite,
+        owner_link=owner_link,
+        owner_user=owner_user,
+    )
 
 
 @app.route("/admin/settings/team/<int:uid>", methods=["POST"])
@@ -1140,6 +1154,46 @@ def admin_reset_employee_password(uid):
         db.session.commit()
         flash(f"Password updated for {emp.full_name or emp.username}.", "success")
     return redirect(url_for("admin_settings", tab="team"))
+
+
+@app.route("/admin/settings/owner/generate-code", methods=["POST"])
+@admin_required
+def admin_generate_owner_code():
+    store = current_store()
+    now = datetime.utcnow()
+    OwnerInviteCode.query.filter(
+        OwnerInviteCode.store_id == store.id,
+        OwnerInviteCode.used_at.is_(None),
+        OwnerInviteCode.expires_at > now
+    ).update({"expires_at": now})
+    db.session.flush()
+    alphabet = string.ascii_uppercase + string.digits
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if not OwnerInviteCode.query.filter_by(code=code).first():
+            break
+    invite = OwnerInviteCode(
+        store_id=store.id,
+        code=code,
+        created_by=current_user().id,
+        expires_at=now + timedelta(days=7),
+    )
+    db.session.add(invite)
+    db.session.commit()
+    flash("Invite code generated.", "success")
+    return redirect(url_for("admin_settings", tab="owner"))
+
+
+@app.route("/admin/settings/owner/remove-access", methods=["POST"])
+@admin_required
+def admin_remove_owner_access():
+    store = current_store()
+    owner_id = request.form.get("owner_id", type=int)
+    if owner_id:
+        StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=owner_id).delete()
+        db.session.commit()
+        flash("Owner access removed.", "success")
+    return redirect(url_for("admin_settings", tab="owner"))
 
 
 # ── Superadmin ───────────────────────────────────────────────
