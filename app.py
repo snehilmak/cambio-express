@@ -637,6 +637,8 @@ def owner_link_store():
     u = current_user()
     code = request.form.get("code", "").strip().upper()
     now = datetime.utcnow()
+    # NOTE: TOCTOU window between lookup and commit — safe under SQLite (serialised
+    # writes) but a Postgres migration should add SELECT FOR UPDATE here.
     invite = OwnerInviteCode.query.filter(
         OwnerInviteCode.code == code,
         OwnerInviteCode.used_at.is_(None),
@@ -654,7 +656,7 @@ def owner_link_store():
     invite.used_by_owner_id = u.id
     db.session.add(link)
     db.session.commit()
-    store = Store.query.get(invite.store_id)
+    store = db.session.get(Store, invite.store_id)
     flash(f"{store.name} connected successfully.", "success")
     return redirect(url_for("owner_dashboard"))
 

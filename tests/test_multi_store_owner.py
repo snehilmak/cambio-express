@@ -356,6 +356,10 @@ def test_already_linked_handled_gracefully(owner_client):
     rv = owner_client.post("/owner/link", data={"code": "LINKDUP1"}, follow_redirects=True)
     assert rv.status_code == 200
     assert b"already connected" in rv.data.lower()
+    with flask_app.app_context():
+        from app import OwnerInviteCode
+        invite = OwnerInviteCode.query.filter_by(code="LINKDUP1").first()
+        assert invite.used_at is None, "invite should not be consumed when owner is already linked"
 
 
 def test_owner_can_unlink_store(owner_with_store_client):
