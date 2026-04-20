@@ -65,10 +65,15 @@ class Transfer(db.Model):
     sender_name    = db.Column(db.String(120), nullable=False)
     send_amount    = db.Column(db.Float, nullable=False)
     fee            = db.Column(db.Float, default=0.0)
+    # Federal tax (e.g. 1%) the customer pays on the send amount. Tracked
+    # separately from `fee` because it leaves the store with the ACH
+    # withdrawal — it's not store revenue.
+    federal_tax    = db.Column(db.Float, default=0.0)
     commission     = db.Column(db.Float, default=0.0)
     recipient_name = db.Column(db.String(120), default="")
     country        = db.Column(db.String(60), default="")
     recipient_phone= db.Column(db.String(40), default="")
+    sender_phone   = db.Column(db.String(40), default="")
     confirm_number = db.Column(db.String(60), default="")
     status         = db.Column(db.String(30), default="Sent")
     status_notes   = db.Column(db.String(255), default="")
@@ -78,7 +83,9 @@ class Transfer(db.Model):
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
     creator        = db.relationship("User", foreign_keys=[created_by])
     @property
-    def total_collected(self): return self.send_amount + self.fee
+    def total_collected(self):
+        """What the customer actually handed over: send amount + store fee + federal tax."""
+        return (self.send_amount or 0) + (self.fee or 0) + (self.federal_tax or 0)
 
 class ACHBatch(db.Model):
     __tablename__ = "ach_batch"
@@ -96,7 +103,13 @@ class ACHBatch(db.Model):
     __table_args__ = (db.UniqueConstraint("store_id","batch_ref"),)
     @property
     def transfers_total(self):
-        v=db.session.query(db.func.sum(Transfer.send_amount)).filter_by(store_id=self.store_id,batch_id=self.batch_ref).scalar()
+        """Sum of what the ACH actually debits: send amount + federal tax.
+        The store fee stays with the store, so it's excluded from this total."""
+        v = (db.session.query(
+                db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0)
+              + db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0))
+             .filter_by(store_id=self.store_id, batch_id=self.batch_ref)
+             .scalar())
         return v or 0.0
     @property
     def variance(self): return round(self.ach_amount-self.transfers_total,2)
@@ -326,9 +339,25 @@ class SuperadminAuditLog(db.Model):
     details     = db.Column(db.Text, default="")             # free-form, usually short JSON/text
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Announcement(db.Model):
+    """Global banner the superadmin can post across the app.
+
+    Shown on every admin/employee page between starts_at and expires_at while
+    is_active. Level maps onto the banner-* utility classes in app.css.
+    """
+    __tablename__ = "announcement"
+    id         = db.Column(db.Integer, primary_key=True)
+    message    = db.Column(db.Text, nullable=False)
+    level      = db.Column(db.String(16), default="info")  # info | warning | error | success
+    is_active  = db.Column(db.Boolean, default=True)
+    starts_at  = db.Column(db.DateTime, nullable=True)
+    expires_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
 # ── Auth ─────────────────────────────────────────────────────
-def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
-def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
+def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
+def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
 _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
                  "owner_dashboard", "owner_link_store", "owner_unlink_store",
@@ -408,6 +437,61 @@ def store_feature_enabled(store, flag_key):
         return True  # Unknown flag = allow by default (fail-open for undeclared features).
     return bool(flag.enabled_by_default)
 
+def stripe_health_check():
+    """Return a dict describing the Stripe integration state.
+
+    Keys:
+      env: {secret_key, webhook_secret, basic_price_id, pro_price_id}  (booleans)
+      ok:  True if we reached Stripe and retrieved the account
+      account_email / account_id / mode: filled on success
+      price_ok: {basic, pro} — booleans, True if the ID resolved
+      error: str on failure
+    """
+    env = {
+        "secret_key":      bool(os.environ.get("STRIPE_SECRET_KEY")),
+        "webhook_secret":  bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
+        "basic_price_id":  bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
+        "pro_price_id":    bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
+    }
+    result = {"env": env, "ok": False, "error": "", "price_ok": {"basic": False, "pro": False}}
+    if not env["secret_key"]:
+        result["error"] = "STRIPE_SECRET_KEY is not configured."
+        return result
+    try:
+        acct = stripe.Account.retrieve()
+        result["ok"] = True
+        result["account_id"]    = acct.get("id", "")
+        result["account_email"] = acct.get("email", "")
+        # Test-mode keys start with sk_test_; live keys with sk_live_.
+        result["mode"] = "test" if (os.environ.get("STRIPE_SECRET_KEY", "").startswith("sk_test_")) else "live"
+    except Exception as e:
+        result["error"] = f"{type(e).__name__}: {e}"
+        return result
+    for plan in ("basic", "pro"):
+        pid = os.environ.get(f"STRIPE_{plan.upper()}_PRICE_ID", "")
+        if not pid:
+            continue
+        try:
+            stripe.Price.retrieve(pid)
+            result["price_ok"][plan] = True
+        except Exception:
+            pass
+    return result
+
+def active_announcements():
+    """Currently-visible announcements (active, within start/expiry window)."""
+    now = datetime.utcnow()
+    q = Announcement.query.filter_by(is_active=True)
+    rows = q.order_by(Announcement.created_at.desc()).all()
+    out = []
+    for a in rows:
+        if a.starts_at and a.starts_at > now:
+            continue
+        if a.expires_at and a.expires_at <= now:
+            continue
+        out.append(a)
+    return out
+
 def login_required(f):
     @wraps(f)
     def d(*a, **k):
@@ -477,21 +561,31 @@ def get_trial_status(store):
 
 @app.context_processor
 def inject_trial_context():
-    """Inject trial_status, trial_days_left, and store into every template."""
+    """Inject trial_status, trial_days_left, store, and announcements globally.
+
+    Announcements are visible on every page for every role (including logged-out)
+    so the superadmin can reach the whole audience with one message.
+    """
+    try:
+        announcements = active_announcements()
+    except Exception:
+        # Table may not exist yet on a fresh install between db.create_all() calls.
+        announcements = []
     user = current_user()
     if not user:
-        return {"trial_status": "exempt", "trial_days_left": 0, "store": None}
-    if user.role == "superadmin":
-        return {"trial_status": "exempt", "trial_days_left": 0, "store": None}
-    if user.role == "owner":
-        return {"trial_status": "exempt", "trial_days_left": 0, "store": None}
+        return {"trial_status": "exempt", "trial_days_left": 0, "store": None,
+                "announcements": announcements}
+    if user.role in ("superadmin", "owner"):
+        return {"trial_status": "exempt", "trial_days_left": 0, "store": None,
+                "announcements": announcements}
     store = current_store()
     status = get_trial_status(store)
     days_left = 0
     if store and store.trial_ends_at:
         delta = store.trial_ends_at - datetime.utcnow()
         days_left = max(0, delta.days)
-    return {"trial_status": status, "trial_days_left": days_left, "store": store}
+    return {"trial_status": status, "trial_days_left": days_left, "store": store,
+            "announcements": announcements}
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
@@ -1043,10 +1137,12 @@ def new_transfer():
             company=request.form["company"],sender_name=request.form["sender_name"],
             send_amount=float(request.form.get("send_amount") or 0),
             fee=float(request.form.get("fee") or 0),
+            federal_tax=float(request.form.get("federal_tax") or 0),
             commission=float(request.form.get("commission") or 0),
             recipient_name=request.form.get("recipient_name",""),
             country=request.form.get("country",""),
             recipient_phone=request.form.get("recipient_phone",""),
+            sender_phone=request.form.get("sender_phone",""),
             confirm_number=request.form.get("confirm_number",""),
             status=request.form.get("status","Sent"),
             status_notes=request.form.get("status_notes",""),
@@ -1071,10 +1167,12 @@ def edit_transfer(tid):
         t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
         t.send_amount=float(request.form.get("send_amount") or 0)
         t.fee=float(request.form.get("fee") or 0)
+        t.federal_tax=float(request.form.get("federal_tax") or 0)
         t.commission=float(request.form.get("commission") or 0)
         t.recipient_name=request.form.get("recipient_name","")
         t.country=request.form.get("country","")
         t.recipient_phone=request.form.get("recipient_phone","")
+        t.sender_phone=request.form.get("sender_phone","")
         t.confirm_number=request.form.get("confirm_number","")
         t.status=request.form.get("status","Sent")
         t.status_notes=request.form.get("status_notes","")
@@ -1512,20 +1610,23 @@ def superadmin_impersonate(store_id):
     flash(f"Viewing as {store.name}","success"); return redirect(url_for("dashboard"))
 
 # ── Superadmin control panel ─────────────────────────────────
+STORES_PER_PAGE = 20
+
 @app.route("/superadmin/controls")
 @superadmin_required
 def superadmin_controls():
-    """Tabbed superadmin hub: metrics, stores, discount codes, feature flags, audit log."""
+    """Tabbed superadmin hub: overview, stores, discounts, feature flags, audit, announcements."""
     user = current_user()
     active_tab = request.args.get("tab", "overview")
 
-    # Metrics — computed server-side so the page works even without JS.
+    # Aggregate metrics — cheap, compute once for the overview + sidebar snapshot.
     plan_counts = dict(db.session.query(Store.plan, db.func.count(Store.id))
                        .group_by(Store.plan).all())
-    basic_count = plan_counts.get("basic", 0)
-    pro_count   = plan_counts.get("pro", 0)
-    trial_count = plan_counts.get("trial", 0)
+    basic_count    = plan_counts.get("basic", 0)
+    pro_count      = plan_counts.get("pro", 0)
+    trial_count    = plan_counts.get("trial", 0)
     inactive_count = plan_counts.get("inactive", 0)
+    total_stores   = Store.query.count()
 
     retention_queue = Store.query.filter(
         Store.plan == "inactive",
@@ -1535,24 +1636,65 @@ def superadmin_controls():
     # Rough MRR — basic $20, pro $30. Real invoices live in Stripe.
     estimated_mrr = basic_count * 20 + pro_count * 30
 
-    stores = Store.query.order_by(Store.created_at.desc()).all()
+    # Stripe health only hit on the overview tab (API call costs one round trip).
+    stripe_health = stripe_health_check() if active_tab == "overview" else None
+
+    # ── Stores tab: search, filters, pagination ──
+    q_text        = request.args.get("q", "").strip()
+    plan_filter   = request.args.get("plan", "").strip()
+    status_filter = request.args.get("status", "").strip()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+
+    stores_q = Store.query
+    if q_text:
+        like = f"%{q_text}%"
+        stores_q = stores_q.filter(db.or_(
+            Store.name.ilike(like),
+            Store.slug.ilike(like),
+            Store.email.ilike(like),
+        ))
+    if plan_filter in ("trial", "basic", "pro", "inactive"):
+        stores_q = stores_q.filter(Store.plan == plan_filter)
+    if status_filter == "active":
+        stores_q = stores_q.filter(Store.is_active.is_(True))
+    elif status_filter == "disabled":
+        stores_q = stores_q.filter(Store.is_active.is_(False))
+
+    stores_matching = stores_q.count()
+    total_pages = max(1, (stores_matching + STORES_PER_PAGE - 1) // STORES_PER_PAGE)
+    page = min(page, total_pages)
+    stores = (stores_q.order_by(Store.created_at.desc())
+              .offset((page - 1) * STORES_PER_PAGE)
+              .limit(STORES_PER_PAGE).all())
+
     discounts = DiscountCode.query.order_by(DiscountCode.created_at.desc()).all()
     flags = FeatureFlag.query.order_by(FeatureFlag.key).all()
-    # Per-store overrides: (store_id, flag_key) -> enabled
-    overrides = {(o.store_id, o.flag_key): o.enabled
-                 for o in StoreFeatureOverride.query.all()}
+    # Feature-flag overrides are keyed by (store_id, flag_key); fetch only for visible stores.
+    visible_ids = [s.id for s in stores]
+    override_rows = (StoreFeatureOverride.query.filter(StoreFeatureOverride.store_id.in_(visible_ids)).all()
+                     if visible_ids else [])
+    overrides = {(o.store_id, o.flag_key): o.enabled for o in override_rows}
     audit = (SuperadminAuditLog.query
              .order_by(SuperadminAuditLog.created_at.desc())
              .limit(100).all())
+    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
 
     return render_template("superadmin_controls.html",
         user=user, active_tab=active_tab,
         stores=stores, discounts=discounts, flags=flags,
-        overrides=overrides, audit=audit,
+        overrides=overrides, audit=audit, announcements=announcements,
         basic_count=basic_count, pro_count=pro_count,
         trial_count=trial_count, inactive_count=inactive_count,
         retention_queue=retention_queue, estimated_mrr=estimated_mrr,
-        total_stores=len(stores),
+        total_stores=total_stores,
+        stripe_health=stripe_health,
+        # Pagination + filter state for the Stores tab.
+        q=q_text, plan_filter=plan_filter, status_filter=status_filter,
+        page=page, total_pages=total_pages, stores_matching=stores_matching,
+        stores_per_page=STORES_PER_PAGE,
     )
 
 # ── Per-store actions (superadmin) ───────────────────────────
@@ -1787,6 +1929,82 @@ def superadmin_set_feature_override(key, store_id):
     flash("Override updated.", "success")
     return redirect(url_for("superadmin_controls", tab="features"))
 
+# ── Announcements (superadmin) ───────────────────────────────
+@app.route("/superadmin/announcements/new", methods=["POST"])
+@superadmin_required
+def superadmin_new_announcement():
+    """Post a banner shown to every user on every page until it expires."""
+    message = request.form.get("message", "").strip()
+    if not message:
+        flash("Announcement message is required.", "error")
+        return redirect(url_for("superadmin_controls", tab="announcements"))
+    level = request.form.get("level", "info")
+    if level not in ("info", "warning", "error", "success"):
+        level = "info"
+    try:
+        days = int(request.form.get("expires_days") or 0)
+    except ValueError:
+        days = 0
+    expires_at = datetime.utcnow() + timedelta(days=days) if days else None
+    a = Announcement(
+        message=message[:2000], level=level,
+        is_active=True, expires_at=expires_at,
+        created_by=current_user().id,
+    )
+    db.session.add(a); db.session.flush()
+    record_audit("create_announcement", target_type="announcement", target_id=a.id,
+                 details=f"{level}: {message[:80]}")
+    db.session.commit()
+    flash("Announcement posted.", "success")
+    return redirect(url_for("superadmin_controls", tab="announcements"))
+
+@app.route("/superadmin/announcements/<int:ann_id>/toggle", methods=["POST"])
+@superadmin_required
+def superadmin_toggle_announcement(ann_id):
+    """Enable or disable a posted announcement without deleting it."""
+    a = db.session.get(Announcement, ann_id) or abort(404)
+    a.is_active = not a.is_active
+    record_audit("toggle_announcement", target_type="announcement", target_id=a.id,
+                 details=f"active={a.is_active}")
+    db.session.commit()
+    flash(f"Announcement {'enabled' if a.is_active else 'disabled'}.", "success")
+    return redirect(url_for("superadmin_controls", tab="announcements"))
+
+@app.route("/superadmin/announcements/<int:ann_id>/delete", methods=["POST"])
+@superadmin_required
+def superadmin_delete_announcement(ann_id):
+    """Permanently remove an announcement. Toggle first if you might want it back."""
+    a = db.session.get(Announcement, ann_id) or abort(404)
+    record_audit("delete_announcement", target_type="announcement", target_id=a.id)
+    db.session.delete(a); db.session.commit()
+    flash("Announcement deleted.", "success")
+    return redirect(url_for("superadmin_controls", tab="announcements"))
+
+# ── Audit log CSV export ─────────────────────────────────────
+@app.route("/superadmin/controls/audit.csv")
+@superadmin_required
+def superadmin_audit_export():
+    """Stream the full audit log as CSV for spreadsheet review."""
+    import csv, io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["timestamp_utc", "admin_id", "admin_name", "action", "target_type", "target_id", "details"])
+    rows = SuperadminAuditLog.query.order_by(SuperadminAuditLog.created_at.desc()).all()
+    for r in rows:
+        w.writerow([
+            r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else "",
+            r.admin_id or "", r.admin_name or "",
+            r.action or "", r.target_type or "", r.target_id or "",
+            (r.details or "").replace("\n", " "),
+        ])
+    record_audit("export_audit_csv", target_type="audit", details=f"rows={len(rows)}")
+    db.session.commit()
+    filename = f"audit-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
+    return buf.getvalue(), 200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+    }
+
 # ── Stripe webhook ───────────────────────────────────────────
 @app.route("/webhooks/stripe", methods=["POST"])
 def stripe_webhook():
@@ -1811,7 +2029,7 @@ def stripe_webhook():
         obj = event["data"]["object"]
         store_id = obj.get("metadata", {}).get("store_id")
         if store_id:
-            store = Store.query.get(int(store_id))
+            store = db.session.get(Store, int(store_id))
             if store:
                 sub_id = obj.get("subscription", "")
                 customer_id = obj.get("customer", "")
@@ -1894,30 +2112,40 @@ def server_error(e):
         message="Something went wrong. Please try again."), 500
 
 # ── Init ─────────────────────────────────────────────────────
-_STORE_ADDED_COLUMNS = [
-    ("addons",               "VARCHAR(255) DEFAULT ''"),
-    ("canceled_at",          "TIMESTAMP NULL"),
-    ("data_retention_until", "TIMESTAMP NULL"),
+# Column additions applied to existing installs on boot. Each entry is
+#   (table_name, column_name, DDL snippet after ADD COLUMN)
+# Kept here so a single helper can migrate any table.
+_ADDED_COLUMNS = [
+    ("store",    "addons",               "VARCHAR(255) DEFAULT ''"),
+    ("store",    "canceled_at",          "TIMESTAMP NULL"),
+    ("store",    "data_retention_until", "TIMESTAMP NULL"),
+    ("transfer", "federal_tax",          "FLOAT DEFAULT 0"),
+    ("transfer", "sender_phone",         "VARCHAR(40) DEFAULT ''"),
 ]
 
-def _ensure_subscription_columns():
-    """Add new store columns on existing databases. No-op if they exist."""
+def _ensure_added_columns():
+    """Apply the _ADDED_COLUMNS migrations. Idempotent and safe on every boot."""
     try:
         with db.engine.connect() as conn:
             dialect = db.engine.dialect.name
             if dialect == "sqlite":
-                cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(store);")]
-                for name, ddl in _STORE_ADDED_COLUMNS:
-                    if name not in cols:
-                        conn.exec_driver_sql(f"ALTER TABLE store ADD COLUMN {name} {ddl}")
+                # PRAGMA table_info returns (cid, name, type, notnull, dflt, pk).
+                existing = {}
+                for table, _, _ in _ADDED_COLUMNS:
+                    if table not in existing:
+                        existing[table] = [r[1] for r in conn.exec_driver_sql(
+                            f"PRAGMA table_info({table});")]
+                for table, name, ddl in _ADDED_COLUMNS:
+                    if name not in existing.get(table, []):
+                        conn.exec_driver_sql(
+                            f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
             else:
-                for name, ddl in _STORE_ADDED_COLUMNS:
+                for table, name, ddl in _ADDED_COLUMNS:
                     conn.exec_driver_sql(
-                        f"ALTER TABLE store ADD COLUMN IF NOT EXISTS {name} {ddl}"
-                    )
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {ddl}")
                 conn.commit()
     except Exception as e:
-        app.logger.warning(f"subscription column migration skipped: {e}")
+        app.logger.warning(f"column migration skipped: {e}")
 
 # Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
 # Declaring them here means a fresh install has a real starting set for the UI.
@@ -1942,7 +2170,7 @@ def _seed_feature_flags():
 def init_db():
     with app.app_context():
         db.create_all()
-        _ensure_subscription_columns()
+        _ensure_added_columns()
         _seed_feature_flags()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)

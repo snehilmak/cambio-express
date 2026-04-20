@@ -76,7 +76,7 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>Date</th><th>Sender</th><th>Amount</th><th>Fee</th><th>Recipient</th><th>Country</th><th>Confirm #</th><th>Status</th><th></th></tr>
+        <tr><th>Date</th><th>Sender</th><th>Amount</th><th>Fee</th><th>Tax</th><th>Recipient</th><th>Country</th><th>Confirm #</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {% for t in transfers %}
@@ -85,6 +85,7 @@
           <td><strong>{{ t.sender_name }}</strong></td>
           <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
           <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
+          <td class="mono text-muted">${{ '{:,.2f}'.format(t.federal_tax or 0) }}</td>
           <td>{{ t.recipient_name }}</td>
           <td>{{ t.country }}</td>
           <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>

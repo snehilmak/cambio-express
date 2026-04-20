@@ -85,7 +85,7 @@ def test_webhook_checkout_completed_updates_plan(client):
 
     assert resp.status_code == 200
     with client.application.app_context():
-        s = Store.query.get(sid)
+        s = db.session.get(Store, sid)
         assert s.plan == "pro"
         assert s.stripe_subscription_id == "sub_test456"
 
@@ -112,6 +112,6 @@ def test_webhook_subscription_deleted_sets_inactive(client):
 
     assert resp.status_code == 200
     with client.application.app_context():
-        s = Store.query.get(sid)
+        s = db.session.get(Store, sid)
         assert s.plan == "inactive"
         assert s.stripe_subscription_id == ""

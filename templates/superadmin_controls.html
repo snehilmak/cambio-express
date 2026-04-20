@@ -61,6 +61,8 @@
      class="tab-link {% if active_tab == 'features'  %}active{% endif %}">Feature Flags</a>
   <a href="{{ url_for('superadmin_controls', tab='audit')     }}"
      class="tab-link {% if active_tab == 'audit'     %}active{% endif %}">Audit Log</a>
+  <a href="{{ url_for('superadmin_controls', tab='announcements') }}"
+     class="tab-link {% if active_tab == 'announcements' %}active{% endif %}">Announcements</a>
 </div>
 
 {# ─────────── OVERVIEW ─────────── #}
@@ -96,6 +98,74 @@
   </div>
 </div>
 
+{# Stripe connection health. Pulled live on this tab only. #}
+{% if stripe_health %}
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Stripe connection</span>
+    {% if stripe_health.ok %}
+      <span class="badge badge-green">Connected</span>
+    {% elif stripe_health.env.secret_key %}
+      <span class="badge badge-red">Error</span>
+    {% else %}
+      <span class="badge badge-yellow">Not configured</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    {% if stripe_health.ok %}
+    <div class="info-row"><span class="k">Account</span>
+      <span class="v">{{ stripe_health.account_email or stripe_health.account_id }}</span></div>
+    <div class="info-row"><span class="k">Account ID</span>
+      <span class="v mono">{{ stripe_health.account_id }}</span></div>
+    <div class="info-row"><span class="k">Mode</span>
+      <span class="v">
+        {% if stripe_health.mode == 'live' %}
+          <span class="badge badge-green">LIVE</span>
+        {% else %}
+          <span class="badge badge-yellow">TEST</span>
+        {% endif %}
+      </span>
+    </div>
+    {% endif %}
+    <div class="info-row"><span class="k">STRIPE_SECRET_KEY</span>
+      <span class="v">{% if stripe_health.env.secret_key %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">STRIPE_WEBHOOK_SECRET</span>
+      <span class="v">{% if stripe_health.env.webhook_secret %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">Basic price</span>
+      <span class="v">
+        {% if not stripe_health.env.basic_price_id %}
+          <span class="badge badge-red">STRIPE_BASIC_PRICE_ID missing</span>
+        {% elif stripe_health.price_ok.basic %}
+          <span class="badge badge-green">valid</span>
+        {% else %}
+          <span class="badge badge-yellow">unverified</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="info-row"><span class="k">Pro price</span>
+      <span class="v">
+        {% if not stripe_health.env.pro_price_id %}
+          <span class="badge badge-red">STRIPE_PRO_PRICE_ID missing</span>
+        {% elif stripe_health.price_ok.pro %}
+          <span class="badge badge-green">valid</span>
+        {% else %}
+          <span class="badge badge-yellow">unverified</span>
+        {% endif %}
+      </span>
+    </div>
+    {% if stripe_health.error %}
+    <div class="banner banner-error mt-2" style="margin-bottom:0;">
+      <span class="banner-msg"><strong>Stripe API:</strong> {{ stripe_health.error }}</span>
+    </div>
+    {% endif %}
+    <p class="text-sm text-muted mt-2">
+      Point your Stripe webhook at <code>/webhooks/stripe</code>. Events consumed:
+      <code>checkout.session.completed</code>, <code>customer.subscription.deleted</code>.
+    </p>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header"><span class="card-title">Quick links</span></div>
   <div class="card-body">
@@ -104,15 +174,53 @@
       <li>→ <a href="{{ url_for('superadmin_controls', tab='discounts') }}">Discount codes</a> — mint Stripe-synced promo codes.</li>
       <li>→ <a href="{{ url_for('superadmin_controls', tab='features') }}">Feature flags</a> — flip functionality globally or per store.</li>
       <li>→ <a href="{{ url_for('superadmin_controls', tab='audit') }}">Audit log</a> — every superadmin action is recorded.</li>
+      <li>→ <a href="{{ url_for('superadmin_controls', tab='announcements') }}">Announcements</a> — push a banner to every user's screen.</li>
     </ul>
   </div>
 </div>
 
 {# ─────────── STORES ─────────── #}
 {% elif active_tab == 'stores' %}
+{# Filter form resets page=1 implicitly because no page field is submitted. #}
+<form method="GET" action="{{ url_for('superadmin_controls') }}"
+      class="card mb-3" style="padding:14px 18px;">
+  <input type="hidden" name="tab" value="stores">
+  <div class="form-grid cols-3" style="gap:12px;">
+    <div class="field">
+      <label>Search</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="name, slug, or email">
+    </div>
+    <div class="field">
+      <label>Plan</label>
+      <select name="plan">
+        <option value="" {% if not plan_filter %}selected{% endif %}>All plans</option>
+        <option value="trial"    {% if plan_filter == 'trial'    %}selected{% endif %}>Trial</option>
+        <option value="basic"    {% if plan_filter == 'basic'    %}selected{% endif %}>Basic</option>
+        <option value="pro"      {% if plan_filter == 'pro'      %}selected{% endif %}>Pro</option>
+        <option value="inactive" {% if plan_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <select name="status">
+        <option value=""         {% if not status_filter %}selected{% endif %}>All</option>
+        <option value="active"   {% if status_filter == 'active'   %}selected{% endif %}>Active only</option>
+        <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>Disabled only</option>
+      </select>
+    </div>
+  </div>
+  <div class="flex gap-2 mt-2">
+    <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+    <a href="{{ url_for('superadmin_controls', tab='stores') }}" class="btn btn-outline btn-sm">Reset</a>
+  </div>
+</form>
+
 <div class="card">
   <div class="card-header">
-    <span class="card-title">All stores ({{ stores|length }})</span>
+    <span class="card-title">
+      Stores — showing {{ stores|length }} of {{ stores_matching }}
+      {% if q or plan_filter or status_filter %}(filtered){% endif %}
+    </span>
     <a href="{{ url_for('superadmin_new_store') }}" class="btn btn-primary btn-sm">＋ Add Store</a>
   </div>
   <div class="table-wrap">
@@ -185,9 +293,30 @@
           </td>
         </tr>
         {% endfor %}
+        {% if not stores %}
+        <tr><td colspan="6" class="empty-state">No stores match these filters.</td></tr>
+        {% endif %}
       </tbody>
     </table>
   </div>
+  {% if total_pages > 1 %}
+  {# Pager — preserves the current filter state across pages. #}
+  <div class="flex items-center justify-between" style="padding:14px 20px;border-top:1px solid var(--gray2);">
+    <div class="text-sm text-muted">
+      Page {{ page }} of {{ total_pages }} · {{ stores_per_page }} per page
+    </div>
+    <div class="flex gap-2">
+      {% if page > 1 %}
+      <a href="{{ url_for('superadmin_controls', tab='stores', q=q, plan=plan_filter, status=status_filter, page=page-1) }}"
+         class="btn btn-outline btn-sm">← Previous</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a href="{{ url_for('superadmin_controls', tab='stores', q=q, plan=plan_filter, status=status_filter, page=page+1) }}"
+         class="btn btn-outline btn-sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 {# ─────────── DISCOUNT CODES ─────────── #}
@@ -424,7 +553,11 @@
 {# ─────────── AUDIT LOG ─────────── #}
 {% elif active_tab == 'audit' %}
 <div class="card">
-  <div class="card-header"><span class="card-title">Recent superadmin activity (last 100)</span></div>
+  <div class="card-header">
+    <span class="card-title">Recent superadmin activity (last 100)</span>
+    <a href="{{ url_for('superadmin_audit_export') }}" class="btn btn-outline btn-sm"
+       title="Download the full audit log as CSV">⬇ Export CSV</a>
+  </div>
   <div class="table-wrap">
     <table>
       <thead>
@@ -442,6 +575,83 @@
         {% endfor %}
         {% if not audit %}
         <tr><td colspan="5" class="empty-state">No activity yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ─────────── ANNOUNCEMENTS ─────────── #}
+{% elif active_tab == 'announcements' %}
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title">Post an announcement</span></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('superadmin_new_announcement') }}">
+      <div class="form-grid">
+        <div class="field span-2">
+          <label>Message *</label>
+          <input type="text" name="message" maxlength="2000" required
+                 placeholder="Planned maintenance Sunday 10pm–midnight EST">
+        </div>
+        <div class="field">
+          <label>Style</label>
+          <select name="level">
+            <option value="info">Info (blue)</option>
+            <option value="warning">Warning (yellow)</option>
+            <option value="error">Error (red)</option>
+            <option value="success">Success (green)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Expires in (days)</label>
+          <input type="number" name="expires_days" min="1" max="365" placeholder="Never">
+        </div>
+      </div>
+      <div class="mt-2">
+        <button type="submit" class="btn btn-primary">📣 Post announcement</button>
+      </div>
+    </form>
+    <p class="text-sm text-muted mt-2">
+      Shown at the top of every page to every user (admins, employees, owners, logged-out).
+      Users can dismiss it from their browser; disable or delete below to pull it back.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">Posted announcements ({{ announcements|length }})</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Message</th><th>Style</th><th>Expires</th><th>Status</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for a in announcements %}
+        <tr>
+          <td style="max-width:420px;">{{ a.message }}</td>
+          <td><span class="badge badge-{% if a.level=='warning' %}yellow{% elif a.level=='error' %}red{% elif a.level=='success' %}green{% else %}blue{% endif %}">{{ a.level }}</span></td>
+          <td class="mono">{{ a.expires_at.strftime('%Y-%m-%d') if a.expires_at else '—' }}</td>
+          <td>
+            {% if a.is_active %}<span class="badge badge-green">Active</span>
+            {% else %}<span class="badge badge-gray">Disabled</span>{% endif %}
+          </td>
+          <td>
+            <div class="action-stack">
+              <form method="POST" action="{{ url_for('superadmin_toggle_announcement', ann_id=a.id) }}" class="inline-form">
+                <button type="submit" class="btn-xs primary">
+                  {% if a.is_active %}Disable{% else %}Enable{% endif %}
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('superadmin_delete_announcement', ann_id=a.id) }}" class="inline-form"
+                    onsubmit="return confirm('Delete this announcement permanently?')">
+                <button type="submit" class="btn-xs danger">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not announcements %}
+        <tr><td colspan="5" class="empty-state">No announcements posted yet.</td></tr>
         {% endif %}
       </tbody>
     </table>
