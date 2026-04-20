@@ -193,6 +193,27 @@
           <input type="text" name="internal_notes" value="{{ transfer.internal_notes if transfer else '' }}"
             placeholder="Staff-only note">
         </div>
+        <div class="field span-2">
+          <label>Processed by *</label>
+          <select name="employee_id" required>
+            <option value="">Select employee…</option>
+            {% for e in roster %}
+            <option value="{{ e.id }}"
+              {% if transfer and transfer.employee_id == e.id %}selected{% endif %}>
+              {{ e.name }}{% if not e.is_active %} (inactive){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="text-sm text-muted" style="margin-top:4px;">
+            Pick the employee who {{ 'made this edit' if transfer else 'processed this transfer' }}.
+            {% if not roster %}
+            <strong>No active employees on the roster</strong> —
+            <a href="{{ url_for('admin_settings', tab='roster') }}">add one</a> first.
+            {% elif transfer and transfer.employee_name and not transfer.employee_id %}
+            Originally logged by <strong>{{ transfer.employee_name }}</strong>.
+            {% endif %}
+          </div>
+        </div>
       </div>
 
       <div style="margin-top:28px;display:flex;gap:12px;">
@@ -204,6 +225,40 @@
     </form>
   </div>
 </div>
+
+{# Activity log — admins (and employees, for transparency) can see every
+   edit and status change on this transfer. Only visible when editing. #}
+{% if transfer and audit_entries %}
+<div class="card mt-3">
+  <div class="card-header">
+    <span class="card-title">Activity</span>
+    <span class="text-sm text-muted">{{ audit_entries|length }} event{{ 's' if audit_entries|length != 1 }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Processed by</th><th>Action</th><th>Change</th></tr></thead>
+      <tbody>
+        {% for a in audit_entries %}
+        <tr>
+          <td class="mono text-sm">{{ a.created_at.strftime('%m/%d/%Y %I:%M %p') }}</td>
+          <td>{{ a.employee_name or '—' }}</td>
+          <td>
+            {% if a.action == 'created' %}
+              <span class="badge badge-green">Created</span>
+            {% elif a.action == 'status_changed' %}
+              <span class="badge badge-yellow">Status change</span>
+            {% else %}
+              <span class="badge badge-blue">Edited</span>
+            {% endif %}
+          </td>
+          <td class="text-sm">{{ a.summary or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 </div>
 {% endblock %}
 {% block scripts %}

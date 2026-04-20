@@ -137,13 +137,58 @@ class Transfer(db.Model):
     status_notes   = db.Column(db.String(255), default="")
     batch_id       = db.Column(db.String(60), default="")
     internal_notes = db.Column(db.String(255), default="")
+    # Processed-by attribution (separate from the login user under `created_by`):
+    # `employee_id` links to the store's named-employee roster for analytics;
+    # `employee_name` is the string snapshot captured at save-time so historical
+    # transfers display the correct name forever — even if the roster row is
+    # later deactivated, renamed, or deleted.
+    employee_id    = db.Column(db.Integer, db.ForeignKey("store_employee.id"), nullable=True)
+    employee_name  = db.Column(db.String(120), default="")
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
     creator        = db.relationship("User", foreign_keys=[created_by])
+    employee       = db.relationship("StoreEmployee", foreign_keys=[employee_id])
     @property
     def total_collected(self):
         """What the customer actually handed over: send amount + store fee + federal tax."""
         return (self.send_amount or 0) + (self.fee or 0) + (self.federal_tax or 0)
+
+class StoreEmployee(db.Model):
+    """Admin-managed list of employee NAMES per store — not login accounts.
+
+    All in-store employees share a single login (the store's employee User
+    account). This table holds the roster of real people whose names can be
+    picked from the "Processed by" dropdown on the transfer form. Admins
+    deactivate (never delete) entries so historical attribution survives.
+    """
+    __tablename__ = "store_employee"
+    id         = db.Column(db.Integer, primary_key=True)
+    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    name       = db.Column(db.String(120), nullable=False)
+    is_active  = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class TransferAudit(db.Model):
+    """Append-only log of everything that happens to a Transfer.
+
+    Written on create, on edit (with a human-readable summary of which fields
+    changed and their before→after values), and on status changes. Shown to
+    admins on the transfer edit page so they can see exactly who touched a
+    record and when. `user_id` is the logged-in User; `employee_name` is the
+    roster name they credited the action to (snapshot string, not FK, so it
+    stays valid after the roster row is deactivated).
+    """
+    __tablename__ = "transfer_audit"
+    id             = db.Column(db.Integer, primary_key=True)
+    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    transfer_id    = db.Column(db.Integer, db.ForeignKey("transfer.id"), nullable=False)
+    user_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    employee_id    = db.Column(db.Integer, db.ForeignKey("store_employee.id"), nullable=True)
+    employee_name  = db.Column(db.String(120), default="")
+    action         = db.Column(db.String(30), nullable=False)   # created | updated | status_changed
+    summary        = db.Column(db.String(500), default="")
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    user           = db.relationship("User", foreign_keys=[user_id])
 
 class ACHBatch(db.Model):
     __tablename__ = "ach_batch"
@@ -1670,6 +1715,79 @@ def _parse_dob(raw):
     except ValueError:
         return None
 
+def _active_roster(store_id):
+    """Names available in the "Processed by" dropdown. Inactive roster rows
+    are hidden so cashiers can't credit new transfers to former employees."""
+    return StoreEmployee.query.filter_by(
+        store_id=store_id, is_active=True
+    ).order_by(StoreEmployee.name.asc()).all()
+
+def _pick_employee(store_id, raw_id):
+    """Resolve a form `employee_id` value against the store's roster.
+    Returns (employee_or_none, display_name). Cross-store picks are rejected."""
+    try:
+        eid = int(raw_id) if raw_id else None
+    except (TypeError, ValueError):
+        return None, ""
+    if not eid:
+        return None, ""
+    emp = StoreEmployee.query.filter_by(id=eid, store_id=store_id).first()
+    return (emp, emp.name) if emp else (None, "")
+
+# Fields whose changes are interesting to surface in the audit log summary.
+# Sender PII edits are included (addr/phone/dob) since the customer directory
+# propagates them across sibling stores and admins want to see who edited.
+_TRANSFER_AUDIT_FIELDS = [
+    ("send_date",      "Send date"),
+    ("company",        "Company"),
+    ("sender_name",    "Sender"),
+    ("send_amount",    "Amount"),
+    ("fee",            "Fee"),
+    ("federal_tax",    "Tax"),
+    ("commission",     "Commission"),
+    ("recipient_name", "Recipient"),
+    ("country",        "Country"),
+    ("recipient_phone","Recipient phone"),
+    ("sender_phone",   "Sender phone"),
+    ("sender_address", "Sender address"),
+    ("confirm_number", "Confirm #"),
+    ("status",         "Status"),
+    ("status_notes",   "Status notes"),
+    ("batch_id",       "Batch"),
+    ("internal_notes", "Notes"),
+    ("employee_name",  "Processed by"),
+]
+
+def _summarize_transfer_changes(before, after, max_fields=4):
+    """Format a before/after diff into the audit log summary string."""
+    parts = []
+    for field, label in _TRANSFER_AUDIT_FIELDS:
+        old, new = before.get(field), after.get(field)
+        if (old or None) == (new or None):
+            continue
+        old_s = "—" if old in (None, "") else str(old)
+        new_s = "—" if new in (None, "") else str(new)
+        parts.append(f"{label}: {old_s} → {new_s}")
+    if len(parts) > max_fields:
+        overflow = len(parts) - max_fields
+        parts = parts[:max_fields] + [f"+{overflow} more field{'s' if overflow != 1 else ''}"]
+    return "; ".join(parts)
+
+def _record_transfer_audit(transfer, user, action, employee_id, employee_name, summary):
+    db.session.add(TransferAudit(
+        store_id=transfer.store_id,
+        transfer_id=transfer.id,
+        user_id=user.id if user else None,
+        employee_id=employee_id,
+        employee_name=employee_name,
+        action=action,
+        summary=summary,
+    ))
+
+def _transfer_snapshot(t):
+    """Capture the subset of Transfer fields we audit, as a dict."""
+    return {field: getattr(t, field, None) for field, _ in _TRANSFER_AUDIT_FIELDS}
+
 @app.route("/transfers/new",methods=["GET","POST"])
 @login_required
 def new_transfer():
@@ -1677,6 +1795,11 @@ def new_transfer():
     if not sid:
         flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     if request.method=="POST":
+        # "Processed by" is required so every transfer has an auditable owner.
+        emp, emp_name = _pick_employee(sid, request.form.get("employee_id"))
+        if not emp:
+            flash("Pick who processed this transfer before saving.", "error")
+            return redirect(url_for("new_transfer"))
         sender_name     = request.form["sender_name"]
         sender_phone_cc = (request.form.get("sender_phone_country") or "+1").strip()
         sender_phone    = request.form.get("sender_phone","").strip()
@@ -1707,24 +1830,39 @@ def new_transfer():
             status=request.form.get("status","Sent"),
             status_notes=request.form.get("status_notes",""),
             batch_id=request.form.get("batch_id",""),
-            internal_notes=request.form.get("internal_notes",""))
-        db.session.add(t); db.session.commit()
+            internal_notes=request.form.get("internal_notes",""),
+            employee_id=emp.id,
+            employee_name=emp_name)
+        db.session.add(t); db.session.flush()
+        _record_transfer_audit(t, user, "created", emp.id, emp_name,
+            f"Logged by {emp_name}.")
+        db.session.commit()
         flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
     return render_template("transfer_form.html", user=user, transfer=None,
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
-        mt_companies=store_mt_companies(current_store()))
+        mt_companies=store_mt_companies(current_store()),
+        roster=_active_roster(sid), audit_entries=[])
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
 def edit_transfer(tid):
-    """Edit a transfer. Employees can only edit their own; admins can edit any."""
+    """Edit any transfer belonging to the current store.
+
+    Employees share a login, so anyone logged in at the store can edit any
+    of the store's transfers. The "Processed by" dropdown (required) +
+    audit log are what give the admin visibility into who actually did
+    what. Employees at other stores are still blocked by `store_id`.
+    """
     user=current_user(); sid=session.get("store_id")
     if not sid:
         flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     t=Transfer.query.filter_by(id=tid,store_id=sid).first_or_404()
-    if user.role=="employee" and t.created_by!=user.id:
-        flash("Access denied.","error"); return redirect(url_for("transfers"))
     if request.method=="POST":
+        emp, emp_name = _pick_employee(sid, request.form.get("employee_id"))
+        if not emp:
+            flash("Pick who made this edit before saving.", "error")
+            return redirect(url_for("edit_transfer", tid=t.id))
+        before = _transfer_snapshot(t)
         t.send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date()
         t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
         t.send_amount=float(request.form.get("send_amount") or 0)
@@ -1743,6 +1881,8 @@ def edit_transfer(tid):
         t.status_notes=request.form.get("status_notes","")
         t.batch_id=request.form.get("batch_id","")
         t.internal_notes=request.form.get("internal_notes","")
+        t.employee_id=emp.id
+        t.employee_name=emp_name
         t.updated_at=datetime.utcnow()
         # Keep the customer directory in sync with the edited snapshot.
         cust = find_or_upsert_customer(
@@ -1752,11 +1892,37 @@ def edit_transfer(tid):
             customer_id=request.form.get("customer_id", type=int) or t.customer_id,
         )
         t.customer_id = cust.id
+        after = _transfer_snapshot(t)
+        summary = _summarize_transfer_changes(before, after) or "No field changes."
+        # Flag pure status changes as a distinct audit action so the admin
+        # view can highlight them — status transitions are the most common
+        # reason an edit happens after the initial save.
+        changed_fields = {
+            f for f, _ in _TRANSFER_AUDIT_FIELDS
+            if (before.get(f) or None) != (after.get(f) or None)
+        }
+        action = "status_changed" if changed_fields == {"status"} else "updated"
+        _record_transfer_audit(t, user, action, emp.id, emp_name, summary)
         db.session.commit(); flash("Transfer updated.","success")
-        return redirect(url_for("transfers"))
+        return redirect(url_for("edit_transfer", tid=t.id))
+    # The preselected "Processed by" is the original roster row if it still
+    # exists (even if deactivated); historical names with no matching row
+    # fall through to a read-only hint line in the form.
+    audit_entries = TransferAudit.query.filter_by(
+        store_id=sid, transfer_id=t.id
+    ).order_by(TransferAudit.created_at.desc()).limit(50).all()
+    roster = _active_roster(sid)
+    # If the transfer's current employee was deactivated, surface them in the
+    # dropdown as a selectable (but italicized) fallback so editing doesn't
+    # silently blank the attribution.
+    if t.employee_id and not any(r.id == t.employee_id for r in roster):
+        legacy = db.session.get(StoreEmployee, t.employee_id)
+        if legacy and legacy.store_id == sid:
+            roster = [legacy] + roster
     return render_template("transfer_form.html", user=user, transfer=t,
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
-        mt_companies=store_mt_companies(current_store()))
+        mt_companies=store_mt_companies(current_store()),
+        roster=roster, audit_entries=audit_entries)
 
 # ── Daily Book ───────────────────────────────────────────────
 # Companies a new store can pick from on the settings page. The daily book
@@ -2352,6 +2518,11 @@ def admin_settings():
     current_set       = set(current_companies)
     custom_companies  = [c for c in current_companies if c not in KNOWN_MT_COMPANIES]
 
+    # Roster tab: list every named employee, active first, then alpha.
+    roster = StoreEmployee.query.filter_by(store_id=store.id).order_by(
+        StoreEmployee.is_active.desc(), StoreEmployee.name.asc()
+    ).all()
+
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
@@ -2362,7 +2533,66 @@ def admin_settings():
         known_companies=KNOWN_MT_COMPANIES,
         current_company_set=current_set,
         custom_companies=custom_companies,
+        roster=roster,
     )
+
+@app.route("/admin/settings/roster/add", methods=["POST"])
+@admin_required
+def admin_roster_add():
+    store = current_store()
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        flash("Name is required.", "error")
+        return redirect(url_for("admin_settings", tab="roster"))
+    # Case-insensitive dedupe against the store's existing roster. If a
+    # deactivated entry matches, re-activate it instead of creating a second
+    # row so the audit log stays intact.
+    existing = StoreEmployee.query.filter(
+        StoreEmployee.store_id == store.id,
+        db.func.lower(StoreEmployee.name) == name.lower(),
+    ).first()
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+            db.session.commit()
+            flash(f"Reactivated {existing.name}.", "success")
+        else:
+            flash(f"{existing.name} is already on the roster.", "error")
+        return redirect(url_for("admin_settings", tab="roster"))
+    db.session.add(StoreEmployee(store_id=store.id, name=name))
+    db.session.commit()
+    flash(f"Added {name}.", "success")
+    return redirect(url_for("admin_settings", tab="roster"))
+
+@app.route("/admin/settings/roster/<int:eid>/toggle", methods=["POST"])
+@admin_required
+def admin_roster_toggle(eid):
+    sid = session["store_id"]
+    emp = StoreEmployee.query.filter_by(id=eid, store_id=sid).first_or_404()
+    emp.is_active = not emp.is_active
+    db.session.commit()
+    flash(
+        f"{emp.name} {'reactivated' if emp.is_active else 'deactivated'}.",
+        "success",
+    )
+    return redirect(url_for("admin_settings", tab="roster"))
+
+@app.route("/admin/settings/roster/<int:eid>/rename", methods=["POST"])
+@admin_required
+def admin_roster_rename(eid):
+    sid = session["store_id"]
+    emp = StoreEmployee.query.filter_by(id=eid, store_id=sid).first_or_404()
+    new_name = (request.form.get("name") or "").strip()
+    if not new_name:
+        flash("Name cannot be empty.", "error")
+    else:
+        emp.name = new_name
+        db.session.commit()
+        # Historical transfers keep their snapshotted employee_name — a
+        # rename only affects future dropdown picks. That's the intended
+        # audit-preserving behavior.
+        flash(f"Renamed to {new_name}.", "success")
+    return redirect(url_for("admin_settings", tab="roster"))
 
 
 @app.route("/admin/settings/team/<int:uid>", methods=["POST"])
@@ -2930,9 +3160,13 @@ def stripe_webhook():
 # ── Data retention purge ─────────────────────────────────────
 # Models that hold per-store data and must be wiped before the store row.
 _STORE_OWNED_MODELS = [
-    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
+    # TransferAudit must purge before Transfer (it has an FK to transfer.id),
+    # and StoreEmployee before any row that FKs to it — we null/ignore employee
+    # FKs on purge via the audit table's nullable column, but order still
+    # matters for cascade sanity.
+    "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
     "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
-    "OwnerInviteCode", "Customer", "User",
+    "StoreEmployee", "OwnerInviteCode", "Customer", "User",
 ]
 
 def purge_expired_stores():
@@ -2993,6 +3227,10 @@ _ADDED_COLUMNS = [
     ("transfer", "sender_dob",           "DATE NULL"),
     ("store",    "companies",            "VARCHAR(500) DEFAULT ''"),
     ("mt_summary","federal_tax",         "FLOAT DEFAULT 0"),
+    # Processed-by attribution. Nullable so old transfers stay valid; the
+    # transfer form enforces a non-empty value for new saves.
+    ("transfer", "employee_id",          "INTEGER NULL"),
+    ("transfer", "employee_name",        "VARCHAR(120) DEFAULT ''"),
 ]
 
 def _ensure_added_columns():
