@@ -74,8 +74,9 @@
         </div>
         <div class="field">
           <label>Send Amount ($) *</label>
-          <input type="number" name="send_amount" step="0.01" min="0"
-            value="{{ transfer.send_amount if transfer else '' }}" placeholder="0.00" required>
+          <input type="number" name="send_amount" id="send_amount" step="0.01" min="0"
+            value="{{ transfer.send_amount if transfer else '' }}" placeholder="0.00" required
+            data-federal-tax-rate="{{ federal_tax_rate }}">
         </div>
         <div class="field">
           <label>Fee ($)</label>
@@ -83,11 +84,18 @@
             value="{{ transfer.fee if transfer else '' }}" placeholder="0.00">
         </div>
         <div class="field">
-          <label>Federal Tax ($)</label>
-          <input type="number" name="federal_tax" step="0.01" min="0"
-            value="{{ transfer.federal_tax if transfer else '' }}" placeholder="0.00">
+          <label>Federal Tax ($) <span class="text-muted" style="text-transform:none;font-weight:400;font-size:10.5px;letter-spacing:0;">auto · {{ '{:.2f}'.format(federal_tax_rate * 100) }}%</span></label>
+          {# Read-only: the server recomputes from Send Amount × the store's
+             configured rate on save, so this input is only a visual mirror. #}
+          <input type="number" name="federal_tax" id="federal_tax" step="0.01" min="0"
+            value="{{ '{:.2f}'.format(transfer.federal_tax) if transfer else '' }}"
+            placeholder="0.00" readonly
+            style="background:var(--gray1);cursor:not-allowed;">
           <div class="text-sm text-muted" style="margin-top:4px;">
+            Calculated automatically from Send Amount at
+            <strong>{{ '{:.2f}'.format(federal_tax_rate * 100) }}%</strong>.
             Tracked separately from fee — leaves with the ACH withdrawal, not store revenue.
+            Admins change the rate in <a href="{{ url_for('admin_settings', tab='store') }}">Store Settings</a>.
           </div>
         </div>
       </div>
@@ -359,6 +367,26 @@
     input.addEventListener('focus', function() { if (box.children.length) box.hidden = false; });
   }
   inputs.forEach(function(p) { attach(p.input, p.box); });
+})();
+</script>
+<script>
+// Federal Tax is read-only and always derived from Send Amount × the store's
+// configured rate. The server also recomputes on save (the submitted value is
+// ignored), so this script is purely cosmetic — it lets the cashier see the
+// tax as they type.
+(function() {
+  var amountEl = document.getElementById('send_amount');
+  var taxEl = document.getElementById('federal_tax');
+  if (!amountEl || !taxEl) return;
+  var rate = parseFloat(amountEl.getAttribute('data-federal-tax-rate') || '0') || 0;
+  function recompute() {
+    var amt = parseFloat(amountEl.value) || 0;
+    taxEl.value = (amt > 0 && rate > 0) ? (amt * rate).toFixed(2) : '';
+  }
+  amountEl.addEventListener('input', recompute);
+  amountEl.addEventListener('change', recompute);
+  // Fire once on load so the tax matches the pre-populated amount on edits.
+  recompute();
 })();
 </script>
 {% endblock %}
