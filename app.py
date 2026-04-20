@@ -3538,6 +3538,13 @@ _STORE_OWNED_MODELS = [
     "User",
 ]
 
+# Models whose store FK isn't literally named `store_id`. The default for
+# anything absent here is `store_id`.
+_STORE_FK_OVERRIDES = {
+    "ReferralCode":       "owner_store_id",
+    "ReferralRedemption": "referee_store_id",
+}
+
 def purge_expired_stores():
     """Hard-delete inactive stores whose retention window has elapsed."""
     now = datetime.utcnow()
@@ -3551,7 +3558,8 @@ def purge_expired_stores():
         for model_name in _STORE_OWNED_MODELS:
             model = globals().get(model_name)
             if model is not None:
-                model.query.filter_by(store_id=s.id).delete(synchronize_session=False)
+                fk = _STORE_FK_OVERRIDES.get(model_name, "store_id")
+                model.query.filter_by(**{fk: s.id}).delete(synchronize_session=False)
         db.session.delete(s)
         purged += 1
     if purged:

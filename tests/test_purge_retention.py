@@ -176,6 +176,44 @@ def test_purge_customer_and_user_listed(client):
             f"would leave orphaned rows"
 
 
+def test_purge_cascades_referral_models_with_custom_fk(client):
+    """ReferralCode/ReferralRedemption use owner_store_id / referee_store_id,
+    not store_id. _STORE_FK_OVERRIDES must route the purge to the right
+    column or the whole purge aborts with an InvalidRequestError."""
+    from app import (
+        db, ReferralCode, ReferralRedemption, purge_expired_stores,
+        _STORE_FK_OVERRIDES,
+    )
+    # Override map must not lie.
+    assert _STORE_FK_OVERRIDES.get("ReferralCode") == "owner_store_id"
+    assert _STORE_FK_OVERRIDES.get("ReferralRedemption") == "referee_store_id"
+
+    with client.application.app_context():
+        doomed = _make_inactive_store_due(slug="referral-doomed")
+        db.session.flush()
+        sid = doomed.id
+        db.session.add(ReferralCode(code="DOOMED1", owner_store_id=sid))
+        db.session.flush()
+        rc_id = ReferralCode.query.filter_by(owner_store_id=sid).one().id
+        # Redemption needs a referee store too.
+        referee = _make_inactive_store_due(slug="referral-referee", days_past=2)
+        db.session.flush()
+        db.session.add(ReferralRedemption(
+            referral_code_id=rc_id, referee_store_id=referee.id,
+        ))
+        db.session.commit()
+
+        assert ReferralCode.query.filter_by(owner_store_id=sid).count() == 1
+        assert ReferralRedemption.query.filter_by(
+            referee_store_id=referee.id).count() == 1
+
+        assert purge_expired_stores() == 2
+
+        assert ReferralCode.query.filter_by(owner_store_id=sid).count() == 0
+        assert ReferralRedemption.query.filter_by(
+            referee_store_id=referee.id).count() == 0
+
+
 # ── Isolation ───────────────────────────────────────────────────────────────
 
 def test_purge_does_not_touch_unrelated_stores(client):
