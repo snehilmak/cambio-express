@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Subscription — DineroBook{% endblock %}
+{% block page_title %}Subscription{% endblock %}
+{% block head %}
+<style>
+.sub-grid {
+  display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px;
+  margin-bottom: 28px;
+}
+@media (max-width: 900px) { .sub-grid { grid-template-columns: 1fr; gap: 16px; } }
+
+.plan-hero {
+  background: var(--navy); color: var(--white);
+  border-radius: 12px; padding: 28px;
+  position: relative; overflow: hidden;
+}
+.plan-hero .label {
+  font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--gold2); font-weight: 600;
+}
+.plan-hero .name {
+  font-family: 'DM Serif Display', serif; font-size: 32px;
+  margin-top: 6px; line-height: 1.1;
+}
+.plan-hero .price {
+  font-size: 14px; color: rgba(255,255,255,0.7); margin-top: 4px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.plan-hero .meta {
+  margin-top: 18px; font-size: 13px; color: rgba(255,255,255,0.75);
+}
+.plan-hero .actions { margin-top: 22px; display: flex; gap: 10px; flex-wrap: wrap; }
+.plan-hero .btn-on-dark {
+  background: var(--gold); color: var(--white); border: none;
+  padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
+  font-weight: 600; cursor: pointer; text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.plan-hero .btn-on-dark:hover { background: var(--gold2); color: var(--navy); }
+.plan-hero .btn-ghost {
+  background: transparent; color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 10px 18px; border-radius: 8px; font-size: 13.5px;
+  font-weight: 500; cursor: pointer; text-decoration: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.plan-hero .btn-ghost:hover { border-color: var(--gold2); color: var(--gold2); }
+
+.addon-card {
+  background: var(--white); border: 1px solid var(--gray2);
+  border-radius: 12px; padding: 22px; position: relative;
+  display: flex; flex-direction: column; gap: 10px;
+}
+[data-theme="dark"] .addon-card { background: #1a1f2e; border-color: #2a3044; }
+
+.addon-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.addon-name {
+  font-family: 'DM Serif Display', serif; font-size: 19px;
+  color: var(--navy); line-height: 1.2;
+}
+[data-theme="dark"] .addon-name { color: #f3f4f6; }
+.addon-price {
+  font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  color: var(--gray4); white-space: nowrap;
+}
+.addon-tag { font-size: 13px; color: var(--gray4); }
+.addon-desc { font-size: 13px; color: var(--dark); line-height: 1.55; }
+[data-theme="dark"] .addon-desc { color: #d1d5db; }
+.addon-foot {
+  margin-top: auto; display: flex; align-items: center;
+  justify-content: space-between; gap: 10px; padding-top: 6px;
+}
+.addon-btn {
+  background: transparent; color: var(--gray4);
+  border: 1.5px solid var(--gray2); padding: 8px 14px;
+  border-radius: 8px; font-size: 12.5px; font-weight: 600;
+  cursor: not-allowed; font-family: 'DM Sans', sans-serif;
+}
+.addon-btn.live {
+  cursor: pointer; color: var(--blue); border-color: var(--blue);
+}
+.addon-btn.live:hover { background: var(--blue); color: var(--white); }
+.coming-pill {
+  background: var(--gold); color: var(--white);
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  padding: 3px 10px; border-radius: 999px; text-transform: uppercase;
+}
+.gate-banner {
+  background: #fef9c3; border: 1px solid #fde047;
+  color: #713f12; border-radius: 8px; padding: 12px 16px;
+  font-size: 13px; margin-bottom: 18px;
+}
+[data-theme="dark"] .gate-banner {
+  background: #2d2410; border-color: #4a3a10; color: #fde047;
+}
+
+.info-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid var(--gray2);
+  font-size: 13.5px;
+}
+[data-theme="dark"] .info-row { border-bottom-color: #2a3044; }
+.info-row:last-child { border-bottom: none; }
+.info-row .k { color: var(--gray4); }
+.info-row .v { color: var(--dark); font-weight: 500; }
+[data-theme="dark"] .info-row .v { color: #e5e7eb; }
+.info-row .v.mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="sub-grid">
+
+  <!-- Current plan -->
+  <div class="plan-hero">
+    <div class="label">Current Plan</div>
+    <div class="name">{{ plan_label }}</div>
+    {% if plan_price %}
+      <div class="price">{{ plan_price }} · per store</div>
+    {% elif store and store.plan == 'trial' and store.trial_ends_at %}
+      <div class="price">Free · trial</div>
+    {% endif %}
+
+    <div class="meta">
+      {% if store and store.plan == 'trial' %}
+        {% if trial_status == 'active' or trial_status == 'expiring_soon' %}
+          Your free trial ends in <strong>{{ trial_days_left }} day{{ 's' if trial_days_left != 1 else '' }}</strong>.
+          Pick a plan now to keep full access without interruption.
+        {% elif trial_status == 'grace' %}
+          Your trial has ended. You're in a short grace period — upgrade now to avoid losing access.
+        {% else %}
+          Your trial has ended.
+        {% endif %}
+      {% elif store and store.plan == 'inactive' %}
+        Your subscription is inactive. Choose a plan to restore access.
+      {% elif has_paid_plan %}
+        Subscription is active. Manage payment method, invoices, or cancellation in the billing portal.
+      {% endif %}
+    </div>
+
+    <div class="actions">
+      {% if has_paid_plan %}
+        <form method="POST" action="{{ url_for('admin_subscription_billing_portal') }}" style="display:inline;">
+          <button type="submit" class="btn-on-dark">Manage Billing</button>
+        </form>
+        <a href="{{ url_for('subscribe') }}" class="btn-ghost">Change Plan</a>
+      {% else %}
+        <a href="{{ url_for('subscribe') }}" class="btn-on-dark">Choose a Plan</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Account snapshot -->
+  <div class="card">
+    <div class="card-header"><span class="card-title">Account</span></div>
+    <div class="card-body">
+      <div class="info-row">
+        <span class="k">Store</span>
+        <span class="v">{{ store.name }}</span>
+      </div>
+      <div class="info-row">
+        <span class="k">Billing Email</span>
+        <span class="v">{{ store.email or '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="k">Customer ID</span>
+        <span class="v mono">{{ store.stripe_customer_id or '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="k">Subscription ID</span>
+        <span class="v mono">{{ store.stripe_subscription_id or '—' }}</span>
+      </div>
+      <div class="info-row">
+        <span class="k">Active Add-ons</span>
+        <span class="v">{{ active_addons|length }}</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">Add-ons</div>
+
+{% if not has_paid_plan %}
+<div class="gate-banner">
+  Add-ons require an active <strong>Basic</strong> or <strong>Pro</strong> subscription.
+  <a href="{{ url_for('subscribe') }}" style="color:inherit;text-decoration:underline;font-weight:600;">Choose a plan</a>
+  to unlock them.
+</div>
+{% endif %}
+
+<div class="grid-2">
+  {% for key, addon in addons_catalog.items() %}
+  <div class="addon-card">
+    <div class="addon-row">
+      <div>
+        <div class="addon-name">{{ addon.name }}</div>
+        <div class="addon-tag">{{ addon.tagline }}</div>
+      </div>
+      <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        {% if addon.status == 'coming_soon' %}
+          <span class="coming-pill">Coming Soon</span>
+        {% endif %}
+        <span class="addon-price">{{ addon.price_label }}</span>
+      </div>
+    </div>
+    <div class="addon-desc">{{ addon.description }}</div>
+    <div class="addon-foot">
+      <span style="font-size:12px;color:var(--gray4);">
+        {% if key in active_addons %}
+          <span class="badge badge-green">Active</span>
+        {% else %}
+          Not added
+        {% endif %}
+      </span>
+      <form method="POST" action="{{ url_for('admin_subscription_toggle_addon', addon_key=key) }}">
+        {% if addon.status == 'coming_soon' %}
+          <button type="submit" class="addon-btn"
+                  title="This add-on isn't live yet — click to get notified.">
+            Notify Me
+          </button>
+        {% elif key in active_addons %}
+          <button type="submit" class="addon-btn live">Remove</button>
+        {% else %}
+          <button type="submit" class="addon-btn live"
+                  {% if not has_paid_plan %}disabled title="Subscribe to a plan first"{% endif %}>
+            Add
+          </button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

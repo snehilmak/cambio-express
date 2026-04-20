@@ -37,6 +37,7 @@ class Store(db.Model):
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     trial_ends_at = db.Column(db.DateTime, nullable=True)
     grace_ends_at = db.Column(db.DateTime, nullable=True)
+    addons        = db.Column(db.String(255), default="")
 
 class User(db.Model):
     __tablename__ = "user"
@@ -254,7 +255,38 @@ def current_user():  return User.query.get(session["user_id"]) if "user_id" in s
 def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
 
 _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
-                 "owner_dashboard", "owner_link_store", "owner_unlink_store"}
+                 "owner_dashboard", "owner_link_store", "owner_unlink_store",
+                 "admin_subscription", "admin_subscription_billing_portal",
+                 "admin_subscription_toggle_addon"}
+
+# ── Add-ons catalog ──────────────────────────────────────────
+# Each add-on has a stable key used in the Store.addons CSV column.
+# Add-ons require an active paid subscription (basic or pro) before they
+# can be activated. status="coming_soon" disables activation in the UI
+# and on the server until the underlying integration ships.
+ADDONS_CATALOG = {
+    "tv_display": {
+        "name": "TV Display & Live Rates",
+        "price_cents": 200,
+        "price_label": "$2 / month",
+        "tagline": "Show ads & money transfer rates on the TV behind your counter.",
+        "description": (
+            "Connects this store to the upcoming DineroBook TV app on Amazon Fire TV "
+            "and Google TV. Stream your branded display ads and live money transfer "
+            "rates straight from your DineroBook account — inspired by Xenok Display."
+        ),
+        "status": "coming_soon",
+    },
+}
+
+def store_addon_keys(store):
+    """Return the set of add-on keys currently active for a store."""
+    if not store or not store.addons:
+        return set()
+    return {k.strip() for k in store.addons.split(",") if k.strip()}
+
+def store_has_paid_plan(store):
+    return bool(store) and store.plan in ("basic", "pro")
 
 def login_required(f):
     @wraps(f)
@@ -720,6 +752,66 @@ def subscribe_success():
     user = current_user()
     store = current_store()
     return render_template("subscribe_success.html", user=user, store=store)
+
+# ── Subscription management ──────────────────────────────────
+@app.route("/admin/subscription")
+@admin_required
+def admin_subscription():
+    user = current_user()
+    store = current_store()
+    active_addons = store_addon_keys(store)
+    plan_labels = {
+        "trial":    "Free Trial",
+        "basic":    "Basic",
+        "pro":      "Pro",
+        "inactive": "Inactive",
+    }
+    plan_prices = {"basic": "$20 / month", "pro": "$30 / month"}
+    return render_template("admin_subscription.html",
+        user=user, store=store,
+        addons_catalog=ADDONS_CATALOG,
+        active_addons=active_addons,
+        has_paid_plan=store_has_paid_plan(store),
+        plan_label=plan_labels.get(store.plan if store else "", "Unknown"),
+        plan_price=plan_prices.get(store.plan if store else "", ""),
+    )
+
+@app.route("/admin/subscription/billing-portal", methods=["POST"])
+@admin_required
+def admin_subscription_billing_portal():
+    store = current_store()
+    if not store or not store.stripe_customer_id:
+        flash("No billing account found. Choose a plan to get started.", "error")
+        return redirect(url_for("subscribe"))
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=store.stripe_customer_id,
+            return_url=url_for("admin_subscription", _external=True),
+        )
+        return redirect(portal.url, code=303)
+    except stripe.error.StripeError as e:
+        app.logger.error(f"Stripe billing portal error: {e}")
+        flash("Could not open billing portal. Please try again.", "error")
+        return redirect(url_for("admin_subscription"))
+
+@app.route("/admin/subscription/addons/<addon_key>", methods=["POST"])
+@admin_required
+def admin_subscription_toggle_addon(addon_key):
+    store = current_store()
+    addon = ADDONS_CATALOG.get(addon_key)
+    if not addon:
+        flash("Unknown add-on.", "error")
+        return redirect(url_for("admin_subscription"))
+    if not store_has_paid_plan(store):
+        flash("Add-ons require an active Basic or Pro subscription.", "error")
+        return redirect(url_for("admin_subscription"))
+    if addon.get("status") == "coming_soon":
+        flash(f"{addon['name']} is coming soon — we'll let you know when it goes live.",
+              "success")
+        return redirect(url_for("admin_subscription"))
+    # Future: real activation flow (Stripe subscription item update, etc.)
+    flash("Add-on updated.", "success")
+    return redirect(url_for("admin_subscription"))
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
@@ -1304,9 +1396,29 @@ def server_error(e):
         message="Something went wrong. Please try again."), 500
 
 # ── Init ─────────────────────────────────────────────────────
+def _ensure_addons_column():
+    """Add the store.addons column on existing databases. No-op if it exists."""
+    try:
+        with db.engine.connect() as conn:
+            dialect = db.engine.dialect.name
+            if dialect == "sqlite":
+                cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(store);")]
+                if "addons" not in cols:
+                    conn.exec_driver_sql(
+                        "ALTER TABLE store ADD COLUMN addons VARCHAR(255) DEFAULT ''"
+                    )
+            else:
+                conn.exec_driver_sql(
+                    "ALTER TABLE store ADD COLUMN IF NOT EXISTS addons VARCHAR(255) DEFAULT ''"
+                )
+                conn.commit()
+    except Exception as e:
+        app.logger.warning(f"addons column migration skipped: {e}")
+
 def init_db():
     with app.app_context():
         db.create_all()
+        _ensure_addons_column()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
