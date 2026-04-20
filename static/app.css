@@ -230,6 +230,19 @@ textarea { resize: vertical; min-height: 80px; }
 .checkbox-row { display: flex; align-items: center; gap: 10px; }
 .checkbox-row input { width: auto; }
 
+/* Hide the browser's number-input spinner buttons globally. `type="number"`
+   still gives us numeric keyboard on mobile and rejects non-digits, we just
+   want the field to look like any other text input. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 /* ── FLASH ──────────────────────────────────────────────── */
 .flash { padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; font-weight: 500; }
 .flash-success { background: var(--green-bg); color: var(--green-dark); border: 1px solid var(--green-border); }

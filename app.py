@@ -216,6 +216,24 @@ class DailyReport(db.Model):
             self.outside_cash_drops,self.cash_deposit,self.checks_deposit,
             self.payroll_expense,self.other_cash_out])
 
+class DailyDrop(db.Model):
+    """Individual "Outside Cash & Drop" entry — logged as they happen by time
+    and amount, then summed into DailyReport.outside_cash_drops.
+
+    Mirrors the Drops section of the master spreadsheet: the main daily-book
+    field becomes read-only, recomputed from these line items on every add /
+    delete / daily-report save so the two always agree.
+    """
+    __tablename__ = "daily_drop"
+    id          = db.Column(db.Integer, primary_key=True)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    report_date = db.Column(db.Date, nullable=False)
+    drop_time   = db.Column(db.Time, nullable=False)
+    amount      = db.Column(db.Float, nullable=False)
+    note        = db.Column(db.String(120), default="")
+    created_by  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
 class MoneyTransferSummary(db.Model):
     __tablename__ = "mt_summary"
     id          = db.Column(db.Integer, primary_key=True)
@@ -1559,6 +1577,36 @@ def daily_list():
         month_name=calendar.month_name[month],
         prev_month=prev_month,prev_year=prev_year,next_month=next_month,next_year=next_year)
 
+def _ensure_daily_report(store_id, report_date):
+    """Return the DailyReport for (store, date), creating an empty one if needed."""
+    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
+    if rpt is None:
+        rpt = DailyReport(store_id=store_id, report_date=report_date)
+        db.session.add(rpt)
+        db.session.flush()
+    return rpt
+
+def _recompute_drops_total(store_id, report_date):
+    """Sum DailyDrop rows for the given date and push the total onto
+    DailyReport.outside_cash_drops. Single source of truth for the daily
+    book's outside-cash-drops line."""
+    total = (db.session.query(db.func.coalesce(db.func.sum(DailyDrop.amount), 0.0))
+             .filter_by(store_id=store_id, report_date=report_date).scalar()) or 0.0
+    rpt = _ensure_daily_report(store_id, report_date)
+    rpt.outside_cash_drops = float(total)
+    rpt.updated_at = datetime.utcnow()
+    return total
+
+# Fields on DailyReport the main form still edits. outside_cash_drops is
+# intentionally omitted — it's derived from DailyDrop line items.
+_DAILY_REPORT_FIELDS = [
+    "taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
+    "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
+    "return_check_paid_back","forward_balance","from_bank","other_cash_in","rebates_commissions",
+    "cash_purchases","cash_expense","check_purchases","check_expense",
+    "cash_deposit","checks_deposit","safe_balance","payroll_expense","other_cash_out","over_short",
+]
+
 @app.route("/daily/<string:ds>",methods=["GET","POST"])
 @admin_required
 def daily_report(ds):
@@ -1573,15 +1621,17 @@ def daily_report(ds):
             Transfer.send_date==report_date,Transfer.status.notin_(["Canceled","Rejected"])).all()
         auto_mt[co]={"amount":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows),
                      "commission":sum(r.commission for r in rows),"count":len(rows)}
+    drops = (DailyDrop.query.filter_by(store_id=sid, report_date=report_date)
+             .order_by(DailyDrop.drop_time).all())
+    drops_total = sum(d.amount for d in drops)
     if request.method=="POST":
         if not report: report=DailyReport(store_id=sid,report_date=report_date); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
-        for field in ["taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
-            "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
-            "return_check_paid_back","forward_balance","from_bank","other_cash_in","rebates_commissions",
-            "cash_purchases","cash_expense","check_purchases","check_expense","outside_cash_drops",
-            "cash_deposit","checks_deposit","safe_balance","payroll_expense","other_cash_out","over_short"]:
+        for field in _DAILY_REPORT_FIELDS:
             setattr(report,field,fv(field))
+        # outside_cash_drops is derived — always pull from DailyDrop so an old
+        # form submission with a stale value can't overwrite the truth.
+        report.outside_cash_drops = float(drops_total)
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
         for co in DAILY_COMPANIES:
             key=co.lower().replace(" ","_").replace(".","")
@@ -1592,7 +1642,59 @@ def daily_report(ds):
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
         return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
     return render_template("daily_report.html",user=user,report_date=report_date,
-        report=report,mt_rows=mt_rows,companies=DAILY_COMPANIES,auto_mt=auto_mt)
+        report=report,mt_rows=mt_rows,companies=DAILY_COMPANIES,auto_mt=auto_mt,
+        drops=drops, drops_total=drops_total)
+
+@app.route("/daily/<string:ds>/drops/new", methods=["POST"])
+@admin_required
+def daily_drop_new(ds):
+    """Append a single Outside Cash Drop for this report date."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    raw_time = request.form.get("drop_time", "").strip()
+    raw_amt  = request.form.get("amount", "").strip()
+    try:
+        drop_time = datetime.strptime(raw_time, "%H:%M").time()
+    except ValueError:
+        flash("Enter a valid time (HH:MM).", "error")
+        return redirect(url_for("daily_report", ds=ds))
+    try:
+        amount = float(raw_amt)
+        if amount <= 0: raise ValueError
+    except ValueError:
+        flash("Amount must be greater than zero.", "error")
+        return redirect(url_for("daily_report", ds=ds))
+    db.session.add(DailyDrop(
+        store_id=sid, report_date=report_date,
+        drop_time=drop_time, amount=amount,
+        note=request.form.get("note", "").strip()[:120],
+        created_by=current_user().id,
+    ))
+    db.session.flush()
+    _recompute_drops_total(sid, report_date)
+    db.session.commit()
+    flash(f"Drop of ${amount:,.2f} at {drop_time.strftime('%H:%M')} added.", "success")
+    return redirect(url_for("daily_report", ds=ds))
+
+@app.route("/daily/<string:ds>/drops/<int:drop_id>/delete", methods=["POST"])
+@admin_required
+def daily_drop_delete(ds, drop_id):
+    """Delete a single Outside Cash Drop and refresh the rolled-up total."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    drop = (DailyDrop.query
+            .filter_by(id=drop_id, store_id=sid, report_date=report_date)
+            .first_or_404())
+    db.session.delete(drop)
+    db.session.flush()
+    _recompute_drops_total(sid, report_date)
+    db.session.commit()
+    flash("Drop deleted.", "success")
+    return redirect(url_for("daily_report", ds=ds))
 
 # ── Monthly P&L ──────────────────────────────────────────────
 @app.route("/monthly")
@@ -2419,9 +2521,9 @@ def stripe_webhook():
 # ── Data retention purge ─────────────────────────────────────
 # Models that hold per-store data and must be wiped before the store row.
 _STORE_OWNED_MODELS = [
-    "Transfer", "ACHBatch", "DailyReport", "MoneyTransferSummary",
+    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
     "MonthlyFinancial", "SimpleFINConfig", "StoreOwnerLink",
-    "OwnerInviteCode", "User",
+    "OwnerInviteCode", "Customer", "User",
 ]
 
 def purge_expired_stores():
