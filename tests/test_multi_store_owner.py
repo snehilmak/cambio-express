@@ -88,3 +88,73 @@ def test_login_already_logged_in_owner_redirects_to_owner_dashboard(client):
     rv = client.get("/login")
     assert rv.status_code == 302
     assert "owner/dashboard" in rv.headers["Location"]
+
+
+def test_owner_signup_success(client):
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane Owner",
+        "email": "jane@example.com",
+        "password": "password123",
+    })
+    assert rv.status_code == 302
+    assert "owner/dashboard" in rv.headers["Location"]
+    with flask_app.app_context():
+        from app import User
+        u = User.query.filter_by(username="jane@example.com", store_id=None).first()
+        assert u is not None
+        assert u.role == "owner"
+        assert u.store_id is None
+        assert u.full_name == "Jane Owner"
+
+
+def test_owner_signup_sets_session(client):
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane Owner",
+        "email": "jane@example.com",
+        "password": "password123",
+    })
+    with client.session_transaction() as sess:
+        assert sess["role"] == "owner"
+        assert sess.get("store_id") is None
+
+
+def test_owner_signup_duplicate_email_rejected(client):
+    client.post("/signup/owner", data={
+        "full_name": "Jane Owner", "email": "jane@example.com", "password": "password123",
+    })
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane 2", "email": "jane@example.com", "password": "password123",
+    })
+    assert rv.status_code == 200
+    assert b"already exists" in rv.data
+
+
+def test_owner_signup_short_password_rejected(client):
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane Owner", "email": "jane@example.com", "password": "short",
+    })
+    assert rv.status_code == 200
+    assert b"8 characters" in rv.data
+
+
+def test_owner_signup_invalid_email_rejected(client):
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane Owner", "email": "notanemail", "password": "password123",
+    })
+    assert rv.status_code == 200
+    assert b"valid email" in rv.data
+
+
+def test_owner_signup_blocks_admin_email(client):
+    """Existing store admin email cannot be reused as an owner."""
+    rv = client.post("/signup/owner", data={
+        "full_name": "Jane Owner", "email": "admin@test.com", "password": "password123",
+    })
+    assert rv.status_code == 200
+    assert b"already exists" in rv.data
+
+
+def test_owner_signup_get_renders_form(client):
+    rv = client.get("/signup/owner")
+    assert rv.status_code == 200
+    assert b"owner" in rv.data.lower()

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Create Account — Cambio Express</title>
+<title>Owner Sign Up — Cambio Express</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0f1f3d;--blue:#1a4080;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray2:#e8e8ec;--gray4:#6b7280;--dark:#1a1a2e;--red:#dc2626;--sky:#3b82f6}
@@ -15,7 +15,7 @@ nav{background:var(--navy);padding:0 40px;height:60px;display:flex;align-items:c
 .nav-login:hover{color:white}
 .page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
 .card{background:var(--white);border-radius:16px;border:1px solid var(--gray2);padding:40px 44px;width:100%;max-width:460px;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
-.trial-badge{display:inline-flex;align-items:center;gap:6px;background:#dcfce7;color:#15803d;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:22px}
+.owner-badge{display:inline-flex;align-items:center;gap:6px;background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:22px}
 .card-title{font-family:'DM Serif Display',serif;font-size:26px;color:var(--navy);margin-bottom:6px}
 .card-sub{font-size:13.5px;color:var(--gray4);margin-bottom:28px}
 .field{margin-bottom:18px}
@@ -24,23 +24,17 @@ input{width:100%;padding:11px 14px;border:1.5px solid var(--gray2);border-radius
 input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
 input.has-error{border-color:var(--red)}
 .error-msg{font-size:12px;color:var(--red);margin-top:5px}
-.optional{color:var(--gray4);font-weight:400;font-size:10px;margin-left:4px}
 .submit-btn{width:100%;background:var(--gold);color:white;border:none;padding:13px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;transition:background .15s}
 .submit-btn:hover{background:var(--gold2);color:var(--navy)}
 .login-prompt{text-align:center;margin-top:20px;font-size:13px;color:var(--gray4)}
 .login-prompt a{color:var(--blue);text-decoration:none;font-weight:500}
 @media(max-width:600px){
   nav{padding:0 16px;height:56px}
-  .nav-brand{font-size:16px}
-  .nav-login{font-size:12px}
   .page{padding:24px 14px}
   .card{padding:28px 22px;border-radius:14px}
   .card-title{font-size:22px}
   input{font-size:16px;padding:12px 14px}
   .submit-btn{padding:14px;font-size:15px}
-}
-@media(max-width:380px){
-  .nav-login{display:none}
 }
 </style>
 </head>
@@ -51,25 +45,25 @@ input.has-error{border-color:var(--red)}
 </nav>
 <div class="page">
   <div class="card">
-    <div class="trial-badge">&#10003; 7-day free trial &middot; No credit card needed</div>
-    <div class="card-title">Create your account</div>
-    <div class="card-sub">Start managing your store in minutes.</div>
-    <form method="POST" action="/signup">
+    <div class="owner-badge">&#9733; Multi-Store Owner Account</div>
+    <div class="card-title">Create owner account</div>
+    <div class="card-sub">Manage multiple store locations from one login.</div>
+    <form method="POST" action="/signup/owner">
       <div class="field">
-        <label>Store Name</label>
-        <input type="text" name="store_name"
-               value="{{ form.get('store_name','') }}"
-               placeholder="e.g. Cambio Express Lamar"
-               class="{{ 'has-error' if errors.get('store_name') else '' }}" required>
-        {% if errors.get('store_name') %}
-          <div class="error-msg">{{ errors.store_name }}</div>
+        <label>Full Name</label>
+        <input type="text" name="full_name"
+               value="{{ form.get('full_name','') }}"
+               placeholder="Your full name"
+               class="{{ 'has-error' if errors.get('full_name') else '' }}" required>
+        {% if errors.get('full_name') %}
+          <div class="error-msg">{{ errors.full_name }}</div>
         {% endif %}
       </div>
       <div class="field">
-        <label>Store Email</label>
+        <label>Email</label>
         <input type="email" name="email"
                value="{{ form.get('email','') }}"
-               placeholder="store@example.com"
+               placeholder="you@example.com"
                class="{{ 'has-error' if errors.get('email') else '' }}" required>
         {% if errors.get('email') %}
           <div class="error-msg">{{ errors.email }}</div>
@@ -84,16 +78,10 @@ input.has-error{border-color:var(--red)}
           <div class="error-msg">{{ errors.password }}</div>
         {% endif %}
       </div>
-      <div class="field">
-        <label>Phone <span class="optional">(optional)</span></label>
-        <input type="tel" name="phone"
-               value="{{ form.get('phone','') }}"
-               placeholder="555-000-0000">
-      </div>
-      <button type="submit" class="submit-btn">Start Free Trial &rarr;</button>
+      <button type="submit" class="submit-btn">Create Owner Account &rarr;</button>
     </form>
     <div class="login-prompt">Already have an account? <a href="/login">Sign in</a></div>
-    <div class="login-prompt" style="margin-top:10px;">Own multiple locations? <a href="/signup/owner">Sign up as an owner &rarr;</a></div>
+    <div class="login-prompt" style="margin-top:10px;">Managing a single store? <a href="/signup">Sign up as a store</a></div>
   </div>
 </div>
 </body>

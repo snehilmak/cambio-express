@@ -503,6 +503,46 @@ def signup():
 
     return render_template("signup.html", errors=errors, form=form)
 
+@app.route("/signup/owner", methods=["GET", "POST"])
+def signup_owner():
+    if "user_id" in session and request.method == "GET":
+        u = current_user()
+        if u and u.role == "owner":
+            return redirect(url_for("owner_dashboard"))
+        return redirect(url_for("dashboard"))
+    errors = {}
+    form = {}
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        email     = request.form.get("email", "").strip().lower()
+        password  = request.form.get("password", "")
+        form = {"full_name": full_name, "email": email}
+        if not full_name:
+            errors["full_name"] = "Full name is required."
+        if not email:
+            errors["email"] = "Email is required."
+        elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+            errors["email"] = "Enter a valid email address."
+        if not password:
+            errors["password"] = "Password is required."
+        elif len(password) < 8:
+            errors["password"] = "Password must be at least 8 characters."
+        if not errors:
+            taken_null  = User.query.filter(User.username == email, User.store_id.is_(None)).first()
+            taken_admin = User.query.filter(User.username == email, User.role == "admin").first()
+            if taken_null or taken_admin:
+                errors["email"] = "An account with this email already exists."
+        if not errors:
+            u = User(store_id=None, username=email, full_name=full_name, role="owner")
+            u.set_password(password)
+            db.session.add(u)
+            db.session.commit()
+            session["user_id"]  = u.id
+            session["role"]     = "owner"
+            session["store_id"] = None
+            return redirect(url_for("owner_dashboard"))
+    return render_template("signup_owner.html", errors=errors, form=form)
+
 @app.route("/logout")
 def logout():
     session.clear(); return redirect(url_for("login"))
