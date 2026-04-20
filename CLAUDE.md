@@ -166,3 +166,27 @@ BACKLOG.md.
 ## Deferred work
 See `BACKLOG.md`. Items under **Before going live** are gates for public
 launch; the rest can land on any cadence.
+
+## PR monitoring — auto-subscribe, auto-fix CI, address comments
+
+For every PR you open (or find open) on a branch you're working on in this
+repo, **automatically call `subscribe_pr_activity`** without asking first.
+Do not ask "would you like me to watch this PR?" — just subscribe.
+
+When PR activity events arrive:
+
+- **CI failures (`get_check_runs` shows failing jobs, or a webhook event
+  reports a failed check):** investigate the failing job's logs, push a fix
+  commit to the same branch, and report what you changed. If the failure
+  is flaky or outside the PR's scope, say so and skip rather than guessing.
+- **Review comments (review threads, PR comments):** for each unresolved
+  thread, read the comment, assess whether the suggestion is correct, and
+  either (a) push a fix and reply briefly, or (b) reply with why the
+  suggestion doesn't apply. Use `AskUserQuestion` only when a comment is
+  genuinely ambiguous or would require a large refactor.
+- Never skip hooks or force-push to address CI failures — fix the
+  underlying problem.
+- Stay on the PR's branch; never push unrelated changes.
+
+When there is no open PR for the current branch and the user is done with
+a set of changes, offer to open one so CI can run.
