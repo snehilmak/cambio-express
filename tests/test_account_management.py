@@ -210,3 +210,87 @@ def test_security_valid_password_change(logged_in_client):
         u = User.query.filter_by(username="admin@test.com").first()
         assert u.check_password("brandnew123!")
         assert not u.check_password("testpass123!")
+
+
+# ── Task 5: Team tab + employee password reset ───────────────
+
+def test_team_tab_loads_and_shows_employees(logged_in_client):
+    sid = get_store_id()
+    make_employee(logged_in_client, sid, username="emp1")
+    resp = logged_in_client.get("/admin/settings?tab=team")
+    assert resp.status_code == 200
+    assert b"emp1" in resp.data or b"Test Cashier" in resp.data
+
+
+def test_team_tab_shows_employee_login_url(logged_in_client):
+    resp = logged_in_client.get("/admin/settings?tab=team")
+    assert resp.status_code == 200
+    assert b"login/test-store" in resp.data
+
+
+def test_team_reset_employee_password(logged_in_client):
+    sid = get_store_id()
+    emp_id = make_employee(logged_in_client, sid, username="resetme", password="oldpass123!")
+    resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
+        "password": "newpass456!",
+        "confirm_password": "newpass456!"
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"updated" in resp.data.lower() or b"password" in resp.data.lower()
+    with flask_app.app_context():
+        from app import User
+        emp = User.query.get(emp_id)
+        assert emp.check_password("newpass456!")
+        assert not emp.check_password("oldpass123!")
+
+
+def test_team_reset_scoped_to_store(logged_in_client, client):
+    # Create a second store and its employee
+    client.post("/signup", data={
+        "store_name": "Other Store",
+        "email": "other2@example.com",
+        "password": "securepass1!",
+        "phone": ""
+    })
+    with flask_app.app_context():
+        from app import Store, User
+        other_store = Store.query.filter_by(email="other2@example.com").first()
+        other_emp = User(store_id=other_store.id, username="otherworker",
+                         full_name="Other Worker", role="employee")
+        other_emp.set_password("original123!")
+        db.session.add(other_emp)
+        db.session.commit()
+        other_emp_id = other_emp.id
+
+    resp = logged_in_client.post(f"/admin/settings/team/{other_emp_id}", data={
+        "password": "hacked123!!",
+        "confirm_password": "hacked123!!"
+    })
+    # Should 404 because user is not in this admin's store
+    assert resp.status_code == 404
+    with flask_app.app_context():
+        from app import User
+        emp = User.query.get(other_emp_id)
+        assert emp.check_password("original123!")
+
+
+def test_team_reset_password_too_short(logged_in_client):
+    sid = get_store_id()
+    emp_id = make_employee(logged_in_client, sid, username="shortpw")
+    resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
+        "password": "short",
+        "confirm_password": "short"
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"8" in resp.data
+
+
+def test_team_reset_passwords_do_not_match(logged_in_client):
+    sid = get_store_id()
+    emp_id = make_employee(logged_in_client, sid, username="mismatch")
+    resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
+        "password": "newpass123!",
+        "confirm_password": "different123!"
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"match" in resp.data.lower()

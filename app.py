@@ -920,6 +920,25 @@ def admin_settings():
         active_tab=active_tab, errors=errors,
         employees=employees)
 
+
+@app.route("/admin/settings/team/<int:uid>", methods=["POST"])
+@admin_required
+def admin_reset_employee_password(uid):
+    sid = session["store_id"]
+    emp = User.query.filter_by(id=uid, store_id=sid).first_or_404()
+    pw = request.form.get("password", "")
+    confirm = request.form.get("confirm_password", "")
+    if len(pw) < 8:
+        flash("Password must be at least 8 characters.", "error")
+    elif pw != confirm:
+        flash("Passwords do not match.", "error")
+    else:
+        emp.set_password(pw)
+        db.session.commit()
+        flash(f"Password updated for {emp.full_name or emp.username}.", "success")
+    return redirect(url_for("admin_settings", tab="team"))
+
+
 # ── Superadmin ───────────────────────────────────────────────
 @app.route("/superadmin/stores")
 @superadmin_required
