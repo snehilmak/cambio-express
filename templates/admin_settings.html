@@ -25,6 +25,8 @@
      class="tab-link {% if active_tab == 'store' %}active{% endif %}">Store Info</a>
   <a href="{{ url_for('admin_settings', tab='security') }}"
      class="tab-link {% if active_tab == 'security' %}active{% endif %}">Security</a>
+  <a href="{{ url_for('admin_settings', tab='companies') }}"
+     class="tab-link {% if active_tab == 'companies' %}active{% endif %}">Companies</a>
   <a href="{{ url_for('admin_settings', tab='team') }}"
      class="tab-link {% if active_tab == 'team' %}active{% endif %}">Team</a>
   <a href="{{ url_for('admin_settings', tab='owner') }}"
@@ -88,6 +90,45 @@
       </div>
       <div style="margin-top:24px;">
         <button type="submit" class="btn btn-primary">🔒 Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% elif active_tab == 'companies' %}
+<div class="card" style="max-width:640px;">
+  <div class="card-header"><span class="card-title">Money Transfer Companies</span></div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      Pick the companies you work with. Only selected companies appear in
+      the daily book and on the transfer form — everything else stays
+      hidden, so cashiers can't log transfers for providers you don't carry.
+    </p>
+    <form method="POST">
+      <input type="hidden" name="_tab" value="companies">
+
+      <div class="section-title" style="margin-top:8px;">Common providers</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;">
+        {% for name in known_companies %}
+        <label class="checkbox-row">
+          <input type="checkbox" name="company_known" value="{{ name }}"
+                 {% if name in current_company_set %}checked{% endif %}>
+          <span style="font-size:13.5px;color:var(--dark);">{{ name }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      <div class="section-title" style="margin-top:20px;">Custom providers</div>
+      <p class="text-sm text-muted mb-1">
+        One per line. Anything typed here is added as-is — useful for regional
+        providers that aren't in the list above.
+      </p>
+      <textarea name="company_extras" rows="3"
+                placeholder="E.g.&#10;MyRemit&#10;ABC Transfer"
+                style="font-family:'DM Sans',sans-serif;">{{ custom_companies | join('\n') }}</textarea>
+
+      <div style="margin-top:18px;">
+        <button type="submit" class="btn btn-primary">💾 Save Companies</button>
       </div>
     </form>
   </div>

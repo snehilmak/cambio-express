@@ -257,21 +257,29 @@
 <!-- MONEY TRANSFERS -->
 <div class="section-box">
   <div class="section-box-header" style="background:var(--navy);">
-    MONEY TRANSFERS &nbsp;<span style="font-size:10px;opacity:0.6;">Intermex/Maxi/Barri pre-filled from employee log</span>
+    MONEY TRANSFERS &nbsp;<span style="font-size:10px;opacity:0.6;">Pre-filled from employee transfer log where available</span>
   </div>
+  {% if not companies %}
+  <div class="empty-state" style="padding:28px 14px;">
+    No money-transfer companies configured yet.
+    <a href="{{ url_for('admin_settings', tab='companies') }}">Enable companies in Settings →</a>
+  </div>
+  {% else %}
   <table class="mt-table">
     <thead>
       <tr>
         <th style="text-align:left;">Company</th>
-        <th>Amount ($)</th><th>Fees ($)</th><th>Commission ($)</th><th>Total</th>
+        <th>Amount ($)</th><th>Fees ($)</th><th>Tax ($)</th><th>Commission ($)</th><th>Total</th>
       </tr>
     </thead>
     <tbody>
       {% for co in companies %}
       {% set key = co.lower().replace(' ','_').replace('.','') %}
       {% set mt = mt_rows.get(co) %}
-      {% set is_auto = co in ['Intermex','Maxi','Barri'] %}
       {% set a = auto_mt.get(co, {}) %}
+      {# A row is "auto" when the employee transfer log has transfers for this
+         company on this date — regardless of which company it is. #}
+      {% set is_auto = (a.get('count', 0) > 0) %}
       <tr>
         <td><strong>{{ co }}</strong>{% if is_auto %}<span class="auto-badge">Auto</span>{% endif %}</td>
         <td>
@@ -285,12 +293,18 @@
             oninput="recalcMT('{{ key }}')">
         </td>
         <td>
+          <input type="number" step="0.01" min="0" name="mt_tax_{{ key }}" id="tax_{{ key }}"
+            value="{{ mt.federal_tax if mt else (a.get('federal_tax',0) if is_auto else 0) }}"
+            oninput="recalcMT('{{ key }}')">
+        </td>
+        <td>
           <input type="number" step="0.01" min="0" name="mt_commission_{{ key }}" id="comm_{{ key }}"
             value="{{ mt.commission if mt else (a.get('commission',0) if is_auto else 0) }}"
             oninput="recalcMT('{{ key }}')">
         </td>
         <td style="text-align:right;" id="tot_{{ key }}">
-          ${{ '{:,.2f}'.format((mt.individual_total if mt else (a.get('amount',0)+a.get('fees',0)+a.get('commission',0) if is_auto else 0))) }}
+          ${{ '{:,.2f}'.format(((mt.individual_total if mt else
+            (a.get('amount',0)+a.get('fees',0)+a.get('commission',0)+a.get('federal_tax',0) if is_auto else 0)))) }}
         </td>
       </tr>
       {% endfor %}
@@ -299,10 +313,12 @@
       <tr>
         <td style="text-align:left;font-weight:700;">TOTAL</td>
         <td id="mt-tot-amt">—</td><td id="mt-tot-fees">—</td>
+        <td id="mt-tot-tax">—</td>
         <td id="mt-tot-comm">—</td><td id="mt-tot-total">—</td>
       </tr>
     </tfoot>
   </table>
+  {% endif %}
 </div>
 
 <!-- EMPLOYEE TRANSFERS THIS DAY -->
@@ -369,22 +385,26 @@ function recalc(){
 function recalcMT(key){
   const a=parseFloat(document.getElementById('amt_'+key)?.value)||0;
   const f=parseFloat(document.getElementById('fees_'+key)?.value)||0;
+  const t=parseFloat(document.getElementById('tax_'+key)?.value)||0;
   const c=parseFloat(document.getElementById('comm_'+key)?.value)||0;
-  document.getElementById('tot_'+key).textContent=fmt(a+f+c);
+  document.getElementById('tot_'+key).textContent=fmt(a+f+t+c);
   recalcMTTotals();
 }
 function recalcMTTotals(){
-  let ta=0,tf=0,tc=0;
+  let ta=0,tf=0,tt=0,tc=0;
   MT_COMPANIES.forEach(co=>{
     const k=co.toLowerCase().replace(/ /g,'_').replace(/\./g,'');
     ta+=parseFloat(document.getElementById('amt_'+k)?.value)||0;
     tf+=parseFloat(document.getElementById('fees_'+k)?.value)||0;
+    tt+=parseFloat(document.getElementById('tax_'+k)?.value)||0;
     tc+=parseFloat(document.getElementById('comm_'+k)?.value)||0;
   });
-  document.getElementById('mt-tot-amt').textContent=fmt(ta);
-  document.getElementById('mt-tot-fees').textContent=fmt(tf);
-  document.getElementById('mt-tot-comm').textContent=fmt(tc);
-  document.getElementById('mt-tot-total').textContent=fmt(ta+tf+tc);
+  const setIf = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = fmt(v); };
+  setIf('mt-tot-amt', ta);
+  setIf('mt-tot-fees', tf);
+  setIf('mt-tot-tax', tt);
+  setIf('mt-tot-comm', tc);
+  setIf('mt-tot-total', ta+tf+tt+tc);
 }
 recalc(); recalcMTTotals();
 
