@@ -588,31 +588,38 @@ def owner_dashboard():
         agg_volume = 0.0
         agg_over_short = 0.0
 
+    # Batch Transfer stats for all stores in one query
+    transfer_rows = db.session.query(
+        Transfer.store_id,
+        db.func.count(Transfer.id),
+        db.func.sum(Transfer.send_amount),
+    ).filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= date_start,
+        Transfer.send_date <= date_end,
+    ).group_by(Transfer.store_id).all() if store_ids else []
+    transfer_stats = {sid: (cnt, vol or 0.0) for sid, cnt, vol in transfer_rows}
+
+    # Batch DailyReport rows for all stores in one query
+    all_reports = DailyReport.query.filter(
+        DailyReport.store_id.in_(store_ids),
+        DailyReport.report_date >= date_start,
+        DailyReport.report_date <= date_end,
+    ).all() if store_ids else []
+    reports_by_store = {}
+    for r in all_reports:
+        reports_by_store.setdefault(r.store_id, []).append(r)
+
     store_data = []
     for store in stores:
-        t_count = Transfer.query.filter(
-            Transfer.store_id == store.id,
-            Transfer.send_date >= date_start,
-            Transfer.send_date <= date_end
-        ).count()
-        t_volume = db.session.query(db.func.sum(Transfer.send_amount)).filter(
-            Transfer.store_id == store.id,
-            Transfer.send_date >= date_start,
-            Transfer.send_date <= date_end
-        ).scalar() or 0.0
-        reports = DailyReport.query.filter(
-            DailyReport.store_id == store.id,
-            DailyReport.report_date >= date_start,
-            DailyReport.report_date <= date_end
-        ).all()
-        total_receipts = sum(r.total_receipts for r in reports)
-        over_short = sum(r.over_short for r in reports)
+        t_count, t_volume = transfer_stats.get(store.id, (0, 0.0))
+        reports = reports_by_store.get(store.id, [])
         store_data.append({
             "store": store,
             "transfer_count": t_count,
             "volume": t_volume,
-            "total_receipts": total_receipts,
-            "over_short": over_short,
+            "total_receipts": sum(r.total_receipts for r in reports),
+            "over_short": sum(r.over_short for r in reports),
         })
 
     return render_template("owner_dashboard.html",
@@ -624,12 +631,12 @@ def owner_dashboard():
         store_data=store_data,
     )
 
-@app.route("/owner/link-store", methods=["POST"])
+@app.route("/owner/link", methods=["POST"])
 @owner_required
 def owner_link_store():
     return "owner link store stub", 200
 
-@app.route("/owner/unlink-store/<int:store_id>", methods=["POST"])
+@app.route("/owner/unlink/<int:store_id>", methods=["POST"])
 @owner_required
 def owner_unlink_store(store_id):
     return "owner unlink store stub", 200
