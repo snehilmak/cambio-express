@@ -2408,6 +2408,11 @@ def daily_report(ds):
         # form submission with a stale value can't overwrite the truth.
         report.outside_cash_drops = float(drops_total)
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
+        # money_transfer is derived — the spreadsheet treats this line as a
+        # subtotal of the MT table below. Compute from the submitted MT row
+        # values so tampering with the read-only field in the UI can't
+        # affect the saved total.
+        mt_grand_total = 0.0
         for co in companies:
             key=co.lower().replace(" ","_").replace(".","")
             ex=mt_rows.get(co) or MoneyTransferSummary(store_id=sid,report_date=report_date,company=co)
@@ -2415,7 +2420,9 @@ def daily_report(ds):
             ex.fees         = fv(f"mt_fees_{key}")
             ex.commission   = fv(f"mt_commission_{key}")
             ex.federal_tax  = fv(f"mt_tax_{key}")
+            mt_grand_total += (ex.amount or 0) + (ex.fees or 0) + (ex.commission or 0) + (ex.federal_tax or 0)
             db.session.add(ex)
+        report.money_transfer = round(mt_grand_total, 2)
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
         return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
