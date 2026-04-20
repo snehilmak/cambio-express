@@ -61,9 +61,15 @@
           <label>Company *</label>
           <select name="company" required>
             <option value="">Select company…</option>
-            {% for co in ['Intermex','Maxi','Barri'] %}
+            {% for co in mt_companies %}
             <option {% if transfer and transfer.company==co %}selected{% endif %}>{{ co }}</option>
             {% endfor %}
+            {# If the transfer was logged before a company was removed from the
+               store's settings, keep the original visible so the edit doesn't
+               silently switch to a blank value. #}
+            {% if transfer and transfer.company and transfer.company not in mt_companies %}
+            <option selected>{{ transfer.company }}</option>
+            {% endif %}
           </select>
         </div>
         <div class="field">

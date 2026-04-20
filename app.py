@@ -41,6 +41,10 @@ class Store(db.Model):
     addons        = db.Column(db.String(255), default="")
     canceled_at           = db.Column(db.DateTime, nullable=True)
     data_retention_until  = db.Column(db.DateTime, nullable=True)
+    # Comma-separated list of money-transfer companies this store works
+    # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
+    # via store_mt_companies(store) — never read this column directly.
+    companies     = db.Column(db.String(500), default="")
 
 class User(db.Model):
     __tablename__ = "user"
@@ -244,16 +248,21 @@ class DailyDrop(db.Model):
 
 class MoneyTransferSummary(db.Model):
     __tablename__ = "mt_summary"
-    id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
-    report_date = db.Column(db.Date, nullable=False)
-    company     = db.Column(db.String(40), nullable=False)
-    amount      = db.Column(db.Float, default=0.0)
-    fees        = db.Column(db.Float, default=0.0)
-    commission  = db.Column(db.Float, default=0.0)
+    id           = db.Column(db.Integer, primary_key=True)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    report_date  = db.Column(db.Date, nullable=False)
+    company      = db.Column(db.String(40), nullable=False)
+    amount       = db.Column(db.Float, default=0.0)
+    fees         = db.Column(db.Float, default=0.0)
+    commission   = db.Column(db.Float, default=0.0)
+    # Federal tax collected from the customer on this company's transfers
+    # for the day. Tracked separately from fees because tax leaves with
+    # the ACH withdrawal, not store revenue.
+    federal_tax  = db.Column(db.Float, default=0.0)
     __table_args__ = (db.UniqueConstraint("store_id","report_date","company"),)
     @property
-    def individual_total(self): return self.amount+self.fees+self.commission
+    def individual_total(self):
+        return (self.amount or 0) + (self.fees or 0) + (self.commission or 0) + (self.federal_tax or 0)
 
 class MonthlyFinancial(db.Model):
     __tablename__ = "monthly_financial"
@@ -747,6 +756,13 @@ def landing():
     if "user_id" in session:
         return redirect(url_for("dashboard"))
     return render_template("landing.html")
+
+@app.route("/privacy")
+def privacy():
+    """Public privacy policy page. Used as the privacy URL on Stripe
+    (Financial Connections and Checkout require it). No auth — any
+    visitor, logged in or not, can read it."""
+    return render_template("privacy.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -1295,7 +1311,7 @@ def dashboard():
         recent_transfers=Transfer.query.filter_by(store_id=sid).order_by(Transfer.created_at.desc()).limit(8).all()
         recent_batches=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).limit(5).all()
         company_stats={}
-        for co in ["Intermex","Maxi","Barri"]:
+        for co in store_mt_companies(store):
             rows=Transfer.query.filter(Transfer.store_id==sid,Transfer.company==co,
                 Transfer.send_date>=month_start,Transfer.status.notin_(["Canceled","Rejected"])).all()
             company_stats[co]={"count":len(rows),"total":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows)}
@@ -1519,7 +1535,8 @@ def new_transfer():
         db.session.add(t); db.session.commit()
         flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
     return render_template("transfer_form.html", user=user, transfer=None,
-        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES)
+        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
+        mt_companies=store_mt_companies(current_store()))
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
@@ -1562,10 +1579,30 @@ def edit_transfer(tid):
         db.session.commit(); flash("Transfer updated.","success")
         return redirect(url_for("transfers"))
     return render_template("transfer_form.html", user=user, transfer=t,
-        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES)
+        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
+        mt_companies=store_mt_companies(current_store()))
 
 # ── Daily Book ───────────────────────────────────────────────
-DAILY_COMPANIES=["Barri","Boost Rev.","Inter Cambio","Intermex","Maxi Transfer","Sigue","Vigo"]
+# Companies a new store can pick from on the settings page. The daily book
+# and transfer form both pull per-store from Store.companies (resolved via
+# store_mt_companies), so this is only the catalog — not a hardcoded list.
+KNOWN_MT_COMPANIES = [
+    "Intermex", "Maxi Transfer", "Barri", "Ria", "Vigo",
+    "Inter Cambio", "Sigue", "MoneyGram", "Western Union",
+    "Dolex", "Viamericas", "Transfast", "Pangea", "Boss Revolution",
+]
+DEFAULT_MT_COMPANIES = ["Intermex", "Maxi Transfer", "Barri"]
+
+def store_mt_companies(store):
+    """The active list of money-transfer companies for a store.
+
+    Falls back to DEFAULT_MT_COMPANIES when the Store.companies CSV is
+    empty — so existing stores keep working the moment the migration
+    lands, and new stores get a sensible default on signup.
+    """
+    if store is None or not (store.companies or "").strip():
+        return list(DEFAULT_MT_COMPANIES)
+    return [c.strip() for c in store.companies.split(",") if c.strip()]
 
 @app.route("/daily")
 @admin_required
@@ -1619,16 +1656,28 @@ _DAILY_REPORT_FIELDS = [
 @admin_required
 def daily_report(ds):
     user=current_user(); sid=session["store_id"]
+    store = current_store()
     try: report_date=datetime.strptime(ds,"%Y-%m-%d").date()
     except: flash("Invalid date.","error"); return redirect(url_for("daily_list"))
     report=DailyReport.query.filter_by(store_id=sid,report_date=report_date).first()
     mt_rows={r.company:r for r in MoneyTransferSummary.query.filter_by(store_id=sid,report_date=report_date).all()}
+    companies = store_mt_companies(store)
+    # Auto-sum the per-transfer ledger for every company configured on the
+    # store — not just the old hardcoded trio. Includes federal_tax now.
     auto_mt={}
-    for co in ["Intermex","Maxi","Barri"]:
-        rows=Transfer.query.filter(Transfer.store_id==sid,Transfer.company==co,
-            Transfer.send_date==report_date,Transfer.status.notin_(["Canceled","Rejected"])).all()
-        auto_mt[co]={"amount":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows),
-                     "commission":sum(r.commission for r in rows),"count":len(rows)}
+    for co in companies:
+        rows = Transfer.query.filter(
+            Transfer.store_id == sid, Transfer.company == co,
+            Transfer.send_date == report_date,
+            Transfer.status.notin_(["Canceled", "Rejected"]),
+        ).all()
+        auto_mt[co] = {
+            "amount":     sum(r.send_amount   for r in rows),
+            "fees":       sum(r.fee           for r in rows),
+            "commission": sum(r.commission    for r in rows),
+            "federal_tax":sum((r.federal_tax or 0) for r in rows),
+            "count":      len(rows),
+        }
     drops = (DailyDrop.query.filter_by(store_id=sid, report_date=report_date)
              .order_by(DailyDrop.drop_time).all())
     drops_total = sum(d.amount for d in drops)
@@ -1641,16 +1690,19 @@ def daily_report(ds):
         # form submission with a stale value can't overwrite the truth.
         report.outside_cash_drops = float(drops_total)
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
-        for co in DAILY_COMPANIES:
+        for co in companies:
             key=co.lower().replace(" ","_").replace(".","")
             ex=mt_rows.get(co) or MoneyTransferSummary(store_id=sid,report_date=report_date,company=co)
-            ex.amount=fv(f"mt_amount_{key}"); ex.fees=fv(f"mt_fees_{key}")
-            ex.commission=fv(f"mt_commission_{key}"); db.session.add(ex)
+            ex.amount       = fv(f"mt_amount_{key}")
+            ex.fees         = fv(f"mt_fees_{key}")
+            ex.commission   = fv(f"mt_commission_{key}")
+            ex.federal_tax  = fv(f"mt_tax_{key}")
+            db.session.add(ex)
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
         return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
     return render_template("daily_report.html",user=user,report_date=report_date,
-        report=report,mt_rows=mt_rows,companies=DAILY_COMPANIES,auto_mt=auto_mt,
+        report=report,mt_rows=mt_rows,companies=companies,auto_mt=auto_mt,
         drops=drops, drops_total=drops_total)
 
 def _wants_json():
@@ -1966,6 +2018,24 @@ def admin_settings():
                 flash("Password updated.", "success")
                 return redirect(url_for("admin_settings", tab="security"))
 
+        elif form_tab == "companies":
+            # Known companies come in as checkboxes ("company_known" list);
+            # operator-added names come as a newline-separated free-form
+            # textarea. We merge + dedupe preserving input order.
+            picked = request.form.getlist("company_known")
+            extras_raw = request.form.get("company_extras", "")
+            extras = [line.strip() for line in extras_raw.splitlines() if line.strip()]
+            seen, out = set(), []
+            for name in list(picked) + extras:
+                if name not in seen:
+                    seen.add(name); out.append(name)
+            # Cap length so we don't try to stuff a novel into the column.
+            csv = ",".join(out)[:500]
+            store.companies = csv
+            db.session.commit()
+            flash("Money transfer companies updated.", "success")
+            return redirect(url_for("admin_settings", tab="companies"))
+
     employees = User.query.filter(
         User.store_id == store.id,
         User.id != user.id
@@ -1981,6 +2051,13 @@ def admin_settings():
     owner_link = StoreOwnerLink.query.filter_by(store_id=store.id).first()
     owner_user = db.session.get(User, owner_link.owner_id) if owner_link else None
 
+    # Companies tab state: split the CSV into a set for checkbox state, and
+    # list any names that aren't in the known catalog as "custom" so the
+    # operator can see them and keep/remove.
+    current_companies = store_mt_companies(store)
+    current_set       = set(current_companies)
+    custom_companies  = [c for c in current_companies if c not in KNOWN_MT_COMPANIES]
+
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
@@ -1988,6 +2065,9 @@ def admin_settings():
         owner_invite=owner_invite,
         owner_link=owner_link,
         owner_user=owner_user,
+        known_companies=KNOWN_MT_COMPANIES,
+        current_company_set=current_set,
+        custom_companies=custom_companies,
     )
 
 
@@ -2617,6 +2697,8 @@ _ADDED_COLUMNS = [
     ("transfer", "sender_phone_country", "VARCHAR(8) DEFAULT ''"),
     ("transfer", "sender_address",       "VARCHAR(255) DEFAULT ''"),
     ("transfer", "sender_dob",           "DATE NULL"),
+    ("store",    "companies",            "VARCHAR(500) DEFAULT ''"),
+    ("mt_summary","federal_tax",         "FLOAT DEFAULT 0"),
 ]
 
 def _ensure_added_columns():
