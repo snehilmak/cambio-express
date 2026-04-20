@@ -1003,10 +1003,14 @@ def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str
 
 @app.route("/api/push/public-key")
 def push_public_key():
-    """Frontend reads this to build a PushManager subscription."""
-    if not push_enabled():
-        return jsonify({"error": "push not configured"}), 501
-    return jsonify({"key": VAPID_PUBLIC_KEY})
+    """Frontend reads this to build a PushManager subscription.
+
+    Returns 200 with key=null when VAPID isn't configured so deployments
+    without push don't fill every user's console with a red 501 on page
+    load. The client treats null as "feature unavailable" and hides the
+    opt-in button.
+    """
+    return jsonify({"key": VAPID_PUBLIC_KEY if push_enabled() else None})
 
 @app.route("/api/push/subscribe", methods=["POST"])
 def push_subscribe():
