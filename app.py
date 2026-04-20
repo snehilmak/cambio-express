@@ -382,9 +382,13 @@ def login():
         username=request.form.get("username","").strip()
         u=User.query.filter_by(username=username).first()
         if u and u.is_active and u.check_password(request.form.get("password","")):
-            session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
-            return redirect(url_for("dashboard"))
-        error="Invalid username or password."
+            if u.role == "employee":
+                error = "Please use your store's login link."
+            else:
+                session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
+                return redirect(url_for("dashboard"))
+        else:
+            error="Invalid username or password."
     return render_template("login.html",error=error)
 
 @app.route("/login/<slug>", methods=["GET", "POST"])

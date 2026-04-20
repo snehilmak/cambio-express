@@ -53,3 +53,28 @@ def test_employee_login_get_page_shows_store_context(client):
     resp = client.get("/login/test-store")
     assert resp.status_code == 200
     assert b"Test Store" in resp.data or b"test-store" in resp.data
+
+
+# ── Task 2: main /login restricted to admin/superadmin ───────
+
+def test_employee_blocked_on_main_login(client):
+    sid = get_store_id()
+    make_employee(client, sid, username="blockeduser", password="emppass123!")
+    resp = client.post("/login", data={
+        "username": "blockeduser",
+        "password": "emppass123!"
+    })
+    assert resp.status_code == 200
+    assert b"store" in resp.data.lower()
+    # must NOT have set session (not redirected to dashboard)
+    with client.session_transaction() as sess:
+        assert "user_id" not in sess
+
+
+def test_admin_can_still_use_main_login(client):
+    resp = client.post("/login", data={
+        "username": "admin@test.com",
+        "password": "testpass123!"
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "dashboard" in resp.headers["Location"]
