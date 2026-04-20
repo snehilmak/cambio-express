@@ -757,6 +757,13 @@ def landing():
         return redirect(url_for("dashboard"))
     return render_template("landing.html")
 
+@app.route("/privacy")
+def privacy():
+    """Public privacy policy page. Used as the privacy URL on Stripe
+    (Financial Connections and Checkout require it). No auth — any
+    visitor, logged in or not, can read it."""
+    return render_template("privacy.html")
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_id" in session:

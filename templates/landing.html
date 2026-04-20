@@ -266,7 +266,10 @@ footer a:hover{color:var(--gold2)}
 
 <footer>
   <p>&copy; 2026 DineroBook. All rights reserved.</p>
-  <a href="/login">Sign In →</a>
+  <div style="display:flex;gap:20px;align-items:center;">
+    <a href="{{ url_for('privacy') }}">Privacy</a>
+    <a href="/login">Sign In →</a>
+  </div>
 </footer>
 
 </body>
