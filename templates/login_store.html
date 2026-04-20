@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ store.name }} — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: #0f1f3d;
+  min-height: 100vh; display: flex;
+}
+.login-left {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+  padding: 60px;
+  background: linear-gradient(145deg, #0f1f3d 0%, #1a3a6e 100%);
+  position: relative; overflow: hidden;
+}
+.login-left::before {
+  content: '';
+  position: absolute; width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(201,151,58,0.12) 0%, transparent 70%);
+  top: -100px; right: -100px; pointer-events: none;
+}
+.brand-block { text-align: center; position: relative; z-index: 1; }
+.brand-icon { font-size: 52px; margin-bottom: 20px; }
+.brand-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 36px; color: #f0c060;
+  letter-spacing: 1px; line-height: 1;
+}
+.brand-store {
+  font-size: 14px; color: rgba(255,255,255,0.55);
+  margin-top: 8px; letter-spacing: 0.5px;
+}
+.brand-tagline {
+  font-size: 12px; color: rgba(255,255,255,0.35);
+  margin-top: 6px; letter-spacing: 1.5px; text-transform: uppercase;
+}
+.login-right {
+  width: 440px; background: #faf7f2;
+  display: flex; flex-direction: column;
+  justify-content: center; padding: 60px 48px;
+}
+.login-heading {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px; color: #0f1f3d; margin-bottom: 8px;
+}
+.login-sub { font-size: 14px; color: #6b7280; margin-bottom: 36px; }
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
+label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.7px; }
+input {
+  padding: 12px 16px; border: 1.5px solid #e8e8ec; border-radius: 9px;
+  font-size: 15px; font-family: 'DM Sans', sans-serif; color: #1a1a2e;
+  background: #fff; transition: border-color 0.15s; width: 100%;
+}
+input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+.error-msg {
+  background: #fee2e2; color: #b91c1c;
+  border: 1px solid #fecaca; border-radius: 8px;
+  padding: 11px 16px; font-size: 13.5px; margin-bottom: 18px;
+}
+.btn-login {
+  width: 100%; padding: 13px;
+  background: #1a4080; color: #fff;
+  border: none; border-radius: 9px;
+  font-size: 15px; font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: background 0.15s; margin-top: 6px;
+}
+.btn-login:hover { background: #2a5caa; }
+.login-footer { margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; }
+</style>
+</head>
+<body>
+<div class="login-left">
+  <div class="brand-block">
+    <div class="brand-icon">💱</div>
+    <div class="brand-name">Cambio Express</div>
+    <div class="brand-store">{{ store.name }}</div>
+    <div class="brand-tagline">Employee Portal</div>
+  </div>
+</div>
+<div class="login-right">
+  <div class="login-heading">Employee Sign In</div>
+  <div class="login-sub">Sign in to {{ store.name }}</div>
+  {% if error %}
+  <div class="error-msg">{{ error }}</div>
+  {% endif %}
+  <form method="POST">
+    <div class="field">
+      <label>Username</label>
+      <input type="text" name="username" placeholder="Enter your username" autofocus required>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Enter your password" required>
+    </div>
+    <button type="submit" class="btn-login">Sign In →</button>
+  </form>
+  <div class="login-footer">{{ store.name }} · Cambio Express</div>
+</div>
+</body>
+</html>

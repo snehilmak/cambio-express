@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
-import requests, base64, os, calendar, logging
+import requests, base64, os, calendar, logging, re
 import stripe
 from slugify import slugify
 
@@ -386,6 +386,23 @@ def login():
             return redirect(url_for("dashboard"))
         error="Invalid username or password."
     return render_template("login.html",error=error)
+
+@app.route("/login/<slug>", methods=["GET", "POST"])
+def login_store(slug):
+    store = Store.query.filter_by(slug=slug).first_or_404()
+    if "user_id" in session:
+        return redirect(url_for("dashboard"))
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        u = User.query.filter_by(username=username, store_id=store.id).first()
+        if u and u.is_active and u.check_password(request.form.get("password", "")):
+            session["user_id"] = u.id
+            session["role"] = u.role
+            session["store_id"] = u.store_id
+            return redirect(url_for("dashboard"))
+        error = "Invalid username or password."
+    return render_template("login_store.html", store=store, error=error)
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
