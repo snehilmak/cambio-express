@@ -1,0 +1,452 @@
+{% extends "base.html" %}
+{% block title %}Platform Controls — DineroBook{% endblock %}
+{% block page_title %}Platform Controls{% endblock %}
+{% block head %}
+<style>
+  /* Tabs — mirrors the pattern in admin_settings.html so users see one consistent shape. */
+  .tab-bar {
+    display: flex; gap: 0; border-bottom: 2px solid var(--gray2);
+    margin-bottom: 28px; flex-wrap: wrap;
+  }
+  .tab-link {
+    padding: 10px 20px; font-size: 13.5px; font-weight: 500;
+    color: var(--gray4); text-decoration: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px;
+    transition: all 0.15s;
+  }
+  .tab-link:hover { color: var(--navy); }
+  .tab-link.active { color: var(--navy); border-bottom-color: var(--blue); font-weight: 600; }
+  [data-theme="dark"] .tab-link:hover,
+  [data-theme="dark"] .tab-link.active { color: #f3f4f6; }
+
+  /* Compact inline forms for row-level actions in tables. */
+  .inline-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+  .inline-form input[type="number"] {
+    width: 68px; padding: 5px 8px; font-size: 12px; border-radius: 6px;
+  }
+  .inline-form select {
+    width: auto; padding: 5px 8px; font-size: 12px; border-radius: 6px;
+  }
+  .action-stack { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btn-xs {
+    padding: 5px 10px; font-size: 11.5px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; border: 1.5px solid var(--gray2);
+    background: transparent; color: var(--gray4);
+    font-family: 'DM Sans', sans-serif;
+  }
+  .btn-xs.primary { color: var(--blue); border-color: var(--blue); }
+  .btn-xs.primary:hover { background: var(--blue); color: var(--white); }
+  .btn-xs.gold { color: var(--gold); border-color: var(--gold); }
+  .btn-xs.gold:hover { background: var(--gold); color: var(--white); }
+  .btn-xs.danger { color: var(--red); border-color: var(--red); }
+  .btn-xs.danger:hover { background: var(--red); color: var(--white); }
+
+  /* Metric tiles for the Overview tab. Uses --accent like regular stat cards. */
+  .metric-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px; margin-bottom: 28px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="tab-bar">
+  <a href="{{ url_for('superadmin_controls', tab='overview')  }}"
+     class="tab-link {% if active_tab == 'overview'  %}active{% endif %}">Overview</a>
+  <a href="{{ url_for('superadmin_controls', tab='stores')    }}"
+     class="tab-link {% if active_tab == 'stores'    %}active{% endif %}">Stores</a>
+  <a href="{{ url_for('superadmin_controls', tab='discounts') }}"
+     class="tab-link {% if active_tab == 'discounts' %}active{% endif %}">Discount Codes</a>
+  <a href="{{ url_for('superadmin_controls', tab='features')  }}"
+     class="tab-link {% if active_tab == 'features'  %}active{% endif %}">Feature Flags</a>
+  <a href="{{ url_for('superadmin_controls', tab='audit')     }}"
+     class="tab-link {% if active_tab == 'audit'     %}active{% endif %}">Audit Log</a>
+</div>
+
+{# ─────────── OVERVIEW ─────────── #}
+{% if active_tab == 'overview' %}
+<div class="metric-grid">
+  <div class="stat-card" style="--accent:var(--navy)">
+    <div class="stat-label">Total stores</div>
+    <div class="stat-value">{{ total_stores }}</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--sky)">
+    <div class="stat-label">Trial</div>
+    <div class="stat-value">{{ trial_count }}</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--blue)">
+    <div class="stat-label">Basic</div>
+    <div class="stat-value">{{ basic_count }}</div>
+    <div class="stat-sub">${{ basic_count * 20 }}/mo</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--gold)">
+    <div class="stat-label">Pro</div>
+    <div class="stat-value">{{ pro_count }}</div>
+    <div class="stat-sub">${{ pro_count * 30 }}/mo</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--red)">
+    <div class="stat-label">Inactive</div>
+    <div class="stat-value">{{ inactive_count }}</div>
+    <div class="stat-sub">{{ retention_queue }} in retention</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--green)">
+    <div class="stat-label">Est. MRR</div>
+    <div class="stat-value">${{ estimated_mrr }}</div>
+    <div class="stat-sub">basic + pro only</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">Quick links</span></div>
+  <div class="card-body">
+    <ul style="list-style:none;padding:0;margin:0;line-height:2;">
+      <li>→ <a href="{{ url_for('superadmin_controls', tab='stores') }}">Manage stores</a> — extend trials, comp plans, toggle active.</li>
+      <li>→ <a href="{{ url_for('superadmin_controls', tab='discounts') }}">Discount codes</a> — mint Stripe-synced promo codes.</li>
+      <li>→ <a href="{{ url_for('superadmin_controls', tab='features') }}">Feature flags</a> — flip functionality globally or per store.</li>
+      <li>→ <a href="{{ url_for('superadmin_controls', tab='audit') }}">Audit log</a> — every superadmin action is recorded.</li>
+    </ul>
+  </div>
+</div>
+
+{# ─────────── STORES ─────────── #}
+{% elif active_tab == 'stores' %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">All stores ({{ stores|length }})</span>
+    <a href="{{ url_for('superadmin_new_store') }}" class="btn btn-primary btn-sm">＋ Add Store</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Store</th><th>Plan</th><th>Trial ends</th><th>Retention</th>
+          <th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stores %}
+        <tr>
+          <td>
+            <div class="fw-600">{{ s.name }}</div>
+            <div class="text-sm text-muted mono">{{ s.slug }}</div>
+          </td>
+          <td>
+            {% if s.plan == 'pro' %}
+              <span class="badge badge-navy">Pro</span>
+            {% elif s.plan == 'basic' %}
+              <span class="badge badge-blue">Basic</span>
+            {% elif s.plan == 'trial' %}
+              <span class="badge badge-yellow">Trial</span>
+            {% else %}
+              <span class="badge badge-gray">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="mono">{{ s.trial_ends_at.strftime('%Y-%m-%d') if s.trial_ends_at else '—' }}</td>
+          <td class="mono">{{ s.data_retention_until.strftime('%Y-%m-%d') if s.data_retention_until else '—' }}</td>
+          <td>
+            {% if s.is_active %}
+              <span class="badge badge-green">Active</span>
+            {% else %}
+              <span class="badge badge-red">Disabled</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="action-stack">
+              {# Extend trial: pick days. #}
+              <form method="POST" action="{{ url_for('superadmin_extend_trial', store_id=s.id) }}" class="inline-form">
+                <input type="number" name="days" value="7" min="1" max="180" title="Days">
+                <button type="submit" class="btn-xs primary" title="Extend the trial/grace window">+Trial</button>
+              </form>
+              {# Comp plan: pick basic/pro. #}
+              <form method="POST" action="{{ url_for('superadmin_comp_plan', store_id=s.id) }}" class="inline-form">
+                <select name="plan">
+                  <option value="pro">Pro</option>
+                  <option value="basic">Basic</option>
+                </select>
+                <button type="submit" class="btn-xs gold" title="Grant free plan (bypass Stripe)">Comp</button>
+              </form>
+              {# Extend retention timer. #}
+              <form method="POST" action="{{ url_for('superadmin_extend_retention', store_id=s.id) }}" class="inline-form">
+                <input type="number" name="days" value="30" min="1" max="720" title="Days">
+                <button type="submit" class="btn-xs primary" title="Push data-purge deadline later">+Retention</button>
+              </form>
+              {# Toggle + revert + impersonate. #}
+              <form method="POST" action="{{ url_for('superadmin_toggle_active', store_id=s.id) }}" class="inline-form">
+                <button type="submit" class="btn-xs danger" title="Enable / disable this store">
+                  {% if s.is_active %}Disable{% else %}Enable{% endif %}
+                </button>
+              </form>
+              <form method="POST" action="{{ url_for('superadmin_revert_to_trial', store_id=s.id) }}" class="inline-form"
+                    onsubmit="return confirm('Revert {{ s.name }} to a fresh 7-day trial?')">
+                <button type="submit" class="btn-xs" title="Drop to 7-day trial">Revert</button>
+              </form>
+              <a href="{{ url_for('superadmin_impersonate', store_id=s.id) }}" class="btn-xs">Impersonate</a>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ─────────── DISCOUNT CODES ─────────── #}
+{% elif active_tab == 'discounts' %}
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title">Create a discount code</span></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('superadmin_new_discount') }}" class="form-grid cols-3">
+      <div class="field">
+        <label>Code *</label>
+        <input type="text" name="code" placeholder="WELCOME50" required
+               style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;">
+      </div>
+      <div class="field">
+        <label>Label</label>
+        <input type="text" name="label" placeholder="Launch week promo">
+      </div>
+      <div class="field">
+        <label>Discount *</label>
+        <div style="display:flex;gap:6px;">
+          <select name="kind" style="flex:0 0 110px;">
+            <option value="percent">Percent</option>
+            <option value="amount">Amount $</option>
+          </select>
+          <input type="number" name="percent_off" min="1" max="100" placeholder="50" style="flex:1;">
+          <input type="number" name="amount_off" min="0.01" step="0.01" placeholder="5.00" style="flex:1;">
+        </div>
+      </div>
+      <div class="field">
+        <label>Duration</label>
+        <select name="duration">
+          <option value="once">Once</option>
+          <option value="repeating">Repeating</option>
+          <option value="forever">Forever</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Repeating months</label>
+        <input type="number" name="duration_months" min="1" max="12" placeholder="3">
+      </div>
+      <div class="field">
+        <label>Max redemptions</label>
+        <input type="number" name="max_redemptions" min="1" placeholder="Unlimited">
+      </div>
+      <div class="field">
+        <label>Expires in (days)</label>
+        <input type="number" name="expires_days" min="1" max="3650" placeholder="Never">
+      </div>
+      <div class="field span-2" style="justify-content:flex-end;align-self:end;">
+        <button type="submit" class="btn btn-primary">＋ Create Code</button>
+      </div>
+    </form>
+    <p class="text-sm text-muted mt-2">
+      Syncs to Stripe as a coupon + promotion code if <code>STRIPE_SECRET_KEY</code> is set.
+      Customers enter the code at Stripe checkout — the field is enabled by <code>allow_promotion_codes=True</code>.
+      Use <em>percent</em> or <em>amount</em>, not both.
+    </p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">Existing codes ({{ discounts|length }})</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th><th>Value</th><th>Duration</th>
+          <th>Redeemed</th><th>Expires</th><th>Stripe</th>
+          <th>Status</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in discounts %}
+        <tr>
+          <td>
+            <div class="mono fw-600">{{ d.code }}</div>
+            {% if d.label %}<div class="text-sm text-muted">{{ d.label }}</div>{% endif %}
+          </td>
+          <td class="fw-600">{{ d.value_label }}</td>
+          <td>
+            {{ d.duration }}{% if d.duration_in_months %} ({{ d.duration_in_months }}m){% endif %}
+          </td>
+          <td class="mono">
+            {{ d.redeemed_count }}{% if d.max_redemptions %} / {{ d.max_redemptions }}{% endif %}
+          </td>
+          <td class="mono">{{ d.expires_at.strftime('%Y-%m-%d') if d.expires_at else '—' }}</td>
+          <td>
+            {% if d.stripe_promotion_code_id %}
+              <span class="badge badge-green">Synced</span>
+            {% else %}
+              <span class="badge badge-gray">Local only</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if d.is_active %}
+              <span class="badge badge-green">Active</span>
+            {% else %}
+              <span class="badge badge-gray">Disabled</span>
+            {% endif %}
+          </td>
+          <td>
+            <form method="POST" action="{{ url_for('superadmin_toggle_discount', dc_id=d.id) }}" class="inline-form">
+              <button type="submit" class="btn-xs danger">
+                {% if d.is_active %}Disable{% else %}Enable{% endif %}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not discounts %}
+        <tr><td colspan="8" class="empty-state">No codes yet. Create one above.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ─────────── FEATURE FLAGS ─────────── #}
+{% elif active_tab == 'features' %}
+<div class="card mb-3">
+  <div class="card-header"><span class="card-title">Declare a new flag</span></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('superadmin_new_feature') }}" class="form-grid">
+      <div class="field">
+        <label>Key *</label>
+        <input type="text" name="key" placeholder="tv_display" required
+               pattern="[a-z][a-z0-9_]+"
+               style="font-family:'JetBrains Mono',monospace;">
+      </div>
+      <div class="field">
+        <label>Label *</label>
+        <input type="text" name="label" placeholder="TV Display add-on" required>
+      </div>
+      <div class="field span-2">
+        <label>Description</label>
+        <input type="text" name="description" placeholder="What does flipping this flag do?">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="checkbox-row">
+          <input type="checkbox" name="enabled_by_default" id="flag-default" checked>
+          <label for="flag-default" style="font-size:13px;text-transform:none;letter-spacing:0;color:var(--dark);">
+            Enabled by default
+          </label>
+        </div>
+      </div>
+      <div class="field" style="align-self:end;">
+        <button type="submit" class="btn btn-primary">＋ Create Flag</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="card-title">Flags ({{ flags|length }})</span></div>
+  <div class="card-body">
+    {% for f in flags %}
+    <div class="mb-3" style="padding-bottom:16px;border-bottom:1px solid var(--gray2);">
+      <div class="flex items-center justify-between" style="flex-wrap:wrap;gap:10px;">
+        <div style="min-width:240px;">
+          <div class="fw-600 mono">{{ f.key }}</div>
+          <div class="text-sm text-muted">{{ f.label }}</div>
+          {% if f.description %}<div class="text-sm">{{ f.description }}</div>{% endif %}
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="badge {% if f.enabled_by_default %}badge-green{% else %}badge-gray{% endif %}">
+            Global: {% if f.enabled_by_default %}ON{% else %}OFF{% endif %}
+          </span>
+          <form method="POST" action="{{ url_for('superadmin_toggle_feature_global', key=f.key) }}" class="inline-form">
+            <button type="submit" class="btn-xs primary">Toggle global</button>
+          </form>
+        </div>
+      </div>
+
+      {# Per-store overrides. Collapsed by default so the page stays readable. #}
+      <details style="margin-top:10px;">
+        <summary style="cursor:pointer;font-size:12.5px;color:var(--gray4);">
+          Per-store overrides ({{ stores|length }} stores)
+        </summary>
+        <div class="table-wrap" style="margin-top:10px;">
+          <table>
+            <thead>
+              <tr><th>Store</th><th>Effective</th><th>Override</th></tr>
+            </thead>
+            <tbody>
+              {% for s in stores %}
+              {% set ov = overrides.get((s.id, f.key)) %}
+              {% set effective = ov if ov is not none else f.enabled_by_default %}
+              <tr>
+                <td>{{ s.name }}</td>
+                <td>
+                  {% if effective %}
+                    <span class="badge badge-green">ON</span>
+                  {% else %}
+                    <span class="badge badge-gray">OFF</span>
+                  {% endif %}
+                  {% if ov is not none %}
+                    <span class="text-sm text-muted">(overridden)</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <div class="action-stack">
+                    <form method="POST" action="{{ url_for('superadmin_set_feature_override', key=f.key, store_id=s.id) }}" class="inline-form">
+                      <input type="hidden" name="action" value="on">
+                      <button type="submit" class="btn-xs primary">Force ON</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('superadmin_set_feature_override', key=f.key, store_id=s.id) }}" class="inline-form">
+                      <input type="hidden" name="action" value="off">
+                      <button type="submit" class="btn-xs danger">Force OFF</button>
+                    </form>
+                    <form method="POST" action="{{ url_for('superadmin_set_feature_override', key=f.key, store_id=s.id) }}" class="inline-form">
+                      <input type="hidden" name="action" value="clear">
+                      <button type="submit" class="btn-xs">Clear</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+    {% endfor %}
+    {% if not flags %}
+    <div class="empty-state">
+      <div class="empty-title">No flags declared yet</div>
+      <div>Create one above to control features without a deploy.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ─────────── AUDIT LOG ─────────── #}
+{% elif active_tab == 'audit' %}
+<div class="card">
+  <div class="card-header"><span class="card-title">Recent superadmin activity (last 100)</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th></tr>
+      </thead>
+      <tbody>
+        {% for row in audit %}
+        <tr>
+          <td class="mono">{{ row.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+          <td>{{ row.admin_name or '—' }}</td>
+          <td class="mono">{{ row.action }}</td>
+          <td class="mono">{{ row.target_type }} {{ row.target_id }}</td>
+          <td class="text-sm">{{ row.details }}</td>
+        </tr>
+        {% endfor %}
+        {% if not audit %}
+        <tr><td colspan="5" class="empty-state">No activity yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

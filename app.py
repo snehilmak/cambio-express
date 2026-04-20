@@ -252,6 +252,80 @@ class OwnerInviteCode(db.Model):
     used_at          = db.Column(db.DateTime, nullable=True)
     used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
+# ── Superadmin models ────────────────────────────────────────
+# Platform-level tables owned by the superadmin. None of these are
+# scoped to a single store so they're safe from the store purge job.
+
+class DiscountCode(db.Model):
+    """Promo code the superadmin mints; synced to Stripe when possible.
+
+    Either percent_off *or* amount_off_cents is set — never both. When Stripe
+    is reachable we create a coupon + promotion code and store their IDs;
+    customers can then enter the code at checkout because subscribe_checkout
+    passes allow_promotion_codes=True.
+    """
+    __tablename__ = "discount_code"
+    id                        = db.Column(db.Integer, primary_key=True)
+    code                      = db.Column(db.String(40), unique=True, nullable=False)
+    label                     = db.Column(db.String(120), default="")
+    percent_off               = db.Column(db.Integer, nullable=True)   # 1..100
+    amount_off_cents          = db.Column(db.Integer, nullable=True)   # USD cents
+    duration                  = db.Column(db.String(16), default="once")  # once | forever | repeating
+    duration_in_months        = db.Column(db.Integer, nullable=True)
+    max_redemptions           = db.Column(db.Integer, nullable=True)
+    redeemed_count            = db.Column(db.Integer, default=0)
+    expires_at                = db.Column(db.DateTime, nullable=True)
+    stripe_coupon_id          = db.Column(db.String(60), default="")
+    stripe_promotion_code_id  = db.Column(db.String(60), default="")
+    is_active                 = db.Column(db.Boolean, default=True)
+    created_at                = db.Column(db.DateTime, default=datetime.utcnow)
+    created_by                = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+    @property
+    def value_label(self):
+        if self.percent_off:
+            return f"{self.percent_off}% off"
+        if self.amount_off_cents:
+            return f"${self.amount_off_cents / 100:.2f} off"
+        return "—"
+
+class FeatureFlag(db.Model):
+    """Global feature switch the superadmin can flip without a deploy.
+
+    enabled_by_default is the baseline; StoreFeatureOverride can flip it for a
+    single store (e.g. beta-test a feature with one customer).
+    """
+    __tablename__ = "feature_flag"
+    id                 = db.Column(db.Integer, primary_key=True)
+    key                = db.Column(db.String(60), unique=True, nullable=False)
+    label              = db.Column(db.String(120), default="")
+    description        = db.Column(db.Text, default="")
+    enabled_by_default = db.Column(db.Boolean, default=True)
+    created_at         = db.Column(db.DateTime, default=datetime.utcnow)
+
+class StoreFeatureOverride(db.Model):
+    """Per-store override of a FeatureFlag's global default."""
+    __tablename__ = "store_feature_override"
+    id         = db.Column(db.Integer, primary_key=True)
+    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    flag_key   = db.Column(db.String(60), nullable=False)
+    enabled    = db.Column(db.Boolean, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    __table_args__ = (db.UniqueConstraint("store_id", "flag_key"),)
+
+class SuperadminAuditLog(db.Model):
+    """Append-only record of platform-admin actions for traceability."""
+    __tablename__ = "superadmin_audit_log"
+    id          = db.Column(db.Integer, primary_key=True)
+    admin_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    admin_name  = db.Column(db.String(120), default="")  # snapshot in case the user row is deleted
+    action      = db.Column(db.String(60), nullable=False)   # e.g. "extend_trial", "comp_plan"
+    target_type = db.Column(db.String(30), default="")       # "store" | "discount" | "feature"
+    target_id   = db.Column(db.String(60), default="")
+    details     = db.Column(db.Text, default="")             # free-form, usually short JSON/text
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
 # ── Auth ─────────────────────────────────────────────────────
 def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
 def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
@@ -299,6 +373,40 @@ def data_retention_days_left(store):
         return None
     delta = store.data_retention_until - datetime.utcnow()
     return max(0, delta.days)
+
+# ── Superadmin helpers ───────────────────────────────────────
+def record_audit(action, target_type="", target_id="", details=""):
+    """Append a row to the superadmin audit log.
+
+    Safe to call from any request — reads the current user from session so it
+    can stamp admin_name even if the User row is later deleted.
+    """
+    u = current_user()
+    if not u:
+        return
+    row = SuperadminAuditLog(
+        admin_id=u.id,
+        admin_name=u.full_name or u.username or "",
+        action=action,
+        target_type=str(target_type)[:30],
+        target_id=str(target_id)[:60],
+        details=str(details)[:2000],
+    )
+    db.session.add(row)
+    # Intentionally no commit — caller commits as part of its own transaction.
+
+def store_feature_enabled(store, flag_key):
+    """Resolve a feature flag for a store: per-store override > global default > True."""
+    if store is not None:
+        override = StoreFeatureOverride.query.filter_by(
+            store_id=store.id, flag_key=flag_key
+        ).first()
+        if override is not None:
+            return bool(override.enabled)
+    flag = FeatureFlag.query.filter_by(key=flag_key).first()
+    if flag is None:
+        return True  # Unknown flag = allow by default (fail-open for undeclared features).
+    return bool(flag.enabled_by_default)
 
 def login_required(f):
     @wraps(f)
@@ -755,6 +863,8 @@ def subscribe_checkout():
             metadata={"store_id": str(store.id)},
             success_url=url_for("subscribe_success", _external=True),
             cancel_url=url_for("subscribe", _external=True),
+            # Surface the discount-code entry field on the Stripe checkout page.
+            allow_promotion_codes=True,
         )
         if store.stripe_customer_id:
             kwargs["customer"] = store.stripe_customer_id
@@ -779,6 +889,12 @@ def admin_subscription():
     user = current_user()
     store = current_store()
     active_addons = store_addon_keys(store)
+    # Each add-on can be gated behind a feature flag keyed "addon_<key>".
+    # If no flag has been declared the add-on shows normally (fail-open).
+    visible_addons = {
+        k: v for k, v in ADDONS_CATALOG.items()
+        if store_feature_enabled(store, f"addon_{k}")
+    }
     plan_labels = {
         "trial":    "Free Trial",
         "basic":    "Basic",
@@ -788,7 +904,7 @@ def admin_subscription():
     plan_prices = {"basic": "$20 / month", "pro": "$30 / month"}
     return render_template("admin_subscription.html",
         user=user, store=store,
-        addons_catalog=ADDONS_CATALOG,
+        addons_catalog=visible_addons,
         active_addons=active_addons,
         has_paid_plan=store_has_paid_plan(store),
         plan_label=plan_labels.get(store.plan if store else "", "Unknown"),
@@ -1383,14 +1499,293 @@ def superadmin_new_store():
 def superadmin_impersonate(store_id):
     """Swap the current session into the target store's admin user.
 
-    Used by the superadmin to debug a customer's view. There's no impersonation
-    audit log yet — be careful when using this in production.
+    Used by the superadmin to debug a customer's view. The action is written
+    to the audit log so impersonations stay traceable.
     """
     store=Store.query.get_or_404(store_id)
     admin=User.query.filter_by(store_id=store_id,role="admin").first()
     if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
+    record_audit("impersonate", target_type="store", target_id=store.id,
+                 details=f"as {admin.username}")
     session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
+    db.session.commit()
     flash(f"Viewing as {store.name}","success"); return redirect(url_for("dashboard"))
+
+# ── Superadmin control panel ─────────────────────────────────
+@app.route("/superadmin/controls")
+@superadmin_required
+def superadmin_controls():
+    """Tabbed superadmin hub: metrics, stores, discount codes, feature flags, audit log."""
+    user = current_user()
+    active_tab = request.args.get("tab", "overview")
+
+    # Metrics — computed server-side so the page works even without JS.
+    plan_counts = dict(db.session.query(Store.plan, db.func.count(Store.id))
+                       .group_by(Store.plan).all())
+    basic_count = plan_counts.get("basic", 0)
+    pro_count   = plan_counts.get("pro", 0)
+    trial_count = plan_counts.get("trial", 0)
+    inactive_count = plan_counts.get("inactive", 0)
+
+    retention_queue = Store.query.filter(
+        Store.plan == "inactive",
+        Store.data_retention_until.isnot(None),
+    ).count()
+
+    # Rough MRR — basic $20, pro $30. Real invoices live in Stripe.
+    estimated_mrr = basic_count * 20 + pro_count * 30
+
+    stores = Store.query.order_by(Store.created_at.desc()).all()
+    discounts = DiscountCode.query.order_by(DiscountCode.created_at.desc()).all()
+    flags = FeatureFlag.query.order_by(FeatureFlag.key).all()
+    # Per-store overrides: (store_id, flag_key) -> enabled
+    overrides = {(o.store_id, o.flag_key): o.enabled
+                 for o in StoreFeatureOverride.query.all()}
+    audit = (SuperadminAuditLog.query
+             .order_by(SuperadminAuditLog.created_at.desc())
+             .limit(100).all())
+
+    return render_template("superadmin_controls.html",
+        user=user, active_tab=active_tab,
+        stores=stores, discounts=discounts, flags=flags,
+        overrides=overrides, audit=audit,
+        basic_count=basic_count, pro_count=pro_count,
+        trial_count=trial_count, inactive_count=inactive_count,
+        retention_queue=retention_queue, estimated_mrr=estimated_mrr,
+        total_stores=len(stores),
+    )
+
+# ── Per-store actions (superadmin) ───────────────────────────
+def _store_or_404(store_id): return Store.query.get_or_404(store_id)
+
+@app.route("/superadmin/stores/<int:store_id>/extend-trial", methods=["POST"])
+@superadmin_required
+def superadmin_extend_trial(store_id):
+    """Push the store's trial/grace deadlines forward by N days (default 7)."""
+    store = _store_or_404(store_id)
+    days = max(1, min(int(request.form.get("days", 7) or 7), 180))
+    now = datetime.utcnow()
+    base = store.trial_ends_at if (store.trial_ends_at and store.trial_ends_at > now) else now
+    store.trial_ends_at = base + timedelta(days=days)
+    store.grace_ends_at = store.trial_ends_at + timedelta(days=4)
+    if store.plan == "inactive":
+        store.plan = "trial"
+        store.data_retention_until = None
+        store.canceled_at = None
+    record_audit("extend_trial", target_type="store", target_id=store.id,
+                 details=f"+{days}d → {store.trial_ends_at.isoformat()}")
+    db.session.commit()
+    flash(f"{store.name}: trial extended by {days} days.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+@app.route("/superadmin/stores/<int:store_id>/comp-plan", methods=["POST"])
+@superadmin_required
+def superadmin_comp_plan(store_id):
+    """Grant a free plan (basic or pro) bypassing Stripe. For friends/family/comps."""
+    store = _store_or_404(store_id)
+    plan = request.form.get("plan", "pro")
+    if plan not in ("basic", "pro"):
+        flash("Invalid plan.", "error"); return redirect(url_for("superadmin_controls", tab="stores"))
+    store.plan = plan
+    store.canceled_at = None
+    store.data_retention_until = None
+    record_audit("comp_plan", target_type="store", target_id=store.id,
+                 details=f"granted {plan} (no Stripe)")
+    db.session.commit()
+    flash(f"{store.name}: comped to {plan.title()}.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+@app.route("/superadmin/stores/<int:store_id>/toggle-active", methods=["POST"])
+@superadmin_required
+def superadmin_toggle_active(store_id):
+    """Enable/disable the store account without touching billing state."""
+    store = _store_or_404(store_id)
+    store.is_active = not store.is_active
+    record_audit("toggle_active", target_type="store", target_id=store.id,
+                 details=f"is_active={store.is_active}")
+    db.session.commit()
+    flash(f"{store.name}: {'active' if store.is_active else 'disabled'}.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+@app.route("/superadmin/stores/<int:store_id>/extend-retention", methods=["POST"])
+@superadmin_required
+def superadmin_extend_retention(store_id):
+    """Push the 6-month data purge deadline out by N days (default 30)."""
+    store = _store_or_404(store_id)
+    days = max(1, min(int(request.form.get("days", 30) or 30), 720))
+    base = store.data_retention_until if store.data_retention_until else datetime.utcnow()
+    store.data_retention_until = base + timedelta(days=days)
+    record_audit("extend_retention", target_type="store", target_id=store.id,
+                 details=f"+{days}d → {store.data_retention_until.isoformat()}")
+    db.session.commit()
+    flash(f"{store.name}: retention extended by {days} days.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+@app.route("/superadmin/stores/<int:store_id>/revert-to-trial", methods=["POST"])
+@superadmin_required
+def superadmin_revert_to_trial(store_id):
+    """Drop a paid/comped store back onto the 7-day trial. Keeps all data."""
+    store = _store_or_404(store_id)
+    now = datetime.utcnow()
+    store.plan = "trial"
+    store.trial_ends_at = now + timedelta(days=7)
+    store.grace_ends_at = now + timedelta(days=11)
+    store.canceled_at = None
+    store.data_retention_until = None
+    record_audit("revert_to_trial", target_type="store", target_id=store.id)
+    db.session.commit()
+    flash(f"{store.name}: reverted to 7-day trial.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+# ── Discount codes (superadmin) ──────────────────────────────
+def _sync_discount_to_stripe(dc):
+    """Best-effort mirror of a DiscountCode into Stripe as a coupon + promotion code.
+
+    Silent on Stripe errors — the local record is still usable for bookkeeping,
+    and the operator will see the missing IDs in the UI.
+    """
+    try:
+        coupon_kwargs = {"duration": dc.duration, "name": dc.label or dc.code}
+        if dc.percent_off: coupon_kwargs["percent_off"] = dc.percent_off
+        if dc.amount_off_cents:
+            coupon_kwargs["amount_off"] = dc.amount_off_cents
+            coupon_kwargs["currency"] = "usd"
+        if dc.duration == "repeating" and dc.duration_in_months:
+            coupon_kwargs["duration_in_months"] = dc.duration_in_months
+        if dc.max_redemptions: coupon_kwargs["max_redemptions"] = dc.max_redemptions
+        if dc.expires_at:
+            coupon_kwargs["redeem_by"] = int(dc.expires_at.timestamp())
+        coupon = stripe.Coupon.create(**coupon_kwargs)
+        promo = stripe.PromotionCode.create(coupon=coupon.id, code=dc.code)
+        dc.stripe_coupon_id = coupon.id
+        dc.stripe_promotion_code_id = promo.id
+    except Exception as e:
+        app.logger.warning(f"Stripe discount sync failed for {dc.code}: {e}")
+
+@app.route("/superadmin/discounts/new", methods=["POST"])
+@superadmin_required
+def superadmin_new_discount():
+    """Create a discount code; sync to Stripe if the key is configured."""
+    code = request.form.get("code", "").strip().upper()
+    if not code or not re.match(r"^[A-Z0-9_-]{3,40}$", code):
+        flash("Code must be 3–40 chars (A-Z, 0-9, _, -).", "error")
+        return redirect(url_for("superadmin_controls", tab="discounts"))
+    if DiscountCode.query.filter_by(code=code).first():
+        flash("That code already exists.", "error")
+        return redirect(url_for("superadmin_controls", tab="discounts"))
+    kind = request.form.get("kind", "percent")
+    percent = int(request.form.get("percent_off") or 0) if kind == "percent" else 0
+    amount_cents = int(float(request.form.get("amount_off") or 0) * 100) if kind == "amount" else 0
+    if kind == "percent" and not (1 <= percent <= 100):
+        flash("Percent off must be 1–100.", "error")
+        return redirect(url_for("superadmin_controls", tab="discounts"))
+    if kind == "amount" and amount_cents <= 0:
+        flash("Amount off must be greater than zero.", "error")
+        return redirect(url_for("superadmin_controls", tab="discounts"))
+    duration = request.form.get("duration", "once")
+    duration_months = int(request.form.get("duration_months") or 0) if duration == "repeating" else None
+    max_redemptions = int(request.form.get("max_redemptions") or 0) or None
+    expires_days = int(request.form.get("expires_days") or 0)
+    expires_at = datetime.utcnow() + timedelta(days=expires_days) if expires_days else None
+
+    dc = DiscountCode(
+        code=code, label=request.form.get("label", "").strip(),
+        percent_off=percent or None, amount_off_cents=amount_cents or None,
+        duration=duration, duration_in_months=duration_months,
+        max_redemptions=max_redemptions, expires_at=expires_at,
+        created_by=current_user().id,
+    )
+    db.session.add(dc); db.session.flush()
+    if stripe.api_key:
+        _sync_discount_to_stripe(dc)
+    record_audit("create_discount", target_type="discount", target_id=dc.id,
+                 details=f"{dc.code} {dc.value_label}")
+    db.session.commit()
+    flash(f"Discount code {code} created.", "success")
+    return redirect(url_for("superadmin_controls", tab="discounts"))
+
+@app.route("/superadmin/discounts/<int:dc_id>/toggle", methods=["POST"])
+@superadmin_required
+def superadmin_toggle_discount(dc_id):
+    """Activate/deactivate a discount code locally and in Stripe."""
+    dc = DiscountCode.query.get_or_404(dc_id)
+    dc.is_active = not dc.is_active
+    if dc.stripe_promotion_code_id:
+        try:
+            stripe.PromotionCode.modify(dc.stripe_promotion_code_id, active=dc.is_active)
+        except Exception as e:
+            app.logger.warning(f"Stripe promo toggle failed: {e}")
+    record_audit("toggle_discount", target_type="discount", target_id=dc.id,
+                 details=f"active={dc.is_active}")
+    db.session.commit()
+    flash(f"{dc.code}: {'active' if dc.is_active else 'disabled'}.", "success")
+    return redirect(url_for("superadmin_controls", tab="discounts"))
+
+# ── Feature flags (superadmin) ───────────────────────────────
+@app.route("/superadmin/features/new", methods=["POST"])
+@superadmin_required
+def superadmin_new_feature():
+    """Declare a new feature flag. Key must be a short lowercase identifier."""
+    key = request.form.get("key", "").strip().lower()
+    if not re.match(r"^[a-z][a-z0-9_]{1,40}$", key):
+        flash("Flag key must be lowercase letters/numbers/underscore, 2–41 chars.", "error")
+        return redirect(url_for("superadmin_controls", tab="features"))
+    if FeatureFlag.query.filter_by(key=key).first():
+        flash("That flag already exists.", "error")
+        return redirect(url_for("superadmin_controls", tab="features"))
+    flag = FeatureFlag(
+        key=key,
+        label=request.form.get("label", "").strip() or key,
+        description=request.form.get("description", "").strip(),
+        enabled_by_default=request.form.get("enabled_by_default") == "on",
+    )
+    db.session.add(flag)
+    record_audit("create_feature", target_type="feature", target_id=key)
+    db.session.commit()
+    flash(f"Feature flag {key} created.", "success")
+    return redirect(url_for("superadmin_controls", tab="features"))
+
+@app.route("/superadmin/features/<string:key>/toggle-global", methods=["POST"])
+@superadmin_required
+def superadmin_toggle_feature_global(key):
+    """Flip a feature's global default on/off."""
+    flag = FeatureFlag.query.filter_by(key=key).first_or_404()
+    flag.enabled_by_default = not flag.enabled_by_default
+    record_audit("toggle_feature_global", target_type="feature", target_id=flag.key,
+                 details=f"enabled_by_default={flag.enabled_by_default}")
+    db.session.commit()
+    flash(f"Flag {key} globally {'on' if flag.enabled_by_default else 'off'}.", "success")
+    return redirect(url_for("superadmin_controls", tab="features"))
+
+@app.route("/superadmin/features/<string:key>/stores/<int:store_id>", methods=["POST"])
+@superadmin_required
+def superadmin_set_feature_override(key, store_id):
+    """Set or clear a per-store override for a feature flag.
+
+    Form values: action = 'on' | 'off' | 'clear'.
+    """
+    FeatureFlag.query.filter_by(key=key).first_or_404()
+    _store_or_404(store_id)
+    action = request.form.get("action", "on")
+    existing = StoreFeatureOverride.query.filter_by(store_id=store_id, flag_key=key).first()
+    if action == "clear":
+        if existing: db.session.delete(existing)
+    else:
+        enabled = action == "on"
+        if existing:
+            existing.enabled = enabled
+            existing.updated_at = datetime.utcnow()
+            existing.updated_by = current_user().id
+        else:
+            db.session.add(StoreFeatureOverride(
+                store_id=store_id, flag_key=key, enabled=enabled,
+                updated_by=current_user().id,
+            ))
+    record_audit("set_feature_override", target_type="feature", target_id=key,
+                 details=f"store={store_id} action={action}")
+    db.session.commit()
+    flash("Override updated.", "success")
+    return redirect(url_for("superadmin_controls", tab="features"))
 
 # ── Stripe webhook ───────────────────────────────────────────
 @app.route("/webhooks/stripe", methods=["POST"])
@@ -1524,10 +1919,31 @@ def _ensure_subscription_columns():
     except Exception as e:
         app.logger.warning(f"subscription column migration skipped: {e}")
 
+# Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
+# Declaring them here means a fresh install has a real starting set for the UI.
+_DEFAULT_FEATURE_FLAGS = [
+    ("addon_tv_display", "Add-on: TV Display & Rates",
+     "Show the TV Display add-on in the subscription page.", True),
+    ("bank_sync", "Bank sync (SimpleFIN)",
+     "Enable the Pro-tier SimpleFIN bank connection for stores.", True),
+    ("multi_store_owner", "Multi-store owner portal",
+     "Allow store admins to generate owner invite codes.", True),
+]
+
+def _seed_feature_flags():
+    for key, label, description, enabled in _DEFAULT_FEATURE_FLAGS:
+        if not FeatureFlag.query.filter_by(key=key).first():
+            db.session.add(FeatureFlag(
+                key=key, label=label, description=description,
+                enabled_by_default=enabled,
+            ))
+    db.session.commit()
+
 def init_db():
     with app.app_context():
         db.create_all()
         _ensure_subscription_columns()
+        _seed_feature_flags()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
