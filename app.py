@@ -1473,17 +1473,52 @@ def transfers():
     if user.role=="employee": q=q.filter_by(created_by=user.id)
     company=request.args.get("company",""); status=request.args.get("status","")
     date_from=request.args.get("date_from",""); date_to=request.args.get("date_to","")
+    sender=request.args.get("sender","").strip()
+    recipient=request.args.get("recipient","").strip()
+    country=request.args.get("country","").strip()
+    confirm=request.args.get("confirm","").strip()
+    batch=request.args.get("batch","").strip()
+    search=request.args.get("q","").strip()
     if company: q=q.filter_by(company=company)
     if status:  q=q.filter_by(status=status)
-    if date_from:
-        try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
-        except: pass
-    if date_to:
-        try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
-        except: pass
-    rows=q.order_by(Transfer.send_date.desc(),Transfer.created_at.desc()).all()
+    if user.role=="employee":
+        today=date.today()
+        q=q.filter(Transfer.send_date==today)
+        date_from=""; date_to=""
+    else:
+        if date_from:
+            try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
+            except: pass
+        if date_to:
+            try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
+            except: pass
+    if sender:    q=q.filter(Transfer.sender_name.ilike(f"%{sender}%"))
+    if recipient: q=q.filter(Transfer.recipient_name.ilike(f"%{recipient}%"))
+    if country:   q=q.filter(Transfer.country.ilike(f"%{country}%"))
+    if confirm:   q=q.filter(Transfer.confirm_number.ilike(f"%{confirm}%"))
+    if batch:     q=q.filter(Transfer.batch_id.ilike(f"%{batch}%"))
+    if search:
+        like=f"%{search}%"
+        q=q.filter(db.or_(
+            Transfer.sender_name.ilike(like),
+            Transfer.recipient_name.ilike(like),
+            Transfer.confirm_number.ilike(like),
+            Transfer.country.ilike(like),
+            Transfer.batch_id.ilike(like),
+        ))
+    q=q.order_by(Transfer.send_date.desc(),Transfer.created_at.desc())
+    PER_PAGE=50
+    try: page=max(1,int(request.args.get("page",1)))
+    except: page=1
+    total=q.count()
+    total_pages=max(1,(total+PER_PAGE-1)//PER_PAGE)
+    if page>total_pages: page=total_pages
+    rows=q.offset((page-1)*PER_PAGE).limit(PER_PAGE).all()
     return render_template("transfers.html",user=user,transfers=rows,
-        company=company,status=status,date_from=date_from,date_to=date_to)
+        company=company,status=status,date_from=date_from,date_to=date_to,
+        sender=sender,recipient=recipient,country=country,confirm=confirm,
+        batch=batch,q=search,page=page,total=total,total_pages=total_pages,
+        per_page=PER_PAGE)
 
 def _parse_dob(raw):
     """Parse a YYYY-MM-DD date string from the form, or None when blank/bad."""
