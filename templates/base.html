@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}Cambio Express{% endblock %}</title>
+<title>{% block title %}DineroBook{% endblock %}</title>
 <script>
 (function(){
   try{
@@ -409,8 +409,8 @@ textarea { resize: vertical; min-height: 80px; }
   <aside class="sidebar" id="sidebar">
     <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
     <div class="sidebar-logo">
-      <div class="brand">Cambio Express</div>
-      <div class="sub">MSB Manager</div>
+      <div class="brand">DineroBook</div>
+      <div class="sub">{{ store.name if store else 'MSB Manager' }}</div>
     </div>
     <div class="sidebar-user">
       <div class="uname">{{ user.full_name or user.username }}</div>

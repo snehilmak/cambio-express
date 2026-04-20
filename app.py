@@ -294,19 +294,19 @@ def get_trial_status(store):
 
 @app.context_processor
 def inject_trial_context():
-    """Inject trial_status and trial_days_left into every template."""
+    """Inject trial_status, trial_days_left, and store into every template."""
     user = current_user()
     if not user:
-        return {"trial_status": "exempt", "trial_days_left": 0}
+        return {"trial_status": "exempt", "trial_days_left": 0, "store": None}
     if user.role == "superadmin":
-        return {"trial_status": "exempt", "trial_days_left": 0}
+        return {"trial_status": "exempt", "trial_days_left": 0, "store": None}
     store = current_store()
     status = get_trial_status(store)
     days_left = 0
     if store and store.trial_ends_at:
         delta = store.trial_ends_at - datetime.utcnow()
         days_left = max(0, delta.days)
-    return {"trial_status": status, "trial_days_left": days_left}
+    return {"trial_status": status, "trial_days_left": days_left, "store": store}
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
@@ -1050,5 +1050,5 @@ init_db()
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
-    print(f"🚀 Cambio Express → http://0.0.0.0:{port}")
+    print(f"🚀 DineroBook → http://0.0.0.0:{port}")
     app.run(host="0.0.0.0",port=port,debug=False)
