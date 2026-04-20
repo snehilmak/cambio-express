@@ -1763,11 +1763,11 @@ def edit_transfer(tid):
 # and transfer form both pull per-store from Store.companies (resolved via
 # store_mt_companies), so this is only the catalog — not a hardcoded list.
 KNOWN_MT_COMPANIES = [
-    "Intermex", "Maxi Transfer", "Barri", "Ria", "Vigo",
+    "Intermex", "Maxi", "Barri", "Ria", "Vigo",
     "Inter Cambio", "Sigue", "MoneyGram", "Western Union",
     "Dolex", "Viamericas", "Transfast", "Pangea", "Boss Revolution",
 ]
-DEFAULT_MT_COMPANIES = ["Intermex", "Maxi Transfer", "Barri"]
+DEFAULT_MT_COMPANIES = ["Intermex", "Maxi", "Barri"]
 
 def store_mt_companies(store):
     """The active list of money-transfer companies for a store.
@@ -3039,10 +3039,28 @@ def _seed_feature_flags():
             ))
     db.session.commit()
 
+def _rename_maxi_transfer_to_maxi():
+    """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
+    in every place a company name is persisted. Safe on every boot — after
+    the first run, nothing matches and the update is a no-op."""
+    try:
+        Transfer.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        ACHBatch.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        MoneyTransferSummary.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        # Store.companies is a comma-separated string — split, replace, rejoin.
+        for s in Store.query.filter(Store.companies.like("%Maxi Transfer%")).all():
+            parts = [p.strip() for p in (s.companies or "").split(",") if p.strip()]
+            s.companies = ",".join(["Maxi" if p == "Maxi Transfer" else p for p in parts])
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        app.logger.warning(f"Maxi Transfer rename backfill skipped: {e}")
+
 def init_db():
     with app.app_context():
         db.create_all()
         _ensure_added_columns()
+        _rename_maxi_transfer_to_maxi()
         _seed_feature_flags()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
