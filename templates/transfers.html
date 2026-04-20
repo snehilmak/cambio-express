@@ -1,15 +1,44 @@
 {% extends "base.html" %}
 {% block title %}Transfers — DineroBook{% endblock %}
 {% block page_title %}Transfer Log{% endblock %}
+{% block head %}
+<style>
+.tf-search-row { padding: 14px 24px; border-bottom: 1px solid var(--gray2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tf-search-row input[type="text"] { flex: 1; min-width: 180px; }
+.col-search-row th { padding: 6px 10px !important; background: var(--gray1); border-bottom: 1px solid var(--gray2); }
+.col-search-row input { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid var(--gray2); border-radius: 6px; background: var(--white); }
+.tf-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--gray2); flex-wrap: wrap; }
+.tf-pager .pg-info { font-size: 12.5px; color: var(--gray4); }
+.tf-pager .pg-nav { display: flex; gap: 8px; align-items: center; }
+.tf-pager .pg-nav a, .tf-pager .pg-nav span.disabled { padding: 6px 12px; border: 1px solid var(--gray2); border-radius: 6px; font-size: 13px; color: var(--dark); text-decoration: none; background: var(--white); }
+.tf-pager .pg-nav a:hover { border-color: var(--blue); color: var(--blue); }
+.tf-pager .pg-nav span.disabled { color: var(--gray3); background: var(--gray1); cursor: not-allowed; }
+.tf-pager .pg-nav .current { font-weight: 600; color: var(--navy); }
+[data-theme="dark"] .col-search-row th { background: #232838; border-bottom-color: #2a3044; }
+[data-theme="dark"] .col-search-row input { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
+[data-theme="dark"] .tf-pager { border-top-color: #2a3044; }
+[data-theme="dark"] .tf-pager .pg-nav a, [data-theme="dark"] .tf-pager .pg-nav span.disabled { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
+[data-theme="dark"] .tf-pager .pg-nav span.disabled { background: #141828; color: #4b5563; }
+[data-theme="dark"] .tf-pager .pg-nav .current { color: #f0c060; }
+[data-theme="dark"] .tf-search-row { border-bottom-color: #2a3044; }
+@media (max-width: 900px) {
+  .col-search-row { display: none; }
+  .tf-search-row { padding: 12px 14px; }
+}
+</style>
+{% endblock %}
 {% block content %}
+
+<!-- Single form driving filters + search. Inputs use form="tfForm" so they can live in different regions of the page. -->
+<form method="GET" id="tfForm"></form>
 
 <!-- Filters -->
 <div class="card mb-3">
   <div class="card-body" style="padding:16px 24px;">
-    <form method="GET" style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
       <div class="field" style="flex:1;min-width:140px;margin:0;">
         <label>Company</label>
-        <select name="company">
+        <select name="company" form="tfForm">
           <option value="">All</option>
           <option {% if company=='Intermex' %}selected{% endif %}>Intermex</option>
           <option {% if company=='Maxi' %}selected{% endif %}>Maxi</option>
@@ -18,38 +47,50 @@
       </div>
       <div class="field" style="flex:1;min-width:140px;margin:0;">
         <label>Status</label>
-        <select name="status">
+        <select name="status" form="tfForm">
           <option value="">All</option>
           {% for s in ['Sent','Pending','Canceled','Rejected','Refunded','Re-Transferred'] %}
           <option {% if status==s %}selected{% endif %}>{{ s }}</option>
           {% endfor %}
         </select>
       </div>
+      {% if user.role != 'employee' %}
       <div class="field" style="flex:1;min-width:130px;margin:0;">
         <label>From Date</label>
-        <input type="date" name="date_from" value="{{ date_from }}">
+        <input type="date" name="date_from" value="{{ date_from }}" form="tfForm">
       </div>
       <div class="field" style="flex:1;min-width:130px;margin:0;">
         <label>To Date</label>
-        <input type="date" name="date_to" value="{{ date_to }}">
+        <input type="date" name="date_to" value="{{ date_to }}" form="tfForm">
       </div>
-      <button type="submit" class="btn btn-primary" style="height:42px;">Filter</button>
+      {% endif %}
+      <button type="submit" class="btn btn-primary" style="height:42px;" form="tfForm">Apply</button>
       <a href="{{ url_for('transfers') }}" class="btn btn-outline" style="height:42px;">Clear</a>
       <a href="{{ url_for('new_transfer') }}" class="btn btn-gold" style="height:42px;margin-left:auto;white-space:nowrap;">＋ New Transfer</a>
-    </form>
+    </div>
   </div>
 </div>
 
 <div class="card">
   <div class="card-header">
-    <span class="card-title">{{ transfers|length }} Transfer{{ 's' if transfers|length != 1 }}</span>
+    <span class="card-title">
+      {% if user.role == 'employee' %}Today's Transfers &middot; {% endif %}
+      {{ total }} Transfer{{ 's' if total != 1 }}
+    </span>
     {% if transfers %}
     <span class="text-sm text-muted">
-      Total: ${{ '{:,.2f}'.format(transfers|sum(attribute='send_amount')) }}
+      Page total: ${{ '{:,.2f}'.format(transfers|sum(attribute='send_amount')) }}
       &nbsp;|&nbsp; Fees: ${{ '{:,.2f}'.format(transfers|sum(attribute='fee')) }}
     </span>
     {% endif %}
   </div>
+
+  <div class="tf-search-row">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search sender, recipient, confirm #, batch, country…" form="tfForm">
+    <button type="submit" class="btn btn-primary btn-sm" form="tfForm">Search</button>
+    <a href="{{ url_for('transfers') }}" class="btn btn-outline btn-sm">Reset</a>
+  </div>
+
   <div class="table-wrap">
     <table>
       <thead>
@@ -64,6 +105,19 @@
           <th>Confirm #</th>
           <th>Batch</th>
           <th>Status</th>
+          <th></th>
+        </tr>
+        <tr class="col-search-row">
+          <th></th>
+          <th><input type="text" name="sender" value="{{ sender }}" placeholder="Search…" form="tfForm"></th>
+          <th></th>
+          <th></th>
+          <th></th>
+          <th><input type="text" name="recipient" value="{{ recipient }}" placeholder="Search…" form="tfForm"></th>
+          <th><input type="text" name="country" value="{{ country }}" placeholder="Search…" form="tfForm"></th>
+          <th><input type="text" name="confirm" value="{{ confirm }}" placeholder="Search…" form="tfForm"></th>
+          <th><input type="text" name="batch" value="{{ batch }}" placeholder="Search…" form="tfForm"></th>
+          <th></th>
           <th></th>
         </tr>
       </thead>
@@ -93,5 +147,27 @@
       </tbody>
     </table>
   </div>
+
+  {% if total > 0 %}
+  {% set start = (page - 1) * per_page + 1 %}
+  {% set end = start + transfers|length - 1 %}
+  <div class="tf-pager">
+    <div class="pg-info">Showing {{ start }}–{{ end }} of {{ total }}</div>
+    <div class="pg-nav">
+      {% set base_args = {'company': company, 'status': status, 'date_from': date_from, 'date_to': date_to, 'sender': sender, 'recipient': recipient, 'country': country, 'confirm': confirm, 'batch': batch, 'q': q} %}
+      {% if page > 1 %}
+        <a href="{{ url_for('transfers', page=page-1, **base_args) }}">← Prev</a>
+      {% else %}
+        <span class="disabled">← Prev</span>
+      {% endif %}
+      <span class="current">Page {{ page }} of {{ total_pages }}</span>
+      {% if page < total_pages %}
+        <a href="{{ url_for('transfers', page=page+1, **base_args) }}">Next →</a>
+      {% else %}
+        <span class="disabled">Next →</span>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
