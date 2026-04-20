@@ -4,7 +4,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
-import requests, base64, os, calendar, logging, re, secrets, string
+import requests, base64, os, calendar, logging, re, secrets, string, hashlib, smtplib
+from email.message import EmailMessage
 import stripe
 from slugify import slugify
 
@@ -306,6 +307,21 @@ class OwnerInviteCode(db.Model):
     expires_at       = db.Column(db.DateTime, nullable=False)
     used_at          = db.Column(db.DateTime, nullable=True)
     used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+class PasswordResetToken(db.Model):
+    """Short-lived, one-time-use token for the self-service password reset flow.
+
+    Storing only the sha256 hash of the token (never the raw value) means the
+    DB alone isn't enough for an attacker to reset an account — they'd need
+    to have intercepted the email too.
+    """
+    __tablename__ = "password_reset_token"
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    token_hash = db.Column(db.String(128), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used_at    = db.Column(db.DateTime, nullable=True)
 
 # ── Superadmin models ────────────────────────────────────────
 # Platform-level tables owned by the superadmin. None of these are
@@ -736,6 +752,124 @@ def login_store(slug):
             return redirect(url_for("dashboard"))
         error = "Invalid username or password."
     return render_template("login_store.html", store=store, error=error)
+
+# ── Password reset ───────────────────────────────────────────
+PASSWORD_RESET_TTL_HOURS = 1
+
+def _hash_token(raw):
+    """sha256-hex — matches the column size and is fine for single-use tokens."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+def _send_email(to_addr, subject, body):
+    """Send a transactional email. Silent no-op if SMTP isn't configured.
+
+    Env vars required: SMTP_HOST, SMTP_USER, SMTP_PASS. Optional: SMTP_PORT
+    (default 587), SMTP_FROM (default SMTP_USER). When SMTP isn't configured
+    the caller is expected to log enough context that a superadmin can
+    retrieve the link manually.
+    """
+    host = os.environ.get("SMTP_HOST")
+    user = os.environ.get("SMTP_USER")
+    pw   = os.environ.get("SMTP_PASS")
+    if not (host and user and pw):
+        return False
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    sender = os.environ.get("SMTP_FROM", user)
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = to_addr
+    msg["Subject"] = subject
+    msg.set_content(body)
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as s:
+            s.starttls()
+            s.login(user, pw)
+            s.send_message(msg)
+        return True
+    except Exception as e:
+        app.logger.error(f"SMTP send failed: {e}")
+        return False
+
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    """Step 1 of the reset flow — generate a token for the supplied email.
+
+    The response is deliberately the same whether the account exists or not,
+    so attackers can't probe for registered emails. Employees aren't supported
+    here; they should ask their store admin (admin_reset_employee_password).
+    """
+    sent = False
+    if request.method == "POST":
+        username = request.form.get("username", "").strip().lower()
+        sent = True
+        if username:
+            u = (User.query.filter_by(username=username)
+                 .filter(User.role.in_(("admin", "owner", "superadmin")))
+                 .first())
+            if u and u.is_active:
+                # Invalidate any still-valid tokens for this user, then mint fresh.
+                now = datetime.utcnow()
+                (PasswordResetToken.query
+                 .filter(PasswordResetToken.user_id == u.id,
+                         PasswordResetToken.used_at.is_(None),
+                         PasswordResetToken.expires_at > now)
+                 .update({"used_at": now}, synchronize_session=False))
+                raw = secrets.token_urlsafe(48)
+                db.session.add(PasswordResetToken(
+                    user_id=u.id, token_hash=_hash_token(raw),
+                    expires_at=now + timedelta(hours=PASSWORD_RESET_TTL_HOURS),
+                ))
+                db.session.commit()
+                reset_url = url_for("reset_password", token=raw, _external=True)
+                body = (
+                    "Hi,\n\n"
+                    "Someone (hopefully you) requested a password reset for your DineroBook "
+                    "account. Follow this link within the next hour to set a new password:\n\n"
+                    f"  {reset_url}\n\n"
+                    "If you didn't request this you can safely ignore this email — your "
+                    "current password will keep working.\n"
+                )
+                delivered = _send_email(u.username, "Reset your DineroBook password", body)
+                if not delivered:
+                    # No SMTP configured (or send failed): log the URL so the
+                    # superadmin can retrieve it from the server logs and
+                    # relay it to the user manually.
+                    app.logger.warning(
+                        f"[password-reset] email send skipped for {u.username}; "
+                        f"reset URL: {reset_url}"
+                    )
+    return render_template("forgot_password.html", sent=sent)
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    """Step 2 of the reset flow — verify the token and set the new password.
+
+    Tokens are one-time-use and expire after PASSWORD_RESET_TTL_HOURS. We
+    look them up by sha256 so the raw token never sits in the DB.
+    """
+    now = datetime.utcnow()
+    row = (PasswordResetToken.query
+           .filter_by(token_hash=_hash_token(token))
+           .first())
+    invalid = (row is None or row.used_at is not None or row.expires_at <= now)
+    error = None
+    if request.method == "POST" and not invalid:
+        pw1 = request.form.get("password", "")
+        pw2 = request.form.get("confirm_password", "")
+        if len(pw1) < 8:
+            error = "Password must be at least 8 characters."
+        elif pw1 != pw2:
+            error = "Passwords do not match."
+        else:
+            u = db.session.get(User, row.user_id)
+            if u:
+                u.set_password(pw1)
+                row.used_at = now
+                db.session.commit()
+                flash("Password updated. You can now sign in with your new password.", "success")
+                return redirect(url_for("login"))
+            error = "Account no longer exists."
+    return render_template("reset_password.html", invalid=invalid, error=error, token=token)
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
