@@ -8,8 +8,14 @@
 - Price-ID lookup failure falls back to "pro" (safest: keep their access on).
 """
 import json
+import os
 from datetime import datetime, timedelta
 from unittest.mock import patch
+
+# Resolved at call time (not import time) — CI passes different price IDs
+# than conftest, and the webhook reads the env var live.
+def _basic_price_id():
+    return os.environ.get("STRIPE_BASIC_PRICE_ID", "price_basic_test")
 
 
 def _seed(plan="pro", **kwargs):
@@ -93,7 +99,7 @@ def test_checkout_completed_clears_retention_timer(client):
             "subscription": "sub_new",
         }},
     }
-    mock_sub = {"items": {"data": [{"price": {"id": "price_basic_test"}}]}}
+    mock_sub = {"items": {"data": [{"price": {"id": _basic_price_id()}}]}}
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         resp = _post(client, event)
     assert resp.status_code == 200
@@ -117,7 +123,7 @@ def test_checkout_completed_maps_basic_price_to_basic_plan(client):
             "subscription": "sub_1",
         }},
     }
-    mock_sub = {"items": {"data": [{"price": {"id": "price_basic_test"}}]}}
+    mock_sub = {"items": {"data": [{"price": {"id": _basic_price_id()}}]}}
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         _post(client, event)
     with client.application.app_context():
