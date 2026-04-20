@@ -500,6 +500,9 @@ textarea { resize: vertical; min-height: 80px; }
       <a href="{{ url_for('admin_settings') }}" class="nav-link {% if request.endpoint == 'admin_settings' or request.endpoint == 'admin_reset_employee_password' %}active{% endif %}">
         <span class="icon">⚙️</span> Settings
       </a>
+      <a href="{{ url_for('admin_subscription') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('admin_subscription') %}active{% endif %}">
+        <span class="icon">💳</span> Subscription
+      </a>
       {% endif %}
       {% if user.role == 'superadmin' %}
       <div class="nav-section">Platform</div>
