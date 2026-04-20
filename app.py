@@ -685,6 +685,7 @@ def owner_dashboard():
 @app.route("/owner/link", methods=["POST"])
 @owner_required
 def owner_link_store():
+    """Redeem an 8-char invite code to link the current owner to a store."""
     u = current_user()
     code = request.form.get("code", "").strip().upper()
     now = datetime.utcnow()
@@ -715,6 +716,7 @@ def owner_link_store():
 @app.route("/owner/unlink/<int:store_id>", methods=["POST"])
 @owner_required
 def owner_unlink_store(store_id):
+    """Remove an owner→store relationship. Does not affect store data itself."""
     u = current_user()
     link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first_or_404()
     db.session.delete(link)
@@ -732,6 +734,11 @@ def subscribe():
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
 def subscribe_checkout():
+    """Create a Stripe Checkout Session for the chosen plan and redirect there.
+
+    The webhook (checkout.session.completed) is what actually flips the store
+    onto the new plan — this route only initiates the payment flow.
+    """
     store = current_store()
     plan = request.form.get("plan", "").strip()
     price_map = {
@@ -936,6 +943,7 @@ def new_transfer():
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
 def edit_transfer(tid):
+    """Edit a transfer. Employees can only edit their own; admins can edit any."""
     user=current_user(); sid=session.get("store_id")
     if not sid:
         flash("Select a store first.","error"); return redirect(url_for("dashboard"))
@@ -1191,6 +1199,11 @@ def admin_edit_user(uid):
 @app.route("/admin/settings", methods=["GET", "POST"])
 @admin_required
 def admin_settings():
+    """Tabbed admin settings (store info / security / team / owner access).
+
+    The active tab comes from ?tab=… on GET and from the hidden _tab field on
+    POST. Each tab handles its own validation and stays put on errors.
+    """
     user = current_user()
     store = current_store()
     active_tab = request.args.get("tab", "store")
@@ -1293,6 +1306,7 @@ def admin_reset_employee_password(uid):
 @app.route("/admin/settings/owner/generate-code", methods=["POST"])
 @admin_required
 def admin_generate_owner_code():
+    """Mint a fresh 7-day invite code; expires any previous unused codes first."""
     store = current_store()
     now = datetime.utcnow()
     OwnerInviteCode.query.filter(
@@ -1367,6 +1381,11 @@ def superadmin_new_store():
 @app.route("/superadmin/impersonate/<int:store_id>")
 @superadmin_required
 def superadmin_impersonate(store_id):
+    """Swap the current session into the target store's admin user.
+
+    Used by the superadmin to debug a customer's view. There's no impersonation
+    audit log yet — be careful when using this in production.
+    """
     store=Store.query.get_or_404(store_id)
     admin=User.query.filter_by(store_id=store_id,role="admin").first()
     if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
@@ -1376,6 +1395,15 @@ def superadmin_impersonate(store_id):
 # ── Stripe webhook ───────────────────────────────────────────
 @app.route("/webhooks/stripe", methods=["POST"])
 def stripe_webhook():
+    """Stripe webhook receiver.
+
+    Handled events:
+      checkout.session.completed   — flip the store onto the new plan, store
+                                     Stripe IDs, clear any retention timer.
+      customer.subscription.deleted — mark the store inactive and start the
+                                     6-month data retention countdown.
+    Other event types are accepted (200 OK) but ignored.
+    """
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")

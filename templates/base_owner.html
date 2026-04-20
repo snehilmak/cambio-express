@@ -4,93 +4,24 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook — Owner{% endblock %}</title>
+<script>
+  (function(){
+    try{
+      var t = localStorage.getItem('theme');
+      if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+      if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+    }catch(e){}
+  })();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>
-:root {
-  --navy:#0f1f3d;--blue:#1a4080;--mid:#2a5caa;--sky:#3b82f6;
-  --gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--paper:#f3ede3;
-  --white:#ffffff;--gray1:#f5f5f7;--gray2:#e8e8ec;--gray3:#b0b4c0;
-  --gray4:#6b7280;--dark:#1a1a2e;--green:#16a34a;--red:#dc2626;
-  --orange:#ea580c;--yellow:#ca8a04;--sidebar-w:240px;
-}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--dark)}
-.layout{display:flex;min-height:100vh}
-.sidebar{width:var(--sidebar-w);background:var(--navy);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100;overflow-y:auto}
-.sidebar-logo{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,0.08)}
-.sidebar-logo .brand{font-family:'DM Serif Display',serif;font-size:18px;color:var(--gold2);line-height:1.2;letter-spacing:0.3px}
-.sidebar-logo .sub{font-size:11px;color:rgba(255,255,255,0.4);margin-top:3px;font-weight:300;letter-spacing:1px;text-transform:uppercase}
-.sidebar-user{padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.08)}
-.sidebar-user .uname{font-size:13px;font-weight:600;color:var(--white);line-height:1}
-.sidebar-user .urole{font-size:11px;color:var(--gold);margin-top:3px;text-transform:uppercase;letter-spacing:0.8px}
-.sidebar-nav{flex:1;padding:12px 0}
-.nav-section{font-size:10px;color:rgba(255,255,255,0.3);letter-spacing:1.2px;text-transform:uppercase;padding:16px 20px 6px}
-.nav-link{display:flex;align-items:center;gap:10px;padding:10px 20px;color:rgba(255,255,255,0.65);text-decoration:none;font-size:13.5px;font-weight:400;transition:all 0.15s;border-left:3px solid transparent}
-.nav-link:hover{color:var(--white);background:rgba(255,255,255,0.06)}
-.nav-link.active{color:var(--gold2);border-left-color:var(--gold);background:rgba(201,151,58,0.08)}
-.nav-link .icon{font-size:16px;width:20px;text-align:center}
-.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,0.08)}
-.sidebar-footer a{font-size:12px;color:rgba(255,255,255,0.4);text-decoration:none;display:flex;align-items:center;gap:8px}
-.sidebar-footer a:hover{color:rgba(255,255,255,0.7)}
-.main{margin-left:var(--sidebar-w);flex:1;display:flex;flex-direction:column;min-height:100vh}
-.topbar{background:var(--white);border-bottom:1px solid var(--gray2);padding:0 32px;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
-.topbar-title{font-family:'DM Serif Display',serif;font-size:20px;color:var(--navy)}
-.topbar-date{font-size:12px;color:var(--gray4);font-family:'JetBrains Mono',monospace}
-.content{padding:32px;flex:1}
-.card{background:var(--white);border-radius:12px;border:1px solid var(--gray2);overflow:hidden}
-.card-header{padding:18px 24px;border-bottom:1px solid var(--gray2);display:flex;align-items:center;justify-content:space-between}
-.card-title{font-weight:600;font-size:15px;color:var(--navy)}
-.card-body{padding:24px}
-.stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-bottom:28px}
-.stat-card{background:var(--white);border-radius:12px;border:1px solid var(--gray2);padding:20px 22px;position:relative;overflow:hidden}
-.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent,var(--sky))}
-.stat-label{font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.8px;font-weight:500}
-.stat-value{font-family:'DM Serif Display',serif;font-size:30px;color:var(--navy);margin-top:6px;line-height:1}
-.stat-sub{font-size:12px;color:var(--gray4);margin-top:6px}
-.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;letter-spacing:0.3px}
-.badge-green{background:#dcfce7;color:#15803d}
-.badge-blue{background:#dbeafe;color:#1d4ed8}
-.badge-gray{background:var(--gray2);color:var(--gray4)}
-.badge-navy{background:var(--navy);color:var(--gold2)}
-.btn{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer;border:none;text-decoration:none;transition:all 0.15s;font-family:'DM Sans',sans-serif}
-.btn-primary{background:var(--blue);color:var(--white)}
-.btn-primary:hover{background:var(--mid)}
-.btn-outline{background:transparent;color:var(--blue);border:1.5px solid var(--blue)}
-.btn-outline:hover{background:var(--blue);color:var(--white)}
-.btn-sm{padding:6px 12px;font-size:12px}
-.btn-danger{background:var(--red);color:var(--white)}
-.field{display:flex;flex-direction:column;gap:6px}
-label{font-size:12px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:0.6px}
-input,select{padding:10px 14px;border:1.5px solid var(--gray2);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--dark);background:var(--white);transition:border-color 0.15s;width:100%}
-input:focus,select:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-.flash{padding:12px 18px;border-radius:8px;margin-bottom:20px;font-size:14px;font-weight:500}
-.flash-success{background:#dcfce7;color:#15803d;border:1px solid #bbf7d0}
-.flash-error{background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
-.flash-info{background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe}
-.mt-2{margin-top:16px}.mt-3{margin-top:24px}.mb-2{margin-bottom:16px}.mb-3{margin-bottom:24px}
-.flex{display:flex}.items-center{align-items:center}.gap-2{gap:8px}.gap-3{gap:16px}
-.justify-between{justify-content:space-between}.ml-auto{margin-left:auto}
-.text-sm{font-size:12px}.text-muted{color:var(--gray4)}
-.amount-pos{color:var(--green);font-weight:600}
-.amount-neg{color:var(--red);font-weight:600}
-@media(max-width:900px){
-  .sidebar{transform:translateX(-100%);transition:transform 0.25s ease}
-  .sidebar.open{transform:translateX(0)}
-  .main{margin-left:0}
-  .topbar{padding:0 16px;height:56px}
-  .content{padding:16px}
-  .stats-grid{grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px}
-}
-@media(max-width:480px){
-  .stats-grid{grid-template-columns:1fr}
-  .content{padding:12px}
-}
-</style>
+<link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
 {% block head %}{% endblock %}
 </head>
 <body>
 <div class="layout">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
+    <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
     <div class="sidebar-logo">
       <div class="brand">DineroBook</div>
       <div class="sub">Owner Portal</div>
@@ -100,19 +31,53 @@ input:focus,select:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3
       <div class="urole">Owner</div>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-section">Overview</div>
+      <div class="nav-section">Workspace</div>
       <a href="{{ url_for('owner_dashboard') }}" class="nav-link {% if request.endpoint == 'owner_dashboard' %}active{% endif %}">
         <span class="icon">⬛</span> Dashboard
       </a>
     </nav>
-    <div class="sidebar-footer">
-      <a href="{{ url_for('logout') }}">&#x2192; Sign out</a>
-    </div>
   </aside>
+
   <div class="main">
     <div class="topbar">
-      <div class="topbar-title">{% block page_title %}{% endblock %}</div>
-      <div class="topbar-date" id="topbar-date"></div>
+      <div style="display:flex;align-items:center;min-width:0;">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
+      </div>
+      <div class="topbar-right">
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </button>
+        <span class="topbar-date" id="clock"></span>
+        {% set _name = (user.full_name or user.username or '?') %}
+        {% set _parts = _name.split() %}
+        {% if _parts|length > 1 %}
+          {% set _initials = (_parts[0][0] ~ _parts[-1][0])|upper %}
+        {% else %}
+          {% set _initials = _name[:2]|upper %}
+        {% endif %}
+        <div class="user-menu">
+          <button type="button" class="user-avatar" id="userAvatar"
+                  aria-haspopup="true" aria-expanded="false"
+                  aria-label="Account menu" title="{{ _name }}">{{ _initials }}</button>
+          <div class="user-dropdown" id="userDropdown" role="menu" hidden>
+            <div class="user-info">
+              <div class="nm">{{ _name }}</div>
+              <div class="rl">Owner</div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="dropdown-item" role="menuitem">
+              <span class="icon">🚪</span> Sign out
+            </a>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="content">
       {% with messages = get_flashed_messages(with_categories=true) %}
@@ -125,9 +90,54 @@ input:focus,select:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3
   </div>
 </div>
 <script>
-var d=new Date();
-var el=document.getElementById('topbar-date');
-if(el){el.textContent=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});}
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}) +
+      ' · ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+  }
+  updateClock(); setInterval(updateClock, 30000);
+
+  (function() {
+    var sidebar = document.getElementById('sidebar');
+    var backdrop = document.getElementById('sidebarBackdrop');
+    var toggle = document.getElementById('menuToggle');
+    var close = document.getElementById('sidebarClose');
+    function open() { sidebar.classList.add('open'); document.body.classList.add('nav-open'); }
+    function shut() { sidebar.classList.remove('open'); document.body.classList.remove('nav-open'); }
+    if (toggle) toggle.addEventListener('click', open);
+    if (close) close.addEventListener('click', shut);
+    if (backdrop) backdrop.addEventListener('click', shut);
+    if (sidebar) sidebar.addEventListener('click', function(e) {
+      var a = e.target.closest('a');
+      if (a && window.innerWidth <= 900) shut();
+    });
+    window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
+
+    var themeBtn = document.getElementById('themeToggle');
+    if (themeBtn) themeBtn.addEventListener('click', function() {
+      var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+      var next = cur === 'dark' ? 'light' : 'dark';
+      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      else document.documentElement.removeAttribute('data-theme');
+      try { localStorage.setItem('theme', next); } catch(e) {}
+    });
+
+    var avatar = document.getElementById('userAvatar');
+    var dropdown = document.getElementById('userDropdown');
+    if (avatar && dropdown) {
+      function closeMenu() { dropdown.setAttribute('hidden', ''); avatar.setAttribute('aria-expanded', 'false'); }
+      function openMenu()  { dropdown.removeAttribute('hidden');  avatar.setAttribute('aria-expanded', 'true'); }
+      avatar.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (dropdown.hasAttribute('hidden')) openMenu(); else closeMenu();
+      });
+      document.addEventListener('click', function(e) {
+        if (!dropdown.contains(e.target) && e.target !== avatar) closeMenu();
+      });
+      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMenu(); });
+    }
+  })();
 </script>
 {% block scripts %}{% endblock %}
 </body>

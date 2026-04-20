@@ -5,49 +5,77 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Owner Sign Up — DineroBook</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
 <style>
-:root{--navy:#0f1f3d;--blue:#1a4080;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray2:#e8e8ec;--gray4:#6b7280;--dark:#1a1a2e;--red:#dc2626;--sky:#3b82f6}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:var(--cream);min-height:100vh;display:flex;flex-direction:column}
-nav{background:var(--navy);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between}
-.nav-brand{font-family:'DM Serif Display',serif;color:var(--gold2);font-size:18px;text-decoration:none}
-.nav-login{color:rgba(255,255,255,0.55);font-size:13px;text-decoration:none}
-.nav-login:hover{color:white}
-.page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
-.card{background:var(--white);border-radius:16px;border:1px solid var(--gray2);padding:40px 44px;width:100%;max-width:460px;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
-.owner-badge{display:inline-flex;align-items:center;gap:6px;background:#dbeafe;color:#1d4ed8;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:22px}
-.card-title{font-family:'DM Serif Display',serif;font-size:26px;color:var(--navy);margin-bottom:6px}
-.card-sub{font-size:13.5px;color:var(--gray4);margin-bottom:28px}
-.field{margin-bottom:18px}
-label{display:block;font-size:11px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px}
-input{width:100%;padding:11px 14px;border:1.5px solid var(--gray2);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--dark);transition:border-color .15s}
-input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-input.has-error{border-color:var(--red)}
-.error-msg{font-size:12px;color:var(--red);margin-top:5px}
-.submit-btn{width:100%;background:var(--gold);color:white;border:none;padding:13px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;transition:background .15s}
-.submit-btn:hover{background:var(--gold2);color:var(--navy)}
-.login-prompt{text-align:center;margin-top:20px;font-size:13px;color:var(--gray4)}
-.login-prompt a{color:var(--blue);text-decoration:none;font-weight:500}
-@media(max-width:600px){
-  nav{padding:0 16px;height:56px}
-  .page{padding:24px 14px}
-  .card{padding:28px 22px;border-radius:14px}
-  .card-title{font-size:22px}
-  input{font-size:16px;padding:12px 14px}
-  .submit-btn{padding:14px;font-size:15px}
-}
+  /* Logged-out auth layout: top nav bar + centered card. */
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  .auth-nav {
+    background: var(--navy); padding: 0 40px; height: 60px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .auth-nav .brand {
+    font-family: 'DM Serif Display', serif;
+    color: var(--gold2); font-size: 18px; text-decoration: none;
+  }
+  .auth-nav .login-link { color: rgba(255,255,255,0.55); font-size: 13px; text-decoration: none; }
+  .auth-nav .login-link:hover { color: white; }
+
+  .auth-page {
+    flex: 1; display: flex; align-items: center;
+    justify-content: center; padding: 48px 24px;
+  }
+  .auth-card {
+    background: var(--white); border-radius: 16px;
+    border: 1px solid var(--gray2); padding: 40px 44px;
+    width: 100%; max-width: 460px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  }
+  .auth-card .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--blue-bg); color: var(--blue-dark);
+    border-radius: 999px; padding: 4px 12px;
+    font-size: 12px; font-weight: 600; margin-bottom: 22px;
+  }
+  .auth-card h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 26px; color: var(--navy); margin-bottom: 6px;
+  }
+  .auth-card .sub { font-size: 13.5px; color: var(--gray4); margin-bottom: 28px; }
+  .auth-card .field { margin-bottom: 18px; }
+  .auth-card input.has-error { border-color: var(--red); }
+  .auth-card .error-msg { font-size: 12px; color: var(--red); margin-top: 5px; }
+  .auth-card .submit-btn {
+    width: 100%; background: var(--gold); color: white;
+    border: none; padding: 13px; border-radius: 8px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif; margin-top: 8px;
+    transition: background 0.15s;
+  }
+  .auth-card .submit-btn:hover { background: var(--gold2); color: var(--navy); }
+  .auth-card .login-prompt {
+    text-align: center; margin-top: 20px;
+    font-size: 13px; color: var(--gray4);
+  }
+  .auth-card .login-prompt a { color: var(--blue); text-decoration: none; font-weight: 500; }
+
+  @media (max-width: 600px) {
+    .auth-nav { padding: 0 16px; height: 56px; }
+    .auth-page { padding: 24px 14px; }
+    .auth-card { padding: 28px 22px; border-radius: 14px; }
+    .auth-card h1 { font-size: 22px; }
+  }
 </style>
 </head>
 <body>
-<nav>
-  <a href="/" class="nav-brand">DineroBook</a>
-  <a href="/login" class="nav-login">Already have an account? Sign in</a>
+<nav class="auth-nav">
+  <a href="/" class="brand">DineroBook</a>
+  <a href="/login" class="login-link">Already have an account? Sign in</a>
 </nav>
-<div class="page">
-  <div class="card">
-    <div class="owner-badge">&#9733; Multi-Store Owner Account</div>
-    <div class="card-title">Create owner account</div>
-    <div class="card-sub">Manage multiple store locations from one login.</div>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="pill">★ Multi-Store Owner Account</div>
+    <h1>Create owner account</h1>
+    <div class="sub">Manage multiple store locations from one login.</div>
     <form method="POST" action="/signup/owner">
       <div class="field">
         <label>Full Name</label>
@@ -78,7 +106,7 @@ input.has-error{border-color:var(--red)}
           <div class="error-msg">{{ errors.password }}</div>
         {% endif %}
       </div>
-      <button type="submit" class="submit-btn">Create Owner Account &rarr;</button>
+      <button type="submit" class="submit-btn">Create Owner Account →</button>
     </form>
     <div class="login-prompt">Already have an account? <a href="/login">Sign in</a></div>
     <div class="login-prompt" style="margin-top:10px;">Managing a single store? <a href="/signup">Sign up as a store</a></div>
