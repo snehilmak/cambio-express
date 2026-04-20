@@ -1212,9 +1212,11 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 def api_customers_search():
     """Autocomplete endpoint for the sender field on the transfer form.
 
-    Searches by phone number OR address OR name within the current store and
-    returns up to 10 matches. Scoped via the session so one store can never
-    see another store's customers.
+    Searches by phone number OR name within the current store and returns
+    up to 10 matches. Address is not a search key — too long/ambiguous to be
+    a useful lookup — but it rides along in the result so the dropdown can
+    still auto-fill it when the cashier picks a match. Scoped via the
+    session so one store can never see another store's customers.
     """
     sid = session.get("store_id")
     if not sid:
@@ -1227,7 +1229,6 @@ def api_customers_search():
             .filter(Customer.store_id == sid)
             .filter(db.or_(
                 Customer.phone_number.ilike(like),
-                Customer.address.ilike(like),
                 Customer.full_name.ilike(like),
             ))
             .order_by(Customer.updated_at.desc())
