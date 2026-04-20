@@ -426,6 +426,8 @@ def test_admin_owner_access_tab_shows_active_code(logged_in_client):
     logged_in_client.post("/admin/settings/owner/generate-code")
     rv = logged_in_client.get("/admin/settings?tab=owner")
     assert rv.status_code == 200
+    assert b'id="owner-code"' in rv.data
+    assert b"Copy" in rv.data
 
 
 def test_admin_remove_owner_access(logged_in_client):

@@ -243,10 +243,15 @@ function closeReset() {
   document.getElementById('reset-modal').style.display = 'none';
 }
 function copyOwnerCode() {
-  var el = document.getElementById('owner-code');
-  el.select();
-  document.execCommand('copy');
-  alert('Invite code copied!');
+  var val = document.getElementById('owner-code').value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(function() { alert('Invite code copied!'); });
+  } else {
+    var el = document.getElementById('owner-code');
+    el.select();
+    document.execCommand('copy');
+    alert('Invite code copied!');
+  }
 }
 </script>
 {% endblock %}

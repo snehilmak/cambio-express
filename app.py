@@ -1168,10 +1168,15 @@ def admin_generate_owner_code():
     ).update({"expires_at": now})
     db.session.flush()
     alphabet = string.ascii_uppercase + string.digits
-    while True:
-        code = "".join(secrets.choice(alphabet) for _ in range(8))
-        if not OwnerInviteCode.query.filter_by(code=code).first():
+    code = None
+    for _ in range(10):
+        candidate = "".join(secrets.choice(alphabet) for _ in range(8))
+        if not OwnerInviteCode.query.filter_by(code=candidate).first():
+            code = candidate
             break
+    if code is None:
+        flash("Could not generate a unique code. Please try again.", "error")
+        return redirect(url_for("admin_settings", tab="owner"))
     invite = OwnerInviteCode(
         store_id=store.id,
         code=code,
@@ -1189,10 +1194,12 @@ def admin_generate_owner_code():
 def admin_remove_owner_access():
     store = current_store()
     owner_id = request.form.get("owner_id", type=int)
-    if owner_id:
-        StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=owner_id).delete()
-        db.session.commit()
-        flash("Owner access removed.", "success")
+    if not owner_id:
+        flash("Invalid request.", "error")
+        return redirect(url_for("admin_settings", tab="owner"))
+    StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=owner_id).delete()
+    db.session.commit()
+    flash("Owner access removed.", "success")
     return redirect(url_for("admin_settings", tab="owner"))
 
 
