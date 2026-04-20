@@ -52,11 +52,19 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
    (`checkout.session.completed`) we clear it. `purge_expired_stores()`
    cascades through every per-store table (`_STORE_OWNED_MODELS`) before
    deleting the `Store` row. Add new per-store models to that list.
-5. **Customer upsert** — `find_or_upsert_customer()` is the only path
-   that creates or updates `Customer` rows from the transfer form.
-   Lookup order: explicit `customer_id` → `(store, phone_country,
-   phone_number)` → else create. Newest values overwrite. Do not add
-   ad-hoc Customer creation elsewhere.
+5. **Customer upsert (owner umbrella scope)** —
+   `find_or_upsert_customer()` is the only path that creates or updates
+   `Customer` rows from the transfer form. Lookup order:
+   1. explicit `customer_id` (only reused if the target customer lives
+      in a sibling store — the current store's owner umbrella);
+   2. `(phone_country, phone_number)` across **every store that shares
+      an owner with the current store** via `sibling_store_ids()` —
+      so a cashier at Store B finds the sender that Store A logged;
+   3. else create a new record pinned to the current `store_id`.
+   A Customer row always stays pinned to its home store; transfers at
+   sibling stores just point `customer_id` at it (no duplication). Newest
+   values overwrite — edits from anywhere in the umbrella propagate.
+   Unrelated stores (no owner overlap) remain fully isolated.
 6. **Feature flags** — `store_feature_enabled(store, key)` resolves
    per-store override → global default → **fail-open** (undeclared flag
    returns True). New optional features should gate on a flag named
