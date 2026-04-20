@@ -925,12 +925,7 @@ def server_error(e):
 def init_db():
     with app.app_context():
         db.create_all()
-        # ONE-TIME MIGRATION: add trial columns to existing production databases
-        with db.engine.connect() as _conn:
-            _conn.execute(db.text("ALTER TABLE store ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMP"))
-            _conn.execute(db.text("ALTER TABLE store ADD COLUMN IF NOT EXISTS grace_ends_at TIMESTAMP"))
-            _conn.commit()
-        if not User.query.filter_by(username="superadmin",store_id=None).first():
+if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
             print("✅ Superadmin: superadmin / super2025!")
