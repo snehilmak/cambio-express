@@ -18,6 +18,48 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
 
+      # ── Stripe ───────────────────────────────────────────────
+      # These are required for billing (subscribe + cancel) and for the
+      # new bank-sync flow via Stripe Financial Connections.
+      # `sync: false` means Render does NOT use a value from this file —
+      # instead it prompts you to enter the secret in the dashboard.
+      # Where to find each value:
+      #   STRIPE_SECRET_KEY  → Stripe → Developers → API keys → Secret key
+      #                         (starts with sk_test_ in test mode, sk_live_ in live)
+      #   STRIPE_WEBHOOK_SECRET → Stripe → Developers → Webhooks → your
+      #                         endpoint → "Signing secret" (starts whsec_)
+      #   STRIPE_BASIC_PRICE_ID / STRIPE_PRO_PRICE_ID → Stripe → Products →
+      #                         your plan → Pricing → copy the price ID
+      #                         (starts price_)
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_BASIC_PRICE_ID
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+
+      # ── SMTP for password reset emails ───────────────────────
+      # Until these are set, /forgot-password still works — it just logs
+      # the reset URL at WARNING level instead of emailing. Gmail + app
+      # password is the quickest option:
+      #   SMTP_HOST = smtp.gmail.com
+      #   SMTP_PORT = 587
+      #   SMTP_USER = dinerobook26@gmail.com
+      #   SMTP_PASS = <16-char Google App Password, NOT your login>
+      #   SMTP_FROM = dinerobook26@gmail.com
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+
 databases:
   - name: dinerobook-db
     plan: free          # upgrade to starter ($7/mo) for production

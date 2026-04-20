@@ -119,6 +119,45 @@
           <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
         </button>
         <span class="topbar-date" id="clock"></span>
+
+        {# Referral crown — visible only when the context processor populated
+           my_referral_code (admin + paid plan). Click to open a small
+           dropdown with the code + copy + a link to the full page. #}
+        {% if my_referral_code %}
+        <div class="user-menu" id="refCrownWrap">
+          <button type="button" id="refCrownBtn"
+                  class="ref-crown"
+                  aria-haspopup="true" aria-expanded="false"
+                  aria-label="Referral code"
+                  title="Earn $100 — share your referral code">
+            <svg class="crown" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M3 17h18l-1.5-9-4.5 3.5L12 5l-3 6.5L4.5 8 3 17zm0 2h18v2H3v-2z"/>
+            </svg>
+            <span class="ref-badge">$100</span>
+          </button>
+          <div class="user-dropdown ref-dropdown" id="refCrownDropdown" role="menu" hidden>
+            <div class="user-info" style="padding:14px 16px;">
+              <div style="font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.6px;">Your referral code</div>
+              <div id="refCrownCode"
+                   style="font-family:'JetBrains Mono',monospace;font-size:22px;
+                          color:var(--navy);letter-spacing:2px;margin-top:4px;">
+                {{ my_referral_code }}
+              </div>
+              <div style="font-size:12px;color:var(--gray4);margin-top:6px;line-height:1.5;">
+                Share with a friend: they get <strong>$50 off</strong>,
+                you get <strong>$100 off</strong> the moment they subscribe.
+              </div>
+            </div>
+            <button type="button" class="dropdown-item" id="refCrownCopy" role="menuitem">
+              <span class="icon">📋</span> Copy code
+            </button>
+            <a href="{{ url_for('admin_referrals') }}" class="dropdown-item" role="menuitem">
+              <span class="icon">👑</span> See details &amp; history
+            </a>
+          </div>
+        </div>
+        {% endif %}
+
         {% set _name = (user.full_name or user.username or '?') %}
         {% set _parts = _name.split() %}
         {% if _parts|length > 1 %}
@@ -237,6 +276,51 @@
       });
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') closeMenu();
+      });
+    }
+
+    // Referral crown — same open/close pattern as the user avatar.
+    var crown = document.getElementById('refCrownBtn');
+    var crownDrop = document.getElementById('refCrownDropdown');
+    var crownCopy = document.getElementById('refCrownCopy');
+    var crownCode = document.getElementById('refCrownCode');
+    if (crown && crownDrop) {
+      function rcClose() {
+        crownDrop.setAttribute('hidden', '');
+        crown.setAttribute('aria-expanded', 'false');
+      }
+      function rcOpen() {
+        crownDrop.removeAttribute('hidden');
+        crown.setAttribute('aria-expanded', 'true');
+      }
+      crown.addEventListener('click', function(e) {
+        e.stopPropagation();
+        if (crownDrop.hasAttribute('hidden')) rcOpen(); else rcClose();
+      });
+      document.addEventListener('click', function(e) {
+        if (!crownDrop.contains(e.target) && e.target !== crown) rcClose();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') rcClose();
+      });
+    }
+    if (crownCopy && crownCode) {
+      crownCopy.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var code = crownCode.textContent.trim();
+        var done = function() {
+          var orig = crownCopy.innerHTML;
+          crownCopy.innerHTML = '<span class="icon">✓</span> Copied!';
+          setTimeout(function() { crownCopy.innerHTML = orig; }, 1200);
+        };
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(code).then(done);
+        } else {
+          var ta = document.createElement('textarea');
+          ta.value = code; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } finally { ta.remove(); }
+          done();
+        }
       });
     }
   })();

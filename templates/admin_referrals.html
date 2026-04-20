@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block title %}Referrals — DineroBook{% endblock %}
+{% block page_title %}Referrals{% endblock %}
+{% block head %}
+<style>
+  /* Hero panel that shows the code + share link. Dark navy hero matches
+     the Billing page's Current Plan card. */
+  .ref-hero {
+    background: var(--navy); color: var(--white);
+    border-radius: 12px; padding: 28px;
+    margin-bottom: 24px;
+  }
+  .ref-hero .label {
+    font-size: 11px; letter-spacing: 1.2px; text-transform: uppercase;
+    color: var(--gold2); font-weight: 600;
+  }
+  .ref-hero .code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 40px; color: var(--gold2); margin-top: 6px;
+    letter-spacing: 3px;
+  }
+  .ref-hero .meta {
+    margin-top: 14px; font-size: 13.5px; color: rgba(255,255,255,0.75);
+    line-height: 1.55;
+  }
+  .ref-hero .share-row {
+    margin-top: 18px; display: flex; gap: 10px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .ref-hero .share-input {
+    flex: 1; min-width: 240px;
+    background: rgba(255,255,255,0.08); color: var(--white);
+    border: 1px solid rgba(255,255,255,0.25);
+    padding: 10px 14px; border-radius: 8px; font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .ref-hero .btn-gold-on-dark {
+    background: var(--gold); color: var(--white); border: none;
+    padding: 10px 18px; border-radius: 8px;
+    font-size: 13.5px; font-weight: 600; cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .ref-hero .btn-gold-on-dark:hover { background: var(--gold2); color: var(--navy); }
+  .ref-stats {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px; margin-bottom: 24px;
+  }
+  /* Simple one-off "how it works" box. */
+  .how-box {
+    background: var(--gray1); border-left: 3px solid var(--gold);
+    border-radius: 6px; padding: 14px 18px;
+    font-size: 13.5px; line-height: 1.6; color: var(--dark);
+    margin-bottom: 24px;
+  }
+  [data-theme="dark"] .how-box { background: #232838; color: #e5e7eb; }
+</style>
+{% endblock %}
+{% block content %}
+
+{# Big hero with the code. One-click copy for the code and the share link. #}
+<div class="ref-hero">
+  <div class="label">Your referral code</div>
+  <div class="code" id="ref-code">{{ referral.code }}</div>
+  <div class="meta">
+    Share this with friends who run a money-service business. When they
+    sign up and subscribe, <strong>they get ${{ '%.0f'|format(referral.reward_referee_cents/100) }} off</strong>
+    their first paid month and <strong>you get ${{ '%.0f'|format(referral.reward_self_cents/100) }} off</strong>
+    yours — applied automatically to your next invoice as a credit.
+  </div>
+  <div class="share-row">
+    <input type="text" class="share-input" id="share-url" readonly
+           value="{{ share_url }}">
+    <button type="button" class="btn-gold-on-dark" id="copy-code">Copy code</button>
+    <button type="button" class="btn-gold-on-dark" id="copy-link">Copy link</button>
+  </div>
+</div>
+
+<div class="ref-stats">
+  <div class="stat-card" style="--accent:var(--gold)">
+    <div class="stat-label">Successful referrals</div>
+    <div class="stat-value">{{ referral.redeemed_count or 0 }}</div>
+    <div class="stat-sub">converted to paid</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--green)">
+    <div class="stat-label">Credits earned</div>
+    <div class="stat-value">${{ '%.2f'|format((credits_earned_cents or 0) / 100) }}</div>
+    <div class="stat-sub">applied to your Stripe balance</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--navy)">
+    <div class="stat-label">Status</div>
+    <div class="stat-value" style="font-size:18px;margin-top:10px;">
+      {% if referral.is_active %}<span class="badge badge-green">Active</span>
+      {% else %}<span class="badge badge-gray">Disabled</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="how-box">
+  <strong>How it works.</strong>
+  Give the code (or the link) to anyone signing up.
+  Their $50 posts the moment they start a paid plan; your $100
+  posts the same moment. Credits apply to your next invoice via
+  Stripe's customer-balance system — no coupon codes to redeem,
+  no accounting from your side.
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">History</span>
+    <span class="text-sm text-muted">{{ redemptions|length }} redemption{{ 's' if redemptions|length != 1 else '' }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Referred store</th>
+          <th>Your $100</th>
+          <th>Their $50</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in redemptions %}
+        <tr>
+          <td class="mono text-sm">{{ r.redeemed_at.strftime('%Y-%m-%d') }}</td>
+          <td>
+            {# Linked referee store name when available — otherwise show the store id. #}
+            {% set rs = r.referee_store_id %}
+            {{ rs }}
+          </td>
+          <td>
+            {% if r.self_credit_applied_at %}
+              <span class="badge badge-green">Credited</span>
+              <span class="text-sm text-muted mono">{{ r.stripe_self_txn_id }}</span>
+            {% else %}
+              <span class="badge badge-yellow">Pending</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.referee_credit_applied_at %}
+              <span class="badge badge-green">Credited</span>
+            {% else %}
+              <span class="badge badge-yellow">Pending</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        {% if not redemptions %}
+        <tr>
+          <td colspan="4" class="empty-state" style="padding:22px;">
+            No referrals yet. Share your code above — your first credit
+            posts the moment someone subscribes.
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+  // Reuse the system clipboard when available, fall back to execCommand
+  // so older browsers on the cashier's laptop still work.
+  function copy(text) {
+    if (navigator.clipboard) return navigator.clipboard.writeText(text);
+    var ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } finally { ta.remove(); }
+    return Promise.resolve();
+  }
+  function flash(btn, label) {
+    var orig = btn.textContent; btn.textContent = label;
+    setTimeout(function() { btn.textContent = orig; }, 1400);
+  }
+  var codeBtn = document.getElementById('copy-code');
+  var linkBtn = document.getElementById('copy-link');
+  if (codeBtn) codeBtn.addEventListener('click', function() {
+    copy(document.getElementById('ref-code').textContent.trim());
+    flash(codeBtn, 'Copied!');
+  });
+  if (linkBtn) linkBtn.addEventListener('click', function() {
+    copy(document.getElementById('share-url').value);
+    flash(linkBtn, 'Copied!');
+  });
+})();
+</script>
+{% endblock %}

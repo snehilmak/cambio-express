@@ -45,6 +45,17 @@ class Store(db.Model):
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
     companies     = db.Column(db.String(500), default="")
+    # Referral: the ReferralCode this store used when signing up (if any).
+    # Set once at signup from ?ref=<code>, never mutated afterwards. We
+    # use this on the first paid conversion to apply credits to both
+    # sides of the referral. `use_alter=True` breaks the Store↔ReferralCode
+    # dependency cycle during create_all / drop_all — the table is created
+    # without the FK first, then the FK is added via ALTER TABLE.
+    referred_by_code_id = db.Column(db.Integer,
+        db.ForeignKey("referral_code.id", use_alter=True,
+                      name="fk_store_referred_by_code"),
+        nullable=True)
+    referee_credit_applied_at = db.Column(db.DateTime, nullable=True)
 
 class User(db.Model):
     __tablename__ = "user"
@@ -443,6 +454,42 @@ class PasswordResetToken(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False)
     used_at    = db.Column(db.DateTime, nullable=True)
 
+class ReferralCode(db.Model):
+    """One code per store, minted the first time the store goes onto a
+    paid plan. The owner shares this code; every time a new store signs
+    up with it and then converts to paid:
+      - the owner gets `reward_self_cents` credited to their Stripe customer balance
+      - the referee gets `reward_referee_cents` credited to theirs
+    Credits only apply on the referee's *paid* conversion, not at trial —
+    keeps us from paying for signups that churn.
+    """
+    __tablename__ = "referral_code"
+    id                    = db.Column(db.Integer, primary_key=True)
+    code                  = db.Column(db.String(12), unique=True, nullable=False)
+    owner_store_id        = db.Column(db.Integer, db.ForeignKey("store.id"),
+                                      unique=True, nullable=False)
+    reward_self_cents     = db.Column(db.Integer, default=10000)  # $100
+    reward_referee_cents  = db.Column(db.Integer, default=5000)   # $50
+    is_active             = db.Column(db.Boolean, default=True)
+    redeemed_count        = db.Column(db.Integer, default=0)
+    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+
+class ReferralRedemption(db.Model):
+    """One row per new store that signed up with a referral code.
+    Flags track whether the Stripe customer-balance credit on each side
+    has been applied — so a webhook retry can't double-credit.
+    """
+    __tablename__ = "referral_redemption"
+    id                      = db.Column(db.Integer, primary_key=True)
+    referral_code_id        = db.Column(db.Integer, db.ForeignKey("referral_code.id"), nullable=False)
+    referee_store_id        = db.Column(db.Integer, db.ForeignKey("store.id"),
+                                        unique=True, nullable=False)
+    redeemed_at             = db.Column(db.DateTime, default=datetime.utcnow)
+    self_credit_applied_at  = db.Column(db.DateTime, nullable=True)
+    referee_credit_applied_at = db.Column(db.DateTime, nullable=True)
+    stripe_self_txn_id      = db.Column(db.String(60), default="")
+    stripe_referee_txn_id   = db.Column(db.String(60), default="")
+
 # ── Superadmin models ────────────────────────────────────────
 # Platform-level tables owned by the superadmin. None of these are
 # scoped to a single store so they're safe from the store purge job.
@@ -779,8 +826,23 @@ def inject_trial_context():
     if store and store.trial_ends_at:
         delta = store.trial_ends_at - datetime.utcnow()
         days_left = max(0, delta.days)
+    # The topbar crown reads `my_referral_code` directly — only filled in
+    # for admins on a paid plan so the button hides itself for trials and
+    # employees without any template-level conditional.
+    my_referral_code = ""
+    if (user.role == "admin"
+        and store is not None
+        and store.plan in ("basic", "pro")):
+        try:
+            rc = ReferralCode.query.filter_by(owner_store_id=store.id).first()
+            if rc is None:
+                rc = ensure_referral_code(store)
+                db.session.commit()
+            my_referral_code = rc.code if rc else ""
+        except Exception as e:
+            app.logger.warning(f"referral code lookup failed: {e}")
     return {"trial_status": status, "trial_days_left": days_left, "store": store,
-            "announcements": announcements}
+            "announcements": announcements, "my_referral_code": my_referral_code}
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
@@ -1051,6 +1113,118 @@ def push_test():
     n = send_push(u.id, "DineroBook", "Push notifications are working on this device.", url="/")
     return jsonify({"sent": n})
 
+# ── Referrals ────────────────────────────────────────────────
+REFERRAL_SELF_CENTS    = 10000   # $100 for the referrer
+REFERRAL_REFEREE_CENTS = 5000    # $50 for the new store
+
+def _new_referral_code():
+    """Mint an 8-char uppercase alphanumeric referral code, checking uniqueness.
+    Tries up to 12 times before giving up — that ceiling is effectively
+    unreachable at any realistic volume."""
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(12):
+        code = "".join(secrets.choice(alphabet) for _ in range(8))
+        if not ReferralCode.query.filter_by(code=code).first():
+            return code
+    raise RuntimeError("Could not mint a unique referral code")
+
+def ensure_referral_code(store):
+    """Return the store's ReferralCode, creating it on demand.
+
+    Admins only see the crown once they're on a paid plan, so call sites
+    should already have checked `store.plan in {basic, pro}` — we don't
+    enforce here (the superadmin / testing flows may want to pre-mint).
+    """
+    if not store:
+        return None
+    rc = ReferralCode.query.filter_by(owner_store_id=store.id).first()
+    if rc is not None:
+        return rc
+    rc = ReferralCode(
+        code=_new_referral_code(),
+        owner_store_id=store.id,
+        reward_self_cents=REFERRAL_SELF_CENTS,
+        reward_referee_cents=REFERRAL_REFEREE_CENTS,
+    )
+    db.session.add(rc); db.session.flush()
+    return rc
+
+def lookup_referral_code(raw):
+    """Return the active ReferralCode matching the raw input, or None.
+    Accepts either the code string or a URL like /signup?ref=ABC123."""
+    if not raw:
+        return None
+    code = raw.strip().upper()
+    if not code:
+        return None
+    rc = ReferralCode.query.filter_by(code=code, is_active=True).first()
+    return rc
+
+def apply_pending_referral_credits(referee_store):
+    """Called from the Stripe webhook when a store transitions to a paid
+    plan. If that store was referred AND hasn't been credited yet, apply
+    the referee's $50 to their Stripe balance and the referrer's $100
+    to theirs — recording a ReferralRedemption row so retries are safe.
+    """
+    if not referee_store or not referee_store.referred_by_code_id:
+        return
+    # Already credited on this store? bail — keeps webhook retries idempotent.
+    if referee_store.referee_credit_applied_at:
+        return
+    rc = db.session.get(ReferralCode, referee_store.referred_by_code_id)
+    if not rc or not rc.is_active:
+        return
+    owner = db.session.get(Store, rc.owner_store_id)
+    if not owner:
+        return
+    now = datetime.utcnow()
+    # Referee credit: must have stripe_customer_id by this point (webhook
+    # fires on checkout.session.completed, which also sets it upstream).
+    referee_txn_id = ""
+    if referee_store.stripe_customer_id and stripe_is_configured():
+        try:
+            txn = stripe.Customer.create_balance_transaction(
+                referee_store.stripe_customer_id,
+                amount=-abs(rc.reward_referee_cents),
+                currency="usd",
+                description=f"Referral credit — welcome! Used code {rc.code}",
+                metadata={"referral_code": rc.code, "side": "referee"},
+            )
+            referee_txn_id = getattr(txn, "id", "") or ""
+        except stripe.error.StripeError as e:
+            app.logger.warning(f"referee credit failed for store {referee_store.id}: {e}")
+    # Referrer credit (only when they have a Stripe customer, which they
+    # do since they're on a paid plan — but guard anyway).
+    self_txn_id = ""
+    if owner.stripe_customer_id and stripe_is_configured():
+        try:
+            txn = stripe.Customer.create_balance_transaction(
+                owner.stripe_customer_id,
+                amount=-abs(rc.reward_self_cents),
+                currency="usd",
+                description=f"Referral reward — {referee_store.name} just subscribed",
+                metadata={"referral_code": rc.code, "side": "referrer",
+                          "referee_store_id": str(referee_store.id)},
+            )
+            self_txn_id = getattr(txn, "id", "") or ""
+        except stripe.error.StripeError as e:
+            app.logger.warning(f"referrer credit failed for referrer {owner.id}: {e}")
+    # Record the redemption regardless of whether Stripe succeeded — so we
+    # don't double-post on a webhook retry. The txn_id is "" on failure,
+    # and the superadmin can reconcile manually.
+    db.session.add(ReferralRedemption(
+        referral_code_id=rc.id,
+        referee_store_id=referee_store.id,
+        self_credit_applied_at=now if self_txn_id else None,
+        referee_credit_applied_at=now if referee_txn_id else None,
+        stripe_self_txn_id=self_txn_id,
+        stripe_referee_txn_id=referee_txn_id,
+    ))
+    rc.redeemed_count = (rc.redeemed_count or 0) + 1
+    referee_store.referee_credit_applied_at = now
+    # Caller commits — keeps this function transactional alongside the
+    # plan transition that triggered it.
+
 # ── Login ────────────────────────────────────────────────────
 @app.route("/")
 def landing():
@@ -1231,12 +1405,18 @@ def signup():
         return redirect(url_for("dashboard"))
     errors = {}
     form = {}
+    # Support both ?ref=CODE on GET (shared link) and a form field on POST
+    # so the code survives if the page is reloaded after a validation error.
+    ref_raw = (request.form.get("ref_code")
+               or request.args.get("ref", "")).strip().upper()
+    ref = lookup_referral_code(ref_raw) if ref_raw else None
     if request.method == "POST":
         store_name = request.form.get("store_name", "").strip()
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
         phone = request.form.get("phone", "").strip()
-        form = {"store_name": store_name, "email": email, "phone": phone}
+        form = {"store_name": store_name, "email": email, "phone": phone,
+                "ref_code": ref_raw}
 
         if not store_name:
             errors["store_name"] = "Store name is required."
@@ -1246,6 +1426,12 @@ def signup():
             errors["password"] = "Password is required."
         elif len(password) < 8:
             errors["password"] = "Password must be at least 8 characters."
+        # A code that was typed / pasted but doesn't match any active one:
+        # don't hard-fail — that's a bad UX for a nice-to-have. We silently
+        # drop it and continue. The warning surface is the template's green
+        # banner only appearing when the code resolved.
+        if ref_raw and not ref:
+            app.logger.info(f"signup: invalid ref code '{ref_raw}' ignored")
 
         if not errors:
             existing = User.query.filter_by(username=email).filter(
@@ -1262,6 +1448,8 @@ def signup():
                 counter += 1
             s = Store(name=store_name, slug=slug, email=email,
                       phone=phone, plan="trial")
+            if ref:
+                s.referred_by_code_id = ref.id
             db.session.add(s)
             db.session.flush()
             s.trial_ends_at = datetime.utcnow() + timedelta(days=7)
@@ -1274,10 +1462,15 @@ def signup():
             session["user_id"] = u.id
             session["role"] = u.role
             session["store_id"] = s.id
-            flash("Welcome! Your 7-day free trial has started.", "success")
+            if ref:
+                flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
+                      "off your first paid month when you subscribe.", "success")
+            else:
+                flash("Welcome! Your 7-day free trial has started.", "success")
             return redirect(url_for("dashboard"))
 
-    return render_template("signup.html", errors=errors, form=form)
+    return render_template("signup.html", errors=errors, form=form,
+                           referral=ref, ref_code_raw=ref_raw)
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():
@@ -1508,6 +1701,40 @@ def subscribe_success():
     user = current_user()
     store = current_store()
     return render_template("subscribe_success.html", user=user, store=store)
+
+# ── Referrals (store-admin to new-store share + earn) ───────
+@app.route("/account/referrals")
+@admin_required
+def admin_referrals():
+    """Self-service view of the admin's own referral code + stats.
+
+    Paid plans only — the crown in the topbar is hidden on trial and the
+    webhook mints the code at the paid transition. If somehow a paid
+    admin arrives here without a code (e.g. they subscribed before this
+    feature shipped), lazily mint on the fly.
+    """
+    user  = current_user()
+    store = current_store()
+    if not store_has_paid_plan(store):
+        flash("Referrals unlock when your subscription is active.", "error")
+        return redirect(url_for("admin_subscription"))
+    rc = ensure_referral_code(store)
+    db.session.commit()
+    # Stats: total redemptions + total credits earned (from the history).
+    redemptions = (ReferralRedemption.query
+                   .filter_by(referral_code_id=rc.id)
+                   .order_by(ReferralRedemption.redeemed_at.desc())
+                   .all())
+    credits_earned_cents = sum(
+        rc.reward_self_cents for r in redemptions if r.self_credit_applied_at
+    )
+    share_url = url_for("signup", ref=rc.code, _external=True)
+    return render_template("admin_referrals.html",
+        user=user, store=store,
+        referral=rc, redemptions=redemptions,
+        credits_earned_cents=credits_earned_cents,
+        share_url=share_url,
+    )
 
 # ── Subscription management ──────────────────────────────────
 @app.route("/admin/subscription")
@@ -3270,6 +3497,14 @@ def stripe_webhook():
                 # Returning customer: clear cancellation + retention timer.
                 store.canceled_at = None
                 store.data_retention_until = None
+                # Referral flow: mint the referrer's own code so they get
+                # the topbar crown immediately, and apply any pending
+                # referee credit from the code they signed up with.
+                try:
+                    ensure_referral_code(store)
+                    apply_pending_referral_credits(store)
+                except Exception as e:
+                    app.logger.warning(f"referral hook error for store {store.id}: {e}")
                 db.session.commit()
 
     elif event["type"] == "customer.subscription.deleted":
@@ -3294,7 +3529,9 @@ _STORE_OWNED_MODELS = [
     # matters for cascade sanity.
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
     "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
-    "StoreEmployee", "OwnerInviteCode", "Customer", "User",
+    "StoreEmployee", "OwnerInviteCode", "Customer",
+    "ReferralCode", "ReferralRedemption",
+    "User",
 ]
 
 def purge_expired_stores():
@@ -3359,6 +3596,8 @@ _ADDED_COLUMNS = [
     # transfer form enforces a non-empty value for new saves.
     ("transfer", "employee_id",          "INTEGER NULL"),
     ("transfer", "employee_name",        "VARCHAR(120) DEFAULT ''"),
+    ("store",    "referred_by_code_id",  "INTEGER NULL"),
+    ("store",    "referee_credit_applied_at", "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():
