@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -922,6 +922,16 @@ def refresh_bank_balances(store):
     if updated:
         db.session.commit()
     return updated
+
+# ── PWA ──────────────────────────────────────────────────────
+# Service worker must be served from root so its default scope covers
+# every path. The file lives in /static/ but is routed here.
+@app.route("/sw.js")
+def service_worker():
+    resp = send_from_directory("static", "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
 
 # ── Login ────────────────────────────────────────────────────
 @app.route("/")

@@ -1,0 +1,26 @@
+{
+  "name": "DineroBook — MSB Manager",
+  "short_name": "DineroBook",
+  "description": "Log money transfers, track daily books, reconcile ACH batches, and monitor your MSB store from anywhere.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1f3d",
+  "theme_color": "#0f1f3d",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [
+    {
+      "src": "/static/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/logo-200.png",
+      "sizes": "200x200",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
