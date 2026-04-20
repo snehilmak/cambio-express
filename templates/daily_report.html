@@ -18,6 +18,51 @@
 .mt-table td{padding:7px 12px;border-bottom:1px solid var(--gray2);vertical-align:middle;}
 .mt-table td input{text-align:right;width:110px;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;}
 .mt-table tfoot td{background:var(--gray1);font-weight:700;font-family:'JetBrains Mono',monospace;text-align:right;}
+
+/* ── Inline Drops disclosure ──────────────────────────────
+   The outside_cash_drops field-row IS the <summary>. Clicking the row
+   expands the add-form + drops list below it, so there's no separate
+   card at the bottom. Default disclosure marker is hidden; we show our
+   own caret on the label that rotates when open. */
+.drops-disclosure summary { list-style: none; cursor: pointer; }
+.drops-disclosure summary::-webkit-details-marker { display: none; }
+.drops-disclosure summary .field-row:hover { background: var(--gray1); }
+.drops-caret { color: var(--gray4); margin-left: 6px; display: inline-block; transition: transform 0.15s; }
+.drops-disclosure[open] .drops-caret { transform: rotate(90deg); }
+.drops-count { font-size: 11px; color: var(--gray4); margin-left: 6px; }
+
+.drops-panel {
+  background: var(--gray1);
+  border-bottom: 1px solid var(--gray2);
+  padding: 14px 16px;
+}
+[data-theme="dark"] .drops-panel { background: rgba(255,255,255,0.03); border-bottom-color: #2a3044; }
+.drops-add-row {
+  display: flex; gap: 10px; align-items: flex-end;
+  flex-wrap: wrap; margin-bottom: 10px;
+}
+.drops-add-row .field { margin-bottom: 0; }
+.drops-err {
+  background: var(--red-bg); color: var(--red-dark);
+  border: 1px solid var(--red-border); border-radius: 6px;
+  padding: 8px 12px; font-size: 12.5px; margin-bottom: 10px;
+}
+.drops-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.drops-table th {
+  padding: 6px 10px; background: transparent;
+  color: var(--gray4); font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  border-bottom: 1px solid var(--gray2); text-align: left;
+}
+.drops-table td {
+  padding: 6px 10px; border-bottom: 1px solid var(--gray2);
+  vertical-align: middle;
+}
+.drops-table tbody tr:last-child td { border-bottom: none; }
+.drops-empty-cell {
+  text-align: center; color: var(--gray4);
+  font-size: 12.5px; padding: 12px !important;
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -80,23 +125,76 @@
     </div>
     {% endfor %}
 
-    {# Outside Cash & Drops is read-only — computed from DailyDrop line items
-       entered in the Drops card below. The server always overrides whatever
-       this field might send, so the readonly attribute is UI-only. #}
-    <div class="field-row">
-      <span class="field-label">
-        Outside Cash & Drops
-        <span style="font-size:11px;color:var(--gray4);margin-left:6px;">(from drops below)</span>
-      </span>
-      <div class="field-input">
-        <input type="number" step="0.01" min="0" name="outside_cash_drops"
-          id="outside_cash_drops_field"
-          value="{{ '%.2f'|format(drops_total or 0) }}"
-          readonly
-          style="background:var(--gray1);color:var(--gray4);cursor:not-allowed;"
-          title="Enter individual drops in the card below — this total updates automatically.">
+    {# Outside Cash & Drops is read-only; value is the sum of DailyDrop
+       line items. Click the row to expand the inline drops panel. The
+       server always recomputes from DailyDrop on save, so the field's
+       submitted value can't override the truth. #}
+    <details class="drops-disclosure" id="dropsDetails"
+             data-url-new="{{ url_for('daily_drop_new', ds=report_date.isoformat()) }}"
+             data-date="{{ report_date.isoformat() }}">
+      <summary>
+        <div class="field-row">
+          <span class="field-label">
+            Outside Cash & Drops
+            <span class="drops-caret" aria-hidden="true">▸</span>
+            <span class="drops-count"
+                  id="drops-count">{{ drops|length }} drop{{ 's' if drops|length != 1 else '' }}</span>
+          </span>
+          <div class="field-input">
+            <input type="number" step="0.01" name="outside_cash_drops"
+              id="outside_cash_drops_field"
+              value="{{ '%.2f'|format(drops_total or 0) }}"
+              readonly tabindex="-1"
+              title="Click the row to log drops — this total updates automatically.">
+          </div>
+        </div>
+      </summary>
+      <div class="drops-panel">
+        <div class="drops-add-row">
+          <div class="field" style="flex:0 0 130px;">
+            <label>Time</label>
+            <input type="time" id="drop-time">
+          </div>
+          <div class="field" style="flex:0 0 150px;">
+            <label>Amount ($)</label>
+            <input type="number" step="0.01" min="0.01" id="drop-amount" placeholder="0.00">
+          </div>
+          <div class="field" style="flex:1;min-width:180px;">
+            <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+            <input type="text" id="drop-note" maxlength="120" placeholder="ATM drop, safe drop, …">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="drop-add-btn">＋ Add</button>
+        </div>
+        <div id="drop-err" class="drops-err" hidden></div>
+        <table class="drops-table" id="drops-table">
+          <thead>
+            <tr>
+              <th style="width:100px;">Time</th>
+              <th style="width:130px;">Amount</th>
+              <th>Note</th>
+              <th style="width:72px;"></th>
+            </tr>
+          </thead>
+          <tbody id="drops-tbody">
+            {% for d in drops %}
+            <tr data-id="{{ d.id }}">
+              <td class="mono">{{ d.drop_time.strftime('%H:%M') }}</td>
+              <td class="mono">${{ '{:,.2f}'.format(d.amount) }}</td>
+              <td>{{ d.note or '—' }}</td>
+              <td>
+                <button type="button" class="btn btn-outline btn-sm drop-remove"
+                        data-id="{{ d.id }}"
+                        style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot id="drops-empty" {% if drops %}hidden{% endif %}>
+            <tr><td colspan="4" class="drops-empty-cell">No drops logged yet. Add one above.</td></tr>
+          </tfoot>
+        </table>
       </div>
-    </div>
+    </details>
 
     {% for fname, label in [
       ('cash_deposit','Cash Deposit'),
@@ -246,84 +344,6 @@
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Cancel</a>
 </div>
 </form>
-
-{# ── Outside Cash Drops ──────────────────────────────────────────
-   Line-item entry that feeds `outside_cash_drops` on the daily report.
-   Kept OUTSIDE the main form because add/delete are separate POST routes
-   (nesting <form> elements is invalid HTML). #}
-<div class="card" style="margin-top:28px;">
-  <div class="card-header">
-    <span class="card-title">Outside Cash Drops</span>
-    <span class="mono" style="color:var(--gold);font-size:13px;">
-      Total: ${{ '{:,.2f}'.format(drops_total or 0) }}
-    </span>
-  </div>
-  <div class="card-body">
-    <p class="text-sm text-muted mb-2">
-      Log each drop as it happens. The total above fills the read-only
-      <strong>Outside Cash &amp; Drops</strong> line on the daily report.
-    </p>
-
-    <form method="POST" action="{{ url_for('daily_drop_new', ds=report_date.isoformat()) }}"
-          style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
-      <div class="field" style="flex:0 0 140px;">
-        <label>Time</label>
-        <input type="time" name="drop_time" required>
-      </div>
-      <div class="field" style="flex:0 0 160px;">
-        <label>Amount ($)</label>
-        <input type="number" step="0.01" min="0.01" name="amount" placeholder="0.00" required>
-      </div>
-      <div class="field" style="flex:1;min-width:200px;">
-        <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
-        <input type="text" name="note" maxlength="120" placeholder="ATM drop, safe drop, etc.">
-      </div>
-      <button type="submit" class="btn btn-primary">＋ Add Drop</button>
-    </form>
-
-    {% if drops %}
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:110px;">Time</th>
-            <th style="width:140px;">Amount</th>
-            <th>Note</th>
-            <th style="width:80px;"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for d in drops %}
-          <tr>
-            <td class="mono">{{ d.drop_time.strftime('%H:%M') }}</td>
-            <td class="mono">${{ '{:,.2f}'.format(d.amount) }}</td>
-            <td>{{ d.note or '—' }}</td>
-            <td>
-              <form method="POST"
-                    action="{{ url_for('daily_drop_delete', ds=report_date.isoformat(), drop_id=d.id) }}"
-                    onsubmit="return confirm('Delete this drop?')"
-                    style="margin:0;">
-                <button type="submit" class="btn btn-outline btn-sm"
-                        style="color:var(--red);border-color:var(--red);">Remove</button>
-              </form>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-        <tfoot>
-          <tr>
-            <td class="fw-600">Total</td>
-            <td class="mono fw-600">${{ '{:,.2f}'.format(drops_total or 0) }}</td>
-            <td colspan="2"></td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-    {% else %}
-    <div class="empty-state" style="padding:28px 12px;">No drops logged yet for this date.</div>
-    {% endif %}
-  </div>
-</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -367,5 +387,114 @@ function recalcMTTotals(){
   document.getElementById('mt-tot-total').textContent=fmt(ta+tf+tc);
 }
 recalc(); recalcMTTotals();
+
+/*
+ * Inline Drops widget
+ *
+ * The <details id="dropsDetails"> holds the add form + drops table. All
+ * add/delete calls go via fetch() with Accept: application/json so the
+ * main daily-report form never submits and the page never reloads.
+ * Server responses always include {ok, total, drops} for fresh rendering.
+ */
+(function() {
+  const root = document.getElementById('dropsDetails');
+  if (!root) return;
+  const url = root.dataset.urlNew;
+  const dateStr = root.dataset.date;
+  const tbody = document.getElementById('drops-tbody');
+  const empty = document.getElementById('drops-empty');
+  const totalField = document.getElementById('outside_cash_drops_field');
+  const count = document.getElementById('drops-count');
+  const errBox = document.getElementById('drop-err');
+  const timeInput = document.getElementById('drop-time');
+  const amtInput  = document.getElementById('drop-amount');
+  const noteInput = document.getElementById('drop-note');
+  const addBtn    = document.getElementById('drop-add-btn');
+
+  // Keep the disclosure open across reloads within a session — e.g. after
+  // the main daily-report form is saved and the page comes back.
+  const OPEN_KEY = 'dropsOpen:' + dateStr;
+  if (sessionStorage.getItem(OPEN_KEY) === '1') root.open = true;
+  root.addEventListener('toggle', function() {
+    sessionStorage.setItem(OPEN_KEY, root.open ? '1' : '0');
+  });
+
+  function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
+  function fmt2(n) { return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+  function renderDrops(drops, total) {
+    // Re-render the table body from the server payload so local + server
+    // state can never drift.
+    tbody.innerHTML = drops.map(function(d) {
+      return (
+        '<tr data-id="' + d.id + '">' +
+          '<td class="mono">' + d.time + '</td>' +
+          '<td class="mono">' + fmt2(d.amount) + '</td>' +
+          '<td>' + (d.note ? escapeHTML(d.note) : '—') + '</td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm drop-remove" ' +
+                      'data-id="' + d.id + '" ' +
+                      'style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button></td>' +
+        '</tr>'
+      );
+    }).join('');
+    empty.hidden = drops.length > 0;
+    totalField.value = Number(total).toFixed(2);
+    count.textContent = drops.length + ' drop' + (drops.length === 1 ? '' : 's');
+    // Keep the receipts/disbursements totals on the main form in sync too.
+    if (typeof recalc === 'function') recalc();
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  addBtn.addEventListener('click', async function() {
+    showError('');
+    const fd = new FormData();
+    fd.append('drop_time', timeInput.value);
+    fd.append('amount', amtInput.value);
+    fd.append('note', noteInput.value);
+    addBtn.disabled = true;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST', body: fd,
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false, error:'Unexpected response.'}; });
+      if (!resp.ok || !data.ok) {
+        showError(data.error || 'Could not add the drop.'); return;
+      }
+      renderDrops(data.drops, data.total);
+      timeInput.value = ''; amtInput.value = ''; noteInput.value = '';
+      timeInput.focus();
+    } catch (e) {
+      showError('Network error. Try again.');
+    } finally {
+      addBtn.disabled = false;
+    }
+  });
+
+  // Event delegation so Remove buttons added via re-render still work.
+  tbody.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.drop-remove');
+    if (!btn) return;
+    if (!confirm('Delete this drop?')) return;
+    const id = btn.getAttribute('data-id');
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/daily/' + dateStr + '/drops/' + id + '/delete', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false}; });
+      if (!resp.ok || !data.ok) { btn.disabled = false; return; }
+      renderDrops(data.drops, data.total);
+    } catch (e) { btn.disabled = false; }
+  });
+})();
 </script>
 {% endblock %}
