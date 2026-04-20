@@ -86,6 +86,16 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
     "Check your email" regardless of whether the account exists.
 11. **`db.session.get(Model, id)`** — never `Model.query.get(id)` (legacy
     SQLAlchemy 2.0 API, emits deprecation warnings).
+12. **Referrals** — `ReferralCode` is one-per-store, minted lazily by
+    `ensure_referral_code(store)` when an admin on a paid plan loads any
+    page (context processor does this) and explicitly by the
+    `checkout.session.completed` webhook. Credits are applied by
+    `apply_pending_referral_credits(referee_store)` also inside that
+    webhook — $50 to the referee, $100 to the referrer, via Stripe
+    `create_balance_transaction`. Idempotent: `ReferralRedemption` is the
+    lockout row and `Store.referee_credit_applied_at` gates retries. The
+    topbar crown reads `my_referral_code` from the context processor —
+    empty string hides it, so the button self-gates on role + plan.
 
 ## Migrations (no framework)
 New columns on existing tables go in `_ADDED_COLUMNS` (list at bottom of

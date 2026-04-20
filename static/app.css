@@ -456,6 +456,27 @@ input[type="number"] {
 [data-theme="dark"] .theme-toggle .sun  { display: block; }
 [data-theme="dark"] .theme-toggle .moon { display: none; }
 
+/* ── REFERRAL CROWN (topbar) ─────────────────────────────
+   Only rendered when the context processor set my_referral_code —
+   admin + paid plan. Shares .user-menu for the dropdown positioning so
+   clicks outside close it using the same handler. */
+.ref-crown {
+  position: relative;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%);
+  color: var(--navy); border: 2px solid var(--gray2);
+  border-radius: 999px; height: 36px; padding: 0 12px 0 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-weight: 700; font-size: 12px; letter-spacing: 0.4px;
+  cursor: pointer; font-family: 'DM Sans', sans-serif;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.ref-crown:hover { border-color: var(--gold); }
+.ref-crown:active { transform: scale(0.97); }
+.ref-crown .crown { width: 18px; height: 18px; display: block; }
+.ref-crown .ref-badge { line-height: 1; }
+[data-theme="dark"] .ref-crown { border-color: #2a3044; color: #0f1f3d; }
+.ref-dropdown { min-width: 280px; }
+
 /* ── USER AVATAR + DROPDOWN ─────────────────────────────── */
 .user-menu { position: relative; }
 .user-avatar {

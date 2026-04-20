@@ -107,6 +107,16 @@ input.has-error{border-color:var(--red)}
     <div class="trial-badge">&#10003; 7-day free trial &middot; No credit card needed</div>
     <div class="card-title">Create your account</div>
     <div class="card-sub">Start managing your store in minutes.</div>
+    {# Referral banner — only when a VALID code was resolved. #}
+    {% if referral %}
+    <div style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
+                border-radius:8px;padding:10px 14px;font-size:13px;
+                margin-bottom:16px;">
+      🎉 Referred by a DineroBook user — you'll get
+      <strong>${{ '%.0f'|format(referral.reward_referee_cents/100) }}</strong>
+      off your first paid month when you subscribe.
+    </div>
+    {% endif %}
     <form method="POST" action="/signup">
       <div class="field">
         <label>Store Name</label>
@@ -142,6 +152,18 @@ input.has-error{border-color:var(--red)}
         <input type="tel" name="phone"
                value="{{ form.get('phone','') }}"
                placeholder="555-000-0000">
+      </div>
+      {# Visible code entry. If a ?ref= link filled it in, the hidden input
+         at the top of the form already carries it; this visible input is
+         for people who got the code verbally. Either one is fine — the
+         server reads whichever is non-empty. #}
+      <div class="field">
+        <label>Referral code <span class="optional">(optional)</span></label>
+        <input type="text" name="ref_code"
+               value="{{ form.get('ref_code', ref_code_raw or '') }}"
+               placeholder="e.g. ABCD1234"
+               style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;letter-spacing:2px;"
+               maxlength="12">
       </div>
       <button type="submit" class="submit-btn">Start Free Trial &rarr;</button>
     </form>
