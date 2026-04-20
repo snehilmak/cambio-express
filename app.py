@@ -550,7 +550,89 @@ def logout():
 @app.route("/owner/dashboard")
 @owner_required
 def owner_dashboard():
-    return "owner dashboard stub", 200
+    u = current_user()
+    period = request.args.get("period", "today")
+    today = date.today()
+
+    links = StoreOwnerLink.query.filter_by(owner_id=u.id).all()
+    store_ids = [l.store_id for l in links]
+    stores = Store.query.filter(Store.id.in_(store_ids)).order_by(Store.name).all() if store_ids else []
+
+    if period == "today":
+        date_start = date_end = today
+    elif period == "month":
+        date_start = date(today.year, today.month, 1)
+        date_end = today
+    else:
+        date_start = date(today.year, 1, 1)
+        date_end = today
+
+    if store_ids:
+        agg_transfer_count = Transfer.query.filter(
+            Transfer.store_id.in_(store_ids),
+            Transfer.send_date >= date_start,
+            Transfer.send_date <= date_end
+        ).count()
+        agg_volume = db.session.query(db.func.sum(Transfer.send_amount)).filter(
+            Transfer.store_id.in_(store_ids),
+            Transfer.send_date >= date_start,
+            Transfer.send_date <= date_end
+        ).scalar() or 0.0
+        agg_over_short = db.session.query(db.func.sum(DailyReport.over_short)).filter(
+            DailyReport.store_id.in_(store_ids),
+            DailyReport.report_date >= date_start,
+            DailyReport.report_date <= date_end
+        ).scalar() or 0.0
+    else:
+        agg_transfer_count = 0
+        agg_volume = 0.0
+        agg_over_short = 0.0
+
+    store_data = []
+    for store in stores:
+        t_count = Transfer.query.filter(
+            Transfer.store_id == store.id,
+            Transfer.send_date >= date_start,
+            Transfer.send_date <= date_end
+        ).count()
+        t_volume = db.session.query(db.func.sum(Transfer.send_amount)).filter(
+            Transfer.store_id == store.id,
+            Transfer.send_date >= date_start,
+            Transfer.send_date <= date_end
+        ).scalar() or 0.0
+        reports = DailyReport.query.filter(
+            DailyReport.store_id == store.id,
+            DailyReport.report_date >= date_start,
+            DailyReport.report_date <= date_end
+        ).all()
+        total_receipts = sum(r.total_receipts for r in reports)
+        over_short = sum(r.over_short for r in reports)
+        store_data.append({
+            "store": store,
+            "transfer_count": t_count,
+            "volume": t_volume,
+            "total_receipts": total_receipts,
+            "over_short": over_short,
+        })
+
+    return render_template("owner_dashboard.html",
+        user=u, period=period,
+        agg_transfer_count=agg_transfer_count,
+        agg_volume=agg_volume,
+        agg_over_short=agg_over_short,
+        store_count=len(stores),
+        store_data=store_data,
+    )
+
+@app.route("/owner/link-store", methods=["POST"])
+@owner_required
+def owner_link_store():
+    return "owner link store stub", 200
+
+@app.route("/owner/unlink-store/<int:store_id>", methods=["POST"])
+@owner_required
+def owner_unlink_store(store_id):
+    return "owner unlink store stub", 200
 
 @app.route("/subscribe")
 @login_required

@@ -1,0 +1,117 @@
+{% extends "base_owner.html" %}
+{% block title %}Dashboard — Cambio Express Owner{% endblock %}
+{% block page_title %}Owner Dashboard{% endblock %}
+{% block content %}
+
+<!-- Period filter -->
+<div style="display:flex;gap:8px;margin-bottom:24px;align-items:center;">
+  <span style="font-size:13px;color:var(--gray4);font-weight:500;">Period:</span>
+  <a href="{{ url_for('owner_dashboard', period='today') }}"
+     class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-outline{% endif %}">Today</a>
+  <a href="{{ url_for('owner_dashboard', period='month') }}"
+     class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-outline{% endif %}">This Month</a>
+  <a href="{{ url_for('owner_dashboard', period='year') }}"
+     class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-outline{% endif %}">This Year</a>
+</div>
+
+<!-- Aggregate stat cards -->
+<div class="stats-grid">
+  <div class="stat-card" style="--accent:var(--sky)">
+    <div class="stat-label">Transfers</div>
+    <div class="stat-value">{{ agg_transfer_count }}</div>
+    <div class="stat-sub">across all stores</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--green)">
+    <div class="stat-label">Volume</div>
+    <div class="stat-value">${{ "%.0f"|format(agg_volume) }}</div>
+    <div class="stat-sub">total sent</div>
+  </div>
+  <div class="stat-card" style="--accent:var(--gold)">
+    <div class="stat-label">Stores</div>
+    <div class="stat-value">{{ store_count }}</div>
+    <div class="stat-sub">linked locations</div>
+  </div>
+  <div class="stat-card" style="--accent:{% if agg_over_short < 0 %}var(--red){% else %}var(--green){% endif %}">
+    <div class="stat-label">Over / Short</div>
+    <div class="stat-value {% if agg_over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+      ${{ "%.2f"|format(agg_over_short) }}
+    </div>
+    <div class="stat-sub">daily reports</div>
+  </div>
+</div>
+
+<!-- Per-store cards -->
+{% if store_data %}
+<div style="margin-bottom:12px;font-size:11px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:1px;">Locations</div>
+<div style="display:grid;gap:16px;margin-bottom:32px;">
+  {% for sd in store_data %}
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <span class="card-title">{{ sd.store.name }}</span>
+        {% if sd.store.plan == 'pro' %}
+          <span class="badge badge-navy" style="margin-left:8px;">Pro</span>
+        {% elif sd.store.plan == 'basic' %}
+          <span class="badge badge-blue" style="margin-left:8px;">Basic</span>
+        {% else %}
+          <span class="badge badge-gray" style="margin-left:8px;">Trial</span>
+        {% endif %}
+      </div>
+      <form method="POST" action="{{ url_for('owner_unlink_store', store_id=sd.store.id) }}"
+            onsubmit="return confirm('Remove {{ sd.store.name }} from your account?')">
+        <button type="submit" class="btn btn-sm" style="color:var(--red);border-color:var(--red);background:transparent;">Unlink</button>
+      </form>
+    </div>
+    <div class="card-body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:16px;">
+        <div>
+          <div class="text-muted text-sm">Transfers</div>
+          <div style="font-size:22px;font-family:'DM Serif Display',serif;color:var(--navy);margin-top:4px;">{{ sd.transfer_count }}</div>
+          <div class="text-muted text-sm">${{ "%.0f"|format(sd.volume) }} volume</div>
+        </div>
+        <div>
+          <div class="text-muted text-sm">Receipts</div>
+          <div style="font-size:22px;font-family:'DM Serif Display',serif;color:var(--navy);margin-top:4px;">${{ "%.0f"|format(sd.total_receipts) }}</div>
+          <div class="text-muted text-sm">daily reports</div>
+        </div>
+        <div>
+          <div class="text-muted text-sm">Over/Short</div>
+          <div style="font-size:22px;font-family:'DM Serif Display',serif;margin-top:4px;"
+               class="{% if sd.over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+            ${{ "%.2f"|format(sd.over_short) }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="max-width:560px;margin-bottom:32px;">
+  <div class="card-body" style="text-align:center;padding:40px 24px;">
+    <div style="font-size:32px;margin-bottom:12px;">&#127970;</div>
+    <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--navy);margin-bottom:8px;">No stores connected yet</div>
+    <div style="font-size:13.5px;color:var(--gray4);">Enter an invite code from your store manager to connect your first store.</div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Code entry form (always shown) -->
+<div class="card" style="max-width:480px;">
+  <div class="card-header"><span class="card-title">Connect a Store</span></div>
+  <div class="card-body">
+    <p style="font-size:13px;color:var(--gray4);margin-bottom:16px;">
+      Enter the 8-character invite code from your store manager.
+    </p>
+    <form method="POST" action="{{ url_for('owner_link_store') }}" style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label>Invite Code</label>
+        <input type="text" name="code" placeholder="e.g. AB12CD34" maxlength="8"
+               style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;letter-spacing:2px;" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Connect</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
