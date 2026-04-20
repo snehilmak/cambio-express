@@ -1065,10 +1065,14 @@ def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str
 
 @app.route("/api/push/public-key")
 def push_public_key():
-    """Frontend reads this to build a PushManager subscription."""
-    if not push_enabled():
-        return jsonify({"error": "push not configured"}), 501
-    return jsonify({"key": VAPID_PUBLIC_KEY})
+    """Frontend reads this to build a PushManager subscription.
+
+    Returns 200 with key=null when VAPID isn't configured so deployments
+    without push don't fill every user's console with a red 501 on page
+    load. The client treats null as "feature unavailable" and hides the
+    opt-in button.
+    """
+    return jsonify({"key": VAPID_PUBLIC_KEY if push_enabled() else None})
 
 @app.route("/api/push/subscribe", methods=["POST"])
 def push_subscribe():
@@ -3534,6 +3538,13 @@ _STORE_OWNED_MODELS = [
     "User",
 ]
 
+# Models whose store FK isn't literally named `store_id`. The default for
+# anything absent here is `store_id`.
+_STORE_FK_OVERRIDES = {
+    "ReferralCode":       "owner_store_id",
+    "ReferralRedemption": "referee_store_id",
+}
+
 def purge_expired_stores():
     """Hard-delete inactive stores whose retention window has elapsed."""
     now = datetime.utcnow()
@@ -3547,7 +3558,8 @@ def purge_expired_stores():
         for model_name in _STORE_OWNED_MODELS:
             model = globals().get(model_name)
             if model is not None:
-                model.query.filter_by(store_id=s.id).delete(synchronize_session=False)
+                fk = _STORE_FK_OVERRIDES.get(model_name, "store_id")
+                model.query.filter_by(**{fk: s.id}).delete(synchronize_session=False)
         db.session.delete(s)
         purged += 1
     if purged:
