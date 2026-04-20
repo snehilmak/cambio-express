@@ -38,6 +38,7 @@
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--dark); }
+html, body { overflow-x: hidden; max-width: 100%; }
 
 /* ── SIDEBAR ── */
 .layout { display: flex; min-height: 100vh; }
@@ -96,7 +97,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .sidebar-footer a:hover { color: rgba(255,255,255,0.7); }
 
 /* ── MAIN ── */
-.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; background: var(--cream); }
 .topbar {
   background: var(--white); border-bottom: 1px solid var(--gray2);
   padding: 0 32px; height: 58px;
@@ -272,7 +273,7 @@ textarea { resize: vertical; min-height: 80px; }
   body.nav-open .sidebar-backdrop { display: block; }
   body.nav-open { overflow: hidden; }
 
-  .main { margin-left: 0; }
+  .main { margin-left: 0; width: 100%; }
   .menu-toggle { display: inline-flex; align-items: center; }
   .topbar { padding: 0 16px; height: 56px; }
   .topbar-title { font-size: 17px; }
@@ -331,7 +332,9 @@ textarea { resize: vertical; min-height: 80px; }
 [data-theme="dark"] .theme-toggle .moon { display: none; }
 
 /* ── DARK MODE ── */
+[data-theme="dark"] html,
 [data-theme="dark"] body { background: #0f1220; color: #e5e7eb; }
+[data-theme="dark"] .main { background: #0f1220; }
 [data-theme="dark"] .topbar {
   background: #141828; border-bottom-color: #252b3d;
 }
