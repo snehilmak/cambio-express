@@ -68,8 +68,38 @@
   <div style="padding:0;">
     {% for fname, label in [
       ('cash_purchases','Cash Purchases'),('cash_expense','Cash Expense'),
-      ('check_purchases','Check Purchases'),('check_expense','Check Expense'),
-      ('outside_cash_drops','Outside Cash & Drops'),('cash_deposit','Cash Deposit'),
+      ('check_purchases','Check Purchases'),('check_expense','Check Expense')
+    ] %}
+    <div class="field-row">
+      <span class="field-label">{{ label }}</span>
+      <div class="field-input">
+        <input type="number" step="0.01" min="0" name="{{ fname }}"
+          value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
+          oninput="recalc()">
+      </div>
+    </div>
+    {% endfor %}
+
+    {# Outside Cash & Drops is read-only — computed from DailyDrop line items
+       entered in the Drops card below. The server always overrides whatever
+       this field might send, so the readonly attribute is UI-only. #}
+    <div class="field-row">
+      <span class="field-label">
+        Outside Cash & Drops
+        <span style="font-size:11px;color:var(--gray4);margin-left:6px;">(from drops below)</span>
+      </span>
+      <div class="field-input">
+        <input type="number" step="0.01" min="0" name="outside_cash_drops"
+          id="outside_cash_drops_field"
+          value="{{ '%.2f'|format(drops_total or 0) }}"
+          readonly
+          style="background:var(--gray1);color:var(--gray4);cursor:not-allowed;"
+          title="Enter individual drops in the card below — this total updates automatically.">
+      </div>
+    </div>
+
+    {% for fname, label in [
+      ('cash_deposit','Cash Deposit'),
       ('checks_deposit','Checks Deposit'),('safe_balance','Safe Balance'),
       ('payroll_expense','Payroll Expense'),('other_cash_out','Other Cash Out')
     ] %}
@@ -216,6 +246,84 @@
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Cancel</a>
 </div>
 </form>
+
+{# ── Outside Cash Drops ──────────────────────────────────────────
+   Line-item entry that feeds `outside_cash_drops` on the daily report.
+   Kept OUTSIDE the main form because add/delete are separate POST routes
+   (nesting <form> elements is invalid HTML). #}
+<div class="card" style="margin-top:28px;">
+  <div class="card-header">
+    <span class="card-title">Outside Cash Drops</span>
+    <span class="mono" style="color:var(--gold);font-size:13px;">
+      Total: ${{ '{:,.2f}'.format(drops_total or 0) }}
+    </span>
+  </div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      Log each drop as it happens. The total above fills the read-only
+      <strong>Outside Cash &amp; Drops</strong> line on the daily report.
+    </p>
+
+    <form method="POST" action="{{ url_for('daily_drop_new', ds=report_date.isoformat()) }}"
+          style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;">
+      <div class="field" style="flex:0 0 140px;">
+        <label>Time</label>
+        <input type="time" name="drop_time" required>
+      </div>
+      <div class="field" style="flex:0 0 160px;">
+        <label>Amount ($)</label>
+        <input type="number" step="0.01" min="0.01" name="amount" placeholder="0.00" required>
+      </div>
+      <div class="field" style="flex:1;min-width:200px;">
+        <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <input type="text" name="note" maxlength="120" placeholder="ATM drop, safe drop, etc.">
+      </div>
+      <button type="submit" class="btn btn-primary">＋ Add Drop</button>
+    </form>
+
+    {% if drops %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:110px;">Time</th>
+            <th style="width:140px;">Amount</th>
+            <th>Note</th>
+            <th style="width:80px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in drops %}
+          <tr>
+            <td class="mono">{{ d.drop_time.strftime('%H:%M') }}</td>
+            <td class="mono">${{ '{:,.2f}'.format(d.amount) }}</td>
+            <td>{{ d.note or '—' }}</td>
+            <td>
+              <form method="POST"
+                    action="{{ url_for('daily_drop_delete', ds=report_date.isoformat(), drop_id=d.id) }}"
+                    onsubmit="return confirm('Delete this drop?')"
+                    style="margin:0;">
+                <button type="submit" class="btn btn-outline btn-sm"
+                        style="color:var(--red);border-color:var(--red);">Remove</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="fw-600">Total</td>
+            <td class="mono fw-600">${{ '{:,.2f}'.format(drops_total or 0) }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    {% else %}
+    <div class="empty-state" style="padding:28px 12px;">No drops logged yet for this date.</div>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
