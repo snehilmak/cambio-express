@@ -484,8 +484,9 @@ def subscribe_checkout():
 @app.route("/subscribe/success")
 @login_required
 def subscribe_success():
-    flash("Your subscription is active. Welcome aboard!", "success")
-    return redirect(url_for("dashboard"))
+    user = current_user()
+    store = current_store()
+    return render_template("subscribe_success.html", user=user, store=store)
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
@@ -863,10 +864,46 @@ def superadmin_impersonate(store_id):
     session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
     flash(f"Viewing as {store.name}","success"); return redirect(url_for("dashboard"))
 
-# ── Stripe webhook stub ──────────────────────────────────────
-@app.route("/webhooks/stripe",methods=["POST"])
+# ── Stripe webhook ───────────────────────────────────────────
+@app.route("/webhooks/stripe", methods=["POST"])
 def stripe_webhook():
-    return jsonify({"received":True}),200
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature", "")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+    except (ValueError, stripe.error.SignatureVerificationError):
+        return jsonify({"error": "Invalid signature"}), 400
+
+    if event["type"] == "checkout.session.completed":
+        obj = event["data"]["object"]
+        store_id = obj.get("metadata", {}).get("store_id")
+        if store_id:
+            store = Store.query.get(int(store_id))
+            if store:
+                sub_id = obj.get("subscription", "")
+                customer_id = obj.get("customer", "")
+                try:
+                    sub = stripe.Subscription.retrieve(sub_id)
+                    price_id = sub["items"]["data"][0]["price"]["id"]
+                    basic_pid = os.environ.get("STRIPE_BASIC_PRICE_ID", "")
+                    store.plan = "basic" if price_id == basic_pid else "pro"
+                except Exception as e:
+                    app.logger.error(f"Stripe sub retrieve error: {e}")
+                    store.plan = "pro"
+                store.stripe_customer_id = customer_id
+                store.stripe_subscription_id = sub_id
+                db.session.commit()
+
+    elif event["type"] == "customer.subscription.deleted":
+        sub_id = event["data"]["object"].get("id", "")
+        store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
+        if store:
+            store.plan = "inactive"
+            store.stripe_subscription_id = ""
+            db.session.commit()
+
+    return jsonify({"received": True}), 200
 
 # ── Error handlers ───────────────────────────────────────────
 @app.errorhandler(404)
