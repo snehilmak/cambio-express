@@ -239,7 +239,7 @@ def test_team_reset_employee_password(logged_in_client):
     assert b"updated" in resp.data.lower() or b"password" in resp.data.lower()
     with flask_app.app_context():
         from app import User
-        emp = User.query.get(emp_id)
+        emp = db.session.get(User, emp_id)
         assert emp.check_password("newpass456!")
         assert not emp.check_password("oldpass123!")
 
@@ -270,7 +270,7 @@ def test_team_reset_scoped_to_store(logged_in_client, client):
     assert resp.status_code == 404
     with flask_app.app_context():
         from app import User
-        emp = User.query.get(other_emp_id)
+        emp = db.session.get(User, other_emp_id)
         assert emp.check_password("original123!")
 
 

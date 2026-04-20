@@ -137,6 +137,15 @@
       </div>
     </div>
     <div class="content">
+      {# Global announcements posted by the superadmin. Dismissed per-user in localStorage. #}
+      {% for ann in announcements or [] %}
+      <div class="banner banner-{{ ann.level }}" data-announcement-id="{{ ann.id }}">
+        <span class="banner-msg">📣 {{ ann.message }}</span>
+        <button type="button" class="banner-cta announcement-dismiss"
+                style="border:none;cursor:pointer;" aria-label="Dismiss">✕</button>
+      </div>
+      {% endfor %}
+
       {# Trial expiration banners — shown to admins/employees only via context_processor. #}
       {% if trial_status == "expiring_soon" %}
       <div class="banner banner-warning">
@@ -216,6 +225,23 @@
         if (e.key === 'Escape') closeMenu();
       });
     }
+  })();
+
+  // Announcement banners — hide the ones the current browser already dismissed,
+  // and remember new dismissals per ID so users don't see them again.
+  (function() {
+    var KEY = 'db-dismissed-announcements';
+    function read() { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch(e) { return []; } }
+    function write(list) { try { localStorage.setItem(KEY, JSON.stringify(list)); } catch(e) {} }
+    var dismissed = read();
+    document.querySelectorAll('[data-announcement-id]').forEach(function(el) {
+      var id = el.getAttribute('data-announcement-id');
+      if (dismissed.indexOf(id) !== -1) { el.remove(); return; }
+      var btn = el.querySelector('.announcement-dismiss');
+      if (btn) btn.addEventListener('click', function() {
+        dismissed.push(id); write(dismissed); el.remove();
+      });
+    });
   })();
 </script>
 {% block scripts %}{% endblock %}
