@@ -86,15 +86,6 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .nav-link:hover { color: var(--white); background: rgba(255,255,255,0.06); }
 .nav-link.active { color: var(--gold2); border-left-color: var(--gold); background: rgba(201,151,58,0.08); }
 .nav-link .icon { font-size: 16px; width: 20px; text-align: center; }
-.sidebar-footer {
-  padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.08);
-}
-.sidebar-footer a {
-  font-size: 12px; color: rgba(255,255,255,0.4);
-  text-decoration: none; display: flex; align-items: center; gap: 8px;
-}
-.sidebar-footer a:hover { color: rgba(255,255,255,0.7); }
-
 /* ── MAIN ── */
 .main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
 .topbar {
@@ -400,6 +391,61 @@ textarea { resize: vertical; min-height: 80px; }
 [data-theme="dark"] .amount-neg { color: #f87171; }
 [data-theme="dark"] .var-ok  { color: #4ade80; }
 [data-theme="dark"] .var-bad { color: #f87171; }
+
+/* ── USER AVATAR + DROPDOWN ── */
+.user-menu { position: relative; }
+.user-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold2) 100%);
+  color: var(--navy); border: 2px solid var(--gray2);
+  font-weight: 700; font-size: 12px; letter-spacing: 0.5px;
+  cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: border-color 0.15s, transform 0.15s;
+  font-family: 'DM Sans', sans-serif;
+}
+.user-avatar:hover { border-color: var(--gold); }
+.user-avatar:active { transform: scale(0.96); }
+.user-dropdown {
+  position: absolute; top: calc(100% + 10px); right: 0;
+  min-width: 220px;
+  background: var(--white); border: 1px solid var(--gray2);
+  border-radius: 10px; box-shadow: 0 8px 28px rgba(15,31,61,0.15);
+  z-index: 200; overflow: hidden;
+}
+.user-dropdown[hidden] { display: none; }
+.user-dropdown .user-info {
+  padding: 14px 16px; border-bottom: 1px solid var(--gray2);
+}
+.user-dropdown .user-info .nm {
+  font-weight: 600; font-size: 14px; color: var(--navy);
+  line-height: 1.2; word-break: break-word;
+}
+.user-dropdown .user-info .rl {
+  font-size: 11px; color: var(--gold); margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600;
+}
+.user-dropdown .dropdown-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; font-size: 13.5px;
+  color: var(--dark); text-decoration: none;
+  transition: background 0.1s;
+}
+.user-dropdown .dropdown-item:hover { background: var(--gray1); color: var(--red); }
+.user-dropdown .dropdown-item .icon { font-size: 15px; }
+
+[data-theme="dark"] .user-avatar { border-color: #2a3044; }
+[data-theme="dark"] .user-avatar:hover { border-color: #f0c060; }
+[data-theme="dark"] .user-dropdown {
+  background: #1a1f2e; border-color: #2a3044;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+}
+[data-theme="dark"] .user-dropdown .user-info { border-bottom-color: #2a3044; }
+[data-theme="dark"] .user-dropdown .user-info .nm { color: #f3f4f6; }
+[data-theme="dark"] .user-dropdown .dropdown-item { color: #e5e7eb; }
+[data-theme="dark"] .user-dropdown .dropdown-item:hover {
+  background: rgba(255,255,255,0.06); color: #fca5a5;
+}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -462,11 +508,6 @@ textarea { resize: vertical; min-height: 80px; }
       </a>
       {% endif %}
     </nav>
-    <div class="sidebar-footer">
-      <a href="{{ url_for('logout') }}">
-        <span>🚪</span> Sign out
-      </a>
-    </div>
   </aside>
 
   <div class="main">
@@ -487,6 +528,27 @@ textarea { resize: vertical; min-height: 80px; }
           <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
         </button>
         <span class="topbar-date" id="clock"></span>
+        {% set _name = (user.full_name or user.username or '?') %}
+        {% set _parts = _name.split() %}
+        {% if _parts|length > 1 %}
+          {% set _initials = (_parts[0][0] ~ _parts[-1][0])|upper %}
+        {% else %}
+          {% set _initials = _name[:2]|upper %}
+        {% endif %}
+        <div class="user-menu">
+          <button type="button" class="user-avatar" id="userAvatar"
+                  aria-haspopup="true" aria-expanded="false"
+                  aria-label="Account menu" title="{{ _name }}">{{ _initials }}</button>
+          <div class="user-dropdown" id="userDropdown" role="menu" hidden>
+            <div class="user-info">
+              <div class="nm">{{ _name }}</div>
+              <div class="rl">{{ user.role }}</div>
+            </div>
+            <a href="{{ url_for('logout') }}" class="dropdown-item" role="menuitem">
+              <span class="icon">🚪</span> Sign out
+            </a>
+          </div>
+        </div>
       </div>
     </div>
     <div class="content">
@@ -543,6 +605,29 @@ updateClock(); setInterval(updateClock, 30000);
     else document.documentElement.removeAttribute('data-theme');
     try { localStorage.setItem('theme', next); } catch(e) {}
   });
+
+  var avatar = document.getElementById('userAvatar');
+  var dropdown = document.getElementById('userDropdown');
+  if (avatar && dropdown) {
+    function closeMenu() {
+      dropdown.setAttribute('hidden', '');
+      avatar.setAttribute('aria-expanded', 'false');
+    }
+    function openMenu() {
+      dropdown.removeAttribute('hidden');
+      avatar.setAttribute('aria-expanded', 'true');
+    }
+    avatar.addEventListener('click', function(e) {
+      e.stopPropagation();
+      if (dropdown.hasAttribute('hidden')) openMenu(); else closeMenu();
+    });
+    document.addEventListener('click', function(e) {
+      if (!dropdown.contains(e.target) && e.target !== avatar) closeMenu();
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closeMenu();
+    });
+  }
 })();
 </script>
 {% block scripts %}{% endblock %}
