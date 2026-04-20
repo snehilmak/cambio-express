@@ -162,3 +162,212 @@ def test_owner_signup_get_renders_form(client):
     rv = client.get("/signup/owner")
     assert rv.status_code == 200
     assert b"Create owner account" in rv.data
+
+
+@pytest.fixture
+def owner_client():
+    """Client pre-authenticated as an owner with no stores linked."""
+    c = flask_app.test_client()
+    with flask_app.app_context():
+        from app import User
+        o = User(username="owner@dashboard.com", full_name="Test Owner", role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o)
+        db.session.commit()
+        oid = o.id
+    with c.session_transaction() as sess:
+        sess["user_id"] = oid
+        sess["role"] = "owner"
+        sess["store_id"] = None
+    return c
+
+
+def test_owner_dashboard_loads_no_stores(owner_client):
+    rv = owner_client.get("/owner/dashboard")
+    assert rv.status_code == 200
+    assert b"invite" in rv.data.lower() or b"connect" in rv.data.lower()
+
+
+def test_owner_dashboard_shows_store_after_link(owner_client):
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
+        db.session.add(link)
+        db.session.commit()
+    rv = owner_client.get("/owner/dashboard")
+    assert rv.status_code == 200
+    assert b"Test Store" in rv.data
+
+
+def test_owner_dashboard_period_filter_today(owner_client):
+    rv = owner_client.get("/owner/dashboard?period=today")
+    assert rv.status_code == 200
+
+
+def test_owner_dashboard_period_filter_month(owner_client):
+    rv = owner_client.get("/owner/dashboard?period=month")
+    assert rv.status_code == 200
+
+
+def test_owner_dashboard_period_filter_year(owner_client):
+    rv = owner_client.get("/owner/dashboard?period=year")
+    assert rv.status_code == 200
+
+
+def test_owner_dashboard_aggregate_counts_transfers(owner_client):
+    from datetime import date
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink, Transfer
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
+        db.session.add(link)
+        admin = User.query.filter_by(username="admin@test.com").first()
+        t = Transfer(store_id=store.id, created_by=admin.id, send_date=date.today(),
+                     company="Intermex", sender_name="John", send_amount=100.0)
+        db.session.add(t)
+        db.session.commit()
+    rv = owner_client.get("/owner/dashboard?period=today")
+    assert rv.status_code == 200
+    assert b"100" in rv.data
+
+
+@pytest.fixture
+def owner_with_store_client():
+    """Returns (client, owner_id, store_id) with owner linked to test-store."""
+    c = flask_app.test_client()
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink
+        o = User(username="owner2@test.com", full_name="Owner2", role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o)
+        db.session.flush()
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink(owner_id=o.id, store_id=store.id)
+        db.session.add(link)
+        db.session.commit()
+        oid, sid = o.id, store.id
+    with c.session_transaction() as sess:
+        sess["user_id"] = oid
+        sess["role"] = "owner"
+        sess["store_id"] = None
+    return c, oid, sid
+
+
+def _make_valid_invite(store_id, admin_id):
+    from app import OwnerInviteCode
+    from datetime import datetime, timedelta
+    invite = OwnerInviteCode(
+        store_id=store_id,
+        code="TESTCD01",
+        created_by=admin_id,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.session.add(invite)
+    db.session.commit()
+    return invite
+
+
+def test_valid_code_links_owner_to_store(owner_client):
+    with flask_app.app_context():
+        from app import User, Store
+        store = Store.query.filter_by(slug="test-store").first()
+        admin = User.query.filter_by(username="admin@test.com").first()
+        _make_valid_invite(store.id, admin.id)
+    rv = owner_client.post("/owner/link", data={"code": "TESTCD01"})
+    assert rv.status_code == 302
+    assert "owner/dashboard" in rv.headers["Location"]
+    with flask_app.app_context():
+        from app import User, StoreOwnerLink, Store
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink.query.filter_by(owner_id=owner.id, store_id=store.id).first()
+        assert link is not None
+
+
+def test_valid_code_marks_invite_used(owner_client):
+    with flask_app.app_context():
+        from app import User, Store
+        store = Store.query.filter_by(slug="test-store").first()
+        admin = User.query.filter_by(username="admin@test.com").first()
+        _make_valid_invite(store.id, admin.id)
+    owner_client.post("/owner/link", data={"code": "TESTCD01"})
+    with flask_app.app_context():
+        from app import OwnerInviteCode
+        invite = OwnerInviteCode.query.filter_by(code="TESTCD01").first()
+        assert invite.used_at is not None
+
+
+def test_expired_code_rejected(owner_client):
+    with flask_app.app_context():
+        from app import User, Store, OwnerInviteCode
+        from datetime import datetime, timedelta
+        store = Store.query.filter_by(slug="test-store").first()
+        admin = User.query.filter_by(username="admin@test.com").first()
+        invite = OwnerInviteCode(
+            store_id=store.id, code="EXPIRED1", created_by=admin.id,
+            expires_at=datetime.utcnow() - timedelta(days=1),
+        )
+        db.session.add(invite)
+        db.session.commit()
+    rv = owner_client.post("/owner/link", data={"code": "EXPIRED1"}, follow_redirects=True)
+    assert b"expired" in rv.data.lower() or b"invalid" in rv.data.lower()
+
+
+def test_used_code_rejected(owner_client):
+    with flask_app.app_context():
+        from app import User, Store, OwnerInviteCode
+        from datetime import datetime, timedelta
+        store = Store.query.filter_by(slug="test-store").first()
+        admin = User.query.filter_by(username="admin@test.com").first()
+        invite = OwnerInviteCode(
+            store_id=store.id, code="USED0001", created_by=admin.id,
+            expires_at=datetime.utcnow() + timedelta(days=7),
+            used_at=datetime.utcnow(),
+        )
+        db.session.add(invite)
+        db.session.commit()
+    rv = owner_client.post("/owner/link", data={"code": "USED0001"}, follow_redirects=True)
+    assert b"expired" in rv.data.lower() or b"invalid" in rv.data.lower()
+
+
+def test_invalid_code_rejected(owner_client):
+    rv = owner_client.post("/owner/link", data={"code": "BADCODE1"}, follow_redirects=True)
+    assert b"invalid" in rv.data.lower() or b"expired" in rv.data.lower()
+
+
+def test_already_linked_handled_gracefully(owner_client):
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink, OwnerInviteCode
+        from datetime import datetime, timedelta
+        store = Store.query.filter_by(slug="test-store").first()
+        admin = User.query.filter_by(username="admin@test.com").first()
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        existing = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
+        db.session.add(existing)
+        invite = OwnerInviteCode(
+            store_id=store.id, code="LINKDUP1", created_by=admin.id,
+            expires_at=datetime.utcnow() + timedelta(days=7),
+        )
+        db.session.add(invite)
+        db.session.commit()
+    rv = owner_client.post("/owner/link", data={"code": "LINKDUP1"}, follow_redirects=True)
+    assert rv.status_code == 200
+    assert b"already connected" in rv.data.lower()
+
+
+def test_owner_can_unlink_store(owner_with_store_client):
+    c, oid, sid = owner_with_store_client
+    rv = c.post(f"/owner/unlink/{sid}")
+    assert rv.status_code == 302
+    with flask_app.app_context():
+        from app import StoreOwnerLink
+        link = StoreOwnerLink.query.filter_by(owner_id=oid, store_id=sid).first()
+        assert link is None
+
+
+def test_unlink_nonexistent_returns_404(owner_client):
+    rv = owner_client.post("/owner/unlink/99999")
+    assert rv.status_code == 404

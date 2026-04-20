@@ -634,12 +634,40 @@ def owner_dashboard():
 @app.route("/owner/link", methods=["POST"])
 @owner_required
 def owner_link_store():
-    return "owner link store stub", 200
+    u = current_user()
+    code = request.form.get("code", "").strip().upper()
+    now = datetime.utcnow()
+    invite = OwnerInviteCode.query.filter(
+        OwnerInviteCode.code == code,
+        OwnerInviteCode.used_at.is_(None),
+        OwnerInviteCode.expires_at > now
+    ).first()
+    if not invite:
+        flash("Invalid or expired code.", "error")
+        return redirect(url_for("owner_dashboard"))
+    already = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=invite.store_id).first()
+    if already:
+        flash("You're already connected to this store.", "info")
+        return redirect(url_for("owner_dashboard"))
+    link = StoreOwnerLink(owner_id=u.id, store_id=invite.store_id)
+    invite.used_at = now
+    invite.used_by_owner_id = u.id
+    db.session.add(link)
+    db.session.commit()
+    store = Store.query.get(invite.store_id)
+    flash(f"{store.name} connected successfully.", "success")
+    return redirect(url_for("owner_dashboard"))
+
 
 @app.route("/owner/unlink/<int:store_id>", methods=["POST"])
 @owner_required
 def owner_unlink_store(store_id):
-    return "owner unlink store stub", 200
+    u = current_user()
+    link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first_or_404()
+    db.session.delete(link)
+    db.session.commit()
+    flash("Store removed from your account.", "success")
+    return redirect(url_for("owner_dashboard"))
 
 @app.route("/subscribe")
 @login_required
