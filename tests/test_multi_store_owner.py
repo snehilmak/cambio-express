@@ -119,9 +119,13 @@ def test_owner_signup_sets_session(client):
 
 
 def test_owner_signup_duplicate_email_rejected(client):
-    client.post("/signup/owner", data={
-        "full_name": "Jane Owner", "email": "jane@example.com", "password": "password123",
-    })
+    """Duplicate email is rejected even for second signup attempt."""
+    with flask_app.app_context():
+        from app import User
+        existing = User(username="jane@example.com", full_name="Jane Owner", role="owner", store_id=None)
+        existing.set_password("password123")
+        db.session.add(existing)
+        db.session.commit()
     rv = client.post("/signup/owner", data={
         "full_name": "Jane 2", "email": "jane@example.com", "password": "password123",
     })
@@ -157,4 +161,4 @@ def test_owner_signup_blocks_admin_email(client):
 def test_owner_signup_get_renders_form(client):
     rv = client.get("/signup/owner")
     assert rv.status_code == 200
-    assert b"owner" in rv.data.lower()
+    assert b"Create owner account" in rv.data

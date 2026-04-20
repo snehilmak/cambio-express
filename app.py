@@ -505,7 +505,7 @@ def signup():
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():
-    if "user_id" in session and request.method == "GET":
+    if "user_id" in session:
         u = current_user()
         if u and u.role == "owner":
             return redirect(url_for("owner_dashboard"))
