@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
-import requests, base64, os, calendar, logging, re
+import requests, base64, os, calendar, logging, re, secrets, string
 import stripe
 from slugify import slugify
 
@@ -229,6 +229,25 @@ class SimpleFINConfig(db.Model):
     store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), unique=True, nullable=False)
     access_url  = db.Column(db.String(500), default="")
     last_synced = db.Column(db.DateTime, nullable=True)
+
+class StoreOwnerLink(db.Model):
+    __tablename__ = "store_owner_link"
+    id        = db.Column(db.Integer, primary_key=True)
+    owner_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    store_id  = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    linked_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
+
+class OwnerInviteCode(db.Model):
+    __tablename__ = "owner_invite_code"
+    id               = db.Column(db.Integer, primary_key=True)
+    store_id         = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    code             = db.Column(db.String(8), unique=True, nullable=False)
+    created_by       = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at       = db.Column(db.DateTime, nullable=False)
+    used_at          = db.Column(db.DateTime, nullable=True)
+    used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 # ── Auth ─────────────────────────────────────────────────────
 def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
