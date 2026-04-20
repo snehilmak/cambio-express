@@ -227,12 +227,93 @@ textarea { resize: vertical; min-height: 80px; }
 .justify-between { justify-content: space-between; } .ml-auto { margin-left: auto; }
 .text-sm { font-size: 12px; } .text-muted { color: var(--gray4); } .text-right { text-align: right; }
 .fw-600 { font-weight: 600; } .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ── MOBILE NAV TOGGLE ── */
+.menu-toggle {
+  display: none;
+  background: transparent; border: none; cursor: pointer;
+  padding: 8px; margin-right: 8px; border-radius: 6px;
+  color: var(--navy);
+}
+.menu-toggle:hover { background: var(--gray1); }
+.menu-toggle svg { display: block; }
+.sidebar-backdrop {
+  display: none; position: fixed; inset: 0;
+  background: rgba(15,31,61,0.5); z-index: 99;
+}
+.sidebar-close {
+  display: none;
+  position: absolute; top: 14px; right: 14px;
+  background: transparent; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.6); font-size: 24px; line-height: 1;
+  padding: 4px 10px; border-radius: 6px;
+}
+.sidebar-close:hover { color: white; background: rgba(255,255,255,0.08); }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 0 30px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-close { display: block; }
+  body.nav-open .sidebar-backdrop { display: block; }
+  body.nav-open { overflow: hidden; }
+
+  .main { margin-left: 0; }
+  .menu-toggle { display: inline-flex; align-items: center; }
+  .topbar { padding: 0 16px; height: 56px; }
+  .topbar-title { font-size: 17px; }
+  .topbar-date { font-size: 11px; }
+  .content { padding: 16px; }
+
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .stat-card { padding: 16px; }
+  .stat-value { font-size: 24px; }
+
+  .grid-2, .grid-3 { grid-template-columns: 1fr; gap: 16px; }
+  .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; gap: 14px; }
+  .field.span-2 { grid-column: span 1; }
+
+  .card-header { padding: 14px 16px; flex-wrap: wrap; gap: 8px; }
+  .card-body { padding: 16px; }
+
+  thead th { padding: 10px 12px; font-size: 10px; }
+  tbody td { padding: 10px 12px; font-size: 13px; }
+
+  .btn { padding: 10px 16px; font-size: 13.5px; }
+  .section-title { margin: 20px 0 10px; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .topbar-date { display: none; }
+  .topbar-title { font-size: 16px; }
+  .content { padding: 12px; }
+  .card-header { padding: 12px 14px; }
+  .card-body { padding: 14px; }
+  .stat-value { font-size: 22px; }
+  .btn { padding: 10px 14px; }
+}
+
+/* Make inputs more touch-friendly */
+@media (max-width: 900px) {
+  input, select, textarea {
+    font-size: 16px; /* prevents iOS zoom on focus */
+    padding: 11px 13px;
+  }
+}
 </style>
 {% block head %}{% endblock %}
 </head>
 <body>
 <div class="layout">
-  <aside class="sidebar">
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+  <aside class="sidebar" id="sidebar">
+    <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
     <div class="sidebar-logo">
       <div class="brand">Cambio Express</div>
       <div class="sub">MSB Manager</div>
@@ -296,7 +377,16 @@ textarea { resize: vertical; min-height: 80px; }
 
   <div class="main">
     <div class="topbar">
-      <div class="topbar-title">{% block page_title %}{% endblock %}</div>
+      <div style="display:flex;align-items:center;min-width:0;">
+        <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
+      </div>
       <div class="topbar-right">
         <span class="topbar-date" id="clock"></span>
       </div>
@@ -330,6 +420,23 @@ function updateClock() {
     ' · ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
 }
 updateClock(); setInterval(updateClock, 30000);
+
+(function() {
+  var sidebar = document.getElementById('sidebar');
+  var backdrop = document.getElementById('sidebarBackdrop');
+  var toggle = document.getElementById('menuToggle');
+  var close = document.getElementById('sidebarClose');
+  function open() { sidebar.classList.add('open'); document.body.classList.add('nav-open'); }
+  function shut() { sidebar.classList.remove('open'); document.body.classList.remove('nav-open'); }
+  if (toggle) toggle.addEventListener('click', open);
+  if (close) close.addEventListener('click', shut);
+  if (backdrop) backdrop.addEventListener('click', shut);
+  if (sidebar) sidebar.addEventListener('click', function(e) {
+    var a = e.target.closest('a');
+    if (a && window.innerWidth <= 900) shut();
+  });
+  window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
+})();
 </script>
 {% block scripts %}{% endblock %}
 </body>
