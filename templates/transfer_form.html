@@ -37,14 +37,27 @@
           <input type="number" name="fee" step="0.01" min="0"
             value="{{ transfer.fee if transfer else '' }}" placeholder="0.00">
         </div>
+        <div class="field">
+          <label>Federal Tax ($)</label>
+          <input type="number" name="federal_tax" step="0.01" min="0"
+            value="{{ transfer.federal_tax if transfer else '' }}" placeholder="0.00">
+          <div class="text-sm text-muted" style="margin-top:4px;">
+            Tracked separately from fee — leaves with the ACH withdrawal, not store revenue.
+          </div>
+        </div>
       </div>
 
       <div class="section-title">Sender Info</div>
-      <div class="form-grid">
+      <div class="form-grid cols-3">
         <div class="field">
           <label>Sender Name *</label>
           <input type="text" name="sender_name" value="{{ transfer.sender_name if transfer else '' }}"
             placeholder="Full name" required>
+        </div>
+        <div class="field">
+          <label>Sender Phone</label>
+          <input type="text" name="sender_phone" value="{{ transfer.sender_phone if transfer else '' }}"
+            placeholder="Phone number">
         </div>
         <div class="field">
           <label>Confirmation # / Reference</label>

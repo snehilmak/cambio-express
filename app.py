@@ -65,10 +65,15 @@ class Transfer(db.Model):
     sender_name    = db.Column(db.String(120), nullable=False)
     send_amount    = db.Column(db.Float, nullable=False)
     fee            = db.Column(db.Float, default=0.0)
+    # Federal tax (e.g. 1%) the customer pays on the send amount. Tracked
+    # separately from `fee` because it leaves the store with the ACH
+    # withdrawal — it's not store revenue.
+    federal_tax    = db.Column(db.Float, default=0.0)
     commission     = db.Column(db.Float, default=0.0)
     recipient_name = db.Column(db.String(120), default="")
     country        = db.Column(db.String(60), default="")
     recipient_phone= db.Column(db.String(40), default="")
+    sender_phone   = db.Column(db.String(40), default="")
     confirm_number = db.Column(db.String(60), default="")
     status         = db.Column(db.String(30), default="Sent")
     status_notes   = db.Column(db.String(255), default="")
@@ -78,7 +83,9 @@ class Transfer(db.Model):
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
     creator        = db.relationship("User", foreign_keys=[created_by])
     @property
-    def total_collected(self): return self.send_amount + self.fee
+    def total_collected(self):
+        """What the customer actually handed over: send amount + store fee + federal tax."""
+        return (self.send_amount or 0) + (self.fee or 0) + (self.federal_tax or 0)
 
 class ACHBatch(db.Model):
     __tablename__ = "ach_batch"
@@ -96,7 +103,13 @@ class ACHBatch(db.Model):
     __table_args__ = (db.UniqueConstraint("store_id","batch_ref"),)
     @property
     def transfers_total(self):
-        v=db.session.query(db.func.sum(Transfer.send_amount)).filter_by(store_id=self.store_id,batch_id=self.batch_ref).scalar()
+        """Sum of what the ACH actually debits: send amount + federal tax.
+        The store fee stays with the store, so it's excluded from this total."""
+        v = (db.session.query(
+                db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0)
+              + db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0))
+             .filter_by(store_id=self.store_id, batch_id=self.batch_ref)
+             .scalar())
         return v or 0.0
     @property
     def variance(self): return round(self.ach_amount-self.transfers_total,2)
@@ -1124,10 +1137,12 @@ def new_transfer():
             company=request.form["company"],sender_name=request.form["sender_name"],
             send_amount=float(request.form.get("send_amount") or 0),
             fee=float(request.form.get("fee") or 0),
+            federal_tax=float(request.form.get("federal_tax") or 0),
             commission=float(request.form.get("commission") or 0),
             recipient_name=request.form.get("recipient_name",""),
             country=request.form.get("country",""),
             recipient_phone=request.form.get("recipient_phone",""),
+            sender_phone=request.form.get("sender_phone",""),
             confirm_number=request.form.get("confirm_number",""),
             status=request.form.get("status","Sent"),
             status_notes=request.form.get("status_notes",""),
@@ -1152,10 +1167,12 @@ def edit_transfer(tid):
         t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
         t.send_amount=float(request.form.get("send_amount") or 0)
         t.fee=float(request.form.get("fee") or 0)
+        t.federal_tax=float(request.form.get("federal_tax") or 0)
         t.commission=float(request.form.get("commission") or 0)
         t.recipient_name=request.form.get("recipient_name","")
         t.country=request.form.get("country","")
         t.recipient_phone=request.form.get("recipient_phone","")
+        t.sender_phone=request.form.get("sender_phone","")
         t.confirm_number=request.form.get("confirm_number","")
         t.status=request.form.get("status","Sent")
         t.status_notes=request.form.get("status_notes","")
@@ -2095,30 +2112,40 @@ def server_error(e):
         message="Something went wrong. Please try again."), 500
 
 # ── Init ─────────────────────────────────────────────────────
-_STORE_ADDED_COLUMNS = [
-    ("addons",               "VARCHAR(255) DEFAULT ''"),
-    ("canceled_at",          "TIMESTAMP NULL"),
-    ("data_retention_until", "TIMESTAMP NULL"),
+# Column additions applied to existing installs on boot. Each entry is
+#   (table_name, column_name, DDL snippet after ADD COLUMN)
+# Kept here so a single helper can migrate any table.
+_ADDED_COLUMNS = [
+    ("store",    "addons",               "VARCHAR(255) DEFAULT ''"),
+    ("store",    "canceled_at",          "TIMESTAMP NULL"),
+    ("store",    "data_retention_until", "TIMESTAMP NULL"),
+    ("transfer", "federal_tax",          "FLOAT DEFAULT 0"),
+    ("transfer", "sender_phone",         "VARCHAR(40) DEFAULT ''"),
 ]
 
-def _ensure_subscription_columns():
-    """Add new store columns on existing databases. No-op if they exist."""
+def _ensure_added_columns():
+    """Apply the _ADDED_COLUMNS migrations. Idempotent and safe on every boot."""
     try:
         with db.engine.connect() as conn:
             dialect = db.engine.dialect.name
             if dialect == "sqlite":
-                cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(store);")]
-                for name, ddl in _STORE_ADDED_COLUMNS:
-                    if name not in cols:
-                        conn.exec_driver_sql(f"ALTER TABLE store ADD COLUMN {name} {ddl}")
+                # PRAGMA table_info returns (cid, name, type, notnull, dflt, pk).
+                existing = {}
+                for table, _, _ in _ADDED_COLUMNS:
+                    if table not in existing:
+                        existing[table] = [r[1] for r in conn.exec_driver_sql(
+                            f"PRAGMA table_info({table});")]
+                for table, name, ddl in _ADDED_COLUMNS:
+                    if name not in existing.get(table, []):
+                        conn.exec_driver_sql(
+                            f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
             else:
-                for name, ddl in _STORE_ADDED_COLUMNS:
+                for table, name, ddl in _ADDED_COLUMNS:
                     conn.exec_driver_sql(
-                        f"ALTER TABLE store ADD COLUMN IF NOT EXISTS {name} {ddl}"
-                    )
+                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {ddl}")
                 conn.commit()
     except Exception as e:
-        app.logger.warning(f"subscription column migration skipped: {e}")
+        app.logger.warning(f"column migration skipped: {e}")
 
 # Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
 # Declaring them here means a fresh install has a real starting set for the UI.
@@ -2143,7 +2170,7 @@ def _seed_feature_flags():
 def init_db():
     with app.app_context():
         db.create_all()
-        _ensure_subscription_columns()
+        _ensure_added_columns()
         _seed_feature_flags()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
