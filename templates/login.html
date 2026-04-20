@@ -87,6 +87,30 @@ input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(5
 }
 .btn-login:hover { background: #2a5caa; }
 .login-footer { margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; }
+
+@media (max-width: 900px) {
+  body { flex-direction: column; }
+  .login-left {
+    flex: none; padding: 36px 24px 32px;
+    min-height: auto;
+  }
+  .login-left::before, .login-left::after { display: none; }
+  .brand-icon { font-size: 42px; margin-bottom: 14px; }
+  .brand-name { font-size: 28px; }
+  .brand-tagline { font-size: 11px; }
+  .brand-features { display: none; }
+  .login-right {
+    width: 100%; padding: 32px 24px 48px;
+    flex: 1;
+  }
+  .login-heading { font-size: 24px; }
+  input { font-size: 16px; }
+}
+@media (max-width: 480px) {
+  .login-left { padding: 28px 20px 24px; }
+  .login-right { padding: 28px 20px 36px; }
+  .brand-name { font-size: 24px; }
+}
 </style>
 </head>
 <body>

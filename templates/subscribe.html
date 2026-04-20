@@ -1,6 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Choose Your Plan — Cambio Express{% endblock %}
 {% block page_title %}Choose Your Plan{% endblock %}
+{% block head %}
+<style>
+@media (max-width: 720px) {
+  .subscribe-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}
 {% block content %}
 
 <div style="max-width:800px;margin:0 auto;text-align:center;margin-bottom:40px;">
@@ -8,7 +15,7 @@
   <div style="color:var(--gray4);font-size:14px;">No contracts. Cancel anytime.</div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1.1fr;gap:24px;max-width:700px;margin:0 auto;">
+<div class="subscribe-grid" style="display:grid;grid-template-columns:1fr 1.1fr;gap:24px;max-width:700px;margin:0 auto;">
 
   <div style="background:var(--white);border:1.5px solid var(--gray2);border-radius:14px;padding:32px 28px;">
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gray4);margin-bottom:8px;">Basic</div>

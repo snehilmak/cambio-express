@@ -63,20 +63,58 @@ footer{background:var(--navy);padding:32px 48px;display:flex;align-items:center;
 footer p{color:rgba(255,255,255,0.35);font-size:13px}
 footer a{color:rgba(255,255,255,0.45);text-decoration:none;font-size:13px;transition:color .15s}
 footer a:hover{color:var(--gold2)}
-@media(max-width:768px){.features-grid,.pricing-grid{grid-template-columns:1fr}.hero h1{font-size:36px}.hero,.features,.pricing{padding:60px 24px}nav{padding:0 20px}}
+.nav-toggle{display:none;background:transparent;border:none;color:var(--white);cursor:pointer;padding:8px;margin-left:8px}
+.nav-toggle svg{display:block}
+@media(max-width:768px){
+  .features-grid,.pricing-grid{grid-template-columns:1fr}
+  .hero h1{font-size:34px;line-height:1.2}
+  .hero p{font-size:16px}
+  .hero{padding:64px 20px}
+  .features,.pricing{padding:60px 20px}
+  .section-heading{font-size:28px;margin-bottom:36px}
+  nav{padding:0 16px;height:60px}
+  .nav-brand{font-size:17px}
+  .nav-toggle{display:inline-flex;align-items:center}
+  .nav-links{position:absolute;top:60px;left:0;right:0;background:var(--navy);flex-direction:column;align-items:stretch;gap:0;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.08);display:none;box-shadow:0 10px 20px rgba(0,0,0,0.2)}
+  .nav-links.open{display:flex}
+  .nav-links a{padding:14px 20px;font-size:15px;border-top:1px solid rgba(255,255,255,0.06)}
+  .nav-links .cta{margin:10px 20px;text-align:center;border-top:none}
+  .hero-ctas{flex-direction:column;align-items:stretch}
+  .hero-ctas .btn-gold,.hero-ctas .btn-outline{text-align:center;padding:14px 20px}
+  .plan{padding:28px 22px}
+  footer{padding:24px 20px;flex-direction:column;gap:10px;text-align:center}
+}
+@media(max-width:480px){
+  .hero h1{font-size:30px}
+  .hero-eyebrow{font-size:10px;letter-spacing:2px}
+}
 </style>
 </head>
 <body>
 
 <nav>
   <a href="/" class="nav-brand">Cambio Express<span>MSB Manager</span></a>
-  <div class="nav-links">
+  <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <line x1="3" y1="6" x2="21" y2="6"/>
+      <line x1="3" y1="12" x2="21" y2="12"/>
+      <line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  </button>
+  <div class="nav-links" id="navLinks">
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a href="/login">Login</a>
     <a href="/signup" class="cta">Start Free Trial</a>
   </div>
 </nav>
+<script>
+(function(){
+  var t=document.getElementById('navToggle'),l=document.getElementById('navLinks');
+  if(t&&l){t.addEventListener('click',function(){l.classList.toggle('open');});
+  l.addEventListener('click',function(e){if(e.target.tagName==='A')l.classList.remove('open');});}
+})();
+</script>
 
 <section class="hero">
   <div class="hero-eyebrow">Built for MSB Store Owners</div>
