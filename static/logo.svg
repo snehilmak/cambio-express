@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="DineroBook">
+  <!-- Rounded navy square background (matches --navy from app.css). -->
+  <rect x="0" y="0" width="200" height="200" rx="32" ry="32" fill="#0f1f3d"/>
+  <!-- Gold serif "D" monogram, centered. Uses a generic serif family so
+       any rasterizer finds something close; regenerate logo-200.png via the
+       PIL script if you need exact DejaVu Serif Bold output. -->
+  <text x="100" y="118"
+        font-family="'DM Serif Display', 'DejaVu Serif', Georgia, serif"
+        font-weight="700"
+        font-size="140"
+        fill="#f0c060"
+        text-anchor="middle"
+        dominant-baseline="middle">D</text>
+  <!-- Small gold line underneath — a nod to a ledger underline. -->
+  <rect x="66" y="154" width="68" height="5" rx="2.5" ry="2.5" fill="#c9973a"/>
+</svg>
