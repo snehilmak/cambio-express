@@ -1,0 +1,56 @@
+{#
+  Non-intrusive bilingual hint that teaches users their browser's built-in
+  translate feature. Chrome/Edge/Safari all detect the <html lang="en"> we
+  already set and can translate the entire page client-side — zero runtime
+  cost on our side and zero lag beyond the first tap.
+
+  Include this just before </body> in every standalone template and in
+  base.html / base_owner.html. Dismissal is persisted in localStorage so
+  the banner never nags repeat visitors.
+#}
+<div id="translate-hint"
+     style="position:fixed;bottom:16px;right:16px;z-index:9999;
+            background:#0f1f3d;color:#faf7f2;
+            border:1px solid rgba(240,192,96,0.4);
+            border-radius:12px;padding:12px 14px 12px 16px;
+            box-shadow:0 8px 24px rgba(0,0,0,0.25);
+            font-family:'DM Sans',system-ui,sans-serif;font-size:12.5px;
+            max-width:320px;display:none;">
+  <div style="display:flex;align-items:flex-start;gap:10px;">
+    <span style="font-size:16px;line-height:1;margin-top:1px;">🌐</span>
+    <div style="flex:1;line-height:1.5;">
+      <div style="font-weight:600;color:#f0c060;margin-bottom:2px;">
+        ¿Ver en español?
+      </div>
+      <div style="color:rgba(255,255,255,0.8);">
+        En su navegador: clic derecho &rarr; <strong>"Traducir al español"</strong>.<br>
+        <span style="color:rgba(255,255,255,0.55);font-size:11.5px;">
+          (Right-click the page and pick "Translate to Spanish".)
+        </span>
+      </div>
+    </div>
+    <button type="button" id="translate-hint-close" aria-label="Close"
+            style="background:transparent;border:0;color:rgba(255,255,255,0.5);
+                   font-size:18px;line-height:1;cursor:pointer;padding:0 4px;
+                   font-family:inherit;">×</button>
+  </div>
+</div>
+<script>
+(function(){
+  // Hide the hint once the user dismisses it (stored in localStorage).
+  // Also hide it if the browser is already set to Spanish — in that case
+  // the translate banner auto-appears and ours would be redundant.
+  try {
+    var dismissed = localStorage.getItem('translateHintDismissed') === '1';
+    var prefersEs = (navigator.language || '').toLowerCase().startsWith('es');
+    var el = document.getElementById('translate-hint');
+    if (!el) return;
+    if (!dismissed && !prefersEs) el.style.display = 'block';
+    var btn = document.getElementById('translate-hint-close');
+    if (btn) btn.addEventListener('click', function(){
+      el.style.display = 'none';
+      try { localStorage.setItem('translateHintDismissed', '1'); } catch(e) {}
+    });
+  } catch (e) { /* localStorage unavailable — silent fail, hint stays hidden */ }
+})();
+</script>
