@@ -545,7 +545,14 @@ def signup_owner():
 
 @app.route("/logout")
 def logout():
-    session.clear(); return redirect(url_for("login"))
+    user = current_user()
+    store = current_store()
+    is_employee = user and user.role == "employee"
+    slug = store.slug if store else None
+    session.clear()
+    if is_employee and slug:
+        return redirect(url_for("login_store", slug=slug))
+    return redirect(url_for("login"))
 
 @app.route("/owner/dashboard")
 @owner_required
