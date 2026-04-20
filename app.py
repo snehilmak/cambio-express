@@ -253,7 +253,8 @@ class OwnerInviteCode(db.Model):
 def current_user():  return User.query.get(session["user_id"]) if "user_id" in session else None
 def current_store(): return Store.query.get(session["store_id"]) if session.get("store_id") else None
 
-_TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout"}
+_TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
+                 "owner_dashboard", "owner_link_store", "owner_unlink_store"}
 
 def login_required(f):
     @wraps(f)
@@ -288,6 +289,17 @@ def superadmin_required(f):
         return f(*a,**k)
     return d
 
+def owner_required(f):
+    @wraps(f)
+    def d(*a, **k):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        u = current_user()
+        if not u or u.role != "owner":
+            abort(403)
+        return f(*a, **k)
+    return d
+
 # ── Trial Status ─────────────────────────────────────────────
 def get_trial_status(store):
     """Return trial status string for the given store.
@@ -318,6 +330,8 @@ def inject_trial_context():
     if not user:
         return {"trial_status": "exempt", "trial_days_left": 0}
     if user.role == "superadmin":
+        return {"trial_status": "exempt", "trial_days_left": 0}
+    if user.role == "owner":
         return {"trial_status": "exempt", "trial_days_left": 0}
     store = current_store()
     status = get_trial_status(store)
@@ -405,6 +419,8 @@ def login():
                 error = "Please use your store's login link."
             else:
                 session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
+                if u.role == "owner":
+                    return redirect(url_for("owner_dashboard"))
                 return redirect(url_for("dashboard"))
         else:
             error="Invalid username or password."
@@ -486,6 +502,11 @@ def signup():
 @app.route("/logout")
 def logout():
     session.clear(); return redirect(url_for("login"))
+
+@app.route("/owner/dashboard")
+@owner_required
+def owner_dashboard():
+    return "owner dashboard stub", 200
 
 @app.route("/subscribe")
 @login_required

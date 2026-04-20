@@ -38,3 +38,35 @@ def test_store_owner_link_unique_constraint():
         with pytest.raises(Exception):
             db.session.flush()
         db.session.rollback()
+
+
+def test_owner_required_blocks_non_owner(client):
+    """Non-owner users get 403 from owner-only routes."""
+    with flask_app.app_context():
+        from app import User
+        u = User.query.filter_by(username="admin@test.com").first()
+        uid, sid = u.id, u.store_id
+    with client.session_transaction() as sess:
+        sess["user_id"] = uid
+        sess["role"] = "admin"
+        sess["store_id"] = sid
+    rv = client.get("/owner/dashboard")
+    assert rv.status_code == 403
+
+
+def test_owner_required_blocks_unauthenticated(client):
+    rv = client.get("/owner/dashboard")
+    assert rv.status_code == 302
+    assert "/login" in rv.headers["Location"]
+
+
+def test_login_redirects_owner_to_owner_dashboard(client):
+    with flask_app.app_context():
+        from app import User
+        o = User(username="owner@test.com", full_name="Test Owner", role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o)
+        db.session.commit()
+    rv = client.post("/login", data={"username": "owner@test.com", "password": "ownerpass123"})
+    assert rv.status_code == 302
+    assert "owner/dashboard" in rv.headers["Location"]
