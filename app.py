@@ -38,6 +38,8 @@ class Store(db.Model):
     trial_ends_at = db.Column(db.DateTime, nullable=True)
     grace_ends_at = db.Column(db.DateTime, nullable=True)
     addons        = db.Column(db.String(255), default="")
+    canceled_at           = db.Column(db.DateTime, nullable=True)
+    data_retention_until  = db.Column(db.DateTime, nullable=True)
 
 class User(db.Model):
     __tablename__ = "user"
@@ -257,7 +259,7 @@ def current_store(): return Store.query.get(session["store_id"]) if session.get(
 _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
                  "owner_dashboard", "owner_link_store", "owner_unlink_store",
                  "admin_subscription", "admin_subscription_billing_portal",
-                 "admin_subscription_toggle_addon"}
+                 "admin_subscription_toggle_addon", "admin_subscription_cancel"}
 
 # ── Add-ons catalog ──────────────────────────────────────────
 # Each add-on has a stable key used in the Store.addons CSV column.
@@ -287,6 +289,16 @@ def store_addon_keys(store):
 
 def store_has_paid_plan(store):
     return bool(store) and store.plan in ("basic", "pro")
+
+# ── Cancellation & data retention ────────────────────────────
+DATA_RETENTION_DAYS = 180  # 6 months
+
+def data_retention_days_left(store):
+    """Days until cancelled-store data is purged. Returns None if not scheduled."""
+    if not store or not store.data_retention_until:
+        return None
+    delta = store.data_retention_until - datetime.utcnow()
+    return max(0, delta.days)
 
 def login_required(f):
     @wraps(f)
@@ -774,6 +786,8 @@ def admin_subscription():
         has_paid_plan=store_has_paid_plan(store),
         plan_label=plan_labels.get(store.plan if store else "", "Unknown"),
         plan_price=plan_prices.get(store.plan if store else "", ""),
+        retention_days_left=data_retention_days_left(store),
+        retention_total_days=DATA_RETENTION_DAYS,
     )
 
 @app.route("/admin/subscription/billing-portal", methods=["POST"])
@@ -792,6 +806,27 @@ def admin_subscription_billing_portal():
     except stripe.error.StripeError as e:
         app.logger.error(f"Stripe billing portal error: {e}")
         flash("Could not open billing portal. Please try again.", "error")
+        return redirect(url_for("admin_subscription"))
+
+@app.route("/admin/subscription/cancel", methods=["POST"])
+@admin_required
+def admin_subscription_cancel():
+    """User has acknowledged the 6-month retention policy. Send them to the
+    Stripe billing portal to actually cancel; the webhook will then mark the
+    store inactive and start the 180-day retention timer."""
+    store = current_store()
+    if not store_has_paid_plan(store) or not store.stripe_customer_id:
+        flash("No active subscription to cancel.", "error")
+        return redirect(url_for("admin_subscription"))
+    try:
+        portal = stripe.billing_portal.Session.create(
+            customer=store.stripe_customer_id,
+            return_url=url_for("admin_subscription", _external=True),
+        )
+        return redirect(portal.url, code=303)
+    except stripe.error.StripeError as e:
+        app.logger.error(f"Stripe billing portal error (cancel): {e}")
+        flash("Could not open the cancellation page. Please try again.", "error")
         return redirect(url_for("admin_subscription"))
 
 @app.route("/admin/subscription/addons/<addon_key>", methods=["POST"])
@@ -1367,17 +1402,57 @@ def stripe_webhook():
                     store.plan = "pro"
                 store.stripe_customer_id = customer_id
                 store.stripe_subscription_id = sub_id
+                # Returning customer: clear cancellation + retention timer.
+                store.canceled_at = None
+                store.data_retention_until = None
                 db.session.commit()
 
     elif event["type"] == "customer.subscription.deleted":
         sub_id = event["data"]["object"].get("id", "")
         store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
         if store:
+            now = datetime.utcnow()
             store.plan = "inactive"
             store.stripe_subscription_id = ""
+            store.canceled_at = now
+            store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
             db.session.commit()
 
     return jsonify({"received": True}), 200
+
+# ── Data retention purge ─────────────────────────────────────
+# Models that hold per-store data and must be wiped before the store row.
+_STORE_OWNED_MODELS = [
+    "Transfer", "ACHBatch", "DailyReport", "MoneyTransferSummary",
+    "MonthlyFinancial", "SimpleFINConfig", "StoreOwnerLink",
+    "OwnerInviteCode", "User",
+]
+
+def purge_expired_stores():
+    """Hard-delete inactive stores whose retention window has elapsed."""
+    now = datetime.utcnow()
+    expired = Store.query.filter(
+        Store.plan == "inactive",
+        Store.data_retention_until.isnot(None),
+        Store.data_retention_until <= now,
+    ).all()
+    purged = 0
+    for s in expired:
+        for model_name in _STORE_OWNED_MODELS:
+            model = globals().get(model_name)
+            if model is not None:
+                model.query.filter_by(store_id=s.id).delete(synchronize_session=False)
+        db.session.delete(s)
+        purged += 1
+    if purged:
+        db.session.commit()
+    return purged
+
+@app.cli.command("purge-expired-stores")
+def purge_expired_stores_cmd():
+    """Delete inactive stores past their retention deadline. Run daily."""
+    n = purge_expired_stores()
+    print(f"Purged {n} expired store(s).")
 
 # ── Error handlers ───────────────────────────────────────────
 @app.errorhandler(404)
@@ -1396,29 +1471,35 @@ def server_error(e):
         message="Something went wrong. Please try again."), 500
 
 # ── Init ─────────────────────────────────────────────────────
-def _ensure_addons_column():
-    """Add the store.addons column on existing databases. No-op if it exists."""
+_STORE_ADDED_COLUMNS = [
+    ("addons",               "VARCHAR(255) DEFAULT ''"),
+    ("canceled_at",          "TIMESTAMP NULL"),
+    ("data_retention_until", "TIMESTAMP NULL"),
+]
+
+def _ensure_subscription_columns():
+    """Add new store columns on existing databases. No-op if they exist."""
     try:
         with db.engine.connect() as conn:
             dialect = db.engine.dialect.name
             if dialect == "sqlite":
                 cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(store);")]
-                if "addons" not in cols:
-                    conn.exec_driver_sql(
-                        "ALTER TABLE store ADD COLUMN addons VARCHAR(255) DEFAULT ''"
-                    )
+                for name, ddl in _STORE_ADDED_COLUMNS:
+                    if name not in cols:
+                        conn.exec_driver_sql(f"ALTER TABLE store ADD COLUMN {name} {ddl}")
             else:
-                conn.exec_driver_sql(
-                    "ALTER TABLE store ADD COLUMN IF NOT EXISTS addons VARCHAR(255) DEFAULT ''"
-                )
+                for name, ddl in _STORE_ADDED_COLUMNS:
+                    conn.exec_driver_sql(
+                        f"ALTER TABLE store ADD COLUMN IF NOT EXISTS {name} {ddl}"
+                    )
                 conn.commit()
     except Exception as e:
-        app.logger.warning(f"addons column migration skipped: {e}")
+        app.logger.warning(f"subscription column migration skipped: {e}")
 
 def init_db():
     with app.app_context():
         db.create_all()
-        _ensure_addons_column()
+        _ensure_subscription_columns()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()

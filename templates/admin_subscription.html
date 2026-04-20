@@ -94,6 +94,65 @@
   background: #2d2410; border-color: #4a3a10; color: #fde047;
 }
 
+.retention-banner {
+  background: #fee2e2; border: 1px solid #fca5a5;
+  color: #7f1d1d; border-radius: 10px; padding: 16px 20px;
+  margin-bottom: 22px; display: flex; flex-wrap: wrap;
+  align-items: center; justify-content: space-between; gap: 12px;
+}
+.retention-banner .msg { font-size: 13.5px; line-height: 1.5; flex: 1; min-width: 240px; }
+.retention-banner .msg strong { color: #7f1d1d; }
+[data-theme="dark"] .retention-banner {
+  background: #2d1215; border-color: #7f1d1d; color: #fca5a5;
+}
+[data-theme="dark"] .retention-banner .msg strong { color: #fca5a5; }
+.retention-banner .cta {
+  background: var(--blue); color: var(--white);
+  padding: 8px 16px; border-radius: 8px; font-size: 13px;
+  font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.retention-banner .cta:hover { background: var(--mid); }
+
+.cancel-link {
+  background: transparent; color: rgba(255,255,255,0.55);
+  border: none; padding: 8px 0; font-size: 12.5px;
+  cursor: pointer; text-decoration: underline;
+  font-family: 'DM Sans', sans-serif; margin-top: 6px;
+}
+.cancel-link:hover { color: rgba(255,255,255,0.9); }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(15,31,61,0.55);
+  z-index: 200; display: none; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-backdrop.open { display: flex; }
+.modal-card {
+  background: var(--white); border-radius: 14px;
+  width: 100%; max-width: 460px; padding: 28px;
+  box-shadow: 0 20px 60px rgba(15,31,61,0.25);
+}
+[data-theme="dark"] .modal-card { background: #1a1f2e; }
+.modal-card h3 {
+  font-family: 'DM Serif Display', serif; font-size: 22px;
+  color: var(--navy); margin-bottom: 8px;
+}
+[data-theme="dark"] .modal-card h3 { color: #f3f4f6; }
+.modal-card p {
+  font-size: 13.5px; color: var(--dark); line-height: 1.6;
+  margin-bottom: 12px;
+}
+[data-theme="dark"] .modal-card p { color: #d1d5db; }
+.modal-card .policy-box {
+  background: var(--gray1); border-left: 3px solid var(--gold);
+  border-radius: 6px; padding: 12px 14px; font-size: 13px;
+  color: var(--dark); margin: 10px 0 18px;
+}
+[data-theme="dark"] .modal-card .policy-box {
+  background: #232838; color: #e5e7eb;
+}
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+
 .info-row {
   display: flex; justify-content: space-between; align-items: center;
   padding: 10px 0; border-bottom: 1px solid var(--gray2);
@@ -108,6 +167,17 @@
 </style>
 {% endblock %}
 {% block content %}
+
+{% if store and store.plan == 'inactive' and retention_days_left is not none %}
+<div class="retention-banner">
+  <div class="msg">
+    🗂️ Your subscription is canceled. Your store data is safe for
+    <strong>{{ retention_days_left }} more day{{ 's' if retention_days_left != 1 else '' }}</strong>
+    ({{ store.data_retention_until.strftime('%b %d, %Y') }}). Resubscribe before then to pick up where you left off — after that, all data is permanently deleted.
+  </div>
+  <a href="{{ url_for('subscribe') }}" class="cta">Resubscribe</a>
+</div>
+{% endif %}
 
 <div class="sub-grid">
 
@@ -148,6 +218,12 @@
         <a href="{{ url_for('subscribe') }}" class="btn-on-dark">Choose a Plan</a>
       {% endif %}
     </div>
+
+    {% if has_paid_plan %}
+    <button type="button" class="cancel-link" id="openCancelModal">
+      Cancel subscription
+    </button>
+    {% endif %}
   </div>
 
   <!-- Account snapshot -->
@@ -233,4 +309,40 @@
   {% endfor %}
 </div>
 
+{% if has_paid_plan %}
+<div class="modal-backdrop" id="cancelModal" role="dialog" aria-modal="true" aria-labelledby="cancelModalTitle">
+  <div class="modal-card">
+    <h3 id="cancelModalTitle">Before you cancel</h3>
+    <p>You're about to cancel your <strong>{{ plan_label }}</strong> subscription. We hold your data so you can come back without losing a thing.</p>
+    <div class="policy-box">
+      <strong>Your data is safe for 6 months.</strong><br>
+      Reports, transfers, batches, employees, and settings stay exactly where you left them. Resubscribe anytime within 6 months and you're right back in. After 6 months, all of this store's data is permanently deleted.
+    </div>
+    <p style="font-size:12px;color:var(--gray4);">Clicking continue takes you to Stripe to confirm the cancellation.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="closeCancelModal">Keep Subscription</button>
+      <form method="POST" action="{{ url_for('admin_subscription_cancel') }}" style="display:inline;">
+        <button type="submit" class="btn btn-danger">Continue to Cancel</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+  var openBtn = document.getElementById('openCancelModal');
+  var modal = document.getElementById('cancelModal');
+  var closeBtn = document.getElementById('closeCancelModal');
+  if (!openBtn || !modal) return;
+  function open() { modal.classList.add('open'); }
+  function close() { modal.classList.remove('open'); }
+  openBtn.addEventListener('click', open);
+  if (closeBtn) closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(); });
+})();
+</script>
 {% endblock %}
