@@ -29,6 +29,8 @@
      class="tab-link {% if active_tab == 'companies' %}active{% endif %}">Companies</a>
   <a href="{{ url_for('admin_settings', tab='team') }}"
      class="tab-link {% if active_tab == 'team' %}active{% endif %}">Team</a>
+  <a href="{{ url_for('admin_settings', tab='roster') }}"
+     class="tab-link {% if active_tab == 'roster' %}active{% endif %}">Employees</a>
   <a href="{{ url_for('admin_settings', tab='owner') }}"
      class="tab-link {% if active_tab == 'owner' %}active{% endif %}">Owner Access</a>
 </div>
@@ -220,6 +222,73 @@
     </form>
   </div>
 </div>
+{% elif active_tab == 'roster' %}
+<div class="card mb-3" style="max-width:700px;">
+  <div class="card-header"><span class="card-title">Add an employee name</span></div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      Employees share one login; their <strong>names</strong> live here.
+      Every transfer saved by anyone at the store picks a name from this
+      list so you always know who processed it. Deactivate — don't delete —
+      so historical transfer attribution stays intact.
+    </p>
+    <form method="POST" action="{{ url_for('admin_roster_add') }}"
+          style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="field" style="flex:1;margin:0;">
+        <label>Full Name</label>
+        <input type="text" name="name" placeholder="e.g. Maria Gonzalez" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="height:42px;">＋ Add</button>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="max-width:700px;">
+  <div class="card-header">
+    <span class="card-title">Roster</span>
+    <span class="text-sm text-muted">{{ roster|length }} total</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Status</th><th>Added</th><th></th></tr></thead>
+      <tbody>
+        {% for e in roster %}
+        <tr>
+          <td>
+            <form method="POST" action="{{ url_for('admin_roster_rename', eid=e.id) }}"
+                  style="display:flex;gap:6px;align-items:center;margin:0;">
+              <input type="text" name="name" value="{{ e.name }}"
+                     style="font-size:14px;padding:6px 10px;">
+              <button type="submit" class="btn btn-outline btn-sm">Save</button>
+            </form>
+          </td>
+          <td>
+            {% if e.is_active %}
+            <span class="badge badge-green">Active</span>
+            {% else %}
+            <span class="badge badge-gray">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="mono text-sm text-muted">{{ e.created_at.strftime('%m/%d/%Y') }}</td>
+          <td>
+            <form method="POST" action="{{ url_for('admin_roster_toggle', eid=e.id) }}"
+                  style="margin:0;">
+              <button type="submit" class="btn btn-outline btn-sm">
+                {{ 'Deactivate' if e.is_active else 'Reactivate' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" style="text-align:center;padding:32px;color:var(--gray4);">
+          No employees yet. Add the first name above.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% elif active_tab == 'owner' %}
 <div class="card" style="max-width:560px;">
   <div class="card-header"><span class="card-title">Owner Access</span></div>
