@@ -3,7 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{% block title %}Cambio Express{% endblock %}</title>
+<title>{% block title %}DineroBook{% endblock %}</title>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('theme');
+    if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+    if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+  }catch(e){}
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -29,6 +38,7 @@
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--dark); }
+html, body { overflow-x: hidden; max-width: 100%; }
 
 /* ── SIDEBAR ── */
 .layout { display: flex; min-height: 100vh; }
@@ -87,7 +97,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .sidebar-footer a:hover { color: rgba(255,255,255,0.7); }
 
 /* ── MAIN ── */
-.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; }
+.main { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-height: 100vh; min-width: 0; background: var(--cream); }
 .topbar {
   background: var(--white); border-bottom: 1px solid var(--gray2);
   padding: 0 32px; height: 58px;
@@ -263,7 +273,7 @@ textarea { resize: vertical; min-height: 80px; }
   body.nav-open .sidebar-backdrop { display: block; }
   body.nav-open { overflow: hidden; }
 
-  .main { margin-left: 0; }
+  .main { margin-left: 0; width: 100%; }
   .menu-toggle { display: inline-flex; align-items: center; }
   .topbar { padding: 0 16px; height: 56px; }
   .topbar-title { font-size: 17px; }
@@ -306,6 +316,93 @@ textarea { resize: vertical; min-height: 80px; }
     padding: 11px 13px;
   }
 }
+
+/* ── THEME TOGGLE BUTTON ── */
+.theme-toggle {
+  background: transparent; border: 1px solid var(--gray2);
+  color: var(--gray4); width: 34px; height: 34px;
+  border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.theme-toggle:hover { color: var(--navy); border-color: var(--gray3); }
+.theme-toggle svg { display: block; width: 16px; height: 16px; }
+.theme-toggle .sun { display: none; }
+[data-theme="dark"] .theme-toggle .sun { display: block; }
+[data-theme="dark"] .theme-toggle .moon { display: none; }
+
+/* ── DARK MODE ── */
+[data-theme="dark"] html,
+[data-theme="dark"] body { background: #0f1220; color: #e5e7eb; }
+[data-theme="dark"] .main { background: #0f1220; }
+[data-theme="dark"] .topbar {
+  background: #141828; border-bottom-color: #252b3d;
+}
+[data-theme="dark"] .topbar-title { color: #f0c060; }
+[data-theme="dark"] .topbar-date { color: #9ca3af; }
+[data-theme="dark"] .menu-toggle { color: #e5e7eb; }
+[data-theme="dark"] .menu-toggle:hover { background: rgba(255,255,255,0.06); }
+[data-theme="dark"] .theme-toggle { border-color: #2a3044; color: #c9d0dd; }
+[data-theme="dark"] .theme-toggle:hover { color: #f0c060; border-color: #3a4054; background: rgba(255,255,255,0.04); }
+
+[data-theme="dark"] .card,
+[data-theme="dark"] .stat-card {
+  background: #1a1f2e; border-color: #2a3044;
+}
+[data-theme="dark"] .card-header { border-bottom-color: #2a3044; }
+[data-theme="dark"] .card-title { color: #f3f4f6; }
+[data-theme="dark"] .stat-value { color: #f3f4f6; }
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .stat-sub { color: #9ca3af; }
+
+[data-theme="dark"] thead th {
+  background: #232838; color: #9ca3af; border-bottom-color: #2a3044;
+}
+[data-theme="dark"] tbody tr { border-bottom-color: #2a3044; }
+[data-theme="dark"] tbody tr:hover { background: rgba(255,255,255,0.03); }
+[data-theme="dark"] tbody td { color: #e5e7eb; }
+
+[data-theme="dark"] label { color: #9ca3af; }
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #1a1f2e; color: #e5e7eb; border-color: #2a3044;
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #6b7280; }
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+  border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+}
+
+[data-theme="dark"] .btn-outline {
+  color: #93c5fd; border-color: #3a4a6b;
+}
+[data-theme="dark"] .btn-outline:hover { background: #1e3a6b; color: #fff; border-color: #3b82f6; }
+
+[data-theme="dark"] .section-title {
+  color: #9ca3af; border-bottom-color: #2a3044;
+}
+[data-theme="dark"] .text-muted { color: #9ca3af; }
+
+[data-theme="dark"] .badge-gray  { background: #2a3044; color: #c9d0dd; }
+[data-theme="dark"] .badge-green { background: #0f2e1f; color: #86efac; }
+[data-theme="dark"] .badge-red   { background: #2d1215; color: #fca5a5; }
+[data-theme="dark"] .badge-yellow{ background: #2d2410; color: #fde047; }
+[data-theme="dark"] .badge-orange{ background: #2d1a0a; color: #fdba74; }
+[data-theme="dark"] .badge-blue  { background: #0f1d3f; color: #93c5fd; }
+
+[data-theme="dark"] .flash-success { background: #0f2e1f; color: #86efac; border-color: #14532d; }
+[data-theme="dark"] .flash-error   { background: #2d1215; color: #fca5a5; border-color: #7f1d1d; }
+
+[data-theme="dark"] .co-intermex { color: #93c5fd; }
+[data-theme="dark"] .co-maxi     { color: #c4b5fd; }
+[data-theme="dark"] .co-barri    { color: #67e8f9; }
+[data-theme="dark"] .amount-pos, [data-theme="dark"] .amount-zero { color: #4ade80; }
+[data-theme="dark"] .amount-neg { color: #f87171; }
+[data-theme="dark"] .var-ok  { color: #4ade80; }
+[data-theme="dark"] .var-bad { color: #f87171; }
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -315,8 +412,8 @@ textarea { resize: vertical; min-height: 80px; }
   <aside class="sidebar" id="sidebar">
     <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
     <div class="sidebar-logo">
-      <div class="brand">Cambio Express</div>
-      <div class="sub">MSB Manager</div>
+      <div class="brand">DineroBook</div>
+      <div class="sub">{{ store.name if store else 'MSB Manager' }}</div>
     </div>
     <div class="sidebar-user">
       <div class="uname">{{ user.full_name or user.username }}</div>
@@ -391,6 +488,10 @@ textarea { resize: vertical; min-height: 80px; }
         <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
       </div>
       <div class="topbar-right">
+        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        </button>
         <span class="topbar-date" id="clock"></span>
       </div>
     </div>
@@ -439,6 +540,15 @@ updateClock(); setInterval(updateClock, 30000);
     if (a && window.innerWidth <= 900) shut();
   });
   window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
+
+  var themeBtn = document.getElementById('themeToggle');
+  if (themeBtn) themeBtn.addEventListener('click', function() {
+    var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    var next = cur === 'dark' ? 'light' : 'dark';
+    if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+    else document.documentElement.removeAttribute('data-theme');
+    try { localStorage.setItem('theme', next); } catch(e) {}
+  });
 })();
 </script>
 {% block scripts %}{% endblock %}

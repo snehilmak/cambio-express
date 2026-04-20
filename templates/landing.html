@@ -3,13 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Cambio Express — MSB Manager</title>
+<title>DineroBook — MSB Manager</title>
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('theme');
+    if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
+    if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
+  }catch(e){}
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0f1f3d;--blue:#1a4080;--mid:#2a5caa;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray1:#f5f5f7;--gray2:#e8e8ec;--gray3:#b0b4c0;--gray4:#6b7280;--dark:#1a1a2e}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{font-family:'DM Sans',sans-serif;background:var(--cream);color:var(--dark)}
-nav{position:sticky;top:0;z-index:100;background:var(--navy);padding:0 48px;height:64px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08)}
+nav{position:sticky;top:0;z-index:100;background:var(--navy);padding:0 48px;height:64px;display:flex;align-items:center;gap:20px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.nav-links{margin-left:auto}
 .nav-brand{font-family:'DM Serif Display',serif;color:var(--gold2);font-size:20px;text-decoration:none;display:flex;flex-direction:column;line-height:1.1}
 .nav-brand span{font-family:'DM Sans',sans-serif;font-size:10px;color:rgba(255,255,255,0.4);letter-spacing:1.5px;text-transform:uppercase;font-weight:400}
 .nav-links{display:flex;align-items:center;gap:28px}
@@ -63,7 +73,8 @@ footer{background:var(--navy);padding:32px 48px;display:flex;align-items:center;
 footer p{color:rgba(255,255,255,0.35);font-size:13px}
 footer a{color:rgba(255,255,255,0.45);text-decoration:none;font-size:13px;transition:color .15s}
 footer a:hover{color:var(--gold2)}
-.nav-toggle{display:none;background:transparent;border:none;color:var(--white);cursor:pointer;padding:8px;margin-left:8px}
+.nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.nav-toggle{display:none;background:transparent;border:none;color:var(--white);cursor:pointer;padding:8px;margin-left:4px}
 .nav-toggle svg{display:block}
 @media(max-width:768px){
   .features-grid,.pricing-grid{grid-template-columns:1fr}
@@ -88,24 +99,57 @@ footer a:hover{color:var(--gold2)}
   .hero h1{font-size:30px}
   .hero-eyebrow{font-size:10px;letter-spacing:2px}
 }
+
+/* ── THEME TOGGLE ── */
+.theme-toggle{background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.7);width:34px;height:34px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s;margin-right:4px}
+.theme-toggle:hover{color:var(--gold2);border-color:rgba(255,255,255,0.3)}
+.theme-toggle svg{width:16px;height:16px}
+.theme-toggle .sun{display:none}
+[data-theme="dark"] .theme-toggle .sun{display:block}
+[data-theme="dark"] .theme-toggle .moon{display:none}
+
+/* ── DARK MODE ── */
+[data-theme="dark"] body{background:#0f1220;color:#e5e7eb}
+[data-theme="dark"] .features{background:#0f1220}
+[data-theme="dark"] .pricing{background:#141828}
+[data-theme="dark"] .section-heading{color:#f3f4f6}
+[data-theme="dark"] .feature-card{background:#1a1f2e;border-color:#2a3044}
+[data-theme="dark"] .feature-card h3{color:#f3f4f6}
+[data-theme="dark"] .feature-card p{color:#9ca3af}
+[data-theme="dark"] .plan{background:#1a1f2e;border-color:#2a3044}
+[data-theme="dark"] .plan-price{color:#f3f4f6}
+[data-theme="dark"] .plan-period{color:#9ca3af}
+[data-theme="dark"] .plan-features li{color:#e5e7eb;border-bottom-color:#2a3044}
+[data-theme="dark"] .plan-features li.no{color:#4b5563}
+[data-theme="dark"] .btn-border{color:#93c5fd;border-color:#3a4a6b}
+[data-theme="dark"] .btn-border:hover{background:#1e3a6b;border-color:#3b82f6;color:#fff}
+@media(max-width:768px){
+  .theme-toggle{margin-right:0}
+}
 </style>
 </head>
 <body>
 
 <nav>
-  <a href="/" class="nav-brand">Cambio Express<span>MSB Manager</span></a>
-  <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-      <line x1="3" y1="6" x2="21" y2="6"/>
-      <line x1="3" y1="12" x2="21" y2="12"/>
-      <line x1="3" y1="18" x2="21" y2="18"/>
-    </svg>
-  </button>
+  <a href="/" class="nav-brand">DineroBook<span>MSB Manager</span></a>
   <div class="nav-links" id="navLinks">
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a href="/login">Login</a>
     <a href="/signup" class="cta">Start Free Trial</a>
+  </div>
+  <div class="nav-actions">
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+    <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
   </div>
 </nav>
 <script>
@@ -113,13 +157,21 @@ footer a:hover{color:var(--gold2)}
   var t=document.getElementById('navToggle'),l=document.getElementById('navLinks');
   if(t&&l){t.addEventListener('click',function(){l.classList.toggle('open');});
   l.addEventListener('click',function(e){if(e.target.tagName==='A')l.classList.remove('open');});}
+  var tb=document.getElementById('themeToggle');
+  if(tb) tb.addEventListener('click',function(){
+    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
+    var next=cur==='dark'?'light':'dark';
+    if(next==='dark') document.documentElement.setAttribute('data-theme','dark');
+    else document.documentElement.removeAttribute('data-theme');
+    try{localStorage.setItem('theme',next);}catch(e){}
+  });
 })();
 </script>
 
 <section class="hero">
   <div class="hero-eyebrow">Built for MSB Store Owners</div>
   <h1>Your Business.<br>Crystal Clear.</h1>
-  <p>Stop managing your store on paper or spreadsheets. Cambio Express gives you real-time visibility into transfers, daily cash, and monthly profits.</p>
+  <p>Stop managing your store on paper or spreadsheets. DineroBook gives you real-time visibility into transfers, daily cash, and monthly profits.</p>
   <div class="hero-ctas">
     <a href="/signup" class="btn-gold">Try Free for 7 Days</a>
     <a href="#features" class="btn-outline">Learn More ↓</a>
@@ -213,7 +265,7 @@ footer a:hover{color:var(--gold2)}
 </section>
 
 <footer>
-  <p>&copy; 2026 Cambio Express. All rights reserved.</p>
+  <p>&copy; 2026 DineroBook. All rights reserved.</p>
   <a href="/login">Sign In →</a>
 </footer>
 
