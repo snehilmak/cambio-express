@@ -154,3 +154,59 @@ def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
         from app import Store
         s = Store.query.filter_by(slug="test-store").first()
         assert s.email == "admin@test.com"  # unchanged
+
+
+# ── Task 4: Security tab ─────────────────────────────────────
+
+def test_security_wrong_current_password(logged_in_client):
+    resp = logged_in_client.post("/admin/settings", data={
+        "_tab": "security",
+        "current_password": "wrongpassword",
+        "new_password": "newpassword123!",
+        "confirm_password": "newpassword123!"
+    })
+    assert resp.status_code == 200
+    assert b"incorrect" in resp.data.lower()
+    # verify old password still works
+    with flask_app.app_context():
+        from app import User
+        u = User.query.filter_by(username="admin@test.com").first()
+        assert u.check_password("testpass123!")
+
+
+def test_security_new_password_too_short(logged_in_client):
+    resp = logged_in_client.post("/admin/settings", data={
+        "_tab": "security",
+        "current_password": "testpass123!",
+        "new_password": "short",
+        "confirm_password": "short"
+    })
+    assert resp.status_code == 200
+    assert b"8" in resp.data
+
+
+def test_security_passwords_do_not_match(logged_in_client):
+    resp = logged_in_client.post("/admin/settings", data={
+        "_tab": "security",
+        "current_password": "testpass123!",
+        "new_password": "newpassword123!",
+        "confirm_password": "differentpassword!"
+    })
+    assert resp.status_code == 200
+    assert b"match" in resp.data.lower()
+
+
+def test_security_valid_password_change(logged_in_client):
+    resp = logged_in_client.post("/admin/settings", data={
+        "_tab": "security",
+        "current_password": "testpass123!",
+        "new_password": "brandnew123!",
+        "confirm_password": "brandnew123!"
+    }, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"updated" in resp.data.lower()
+    with flask_app.app_context():
+        from app import User
+        u = User.query.filter_by(username="admin@test.com").first()
+        assert u.check_password("brandnew123!")
+        assert not u.check_password("testpass123!")
