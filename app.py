@@ -335,6 +335,35 @@ class SimpleFINConfig(db.Model):
     access_url  = db.Column(db.String(500), default="")
     last_synced = db.Column(db.DateTime, nullable=True)
 
+class StripeBankAccount(db.Model):
+    """A bank account connected via Stripe Financial Connections.
+
+    One row per connected account (a store may link several). We cache just
+    enough metadata to render the UI — the institution name, last4, account
+    type, and the last-known balance + timestamp. Balances refresh on
+    demand (user clicks Refresh, or we pull in Account.refresh on page load
+    when stale). Credentials are never held here — Stripe is the custodian.
+    """
+    __tablename__ = "stripe_bank_account"
+    id                   = db.Column(db.Integer, primary_key=True)
+    store_id             = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    stripe_account_id    = db.Column(db.String(60), unique=True, nullable=False)
+    institution_name     = db.Column(db.String(120), default="")
+    display_name         = db.Column(db.String(120), default="")
+    last4                = db.Column(db.String(8), default="")
+    category             = db.Column(db.String(30), default="")   # checking / savings / credit / other
+    subcategory          = db.Column(db.String(30), default="")
+    currency             = db.Column(db.String(8), default="usd")
+    last_balance_cents   = db.Column(db.BigInteger, default=0)
+    last_balance_as_of   = db.Column(db.DateTime, nullable=True)
+    connected_at         = db.Column(db.DateTime, default=datetime.utcnow)
+    disconnected_at      = db.Column(db.DateTime, nullable=True)
+    enabled              = db.Column(db.Boolean, default=True)
+
+    @property
+    def last_balance(self):
+        return (self.last_balance_cents or 0) / 100.0
+
 class StoreOwnerLink(db.Model):
     __tablename__ = "store_owner_link"
     id        = db.Column(db.Integer, primary_key=True)
@@ -749,6 +778,102 @@ def simplefin_claim_token(token_raw,store_id):
         return False,f"SimpleFIN claim failed ({e.response.status_code}). Token may be expired."
     except Exception as e:
         return False,f"Connection error: {str(e)}"
+
+# ── Stripe Financial Connections ─────────────────────────────
+# Primary bank-sync path; SimpleFIN is kept around as a legacy option
+# while this stabilizes.
+BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
+
+def stripe_is_configured():
+    """We can only start an FC session if Stripe is wired up."""
+    return bool(os.environ.get("STRIPE_SECRET_KEY"))
+
+def ensure_stripe_customer(store):
+    """Return a Stripe customer id for this store, creating one if needed.
+
+    Stripe FC requires an `account_holder={"type":"customer", ...}` on
+    every Financial Connections session — so even trial / inactive stores
+    that haven't paid yet need a customer record to link a bank account.
+    We reuse the existing billing customer when present.
+    """
+    if store.stripe_customer_id:
+        return store.stripe_customer_id
+    try:
+        cust = stripe.Customer.create(
+            email=(store.email or None),
+            name=store.name,
+            metadata={"store_id": str(store.id)},
+        )
+    except stripe.error.StripeError as e:
+        app.logger.error(f"Stripe customer create failed for store {store.id}: {e}")
+        raise
+    store.stripe_customer_id = cust.id
+    db.session.commit()
+    return cust.id
+
+def _upsert_fc_account(store_id, api_obj):
+    """Persist (or refresh) a FinancialConnectionsAccount into our cache."""
+    acct_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
+    existing = StripeBankAccount.query.filter_by(stripe_account_id=acct_id).first()
+    row = existing or StripeBankAccount(store_id=store_id, stripe_account_id=acct_id)
+    institution = api_obj.get("institution_name") if isinstance(api_obj, dict) else getattr(api_obj, "institution_name", "")
+    display     = api_obj.get("display_name")     if isinstance(api_obj, dict) else getattr(api_obj, "display_name", "")
+    last4       = api_obj.get("last4")            if isinstance(api_obj, dict) else getattr(api_obj, "last4", "")
+    category    = api_obj.get("category")         if isinstance(api_obj, dict) else getattr(api_obj, "category", "")
+    subcategory = api_obj.get("subcategory")      if isinstance(api_obj, dict) else getattr(api_obj, "subcategory", "")
+    row.institution_name = institution or row.institution_name or ""
+    row.display_name     = display or row.display_name or ""
+    row.last4            = last4 or row.last4 or ""
+    row.category         = category or row.category or ""
+    row.subcategory      = subcategory or row.subcategory or ""
+    # Balance payload lives inside the "balance" field; may be missing if
+    # the "balances" permission wasn't granted.
+    bal = api_obj.get("balance") if isinstance(api_obj, dict) else getattr(api_obj, "balance", None)
+    if bal:
+        current = bal.get("current") if isinstance(bal, dict) else getattr(bal, "current", None)
+        as_of   = bal.get("as_of")   if isinstance(bal, dict) else getattr(bal, "as_of", None)
+        # Stripe returns balances as a dict {"usd": <cents>}; we pick whatever
+        # matches the account currency, falling back to the first value.
+        if isinstance(current, dict):
+            cents = current.get(row.currency or "usd") or next(iter(current.values()), 0)
+        else:
+            cents = current or 0
+        row.last_balance_cents = int(cents or 0)
+        if as_of:
+            try:
+                row.last_balance_as_of = datetime.utcfromtimestamp(int(as_of))
+            except (TypeError, ValueError):
+                pass
+    row.enabled = True
+    row.disconnected_at = None
+    if existing is None:
+        db.session.add(row)
+    db.session.flush()
+    return row
+
+def refresh_bank_balances(store):
+    """Pull fresh balances for every enabled account on the store.
+
+    Stripe requires the `balances` feature to be refreshed explicitly when
+    the cached value is stale; we call Account.refresh(features=["balance"])
+    and then retrieve to capture the new snapshot.
+    """
+    if not stripe_is_configured():
+        return 0
+    updated = 0
+    for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
+        try:
+            stripe.financial_connections.Account.refresh(
+                acct.stripe_account_id, features=["balance"],
+            )
+            api_obj = stripe.financial_connections.Account.retrieve(acct.stripe_account_id)
+            _upsert_fc_account(store.id, api_obj)
+            updated += 1
+        except stripe.error.StripeError as e:
+            app.logger.warning(f"FC refresh failed for {acct.stripe_account_id}: {e}")
+    if updated:
+        db.session.commit()
+    return updated
 
 # ── Login ────────────────────────────────────────────────────
 @app.route("/")
@@ -1317,12 +1442,22 @@ def dashboard():
             company_stats[co]={"count":len(rows),"total":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows)}
         today_report=DailyReport.query.filter_by(store_id=sid,report_date=today).first()
         month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=today.year,month=today.month).first()
-        cfg=get_sfin_cfg(sid)
-        bank_data,bank_error=simplefin_fetch(sid) if (cfg and cfg.access_url) else (None,None)
+        # Prefer Stripe Financial Connections on the dashboard; only fall back
+        # to SimpleFIN when it's actually configured for this store (else it
+        # disappears from the UI — the legacy code still exists for anyone
+        # who connected before the switch).
+        stripe_accounts = (StripeBankAccount.query
+                           .filter_by(store_id=sid, enabled=True)
+                           .order_by(StripeBankAccount.connected_at.desc()).limit(3).all())
+        cfg = get_sfin_cfg(sid)
+        bank_data, bank_error = (None, None)
+        if not stripe_accounts and cfg and cfg.access_url:
+            bank_data, bank_error = simplefin_fetch(sid)
         return render_template("dashboard_admin.html",user=user,store=store,today=today,
             total_transfers=total_transfers,today_transfers=today_transfers,
             pending_ach=pending_ach,recent_transfers=recent_transfers,recent_batches=recent_batches,
             company_stats=company_stats,today_report=today_report,month_report=month_report,
+            stripe_accounts=stripe_accounts,
             bank_data=bank_data,bank_error=bank_error,cfg=cfg)
     else:
         my_today=Transfer.query.filter_by(store_id=sid,created_by=user.id,send_date=today).order_by(Transfer.created_at.desc()).all()
@@ -1921,15 +2056,133 @@ def batch_transfers(bid):
     rows=Transfer.query.filter_by(store_id=sid,batch_id=b.batch_ref).all()
     return render_template("batch_detail.html",user=user,batch=b,transfers=rows)
 
-# ── Bank / SimpleFIN ─────────────────────────────────────────
+# ── Bank (Stripe Financial Connections primary + SimpleFIN legacy) ──
 @app.route("/bank")
 @admin_required
 def bank():
-    user=current_user(); sid=session["store_id"]
-    cfg=get_sfin_cfg(sid)
-    bank_data,bank_error=simplefin_fetch(sid) if (cfg and cfg.access_url) else (None,None)
-    return render_template("bank.html",user=user,bank_data=bank_data,bank_error=bank_error,cfg=cfg)
+    user = current_user()
+    store = current_store()
+    sid = store.id
+    # Stripe FC — primary.
+    stripe_accounts = (StripeBankAccount.query
+                       .filter_by(store_id=sid, enabled=True)
+                       .order_by(StripeBankAccount.connected_at.desc()).all())
+    # Auto-refresh balances that are older than the staleness window so the
+    # page always shows something close to live. Silent on failure.
+    now = datetime.utcnow()
+    stale = [a for a in stripe_accounts
+             if not a.last_balance_as_of or
+             (now - a.last_balance_as_of).total_seconds() > BANK_BALANCE_STALE_SECONDS]
+    if stale and stripe_is_configured():
+        try:
+            refresh_bank_balances(store)
+            stripe_accounts = (StripeBankAccount.query
+                               .filter_by(store_id=sid, enabled=True)
+                               .order_by(StripeBankAccount.connected_at.desc()).all())
+        except Exception as e:
+            app.logger.warning(f"bank() auto-refresh failed: {e}")
+    # SimpleFIN — legacy (kept until FC proven in production).
+    cfg = get_sfin_cfg(sid)
+    bank_data, bank_error = (simplefin_fetch(sid)
+                             if (cfg and cfg.access_url) else (None, None))
+    return render_template("bank.html", user=user,
+        stripe_accounts=stripe_accounts, stripe_ready=stripe_is_configured(),
+        bank_data=bank_data, bank_error=bank_error, cfg=cfg)
 
+@app.route("/bank/stripe/connect", methods=["POST"])
+@admin_required
+def bank_stripe_connect():
+    """Kick off a Stripe Financial Connections session and redirect the
+    admin to Stripe's hosted auth flow. On success Stripe redirects the
+    browser back to bank_stripe_return."""
+    if not stripe_is_configured():
+        flash("Stripe isn't configured yet — ask the platform admin.", "error")
+        return redirect(url_for("bank"))
+    store = current_store()
+    try:
+        customer_id = ensure_stripe_customer(store)
+        fc_session = stripe.financial_connections.Session.create(
+            account_holder={"type": "customer", "customer": customer_id},
+            permissions=["balances"],
+            filters={"countries": ["US"]},
+            return_url=url_for("bank_stripe_return", _external=True),
+        )
+        # The Session object exposes a hosted URL the user completes in-browser.
+        hosted_url = getattr(fc_session, "url", None) or fc_session.get("url")
+        if not hosted_url:
+            flash("Stripe did not return a hosted link. Try again in a moment.", "error")
+            return redirect(url_for("bank"))
+        # Remember the session id so the return handler can fetch its accounts.
+        session["fc_session_id"] = fc_session.id
+        return redirect(hosted_url, code=303)
+    except stripe.error.StripeError as e:
+        app.logger.error(f"FC session create failed: {e}")
+        flash(f"Could not start the bank connection: {e.user_message or str(e)}", "error")
+        return redirect(url_for("bank"))
+
+@app.route("/bank/stripe/return")
+@admin_required
+def bank_stripe_return():
+    """Stripe redirects here after the user finishes linking an account.
+    We retrieve the FC session by id and persist any attached accounts."""
+    sid = session["store_id"]
+    fc_session_id = session.pop("fc_session_id", None)
+    if not fc_session_id:
+        flash("No active bank-link session found.", "error")
+        return redirect(url_for("bank"))
+    try:
+        fc_session = stripe.financial_connections.Session.retrieve(
+            fc_session_id, expand=["accounts"])
+        accounts = fc_session.accounts.data if hasattr(fc_session, "accounts") else []
+        if not accounts:
+            flash("No accounts were linked.", "error")
+            return redirect(url_for("bank"))
+        for acct_summary in accounts:
+            # The session returns a trimmed account object; retrieve it fully
+            # so we get balance and institution metadata.
+            full = stripe.financial_connections.Account.retrieve(acct_summary.id)
+            _upsert_fc_account(sid, full)
+        db.session.commit()
+        # Immediately pull fresh balances for the newly linked accounts.
+        try:
+            refresh_bank_balances(current_store())
+        except Exception as e:
+            app.logger.warning(f"post-connect refresh failed: {e}")
+        flash(f"Connected {len(accounts)} account(s) via Stripe.", "success")
+    except stripe.error.StripeError as e:
+        app.logger.error(f"FC session retrieve failed: {e}")
+        flash(f"Stripe error while completing the link: {e.user_message or str(e)}", "error")
+    return redirect(url_for("bank"))
+
+@app.route("/bank/stripe/refresh", methods=["POST"])
+@admin_required
+def bank_stripe_refresh():
+    """Manually refresh all connected account balances."""
+    n = refresh_bank_balances(current_store())
+    flash(f"Refreshed {n} account(s)." if n else "Nothing to refresh.",
+          "success" if n else "error")
+    return redirect(url_for("bank"))
+
+@app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
+@admin_required
+def bank_stripe_disconnect(acct_id):
+    """Disconnect a single Stripe FC account. We both mark it disabled
+    locally and tell Stripe to revoke, so the account stops counting
+    toward the per-account billing line as well."""
+    sid = session["store_id"]
+    row = StripeBankAccount.query.filter_by(id=acct_id, store_id=sid).first_or_404()
+    try:
+        if stripe_is_configured():
+            stripe.financial_connections.Account.disconnect(row.stripe_account_id)
+    except stripe.error.StripeError as e:
+        app.logger.warning(f"FC disconnect API call failed (continuing locally): {e}")
+    row.enabled = False
+    row.disconnected_at = datetime.utcnow()
+    db.session.commit()
+    flash("Bank account disconnected.", "success")
+    return redirect(url_for("bank"))
+
+# ── SimpleFIN (legacy — hidden by default; see BACKLOG for removal) ──
 @app.route("/bank/setup",methods=["POST"])
 @admin_required
 def bank_setup():
@@ -2672,7 +2925,7 @@ def stripe_webhook():
 # Models that hold per-store data and must be wiped before the store row.
 _STORE_OWNED_MODELS = [
     "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
-    "MonthlyFinancial", "SimpleFINConfig", "StoreOwnerLink",
+    "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
     "OwnerInviteCode", "Customer", "User",
 ]
 

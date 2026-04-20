@@ -55,6 +55,21 @@ any cadence.
 - [ ] Mask phone numbers in list views per compliance.
 - [ ] CSV export on the customer directory.
 
+## SimpleFIN removal (after Stripe FC is proven)
+- [ ] Once all active stores have migrated off SimpleFIN (verify via a
+      superadmin query on `SimpleFINConfig` rows with `access_url != ''`),
+      delete:
+      - The `SimpleFINConfig` model (keep it in `_STORE_OWNED_MODELS` right
+        up to the moment you drop the table so the retention purge still
+        cleans legacy rows).
+      - `simplefin_fetch`, `simplefin_claim_token`, `get_sfin_cfg`.
+      - Routes: `/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`.
+      - The `<details>` legacy section on `/bank`.
+      - The `bank_data` / `bank_error` / `cfg` context on the dashboard.
+      - The SimpleFIN references in `CLAUDE.md` section map.
+- [ ] Drop the `simplefin_config` table in a follow-up deploy, not together
+      with the code removal.
+
 ## Code quality
 - [ ] Graduate inline chat smoke tests to committed regression tests in
       `tests/`. Current gap: subscription, superadmin controls, customer
