@@ -409,7 +409,11 @@ def landing():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if "user_id" in session: return redirect(url_for("dashboard"))
+    if "user_id" in session:
+        u = current_user()
+        if u and u.role == "owner":
+            return redirect(url_for("owner_dashboard"))
+        return redirect(url_for("dashboard"))
     error=None
     if request.method=="POST":
         username=request.form.get("username","").strip()

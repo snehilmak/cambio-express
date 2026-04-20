@@ -70,3 +70,21 @@ def test_login_redirects_owner_to_owner_dashboard(client):
     rv = client.post("/login", data={"username": "owner@test.com", "password": "ownerpass123"})
     assert rv.status_code == 302
     assert "owner/dashboard" in rv.headers["Location"]
+
+
+def test_login_already_logged_in_owner_redirects_to_owner_dashboard(client):
+    """Owner already in session hitting /login should go to owner_dashboard."""
+    with flask_app.app_context():
+        from app import User
+        o = User(username="owner_loggedin@test.com", full_name="Owner", role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o)
+        db.session.commit()
+        oid = o.id
+    with client.session_transaction() as sess:
+        sess["user_id"] = oid
+        sess["role"] = "owner"
+        sess["store_id"] = None
+    rv = client.get("/login")
+    assert rv.status_code == 302
+    assert "owner/dashboard" in rv.headers["Location"]
