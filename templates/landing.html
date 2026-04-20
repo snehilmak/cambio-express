@@ -14,6 +14,12 @@
 })();
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DineroBook">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 <style>
 :root{--navy:#0f1f3d;--blue:#1a4080;--mid:#2a5caa;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray1:#f5f5f7;--gray2:#e8e8ec;--gray3:#b0b4c0;--gray4:#6b7280;--dark:#1a1a2e}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -74,6 +80,9 @@ footer p{color:rgba(255,255,255,0.35);font-size:13px}
 footer a{color:rgba(255,255,255,0.45);text-decoration:none;font-size:13px;transition:color .15s}
 footer a:hover{color:var(--gold2)}
 .nav-actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+.install-btn{background:var(--gold);color:#fff;border:0;padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.install-btn:hover{background:var(--gold2);color:var(--navy)}
+@media(max-width:480px){.install-btn{padding:7px 10px;font-size:11.5px}}
 .nav-toggle{display:none;background:transparent;border:none;color:var(--white);cursor:pointer;padding:8px;margin-left:4px}
 .nav-toggle svg{display:block}
 @media(max-width:768px){
@@ -139,6 +148,7 @@ footer a:hover{color:var(--gold2)}
     <a href="/signup" class="cta">Start Free Trial</a>
   </div>
   <div class="nav-actions">
+    <button type="button" id="installAppBtn" class="install-btn" hidden>📲 Install app</button>
     <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
       <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
@@ -272,5 +282,24 @@ footer a:hover{color:var(--gold2)}
   </div>
 </footer>
 
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+(function(){
+  var deferred=null, btn=document.getElementById('installAppBtn');
+  var standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+  if(!btn||standalone) return;
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e;btn.hidden=false;});
+  btn.addEventListener('click',function(){
+    if(!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.finally(function(){deferred=null;btn.hidden=true;});
+  });
+  window.addEventListener('appinstalled',function(){btn.hidden=true;});
+})();
+</script>
 </body>
 </html>

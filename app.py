@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -533,6 +533,20 @@ class Announcement(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
+class PushSubscription(db.Model):
+    """Web Push endpoint for a user — one row per browser/device they
+    opted in on. Deleted on unsubscribe or when the endpoint starts
+    returning 404/410 from the push provider."""
+    __tablename__ = "push_subscription"
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    endpoint   = db.Column(db.Text, nullable=False)
+    p256dh     = db.Column(db.String(200), nullable=False)
+    auth       = db.Column(db.String(80), nullable=False)
+    user_agent = db.Column(db.String(255), default="")
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("user_id", "endpoint"),)
+
 # ── Auth ─────────────────────────────────────────────────────
 def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
 def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
@@ -922,6 +936,120 @@ def refresh_bank_balances(store):
     if updated:
         db.session.commit()
     return updated
+
+# ── PWA ──────────────────────────────────────────────────────
+# Service worker must be served from root so its default scope covers
+# every path. The file lives in /static/ but is routed here.
+@app.route("/sw.js")
+def service_worker():
+    resp = send_from_directory("static", "sw.js", mimetype="application/javascript")
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
+
+@app.route("/offline")
+def offline():
+    """Plain offline page. Precached by the service worker so it
+    renders even when the network is completely unavailable."""
+    return render_template("offline.html")
+
+# ── Push notifications ───────────────────────────────────────
+# Operators generate a VAPID keypair once (see docs/push-keys.md)
+# and set the three env vars below. When they're not set, push
+# endpoints return 501 and the opt-in UI stays hidden.
+VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT     = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+
+def push_enabled() -> bool:
+    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+
+def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str | None = None) -> int:
+    """Deliver a push notification to every device the user has
+    subscribed. Returns the number of successful sends. Dead
+    subscriptions (404/410 from the push provider) are cleaned up."""
+    if not push_enabled():
+        return 0
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        app.logger.warning("pywebpush not installed; skipping send_push")
+        return 0
+    import json as _json
+    payload = _json.dumps({k: v for k, v in {"title": title, "body": body, "url": url, "tag": tag}.items() if v is not None})
+    sent = 0
+    subs = PushSubscription.query.filter_by(user_id=user_id).all()
+    for s in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": s.endpoint,
+                    "keys": {"p256dh": s.p256dh, "auth": s.auth},
+                },
+                data=payload,
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims={"sub": VAPID_SUBJECT},
+            )
+            sent += 1
+        except WebPushException as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status in (404, 410):
+                # Subscription gone — drop it.
+                db.session.delete(s)
+            else:
+                app.logger.warning(f"push send failed ({status}): {e}")
+    db.session.commit()
+    return sent
+
+@app.route("/api/push/public-key")
+def push_public_key():
+    """Frontend reads this to build a PushManager subscription."""
+    if not push_enabled():
+        return jsonify({"error": "push not configured"}), 501
+    return jsonify({"key": VAPID_PUBLIC_KEY})
+
+@app.route("/api/push/subscribe", methods=["POST"])
+def push_subscribe():
+    u = current_user()
+    if not u:
+        return jsonify({"error": "auth"}), 401
+    if not push_enabled():
+        return jsonify({"error": "push not configured"}), 501
+    data = request.get_json(silent=True) or {}
+    endpoint = (data.get("endpoint") or "").strip()
+    keys = data.get("keys") or {}
+    p256dh = (keys.get("p256dh") or "").strip()
+    auth   = (keys.get("auth") or "").strip()
+    if not endpoint or not p256dh or not auth:
+        return jsonify({"error": "missing fields"}), 400
+    existing = PushSubscription.query.filter_by(user_id=u.id, endpoint=endpoint).first()
+    if not existing:
+        db.session.add(PushSubscription(
+            user_id=u.id, endpoint=endpoint, p256dh=p256dh, auth=auth,
+            user_agent=(request.headers.get("User-Agent") or "")[:255],
+        ))
+        db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/push/unsubscribe", methods=["POST"])
+def push_unsubscribe():
+    u = current_user()
+    if not u:
+        return jsonify({"error": "auth"}), 401
+    endpoint = (request.get_json(silent=True) or {}).get("endpoint", "")
+    if endpoint:
+        PushSubscription.query.filter_by(user_id=u.id, endpoint=endpoint).delete()
+        db.session.commit()
+    return jsonify({"ok": True})
+
+@app.route("/api/push/test", methods=["POST"])
+def push_test():
+    """Send a test notification to the caller's own devices."""
+    u = current_user()
+    if not u:
+        return jsonify({"error": "auth"}), 401
+    n = send_push(u.id, "DineroBook", "Push notifications are working on this device.", url="/")
+    return jsonify({"sent": n})
 
 # ── Login ────────────────────────────────────────────────────
 @app.route("/")

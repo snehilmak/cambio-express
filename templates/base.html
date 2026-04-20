@@ -16,6 +16,12 @@
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css') }}" rel="stylesheet">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+<meta name="theme-color" content="#0f1f3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DineroBook">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -129,6 +135,14 @@
               <div class="nm">{{ _name }}</div>
               <div class="rl">{{ user.role }}</div>
             </div>
+            <button type="button" id="installAppBtn" class="dropdown-item" role="menuitem" hidden
+                    style="width:100%;background:none;border:0;text-align:left;font:inherit;cursor:pointer;">
+              <span class="icon">📲</span> Install app
+            </button>
+            <button type="button" id="notifyToggleBtn" class="dropdown-item" role="menuitem" hidden
+                    style="width:100%;background:none;border:0;text-align:left;font:inherit;cursor:pointer;">
+              <span class="icon">🔔</span> <span id="notifyToggleLabel">Enable notifications</span>
+            </button>
             <a href="{{ url_for('logout') }}" class="dropdown-item" role="menuitem">
               <span class="icon">🚪</span> Sign out
             </a>
@@ -245,5 +259,94 @@
   })();
 </script>
 {% block scripts %}{% endblock %}
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+
+// PWA install prompt: show the "Install app" dropdown item only when
+// the browser confirms installability and the app isn't already running
+// standalone.
+(function() {
+  var deferred = null;
+  var btn = document.getElementById('installAppBtn');
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+  if (!btn || isStandalone) return;
+
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferred = e;
+    btn.hidden = false;
+  });
+  btn.addEventListener('click', function() {
+    if (!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.finally(function() {
+      deferred = null;
+      btn.hidden = true;
+    });
+  });
+  window.addEventListener('appinstalled', function() { btn.hidden = true; });
+})();
+
+// Push notification opt-in. Hidden until we confirm: browser support,
+// server has VAPID configured, and we're on HTTPS (or localhost).
+(function(){
+  var btn = document.getElementById('notifyToggleBtn');
+  var lbl = document.getElementById('notifyToggleLabel');
+  if (!btn || !('serviceWorker' in navigator) || !('PushManager' in window) || !window.Notification) return;
+  if (Notification.permission === 'denied') return;
+
+  function b64ToUint8(b64){
+    var padding='='.repeat((4-b64.length%4)%4);
+    var base=(b64+padding).replace(/-/g,'+').replace(/_/g,'/');
+    var raw=window.atob(base), out=new Uint8Array(raw.length);
+    for (var i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+    return out;
+  }
+  function setLabel(subscribed){
+    lbl.textContent = subscribed ? 'Disable notifications' : 'Enable notifications';
+  }
+  function fetchKey(){
+    return fetch('/api/push/public-key').then(function(r){
+      if (!r.ok) return null;
+      return r.json().then(function(j){ return j.key; });
+    }).catch(function(){ return null; });
+  }
+
+  navigator.serviceWorker.ready.then(function(reg){
+    return Promise.all([reg.pushManager.getSubscription(), fetchKey()]).then(function(parts){
+      var sub = parts[0], key = parts[1];
+      if (!key) return;
+      btn.hidden = false;
+      setLabel(!!sub);
+      btn.addEventListener('click', function(){
+        reg.pushManager.getSubscription().then(function(existing){
+          if (existing) {
+            fetch('/api/push/unsubscribe', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({endpoint: existing.endpoint})
+            });
+            existing.unsubscribe().then(function(){ setLabel(false); });
+          } else {
+            reg.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: b64ToUint8(key)
+            }).then(function(newSub){
+              fetch('/api/push/subscribe', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify(newSub.toJSON())
+              }).then(function(){ setLabel(true); });
+            }).catch(function(err){ console.warn('push subscribe failed', err); });
+          }
+        });
+      });
+    });
+  });
+})();
+</script>
 </body>
 </html>
