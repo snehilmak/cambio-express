@@ -1,6 +1,40 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit' if transfer else 'New' }} Transfer — DineroBook{% endblock %}
 {% block page_title %}{{ 'Edit Transfer' if transfer else 'Log New Transfer' }}{% endblock %}
+{% block head %}
+<style>
+  /* Autocomplete dropdown attached to sender inputs. Positioned absolutely
+     below the input — the parent .field needs position:relative which is
+     set inline on the markup. */
+  .customer-suggest {
+    position: absolute; left: 0; right: 0; top: 100%;
+    background: var(--white); border: 1px solid var(--gray2);
+    border-radius: 8px; box-shadow: 0 8px 20px rgba(15,31,61,0.08);
+    z-index: 30; max-height: 240px; overflow-y: auto; margin-top: 4px;
+  }
+  [data-theme="dark"] .customer-suggest {
+    background: #1a1f2e; border-color: #2a3044;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  }
+  .customer-suggest .row {
+    padding: 8px 12px; cursor: pointer;
+    border-bottom: 1px solid var(--gray2);
+    font-size: 13px; line-height: 1.4;
+  }
+  [data-theme="dark"] .customer-suggest .row { border-bottom-color: #2a3044; color: #e5e7eb; }
+  .customer-suggest .row:last-child { border-bottom: none; }
+  .customer-suggest .row:hover,
+  .customer-suggest .row.active { background: var(--gray1); }
+  [data-theme="dark"] .customer-suggest .row:hover,
+  [data-theme="dark"] .customer-suggest .row.active { background: rgba(255,255,255,0.04); }
+  .customer-suggest .name { font-weight: 600; color: var(--navy); }
+  [data-theme="dark"] .customer-suggest .name { color: #f3f4f6; }
+  .customer-suggest .meta {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    color: var(--gray4); margin-top: 2px;
+  }
+</style>
+{% endblock %}
 {% block content %}
 
 <div style="max-width:780px;">
@@ -48,18 +82,53 @@
       </div>
 
       <div class="section-title">Sender Info</div>
-      <div class="form-grid cols-3">
-        <div class="field">
+      <p class="text-sm text-muted mb-2">
+        Start typing a name, phone number, or address to find a returning customer.
+      </p>
+      {# Hidden link to the Customer row. Set when the cashier picks from
+         the autocomplete; the server also tries to upsert by phone. #}
+      <input type="hidden" name="customer_id" id="customer_id"
+             value="{{ transfer.customer_id if transfer else '' }}">
+      <div class="form-grid">
+        <div class="field" style="position:relative;">
           <label>Sender Name *</label>
-          <input type="text" name="sender_name" value="{{ transfer.sender_name if transfer else '' }}"
+          <input type="text" name="sender_name" id="sender_name" autocomplete="off"
+            value="{{ transfer.sender_name if transfer else '' }}"
             placeholder="Full name" required>
+          <div class="customer-suggest" id="suggest-sender_name" hidden></div>
         </div>
         <div class="field">
-          <label>Sender Phone</label>
-          <input type="text" name="sender_phone" value="{{ transfer.sender_phone if transfer else '' }}"
-            placeholder="Phone number">
+          <label>Date of Birth</label>
+          <input type="date" name="sender_dob" id="sender_dob"
+            value="{{ transfer.sender_dob.isoformat() if transfer and transfer.sender_dob else '' }}">
         </div>
         <div class="field">
+          <label>Phone</label>
+          <div style="display:flex;gap:6px;">
+            <select name="sender_phone_country" id="sender_phone_country" style="flex:0 0 140px;">
+              {% for cc, name in phone_country_codes %}
+              <option value="{{ cc }}"
+                {% if transfer and transfer.sender_phone_country == cc %}selected
+                {% elif not transfer and cc == '+1' %}selected{% endif %}>
+                {{ cc }} — {{ name }}
+              </option>
+              {% endfor %}
+            </select>
+            <input type="text" name="sender_phone" id="sender_phone" autocomplete="off"
+              style="flex:1;"
+              value="{{ transfer.sender_phone if transfer else '' }}"
+              placeholder="Phone number">
+          </div>
+          <div class="customer-suggest" id="suggest-sender_phone" hidden></div>
+        </div>
+        <div class="field span-2" style="position:relative;">
+          <label>Address</label>
+          <input type="text" name="sender_address" id="sender_address" autocomplete="off"
+            value="{{ transfer.sender_address if transfer else '' }}"
+            placeholder="Street, city, state, ZIP">
+          <div class="customer-suggest" id="suggest-sender_address" hidden></div>
+        </div>
+        <div class="field span-2">
           <label>Confirmation # / Reference</label>
           <input type="text" name="confirm_number" value="{{ transfer.confirm_number if transfer else '' }}"
             placeholder="e.g. INT-00123">
@@ -126,4 +195,98 @@
   </div>
 </div>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+/*
+ * Sender autocomplete
+ *
+ * Attaches to the sender_name / sender_phone / sender_address inputs on the
+ * transfer form. Each keystroke (debounced) hits /api/customers/search,
+ * renders up to 10 matches below the input, and — on click — fills the
+ * whole sender section from the selected Customer row.
+ */
+(function() {
+  var SEARCH_URL = "{{ url_for('api_customers_search') }}";
+  var DEBOUNCE_MS = 180;
+
+  var inputs = [
+    { input: document.getElementById('sender_name'),    box: document.getElementById('suggest-sender_name') },
+    { input: document.getElementById('sender_phone'),   box: document.getElementById('suggest-sender_phone') },
+    { input: document.getElementById('sender_address'), box: document.getElementById('suggest-sender_address') },
+  ];
+  var customerIdField   = document.getElementById('customer_id');
+  var dobField          = document.getElementById('sender_dob');
+  var addressField      = document.getElementById('sender_address');
+  var phoneField        = document.getElementById('sender_phone');
+  var phoneCountryField = document.getElementById('sender_phone_country');
+  var nameField         = document.getElementById('sender_name');
+
+  function hideAll() { inputs.forEach(function(p) { if (p.box) p.box.hidden = true; }); }
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.customer-suggest') && !e.target.closest('.field')) hideAll();
+  });
+
+  function applyCustomer(c) {
+    if (customerIdField)   customerIdField.value   = c.id || '';
+    if (nameField)         nameField.value         = c.full_name || '';
+    if (dobField)          dobField.value          = c.dob || '';
+    if (addressField)      addressField.value      = c.address || '';
+    if (phoneField)        phoneField.value        = c.phone_number || '';
+    if (phoneCountryField && c.phone_country) {
+      // Try to select the matching option; fall back silently if unknown.
+      for (var i = 0; i < phoneCountryField.options.length; i++) {
+        if (phoneCountryField.options[i].value === c.phone_country) {
+          phoneCountryField.selectedIndex = i; break;
+        }
+      }
+    }
+    hideAll();
+  }
+
+  function render(box, results) {
+    if (!box) return;
+    if (!results.length) { box.hidden = true; return; }
+    box.innerHTML = results.map(function(c) {
+      var phone = (c.phone_country ? c.phone_country + ' ' : '') + (c.phone_number || '');
+      return (
+        '<div class="row" data-id="' + c.id + '">' +
+          '<div class="name">' + (c.full_name || '—') + '</div>' +
+          '<div class="meta">' + phone + ' · ' + (c.address || 'no address') + '</div>' +
+        '</div>'
+      );
+    }).join('');
+    box.querySelectorAll('.row').forEach(function(el) {
+      el.addEventListener('mousedown', function(e) {
+        e.preventDefault();  // keep focus in the input
+        var id = el.getAttribute('data-id');
+        var picked = results.filter(function(c) { return String(c.id) === String(id); })[0];
+        if (picked) applyCustomer(picked);
+      });
+    });
+    box.hidden = false;
+  }
+
+  function attach(input, box) {
+    if (!input || !box) return;
+    var timer = null;
+    input.addEventListener('input', function() {
+      // A fresh keystroke means the user is typing a NEW value — drop the
+      // previously-picked customer link so we don't silently keep it.
+      if (customerIdField) customerIdField.value = '';
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { box.hidden = true; return; }
+      timer = setTimeout(function() {
+        fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+          .then(function(r) { return r.json(); })
+          .then(function(rows) { render(box, rows || []); })
+          .catch(function() { box.hidden = true; });
+      }, DEBOUNCE_MS);
+    });
+    input.addEventListener('focus', function() { if (box.children.length) box.hidden = false; });
+  }
+  inputs.forEach(function(p) { attach(p.input, p.box); });
+})();
+</script>
 {% endblock %}

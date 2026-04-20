@@ -55,11 +55,46 @@ class User(db.Model):
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
 
+class Customer(db.Model):
+    """Per-store customer directory used to autofill returning-sender info.
+
+    Unique within a store on (phone_country, phone_number) so the same
+    person can be reached the same way twice. Soft fields (address, dob)
+    are free to update on each visit — newest values win.
+    """
+    __tablename__ = "customer"
+    id            = db.Column(db.Integer, primary_key=True)
+    store_id      = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    full_name     = db.Column(db.String(120), nullable=False)
+    dob           = db.Column(db.Date, nullable=True)
+    address       = db.Column(db.String(255), default="")
+    phone_country = db.Column(db.String(8),  default="+1")
+    phone_number  = db.Column(db.String(40), default="")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("store_id", "phone_country", "phone_number",
+                            name="uq_customer_store_phone"),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "full_name": self.full_name,
+            "dob": self.dob.isoformat() if self.dob else "",
+            "address": self.address or "",
+            "phone_country": self.phone_country or "",
+            "phone_number": self.phone_number or "",
+        }
+
 class Transfer(db.Model):
     __tablename__ = "transfer"
     id             = db.Column(db.Integer, primary_key=True)
     store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
     created_by     = db.Column(db.Integer, db.ForeignKey("user.id"))
+    # Linked to Customer for returning-customer autofill. Nullable so legacy
+    # transfers stay valid.
+    customer_id    = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=True)
     send_date      = db.Column(db.Date, nullable=False)
     company        = db.Column(db.String(30), nullable=False)
     sender_name    = db.Column(db.String(120), nullable=False)
@@ -73,7 +108,14 @@ class Transfer(db.Model):
     recipient_name = db.Column(db.String(120), default="")
     country        = db.Column(db.String(60), default="")
     recipient_phone= db.Column(db.String(40), default="")
-    sender_phone   = db.Column(db.String(40), default="")
+    # Sender snapshot: a copy of Customer fields at transfer time. The
+    # canonical source of truth is the linked Customer row so updates flow
+    # both ways — we mirror here so old transfers still display even after
+    # a customer edits their info or the Customer row is deleted.
+    sender_phone        = db.Column(db.String(40), default="")
+    sender_phone_country= db.Column(db.String(8),  default="")
+    sender_address      = db.Column(db.String(255), default="")
+    sender_dob          = db.Column(db.Date, nullable=True)
     confirm_number = db.Column(db.String(60), default="")
     status         = db.Column(db.String(30), default="Sent")
     status_notes   = db.Column(db.String(255), default="")
@@ -1102,6 +1144,97 @@ def dashboard():
         return render_template("dashboard_employee.html",user=user,store=store,today=today,
             my_today=my_today,my_total=my_total,my_month=my_month)
 
+# ── Customers (per-store directory) ──────────────────────────
+# Ordered roughly by likelihood for a US-based remittance storefront; the
+# picker displays these in order so the common choices stay on top.
+PHONE_COUNTRY_CODES = [
+    ("+1",   "United States / Canada"),
+    ("+52",  "Mexico"),
+    ("+502", "Guatemala"),
+    ("+503", "El Salvador"),
+    ("+504", "Honduras"),
+    ("+505", "Nicaragua"),
+    ("+506", "Costa Rica"),
+    ("+507", "Panama"),
+    ("+509", "Haiti"),
+    ("+57",  "Colombia"),
+    ("+593", "Ecuador"),
+    ("+51",  "Peru"),
+    ("+58",  "Venezuela"),
+    ("+54",  "Argentina"),
+    ("+55",  "Brazil"),
+    ("+56",  "Chile"),
+    ("+91",  "India"),
+    ("+92",  "Pakistan"),
+    ("+63",  "Philippines"),
+    ("+234", "Nigeria"),
+    ("+254", "Kenya"),
+    ("+233", "Ghana"),
+]
+
+def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
+                             address="", dob=None, customer_id=None):
+    """Return the Customer row for this sender, creating / updating as needed.
+
+    Lookup priority:
+      1. explicit customer_id from the form (set when cashier picked from the
+         autocomplete);
+      2. (store_id, phone_country, phone_number) when a phone is provided;
+      3. otherwise create a new record.
+    Any non-empty field in the arguments overwrites the stored one — last
+    write wins so the customer record tracks the latest info the cashier saw.
+    """
+    cust = None
+    if customer_id:
+        cust = Customer.query.filter_by(id=customer_id, store_id=store_id).first()
+    if cust is None and phone_number:
+        cust = Customer.query.filter_by(
+            store_id=store_id,
+            phone_country=(phone_country or "+1"),
+            phone_number=phone_number,
+        ).first()
+    if cust is None:
+        cust = Customer(store_id=store_id, full_name=full_name or "",
+                        phone_country=(phone_country or "+1"),
+                        phone_number=phone_number or "")
+        db.session.add(cust)
+    if full_name:   cust.full_name    = full_name
+    if address:     cust.address      = address
+    if dob:         cust.dob          = dob
+    if phone_country: cust.phone_country = phone_country
+    if phone_number:  cust.phone_number  = phone_number
+    cust.updated_at = datetime.utcnow()
+    db.session.flush()
+    return cust
+
+@app.route("/api/customers/search")
+@login_required
+def api_customers_search():
+    """Autocomplete endpoint for the sender field on the transfer form.
+
+    Searches by phone number OR address OR name within the current store and
+    returns up to 10 matches. Scoped via the session so one store can never
+    see another store's customers.
+    """
+    sid = session.get("store_id")
+    if not sid:
+        return jsonify([])
+    q_text = request.args.get("q", "").strip()
+    if len(q_text) < 2:
+        return jsonify([])
+    like = f"%{q_text}%"
+    rows = (Customer.query
+            .filter(Customer.store_id == sid)
+            .filter(db.or_(
+                Customer.phone_number.ilike(like),
+                Customer.address.ilike(like),
+                Customer.full_name.ilike(like),
+            ))
+            .order_by(Customer.updated_at.desc())
+            .limit(10)
+            .all())
+    return jsonify([c.to_dict() for c in rows])
+
 # ── Transfers ────────────────────────────────────────────────
 @app.route("/transfers")
 @login_required
@@ -1125,6 +1258,15 @@ def transfers():
     return render_template("transfers.html",user=user,transfers=rows,
         company=company,status=status,date_from=date_from,date_to=date_to)
 
+def _parse_dob(raw):
+    """Parse a YYYY-MM-DD date string from the form, or None when blank/bad."""
+    if not raw:
+        return None
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
 @app.route("/transfers/new",methods=["GET","POST"])
 @login_required
 def new_transfer():
@@ -1132,9 +1274,21 @@ def new_transfer():
     if not sid:
         flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     if request.method=="POST":
-        t=Transfer(store_id=sid,created_by=user.id,
+        sender_name     = request.form["sender_name"]
+        sender_phone_cc = (request.form.get("sender_phone_country") or "+1").strip()
+        sender_phone    = request.form.get("sender_phone","").strip()
+        sender_address  = request.form.get("sender_address","").strip()
+        sender_dob      = _parse_dob(request.form.get("sender_dob"))
+        # Upsert the Customer first so the transfer can link to a stable FK.
+        cust = find_or_upsert_customer(
+            store_id=sid, full_name=sender_name,
+            phone_country=sender_phone_cc, phone_number=sender_phone,
+            address=sender_address, dob=sender_dob,
+            customer_id=request.form.get("customer_id", type=int),
+        )
+        t=Transfer(store_id=sid,created_by=user.id,customer_id=cust.id,
             send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
-            company=request.form["company"],sender_name=request.form["sender_name"],
+            company=request.form["company"],sender_name=sender_name,
             send_amount=float(request.form.get("send_amount") or 0),
             fee=float(request.form.get("fee") or 0),
             federal_tax=float(request.form.get("federal_tax") or 0),
@@ -1142,7 +1296,10 @@ def new_transfer():
             recipient_name=request.form.get("recipient_name",""),
             country=request.form.get("country",""),
             recipient_phone=request.form.get("recipient_phone",""),
-            sender_phone=request.form.get("sender_phone",""),
+            sender_phone=sender_phone,
+            sender_phone_country=sender_phone_cc,
+            sender_address=sender_address,
+            sender_dob=sender_dob,
             confirm_number=request.form.get("confirm_number",""),
             status=request.form.get("status","Sent"),
             status_notes=request.form.get("status_notes",""),
@@ -1150,7 +1307,8 @@ def new_transfer():
             internal_notes=request.form.get("internal_notes",""))
         db.session.add(t); db.session.commit()
         flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
-    return render_template("transfer_form.html",user=user,transfer=None,today=date.today().isoformat())
+    return render_template("transfer_form.html", user=user, transfer=None,
+        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES)
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
@@ -1172,16 +1330,28 @@ def edit_transfer(tid):
         t.recipient_name=request.form.get("recipient_name","")
         t.country=request.form.get("country","")
         t.recipient_phone=request.form.get("recipient_phone","")
-        t.sender_phone=request.form.get("sender_phone","")
+        t.sender_phone=request.form.get("sender_phone","").strip()
+        t.sender_phone_country=(request.form.get("sender_phone_country") or "+1").strip()
+        t.sender_address=request.form.get("sender_address","").strip()
+        t.sender_dob=_parse_dob(request.form.get("sender_dob"))
         t.confirm_number=request.form.get("confirm_number","")
         t.status=request.form.get("status","Sent")
         t.status_notes=request.form.get("status_notes","")
         t.batch_id=request.form.get("batch_id","")
         t.internal_notes=request.form.get("internal_notes","")
         t.updated_at=datetime.utcnow()
+        # Keep the customer directory in sync with the edited snapshot.
+        cust = find_or_upsert_customer(
+            store_id=sid, full_name=t.sender_name,
+            phone_country=t.sender_phone_country, phone_number=t.sender_phone,
+            address=t.sender_address, dob=t.sender_dob,
+            customer_id=request.form.get("customer_id", type=int) or t.customer_id,
+        )
+        t.customer_id = cust.id
         db.session.commit(); flash("Transfer updated.","success")
         return redirect(url_for("transfers"))
-    return render_template("transfer_form.html",user=user,transfer=t,today=date.today().isoformat())
+    return render_template("transfer_form.html", user=user, transfer=t,
+        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES)
 
 # ── Daily Book ───────────────────────────────────────────────
 DAILY_COMPANIES=["Barri","Boost Rev.","Inter Cambio","Intermex","Maxi Transfer","Sigue","Vigo"]
@@ -2121,6 +2291,10 @@ _ADDED_COLUMNS = [
     ("store",    "data_retention_until", "TIMESTAMP NULL"),
     ("transfer", "federal_tax",          "FLOAT DEFAULT 0"),
     ("transfer", "sender_phone",         "VARCHAR(40) DEFAULT ''"),
+    ("transfer", "customer_id",          "INTEGER NULL"),
+    ("transfer", "sender_phone_country", "VARCHAR(8) DEFAULT ''"),
+    ("transfer", "sender_address",       "VARCHAR(255) DEFAULT ''"),
+    ("transfer", "sender_dob",           "DATE NULL"),
 ]
 
 def _ensure_added_columns():
