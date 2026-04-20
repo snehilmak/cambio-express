@@ -1,12 +1,14 @@
 // DineroBook service worker
-// Minimal: caches the app shell assets so install works and iconography
-// renders quickly. Everything else is network-first — this is a live
-// financial dashboard, not a content site, so we never want stale data.
-const CACHE = 'dinerobook-v1';
+// - Cache-first for the /static/ shell (CSS, icons)
+// - Network-first for navigations with /offline as fallback
+// - Push notifications (show + handle click)
+const CACHE = 'dinerobook-v2';
 const SHELL = [
+  '/offline',
   '/static/app.css',
   '/static/logo.svg',
-  '/static/logo-200.png',
+  '/static/logo-192.png',
+  '/static/logo-512.png',
   '/static/manifest.webmanifest'
 ];
 
@@ -20,8 +22,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
+      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
   );
   self.clients.claim();
 });
@@ -29,11 +30,18 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
-
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  // Cache-first for the static shell — fonts, CSS, icons.
+  // Navigations: network first, offline page on failure.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req).catch(() => caches.match('/offline'))
+    );
+    return;
+  }
+
+  // Static shell: cache first, populate on miss.
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(
       caches.match(req).then((hit) =>
@@ -46,5 +54,33 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  // Everything else: straight network. No caching of dashboard data.
+  // API / data: straight network. Never cached.
+});
+
+// ── Push notifications ───────────────────────────────────────
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: 'DineroBook', body: event.data ? event.data.text() : '' }; }
+  const title = data.title || 'DineroBook';
+  const opts = {
+    body: data.body || '',
+    icon: '/static/logo-192.png',
+    badge: '/static/logo-192.png',
+    data: { url: data.url || '/' },
+    tag: data.tag || undefined
+  };
+  event.waitUntil(self.registration.showNotification(title, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) {
+        if (c.url.endsWith(url) && 'focus' in c) return c.focus();
+      }
+      if (clients.openWindow) return clients.openWindow(url);
+    })
+  );
 });

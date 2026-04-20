@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offline — DineroBook</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%;
+    font-family: system-ui, -apple-system, "Segoe UI", "DM Sans", sans-serif;
+    background: #0f1f3d; color: #e5e7eb;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 24px; }
+  .wrap { max-width: 420px; }
+  .icon { font-size: 56px; margin-bottom: 18px; }
+  h1 { font-family: Georgia, "DM Serif Display", serif;
+    font-size: 26px; color: #f0c060; margin: 0 0 12px; }
+  p { font-size: 15px; line-height: 1.6; color: rgba(255,255,255,0.72); margin: 0 0 22px; }
+  button {
+    background: #c9973a; color: #fff; border: 0; cursor: pointer;
+    padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    font-family: inherit;
+  }
+  button:hover { background: #f0c060; color: #0f1f3d; }
+  .sub { margin-top: 18px; font-size: 12px; color: rgba(255,255,255,0.4); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="icon">📡</div>
+    <h1>You're offline</h1>
+    <p>DineroBook needs a connection to show live dashboards, transfers, and bank data. Check your Wi-Fi or cellular signal and try again.</p>
+    <button onclick="location.reload()">Retry</button>
+    <div class="sub">Your installed app will resume automatically once you're back online.</div>
+  </div>
+</body>
+</html>
