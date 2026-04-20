@@ -91,12 +91,23 @@
       ('return_check_paid_back','Return Check Paid Back'),('forward_balance','Forward Balance'),
       ('from_bank','From Bank'),('other_cash_in','Other Cash In'),('rebates_commissions','Rebates & Commissions')
     ] %}
+    {# money_transfer is derived from the Money Transfer table below
+       (matches the spreadsheet's subtotal formula). Rendered as readonly
+       with an Auto badge; JS mirrors the MT-table total into this input
+       on every change, and the server recomputes on save. #}
+    {% set is_derived = (fname == 'money_transfer') %}
     <div class="field-row">
-      <span class="field-label">{{ label }}</span>
+      <span class="field-label">
+        {{ label }}{% if is_derived %}<span class="auto-badge">Auto</span>{% endif %}
+      </span>
       <div class="field-input">
         <input type="number" step="0.01" min="0" name="{{ fname }}"
+          id="{{ fname }}_field"
           value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
-          oninput="recalc()">
+          {% if is_derived %}readonly tabindex="-1"
+          style="background:var(--gray1);cursor:not-allowed;"
+          title="Auto-sum of the Money Transfer table below."
+          {% else %}oninput="recalc()"{% endif %}>
       </div>
     </div>
     {% endfor %}
@@ -405,8 +416,16 @@ function recalcMTTotals(){
   setIf('mt-tot-tax', tt);
   setIf('mt-tot-comm', tc);
   setIf('mt-tot-total', ta+tf+tt+tc);
+  // Mirror the MT grand total into the read-only Money Transfer receipts
+  // line. Matches the spreadsheet's "=SUM(MT table)" formula. The server
+  // also recomputes this on save, so this is purely cosmetic sync.
+  const mtField = document.getElementById('money_transfer_field');
+  if (mtField) {
+    mtField.value = (ta+tf+tt+tc).toFixed(2);
+    recalc();  // propagate into TOTAL RECEIPTS / Net Position
+  }
 }
-recalc(); recalcMTTotals();
+recalcMTTotals(); recalc();
 
 /*
  * Inline Drops widget
