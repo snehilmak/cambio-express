@@ -581,12 +581,13 @@ def stripe_health_check():
       error: str on failure
     """
     env = {
-        "secret_key":      bool(os.environ.get("STRIPE_SECRET_KEY")),
-        "webhook_secret":  bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-        "basic_price_id":  bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
-        "pro_price_id":    bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
+        "secret_key":          bool(os.environ.get("STRIPE_SECRET_KEY")),
+        "webhook_secret":      bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
+        "basic_price_id":      bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
+        "pro_price_id":        bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
+        "pro_yearly_price_id": bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")),
     }
-    result = {"env": env, "ok": False, "error": "", "price_ok": {"basic": False, "pro": False}}
+    result = {"env": env, "ok": False, "error": "", "price_ok": {"basic": False, "pro": False, "pro_yearly": False}}
     if not env["secret_key"]:
         result["error"] = "STRIPE_SECRET_KEY is not configured."
         return result
@@ -600,8 +601,10 @@ def stripe_health_check():
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
         return result
-    for plan in ("basic", "pro"):
-        pid = os.environ.get(f"STRIPE_{plan.upper()}_PRICE_ID", "")
+    for plan, env_key in (("basic", "STRIPE_BASIC_PRICE_ID"),
+                          ("pro", "STRIPE_PRO_PRICE_ID"),
+                          ("pro_yearly", "STRIPE_PRO_YEARLY_PRICE_ID")):
+        pid = os.environ.get(env_key, "")
         if not pid:
             continue
         try:
@@ -1297,9 +1300,12 @@ def subscribe_checkout():
     """
     store = current_store()
     plan = request.form.get("plan", "").strip()
+    # "pro_yearly" maps to the Pro plan billed annually at $300. The webhook
+    # coerces both monthly and yearly Pro subscriptions onto Store.plan="pro".
     price_map = {
-        "basic": os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-        "pro":   os.environ.get("STRIPE_PRO_PRICE_ID", ""),
+        "basic":      os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
+        "pro":        os.environ.get("STRIPE_PRO_PRICE_ID", ""),
+        "pro_yearly": os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
     }
     if plan not in price_map or not price_map[plan]:
         flash("Invalid plan selected.", "error")

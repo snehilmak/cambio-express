@@ -142,11 +142,22 @@
         {% endif %}
       </span>
     </div>
-    <div class="info-row"><span class="k">Pro price</span>
+    <div class="info-row"><span class="k">Pro price (monthly)</span>
       <span class="v">
         {% if not stripe_health.env.pro_price_id %}
           <span class="badge badge-red">STRIPE_PRO_PRICE_ID missing</span>
         {% elif stripe_health.price_ok.pro %}
+          <span class="badge badge-green">valid</span>
+        {% else %}
+          <span class="badge badge-yellow">unverified</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="info-row"><span class="k">Pro price (yearly)</span>
+      <span class="v">
+        {% if not stripe_health.env.pro_yearly_price_id %}
+          <span class="badge badge-yellow">STRIPE_PRO_YEARLY_PRICE_ID not set</span>
+        {% elif stripe_health.price_ok.pro_yearly %}
           <span class="badge badge-green">valid</span>
         {% else %}
           <span class="badge badge-yellow">unverified</span>

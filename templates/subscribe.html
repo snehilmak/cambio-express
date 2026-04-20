@@ -37,17 +37,22 @@
   <div style="background:var(--navy);border:2px solid var(--gold);border-radius:14px;padding:32px 28px;position:relative;">
     <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 14px;border-radius:999px;white-space:nowrap;">MOST POPULAR</div>
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold2);margin-bottom:8px;">Pro</div>
-    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:white;line-height:1;">$30</div>
-    <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:20px;">per store / month</div>
+    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:white;line-height:1;">$30<span style="font-size:18px;color:rgba(255,255,255,0.55);"> /mo</span></div>
+    <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:4px;">or $300 / year — save $60</div>
+    <div style="font-size:11px;color:var(--gold2);font-weight:600;letter-spacing:0.4px;margin-bottom:20px;">2 MONTHS FREE WITH ANNUAL</div>
     <ul style="list-style:none;margin-bottom:28px;">
       <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Everything in Basic</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ SimpleFIN bank sync</li>
+      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Stripe bank sync</li>
       <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Live balance visibility</li>
       <li style="font-size:13.5px;padding:7px 0;color:rgba(255,255,255,0.85);">✓ Multi-store (coming soon)</li>
     </ul>
-    <form method="POST" action="/subscribe/checkout">
+    <form method="POST" action="/subscribe/checkout" style="margin-bottom:10px;">
       <input type="hidden" name="plan" value="pro">
-      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Choose Pro</button>
+      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Monthly · $30 / mo</button>
+    </form>
+    <form method="POST" action="/subscribe/checkout">
+      <input type="hidden" name="plan" value="pro_yearly">
+      <button type="submit" style="width:100%;background:transparent;color:var(--gold2);border:1.5px solid var(--gold2);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Yearly · $300 / yr</button>
     </form>
   </div>
 

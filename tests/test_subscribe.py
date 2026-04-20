@@ -8,6 +8,8 @@ def test_subscribe_loads_for_logged_in_user(logged_in_client):
     assert resp.status_code == 200
     assert b"$20" in resp.data
     assert b"$30" in resp.data
+    # Pro offers a yearly plan at $300 (2 months free vs $30/mo).
+    assert b"$300" in resp.data
     assert b"Basic" in resp.data
     assert b"Pro" in resp.data
 
@@ -40,6 +42,22 @@ def test_checkout_redirects_to_stripe_for_pro(logged_in_client):
                                       follow_redirects=False)
     assert resp.status_code == 303
     assert "stripe.com" in resp.headers["Location"]
+
+def test_checkout_redirects_to_stripe_for_pro_yearly(logged_in_client, monkeypatch):
+    # Yearly Pro uses its own Stripe Price ID; the conftest seeds only the
+    # monthly one, so we set the yearly env var inline for this test.
+    monkeypatch.setenv("STRIPE_PRO_YEARLY_PRICE_ID", "price_pro_yearly_test")
+    mock_session = MagicMock()
+    mock_session.url = "https://checkout.stripe.com/test-pro-yearly"
+    with patch("stripe.checkout.Session.create", return_value=mock_session) as m:
+        resp = logged_in_client.post("/subscribe/checkout",
+                                      data={"plan": "pro_yearly"},
+                                      follow_redirects=False)
+    assert resp.status_code == 303
+    assert "stripe.com" in resp.headers["Location"]
+    # Confirm the yearly Price ID was passed to Stripe (not the monthly one).
+    line_items = m.call_args.kwargs["line_items"]
+    assert line_items[0]["price"] == "price_pro_yearly_test"
 
 def test_subscribe_success_loads(logged_in_client):
     resp = logged_in_client.get("/subscribe/success")
