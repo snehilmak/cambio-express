@@ -234,6 +234,14 @@ class DailyDrop(db.Model):
     created_by  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "time": self.drop_time.strftime("%H:%M") if self.drop_time else "",
+            "amount": float(self.amount or 0),
+            "note": self.note or "",
+        }
+
 class MoneyTransferSummary(db.Model):
     __tablename__ = "mt_summary"
     id          = db.Column(db.Integer, primary_key=True)
@@ -1645,6 +1653,23 @@ def daily_report(ds):
         report=report,mt_rows=mt_rows,companies=DAILY_COMPANIES,auto_mt=auto_mt,
         drops=drops, drops_total=drops_total)
 
+def _wants_json():
+    """Client explicitly asked for JSON (AJAX from the drops widget).
+
+    Keeping the drop routes dual-mode means they still work as plain HTML
+    form posts if JS is off, so the feature degrades gracefully.
+    """
+    accept = request.accept_mimetypes
+    return bool(accept and accept.best == "application/json")
+
+def _drops_json_payload(store_id, report_date):
+    """Current state of the drops widget for a given day."""
+    drops = (DailyDrop.query
+             .filter_by(store_id=store_id, report_date=report_date)
+             .order_by(DailyDrop.drop_time).all())
+    total = sum(d.amount for d in drops)
+    return {"ok": True, "total": float(total), "drops": [d.to_dict() for d in drops]}
+
 @app.route("/daily/<string:ds>/drops/new", methods=["POST"])
 @admin_required
 def daily_drop_new(ds):
@@ -1652,20 +1677,25 @@ def daily_drop_new(ds):
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
+        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
     raw_time = request.form.get("drop_time", "").strip()
     raw_amt  = request.form.get("amount", "").strip()
+    err = None
+    drop_time = amount = None
     try:
         drop_time = datetime.strptime(raw_time, "%H:%M").time()
     except ValueError:
-        flash("Enter a valid time (HH:MM).", "error")
-        return redirect(url_for("daily_report", ds=ds))
-    try:
-        amount = float(raw_amt)
-        if amount <= 0: raise ValueError
-    except ValueError:
-        flash("Amount must be greater than zero.", "error")
-        return redirect(url_for("daily_report", ds=ds))
+        err = "Enter a valid time (HH:MM)."
+    if err is None:
+        try:
+            amount = float(raw_amt)
+            if amount <= 0: raise ValueError
+        except ValueError:
+            err = "Amount must be greater than zero."
+    if err:
+        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
+        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
     db.session.add(DailyDrop(
         store_id=sid, report_date=report_date,
         drop_time=drop_time, amount=amount,
@@ -1675,6 +1705,8 @@ def daily_drop_new(ds):
     db.session.flush()
     _recompute_drops_total(sid, report_date)
     db.session.commit()
+    if _wants_json():
+        return jsonify(_drops_json_payload(sid, report_date))
     flash(f"Drop of ${amount:,.2f} at {drop_time.strftime('%H:%M')} added.", "success")
     return redirect(url_for("daily_report", ds=ds))
 
@@ -1685,6 +1717,7 @@ def daily_drop_delete(ds, drop_id):
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
+        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
     drop = (DailyDrop.query
             .filter_by(id=drop_id, store_id=sid, report_date=report_date)
@@ -1693,6 +1726,8 @@ def daily_drop_delete(ds, drop_id):
     db.session.flush()
     _recompute_drops_total(sid, report_date)
     db.session.commit()
+    if _wants_json():
+        return jsonify(_drops_json_payload(sid, report_date))
     flash("Drop deleted.", "success")
     return redirect(url_for("daily_report", ds=ds))
 
