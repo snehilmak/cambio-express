@@ -27,7 +27,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: 'DM Sans', sans-serif;
-  background: #0f1f3d; min-height: 100vh; display: flex;
+  background: #0f1f3d;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  overscroll-behavior-y: none;
 }
 .login-left {
   flex: 1; display: flex; flex-direction: column;
@@ -55,7 +59,9 @@ body {
   width: 520px; background: #faf7f2;
   display: flex; flex-direction: column;
   justify-content: center; padding: 48px 48px;
-  overflow-y: auto; max-height: 100vh;
+  overflow-y: auto;
+  max-height: 100vh;
+  max-height: 100dvh;
 }
 .login-heading {
   font-family: 'DM Serif Display', serif;
@@ -124,18 +130,35 @@ input:focus, textarea:focus {
 
 @media (max-width: 900px) {
   body { flex-direction: column; }
-  .login-left { flex: none; padding: 36px 24px 32px; min-height: auto; }
+  .login-left {
+    flex: none; padding: 28px 24px 24px; min-height: auto;
+    padding-top: max(28px, env(safe-area-inset-top));
+  }
   .login-left::before { display: none; }
-  .brand-icon { font-size: 42px; margin-bottom: 14px; }
-  .brand-name { font-size: 28px; }
+  .brand-icon { font-size: 38px; margin-bottom: 10px; }
+  .brand-name { font-size: 26px; }
   .brand-tagline { font-size: 11px; }
   .login-right {
-    width: 100%; padding: 32px 24px 48px; flex: 1; max-height: none;
+    width: 100%;
+    padding: 24px 24px 32px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    /* Let the content drive height; the 2FA enroll page (QR + secret +
+       recovery codes) will scroll within the body if it overflows the
+       viewport, which is fine and expected on small phones. */
+    flex: 0 0 auto; max-height: none;
   }
-  .login-heading { font-size: 24px; }
+  .login-heading { font-size: 22px; margin-bottom: 4px; }
+  .login-sub { margin-bottom: 22px; }
+  .field { margin-bottom: 14px; }
   input, textarea { font-size: 16px; }
   .qr-wrap svg { width: 180px; height: 180px; }
   .recovery-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .login-left { padding: 22px 20px 18px; padding-top: max(22px, env(safe-area-inset-top)); }
+  .login-right { padding: 20px 20px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .brand-icon { font-size: 34px; }
+  .brand-name { font-size: 24px; }
 }
 
 .theme-toggle {

@@ -10,7 +10,10 @@
 body {
   font-family: 'DM Sans', sans-serif;
   background: #0f1f3d;
-  min-height: 100vh; display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  overscroll-behavior-y: none;
 }
 .login-left {
   flex: 1; display: flex; flex-direction: column;
@@ -73,6 +76,36 @@ input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(5
 }
 .btn-login:hover { background: #2a5caa; }
 .login-footer { margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; }
+
+@media (max-width: 900px) {
+  body { flex-direction: column; }
+  .login-left {
+    flex: none; padding: 28px 24px 24px;
+    padding-top: max(28px, env(safe-area-inset-top));
+    min-height: auto;
+  }
+  .login-left::before { display: none; }
+  .brand-icon { font-size: 38px; margin-bottom: 10px; }
+  .brand-name { font-size: 26px; }
+  .brand-store { font-size: 13px; margin-top: 6px; }
+  .brand-tagline { font-size: 11px; }
+  .login-right {
+    width: 100%; padding: 24px 24px 32px;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
+    flex: 0 0 auto;
+  }
+  .login-heading { font-size: 22px; margin-bottom: 4px; }
+  .login-sub { margin-bottom: 22px; }
+  .field { margin-bottom: 14px; }
+  input { font-size: 16px; }
+  .login-footer { margin-top: 24px; }
+}
+@media (max-width: 480px) {
+  .login-left { padding: 22px 20px 18px; padding-top: max(22px, env(safe-area-inset-top)); }
+  .login-right { padding: 20px 20px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .brand-icon { font-size: 34px; }
+  .brand-name { font-size: 24px; }
+}
 </style>
 </head>
 <body>

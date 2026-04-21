@@ -93,7 +93,7 @@
     {% endfor %}
     <div class="sb-row sb-total">
       <span class="sb-label">TOTAL RECEIPTS</span>
-      <div style="width:150px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
+      <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
     </div>
   </div>
 </div>
@@ -203,7 +203,7 @@
     {% endfor %}
     <div class="sb-row sb-total">
       <span class="sb-label">TOTAL DISBURSEMENTS</span>
-      <div style="width:150px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
+      <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
     </div>
   </div>
 </div>
@@ -273,28 +273,28 @@
            company on this date — regardless of which company it is. #}
         {% set is_auto = (a.get('count', 0) > 0) %}
         <tr>
-          <td><strong>{{ co }}</strong>{% if is_auto %}<span class="sb-auto-badge">Auto</span>{% endif %}</td>
-          <td>
+          <td class="mt-company"><strong>{{ co }}</strong>{% if is_auto %}<span class="sb-auto-badge">Auto</span>{% endif %}</td>
+          <td data-label="Amount ($)">
             <input type="number" step="0.01" min="0" name="mt_amount_{{ key }}" id="amt_{{ key }}"
               value="{{ mt.amount if mt else (a.get('amount',0) if is_auto else 0) }}"
               oninput="recalcMT('{{ key }}')">
           </td>
-          <td>
+          <td data-label="Fees ($)">
             <input type="number" step="0.01" min="0" name="mt_fees_{{ key }}" id="fees_{{ key }}"
               value="{{ mt.fees if mt else (a.get('fees',0) if is_auto else 0) }}"
               oninput="recalcMT('{{ key }}')">
           </td>
-          <td>
+          <td data-label="Tax ($)">
             <input type="number" step="0.01" min="0" name="mt_tax_{{ key }}" id="tax_{{ key }}"
               value="{{ mt.federal_tax if mt else (a.get('federal_tax',0) if is_auto else 0) }}"
               oninput="recalcMT('{{ key }}')">
           </td>
-          <td>
+          <td data-label="Commission ($)">
             <input type="number" step="0.01" min="0" name="mt_commission_{{ key }}" id="comm_{{ key }}"
               value="{{ mt.commission if mt else (a.get('commission',0) if is_auto else 0) }}"
               oninput="recalcMT('{{ key }}')">
           </td>
-          <td style="text-align:right;" id="tot_{{ key }}">
+          <td data-label="Total" style="text-align:right;" id="tot_{{ key }}">
             ${{ '{:,.2f}'.format(((mt.individual_total if mt else
               (a.get('amount',0)+a.get('fees',0)+a.get('commission',0)+a.get('federal_tax',0) if is_auto else 0)))) }}
           </td>
@@ -303,10 +303,12 @@
       </tbody>
       <tfoot>
         <tr>
-          <td style="text-align:left;font-weight:700;">TOTAL</td>
-          <td id="mt-tot-amt">—</td><td id="mt-tot-fees">—</td>
-          <td id="mt-tot-tax">—</td>
-          <td id="mt-tot-comm">—</td><td id="mt-tot-total">—</td>
+          <td class="mt-company" style="text-align:left;font-weight:700;">TOTAL</td>
+          <td data-label="Amount" id="mt-tot-amt">—</td>
+          <td data-label="Fees" id="mt-tot-fees">—</td>
+          <td data-label="Tax" id="mt-tot-tax">—</td>
+          <td data-label="Commission" id="mt-tot-comm">—</td>
+          <td data-label="Total" id="mt-tot-total">—</td>
         </tr>
       </tfoot>
     </table>
