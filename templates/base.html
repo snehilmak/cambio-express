@@ -231,6 +231,29 @@
   }
   updateClock(); setInterval(updateClock, 30000);
 
+  // Server datetimes are always UTC. Templates wrap them in
+  // `<time data-utc="...Z" data-fmt="time|datetime|date">...</time>` with
+  // a UTC fallback as the text; we swap that fallback for a browser-
+  // local formatted string so the user sees times in their own timezone.
+  (function() {
+    document.querySelectorAll('time[data-utc]').forEach(function(el) {
+      var utc = el.getAttribute('data-utc');
+      var fmt = el.getAttribute('data-fmt') || 'datetime';
+      var d = new Date(utc);
+      if (isNaN(d.getTime())) return;
+      if (fmt === 'time') {
+        el.textContent = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      } else if (fmt === 'date') {
+        el.textContent = d.toLocaleDateString();
+      } else {
+        el.textContent = d.toLocaleString([], {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: 'numeric', minute: '2-digit'
+        });
+      }
+    });
+  })();
+
   // Sidebar drawer (mobile), theme toggle, and avatar dropdown.
   (function() {
     var sidebar = document.getElementById('sidebar');
