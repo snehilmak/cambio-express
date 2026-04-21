@@ -397,9 +397,9 @@ tbody td { padding: 12px 16px; color: var(--dark); vertical-align: middle; }
 .btn-danger { background: var(--red); color: var(--white); }
 
 /* ── FORMS ──────────────────────────────────────────────── */
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-.form-grid.cols-1 { grid-template-columns: 1fr; }
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+.form-grid.cols-3 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); }
+.form-grid.cols-1 { grid-template-columns: minmax(0, 1fr); }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field.span-2 { grid-column: span 2; }
 label { font-size: 12px; font-weight: 600; color: var(--gray4); text-transform: uppercase; letter-spacing: 0.6px; }
@@ -544,8 +544,14 @@ input[type="number"] {
 .var-bad { color: var(--red);   font-weight: 700; font-family: 'JetBrains Mono', monospace; }
 
 /* ── LAYOUT UTILITIES ───────────────────────────────────── */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+/* Using minmax(0, 1fr) instead of plain 1fr so a grid item with a wide
+   child (e.g. the Money Transfers table on the Daily Book, whose input
+   cells force ~720px of min-content) cannot expand its track past its
+   proportional share. Without the minmax, the track blows out the whole
+   grid past the viewport, body { overflow-x: hidden } silently clips
+   everything, and the user sees the right column appear "cut off". */
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.grid-3 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 20px; }
 .mt-0 { margin-top: 0; } .mt-1 { margin-top: 8px; } .mt-2 { margin-top: 16px; } .mt-3 { margin-top: 24px; }
 .mb-1 { margin-bottom: 8px; } .mb-2 { margin-bottom: 16px; } .mb-3 { margin-bottom: 24px; }
 .flex { display: flex; } .flex-wrap { flex-wrap: wrap; } .items-center { align-items: center; } .gap-2 { gap: 8px; } .gap-3 { gap: 16px; }
