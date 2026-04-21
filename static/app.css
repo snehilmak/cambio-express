@@ -200,9 +200,15 @@ html, body { overscroll-behavior-y: none; }
 }
 .sb-row {
   display: flex; align-items: center; gap: 12px;
-  padding: 7px 16px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--border);
 }
+/* Kept as no-op class aliases because a handful of Monthly P&L rows
+   still spell them out — keeps the markup tidy until the template
+   migrates off. Do NOT add local overrides here; adjust .sb-row. */
+.pl-row { }
+.pl-total { padding: 10px 20px; }
+.pl-auto { font-size: 11px; color: var(--sky); margin-left: 6px; }
 .sb-row:last-child { border-bottom: none; }
 .sb-label { flex: 1; font-size: 13px; color: var(--text); }
 .sb-input { width: 160px; }
@@ -646,15 +652,28 @@ input[type="number"] {
   .btn-sm { padding: 6px 10px; font-size: 12px; }
 
   /* Keep the side-by-side label/input layout on phones — matches the
-     Monthly P&L look the user prefers. Inputs stay visible thanks to
-     the dark-mode contrast rule below (input fill vs section-box
-     surface), so we don't need to steal the whole row for them. */
-  .sb-row { padding: 8px 12px; gap: 10px; }
-  .sb-label { font-size: 13px; font-weight: 500; }
-  .sb-input { width: 42%; min-width: 120px; max-width: 200px; }
+     Monthly P&L look the user prefers. The key rule is flex-basis on
+     both children so nothing relies on the browser's default intrinsic
+     sizing for <input type="number"> (which on Chrome/Android can be
+     ~150px and push the input past the section-box right edge). */
+  .sb-row {
+    padding: 10px 12px; gap: 10px;
+    min-width: 0;
+  }
+  .sb-label {
+    font-size: 13px; font-weight: 500;
+    flex: 1 1 auto; min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .sb-input {
+    /* Fixed 140px basis — no grow, no shrink, no max-width surprises. */
+    flex: 0 0 140px;
+    width: 140px; max-width: 140px; min-width: 0;
+  }
   .sb-input input {
+    width: 100%; min-width: 0;
     text-align: right; padding: 9px 10px; font-size: 15px;
-    border-width: 1.5px; width: 100%;
+    border-width: 1.5px;
   }
   /* Totals row — bump the readout font so the day's total pops. */
   .sb-row.sb-total .sb-input { font-size: 15px; font-weight: 700; }
