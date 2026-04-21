@@ -57,7 +57,7 @@ cambio-express/
 6. Wait 3–5 minutes for the first deploy
 
 Your app will be live at:
-`https://cambio-express.onrender.com`
+`https://dinerobook.onrender.com`
 
 ---
 
@@ -132,7 +132,7 @@ The crash you had before is fully fixed. To reconnect:
 2. Render → Your Service → **Settings → Custom Domains → Add**
 3. Enter your domain (e.g. `app.cambioexpress.com`)
 4. In Namecheap DNS settings, add:
-   `CNAME  app  →  cambio-express.onrender.com`
+   `CNAME  app  →  dinerobook.onrender.com`
 5. SSL/HTTPS is automatic — takes ~10 minutes
 
 ---
