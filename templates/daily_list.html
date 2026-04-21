@@ -51,18 +51,58 @@
 }
 .cal-legend-swatch.today { border-color: var(--gold); color: var(--gold); }
 .cal-legend-swatch.no-entry { background: var(--surface-2); }
+
+/* Month navigator — allow buttons to wrap on narrow screens so the
+   month title doesn't get crushed or pushed off-screen. */
+.cal-month-nav {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 24px; flex-wrap: wrap;
+}
+.cal-month-nav .cal-month-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 22px; color: var(--navy);
+}
+[data-theme="dark"] .cal-month-nav .cal-month-title { color: var(--gold2); }
+
+/* Monthly summary strip — 4 cols on desktop, 2 on tablet, 1 on phone. */
+.cal-summary {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 14px; margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .cal-month-nav { gap: 8px; }
+  .cal-month-nav .cal-month-title { font-size: 18px; flex: 1 1 auto; min-width: 140px; }
+  .cal-summary { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .cal-grid { gap: 6px; }
+  .cal-cell { padding: 10px 8px; border-width: 1.5px; border-radius: 8px; }
+  .cal-day-num { font-size: 14px; }
+  .cal-money { font-size: 11px; }
+  .cal-label { font-size: 9.5px; }
+  .cal-pill { font-size: 9px; padding: 1px 5px; }
+}
+@media (max-width: 480px) {
+  .cal-summary { grid-template-columns: 1fr 1fr; }
+  .cal-grid { gap: 4px; }
+  .cal-cell { padding: 6px 4px; border-radius: 6px; border-width: 1px; }
+  .cal-day-num { font-size: 13px; }
+  .cal-money { font-size: 10px; }
+  .cal-label { font-size: 9px; margin-bottom: 1px; }
+  .cal-hint { display: none; }
+  .cal-dot { width: 5px; height: 5px; }
+  .cal-pill { font-size: 8.5px; padding: 1px 4px; }
+  .cal-legend { gap: 10px; flex-wrap: wrap; font-size: 11px; }
+}
 </style>
 {% endblock %}
 {% block content %}
 
 <!-- Month navigator -->
-<div style="display:flex;align-items:center;gap:16px;margin-bottom:24px;">
+<div class="cal-month-nav">
   <a href="{{ url_for('daily_list', month=prev_month, year=prev_year) }}" class="btn btn-outline btn-sm">← Prev</a>
-  <div style="font-family:'DM Serif Display',serif;font-size:22px;color:var(--navy);">
-    {{ month_name }} {{ year }}
-  </div>
+  <div class="cal-month-title">{{ month_name }} {{ year }}</div>
   <a href="{{ url_for('daily_list', month=next_month, year=next_year) }}" class="btn btn-outline btn-sm">Next →</a>
-  <a href="{{ url_for('daily_list', month=today.month, year=today.year) }}" class="btn btn-outline btn-sm" style="margin-left:8px;">Today</a>
+  <a href="{{ url_for('daily_list', month=today.month, year=today.year) }}" class="btn btn-outline btn-sm">Today</a>
   {% if month_report %}
     <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-gold btn-sm" style="margin-left:auto;">📊 Monthly P&L</a>
   {% else %}
@@ -72,7 +112,7 @@
 
 <!-- Monthly summary strip -->
 {% if month_report %}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px;">
+<div class="cal-summary">
   <div class="stat-card" style="--accent:#16a34a;">
     <div class="stat-label">Total Revenue</div>
     <div class="stat-value" style="font-size:22px;">${{ '{:,.2f}'.format(month_report.total_revenue) }}</div>

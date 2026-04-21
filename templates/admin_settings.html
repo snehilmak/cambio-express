@@ -218,10 +218,10 @@
 </div>
 
 <!-- Reset password modal -->
-<div id="reset-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;align-items:center;justify-content:center;">
-  <div style="background:var(--white);border-radius:12px;padding:32px;width:380px;box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-    <div style="font-family:'DM Serif Display',serif;font-size:20px;color:var(--navy);margin-bottom:6px;">Reset Password</div>
-    <div id="reset-name" style="font-size:13px;color:var(--gray4);margin-bottom:20px;"></div>
+<div id="reset-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle">
+  <div class="modal-card">
+    <h3 id="resetModalTitle">Reset Password</h3>
+    <div id="reset-name" class="text-sm text-muted" style="margin-bottom:18px;"></div>
     <form id="reset-form" method="POST">
       <div class="field" style="margin-bottom:14px;">
         <label>New Password</label>
@@ -231,9 +231,9 @@
         <label>Confirm Password</label>
         <input type="password" name="confirm_password" placeholder="Repeat password" required>
       </div>
-      <div style="display:flex;gap:10px;">
-        <button type="submit" class="btn btn-primary">Set Password</button>
+      <div class="modal-actions">
         <button type="button" class="btn btn-outline" onclick="closeReset()">Cancel</button>
+        <button type="submit" class="btn btn-primary">Set Password</button>
       </div>
     </form>
   </div>
@@ -362,11 +362,10 @@ function copyLoginUrl() {
 function showReset(uid, name) {
   document.getElementById('reset-name').textContent = 'Setting new password for: ' + name;
   document.getElementById('reset-form').action = '/admin/settings/team/' + uid;
-  var modal = document.getElementById('reset-modal');
-  modal.style.display = 'flex';
+  document.getElementById('reset-modal').classList.add('open');
 }
 function closeReset() {
-  document.getElementById('reset-modal').style.display = 'none';
+  document.getElementById('reset-modal').classList.remove('open');
 }
 function copyOwnerCode() {
   var val = document.getElementById('owner-code').value;

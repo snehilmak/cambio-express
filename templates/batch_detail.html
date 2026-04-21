@@ -10,7 +10,7 @@
       <a href="{{ url_for('edit_batch', bid=batch.id) }}" class="btn btn-outline btn-sm">Edit</a>
     </div>
     <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;">
         <div><div class="text-sm text-muted mb-1">ACH Date</div><strong>{{ batch.ach_date.strftime('%m/%d/%Y') }}</strong></div>
         <div><div class="text-sm text-muted mb-1">Dates Covered</div><strong>{{ batch.transfer_dates or '—' }}</strong></div>
         <div>

@@ -23,7 +23,7 @@
 {% endblock %}
 {% block content %}
 
-<div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;">
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{{ url_for('monthly_list') }}" class="btn btn-outline btn-sm">← All Reports</a>
   <a href="{{ url_for('daily_list', month=month, year=year) }}" class="btn btn-outline btn-sm">📅 Daily Book</a>
   {% if report %}
@@ -38,7 +38,7 @@
 </div>
 
 <form method="POST">
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+<div class="grid-2">
 
   <!-- LEFT: REVENUE + PURCHASES -->
   <div>

@@ -3,7 +3,7 @@
 {% block page_title %}ACH Batch Reconciliation{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-3">
+<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
   <div class="text-sm text-muted">Log each ACH debit from your bank. Variance turns green when your transfer log matches exactly.</div>
   <a href="{{ url_for('new_batch') }}" class="btn btn-primary">＋ Log ACH Batch</a>
 </div>

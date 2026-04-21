@@ -50,14 +50,14 @@
 
 {% macro field_val(fname) %}{{ (report | attr(fname)) if report else 0 }}{% endmacro %}
 
-<div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;">
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline btn-sm">← Calendar</a>
   {% if report %}<span class="badge badge-green">✓ Saved {{ report.updated_at.strftime('%I:%M %p') }}</span>
   {% else %}<span class="badge badge-yellow">New Entry</span>{% endif %}
 </div>
 
 <form method="POST" id="daily-form">
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+<div class="grid-2">
 <div>
 
 <!-- RECEIPTS -->
@@ -256,86 +256,90 @@
     <a href="{{ url_for('admin_settings', tab='companies') }}">Enable companies in Settings →</a>
   </div>
   {% else %}
-  <table class="mt-table">
-    <thead>
-      <tr>
-        <th style="text-align:left;">Company</th>
-        <th>Amount ($)</th><th>Fees ($)</th><th>Tax ($)</th><th>Commission ($)</th><th>Total</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for co in companies %}
-      {% set key = co.lower().replace(' ','_').replace('.','') %}
-      {% set mt = mt_rows.get(co) %}
-      {% set a = auto_mt.get(co, {}) %}
-      {# A row is "auto" when the employee transfer log has transfers for this
-         company on this date — regardless of which company it is. #}
-      {% set is_auto = (a.get('count', 0) > 0) %}
-      <tr>
-        <td><strong>{{ co }}</strong>{% if is_auto %}<span class="sb-auto-badge">Auto</span>{% endif %}</td>
-        <td>
-          <input type="number" step="0.01" min="0" name="mt_amount_{{ key }}" id="amt_{{ key }}"
-            value="{{ mt.amount if mt else (a.get('amount',0) if is_auto else 0) }}"
-            oninput="recalcMT('{{ key }}')">
-        </td>
-        <td>
-          <input type="number" step="0.01" min="0" name="mt_fees_{{ key }}" id="fees_{{ key }}"
-            value="{{ mt.fees if mt else (a.get('fees',0) if is_auto else 0) }}"
-            oninput="recalcMT('{{ key }}')">
-        </td>
-        <td>
-          <input type="number" step="0.01" min="0" name="mt_tax_{{ key }}" id="tax_{{ key }}"
-            value="{{ mt.federal_tax if mt else (a.get('federal_tax',0) if is_auto else 0) }}"
-            oninput="recalcMT('{{ key }}')">
-        </td>
-        <td>
-          <input type="number" step="0.01" min="0" name="mt_commission_{{ key }}" id="comm_{{ key }}"
-            value="{{ mt.commission if mt else (a.get('commission',0) if is_auto else 0) }}"
-            oninput="recalcMT('{{ key }}')">
-        </td>
-        <td style="text-align:right;" id="tot_{{ key }}">
-          ${{ '{:,.2f}'.format(((mt.individual_total if mt else
-            (a.get('amount',0)+a.get('fees',0)+a.get('commission',0)+a.get('federal_tax',0) if is_auto else 0)))) }}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-    <tfoot>
-      <tr>
-        <td style="text-align:left;font-weight:700;">TOTAL</td>
-        <td id="mt-tot-amt">—</td><td id="mt-tot-fees">—</td>
-        <td id="mt-tot-tax">—</td>
-        <td id="mt-tot-comm">—</td><td id="mt-tot-total">—</td>
-      </tr>
-    </tfoot>
-  </table>
+  <div class="table-wrap">
+    <table class="mt-table">
+      <thead>
+        <tr>
+          <th style="text-align:left;">Company</th>
+          <th>Amount ($)</th><th>Fees ($)</th><th>Tax ($)</th><th>Commission ($)</th><th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for co in companies %}
+        {% set key = co.lower().replace(' ','_').replace('.','') %}
+        {% set mt = mt_rows.get(co) %}
+        {% set a = auto_mt.get(co, {}) %}
+        {# A row is "auto" when the employee transfer log has transfers for this
+           company on this date — regardless of which company it is. #}
+        {% set is_auto = (a.get('count', 0) > 0) %}
+        <tr>
+          <td><strong>{{ co }}</strong>{% if is_auto %}<span class="sb-auto-badge">Auto</span>{% endif %}</td>
+          <td>
+            <input type="number" step="0.01" min="0" name="mt_amount_{{ key }}" id="amt_{{ key }}"
+              value="{{ mt.amount if mt else (a.get('amount',0) if is_auto else 0) }}"
+              oninput="recalcMT('{{ key }}')">
+          </td>
+          <td>
+            <input type="number" step="0.01" min="0" name="mt_fees_{{ key }}" id="fees_{{ key }}"
+              value="{{ mt.fees if mt else (a.get('fees',0) if is_auto else 0) }}"
+              oninput="recalcMT('{{ key }}')">
+          </td>
+          <td>
+            <input type="number" step="0.01" min="0" name="mt_tax_{{ key }}" id="tax_{{ key }}"
+              value="{{ mt.federal_tax if mt else (a.get('federal_tax',0) if is_auto else 0) }}"
+              oninput="recalcMT('{{ key }}')">
+          </td>
+          <td>
+            <input type="number" step="0.01" min="0" name="mt_commission_{{ key }}" id="comm_{{ key }}"
+              value="{{ mt.commission if mt else (a.get('commission',0) if is_auto else 0) }}"
+              oninput="recalcMT('{{ key }}')">
+          </td>
+          <td style="text-align:right;" id="tot_{{ key }}">
+            ${{ '{:,.2f}'.format(((mt.individual_total if mt else
+              (a.get('amount',0)+a.get('fees',0)+a.get('commission',0)+a.get('federal_tax',0) if is_auto else 0)))) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td style="text-align:left;font-weight:700;">TOTAL</td>
+          <td id="mt-tot-amt">—</td><td id="mt-tot-fees">—</td>
+          <td id="mt-tot-tax">—</td>
+          <td id="mt-tot-comm">—</td><td id="mt-tot-total">—</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
   {% endif %}
 </div>
 
 <!-- EMPLOYEE TRANSFERS THIS DAY -->
 <div class="section-box">
   <div class="section-box-header" style="--sb-accent:var(--mid);">EMPLOYEE TRANSFERS THIS DAY</div>
-  <table style="width:100%;border-collapse:collapse;font-size:13px;">
-    <thead>
-      <tr style="background:var(--surface-2);">
-        <th style="padding:8px 14px;text-align:left;font-size:11px;color:var(--text-muted);">Company</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);"># Transfers</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Amount</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Fees</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for co in ['Intermex','Maxi','Barri'] %}
-      {% set a = auto_mt.get(co, {}) %}
-      <tr style="border-bottom:1px solid var(--border);">
-        <td style="padding:8px 14px;color:var(--text);"><span class="co-{{ co.lower() }}">{{ co }}</span></td>
-        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">{{ a.get('count',0) }}</td>
-        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('amount',0)) }}</td>
-        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('fees',0)) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="background:var(--surface-2);">
+          <th style="padding:8px 14px;text-align:left;font-size:11px;color:var(--text-muted);">Company</th>
+          <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);"># Transfers</th>
+          <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Amount</th>
+          <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Fees</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for co in ['Intermex','Maxi','Barri'] %}
+        {% set a = auto_mt.get(co, {}) %}
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 14px;color:var(--text);"><span class="co-{{ co.lower() }}">{{ co }}</span></td>
+          <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">{{ a.get('count',0) }}</td>
+          <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('amount',0)) }}</td>
+          <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('fees',0)) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   <div style="padding:10px 14px;">
     <a href="{{ url_for('transfers', date_from=report_date.isoformat(), date_to=report_date.isoformat()) }}"
        class="btn btn-outline btn-sm">View All Transfers This Day →</a>

@@ -471,7 +471,7 @@ input[type="number"] {
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
 .mt-0 { margin-top: 0; } .mt-1 { margin-top: 8px; } .mt-2 { margin-top: 16px; } .mt-3 { margin-top: 24px; }
 .mb-1 { margin-bottom: 8px; } .mb-2 { margin-bottom: 16px; } .mb-3 { margin-bottom: 24px; }
-.flex { display: flex; } .items-center { align-items: center; } .gap-2 { gap: 8px; } .gap-3 { gap: 16px; }
+.flex { display: flex; } .flex-wrap { flex-wrap: wrap; } .items-center { align-items: center; } .gap-2 { gap: 8px; } .gap-3 { gap: 16px; }
 .justify-between { justify-content: space-between; } .ml-auto { margin-left: auto; }
 .text-sm { font-size: 12px; } .text-muted { color: var(--gray4); } .text-right { text-align: right; }
 .fw-600 { font-weight: 600; } .font-mono { font-family: 'JetBrains Mono', monospace; }
@@ -534,6 +534,33 @@ input[type="number"] {
 
   .btn { padding: 10px 16px; font-size: 13.5px; }
   .section-title { margin: 20px 0 10px; }
+
+  /* Section-box rows (Daily Book / Monthly P&L) — tighter padding and
+     narrower input column so long labels don't wrap oddly on phones. */
+  .sb-row { padding: 7px 12px; gap: 8px; }
+  .sb-label { font-size: 13px; }
+  .sb-input { width: 130px; }
+  .sb-input input { font-size: 14px; padding: 8px 10px; }
+
+  /* Money Transfer table — shrink inputs; the wrapping .table-wrap gives
+     horizontal scroll for the full 6-column grid on narrow screens. */
+  .mt-table { font-size: 12px; min-width: 560px; }
+  .mt-table th, .mt-table td { padding: 6px 8px; }
+  .mt-table td input { width: 80px; font-size: 14px; padding: 6px 7px; }
+
+  /* Tab bar — horizontal scroll beats wrapping for a strip of pill links. */
+  .tab-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-link { white-space: nowrap; flex: 0 0 auto; padding: 10px 14px; }
+
+  /* Sticky save bar — allow the primary + cancel to stack / fill width. */
+  .sticky-save-bar { flex-wrap: wrap; padding: 12px 0; }
+  .sticky-save-bar .btn { flex: 1 1 140px; justify-content: center; }
 }
 
 @media (max-width: 480px) {
@@ -545,6 +572,12 @@ input[type="number"] {
   .card-body { padding: 14px; }
   .stat-value { font-size: 22px; }
   .btn { padding: 10px 14px; }
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+  /* Section-box gets even tighter at phone width. */
+  .sb-row { padding: 6px 10px; }
+  .sb-input { width: 110px; }
+  .sb-input input { padding: 7px 8px; }
 }
 
 /* Touch-friendly inputs (prevents iOS zoom on focus). */
