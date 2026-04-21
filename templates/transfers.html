@@ -96,8 +96,7 @@
     </span>
     {% if transfers %}
     <span class="text-sm text-muted" id="tfHeaderSum">
-      Page total: ${{ '{:,.2f}'.format(transfers|sum(attribute='send_amount')) }}
-      &nbsp;|&nbsp; Fees: ${{ '{:,.2f}'.format(transfers|sum(attribute='fee')) }}
+      Page total: ${{ '{:,.2f}'.format(page_amount) }}
     </span>
     {% else %}
     <span class="text-sm text-muted" id="tfHeaderSum"></span>
@@ -139,8 +138,9 @@
  *   - URL sync via history.replaceState so the query is bookmarkable
  *     and pagination links carry the current filters.
  *
- * Server returns JSON { html, total, page, total_pages, page_amount,
- * page_fees } when called with ?partial=1. The HTML replaces
+ * Server returns JSON { html, total, page, total_pages, page_amount }
+ * when called with ?partial=1, where page_amount is the combined
+ * send+fee+tax sum for the current page. The HTML replaces
  * #transfersResult in place; focus/scroll are preserved because the
  * search input sits above the swap region.
  */
@@ -236,8 +236,7 @@
       }
       if (sumEl) {
         if ((data.total || 0) > 0) {
-          sumEl.innerHTML = 'Page total: ' + fmt(data.page_amount || 0) +
-                            ' &nbsp;|&nbsp; Fees: ' + fmt(data.page_fees || 0);
+          sumEl.innerHTML = 'Page total: ' + fmt(data.page_amount || 0);
         } else {
           sumEl.innerHTML = '';
         }

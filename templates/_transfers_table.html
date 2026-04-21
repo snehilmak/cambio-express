@@ -10,8 +10,6 @@
         <th>Sender</th>
         <th>Company</th>
         <th>Amount</th>
-        <th>Fee</th>
-        <th>Tax</th>
         <th>Recipient</th>
         <th>Country</th>
         <th>Confirm #</th>
@@ -24,7 +22,6 @@
         <th><input type="text" name="sender" value="{{ sender }}" placeholder="Search…" form="tfForm"></th>
         <th></th>
         <th></th>
-        <th></th>
         <th><input type="text" name="recipient" value="{{ recipient }}" placeholder="Search…" form="tfForm"></th>
         <th><input type="text" name="country" value="{{ country }}" placeholder="Search…" form="tfForm"></th>
         <th><input type="text" name="confirm" value="{{ confirm }}" placeholder="Search…" form="tfForm"></th>
@@ -35,13 +32,27 @@
     </thead>
     <tbody>
       {% for t in transfers %}
+      {% set tax = t.federal_tax or 0 %}
+      {% set total = t.send_amount + t.fee + tax %}
       <tr>
         <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
         <td><strong>{{ t.sender_name }}</strong></td>
         <td><span class="co-{{ t.company.lower() }}">{{ t.company }}</span></td>
-        <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
-        <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
-        <td class="mono text-muted">${{ '{:,.2f}'.format(t.federal_tax or 0) }}</td>
+        <td class="mono">
+          {# Combined total with hover breakdown. tabindex=0 so keyboard /
+             touch users can focus the cell and see the same tooltip. The
+             `title` attr is a belt-and-braces fallback for accessibility
+             tools and mobile long-press. #}
+          <span class="tf-amount" tabindex="0"
+                title="Amount ${{ '{:,.2f}'.format(t.send_amount) }} · Fee ${{ '{:,.2f}'.format(t.fee) }} · Tax ${{ '{:,.2f}'.format(tax) }}">
+            ${{ '{:,.2f}'.format(total) }}
+            <span class="tf-amount-tip" role="tooltip" aria-hidden="true">
+              <span class="tf-amount-tip-row"><span>Amount</span><span>${{ '{:,.2f}'.format(t.send_amount) }}</span></span>
+              <span class="tf-amount-tip-row"><span>Fee</span><span>${{ '{:,.2f}'.format(t.fee) }}</span></span>
+              <span class="tf-amount-tip-row"><span>Tax</span><span>${{ '{:,.2f}'.format(tax) }}</span></span>
+            </span>
+          </span>
+        </td>
         <td>{{ t.recipient_name }}</td>
         <td>{{ t.country }}</td>
         <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>
@@ -55,7 +66,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="12" style="text-align:center;padding:40px;color:var(--gray4);">No transfers found.</td></tr>
+      <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--gray4);">No transfers found.</td></tr>
       {% endfor %}
     </tbody>
   </table>

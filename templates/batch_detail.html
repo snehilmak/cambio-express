@@ -76,16 +76,26 @@
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>Date</th><th>Sender</th><th>Amount</th><th>Fee</th><th>Tax</th><th>Recipient</th><th>Country</th><th>Confirm #</th><th>Status</th><th></th></tr>
+        <tr><th>Date</th><th>Sender</th><th>Amount</th><th>Recipient</th><th>Country</th><th>Confirm #</th><th>Status</th><th></th></tr>
       </thead>
       <tbody>
         {% for t in transfers %}
+        {% set tax = t.federal_tax or 0 %}
+        {% set total = t.send_amount + t.fee + tax %}
         <tr>
           <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
           <td><strong>{{ t.sender_name }}</strong></td>
-          <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
-          <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
-          <td class="mono text-muted">${{ '{:,.2f}'.format(t.federal_tax or 0) }}</td>
+          <td class="mono">
+            <span class="tf-amount" tabindex="0"
+                  title="Amount ${{ '{:,.2f}'.format(t.send_amount) }} · Fee ${{ '{:,.2f}'.format(t.fee) }} · Tax ${{ '{:,.2f}'.format(tax) }}">
+              ${{ '{:,.2f}'.format(total) }}
+              <span class="tf-amount-tip" role="tooltip" aria-hidden="true">
+                <span class="tf-amount-tip-row"><span>Amount</span><span>${{ '{:,.2f}'.format(t.send_amount) }}</span></span>
+                <span class="tf-amount-tip-row"><span>Fee</span><span>${{ '{:,.2f}'.format(t.fee) }}</span></span>
+                <span class="tf-amount-tip-row"><span>Tax</span><span>${{ '{:,.2f}'.format(tax) }}</span></span>
+              </span>
+            </span>
+          </td>
           <td>{{ t.recipient_name }}</td>
           <td>{{ t.country }}</td>
           <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>
@@ -96,7 +106,7 @@
           <td><a href="{{ url_for('edit_transfer', tid=t.id) }}" class="btn btn-outline btn-sm">Edit</a></td>
         </tr>
         {% else %}
-        <tr><td colspan="9" style="text-align:center;padding:32px;color:var(--gray4);">
+        <tr><td colspan="8" style="text-align:center;padding:32px;color:var(--gray4);">
           No transfers linked to this batch yet. Set the Batch ID on transfer entries to link them.
         </td></tr>
         {% endfor %}

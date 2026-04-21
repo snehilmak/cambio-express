@@ -2307,18 +2307,23 @@ def transfers():
         batch=batch, q=search, page=page, total=total, total_pages=total_pages,
         per_page=PER_PAGE)
     # Live-search AJAX path — called from templates/transfers.html's JS.
+    # Combined page total — send_amount + fee + federal_tax, matching the
+    # single "Amount" column the user sees in the table (each row shows
+    # the total with a hover-pill breakdown). Shared between the full and
+    # partial render paths so the header always matches the column sum.
+    page_amount = float(sum(
+        r.send_amount + r.fee + (r.federal_tax or 0) for r in rows))
+    ctx["page_amount"] = page_amount
+
     # Returns the table+pager HTML plus meta so the client can update the
     # card header without refetching the whole chrome.
     if request.args.get("partial") == "1":
-        page_amount = float(sum(r.send_amount for r in rows))
-        page_fees   = float(sum(r.fee         for r in rows))
         return jsonify({
             "html":        render_template("_transfers_table.html", **ctx),
             "total":       total,
             "page":        page,
             "total_pages": total_pages,
             "page_amount": page_amount,
-            "page_fees":   page_fees,
         })
     return render_template("transfers.html", **ctx)
 

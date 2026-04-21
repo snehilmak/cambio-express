@@ -1,8 +1,10 @@
 """Tests for the /transfers live-search endpoint.
 
 The route returns full HTML by default, and a JSON envelope {html, total,
-page, total_pages, page_amount, page_fees} when `?partial=1`. The client
-JS swaps the HTML into #transfersResult and updates the header count.
+page, total_pages, page_amount} when `?partial=1` — page_amount is the
+combined send+fee+tax total for the page, matching the single "Amount"
+column in the table. The client JS swaps the HTML into #transfersResult
+and updates the header count.
 """
 import json
 from datetime import date, timedelta
@@ -55,7 +57,8 @@ def test_partial_returns_json_envelope(logged_in_client):
     assert "page" in body
     assert "total_pages" in body
     assert "page_amount" in body
-    assert "page_fees" in body
+    # page_fees removed — total is now combined send+fee+tax.
+    assert "page_fees" not in body
 
 
 def test_partial_html_contains_table_rows(logged_in_client):
@@ -86,13 +89,36 @@ def test_partial_respects_q_fulltext_search(logged_in_client):
     assert "Bob Johnson" in body["html"]
 
 
+def test_table_shows_combined_amount_and_breakdown(logged_in_client):
+    """Each row renders the send+fee+tax total as the Amount cell and
+    includes all three values in a hover-pill breakdown. The individual
+    Fee and Tax columns are gone."""
+    _seed_transfer(send_amount=100.0, fee=2.50)  # tax seed = 1.00
+    resp = logged_in_client.get("/transfers")
+    html = resp.data.decode()
+    # Combined total appears in the cell: 100 + 2.50 + 1.00 = 103.50
+    assert "$103.50" in html
+    # Breakdown is in the tooltip markup.
+    assert "tf-amount-tip" in html
+    assert "Amount" in html and "Fee" in html and "Tax" in html
+    assert "$100.00" in html and "$2.50" in html and "$1.00" in html
+    # Old separate <th>Fee</th> / <th>Tax</th> header cells are gone —
+    # use tags to avoid matching the tooltip labels.
+    assert "<th>Fee</th>" not in html
+    assert "<th>Tax</th>" not in html
+
+
 def test_partial_reports_page_sums(logged_in_client):
+    """page_amount is the combined send + fee + tax total for the page."""
+    # _seed_transfer sets federal_tax to send_amount * 0.01, so:
+    # row 1: 100 + 2 + 1.00 = 103.00
+    # row 2: 200 + 3 + 2.00 = 205.00
+    # combined = 308.00
     _seed_transfer(send_amount=100.0, fee=2.0)
     _seed_transfer(send_amount=200.0, fee=3.0)
     resp = logged_in_client.get("/transfers?partial=1")
     body = json.loads(resp.data)
-    assert abs(body["page_amount"] - 300.0) < 0.01
-    assert abs(body["page_fees"] - 5.0) < 0.01
+    assert abs(body["page_amount"] - 308.0) < 0.01
 
 
 # ── Non-partial path still returns full HTML (backward compat) ──
