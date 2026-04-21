@@ -651,27 +651,29 @@ input[type="number"] {
   .btn { padding: 10px 14px; }
   .btn-sm { padding: 6px 10px; font-size: 12px; }
 
-  /* Keep the side-by-side label/input layout on phones — matches the
-     Monthly P&L look the user prefers. The key rule is flex-basis on
-     both children so nothing relies on the browser's default intrinsic
-     sizing for <input type="number"> (which on Chrome/Android can be
-     ~150px and push the input past the section-box right edge). */
+  /* Switch .sb-row from flex to CSS Grid on phones. Grid enforces the
+     two track widths absolutely — unlike flex, the label can't push
+     the input past the section-box right edge no matter how long the
+     label text or how narrow the viewport. Daily Book was clipping the
+     input with flex because <input type="number">'s browser-default
+     intrinsic size + the label's min-content were fighting for space. */
   .sb-row {
-    padding: 10px 12px; gap: 10px;
-    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 130px;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
   }
   .sb-label {
     font-size: 13px; font-weight: 500;
-    flex: 1 1 auto; min-width: 0;
+    min-width: 0;
     overflow-wrap: anywhere;
   }
   .sb-input {
-    /* Fixed 140px basis — no grow, no shrink, no max-width surprises. */
-    flex: 0 0 140px;
-    width: 140px; max-width: 140px; min-width: 0;
+    width: 100%; min-width: 0; max-width: none;
   }
   .sb-input input {
-    width: 100%; min-width: 0;
+    width: 100%; min-width: 0; max-width: 100%;
     text-align: right; padding: 9px 10px; font-size: 15px;
     border-width: 1.5px;
   }
@@ -812,12 +814,20 @@ input[type="number"] {
 [data-theme="dark"] input,
 [data-theme="dark"] select,
 [data-theme="dark"] textarea {
-  /* Slightly darker fill + lighter border than --surface so the input
-     stays visually distinct from a .section-box / .card background in
-     dark mode, which is where the Daily Book inputs were ghosting. */
-  background: #0f1424;
-  color: #e5e7eb;
-  border-color: #3a4054;
+  /* Distinctly LIGHTER than the section-box / card surface (#1a1f2e) so
+     the input reads as a raised field, not a hole in the background.
+     Earlier we tried #0f1424 (slightly darker) — on phone screens the
+     contrast with the body background was too low and the inputs
+     "ghosted" inside the Daily Book section-boxes. */
+  background: #2a3044;
+  color: #f3f4f6;
+  border-color: #444b5f;
+}
+[data-theme="dark"] .sb-input input[readonly],
+[data-theme="dark"] input[readonly] {
+  /* Keep readonly fields visually distinct from editable ones. */
+  background: #1f2434;
+  color: #c9d0dd;
 }
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder { color: #6b7280; }
