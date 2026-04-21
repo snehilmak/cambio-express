@@ -89,7 +89,12 @@ def test_forgot_password_invalidates_old_tokens(client):
 
 
 def test_forgot_password_ignores_employee_accounts(client):
-    """Only admins/owners/superadmins can reset via this flow."""
+    """Only admins/owners can reset via this flow.
+
+    Employees go through their store admin (admin_reset_employee_password).
+    Superadmin is excluded by design — self-service email reset would
+    bypass 2FA. Superadmin recovery goes through `flask reset-superadmin`.
+    """
     from app import db, PasswordResetToken
     with client.application.app_context():
         _seed_user(username="cashier@example.com", role="employee")

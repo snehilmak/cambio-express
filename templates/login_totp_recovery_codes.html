@@ -1,0 +1,28 @@
+{% set login_page_title = "Save your recovery codes" %}
+{% include "_login_chrome.html" %}
+  <div class="login-heading">Save these recovery codes</div>
+  <div class="login-sub">
+    If you lose access to your authenticator app, each of these codes can
+    be used once to sign in instead of a 6-digit code. This is the only
+    time they'll be shown.
+  </div>
+  <div class="info-box">
+    <strong>Where to store them:</strong> password manager (1Password,
+    Bitwarden), a printed copy in a safe, or both. Don't save them in a
+    plain note on your phone — if your phone is the device you've just
+    enrolled, losing it loses everything.
+  </div>
+  <div class="recovery-grid">
+    {% for c in codes %}<div>{{ c }}</div>{% endfor %}
+  </div>
+  <form method="POST" autocomplete="off">
+    <input type="hidden" name="saved" value="1">
+    <div class="checkbox-row">
+      <input type="checkbox" id="confirm" required>
+      <label for="confirm" style="font-size:14px;color:inherit;text-transform:none;letter-spacing:normal;font-weight:500;">
+        I've saved these recovery codes somewhere safe.
+      </label>
+    </div>
+    <button type="submit" class="btn-login">Finish and sign in →</button>
+  </form>
+{% include "_login_chrome_end.html" %}

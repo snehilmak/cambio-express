@@ -92,6 +92,11 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
     `PasswordResetToken.token_hash`, single-use, 1-hour expiry. The raw
     token never hits the DB. `/forgot-password` always responds with
     "Check your email" regardless of whether the account exists.
+    **Superadmin is deliberately excluded** from the email flow — an
+    attacker who compromises the superadmin mailbox would bypass 2FA.
+    Superadmin recovery goes through `flask reset-superadmin` on the
+    Render shell (optionally `--reset-2fa` to also wipe TOTP if the
+    recovery codes are lost).
 11. **`db.session.get(Model, id)`** — never `Model.query.get(id)` (legacy
     SQLAlchemy 2.0 API, emits deprecation warnings).
 12. **Referrals** — `ReferralCode` is one-per-store, minted lazily by
@@ -104,7 +109,23 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
     lockout row and `Store.referee_credit_applied_at` gates retries. The
     topbar crown reads `my_referral_code` from the context processor —
     empty string hides it, so the button self-gates on role + plan.
-13. **Table search UX — live-search is the standard.** Every paginated
+13. **2FA (TOTP) is mandatory for superadmin.** Login routes are the
+    only source of truth:
+    - `/login` POST → if creds valid AND `_needs_totp(user)` returns
+      True, set `session["pending_auth_user_id"]` (NOT `user_id`) and
+      redirect to `/login/2fa/enroll` (first time) or `/login/2fa`.
+    - `/login/2fa/*` is the only flow that may call
+      `_finalize_2fa_login(user)`, which promotes `pending_auth_user_id`
+      → real `user_id`. **Never set `session["user_id"]` directly for
+      a role that `_needs_totp` returns True for.**
+    - Recovery codes: 10 per user, sha256-hashed, single-use
+      (`RecoveryCode.used_at`). Shown in plaintext exactly once on the
+      post-enrollment recovery-codes page.
+    - TOTP secret (`User.totp_secret`) is base32 plaintext in the DB —
+      the DB is the trust boundary, same as `password_hash`.
+    - To extend 2FA to other roles, change the single `_needs_totp()`
+      predicate; do NOT scatter role checks through the login routes.
+14. **Table search UX — live-search is the standard.** Every paginated
     table (transfers is the reference implementation; customers,
     batches, monthly list, etc. should follow) uses the debounced AJAX
     pattern — **never** a plain "type then click Search" form. Pattern:
