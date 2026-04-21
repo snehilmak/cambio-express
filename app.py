@@ -18,6 +18,19 @@ logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cambio-dev-secret-change-in-prod")
 
+# Cache-bust query string for the shared stylesheet (and any other static
+# asset we want to force-refresh on deploy). Computed once at boot from
+# the file's mtime so every new deploy yields a different `?v=...` and
+# browsers that still have the previous app.css cached will re-fetch.
+# Fallback to the Python start time if the file is missing for any reason.
+_APP_CSS_PATH = os.path.join(os.path.dirname(__file__), "static", "app.css")
+try:
+    STATIC_VERSION = str(int(os.path.getmtime(_APP_CSS_PATH)))
+except OSError:
+    import time as _t
+    STATIC_VERSION = str(int(_t.time()))
+app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///cambio.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
