@@ -41,10 +41,11 @@
         <td class="mono">
           {# Combined total with hover breakdown. tabindex=0 so keyboard /
              touch users can focus the cell and see the same tooltip. The
-             `title` attr is a belt-and-braces fallback for accessibility
-             tools and mobile long-press. #}
-          <span class="tf-amount" tabindex="0"
-                title="Amount ${{ '{:,.2f}'.format(t.send_amount) }} · Fee ${{ '{:,.2f}'.format(t.fee) }} · Tax ${{ '{:,.2f}'.format(tax) }}">
+             breakdown inside .tf-amount-tip is already part of the
+             accessibility tree, so no title attribute is needed — and
+             emitting one would render a duplicate browser-native tooltip
+             alongside our styled pill. #}
+          <span class="tf-amount" tabindex="0">
             ${{ '{:,.2f}'.format(total) }}
             <span class="tf-amount-tip" role="tooltip" aria-hidden="true">
               <span class="tf-amount-tip-row"><span>Amount</span><span>${{ '{:,.2f}'.format(t.send_amount) }}</span></span>
