@@ -86,8 +86,7 @@
           <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
           <td><strong>{{ t.sender_name }}</strong></td>
           <td class="mono">
-            <span class="tf-amount" tabindex="0"
-                  title="Amount ${{ '{:,.2f}'.format(t.send_amount) }} · Fee ${{ '{:,.2f}'.format(t.fee) }} · Tax ${{ '{:,.2f}'.format(tax) }}">
+            <span class="tf-amount" tabindex="0">
               ${{ '{:,.2f}'.format(total) }}
               <span class="tf-amount-tip" role="tooltip" aria-hidden="true">
                 <span class="tf-amount-tip-row"><span>Amount</span><span>${{ '{:,.2f}'.format(t.send_amount) }}</span></span>

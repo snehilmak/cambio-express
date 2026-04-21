@@ -418,12 +418,31 @@ html, body { overscroll-behavior-y: none; }
 .tf-amount:focus .tf-amount-tip,
 .tf-amount:focus-within .tf-amount-tip { display: block; }
 
+/* Flip the tooltip BELOW the cell for the first row, so it doesn't get
+   clipped above the table / under the card's search header. The caret
+   also flips — we move it to the top of the pill and recolor it so it
+   points up at the cell instead of down. */
+tbody tr:first-child .tf-amount-tip {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+tbody tr:first-child .tf-amount-tip::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--dark);
+}
+
 [data-theme="dark"] .tf-amount-tip {
   background: #0f1424;
   border: 1px solid #3a4054;
   box-shadow: 0 6px 18px rgba(0,0,0,0.55);
 }
 [data-theme="dark"] .tf-amount-tip::after { border-top-color: #0f1424; }
+[data-theme="dark"] tbody tr:first-child .tf-amount-tip::after {
+  border-top-color: transparent;
+  border-bottom-color: #0f1424;
+}
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 thead th {
   padding: 11px 16px; text-align: left;
