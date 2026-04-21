@@ -31,13 +31,22 @@ services:
       #   STRIPE_BASIC_PRICE_ID / STRIPE_PRO_PRICE_ID → Stripe → Products →
       #                         your plan → Pricing → copy the price ID
       #                         (starts price_)
+      #   STRIPE_BASIC_YEARLY_PRICE_ID / STRIPE_PRO_YEARLY_PRICE_ID →
+      #                         Stripe → Products → Basic or Pro → add an
+      #                         additional price with yearly recurring →
+      #                         copy the price ID. Optional: leave blank
+      #                         to hide the yearly button on /subscribe.
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: STRIPE_BASIC_PRICE_ID
         sync: false
+      - key: STRIPE_BASIC_YEARLY_PRICE_ID
+        sync: false
       - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: STRIPE_PRO_YEARLY_PRICE_ID
         sync: false
 
       # ── SMTP for password reset emails ───────────────────────
