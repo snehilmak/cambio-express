@@ -19,6 +19,14 @@ one **Superadmin**.
 - Stripe for billing (Checkout Sessions + Billing Portal + webhooks).
 - pytest + pytest-flask.
 
+## Production deploy target (single source of truth)
+- **Web service**: `dinerobook` on Render → `https://dinerobook.onrender.com`
+- **Database**: `dinerobook-db` on Render (linked via `fromDatabase:` in `render.yaml`)
+- The older `cashnet` service / `cambio-db` database are decommissioned.
+  Never add references to them, never point env vars at them, never run
+  migrations against them. If a new service is ever needed it must be
+  declared in `render.yaml` and auto-deploy from `main`.
+
 ## Running locally
 ```bash
 pip install -r requirements.txt
