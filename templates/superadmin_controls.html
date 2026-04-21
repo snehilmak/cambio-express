@@ -5,19 +5,17 @@
 <style>
   /* Tabs — mirrors the pattern in admin_settings.html so users see one consistent shape. */
   .tab-bar {
-    display: flex; gap: 0; border-bottom: 2px solid var(--gray2);
+    display: flex; gap: 0; border-bottom: 2px solid var(--border);
     margin-bottom: 28px; flex-wrap: wrap;
   }
   .tab-link {
     padding: 10px 20px; font-size: 13.5px; font-weight: 500;
-    color: var(--gray4); text-decoration: none;
+    color: var(--text-muted); text-decoration: none;
     border-bottom: 2px solid transparent; margin-bottom: -2px;
     transition: all 0.15s;
   }
-  .tab-link:hover { color: var(--navy); }
-  .tab-link.active { color: var(--navy); border-bottom-color: var(--blue); font-weight: 600; }
-  [data-theme="dark"] .tab-link:hover,
-  [data-theme="dark"] .tab-link.active { color: #f3f4f6; }
+  .tab-link:hover { color: var(--text); }
+  .tab-link.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
 
   /* Compact inline forms for row-level actions in tables. */
   .inline-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
@@ -30,16 +28,16 @@
   .action-stack { display: flex; flex-wrap: wrap; gap: 6px; }
   .btn-xs {
     padding: 5px 10px; font-size: 11.5px; font-weight: 600;
-    border-radius: 6px; cursor: pointer; border: 1.5px solid var(--gray2);
-    background: transparent; color: var(--gray4);
+    border-radius: 6px; cursor: pointer; border: 1.5px solid var(--border-strong);
+    background: transparent; color: var(--text-muted);
     font-family: 'DM Sans', sans-serif;
   }
   .btn-xs.primary { color: var(--blue); border-color: var(--blue); }
-  .btn-xs.primary:hover { background: var(--blue); color: var(--white); }
+  .btn-xs.primary:hover { background: var(--blue); color: #fff; }
   .btn-xs.gold { color: var(--gold); border-color: var(--gold); }
-  .btn-xs.gold:hover { background: var(--gold); color: var(--white); }
+  .btn-xs.gold:hover { background: var(--gold); color: #fff; }
   .btn-xs.danger { color: var(--red); border-color: var(--red); }
-  .btn-xs.danger:hover { background: var(--red); color: var(--white); }
+  .btn-xs.danger:hover { background: var(--red); color: #fff; }
 
   /* Metric tiles for the Overview tab. Uses --accent like regular stat cards. */
   .metric-grid {

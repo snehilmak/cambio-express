@@ -49,7 +49,7 @@ def test_daily_report_renders_money_transfer_readonly(logged_in_client):
     assert idx != -1, "money_transfer input missing"
     assert "readonly" in html[max(0, idx - 200):idx + 200]
     # The "Auto" badge should be next to the label.
-    assert 'class="auto-badge">Auto' in html
+    assert 'class="sb-auto-badge">Auto' in html
 
 
 def test_daily_report_ignores_submitted_money_transfer(logged_in_client):

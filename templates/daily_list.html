@@ -1,6 +1,58 @@
 {% extends "base.html" %}
 {% block title %}Daily Book — {{ month_name }} {{ year }}{% endblock %}
 {% block page_title %}Daily Book{% endblock %}
+{% block head %}
+<style>
+/* Calendar grid. Uses semantic surface/border tokens so dark mode
+   just works — avoid hardcoded hex here. */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.cal-cell {
+  text-decoration: none; display: block;
+  padding: 14px; border-radius: 10px;
+  border: 2px solid var(--border);
+  background: var(--surface-2);
+  transition: all 0.15s; position: relative;
+  color: var(--text);
+}
+.cal-cell.has-report { background: var(--surface); }
+.cal-cell.today {
+  border-color: var(--gold);
+  background: var(--yellow-bg);
+}
+[data-theme="dark"] .cal-cell.today { background: #2d2410; }
+.cal-cell:hover {
+  border-color: var(--sky);
+  background: var(--blue-bg);
+}
+[data-theme="dark"] .cal-cell:hover { background: #0f1d3f; }
+.cal-day-num { font-weight: 700; font-size: 16px; color: var(--navy); }
+[data-theme="dark"] .cal-day-num { color: var(--gold2); }
+.cal-cell.today .cal-day-num { color: var(--gold); }
+.cal-label { font-size: 11px; color: var(--text-muted); margin-bottom: 2px; }
+.cal-money { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; }
+.cal-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); display: block; margin-top: 3px;
+}
+.cal-pill {
+  font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+}
+.cal-pill.over  { background: var(--green-bg); color: var(--green-dark); }
+.cal-pill.short { background: var(--red-bg);   color: var(--red-dark); }
+[data-theme="dark"] .cal-pill.over  { background: #0f2e1f; color: #86efac; }
+[data-theme="dark"] .cal-pill.short { background: #2d1215; color: #fca5a5; }
+.cal-hint { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
+.cal-legend {
+  margin-top: 20px; display: flex; align-items: center;
+  gap: 20px; font-size: 12px; color: var(--text-muted);
+}
+.cal-legend-swatch {
+  padding: 2px 8px; border-radius: 6px; border: 2px solid var(--border);
+}
+.cal-legend-swatch.today { border-color: var(--gold); color: var(--gold); }
+.cal-legend-swatch.no-entry { background: var(--surface-2); }
+</style>
+{% endblock %}
 {% block content %}
 
 <!-- Month navigator -->
@@ -41,49 +93,37 @@
 {% endif %}
 
 <!-- Day grid -->
-<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:10px;">
+<div class="cal-grid">
   {% for day_num in range(1, days+1) %}
     {% set report = reports.get(day_num) %}
     {% set ds = '%04d-%02d-%02d'|format(year, month, day_num) %}
     {% set is_today = (today.year == year and today.month == month and today.day == day_num) %}
     <a href="{{ url_for('daily_report', ds=ds) }}"
-       style="text-decoration:none;display:block;padding:14px;border-radius:10px;
-              border:2px solid {% if is_today %}var(--gold){% elif report %}var(--gray2){% else %}var(--gray2){% endif %};
-              background:{% if is_today %}#fffbeb{% elif report %}var(--white){% else %}var(--gray1){% endif %};
-              transition:all 0.15s;position:relative;"
-       onmouseover="this.style.borderColor='var(--sky)';this.style.background='#eff6ff'"
-       onmouseout="this.style.borderColor='{% if is_today %}var(--gold){% elif report %}var(--gray2){% else %}var(--gray2){% endif %}';
-                  this.style.background='{% if is_today %}#fffbeb{% elif report %}var(--white){% else %}var(--gray1){% endif %}'">
+       class="cal-cell {% if is_today %}today{% elif report %}has-report{% endif %}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-        <span style="font-weight:700;font-size:16px;color:{% if is_today %}var(--gold){% else %}var(--navy){% endif %};">
-          {{ day_num }}
-        </span>
-        {% if report %}
-          <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:block;margin-top:3px;"></span>
-        {% endif %}
+        <span class="cal-day-num">{{ day_num }}</span>
+        {% if report %}<span class="cal-dot"></span>{% endif %}
       </div>
       {% if report %}
         <div style="margin-top:8px;">
-          <div style="font-size:11px;color:var(--gray4);margin-bottom:2px;">Receipts</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--green);">
+          <div class="cal-label">Receipts</div>
+          <div class="cal-money" style="color:var(--green);">
             ${{ '{:,.0f}'.format(report.total_receipts) }}
           </div>
-          <div style="font-size:11px;color:var(--gray4);margin-top:4px;margin-bottom:2px;">Disbursed</div>
-          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--red);">
+          <div class="cal-label" style="margin-top:4px;">Disbursed</div>
+          <div class="cal-money" style="color:var(--red);">
             ${{ '{:,.0f}'.format(report.total_disbursements) }}
           </div>
           {% if report.over_short != 0 %}
           <div style="margin-top:4px;">
-            <span style="font-size:10px;padding:2px 6px;border-radius:4px;
-              background:{% if report.over_short > 0 %}#dcfce7{% else %}#fee2e2{% endif %};
-              color:{% if report.over_short > 0 %}var(--green){% else %}var(--red){% endif %};font-weight:600;">
+            <span class="cal-pill {{ 'over' if report.over_short > 0 else 'short' }}">
               {{ 'Over' if report.over_short > 0 else 'Short' }} ${{ '{:,.0f}'.format(report.over_short|abs) }}
             </span>
           </div>
           {% endif %}
         </div>
       {% else %}
-        <div style="margin-top:10px;font-size:11px;color:var(--gray3);">
+        <div class="cal-hint">
           {% if day_num <= today.day or month < today.month or year < today.year %}
             Click to enter
           {% else %}
@@ -95,9 +135,9 @@
   {% endfor %}
 </div>
 
-<div style="margin-top:20px;display:flex;align-items:center;gap:20px;font-size:12px;color:var(--gray4);">
-  <span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);margin-right:5px;"></span>Report entered</span>
-  <span style="border:2px solid var(--gold);padding:2px 8px;border-radius:6px;color:var(--gold);">Today</span>
-  <span style="border:2px solid var(--gray2);padding:2px 8px;border-radius:6px;background:var(--gray1);">No entry</span>
+<div class="cal-legend">
+  <span><span class="cal-dot" style="display:inline-block;margin-right:5px;"></span>Report entered</span>
+  <span class="cal-legend-swatch today">Today</span>
+  <span class="cal-legend-swatch no-entry">No entry</span>
 </div>
 {% endblock %}

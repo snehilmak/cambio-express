@@ -40,11 +40,37 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 
 ## Critical invariants — don't break these
 
-1. **One stylesheet** — every template `<link>`s `static/app.css`. Use
-   the CSS vars (`--navy`, `--gold`, `--red-dark`, `--green-dark`,
-   `--yellow-bg`, etc.) and utility classes (`.banner-*`, `.info-box`,
-   `.info-row`, `.empty-state`, `.coming-pill`, `.modal-*`). Do not
-   re-define these inline.
+1. **One stylesheet + mode-aware tokens** — every template `<link>`s
+   `static/app.css`. Use the utility classes (`.banner-*`, `.info-box`,
+   `.info-row`, `.empty-state`, `.coming-pill`, `.modal-*`,
+   `.section-box`, `.sb-row`, `.sb-label`, `.sb-input`, `.sb-total`,
+   `.sb-auto-badge`, `.sb-summary-box`, `.mt-table`, `.sticky-save-bar`)
+   rather than rolling your own.
+
+   **For ANY surface, text, or border that should respect the light/dark
+   toggle, use the semantic tokens** — they are the only tokens that
+   flip in `[data-theme="dark"]`:
+    - `--surface`        (card / box background)
+    - `--surface-2`      (subtle inset: totals rows, read-only fields)
+    - `--surface-sticky` (sticky save bars)
+    - `--text`           (primary body text)
+    - `--text-muted`     (secondary labels)
+    - `--border`         (component borders)
+    - `--border-strong`  (button outlines, focus rings)
+
+   The fixed tokens (`--navy`, `--blue`, `--gold`, `--white`, `--gray1`,
+   `--gray2`, `--gray4`, `--dark`, `--cream`, `--paper`) are brand /
+   mode-agnostic colors — only reach for them when you specifically want
+   a color that does NOT flip (e.g. a navy hero, a gold accent band).
+   **Never use `--white` / `--gray1` / `--dark` for a surface or text
+   that should adapt to dark mode** — that's the bug we keep regressing
+   on. Likewise: no hardcoded hex for backgrounds/text; pick a
+   semantic token or a brand token.
+
+   For section-box header accent colors, set the `--sb-accent` custom
+   property inline (`style="--sb-accent: var(--blue);"`) — don't
+   override `background:` directly. New report-like pages should reuse
+   `.section-box` + `.sb-*` rather than define their own family.
 2. **Sidebar groupings** (admin) — **Workspace · Books · Finance ·
    Account**. Superadmin gets a **Platform** section with **Controls**.
    New pages belong to exactly one section; add the nav link in

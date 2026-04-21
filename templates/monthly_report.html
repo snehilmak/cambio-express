@@ -3,17 +3,22 @@
 {% block page_title %}P&L — {{ month_name }} {{ year }}{% endblock %}
 {% block head %}
 <style>
-.pl-section { background:var(--white);border:1px solid var(--gray2);border-radius:12px;overflow:hidden;margin-bottom:20px; }
-.pl-header { padding:12px 20px;font-weight:700;font-size:13px;color:var(--white);letter-spacing:0.5px; }
-.pl-row { display:flex;align-items:center;padding:8px 20px;border-bottom:1px solid var(--gray2);gap:12px; }
-.pl-row:last-child { border-bottom:none; }
-.pl-label { flex:1;font-size:13px;color:var(--dark); }
-.pl-auto { font-size:11px;color:var(--sky);margin-left:6px; }
-.pl-input { width:160px; }
-.pl-input input { text-align:right;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:13px;width:100%; }
-.pl-total { background:var(--gray1);font-weight:700;padding:10px 20px; }
-.pl-net { font-size:18px;font-weight:700;font-family:'DM Serif Display',serif; }
-.hint { font-size:11px;color:var(--gray3);margin-left:6px; }
+/* Page-local variants of the shared section-box family (see app.css).
+   Everything else — .section-box, .sb-row, .sb-label, .sb-input,
+   .sb-total, .sb-auto-badge — is shared and handles dark mode. */
+.pl-row { padding: 8px 20px; }  /* slightly taller than default .sb-row */
+.pl-total { padding: 10px 20px; }
+.pl-auto { font-size: 11px; color: var(--sky); margin-left: 6px; }
+.pl-net {
+  font-size: 18px; font-weight: 700;
+  font-family: 'DM Serif Display', serif;
+}
+.hint { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
+.expense-subhead {
+  padding: 10px 20px 4px;
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -38,16 +43,16 @@
   <!-- LEFT: REVENUE + PURCHASES -->
   <div>
 
-    <div class="pl-section">
-      <div class="pl-header" style="background:var(--blue);">REVENUE</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--blue);">REVENUE</div>
 
       {% macro pl_field(name, label, auto_key=None) %}
-      <div class="pl-row">
-        <span class="pl-label">
+      <div class="sb-row pl-row">
+        <span class="sb-label">
           {{ label }}
           {% if auto_key %}<span class="pl-auto">Auto</span>{% endif %}
         </span>
-        <div class="pl-input">
+        <div class="sb-input">
           <input type="number" step="0.01" min="0" name="{{ name }}"
             value="{{ (report|attr(name)) if report else (auto.get(auto_key, 0) if auto_key else 0) }}"
             oninput="recalc()">
@@ -68,25 +73,25 @@
       {{ pl_field('other_income_2',         'Other Income') }}
       {{ pl_field('other_income_3',         'Other Income') }}
 
-      <div class="pl-row pl-total">
-        <span class="pl-label">TOTAL REVENUE</span>
+      <div class="sb-row sb-total pl-row pl-total">
+        <span class="sb-label">TOTAL REVENUE</span>
         <div style="width:160px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--green);font-size:15px;" id="tot-rev">—</div>
       </div>
     </div>
 
-    <div class="pl-section">
-      <div class="pl-header" style="background:#7c3aed;">COST OF GOODS SOLD (Purchases)</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:#7c3aed;">COST OF GOODS SOLD (Purchases)</div>
       {{ pl_field('cash_purchases',   'Cash Purchases',   'cash_purchases') }}
       {{ pl_field('check_purchases',  'Check Purchases',  'check_purchases') }}
-      <div class="pl-row pl-total">
-        <span class="pl-label">TOTAL PURCHASES</span>
+      <div class="sb-row sb-total pl-row pl-total">
+        <span class="sb-label">TOTAL PURCHASES</span>
         <div style="width:160px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--red);font-size:15px;" id="tot-purch">—</div>
       </div>
     </div>
 
     <!-- Summary card -->
-    <div class="pl-section">
-      <div class="pl-header" style="background:var(--navy);">NET INCOME SUMMARY</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--navy);">NET INCOME SUMMARY</div>
       <div style="padding:20px;">
         <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
           <span class="text-sm">Total Revenue</span>
@@ -112,16 +117,16 @@
     </div>
 
     <!-- Bottom fields -->
-    <div class="pl-section">
-      <div class="pl-header" style="background:var(--gold);">BOTTOM LINE</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--gold);">BOTTOM LINE</div>
       {{ pl_field('over_short',            'Over & Short',               'over_short') }}
       {{ pl_field('borrowed_money_return', 'Borrowed Money Return') }}
       {{ pl_field('profit_distributed',    'Profit Distributed') }}
       {{ pl_field('cash_carry_forward',    'Cash Carry Forward') }}
     </div>
 
-    <div class="pl-section">
-      <div class="pl-header" style="background:var(--gray4);">NOTES</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--gray4);">NOTES</div>
       <div style="padding:16px;">
         <textarea name="notes" rows="3" style="width:100%;" placeholder="Monthly notes…">{{ report.notes if report else '' }}</textarea>
       </div>
@@ -131,20 +136,20 @@
 
   <!-- RIGHT: EXPENSES -->
   <div>
-    <div class="pl-section">
-      <div class="pl-header" style="background:#dc2626;">EXPENSES</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--red);">EXPENSES</div>
 
-      <div style="padding:10px 20px 4px;font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.8px;">Operating</div>
+      <div class="expense-subhead">Operating</div>
       {{ pl_field('cash_expenses',       'Cash Expenses',       'cash_expenses') }}
       {{ pl_field('check_expenses',      'Check Expenses',      'check_expenses') }}
       {{ pl_field('cash_payroll',        'Cash Payroll',        'cash_payroll') }}
 
-      <div style="padding:10px 20px 4px;font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.8px;">Bank Charges</div>
+      <div class="expense-subhead">Bank Charges</div>
       {{ pl_field('bank_charges_210',    'Bank Charges — Acct 210') }}
       {{ pl_field('bank_charges_230',    'Bank Charges — Acct 230') }}
       {{ pl_field('credit_card_fees',    'Credit Card Fees') }}
 
-      <div style="padding:10px 20px 4px;font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.8px;">Other Expenses</div>
+      <div class="expense-subhead">Other Expenses</div>
       {{ pl_field('money_order_rent',    'Money Order Rent') }}
       {{ pl_field('emaginenet_tech',     'Emaginenet Technology') }}
       {{ pl_field('irs_payroll_tax',     'IRS Payroll Tax') }}
@@ -158,28 +163,28 @@
       {{ pl_field('other_expense_4',     'Other Expense') }}
       {{ pl_field('other_expense_5',     'Other Expense') }}
 
-      <div class="pl-row pl-total">
-        <span class="pl-label">TOTAL EXPENSES</span>
+      <div class="sb-row sb-total pl-row pl-total">
+        <span class="sb-label">TOTAL EXPENSES</span>
         <div style="width:160px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--red);font-size:15px;" id="tot-exp">—</div>
       </div>
     </div>
 
     <!-- Commission table -->
-    <div class="pl-section">
-      <div class="pl-header" style="background:var(--mid);">COMMISSION IN BANK (by company)</div>
+    <div class="section-box">
+      <div class="section-box-header" style="--sb-accent:var(--mid);">COMMISSION IN BANK (by company)</div>
       <div style="padding:16px;">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
           <thead>
-            <tr style="background:var(--gray1);">
-              <th style="padding:7px 12px;text-align:left;font-size:11px;color:var(--gray4);">Company</th>
-              <th style="padding:7px 12px;text-align:right;font-size:11px;color:var(--gray4);">Commission</th>
+            <tr style="background:var(--surface-2);">
+              <th style="padding:7px 12px;text-align:left;font-size:11px;color:var(--text-muted);">Company</th>
+              <th style="padding:7px 12px;text-align:right;font-size:11px;color:var(--text-muted);">Commission</th>
             </tr>
           </thead>
           <tbody>
             {% for co in ['Barri','Boost Rev.','Inter Cambio','Intermex','Maxi','Sigue','Vigo'] %}
-            <tr style="border-bottom:1px solid var(--gray2);">
-              <td style="padding:8px 12px;">{{ co }}</td>
-              <td style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:8px 12px;color:var(--text);">{{ co }}</td>
+              <td style="padding:8px 12px;text-align:right;font-family:'JetBrains Mono',monospace;color:var(--text);">
                 {# Sum from MoneyTransferSummary for this month — shown as read-only reference #}
                 —
               </td>
@@ -194,8 +199,7 @@
   </div>
 </div>
 
-<div style="position:sticky;bottom:0;background:rgba(250,247,242,0.95);backdrop-filter:blur(4px);
-            border-top:1px solid var(--gray2);padding:16px 0;display:flex;gap:12px;align-items:center;">
+<div class="sticky-save-bar">
   <button type="submit" class="btn btn-primary" style="font-size:15px;padding:12px 28px;">💾 Save P&L Report</button>
   <a href="{{ url_for('monthly_list') }}" class="btn btn-outline">Cancel</a>
 </div>
