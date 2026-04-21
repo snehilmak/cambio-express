@@ -2,7 +2,7 @@
 // - Cache-first for the /static/ shell (CSS, icons)
 // - Network-first for navigations with /offline as fallback
 // - Push notifications (show + handle click)
-const CACHE = 'dinerobook-v2';
+const CACHE = 'dinerobook-v3';
 const SHELL = [
   '/offline',
   '/static/app.css',
@@ -41,7 +41,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static shell: cache first, populate on miss.
+  // Stylesheet: network first so CSS updates roll out immediately.
+  // CSS is small and updated often — cache-first here has bitten users
+  // who kept seeing stale layouts after deploys.
+  if (url.pathname === '/static/app.css') {
+    event.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+        return res;
+      }).catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Other static shell assets: cache first, populate on miss.
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(
       caches.match(req).then((hit) =>
