@@ -734,13 +734,16 @@ def stripe_health_check():
       error: str on failure
     """
     env = {
-        "secret_key":          bool(os.environ.get("STRIPE_SECRET_KEY")),
-        "webhook_secret":      bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-        "basic_price_id":      bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
-        "pro_price_id":        bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
-        "pro_yearly_price_id": bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")),
+        "secret_key":            bool(os.environ.get("STRIPE_SECRET_KEY")),
+        "webhook_secret":        bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
+        "basic_price_id":        bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
+        "basic_yearly_price_id": bool(os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID")),
+        "pro_price_id":          bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
+        "pro_yearly_price_id":   bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")),
     }
-    result = {"env": env, "ok": False, "error": "", "price_ok": {"basic": False, "pro": False, "pro_yearly": False}}
+    result = {"env": env, "ok": False, "error": "",
+              "price_ok": {"basic": False, "basic_yearly": False,
+                           "pro": False, "pro_yearly": False}}
     if not env["secret_key"]:
         result["error"] = "STRIPE_SECRET_KEY is not configured."
         return result
@@ -755,6 +758,7 @@ def stripe_health_check():
         result["error"] = f"{type(e).__name__}: {e}"
         return result
     for plan, env_key in (("basic", "STRIPE_BASIC_PRICE_ID"),
+                          ("basic_yearly", "STRIPE_BASIC_YEARLY_PRICE_ID"),
                           ("pro", "STRIPE_PRO_PRICE_ID"),
                           ("pro_yearly", "STRIPE_PRO_YEARLY_PRICE_ID")):
         pid = os.environ.get(env_key, "")
@@ -1900,7 +1904,12 @@ def owner_unlink_store(store_id):
 def subscribe():
     user = current_user()
     store = current_store()
-    return render_template("subscribe.html", user=user, store=store)
+    # Yearly buttons show up on the pricing page only if their price ID
+    # is configured in the environment — otherwise a user clicking them
+    # would just get bounced back with "Invalid plan selected."
+    return render_template("subscribe.html", user=user, store=store,
+        basic_yearly_enabled=bool(os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID")),
+        pro_yearly_enabled=bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")))
 
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
@@ -1912,12 +1921,14 @@ def subscribe_checkout():
     """
     store = current_store()
     plan = request.form.get("plan", "").strip()
-    # "pro_yearly" maps to the Pro plan billed annually at $300. The webhook
-    # coerces both monthly and yearly Pro subscriptions onto Store.plan="pro".
+    # "_yearly" variants are separate Stripe prices but land on the same
+    # Store.plan value — basic_yearly→"basic", pro_yearly→"pro" — because
+    # Store.plan is about feature entitlement, not billing cadence.
     price_map = {
-        "basic":      os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-        "pro":        os.environ.get("STRIPE_PRO_PRICE_ID", ""),
-        "pro_yearly": os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
+        "basic":        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
+        "basic_yearly": os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
+        "pro":          os.environ.get("STRIPE_PRO_PRICE_ID", ""),
+        "pro_yearly":   os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
     }
     if plan not in price_map or not price_map[plan]:
         flash("Invalid plan selected.", "error")
@@ -3813,8 +3824,16 @@ def stripe_webhook():
                 try:
                     sub = stripe.Subscription.retrieve(sub_id)
                     price_id = sub["items"]["data"][0]["price"]["id"]
-                    basic_pid = os.environ.get("STRIPE_BASIC_PRICE_ID", "")
-                    store.plan = "basic" if price_id == basic_pid else "pro"
+                    # Map the Stripe price to the internal plan key.
+                    # basic + basic_yearly both grant the "basic" tier;
+                    # pro + pro_yearly both grant "pro". Anything unknown
+                    # falls back to "pro" (safer than locking the user out
+                    # of features they paid for).
+                    basic_ids = {
+                        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
+                        os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
+                    } - {""}
+                    store.plan = "basic" if price_id in basic_ids else "pro"
                 except Exception as e:
                     app.logger.error(f"Stripe sub retrieve error: {e}")
                     store.plan = "pro"
