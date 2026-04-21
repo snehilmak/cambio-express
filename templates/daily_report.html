@@ -63,58 +63,55 @@
 <!-- RECEIPTS -->
 <div class="section-box">
   <div class="section-box-header" style="--sb-accent:var(--blue);">RECEIPTS</div>
-  <div style="padding:0;">
-    {% for fname, label in [
-      ('taxable_sales','Taxable Sales'),('non_taxable','Non-Taxable'),('sales_tax','Sales Tax'),
-      ('bill_payment_charge','Bill Payment Charge'),('phone_recargas','Phone / Recargas'),
-      ('boost_mobile','Boost Mobile'),('money_transfer','Money Transfer'),('money_order','Money Order'),
-      ('check_cashing_fees','Check Cashing Fees'),('return_check_hold_fees','Return Check & Hold Fees'),
-      ('return_check_paid_back','Return Check Paid Back'),('forward_balance','Forward Balance'),
-      ('from_bank','From Bank'),('other_cash_in','Other Cash In'),('rebates_commissions','Rebates & Commissions')
-    ] %}
-    {# money_transfer is derived from the Money Transfer table below
-       (matches the spreadsheet's subtotal formula). Rendered as readonly
-       with an Auto badge; JS mirrors the MT-table total into this input
-       on every change, and the server recomputes on save. #}
-    {% set is_derived = (fname == 'money_transfer') %}
-    <div class="sb-row">
-      <span class="sb-label">
-        {{ label }}{% if is_derived %}<span class="sb-auto-badge">Auto</span>{% endif %}
-      </span>
-      <div class="sb-input">
-        <input type="number" step="0.01" min="0" name="{{ fname }}"
-          id="{{ fname }}_field"
-          value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
-          {% if is_derived %}readonly tabindex="-1"
-          title="Auto-sum of the Money Transfer table below."
-          {% else %}oninput="recalc()"{% endif %}>
-      </div>
+  {% for fname, label in [
+    ('taxable_sales','Taxable Sales'),('non_taxable','Non-Taxable'),('sales_tax','Sales Tax'),
+    ('bill_payment_charge','Bill Payment Charge'),('phone_recargas','Phone / Recargas'),
+    ('boost_mobile','Boost Mobile'),('money_transfer','Money Transfer'),('money_order','Money Order'),
+    ('check_cashing_fees','Check Cashing Fees'),('return_check_hold_fees','Return Check & Hold Fees'),
+    ('return_check_paid_back','Return Check Paid Back'),('forward_balance','Forward Balance'),
+    ('from_bank','From Bank'),('other_cash_in','Other Cash In'),('rebates_commissions','Rebates & Commissions')
+  ] %}
+  {# money_transfer is derived from the Money Transfer table below
+     (matches the spreadsheet's subtotal formula). Rendered as readonly
+     with an Auto badge; JS mirrors the MT-table total into this input
+     on every change, and the server recomputes on save. #}
+  {% set is_derived = (fname == 'money_transfer') %}
+  <div class="sb-row">
+    <span class="sb-label">
+      {{ label }}{% if is_derived %}<span class="sb-auto-badge">Auto</span>{% endif %}
+    </span>
+    <div class="sb-input">
+      <input type="number" step="0.01" min="0" name="{{ fname }}"
+        id="{{ fname }}_field"
+        value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
+        {% if is_derived %}readonly tabindex="-1"
+        title="Auto-sum of the Money Transfer table below."
+        {% else %}oninput="recalc()"{% endif %}>
     </div>
-    {% endfor %}
-    <div class="sb-row sb-total">
-      <span class="sb-label">TOTAL RECEIPTS</span>
-      <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
-    </div>
+  </div>
+  {% endfor %}
+  <div class="sb-row sb-total pl-total">
+    <span class="sb-label">TOTAL RECEIPTS</span>
+    <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
   </div>
 </div>
 
 <!-- DISBURSEMENTS -->
 <div class="section-box">
   <div class="section-box-header" style="--sb-accent:#7c3aed;">DISBURSEMENTS</div>
-  <div style="padding:0;">
-    {% for fname, label in [
-      ('cash_purchases','Cash Purchases'),('cash_expense','Cash Expense'),
-      ('check_purchases','Check Purchases'),('check_expense','Check Expense')
-    ] %}
-    <div class="sb-row">
-      <span class="sb-label">{{ label }}</span>
-      <div class="sb-input">
-        <input type="number" step="0.01" min="0" name="{{ fname }}"
-          value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
-          oninput="recalc()">
-      </div>
+  {% for fname, label in [
+    ('cash_purchases','Cash Purchases'),('cash_expense','Cash Expense'),
+    ('check_purchases','Check Purchases'),('check_expense','Check Expense')
+  ] %}
+  <div class="sb-row">
+    <span class="sb-label">{{ label }}</span>
+    <div class="sb-input">
+      <input type="number" step="0.01" min="0" name="{{ fname }}"
+        value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
+        oninput="recalc()">
     </div>
-    {% endfor %}
+  </div>
+  {% endfor %}
 
     {# Outside Cash & Drops is read-only; value is the sum of DailyDrop
        line items. Click the row to expand the inline drops panel. The
@@ -200,11 +197,10 @@
           oninput="recalc()">
       </div>
     </div>
-    {% endfor %}
-    <div class="sb-row sb-total">
-      <span class="sb-label">TOTAL DISBURSEMENTS</span>
-      <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
-    </div>
+  {% endfor %}
+  <div class="sb-row sb-total pl-total">
+    <span class="sb-label">TOTAL DISBURSEMENTS</span>
+    <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
   </div>
 </div>
 

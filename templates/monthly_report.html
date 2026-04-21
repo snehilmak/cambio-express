@@ -3,12 +3,8 @@
 {% block page_title %}P&L — {{ month_name }} {{ year }}{% endblock %}
 {% block head %}
 <style>
-/* Page-local variants of the shared section-box family (see app.css).
-   Everything else — .section-box, .sb-row, .sb-label, .sb-input,
-   .sb-total, .sb-auto-badge — is shared and handles dark mode. */
-.pl-row { padding: 8px 20px; }  /* slightly taller than default .sb-row */
-.pl-total { padding: 10px 20px; }
-.pl-auto { font-size: 11px; color: var(--sky); margin-left: 6px; }
+/* Page-local styles. .sb-row, .sb-label, .sb-input, .pl-row, .pl-total,
+   .pl-auto are shared in app.css and already handle dark mode. */
 .pl-net {
   font-size: 18px; font-weight: 700;
   font-family: 'DM Serif Display', serif;
