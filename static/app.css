@@ -49,8 +49,33 @@
   --blue-bg:      #dbeafe;
   --blue-border:  #bfdbfe;
 
+  /* ── Mode-aware semantic tokens ─────────────────────────
+     Use these for ANY surface, text, or border that should
+     respect the light/dark toggle. The fixed tokens above
+     (--white, --gray1, --dark, …) stay light-mode values by
+     design — only reach for them when you specifically want
+     a color that does NOT flip. */
+  --surface:        #ffffff;   /* card / box background */
+  --surface-2:      #f5f5f7;   /* subtle inset — totals rows, read-only fields */
+  --surface-sticky: rgba(250,247,242,0.96);  /* sticky save bars */
+  --text:           #1a1a2e;
+  --text-muted:     #6b7280;
+  --border:         #e8e8ec;
+  --border-strong:  #d1d5db;
+
   /* Layout */
   --sidebar-w: 240px;
+}
+
+/* Semantic tokens flip here; the light values above are the defaults. */
+[data-theme="dark"] {
+  --surface:        #1a1f2e;
+  --surface-2:      #232838;
+  --surface-sticky: rgba(15,18,32,0.95);
+  --text:           #e5e7eb;
+  --text-muted:     #9ca3af;
+  --border:         #2a3044;
+  --border-strong:  #3a4054;
 }
 
 /* ── RESET ──────────────────────────────────────────────── */
@@ -142,6 +167,91 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 .card-title { font-weight: 600; font-size: 15px; color: var(--navy); }
 .card-body { padding: 24px; }
+
+/* ── SECTION BOXES (report forms) ───────────────────────
+ * Shared container for the Daily Book and Monthly P&L form
+ * sections. Header color is set per-instance via
+ * style="--sb-accent: var(--blue)" etc. on the header element.
+ * Uses semantic tokens so both modes are handled automatically
+ * — do NOT add local [data-theme="dark"] overrides that
+ * duplicate these rules. */
+.section-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+  margin-bottom: 20px;
+}
+.section-box-header {
+  padding: 12px 20px;
+  font-weight: 700; font-size: 13px;
+  color: #fff;  /* always-white on the colored accent band */
+  letter-spacing: 0.5px;
+  background: var(--sb-accent, var(--navy));
+}
+.sb-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sb-row:last-child { border-bottom: none; }
+.sb-label { flex: 1; font-size: 13px; color: var(--text); }
+.sb-input { width: 160px; }
+.sb-input input {
+  text-align: right; padding: 6px 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 13px; width: 100%;
+}
+.sb-input input[readonly] {
+  background: var(--surface-2); cursor: not-allowed;
+}
+.sb-total {
+  background: var(--surface-2);
+  font-weight: 700;
+}
+.sb-auto-badge {
+  font-size: 10px;
+  background: var(--blue-bg); color: var(--blue-dark);
+  padding: 2px 7px; border-radius: 4px;
+  font-weight: 600; margin-left: 6px;
+}
+[data-theme="dark"] .sb-auto-badge { background: #0f1d3f; color: #93c5fd; }
+.sb-summary-box {
+  background: var(--surface-2);
+  border-radius: 8px; padding: 14px;
+}
+
+/* Sticky save-action bar that sits below a long form. */
+.sticky-save-bar {
+  position: sticky; bottom: 0;
+  background: var(--surface-sticky);
+  backdrop-filter: blur(4px);
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  display: flex; gap: 12px; align-items: center;
+}
+
+/* Shared money-transfer table style used on the Daily Book. */
+.mt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.mt-table th {
+  padding: 8px 12px; background: var(--navy); color: #fff;
+  font-size: 11px; text-align: right; font-weight: 600;
+}
+.mt-table th:first-child { text-align: left; }
+.mt-table td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle; color: var(--text);
+}
+.mt-table td input {
+  text-align: right; width: 110px; padding: 5px 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+}
+.mt-table tfoot td {
+  background: var(--surface-2);
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: right;
+  color: var(--text);
+}
 
 /* ── STAT CARDS ─────────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }

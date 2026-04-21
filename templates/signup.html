@@ -65,6 +65,13 @@ input.has-error{border-color:var(--red)}
 [data-theme="dark"] .theme-toggle .sun{display:block}
 [data-theme="dark"] .theme-toggle .moon{display:none}
 .nav-right{display:flex;align-items:center;gap:12px}
+.referral-banner{
+  background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
+  border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;
+}
+[data-theme="dark"] .referral-banner{
+  background:#0f2e1f;color:#86efac;border-color:#14532d;
+}
 
 [data-theme="dark"] body{background:#0f1220}
 [data-theme="dark"] .card{background:#1a1f2e;border-color:#2a3044;box-shadow:0 4px 24px rgba(0,0,0,0.3)}
@@ -109,9 +116,7 @@ input.has-error{border-color:var(--red)}
     <div class="card-sub">Start managing your store in minutes.</div>
     {# Referral banner — only when a VALID code was resolved. #}
     {% if referral %}
-    <div style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
-                border-radius:8px;padding:10px 14px;font-size:13px;
-                margin-bottom:16px;">
+    <div class="referral-banner">
       🎉 Referred by a DineroBook user — you'll get
       <strong>${{ '%.0f'|format(referral.reward_referee_cents/100) }}</strong>
       off your first paid month when you subscribe.

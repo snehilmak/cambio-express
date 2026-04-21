@@ -3,40 +3,21 @@
 {% block page_title %}Daily Report — {{ report_date.strftime('%A, %B %d, %Y') }}{% endblock %}
 {% block head %}
 <style>
-.section-box{background:var(--white);border:1px solid var(--gray2);border-radius:12px;overflow:hidden;margin-bottom:20px;}
-.section-box-header{padding:12px 20px;font-weight:700;font-size:13px;color:var(--white);letter-spacing:0.5px;}
-.field-row{display:flex;align-items:center;gap:12px;padding:7px 16px;border-bottom:1px solid var(--gray2);}
-.field-row:last-child{border-bottom:none;}
-.field-label{flex:1;font-size:13px;color:var(--dark);}
-.field-input{width:150px;}
-.field-input input{text-align:right;padding:6px 10px;font-family:'JetBrains Mono',monospace;font-size:13px;width:100%;}
-.total-row{background:var(--gray1);font-weight:700;}
-.auto-badge{font-size:10px;background:#dbeafe;color:#1d4ed8;padding:2px 7px;border-radius:4px;font-weight:600;margin-left:6px;}
-.mt-table{width:100%;border-collapse:collapse;font-size:13px;}
-.mt-table th{padding:8px 12px;background:var(--navy);color:var(--white);font-size:11px;text-align:right;font-weight:600;}
-.mt-table th:first-child{text-align:left;}
-.mt-table td{padding:7px 12px;border-bottom:1px solid var(--gray2);vertical-align:middle;}
-.mt-table td input{text-align:right;width:110px;padding:5px 8px;font-family:'JetBrains Mono',monospace;font-size:12px;}
-.mt-table tfoot td{background:var(--gray1);font-weight:700;font-family:'JetBrains Mono',monospace;text-align:right;}
-
-/* ── Inline Drops disclosure ──────────────────────────────
-   The outside_cash_drops field-row IS the <summary>. Clicking the row
-   expands the add-form + drops list below it, so there's no separate
-   card at the bottom. Default disclosure marker is hidden; we show our
-   own caret on the label that rotates when open. */
+/* Page-local styles for the inline Drops disclosure. Shared section-box,
+   sb-row, sb-input, mt-table, and sticky-save-bar live in app.css and
+   already handle dark mode. */
 .drops-disclosure summary { list-style: none; cursor: pointer; }
 .drops-disclosure summary::-webkit-details-marker { display: none; }
-.drops-disclosure summary .field-row:hover { background: var(--gray1); }
-.drops-caret { color: var(--gray4); margin-left: 6px; display: inline-block; transition: transform 0.15s; }
+.drops-disclosure summary .sb-row:hover { background: var(--surface-2); }
+.drops-caret { color: var(--text-muted); margin-left: 6px; display: inline-block; transition: transform 0.15s; }
 .drops-disclosure[open] .drops-caret { transform: rotate(90deg); }
-.drops-count { font-size: 11px; color: var(--gray4); margin-left: 6px; }
+.drops-count { font-size: 11px; color: var(--text-muted); margin-left: 6px; }
 
 .drops-panel {
-  background: var(--gray1);
-  border-bottom: 1px solid var(--gray2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
   padding: 14px 16px;
 }
-[data-theme="dark"] .drops-panel { background: rgba(255,255,255,0.03); border-bottom-color: #2a3044; }
 .drops-add-row {
   display: flex; gap: 10px; align-items: flex-end;
   flex-wrap: wrap; margin-bottom: 10px;
@@ -50,17 +31,17 @@
 .drops-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .drops-table th {
   padding: 6px 10px; background: transparent;
-  color: var(--gray4); font-size: 10.5px;
+  color: var(--text-muted); font-size: 10.5px;
   text-transform: uppercase; letter-spacing: 0.6px;
-  border-bottom: 1px solid var(--gray2); text-align: left;
+  border-bottom: 1px solid var(--border); text-align: left;
 }
 .drops-table td {
-  padding: 6px 10px; border-bottom: 1px solid var(--gray2);
-  vertical-align: middle;
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  vertical-align: middle; color: var(--text);
 }
 .drops-table tbody tr:last-child td { border-bottom: none; }
 .drops-empty-cell {
-  text-align: center; color: var(--gray4);
+  text-align: center; color: var(--text-muted);
   font-size: 12.5px; padding: 12px !important;
 }
 </style>
@@ -81,7 +62,7 @@
 
 <!-- RECEIPTS -->
 <div class="section-box">
-  <div class="section-box-header" style="background:var(--blue);">RECEIPTS</div>
+  <div class="section-box-header" style="--sb-accent:var(--blue);">RECEIPTS</div>
   <div style="padding:0;">
     {% for fname, label in [
       ('taxable_sales','Taxable Sales'),('non_taxable','Non-Taxable'),('sales_tax','Sales Tax'),
@@ -96,23 +77,22 @@
        with an Auto badge; JS mirrors the MT-table total into this input
        on every change, and the server recomputes on save. #}
     {% set is_derived = (fname == 'money_transfer') %}
-    <div class="field-row">
-      <span class="field-label">
-        {{ label }}{% if is_derived %}<span class="auto-badge">Auto</span>{% endif %}
+    <div class="sb-row">
+      <span class="sb-label">
+        {{ label }}{% if is_derived %}<span class="sb-auto-badge">Auto</span>{% endif %}
       </span>
-      <div class="field-input">
+      <div class="sb-input">
         <input type="number" step="0.01" min="0" name="{{ fname }}"
           id="{{ fname }}_field"
           value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
           {% if is_derived %}readonly tabindex="-1"
-          style="background:var(--gray1);cursor:not-allowed;"
           title="Auto-sum of the Money Transfer table below."
           {% else %}oninput="recalc()"{% endif %}>
       </div>
     </div>
     {% endfor %}
-    <div class="field-row total-row">
-      <span class="field-label">TOTAL RECEIPTS</span>
+    <div class="sb-row sb-total">
+      <span class="sb-label">TOTAL RECEIPTS</span>
       <div style="width:150px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
     </div>
   </div>
@@ -120,15 +100,15 @@
 
 <!-- DISBURSEMENTS -->
 <div class="section-box">
-  <div class="section-box-header" style="background:#7c3aed;">DISBURSEMENTS</div>
+  <div class="section-box-header" style="--sb-accent:#7c3aed;">DISBURSEMENTS</div>
   <div style="padding:0;">
     {% for fname, label in [
       ('cash_purchases','Cash Purchases'),('cash_expense','Cash Expense'),
       ('check_purchases','Check Purchases'),('check_expense','Check Expense')
     ] %}
-    <div class="field-row">
-      <span class="field-label">{{ label }}</span>
-      <div class="field-input">
+    <div class="sb-row">
+      <span class="sb-label">{{ label }}</span>
+      <div class="sb-input">
         <input type="number" step="0.01" min="0" name="{{ fname }}"
           value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
           oninput="recalc()">
@@ -144,14 +124,14 @@
              data-url-new="{{ url_for('daily_drop_new', ds=report_date.isoformat()) }}"
              data-date="{{ report_date.isoformat() }}">
       <summary>
-        <div class="field-row">
-          <span class="field-label">
+        <div class="sb-row">
+          <span class="sb-label">
             Outside Cash & Drops
             <span class="drops-caret" aria-hidden="true">▸</span>
             <span class="drops-count"
                   id="drops-count">{{ drops|length }} drop{{ 's' if drops|length != 1 else '' }}</span>
           </span>
-          <div class="field-input">
+          <div class="sb-input">
             <input type="number" step="0.01" name="outside_cash_drops"
               id="outside_cash_drops_field"
               value="{{ '%.2f'|format(drops_total or 0) }}"
@@ -212,17 +192,17 @@
       ('checks_deposit','Checks Deposit'),('safe_balance','Safe Balance'),
       ('payroll_expense','Payroll Expense'),('other_cash_out','Other Cash Out')
     ] %}
-    <div class="field-row">
-      <span class="field-label">{{ label }}</span>
-      <div class="field-input">
+    <div class="sb-row">
+      <span class="sb-label">{{ label }}</span>
+      <div class="sb-input">
         <input type="number" step="0.01" min="0" name="{{ fname }}"
           value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
           oninput="recalc()">
       </div>
     </div>
     {% endfor %}
-    <div class="field-row total-row">
-      <span class="field-label">TOTAL DISBURSEMENTS</span>
+    <div class="sb-row sb-total">
+      <span class="sb-label">TOTAL DISBURSEMENTS</span>
       <div style="width:150px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
     </div>
   </div>
@@ -230,23 +210,23 @@
 
 <!-- OVER / SHORT -->
 <div class="section-box">
-  <div class="section-box-header" style="background:var(--gold);">OVER / SHORT</div>
+  <div class="section-box-header" style="--sb-accent:var(--gold);">OVER / SHORT</div>
   <div style="padding:16px 20px;">
-    <div class="field-row" style="padding:0;border:none;">
-      <span class="field-label">Over (positive) / Short (negative)</span>
-      <div class="field-input">
+    <div class="sb-row" style="padding:0;border:none;">
+      <span class="sb-label">Over (positive) / Short (negative)</span>
+      <div class="sb-input">
         <input type="number" step="0.01" name="over_short"
           value="{{ report.over_short if report else 0 }}" oninput="recalc()">
       </div>
     </div>
-    <div style="margin-top:16px;padding:14px;background:var(--gray1);border-radius:8px;">
+    <div class="sb-summary-box" style="margin-top:16px;">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
         <span class="text-sm">Total Receipts</span><span class="mono" id="sum-rec">—</span>
       </div>
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
         <span class="text-sm">Total Disbursements</span><span class="mono" id="sum-dis">—</span>
       </div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--gray2);padding-top:10px;margin-top:4px;">
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
         <span class="text-sm fw-600">Net Position</span>
         <span class="font-mono fw-600" id="net-pos" style="font-size:16px;">—</span>
       </div>
@@ -256,7 +236,7 @@
 
 <!-- NOTES -->
 <div class="section-box">
-  <div class="section-box-header" style="background:var(--gray4);">NOTES</div>
+  <div class="section-box-header" style="--sb-accent:var(--gray4);">NOTES</div>
   <div style="padding:16px 20px;">
     <textarea name="notes" rows="3" style="width:100%;" placeholder="Any notes for this day…">{{ report.notes if report else '' }}</textarea>
   </div>
@@ -267,7 +247,7 @@
 
 <!-- MONEY TRANSFERS -->
 <div class="section-box">
-  <div class="section-box-header" style="background:var(--navy);">
+  <div class="section-box-header" style="--sb-accent:var(--navy);">
     MONEY TRANSFERS &nbsp;<span style="font-size:10px;opacity:0.6;">Pre-filled from employee transfer log where available</span>
   </div>
   {% if not companies %}
@@ -292,7 +272,7 @@
          company on this date — regardless of which company it is. #}
       {% set is_auto = (a.get('count', 0) > 0) %}
       <tr>
-        <td><strong>{{ co }}</strong>{% if is_auto %}<span class="auto-badge">Auto</span>{% endif %}</td>
+        <td><strong>{{ co }}</strong>{% if is_auto %}<span class="sb-auto-badge">Auto</span>{% endif %}</td>
         <td>
           <input type="number" step="0.01" min="0" name="mt_amount_{{ key }}" id="amt_{{ key }}"
             value="{{ mt.amount if mt else (a.get('amount',0) if is_auto else 0) }}"
@@ -334,24 +314,24 @@
 
 <!-- EMPLOYEE TRANSFERS THIS DAY -->
 <div class="section-box">
-  <div class="section-box-header" style="background:var(--mid);">EMPLOYEE TRANSFERS THIS DAY</div>
+  <div class="section-box-header" style="--sb-accent:var(--mid);">EMPLOYEE TRANSFERS THIS DAY</div>
   <table style="width:100%;border-collapse:collapse;font-size:13px;">
     <thead>
-      <tr style="background:var(--gray1);">
-        <th style="padding:8px 14px;text-align:left;font-size:11px;color:var(--gray4);">Company</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--gray4);"># Transfers</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--gray4);">Amount</th>
-        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--gray4);">Fees</th>
+      <tr style="background:var(--surface-2);">
+        <th style="padding:8px 14px;text-align:left;font-size:11px;color:var(--text-muted);">Company</th>
+        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);"># Transfers</th>
+        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Amount</th>
+        <th style="padding:8px 14px;text-align:right;font-size:11px;color:var(--text-muted);">Fees</th>
       </tr>
     </thead>
     <tbody>
       {% for co in ['Intermex','Maxi','Barri'] %}
       {% set a = auto_mt.get(co, {}) %}
-      <tr style="border-bottom:1px solid var(--gray2);">
-        <td style="padding:8px 14px;"><span class="co-{{ co.lower() }}">{{ co }}</span></td>
-        <td style="padding:8px 14px;text-align:right;" class="mono">{{ a.get('count',0) }}</td>
-        <td style="padding:8px 14px;text-align:right;" class="mono">${{ '{:,.2f}'.format(a.get('amount',0)) }}</td>
-        <td style="padding:8px 14px;text-align:right;" class="mono">${{ '{:,.2f}'.format(a.get('fees',0)) }}</td>
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:8px 14px;color:var(--text);"><span class="co-{{ co.lower() }}">{{ co }}</span></td>
+        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">{{ a.get('count',0) }}</td>
+        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('amount',0)) }}</td>
+        <td style="padding:8px 14px;text-align:right;color:var(--text);" class="mono">${{ '{:,.2f}'.format(a.get('fees',0)) }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -365,8 +345,7 @@
 </div><!-- end right col -->
 </div><!-- end grid -->
 
-<div style="position:sticky;bottom:0;background:rgba(250,247,242,0.96);backdrop-filter:blur(4px);
-            border-top:1px solid var(--gray2);padding:16px 0;display:flex;gap:12px;align-items:center;">
+<div class="sticky-save-bar">
   <button type="submit" class="btn btn-primary" style="font-size:15px;padding:12px 28px;">💾 Save Daily Report</button>
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Cancel</a>
 </div>

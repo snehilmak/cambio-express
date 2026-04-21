@@ -3,18 +3,20 @@
 {% block page_title %}Settings{% endblock %}
 {% block head %}
 <style>
+/* Settings tabs use the shared semantic tokens so they read correctly
+   in both themes — matching the pattern in superadmin_controls.html. */
 .tab-bar {
-  display: flex; gap: 0; border-bottom: 2px solid var(--gray2);
+  display: flex; gap: 0; border-bottom: 2px solid var(--border);
   margin-bottom: 28px;
 }
 .tab-link {
   padding: 10px 20px; font-size: 13.5px; font-weight: 500;
-  color: var(--gray4); text-decoration: none;
+  color: var(--text-muted); text-decoration: none;
   border-bottom: 2px solid transparent; margin-bottom: -2px;
   transition: all 0.15s;
 }
-.tab-link:hover { color: var(--navy); }
-.tab-link.active { color: var(--navy); border-bottom-color: var(--blue); font-weight: 600; }
+.tab-link:hover { color: var(--text); }
+.tab-link.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
 .field-error { font-size: 12px; color: var(--red); margin-top: 3px; }
 </style>
 {% endblock %}
