@@ -2065,11 +2065,26 @@ def transfers():
     total_pages=max(1,(total+PER_PAGE-1)//PER_PAGE)
     if page>total_pages: page=total_pages
     rows=q.offset((page-1)*PER_PAGE).limit(PER_PAGE).all()
-    return render_template("transfers.html",user=user,transfers=rows,
-        company=company,status=status,date_from=date_from,date_to=date_to,
-        sender=sender,recipient=recipient,country=country,confirm=confirm,
-        batch=batch,q=search,page=page,total=total,total_pages=total_pages,
+    ctx = dict(user=user, transfers=rows,
+        company=company, status=status, date_from=date_from, date_to=date_to,
+        sender=sender, recipient=recipient, country=country, confirm=confirm,
+        batch=batch, q=search, page=page, total=total, total_pages=total_pages,
         per_page=PER_PAGE)
+    # Live-search AJAX path — called from templates/transfers.html's JS.
+    # Returns the table+pager HTML plus meta so the client can update the
+    # card header without refetching the whole chrome.
+    if request.args.get("partial") == "1":
+        page_amount = float(sum(r.send_amount for r in rows))
+        page_fees   = float(sum(r.fee         for r in rows))
+        return jsonify({
+            "html":        render_template("_transfers_table.html", **ctx),
+            "total":       total,
+            "page":        page,
+            "total_pages": total_pages,
+            "page_amount": page_amount,
+            "page_fees":   page_fees,
+        })
+    return render_template("transfers.html", **ctx)
 
 def _parse_dob(raw):
     """Parse a YYYY-MM-DD date string from the form, or None when blank/bad."""

@@ -5,6 +5,22 @@
 <style>
 .tf-search-row { padding: 14px 24px; border-bottom: 1px solid var(--gray2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .tf-search-row input[type="text"] { flex: 1; min-width: 180px; }
+.tf-col-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; border: 1px solid var(--gray2); border-radius: 6px;
+  background: var(--white); color: var(--gray4);
+  font-size: 12.5px; font-weight: 500; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+}
+.tf-col-toggle:hover { border-color: var(--blue); color: var(--blue); }
+.tf-col-toggle.active { background: var(--navy); color: var(--gold2); border-color: var(--navy); }
+[data-theme="dark"] .tf-col-toggle { background: #1a1f2e; border-color: #2a3044; color: #c9d0dd; }
+[data-theme="dark"] .tf-col-toggle:hover { border-color: #3b82f6; color: #93c5fd; }
+[data-theme="dark"] .tf-col-toggle.active { background: #0f1220; color: #f0c060; border-color: #3a4054; }
+/* Per-column search inputs — hidden by default. Toggled via the
+   "Columns" button in .tf-search-row, state persisted in localStorage. */
+.col-search-row { display: none; }
+.col-search-row.expanded { display: table-row; }
 .col-search-row th { padding: 6px 10px !important; background: var(--gray1); border-bottom: 1px solid var(--gray2); }
 .col-search-row input { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid var(--gray2); border-radius: 6px; background: var(--white); }
 .tf-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--gray2); flex-wrap: wrap; }
@@ -22,8 +38,9 @@
 [data-theme="dark"] .tf-pager .pg-nav .current { color: #f0c060; }
 [data-theme="dark"] .tf-search-row { border-bottom-color: #2a3044; }
 @media (max-width: 900px) {
-  .col-search-row { display: none; }
   .tf-search-row { padding: 12px 14px; }
+  /* Column search is still togglable on mobile — scrolls horizontally
+     with the table inside .table-wrap since the row lives in <thead>. */
 }
 </style>
 {% endblock %}
@@ -72,104 +89,195 @@
 </div>
 
 <div class="card">
-  <div class="card-header">
-    <span class="card-title">
+  <div class="card-header" id="tfHeader">
+    <span class="card-title" id="tfHeaderTitle">
       {% if user.role == 'employee' %}Today's Transfers &middot; {% endif %}
       {{ total }} Transfer{{ 's' if total != 1 }}
     </span>
     {% if transfers %}
-    <span class="text-sm text-muted">
+    <span class="text-sm text-muted" id="tfHeaderSum">
       Page total: ${{ '{:,.2f}'.format(transfers|sum(attribute='send_amount')) }}
       &nbsp;|&nbsp; Fees: ${{ '{:,.2f}'.format(transfers|sum(attribute='fee')) }}
     </span>
+    {% else %}
+    <span class="text-sm text-muted" id="tfHeaderSum"></span>
     {% endif %}
   </div>
 
   <div class="tf-search-row">
-    <input type="text" name="q" value="{{ q }}" placeholder="Search sender, recipient, confirm #, batch, country…" form="tfForm">
-    <button type="submit" class="btn btn-primary btn-sm" form="tfForm">Search</button>
+    <input type="text" name="q" id="tfSearchQ" value="{{ q }}"
+           placeholder="Search sender, recipient, confirm #, batch, country… (2+ chars)"
+           form="tfForm" autocomplete="off">
+    <span id="tfSearchStatus" class="text-sm text-muted" style="min-width:80px;"></span>
+    <button type="button" id="tfColToggle" class="tf-col-toggle"
+            aria-expanded="false" aria-controls="tfResult"
+            title="Show per-column search boxes">
+      <span aria-hidden="true">🔍</span>
+      <span id="tfColToggleLabel">Columns</span>
+    </button>
     <a href="{{ url_for('transfers') }}" class="btn btn-outline btn-sm">Reset</a>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th>Date</th>
-          <th>Sender</th>
-          <th>Company</th>
-          <th>Amount</th>
-          <th>Fee</th>
-          <th>Tax</th>
-          <th>Recipient</th>
-          <th>Country</th>
-          <th>Confirm #</th>
-          <th>Batch</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-        <tr class="col-search-row">
-          <th></th>
-          <th><input type="text" name="sender" value="{{ sender }}" placeholder="Search…" form="tfForm"></th>
-          <th></th>
-          <th></th>
-          <th></th>
-          <th><input type="text" name="recipient" value="{{ recipient }}" placeholder="Search…" form="tfForm"></th>
-          <th><input type="text" name="country" value="{{ country }}" placeholder="Search…" form="tfForm"></th>
-          <th><input type="text" name="confirm" value="{{ confirm }}" placeholder="Search…" form="tfForm"></th>
-          <th><input type="text" name="batch" value="{{ batch }}" placeholder="Search…" form="tfForm"></th>
-          <th></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in transfers %}
-        <tr>
-          <td class="mono text-sm">{{ t.send_date.strftime('%m/%d/%Y') }}</td>
-          <td><strong>{{ t.sender_name }}</strong></td>
-          <td><span class="co-{{ t.company.lower() }}">{{ t.company }}</span></td>
-          <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
-          <td class="mono text-muted">${{ '{:,.2f}'.format(t.fee) }}</td>
-          <td class="mono text-muted">${{ '{:,.2f}'.format(t.federal_tax or 0) }}</td>
-          <td>{{ t.recipient_name }}</td>
-          <td>{{ t.country }}</td>
-          <td class="mono text-sm">{{ t.confirm_number or '—' }}</td>
-          <td class="mono text-sm">{{ t.batch_id or '—' }}</td>
-          <td>
-            {% set sc = {'Sent':'green','Pending':'yellow','Canceled':'red','Rejected':'red','Refunded':'orange','Re-Transferred':'orange'} %}
-            <span class="badge badge-{{ sc.get(t.status,'gray') }}">{{ t.status }}</span>
-          </td>
-          <td>
-            <a href="{{ url_for('edit_transfer', tid=t.id) }}" class="btn btn-outline btn-sm">Edit</a>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray4);">No transfers found.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div id="transfersResult">
+    {% include "_transfers_table.html" %}
   </div>
-
-  {% if total > 0 %}
-  {% set start = (page - 1) * per_page + 1 %}
-  {% set end = start + transfers|length - 1 %}
-  <div class="tf-pager">
-    <div class="pg-info">Showing {{ start }}–{{ end }} of {{ total }}</div>
-    <div class="pg-nav">
-      {% set base_args = {'company': company, 'status': status, 'date_from': date_from, 'date_to': date_to, 'sender': sender, 'recipient': recipient, 'country': country, 'confirm': confirm, 'batch': batch, 'q': q} %}
-      {% if page > 1 %}
-        <a href="{{ url_for('transfers', page=page-1, **base_args) }}">← Prev</a>
-      {% else %}
-        <span class="disabled">← Prev</span>
-      {% endif %}
-      <span class="current">Page {{ page }} of {{ total_pages }}</span>
-      {% if page < total_pages %}
-        <a href="{{ url_for('transfers', page=page+1, **base_args) }}">Next →</a>
-      {% else %}
-        <span class="disabled">Next →</span>
-      {% endif %}
-    </div>
-  </div>
-  {% endif %}
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+/*
+ * Debounced live-search AJAX for the transfers table.
+ *
+ * Design choices (see PR description for rationale):
+ *   - Debounce: 300ms after the last keystroke, so a typist firing 10
+ *     keys still only triggers 1–2 fetches.
+ *   - Minimum 2 chars on the global `q` box. Per-column inputs trigger
+ *     at 1+ char because they're narrower scopes. Selects + date pickers
+ *     fire immediately on `change`.
+ *   - AbortController: cancel any in-flight fetch when a new one starts
+ *     so the user never sees a stale result paint.
+ *   - URL sync via history.replaceState so the query is bookmarkable
+ *     and pagination links carry the current filters.
+ *
+ * Server returns JSON { html, total, page, total_pages, page_amount,
+ * page_fees } when called with ?partial=1. The HTML replaces
+ * #transfersResult in place; focus/scroll are preserved because the
+ * search input sits above the swap region.
+ */
+(function() {
+  const form = document.getElementById('tfForm');
+  const result = document.getElementById('transfersResult');
+  const status = document.getElementById('tfSearchStatus');
+  const title = document.getElementById('tfHeaderTitle');
+  const sumEl = document.getElementById('tfHeaderSum');
+  const colToggle = document.getElementById('tfColToggle');
+  const colToggleLabel = document.getElementById('tfColToggleLabel');
+  if (!form || !result) return;
+
+  // ── Per-column search toggle ─────────────────────────────────
+  // Hidden by default. The preference is remembered in localStorage so
+  // users who prefer column search keep seeing it.
+  const COL_PREF_KEY = 'tfColSearchExpanded';
+  function applyColToggle() {
+    const expanded = localStorage.getItem(COL_PREF_KEY) === '1';
+    document.querySelectorAll('.col-search-row').forEach(r => {
+      r.classList.toggle('expanded', expanded);
+    });
+    if (colToggle) {
+      colToggle.classList.toggle('active', expanded);
+      colToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+    if (colToggleLabel) {
+      colToggleLabel.textContent = expanded ? 'Hide columns' : 'Columns';
+    }
+  }
+  if (colToggle) {
+    colToggle.addEventListener('click', () => {
+      const now = localStorage.getItem(COL_PREF_KEY) === '1';
+      try { localStorage.setItem(COL_PREF_KEY, now ? '0' : '1'); } catch (e) {}
+      applyColToggle();
+    });
+  }
+  applyColToggle();
+
+  const DEBOUNCE_MS = 300;
+  const MIN_Q_CHARS = 2;   // applies to the global search `q` only
+  let timer = null;
+  let currentAbort = null;
+
+  function fmt(v){return '$'+v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+
+  // Collect every named form element (inputs + selects) that carries a
+  // value into the /transfers query string. The <form id="tfForm"> is
+  // an empty container; inputs claim it via the `form="tfForm"` attr.
+  function formParams() {
+    const params = new URLSearchParams();
+    document.querySelectorAll('[form="tfForm"][name]').forEach(el => {
+      if (el.value !== '' && el.value != null) {
+        params.set(el.name, el.value);
+      }
+    });
+    return params;
+  }
+
+  async function runSearch() {
+    if (currentAbort) currentAbort.abort();
+    const ac = new AbortController();
+    currentAbort = ac;
+
+    const params = formParams();
+    const q = (params.get('q') || '').trim();
+    // Minimum-char gate for the global box — empty `q` is fine
+    // (normal paginated listing), but 1 stray character is too broad.
+    if (q.length > 0 && q.length < MIN_Q_CHARS) {
+      status.textContent = 'Keep typing…';
+      return;
+    }
+    status.textContent = 'Searching…';
+    params.set('partial', '1');
+
+    try {
+      const resp = await fetch('{{ url_for("transfers") }}?' + params.toString(), {
+        headers: { 'Accept': 'application/json' },
+        signal: ac.signal,
+        credentials: 'same-origin',
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      result.innerHTML = data.html;
+      // Newly-injected .col-search-row starts without the `expanded`
+      // class — re-apply the persisted toggle state so the column search
+      // row doesn't vanish on every keystroke.
+      applyColToggle();
+      if (title) {
+        const n = data.total || 0;
+        const prefix = '{% if user.role == "employee" %}Today\'s Transfers · {% endif %}';
+        title.textContent = prefix + n + ' Transfer' + (n === 1 ? '' : 's');
+      }
+      if (sumEl) {
+        if ((data.total || 0) > 0) {
+          sumEl.innerHTML = 'Page total: ' + fmt(data.page_amount || 0) +
+                            ' &nbsp;|&nbsp; Fees: ' + fmt(data.page_fees || 0);
+        } else {
+          sumEl.innerHTML = '';
+        }
+      }
+      // Rewrite the URL so refresh / copy-link carries the filters.
+      params.delete('partial');
+      const qs = params.toString();
+      history.replaceState(null, '', qs ? '?' + qs : window.location.pathname);
+      status.textContent = '';
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      status.textContent = 'Error';
+      console.error(e);
+    }
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(runSearch, DEBOUNCE_MS);
+  }
+
+  // Wire up every field that lives in the tfForm. Inputs debounce; selects
+  // and date pickers fire immediately on `change`.
+  document.querySelectorAll('[form="tfForm"]').forEach(el => {
+    if (el.tagName === 'SELECT' || el.type === 'date') {
+      el.addEventListener('change', schedule);
+    } else {
+      el.addEventListener('input', schedule);
+    }
+  });
+
+  // Prevent the "Enter" key from doing a full-page form submit (keeps the
+  // live-search UX consistent with the rest of the page).
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.closest && e.target.closest('[form="tfForm"]')) {
+      e.preventDefault();
+      clearTimeout(timer);
+      runSearch();
+    }
+  });
+})();
+</script>
 {% endblock %}
