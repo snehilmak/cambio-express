@@ -1,0 +1,22 @@
+{% set login_page_title = "Enter 6-digit code" %}
+{% include "_login_chrome.html" %}
+  <div class="login-heading">Enter your code</div>
+  <div class="login-sub">Open your authenticator app and type the 6-digit code it shows for DineroBook.</div>
+  {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+  <form method="POST" autocomplete="off">
+    <div class="field">
+      <label>Authentication code</label>
+      <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+             pattern="[0-9 ]*" maxlength="7" placeholder="123 456"
+             autofocus required
+             style="font-family:ui-monospace,monospace;font-size:20px;letter-spacing:6px;text-align:center;">
+    </div>
+    <button type="submit" class="btn-login">Verify →</button>
+  </form>
+  <div class="aux-link">
+    Lost your device? <a href="{{ url_for('login_totp_recover') }}">Use a recovery code</a>
+  </div>
+  <div class="aux-link">
+    <a href="{{ url_for('logout') }}">Cancel and sign out</a>
+  </div>
+{% include "_login_chrome_end.html" %}

@@ -7,6 +7,11 @@ from calendar import monthrange
 import requests, base64, os, calendar, logging, re, secrets, string, hashlib, smtplib
 from email.message import EmailMessage
 import stripe
+import click
+import pyotp
+import qrcode
+import qrcode.image.svg
+import io
 from slugify import slugify
 
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +78,11 @@ class User(db.Model):
     full_name     = db.Column(db.String(120), default="")
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     is_active     = db.Column(db.Boolean, default=True)
+    # TOTP-based 2FA. Mandatory for superadmin (see _needs_totp_enroll /
+    # _totp_is_enrolled); other roles ignore these columns today. The secret
+    # is base32 and stored plaintext — the DB itself is the trust boundary.
+    totp_secret      = db.Column(db.String(64), nullable=True)
+    totp_enrolled_at = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint("store_id","username"),)
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
@@ -459,6 +469,24 @@ class PasswordResetToken(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     used_at    = db.Column(db.DateTime, nullable=True)
+
+class RecoveryCode(db.Model):
+    """One-time-use 2FA recovery code for a user.
+
+    Shown in plaintext exactly once at enrollment time; only the sha256 hash
+    is persisted. Consumed on use (used_at set) — a consumed code stays in
+    the table so we can show the user how many remain. Regenerate via the
+    account-security page wipes all rows for that user and mints a fresh
+    batch.
+    """
+    __tablename__ = "recovery_code"
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code_hash  = db.Column(db.String(128), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    used_at    = db.Column(db.DateTime, nullable=True)
+    __table_args__ = (db.UniqueConstraint("user_id", "code_hash",
+                                          name="uq_recovery_user_code"),)
 
 class ReferralCode(db.Model):
     """One code per store, minted the first time the store goes onto a
@@ -1249,6 +1277,109 @@ def privacy():
     visitor, logged in or not, can read it."""
     return render_template("privacy.html")
 
+# ── 2FA (TOTP) helpers ───────────────────────────────────────
+# Mandatory for superadmin; other roles opt out entirely today.
+# The login flow is:
+#   1) POST /login → creds valid → session["pending_auth_user_id"] = uid
+#   2) redirect to /login/2fa (if enrolled) or /login/2fa/enroll (if not)
+#   3) successful TOTP / recovery code → _finalize_2fa_login() promotes
+#      pending_auth_user_id → real user_id session.
+# Nothing outside this block should set user_id on its own for a
+# 2FA-required role.
+
+RECOVERY_CODES_PER_USER = 10
+TOTP_ISSUER = "DineroBook"
+
+def _needs_totp(user):
+    """Which roles must use 2FA. Keep this the single gatekeeper."""
+    return bool(user and user.role == "superadmin")
+
+def _totp_is_enrolled(user):
+    return bool(user and user.totp_secret and user.totp_enrolled_at)
+
+def _pending_auth_user():
+    uid = session.get("pending_auth_user_id")
+    return db.session.get(User, uid) if uid else None
+
+def _hash_recovery_code(raw):
+    # Normalize so casing/whitespace/hyphen differences don't lock the
+    # user out. The display format is e.g. "ABCD-EFGH" but the stored
+    # hash is of the unhyphenated, uppercase form.
+    normalized = raw.strip().upper().replace("-", "").replace(" ", "")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+def _format_recovery_code(raw):
+    """Pretty-print with a hyphen in the middle so codes are easier to
+    read and to transcribe — e.g. 'ABCD-EFGH'."""
+    s = raw.strip().upper()
+    return f"{s[:4]}-{s[4:]}" if len(s) == 8 else s
+
+def _generate_recovery_codes(user):
+    """Wipe any existing codes for this user and mint a fresh batch.
+    Returns the plaintext list (shown to the user exactly once)."""
+    RecoveryCode.query.filter_by(user_id=user.id).delete()
+    plaintext = []
+    for _ in range(RECOVERY_CODES_PER_USER):
+        raw = secrets.token_hex(4).upper()  # 8 hex chars
+        plaintext.append(raw)
+        db.session.add(RecoveryCode(user_id=user.id, code_hash=_hash_recovery_code(raw)))
+    db.session.commit()
+    return [_format_recovery_code(c) for c in plaintext]
+
+def _consume_recovery_code(user, raw):
+    """Return True if `raw` matches an unused code for `user` and mark
+    it used. `raw` may be pasted with or without the hyphen."""
+    if not raw:
+        return False
+    row = (RecoveryCode.query
+           .filter_by(user_id=user.id, code_hash=_hash_recovery_code(raw), used_at=None)
+           .first())
+    if not row:
+        return False
+    row.used_at = datetime.utcnow()
+    db.session.commit()
+    return True
+
+def _verify_totp(user, token):
+    """True if `token` is a valid current (or immediately adjacent) 6-digit
+    TOTP code for `user`. `valid_window=1` forgives a ±30s clock drift."""
+    if not (user and user.totp_secret and token):
+        return False
+    try:
+        return pyotp.TOTP(user.totp_secret).verify(str(token).strip(), valid_window=1)
+    except Exception:
+        return False
+
+def _totp_qr_svg(secret, username):
+    """SVG <svg>…</svg> string encoding the TOTP provisioning URI.
+    Pure-Python (no Pillow) via qrcode.image.svg. Embeddable directly."""
+    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name=TOTP_ISSUER)
+    img = qrcode.make(uri, image_factory=qrcode.image.svg.SvgPathImage,
+                      box_size=8, border=2)
+    buf = io.BytesIO()
+    img.save(buf)
+    return buf.getvalue().decode("utf-8")
+
+def _finalize_2fa_login(user):
+    """Promote the partial-auth session to a full-auth session after
+    successful TOTP/recovery-code verification or first enrollment."""
+    session.pop("pending_auth_user_id", None)
+    session.pop("totp_enrollment_codes", None)
+    session["user_id"]  = user.id
+    session["role"]     = user.role
+    session["store_id"] = user.store_id
+
+def _require_pending_auth():
+    """Shared guard for /login/2fa* routes: redirect back to /login if
+    there's no partial-auth in flight (expired session, direct visit,
+    etc.). Returns the pending user, or None (caller must return the
+    redirect)."""
+    u = _pending_auth_user()
+    if not u or not u.is_active:
+        session.pop("pending_auth_user_id", None)
+        return None
+    return u
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "user_id" in session:
@@ -1263,6 +1394,14 @@ def login():
         if u and u.is_active and u.check_password(request.form.get("password","")):
             if u.role == "employee":
                 error = "Please use your store's login link."
+            elif _needs_totp(u):
+                # Drop any previous partial-auth before starting a new one.
+                session.pop("pending_auth_user_id", None)
+                session.pop("totp_enrollment_codes", None)
+                session["pending_auth_user_id"] = u.id
+                if _totp_is_enrolled(u):
+                    return redirect(url_for("login_totp"))
+                return redirect(url_for("login_totp_enroll"))
             else:
                 session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
                 if u.role == "owner":
@@ -1271,6 +1410,79 @@ def login():
         else:
             error="Invalid username or password."
     return render_template("login.html",error=error)
+
+@app.route("/login/2fa", methods=["GET", "POST"])
+def login_totp():
+    u = _require_pending_auth()
+    if not u:
+        return redirect(url_for("login"))
+    if not _totp_is_enrolled(u):
+        return redirect(url_for("login_totp_enroll"))
+    error = None
+    if request.method == "POST":
+        if _verify_totp(u, request.form.get("code", "")):
+            _finalize_2fa_login(u)
+            return redirect(url_for("dashboard"))
+        error = "That code didn't match. Check the 6 digits in your authenticator app, or use a recovery code."
+    return render_template("login_totp.html", error=error)
+
+@app.route("/login/2fa/recover", methods=["GET", "POST"])
+def login_totp_recover():
+    u = _require_pending_auth()
+    if not u:
+        return redirect(url_for("login"))
+    error = None
+    if request.method == "POST":
+        if _consume_recovery_code(u, request.form.get("code", "")):
+            _finalize_2fa_login(u)
+            flash("Recovery code used. Consider regenerating your recovery codes from Security settings.", "success")
+            return redirect(url_for("dashboard"))
+        error = "Recovery code not recognized, or already used."
+    return render_template("login_totp_recover.html", error=error)
+
+@app.route("/login/2fa/enroll", methods=["GET", "POST"])
+def login_totp_enroll():
+    u = _require_pending_auth()
+    if not u:
+        return redirect(url_for("login"))
+    if _totp_is_enrolled(u):
+        return redirect(url_for("login_totp"))
+    # First hit: mint a secret if none pending. Refreshes reuse the pending
+    # secret so the user's already-scanned QR stays valid.
+    if not u.totp_secret:
+        u.totp_secret = pyotp.random_base32()
+        db.session.commit()
+    error = None
+    if request.method == "POST":
+        if _verify_totp(u, request.form.get("code", "")):
+            u.totp_enrolled_at = datetime.utcnow()
+            codes = _generate_recovery_codes(u)
+            session["totp_enrollment_codes"] = codes
+            return redirect(url_for("login_totp_recovery_codes"))
+        error = "That code didn't match. Make sure the clock on your phone is accurate, then try the next code your app shows."
+    qr_svg = _totp_qr_svg(u.totp_secret, u.username)
+    # Group the secret into 4-char chunks for easier manual entry.
+    secret_chunks = " ".join(u.totp_secret[i:i+4] for i in range(0, len(u.totp_secret), 4))
+    return render_template("login_totp_enroll.html",
+                           qr_svg=qr_svg, secret=u.totp_secret,
+                           secret_chunks=secret_chunks, username=u.username,
+                           issuer=TOTP_ISSUER, error=error)
+
+@app.route("/login/2fa/recovery-codes", methods=["GET", "POST"])
+def login_totp_recovery_codes():
+    u = _require_pending_auth()
+    if not u:
+        return redirect(url_for("login"))
+    codes = session.get("totp_enrollment_codes")
+    if not codes:
+        # No fresh enrollment batch in session — enrollment either already
+        # finalized or expired. Send them back to the code prompt.
+        return redirect(url_for("login_totp"))
+    if request.method == "POST" and request.form.get("saved") == "1":
+        _finalize_2fa_login(u)
+        flash("2FA is now active on your account. Keep those recovery codes somewhere safe.", "success")
+        return redirect(url_for("dashboard"))
+    return render_template("login_totp_recovery_codes.html", codes=codes)
 
 @app.route("/login/<slug>", methods=["GET", "POST"])
 def login_store(slug):
@@ -1341,8 +1553,12 @@ def forgot_password():
         username = request.form.get("username", "").strip().lower()
         sent = True
         if username:
+            # Superadmin is intentionally excluded: email-based reset would
+            # be a 2FA bypass. Recovery is via `flask reset-superadmin` from
+            # the Render shell. The response is still the "sent" message so
+            # attackers can't tell a superadmin from a non-existent account.
             u = (User.query.filter_by(username=username)
-                 .filter(User.role.in_(("admin", "owner", "superadmin")))
+                 .filter(User.role.in_(("admin", "owner")))
                  .first())
             if u and u.is_active:
                 # Invalidate any still-valid tokens for this user, then mint fresh.
@@ -1390,6 +1606,13 @@ def reset_password(token):
            .filter_by(token_hash=_hash_token(token))
            .first())
     invalid = (row is None or row.used_at is not None or row.expires_at <= now)
+    # Belt-and-suspenders: even if a token somehow exists for a superadmin
+    # (it can't via /forgot-password today, but defense in depth), refuse
+    # to honor it. Superadmin resets go through the Flask CLI.
+    if row and not invalid:
+        target = db.session.get(User, row.user_id)
+        if target and target.role == "superadmin":
+            invalid = True
     error = None
     if request.method == "POST" and not invalid:
         pw1 = request.form.get("password", "")
@@ -3625,6 +3848,37 @@ def purge_expired_stores_cmd():
     n = purge_expired_stores()
     print(f"Purged {n} expired store(s).")
 
+@app.cli.command("reset-superadmin")
+@click.argument("username", required=False)
+@click.option("--reset-2fa", is_flag=True,
+              help="Also wipe TOTP secret + recovery codes, forcing fresh enrollment.")
+def reset_superadmin_cmd(username, reset_2fa):
+    """Reset a superadmin's password (and optionally their 2FA). Run from
+    the Render shell. Prompts for the new password; doesn't touch
+    non-superadmin accounts. This is the recovery path for a locked-out
+    superadmin, since /forgot-password intentionally skips the role."""
+    q = User.query.filter_by(role="superadmin")
+    if username:
+        q = q.filter_by(username=username.strip())
+    sa = q.first()
+    if not sa:
+        click.echo("No superadmin found" +
+                   (f" with username={username!r}." if username else "."))
+        return
+    click.echo(f"Resetting password for superadmin: {sa.username}")
+    pw = click.prompt("New password", hide_input=True, confirmation_prompt=True)
+    if len(pw) < 8:
+        click.echo("Password must be at least 8 characters. Aborting.")
+        return
+    sa.set_password(pw)
+    if reset_2fa:
+        sa.totp_secret = None
+        sa.totp_enrolled_at = None
+        RecoveryCode.query.filter_by(user_id=sa.id).delete()
+        click.echo("2FA wiped — re-enrollment will be forced on next login.")
+    db.session.commit()
+    click.echo("Done.")
+
 # ── Error handlers ───────────────────────────────────────────
 @app.errorhandler(404)
 def not_found(e):
@@ -3666,6 +3920,10 @@ _ADDED_COLUMNS = [
     # Per-store federal tax rate — 0.01 = 1%. Existing stores get 0.01 via
     # the DEFAULT; admins can change via Settings → Store.
     ("store",    "federal_tax_rate",     "FLOAT DEFAULT 0.01 NOT NULL"),
+    # 2FA (TOTP) columns on user. Mandatory for superadmin; optional/unused
+    # for other roles today. Nullable so existing rows stay valid on upgrade.
+    ("user",     "totp_secret",          "VARCHAR(64) NULL"),
+    ("user",     "totp_enrolled_at",     "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():
@@ -3739,11 +3997,9 @@ def init_db():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
             print("✅ Superadmin: superadmin / super2025!")
-        if not Store.query.first():
-            s=Store(name="Cambio Express Lamar",slug="cambio-express-lamar",plan="pro"); db.session.add(s); db.session.flush()
-            a=User(store_id=s.id,username="admin",full_name="Store Admin",role="admin")
-            a.set_password(os.environ.get("ADMIN_PASSWORD","cambio2025!")); db.session.add(a); db.session.commit()
-            print("✅ Demo store admin: admin / cambio2025!")
+        # No demo store on fresh boot — this is a live SaaS, the operator
+        # creates their own stores. The superadmin seed above is the only
+        # row a fresh DB needs. (2FA is mandatory and enforced at login.)
 
 init_db()
 

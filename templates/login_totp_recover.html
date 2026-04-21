@@ -1,0 +1,25 @@
+{% set login_page_title = "Use a recovery code" %}
+{% include "_login_chrome.html" %}
+  <div class="login-heading">Use a recovery code</div>
+  <div class="login-sub">
+    Enter one of the 8-character recovery codes you saved when setting up
+    2FA. Each code works only once.
+  </div>
+  {% if error %}<div class="error-msg">{{ error }}</div>{% endif %}
+  <form method="POST" autocomplete="off">
+    <div class="field">
+      <label>Recovery code</label>
+      <input type="text" name="code" autocomplete="off"
+             placeholder="ABCD-EFGH" maxlength="16"
+             autofocus required
+             style="font-family:ui-monospace,monospace;font-size:18px;letter-spacing:2px;text-align:center;text-transform:uppercase;">
+    </div>
+    <button type="submit" class="btn-login">Use code →</button>
+  </form>
+  <div class="aux-link">
+    Got your authenticator back? <a href="{{ url_for('login_totp') }}">Enter a 6-digit code instead</a>
+  </div>
+  <div class="aux-link">
+    <a href="{{ url_for('logout') }}">Cancel and sign out</a>
+  </div>
+{% include "_login_chrome_end.html" %}
