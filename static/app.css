@@ -645,22 +645,19 @@ input[type="number"] {
   .btn { padding: 10px 14px; }
   .btn-sm { padding: 6px 10px; font-size: 12px; }
 
-  /* Stack the label on top and the input full-width below. At phone
-     widths the side-by-side layout left inputs nearly invisible in
-     dark mode (narrow boxes, low-contrast borders against the
-     section-box surface), so we give them the full row instead. */
-  .sb-row {
-    flex-direction: column; align-items: stretch;
-    gap: 6px; padding: 10px 14px;
-  }
+  /* Keep the side-by-side label/input layout on phones — matches the
+     Monthly P&L look the user prefers. Inputs stay visible thanks to
+     the dark-mode contrast rule below (input fill vs section-box
+     surface), so we don't need to steal the whole row for them. */
+  .sb-row { padding: 8px 12px; gap: 10px; }
   .sb-label { font-size: 13px; font-weight: 500; }
-  .sb-input { width: 100%; }
+  .sb-input { width: 42%; min-width: 120px; max-width: 200px; }
   .sb-input input {
-    text-align: right; padding: 10px 12px; font-size: 16px;
+    text-align: right; padding: 9px 10px; font-size: 15px;
     border-width: 1.5px; width: 100%;
   }
-  /* Keep the totals row readable — bigger number, still full-width. */
-  .sb-row.sb-total .sb-input { font-size: 16px; font-weight: 700; padding: 8px 12px; }
+  /* Totals row — bump the readout font so the day's total pops. */
+  .sb-row.sb-total .sb-input { font-size: 15px; font-weight: 700; }
 
   /* Sticky save bar — stack the primary + secondary button so the
      "Save Daily Report" text never wraps mid-word next to a narrow
