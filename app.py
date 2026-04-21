@@ -2551,6 +2551,34 @@ def edit_transfer(tid):
         roster=roster, audit_entries=audit_entries,
         federal_tax_rate=(current_store().federal_tax_rate or 0))
 
+
+@app.route("/transfers/<int:tid>/delete", methods=["POST"])
+@admin_required
+def delete_transfer(tid):
+    """Hard-delete a transfer. Store admins only; employees get blocked
+    by @admin_required at the route level, so hiding the button in the
+    template is defense-in-depth, not the actual gate.
+
+    TransferAudit has an FK onto Transfer, so we drop the audit rows
+    for this transfer first. The transfer's audit history disappears
+    along with the record it described — the intent of deletion — but
+    anything downstream that aggregates from transfers (batch totals,
+    daily book MT auto-pre-fill, dashboard counts) is a live query, so
+    those recompute correctly on the next page load.
+    """
+    sid = session.get("store_id")
+    if not sid:
+        flash("Select a store first.", "error")
+        return redirect(url_for("dashboard"))
+    t = Transfer.query.filter_by(id=tid, store_id=sid).first_or_404()
+    TransferAudit.query.filter_by(store_id=sid, transfer_id=t.id).delete(
+        synchronize_session=False)
+    db.session.delete(t)
+    db.session.commit()
+    flash("Transfer deleted.", "success")
+    return redirect(url_for("transfers"))
+
+
 # ── Daily Book ───────────────────────────────────────────────
 # Companies a new store can pick from on the settings page. The daily book
 # and transfer form both pull per-store from Store.companies (resolved via

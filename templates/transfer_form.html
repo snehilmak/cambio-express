@@ -234,6 +234,31 @@
   </div>
 </div>
 
+{# Admin-only delete. Outside the main edit form so it's its own POST —
+   nested <form> elements aren't allowed in HTML and we don't want the
+   delete button to submit the edit form by accident. Employees never
+   see it; the @admin_required decorator on the route is the real gate. #}
+{% if transfer and user.role == 'admin' %}
+<div class="card mt-3" style="max-width:780px;border-color:var(--red-border);">
+  <div class="card-header">
+    <span class="card-title" style="color:var(--red);">Danger Zone</span>
+  </div>
+  <div class="card-body">
+    <p class="text-sm text-muted" style="margin-bottom:12px;">
+      Deleting this transfer removes it and its activity log permanently.
+      Batch totals and daily book auto-pre-fill will recompute on the next
+      page load — if this transfer belongs to a reconciled ACH batch, the
+      batch's variance will shift.
+    </p>
+    <form method="POST" action="{{ url_for('delete_transfer', tid=transfer.id) }}"
+          onsubmit="return confirm('Delete this transfer permanently? This cannot be undone.');"
+          style="margin:0;">
+      <button type="submit" class="btn btn-danger">🗑 Delete Transfer</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 {# Activity log — admins (and employees, for transparency) can see every
    edit and status change on this transfer. Only visible when editing. #}
 {% if transfer and audit_entries %}
