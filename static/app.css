@@ -238,6 +238,9 @@ html, body { overscroll-behavior-y: none; }
   padding: 16px 0;
   display: flex; gap: 12px; align-items: center;
 }
+/* Primary button in the sticky bar — slightly larger on desktop without
+   needing inline padding overrides at each call site. */
+.sticky-save-bar .sticky-save-primary { font-size: 15px; padding: 12px 28px; }
 
 /* Shared money-transfer table style used on the Daily Book. */
 .mt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -642,10 +645,38 @@ input[type="number"] {
   .btn { padding: 10px 14px; }
   .btn-sm { padding: 6px 10px; font-size: 12px; }
 
-  /* Section-box gets even tighter at phone width. */
-  .sb-row { padding: 6px 10px; }
-  .sb-input { width: 110px; }
-  .sb-input input { padding: 7px 8px; }
+  /* Stack the label on top and the input full-width below. At phone
+     widths the side-by-side layout left inputs nearly invisible in
+     dark mode (narrow boxes, low-contrast borders against the
+     section-box surface), so we give them the full row instead. */
+  .sb-row {
+    flex-direction: column; align-items: stretch;
+    gap: 6px; padding: 10px 14px;
+  }
+  .sb-label { font-size: 13px; font-weight: 500; }
+  .sb-input { width: 100%; }
+  .sb-input input {
+    text-align: right; padding: 10px 12px; font-size: 16px;
+    border-width: 1.5px; width: 100%;
+  }
+  /* Keep the totals row readable — bigger number, still full-width. */
+  .sb-row.sb-total .sb-input { font-size: 16px; font-weight: 700; padding: 8px 12px; }
+
+  /* Sticky save bar — stack the primary + secondary button so the
+     "Save Daily Report" text never wraps mid-word next to a narrow
+     Cancel. Full-width buttons also give thumb-friendly tap targets. */
+  .sticky-save-bar {
+    flex-direction: column; align-items: stretch;
+    padding: 12px; gap: 10px;
+    /* Honor iOS home-indicator safe area when pinned to the bottom. */
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+    /* Bleed into the content padding so the bar spans edge-to-edge. */
+    margin: 8px -12px 0;
+  }
+  .sticky-save-bar .btn {
+    width: 100%; justify-content: center;
+    padding: 14px 16px; font-size: 15px;
+  }
 }
 
 /* Touch-friendly inputs (prevents iOS zoom on focus). */
@@ -760,7 +791,14 @@ input[type="number"] {
 [data-theme="dark"] label { color: #9ca3af; }
 [data-theme="dark"] input,
 [data-theme="dark"] select,
-[data-theme="dark"] textarea { background: #1a1f2e; color: #e5e7eb; border-color: #2a3044; }
+[data-theme="dark"] textarea {
+  /* Slightly darker fill + lighter border than --surface so the input
+     stays visually distinct from a .section-box / .card background in
+     dark mode, which is where the Daily Book inputs were ghosting. */
+  background: #0f1424;
+  color: #e5e7eb;
+  border-color: #3a4054;
+}
 [data-theme="dark"] input::placeholder,
 [data-theme="dark"] textarea::placeholder { color: #6b7280; }
 [data-theme="dark"] input:focus,
