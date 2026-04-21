@@ -612,12 +612,25 @@ input[type="number"] {
   .btn { padding: 10px 16px; font-size: 13.5px; }
   .section-title { margin: 20px 0 10px; }
 
-  /* Section-box rows (Daily Book / Monthly P&L) — tighter padding and
-     narrower input column so long labels don't wrap oddly on phones. */
-  .sb-row { padding: 7px 12px; gap: 8px; }
-  .sb-label { font-size: 13px; }
-  .sb-input { width: 130px; }
-  .sb-input input { font-size: 14px; padding: 8px 10px; }
+  /* Section-box rows (Daily Book / Monthly P&L) — switch to Grid so
+     long labels can never push the input past the section-box edge
+     (which is what kept clipping Daily Book inputs on phones). The
+     minmax(0, 1fr) first track guarantees the label can shrink to 0
+     without overflow, and the fixed second track locks the input
+     width. Same rule applies at <=480px too (see 480 block below). */
+  .sb-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 150px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+  }
+  .sb-label { font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+  .sb-input { width: 100%; min-width: 0; max-width: none; }
+  .sb-input input {
+    width: 100%; min-width: 0; max-width: 100%;
+    font-size: 15px; padding: 8px 10px; text-align: right;
+  }
 
   /* Money Transfer table — shrink inputs; the wrapping .table-wrap gives
      horizontal scroll for the full 6-column grid on narrow screens. */
