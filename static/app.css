@@ -353,6 +353,77 @@ html, body { overscroll-behavior-y: none; }
    overflow-x: auto creates horizontal scroll INSIDE the wrap instead
    of letting the table push the card / grid item wider. */
 .table-wrap { overflow-x: auto; max-width: 100%; }
+
+/* ── Amount cell hover-pill (Transfers + batch detail tables) ────
+ * The Transfers table shows a single "Amount" column with the combined
+ * send+fee+tax total, and a dark pill tooltip with the breakdown on
+ * hover/focus. Kept in app.css so it's shared between /transfers and
+ * the Batch detail transfers table. */
+.tf-amount {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+  outline: none;
+}
+.tf-amount-tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--dark);
+  color: var(--white);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  z-index: 20;
+  box-shadow: 0 6px 18px rgba(15,31,61,0.25);
+  min-width: 150px;
+  font-weight: 400;
+}
+.tf-amount-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--dark);
+}
+.tf-amount-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+.tf-amount-tip-row + .tf-amount-tip-row {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+.tf-amount-tip-row > span:first-child {
+  color: rgba(255,255,255,0.6);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-weight: 600;
+  align-self: center;
+}
+.tf-amount-tip-row > span:last-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+}
+.tf-amount:hover .tf-amount-tip,
+.tf-amount:focus .tf-amount-tip,
+.tf-amount:focus-within .tf-amount-tip { display: block; }
+
+[data-theme="dark"] .tf-amount-tip {
+  background: #0f1424;
+  border: 1px solid #3a4054;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+}
+[data-theme="dark"] .tf-amount-tip::after { border-top-color: #0f1424; }
 table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 thead th {
   padding: 11px 16px; text-align: left;
