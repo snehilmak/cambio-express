@@ -96,6 +96,23 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
     lockout row and `Store.referee_credit_applied_at` gates retries. The
     topbar crown reads `my_referral_code` from the context processor —
     empty string hides it, so the button self-gates on role + plan.
+13. **Table search UX — live-search is the standard.** Every paginated
+    table (transfers is the reference implementation; customers,
+    batches, monthly list, etc. should follow) uses the debounced AJAX
+    pattern — **never** a plain "type then click Search" form. Pattern:
+    - Split the table + pager into a `_<name>_table.html` partial.
+    - The route accepts `?partial=1`, returns JSON `{html, total, page,
+      total_pages, page_amount?, page_fees?}`.
+    - Page-level template wraps the partial in a stable swap container
+      (e.g. `<div id="transfersResult">`) and includes a small `<script>`
+      that: debounces at **300ms**, enforces a **2-char minimum** on the
+      global `q` box, cancels in-flight fetches via **AbortController**,
+      and updates the URL with `history.replaceState` so filters are
+      shareable. Selects + date pickers fire immediately on `change`.
+    - Focus must stay in the search input — the swap region lives below
+      the input, not around it.
+    - Reference: `templates/transfers.html` + `templates/_transfers_table.html`
+      + `/transfers` route's `partial=1` branch.
 
 ## Migrations (no framework)
 New columns on existing tables go in `_ADDED_COLUMNS` (list at bottom of
