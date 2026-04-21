@@ -3927,28 +3927,53 @@ _ADDED_COLUMNS = [
 ]
 
 def _ensure_added_columns():
-    """Apply the _ADDED_COLUMNS migrations. Idempotent and safe on every boot."""
+    """Apply the _ADDED_COLUMNS migrations. Idempotent and safe on every boot.
+
+    Table names are ALWAYS quoted — `user` is a Postgres reserved word
+    (it aliases CURRENT_USER), so `ALTER TABLE user …` throws a syntax
+    error in PG even though the table exists. Quoting (`"user"`) makes
+    the reserved-word issue go away; sqlite accepts the quotes too.
+
+    Each ALTER runs in its own transaction on Postgres so one failure
+    doesn't abort the others — and we log the specific column that
+    failed instead of a silent "column migration skipped"."""
     try:
-        with db.engine.connect() as conn:
-            dialect = db.engine.dialect.name
-            if dialect == "sqlite":
-                # PRAGMA table_info returns (cid, name, type, notnull, dflt, pk).
+        dialect = db.engine.dialect.name
+    except Exception as e:
+        app.logger.warning(f"column migration skipped (no engine): {e}")
+        return
+
+    if dialect == "sqlite":
+        try:
+            with db.engine.connect() as conn:
                 existing = {}
                 for table, _, _ in _ADDED_COLUMNS:
                     if table not in existing:
-                        existing[table] = [r[1] for r in conn.exec_driver_sql(
-                            f"PRAGMA table_info({table});")]
+                        rows = conn.exec_driver_sql(
+                            f'PRAGMA table_info("{table}");')
+                        existing[table] = [r[1] for r in rows]
                 for table, name, ddl in _ADDED_COLUMNS:
                     if name not in existing.get(table, []):
-                        conn.exec_driver_sql(
-                            f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
-            else:
-                for table, name, ddl in _ADDED_COLUMNS:
-                    conn.exec_driver_sql(
-                        f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {name} {ddl}")
+                        try:
+                            conn.exec_driver_sql(
+                                f'ALTER TABLE "{table}" ADD COLUMN {name} {ddl}')
+                        except Exception as e:
+                            app.logger.warning(
+                                f"sqlite ADD COLUMN failed for {table}.{name}: {e}")
                 conn.commit()
-    except Exception as e:
-        app.logger.warning(f"column migration skipped: {e}")
+        except Exception as e:
+            app.logger.warning(f"sqlite column migration skipped: {e}")
+        return
+
+    # Postgres path. Each ALTER in its own transaction — so a failure on
+    # one doesn't poison the rest (PG aborts the whole tx on any error).
+    for table, name, ddl in _ADDED_COLUMNS:
+        try:
+            with db.engine.begin() as conn:
+                conn.exec_driver_sql(
+                    f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {name} {ddl}')
+        except Exception as e:
+            app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
 
 # Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
 # Declaring them here means a fresh install has a real starting set for the UI.
