@@ -24,7 +24,7 @@
   <a href="{{ url_for('daily_list', month=month, year=year) }}" class="btn btn-outline btn-sm">📅 Daily Book</a>
   {% if report %}
     <span class="badge badge-green">✓ Saved</span>
-    <span class="text-sm text-muted">Last updated: {{ report.updated_at.strftime('%m/%d/%Y %I:%M %p') }}</span>
+    <span class="text-sm text-muted">Last updated: <time data-utc="{{ report.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}" data-fmt="datetime">{{ report.updated_at.strftime('%m/%d/%Y %I:%M %p') }}</time></span>
   {% else %}
     <span class="badge badge-yellow">New</span>
   {% endif %}

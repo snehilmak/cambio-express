@@ -52,7 +52,7 @@
 
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline btn-sm">← Calendar</a>
-  {% if report %}<span class="badge badge-green">✓ Saved {{ report.updated_at.strftime('%I:%M %p') }}</span>
+  {% if report %}<span class="badge badge-green">✓ Saved <time data-utc="{{ report.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}" data-fmt="time">{{ report.updated_at.strftime('%I:%M %p') }}</time></span>
   {% else %}<span class="badge badge-yellow">New Entry</span>{% endif %}
 </div>
 
