@@ -41,6 +41,14 @@ any cadence.
 - [ ] **Session cookie hardening** — `Secure`, `HttpOnly`, `SameSite=Lax`.
 
 ## Nice to have (post-launch)
+- [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers
+      sharing the same employee login on different computers currently
+      only see each other's edits after a page reload / filter change.
+      Add a ~20s polling timer on `/transfers` that re-runs the existing
+      `?partial=1` fetch so the table silently refreshes. Skip while the
+      user is actively typing in the search box or has an unsaved form
+      open. If this ever feels too laggy, upgrade to Server-Sent Events
+      from the route that fires after `commit_transfer()`.
 - [ ] Auto-fill `federal_tax` at 1% of send amount (or a per-company
       rate map) with an override field, so cashiers don't typo.
 - [ ] Backfill script for `federal_tax` on historical transfers — they
