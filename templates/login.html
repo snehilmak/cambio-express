@@ -26,7 +26,13 @@
 body {
   font-family: 'DM Sans', sans-serif;
   background: #0f1f3d;
-  min-height: 100vh; display: flex;
+  /* dvh stays in sync with the visible area as the mobile address bar
+     hides/shows, so the split-screen never spills into a scroll. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  /* Block iOS rubber-band so the installed PWA feels native. */
+  overscroll-behavior-y: none;
 }
 .login-left {
   flex: 1; display: flex; flex-direction: column;
@@ -107,25 +113,36 @@ input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(5
 @media (max-width: 900px) {
   body { flex-direction: column; }
   .login-left {
-    flex: none; padding: 36px 24px 32px;
+    flex: none; padding: 28px 24px 24px;
     min-height: auto;
+    /* iOS notch — keep the brand block clear of the status bar. */
+    padding-top: max(28px, env(safe-area-inset-top));
   }
   .login-left::before, .login-left::after { display: none; }
-  .brand-icon { font-size: 42px; margin-bottom: 14px; }
-  .brand-name { font-size: 28px; }
+  .brand-icon { font-size: 38px; margin-bottom: 10px; }
+  .brand-name { font-size: 26px; }
   .brand-tagline { font-size: 11px; }
   .brand-features { display: none; }
   .login-right {
-    width: 100%; padding: 32px 24px 48px;
-    flex: 1;
+    width: 100%; padding: 24px 24px 32px;
+    /* Don't grow past the form contents — without this, flex:1 + the
+       100dvh body stretch the cream pane and the user can scroll the
+       empty space underneath. */
+    flex: 0 0 auto;
+    padding-bottom: max(32px, env(safe-area-inset-bottom));
   }
-  .login-heading { font-size: 24px; }
+  .login-heading { font-size: 22px; margin-bottom: 4px; }
+  .login-sub { margin-bottom: 22px; }
+  .field { margin-bottom: 14px; }
   input { font-size: 16px; }
+  .login-footer { margin-top: 24px; }
 }
 @media (max-width: 480px) {
-  .login-left { padding: 28px 20px 24px; }
-  .login-right { padding: 28px 20px 36px; }
+  .login-left { padding: 22px 20px 18px; padding-top: max(22px, env(safe-area-inset-top)); }
+  .login-right { padding: 20px 20px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .brand-icon { font-size: 34px; margin-bottom: 8px; }
   .brand-name { font-size: 24px; }
+  .brand-tagline { margin-top: 6px; }
 }
 
 .theme-toggle {

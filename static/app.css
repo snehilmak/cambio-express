@@ -82,14 +82,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--dark); }
 html, body { overflow-x: hidden; max-width: 100%; }
+/* Stop iOS Safari rubber-band overscroll so installed PWAs feel native. */
+html, body { overscroll-behavior-y: none; }
 
 /* ── SIDEBAR ────────────────────────────────────────────── */
-.layout { display: flex; min-height: 100vh; }
+.layout { display: flex; min-height: 100vh; min-height: 100dvh; }
 .sidebar {
   width: var(--sidebar-w); background: var(--navy);
   display: flex; flex-direction: column;
-  position: fixed; top: 0; left: 0; height: 100vh;
+  position: fixed; top: 0; left: 0; height: 100vh; height: 100dvh;
   z-index: 100; overflow-y: auto;
+  /* Respect the iOS notch / home indicator inside the navy drawer. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 .sidebar-logo {
   padding: 24px 20px 16px;
@@ -142,13 +147,18 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .main {
   margin-left: var(--sidebar-w); flex: 1;
   display: flex; flex-direction: column;
-  min-height: 100vh; min-width: 0; background: var(--cream);
+  min-height: 100vh; min-height: 100dvh;
+  min-width: 0; background: var(--cream);
 }
 .topbar {
   background: var(--white); border-bottom: 1px solid var(--gray2);
   padding: 0 32px; height: 58px;
   display: flex; align-items: center; justify-content: space-between;
   position: sticky; top: 0; z-index: 50;
+  /* iOS standalone PWA — push the topbar below the notch so it never
+     gets hidden under the status bar. */
+  padding-top: env(safe-area-inset-top);
+  height: calc(58px + env(safe-area-inset-top));
 }
 .topbar-title { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--navy); }
 .topbar-right { display: flex; align-items: center; gap: 16px; }
@@ -251,6 +261,64 @@ html, body { overflow-x: hidden; max-width: 100%; }
   font-family: 'JetBrains Mono', monospace;
   text-align: right;
   color: var(--text);
+}
+
+/* On phones the 6-col MT table is unusable as a horizontal-scroll grid.
+   Re-render each <tr> as a stacked card with label/value rows. The
+   template tags every <td> with data-label="..." so the label can come
+   from the (now-hidden) <thead>. */
+@media (max-width: 600px) {
+  .mt-table { display: block; min-width: 0; font-size: 13px; }
+  .mt-table thead { display: none; }
+  .mt-table tbody, .mt-table tr, .mt-table td { display: block; width: 100%; }
+  .mt-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    margin: 0 12px 12px;
+    padding: 4px 12px;
+  }
+  .mt-table tbody tr:first-child { margin-top: 12px; }
+  .mt-table td {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; text-align: right;
+  }
+  .mt-table td:last-child { border-bottom: none; }
+  .mt-table td::before {
+    content: attr(data-label);
+    flex: 1; min-width: 0;
+    font-size: 11px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    font-weight: 600; text-align: left;
+  }
+  /* The "Company" cell is the card title — bigger, no label prefix. */
+  .mt-table td.mt-company {
+    justify-content: flex-start; font-size: 15px;
+    border-bottom: 1px solid var(--border-strong); padding: 10px 0 8px;
+  }
+  .mt-table td.mt-company::before { content: none; }
+  .mt-table td input {
+    width: 130px; font-size: 16px; padding: 8px 10px; text-align: right;
+  }
+  .mt-table tfoot { display: block; padding: 0 12px 12px; }
+  .mt-table tfoot tr {
+    display: block;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--surface-2);
+    padding: 4px 12px;
+  }
+  .mt-table tfoot td {
+    text-align: right; padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .mt-table tfoot td:last-child { border-bottom: none; }
+  .mt-table tfoot td.mt-company {
+    text-align: left; font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+  }
 }
 
 /* ── STAT CARDS ─────────────────────────────────────────── */

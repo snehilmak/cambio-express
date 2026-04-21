@@ -8,7 +8,7 @@
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <style>
   /* Logged-out auth layout: top nav bar + centered card. */
-  body { display: flex; flex-direction: column; min-height: 100vh; }
+  body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none; }
   .auth-nav {
     background: var(--navy); padding: 0 40px; height: 60px;
     display: flex; align-items: center; justify-content: space-between;
