@@ -13,19 +13,6 @@
   [data-theme="dark"] .bank-card .bal { color: #f3f4f6; }
   .bank-card .asof { font-size: 11px; color: var(--gray4); }
   .bank-card .row-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
-  .bank-empty {
-    text-align: center; padding: 48px 24px;
-    border: 1.5px dashed var(--gray2); border-radius: 12px;
-    background: var(--white);
-  }
-  [data-theme="dark"] .bank-empty { background: #1a1f2e; border-color: #2a3044; }
-  .bank-empty .ico { font-size: 40px; margin-bottom: 12px; }
-  .bank-empty h3 {
-    font-family: 'DM Serif Display', serif; font-size: 22px;
-    color: var(--navy); margin-bottom: 6px;
-  }
-  [data-theme="dark"] .bank-empty h3 { color: #f3f4f6; }
-  .bank-empty p { color: var(--gray4); font-size: 13.5px; margin-bottom: 18px; }
   /* SimpleFIN legacy block is hidden by default behind <details>. It's still
      linked to a working backend so anyone on SimpleFIN today keeps working. */
   details.legacy-bank { margin-top: 32px; }
@@ -99,11 +86,13 @@
         {% endfor %}
       </div>
     {% else %}
-      {# Empty state — the main "connect" CTA lives here. #}
-      <div class="bank-empty">
-        <div class="ico">🏦</div>
-        <h3>Connect your bank</h3>
-        <p>
+      {# Empty state — the main "connect" CTA lives here. Uses the
+         shared .empty-state primitive instead of a page-local
+         .bank-empty so it stays in sync with the rest of the app. #}
+      <div class="empty-state">
+        <div style="font-size:40px;margin-bottom:12px;">🏦</div>
+        <div class="empty-title">Connect your bank</div>
+        <p style="margin:6px 0 18px;">
           Link your accounts securely through Stripe Financial Connections.
           We only see balances — never your bank login.
           <br>Included with your plan; no extra setup.
