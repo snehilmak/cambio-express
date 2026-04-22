@@ -73,6 +73,22 @@
           </select>
         </div>
         <div class="field">
+          <label>Service Type *</label>
+          <select name="service_type" id="service_type"
+                  data-tax-exempt="{{ tax_exempt_services|tojson }}" required>
+            {% for svc in service_types %}
+            <option value="{{ svc }}"
+              {% if transfer and transfer.service_type == svc %}selected
+              {% elif not transfer and svc == 'Money Transfer' %}selected{% endif %}>{{ svc }}</option>
+            {% endfor %}
+          </select>
+          <div class="text-sm text-muted" style="margin-top:4px;">
+            Bill Payment, Top Up, and Recharge are not subject to the
+            federal tax. Money Transfer applies the store's configured
+            <strong>{{ '{:.2f}'.format(federal_tax_rate * 100) }}%</strong>.
+          </div>
+        </div>
+        <div class="field">
           <label>Send Amount ($) *</label>
           <input type="number" name="send_amount" id="send_amount" step="0.01" min="0"
             value="{{ transfer.send_amount if transfer else '' }}" placeholder="0.00" required
@@ -84,14 +100,15 @@
             value="{{ transfer.fee if transfer else '' }}" placeholder="0.00">
         </div>
         <div class="field">
-          <label>Federal Tax ($) <span class="text-muted" style="text-transform:none;font-weight:400;font-size:10.5px;letter-spacing:0;">auto · {{ '{:.2f}'.format(federal_tax_rate * 100) }}%</span></label>
+          <label>Federal Tax ($) <span class="text-muted" id="federal_tax_label_hint"
+                style="text-transform:none;font-weight:400;font-size:10.5px;letter-spacing:0;">auto · {{ '{:.2f}'.format(federal_tax_rate * 100) }}%</span></label>
           {# Read-only: the server recomputes from Send Amount × the store's
-             configured rate on save, so this input is only a visual mirror. #}
+             configured rate on save (and ZEROS it for non-money-transfer
+             service types), so this input is only a visual mirror. #}
           <input type="number" name="federal_tax" id="federal_tax" step="0.01" min="0"
             value="{{ '{:.2f}'.format(transfer.federal_tax) if transfer else '' }}"
-            placeholder="0.00" readonly
-            style="background:var(--gray1);cursor:not-allowed;">
-          <div class="text-sm text-muted" style="margin-top:4px;">
+            placeholder="0.00" readonly>
+          <div class="text-sm text-muted" style="margin-top:4px;" id="federal_tax_help">
             Calculated automatically from Send Amount at
             <strong>{{ '{:.2f}'.format(federal_tax_rate * 100) }}%</strong>.
             Tracked separately from fee — leaves with the ACH withdrawal, not store revenue.
@@ -396,20 +413,44 @@
 </script>
 <script>
 // Federal Tax is read-only and always derived from Send Amount × the store's
-// configured rate. The server also recomputes on save (the submitted value is
-// ignored), so this script is purely cosmetic — it lets the cashier see the
-// tax as they type.
+// configured rate. The server also recomputes on save (and zeros it out for
+// non-Money-Transfer service types), so this script is cosmetic — it lets
+// the cashier see the tax flip live as they switch service or edit amount.
 (function() {
   var amountEl = document.getElementById('send_amount');
   var taxEl = document.getElementById('federal_tax');
+  var svcEl = document.getElementById('service_type');
+  var hintEl = document.getElementById('federal_tax_label_hint');
+  var helpEl = document.getElementById('federal_tax_help');
   if (!amountEl || !taxEl) return;
   var rate = parseFloat(amountEl.getAttribute('data-federal-tax-rate') || '0') || 0;
+  var exempt = [];
+  try {
+    exempt = JSON.parse(svcEl && svcEl.getAttribute('data-tax-exempt') || '[]');
+  } catch (e) { exempt = []; }
+  function isExempt() {
+    return svcEl && exempt.indexOf(svcEl.value) !== -1;
+  }
   function recompute() {
     var amt = parseFloat(amountEl.value) || 0;
-    taxEl.value = (amt > 0 && rate > 0) ? (amt * rate).toFixed(2) : '';
+    if (isExempt()) {
+      taxEl.value = '0.00';
+      if (hintEl) hintEl.textContent = 'no tax for this service';
+      if (helpEl) helpEl.innerHTML =
+        '<strong>' + (svcEl ? svcEl.value : '') + '</strong> is not subject to the federal tax. ' +
+        'Switch to Money Transfer to apply the configured rate.';
+    } else {
+      taxEl.value = (amt > 0 && rate > 0) ? (amt * rate).toFixed(2) : '';
+      if (hintEl) hintEl.textContent = 'auto · ' + (rate * 100).toFixed(2) + '%';
+      // Restore the original Money Transfer help copy.
+      if (helpEl) helpEl.innerHTML =
+        'Calculated automatically from Send Amount at <strong>' + (rate * 100).toFixed(2) + '%</strong>. ' +
+        'Tracked separately from fee — leaves with the ACH withdrawal, not store revenue.';
+    }
   }
   amountEl.addEventListener('input', recompute);
   amountEl.addEventListener('change', recompute);
+  if (svcEl) svcEl.addEventListener('change', recompute);
   // Fire once on load so the tax matches the pre-populated amount on edits.
   recompute();
 })();
