@@ -131,7 +131,7 @@
         <label class="checkbox-row">
           <input type="checkbox" name="company_known" value="{{ name }}"
                  {% if name in current_company_set %}checked{% endif %}>
-          <span style="font-size:13.5px;color:var(--dark);">{{ name }}</span>
+          <span style="font-size:13.5px;color:var(--text);">{{ name }}</span>
         </label>
         {% endfor %}
       </div>
@@ -162,7 +162,7 @@
     </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <input type="text" id="emp-url" value="{{ login_url }}" readonly
-        style="flex:1;background:var(--gray1);color:var(--dark);font-family:'JetBrains Mono',monospace;font-size:13px;">
+        style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13px;">
       <button type="button" class="btn btn-outline btn-sm" onclick="copyLoginUrl()">Copy</button>
     </div>
   </div>
@@ -312,9 +312,9 @@
 
     {% if owner_link and owner_user %}
     <!-- State: owner linked -->
-    <div style="margin-bottom:20px;padding:16px;background:var(--gray1);border-radius:8px;border:1px solid var(--gray2);">
-      <div style="font-size:13px;font-weight:600;color:var(--navy);">{{ owner_user.full_name or owner_user.username }}</div>
-      <div style="font-size:12px;color:var(--gray4);margin-top:3px;">{{ owner_user.username }} has access to this store.</div>
+    <div style="margin-bottom:20px;padding:16px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:600;color:var(--text);">{{ owner_user.full_name or owner_user.username }}</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">{{ owner_user.username }} has access to this store.</div>
     </div>
     <form method="POST" action="{{ url_for('admin_remove_owner_access') }}"
           onsubmit="return confirm('Remove owner access for {{ owner_user.full_name or owner_user.username }}?')">
@@ -329,7 +329,7 @@
     </p>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;">
       <input type="text" id="owner-code" value="{{ owner_invite.code }}" readonly
-             style="flex:1;background:var(--gray1);font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;font-weight:600;text-align:center;">
+             style="flex:1;font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;font-weight:600;text-align:center;">
       <button type="button" class="btn btn-outline btn-sm" onclick="copyOwnerCode()">Copy</button>
     </div>
     <form method="POST" action="{{ url_for('admin_generate_owner_code') }}">
