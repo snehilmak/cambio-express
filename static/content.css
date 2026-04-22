@@ -1,0 +1,320 @@
+/* ==========================================================================
+   DineroBook — Content Overrides (v1, dark+neon)
+   --------------------------------------------------------------------------
+   Overrides the legacy content-area classes in `app.css` (.card,
+   .stat-card, tables, buttons, badges, etc.) with the dark+neon
+   styling from the design system.
+
+   Loaded AFTER app.css + shell.css so these rules win the cascade.
+   Templates keep their existing Jinja structure — only the visual
+   layer changes. Templates that want rich new components (sparklines,
+   volume charts) will add them in their own {% block head %}.
+   ========================================================================== */
+
+/* ── Global body/fonts ── */
+html, body {
+  background: var(--db-bg);
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Page content area (inside .main from base.html) ── */
+.main { background: var(--db-bg); }
+.content { padding: 24px 28px 48px; }
+
+/* ── Cards ── */
+.card {
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 14px;
+  box-shadow: none;
+}
+.card-header {
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--db-gray-2);
+}
+.card-title {
+  font-family: var(--db-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.01em;
+}
+.card-body { padding: 20px 22px; }
+
+/* ── Stat cards ── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 14px;
+  padding: 18px;
+  overflow: hidden;
+}
+.stat-card::before { display: none; } /* retire the legacy gold top stripe */
+.stat-label {
+  font-family: var(--db-font-mono);
+  font-size: 11px;
+  color: var(--db-gray-6);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-weight: 500;
+}
+.stat-value {
+  font-family: var(--db-font-display);
+  font-size: 28px;
+  color: var(--db-gray-9);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-top: 10px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-sub {
+  font-size: 11.5px;
+  color: var(--db-gray-6);
+  margin-top: 8px;
+}
+.stat-sub a { color: var(--db-neon); text-decoration: none; }
+.stat-sub a:hover { color: var(--db-neon-bright); }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--db-font-body);
+  font-size: 13.5px;
+}
+thead th {
+  padding: 12px 16px;
+  text-align: left;
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--db-gray-6);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  background: var(--db-bg-input);
+  border-bottom: 1px solid var(--db-gray-3);
+}
+tbody tr { border-bottom: 1px solid var(--db-gray-2); transition: background 0.1s; }
+tbody tr:hover { background: rgba(255,255,255,0.03); }
+tbody td {
+  padding: 13px 16px;
+  color: var(--db-gray-9);
+  vertical-align: middle;
+}
+.mono {
+  font-family: var(--db-font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badges (status pills) ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--db-font-mono);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.badge-green  { background: rgba(63,255,0,0.10);  color: var(--db-neon);     border-color: rgba(63,255,0,0.30); }
+.badge-red    { background: rgba(255,77,109,0.10); color: var(--db-negative); border-color: rgba(255,77,109,0.30); }
+.badge-yellow { background: rgba(255,176,32,0.10); color: var(--db-warning);  border-color: rgba(255,176,32,0.30); }
+.badge-orange { background: rgba(255,176,32,0.10); color: var(--db-warning);  border-color: rgba(255,176,32,0.30); }
+.badge-blue   { background: rgba(94,169,255,0.10); color: var(--db-info);     border-color: rgba(94,169,255,0.30); }
+.badge-gray   { background: var(--db-bg-input);    color: var(--db-gray-7);   border-color: var(--db-gray-3); }
+.badge-navy   { background: var(--db-bg-popover);  color: var(--db-neon);     border-color: rgba(63,255,0,0.25); }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-family: var(--db-font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  text-decoration: none;
+}
+.btn:focus-visible { outline: 2px solid var(--db-neon); outline-offset: 2px; }
+.btn-primary {
+  background: var(--db-neon);
+  color: var(--db-neon-ink);
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 16px var(--db-neon-glow-25);
+}
+.btn-primary:hover { background: var(--db-neon-bright); }
+.btn-gold {
+  background: var(--db-neon);
+  color: var(--db-neon-ink);
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 16px var(--db-neon-glow-25);
+}
+.btn-gold:hover { background: var(--db-neon-bright); color: var(--db-neon-ink); }
+.btn-outline {
+  background: transparent;
+  color: var(--db-gray-9);
+  border-color: var(--db-gray-4);
+  box-shadow: none;
+}
+.btn-outline:hover { border-color: var(--db-neon); color: var(--db-neon); background: rgba(255,255,255,0.02); }
+.btn-danger {
+  background: var(--db-negative);
+  color: #fff;
+  border: none;
+}
+.btn-danger:hover { background: #ff6b85; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ── Forms ── */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-grid.cols-1 { grid-template-columns: 1fr; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.span-2 { grid-column: span 2; }
+label {
+  font-family: var(--db-font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--db-gray-6);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+input, select, textarea {
+  padding: 11px 13px;
+  border: 1px solid var(--db-gray-3);
+  border-radius: 10px;
+  font-size: 14px;
+  font-family: var(--db-font-body);
+  color: var(--db-gray-9);
+  background: var(--db-bg-input);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  width: 100%;
+  outline: none;
+}
+input::placeholder, textarea::placeholder { color: var(--db-gray-5); }
+input:focus, select:focus, textarea:focus {
+  border-color: var(--db-neon);
+  box-shadow: 0 0 0 3px var(--db-neon-glow-15);
+}
+textarea { resize: vertical; min-height: 80px; }
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--db-gray-6) 50%),
+                    linear-gradient(135deg, var(--db-gray-6) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 32px;
+}
+
+/* ── Flash / banners ── */
+.flash {
+  padding: 11px 16px;
+  border-radius: 10px;
+  margin-bottom: 18px;
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: var(--db-font-body);
+  border: 1px solid;
+}
+.flash-success { background: rgba(63,255,0,0.08);  color: var(--db-neon);     border-color: rgba(63,255,0,0.30); }
+.flash-error   { background: rgba(255,77,109,0.08); color: var(--db-negative); border-color: rgba(255,77,109,0.30); }
+.banner {
+  padding: 12px 18px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13.5px;
+  font-weight: 500;
+  border: 1px solid;
+  font-family: var(--db-font-body);
+}
+.banner-warning { background: rgba(255,176,32,0.08); color: var(--db-warning); border-color: rgba(255,176,32,0.30); }
+.banner-error   { background: rgba(255,77,109,0.08); color: var(--db-negative); border-color: rgba(255,77,109,0.30); }
+.banner-info    { background: rgba(94,169,255,0.08); color: var(--db-info);    border-color: rgba(94,169,255,0.30); }
+.banner-success { background: rgba(63,255,0,0.08);   color: var(--db-neon);    border-color: rgba(63,255,0,0.30); }
+.banner .banner-cta {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--db-neon);
+  color: var(--db-neon-ink);
+  text-decoration: none;
+  font-family: var(--db-font-body);
+}
+
+/* ── Section titles ── */
+.section-title {
+  font-family: var(--db-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--db-neon);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 28px 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--db-gray-2);
+}
+
+/* ── Amount / variance colors ── */
+.amount-pos { color: var(--db-neon);     font-weight: 600; }
+.amount-neg { color: var(--db-negative); font-weight: 600; }
+.amount-zero { color: var(--db-neon);     font-weight: 600; }
+.var-ok  { color: var(--db-neon);     font-weight: 700; font-family: var(--db-font-mono); }
+.var-bad { color: var(--db-negative); font-weight: 700; font-family: var(--db-font-mono); }
+
+/* ── Company tag colors ── */
+.co-intermex { color: var(--db-co-intermex); font-weight: 600; }
+.co-maxi     { color: var(--db-co-maxi);     font-weight: 600; }
+.co-barri    { color: var(--db-co-barri);    font-weight: 600; }
+
+/* ── Text utility overrides ── */
+.text-muted { color: var(--db-gray-7); }
+
+/* ── Grid utility overrides (legacy .grid-2 / .grid-3) ── */
+.grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
+
+/* ── Mobile ── */
+@media (max-width: 900px) {
+  .content { padding: 16px; }
+  .form-grid, .form-grid.cols-3 { grid-template-columns: 1fr; gap: 14px; }
+  .field.span-2 { grid-column: span 1; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 24px; }
+  .card-header { padding: 14px 16px; }
+  .card-body { padding: 16px; }
+  thead th { padding: 10px 12px; font-size: 10px; }
+  tbody td { padding: 10px 12px; font-size: 13px; }
+  input, select, textarea { font-size: 16px; padding: 12px 13px; }
+  .btn { padding: 10px 16px; font-size: 13.5px; }
+}
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .content { padding: 12px; }
+}
