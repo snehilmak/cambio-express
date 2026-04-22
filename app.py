@@ -153,6 +153,13 @@ class Transfer(db.Model):
     customer_id    = db.Column(db.Integer, db.ForeignKey("customer.id"), nullable=True)
     send_date      = db.Column(db.Date, nullable=False)
     company        = db.Column(db.String(30), nullable=False)
+    # Service performed for the customer. Money Transfer is the historical
+    # default — we still apply Store.federal_tax_rate to it. Bill Payment,
+    # Top Up, and Recharge are non-remittance services that the cashier
+    # also runs through the same companies, but the federal tax doesn't
+    # apply (no ACH withdrawal that would carry it). Server-side tax math
+    # in new_transfer / edit_transfer is the gate, not this column.
+    service_type   = db.Column(db.String(30), default="Money Transfer", nullable=False)
     sender_name    = db.Column(db.String(120), nullable=False)
     send_amount    = db.Column(db.Float, nullable=False)
     fee            = db.Column(db.Float, default=0.0)
@@ -2386,6 +2393,7 @@ def _pick_employee(store_id, raw_id):
 _TRANSFER_AUDIT_FIELDS = [
     ("send_date",      "Send date"),
     ("company",        "Company"),
+    ("service_type",   "Service"),
     ("sender_name",    "Sender"),
     ("send_amount",    "Amount"),
     ("fee",            "Fee"),
@@ -2403,6 +2411,31 @@ _TRANSFER_AUDIT_FIELDS = [
     ("internal_notes", "Notes"),
     ("employee_name",  "Processed by"),
 ]
+
+# Service types other than Money Transfer don't carry the 1% federal tax —
+# bill payments, top-ups, and recharges aren't ACH-withdrawal flows where
+# tax would be remitted. The transfer form's dropdown options must match
+# this set exactly. Server-side check is the gate; the JS preview just
+# mirrors the same rule for live feedback.
+SERVICE_TYPES = ("Money Transfer", "Bill Payment", "Top Up", "Recharge")
+_TAX_EXEMPT_SERVICES = frozenset(SERVICE_TYPES) - {"Money Transfer"}
+
+def _normalize_service_type(raw):
+    """Coerce the form input to a known service type. Anything we don't
+    recognize falls back to Money Transfer (the historical default), so a
+    bad client value can't quietly disable tax."""
+    val = (raw or "").strip()
+    return val if val in SERVICE_TYPES else "Money Transfer"
+
+def _federal_tax_for(send_amount, service_type, store):
+    """The single source of truth for transfer tax. Bill Payment / Top Up /
+    Recharge skip the tax entirely; Money Transfer applies the store's
+    configured rate. Both new_transfer and edit_transfer call this so the
+    rule can't drift between create and update."""
+    if service_type in _TAX_EXEMPT_SERVICES:
+        return 0.0
+    rate = (store.federal_tax_rate if store else None) or 0
+    return round((send_amount or 0) * rate, 2)
 
 def _summarize_transfer_changes(before, after, max_fields=4):
     """Format a before/after diff into the audit log summary string."""
@@ -2458,17 +2491,19 @@ def new_transfer():
             address=sender_address, dob=sender_dob,
             customer_id=request.form.get("customer_id", type=int),
         )
+        send_amount_v = float(request.form.get("send_amount") or 0)
+        service_type_v = _normalize_service_type(request.form.get("service_type"))
         t=Transfer(store_id=sid,created_by=user.id,customer_id=cust.id,
             send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
-            company=request.form["company"],sender_name=sender_name,
-            send_amount=float(request.form.get("send_amount") or 0),
+            company=request.form["company"],
+            service_type=service_type_v,
+            sender_name=sender_name,
+            send_amount=send_amount_v,
             fee=float(request.form.get("fee") or 0),
-            # Federal tax is server-computed from the store's configured rate —
-            # we ignore whatever the client submitted. Employees can't edit
-            # the field in the UI either; admins change the rate via Settings.
-            federal_tax=round(
-                float(request.form.get("send_amount") or 0)
-                * (current_store().federal_tax_rate or 0), 2),
+            # Federal tax is server-computed via _federal_tax_for — the rule
+            # (Money Transfer = taxed, others = exempt) lives in one place
+            # so the form, edit, and recompute paths can't drift apart.
+            federal_tax=_federal_tax_for(send_amount_v, service_type_v, current_store()),
             commission=float(request.form.get("commission") or 0),
             recipient_name=request.form.get("recipient_name",""),
             country=request.form.get("country",""),
@@ -2493,6 +2528,8 @@ def new_transfer():
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
         mt_companies=store_mt_companies(current_store()),
         roster=_active_roster(sid), audit_entries=[],
+        service_types=SERVICE_TYPES,
+        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
         federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
@@ -2517,13 +2554,12 @@ def edit_transfer(tid):
         before = _transfer_snapshot(t)
         t.send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date()
         t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
+        t.service_type=_normalize_service_type(request.form.get("service_type"))
         t.send_amount=float(request.form.get("send_amount") or 0)
         t.fee=float(request.form.get("fee") or 0)
-        # Always recompute federal_tax server-side from the store rate so
-        # editing the Send Amount correctly propagates to Tax. See the
-        # matching comment in new_transfer().
-        t.federal_tax=round(
-            t.send_amount * (current_store().federal_tax_rate or 0), 2)
+        # Always recompute federal_tax server-side via _federal_tax_for so
+        # changing the send amount OR the service type both flip the tax.
+        t.federal_tax=_federal_tax_for(t.send_amount, t.service_type, current_store())
         t.commission=float(request.form.get("commission") or 0)
         t.recipient_name=request.form.get("recipient_name","")
         t.country=request.form.get("country","")
@@ -2579,6 +2615,8 @@ def edit_transfer(tid):
         today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
         mt_companies=store_mt_companies(current_store()),
         roster=roster, audit_entries=audit_entries,
+        service_types=SERVICE_TYPES,
+        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
         federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 
@@ -4003,6 +4041,11 @@ _ADDED_COLUMNS = [
     # for other roles today. Nullable so existing rows stay valid on upgrade.
     ("user",     "totp_secret",          "VARCHAR(64) NULL"),
     ("user",     "totp_enrolled_at",     "TIMESTAMP NULL"),
+    # Service performed: Money Transfer (default, taxed) vs Bill Payment /
+    # Top Up / Recharge (no federal tax). Existing rows backfill to
+    # "Money Transfer" via the DEFAULT, which preserves their current tax
+    # state because the tax was already computed at save time.
+    ("transfer", "service_type",         "VARCHAR(30) DEFAULT 'Money Transfer' NOT NULL"),
 ]
 
 def _ensure_added_columns():
