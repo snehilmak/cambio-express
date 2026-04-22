@@ -44,8 +44,16 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
    `static/app.css`. Use the utility classes (`.banner-*`, `.info-box`,
    `.info-row`, `.empty-state`, `.coming-pill`, `.modal-*`,
    `.section-box`, `.sb-row`, `.sb-label`, `.sb-input`, `.sb-total`,
-   `.sb-auto-badge`, `.sb-summary-box`, `.mt-table`, `.sticky-save-bar`)
-   rather than rolling your own.
+   `.sb-auto-badge`, `.sb-summary-box`, `.mt-table`, `.sticky-save-bar`,
+   `.quick-links-grid` + `.quick-link-card`) rather than rolling your own.
+
+   **`.quick-link-card` is the standard for any "pick where to go"
+   landing grid** — icon tile + title + one-line description, hovers
+   into the brand blue with a subtle lift. Use it whenever you'd
+   otherwise be tempted to write a `<ul>` of plain links: superadmin
+   tab landings, store admin settings hubs, "what next?" prompts on
+   wizard finish pages, etc. See the Quick Links section on
+   `superadmin_controls?tab=overview` for the canonical example.
 
    **For ANY surface, text, or border that should respect the light/dark
    toggle, use the semantic tokens** — they are the only tokens that
