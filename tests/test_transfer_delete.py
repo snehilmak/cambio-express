@@ -7,9 +7,13 @@ record it described is also gone.
 """
 from datetime import date
 from app import app as flask_app, db
+from .conftest import make_employee_client
 
 
 def _seed_transfer(sender="Jane Doe", send_amount=500.0, fee=5.0):
+    """Local variant that also seeds one TransferAudit row — lets the
+    delete test verify the audit-cascade side effect. The shared
+    conftest seed_transfer only writes the transfer row."""
     from app import Store, User, Transfer, TransferAudit
     with flask_app.app_context():
         store = Store.query.filter_by(slug="test-store").first()
@@ -23,7 +27,6 @@ def _seed_transfer(sender="Jane Doe", send_amount=500.0, fee=5.0):
         )
         db.session.add(t)
         db.session.flush()
-        # Seed one audit row so we can verify cascade behavior.
         db.session.add(TransferAudit(
             store_id=store.id, transfer_id=t.id,
             user_id=user.id, action="created", summary="seeded",
@@ -33,23 +36,12 @@ def _seed_transfer(sender="Jane Doe", send_amount=500.0, fee=5.0):
 
 
 def _logged_in_employee_client():
-    """A client authenticated as a store employee (role='employee'),
-    which is the role @admin_required is supposed to reject."""
-    from app import User, Store
-    c = flask_app.test_client()
+    """Back-compat wrapper — existing tests want the employee to be at
+    the test-store; the shared helper takes the store_id explicitly."""
+    from app import Store
     with flask_app.app_context():
-        store = Store.query.filter_by(slug="test-store").first()
-        emp = User(store_id=store.id, username="emp@test.com",
-                   full_name="Employee", role="employee")
-        emp.set_password("testpass123!")
-        db.session.add(emp)
-        db.session.commit()
-        uid, sid = emp.id, store.id
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = sid
-    return c
+        sid = Store.query.filter_by(slug="test-store").first().id
+    return make_employee_client(sid)
 
 
 # ── Admin can delete ────────────────────────────────────────────
