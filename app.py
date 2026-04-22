@@ -912,6 +912,22 @@ def inject_trial_context():
     return {"trial_status": status, "trial_days_left": days_left, "store": store,
             "announcements": announcements, "my_referral_code": my_referral_code}
 
+
+@app.context_processor
+def inject_impersonation_context():
+    """Surfaces the impersonation banner's state. Kept as a small separate
+    processor so other surfaces (trial, referrals, announcements) don't
+    care about it. Returns is_impersonating=False + empty name by default
+    so templates can unconditionally render `{% if is_impersonating %}`."""
+    if "impersonator_user_id" not in session:
+        return {"is_impersonating": False, "impersonated_store_name": ""}
+    sid = session.get("store_id")
+    store = db.session.get(Store, sid) if sid else None
+    return {
+        "is_impersonating": True,
+        "impersonated_store_name": store.name if store else "(unknown store)",
+    }
+
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
     """Returns store_id or None. Routes needing a store should call this."""
@@ -3441,17 +3457,60 @@ def superadmin_new_store():
 def superadmin_impersonate(store_id):
     """Swap the current session into the target store's admin user.
 
-    Used by the superadmin to debug a customer's view. The action is written
-    to the audit log so impersonations stay traceable.
+    Used by the superadmin to debug a customer's view. The *real*
+    superadmin identity is stashed in `session["impersonator_user_id"]`
+    so `/superadmin/stop-impersonation` can restore it — before this,
+    the only way back was a full re-login. Every start AND end of an
+    impersonation is written to the audit log.
     """
     store=Store.query.get_or_404(store_id)
     admin=User.query.filter_by(store_id=store_id,role="admin").first()
     if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
-    record_audit("impersonate", target_type="store", target_id=store.id,
+    record_audit("impersonate_start", target_type="store", target_id=store.id,
                  details=f"as {admin.username}")
+    # Preserve the real superadmin identity so the "Exit impersonation"
+    # button can restore it without a re-login. We only ever set this
+    # from a route guarded by @superadmin_required, so the value is
+    # trustworthy at write time; /superadmin/stop-impersonation still
+    # re-validates it on read.
+    session["impersonator_user_id"] = session["user_id"]
     session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
     db.session.commit()
-    flash(f"Viewing as {store.name}","success"); return redirect(url_for("dashboard"))
+    flash(f"Viewing as {store.name}. Use 'Exit impersonation' to return.","success")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/superadmin/stop-impersonation", methods=["POST"])
+def superadmin_stop_impersonation():
+    """Return to the real superadmin identity after impersonation.
+
+    Intentionally NOT guarded by @superadmin_required — while
+    impersonating, session['role'] is 'admin', so the decorator would
+    reject the superadmin trying to exit. Instead we verify the
+    stashed impersonator_user_id still resolves to an active
+    superadmin before restoring. If anything looks off, clear the
+    session entirely rather than elevate the current identity.
+    """
+    imp_id = session.get("impersonator_user_id")
+    if not imp_id:
+        flash("Not currently impersonating.", "error")
+        return redirect(url_for("dashboard"))
+    imp = db.session.get(User, imp_id)
+    if not imp or imp.role != "superadmin" or not imp.is_active:
+        # Defense in depth — cookie tampering or a since-deactivated
+        # superadmin account shouldn't be a path to an elevated session.
+        session.clear()
+        flash("Session invalid. Please sign in again.", "error")
+        return redirect(url_for("login"))
+    record_audit("impersonate_end", target_type="user", target_id=imp.id,
+                 details=f"returning to {imp.username}")
+    session["user_id"] = imp.id
+    session["role"] = "superadmin"
+    session["store_id"] = None
+    session.pop("impersonator_user_id", None)
+    db.session.commit()
+    flash("Returned to superadmin.", "success")
+    return redirect(url_for("dashboard"))
 
 # ── Superadmin control panel ─────────────────────────────────
 STORES_PER_PAGE = 20
