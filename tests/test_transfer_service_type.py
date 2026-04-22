@@ -180,3 +180,31 @@ def test_new_transfer_form_renders_service_dropdown(logged_in_client):
     assert "Bill Payment" in html
     assert "Top Up" in html
     assert "Recharge" in html
+
+
+def test_tax_exempt_attr_is_parseable_json(logged_in_client):
+    """The template emits the exempt-service list as a data-* attribute
+    that the page-local JS feeds to JSON.parse. The value must be on a
+    single-quoted attribute so the JSON's double quotes survive; if we
+    regress back to double-quoted + |tojson the attribute terminates at
+    the first inner quote and JSON.parse silently fails → Federal Tax
+    never hides. Guard against that."""
+    import json
+    import re
+    resp = logged_in_client.get("/transfers/new")
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    # Match both single- and double-quoted forms so the assertion can
+    # describe the bug rather than require a specific quote style.
+    m = re.search(r"""data-tax-exempt=(['"])(.*?)\1""", html)
+    assert m, "data-tax-exempt attribute missing from transfer form"
+    payload = m.group(2)
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError as e:
+        raise AssertionError(
+            f"data-tax-exempt is not valid JSON — this is the bug where "
+            f"|tojson was wrapped in double-quoted HTML attrs. Attr was: "
+            f"{payload!r}. Error: {e}"
+        )
+    assert set(parsed) == {"Bill Payment", "Top Up", "Recharge"}
