@@ -56,6 +56,13 @@ html, body {
   border-radius: 14px;
   padding: 18px;
   overflow: hidden;
+  /* Equal-height cards across the stats grid. Without this, cards
+     with shorter content (stat-sub) render shorter than neighbors
+     that have longer sub-text — visually inconsistent in a grid. */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 120px;
 }
 .stat-card::before { display: none; } /* retire the legacy gold top stripe */
 .stat-label {

@@ -104,9 +104,9 @@
   <a href="{{ url_for('daily_list', month=next_month, year=next_year) }}" class="btn btn-outline btn-sm">Next →</a>
   <a href="{{ url_for('daily_list', month=today.month, year=today.year) }}" class="btn btn-outline btn-sm">Today</a>
   {% if month_report %}
-    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-gold btn-sm" style="margin-left:auto;">📊 Monthly P&L</a>
+    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-gold btn-sm" style="margin-left:auto;">Monthly P&L</a>
   {% else %}
-    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-outline btn-sm" style="margin-left:auto;">📊 Start Monthly P&L</a>
+    <a href="{{ url_for('monthly_report', year=year, month=month) }}" class="btn btn-outline btn-sm" style="margin-left:auto;">Start Monthly P&L</a>
   {% endif %}
 </div>
 

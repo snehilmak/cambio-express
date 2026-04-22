@@ -191,35 +191,35 @@
   <div class="card-body">
     <div class="quick-links-grid">
       <a href="{{ url_for('superadmin_controls', tab='stores') }}" class="quick-link-card">
-        <div class="quick-link-icon">🏪</div>
+        <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Manage Stores</div>
           <div class="quick-link-desc">Extend trials, comp plans, toggle active.</div>
         </div>
       </a>
       <a href="{{ url_for('superadmin_controls', tab='discounts') }}" class="quick-link-card">
-        <div class="quick-link-icon">🎟️</div>
+        <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6l8 8 10-10z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Discount Codes</div>
           <div class="quick-link-desc">Mint Stripe-synced promo codes.</div>
         </div>
       </a>
       <a href="{{ url_for('superadmin_controls', tab='features') }}" class="quick-link-card">
-        <div class="quick-link-icon">🚩</div>
+        <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Feature Flags</div>
           <div class="quick-link-desc">Flip functionality globally or per store.</div>
         </div>
       </a>
       <a href="{{ url_for('superadmin_controls', tab='audit') }}" class="quick-link-card">
-        <div class="quick-link-icon">📜</div>
+        <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Audit Log</div>
           <div class="quick-link-desc">Every superadmin action recorded.</div>
         </div>
       </a>
       <a href="{{ url_for('superadmin_controls', tab='announcements') }}" class="quick-link-card">
-        <div class="quick-link-icon">📣</div>
+        <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-8v18L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Announcements</div>
           <div class="quick-link-desc">Push a banner to every user's screen.</div>
@@ -606,7 +606,7 @@
   <div class="card-header">
     <span class="card-title">Recent superadmin activity (last 100)</span>
     <a href="{{ url_for('superadmin_audit_export') }}" class="btn btn-outline btn-sm"
-       title="Download the full audit log as CSV">⬇ Export CSV</a>
+       title="Download the full audit log as CSV">Export CSV</a>
   </div>
   <div class="table-wrap">
     <table>
@@ -658,7 +658,7 @@
         </div>
       </div>
       <div class="mt-2">
-        <button type="submit" class="btn btn-primary">📣 Post announcement</button>
+        <button type="submit" class="btn btn-primary">Post announcement</button>
       </div>
     </form>
     <p class="text-sm text-muted mt-2">

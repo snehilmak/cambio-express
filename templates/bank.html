@@ -35,11 +35,11 @@
 {# ─────── Stripe Financial Connections (primary) ─────── #}
 <div class="card mb-3">
   <div class="card-header">
-    <span class="card-title">🏦 Connected Bank Accounts</span>
+    <span class="card-title">Connected Bank Accounts</span>
     {% if stripe_accounts %}
     <div style="display:flex;gap:8px;">
       <form method="POST" action="{{ url_for('bank_stripe_refresh') }}" style="margin:0;">
-        <button type="submit" class="btn btn-outline btn-sm">🔄 Refresh</button>
+        <button type="submit" class="btn btn-outline btn-sm">Refresh</button>
       </form>
       <form method="POST" action="{{ url_for('bank_stripe_connect') }}" style="margin:0;">
         <button type="submit" class="btn btn-primary btn-sm">＋ Connect another</button>
@@ -90,7 +90,11 @@
          shared .empty-state primitive instead of a page-local
          .bank-empty so it stays in sync with the rest of the app. #}
       <div class="empty-state">
-        <div style="font-size:40px;margin-bottom:12px;">🏦</div>
+        <div style="width:56px;height:56px;border-radius:14px;background:rgba(63,255,0,0.08);border:1px solid rgba(63,255,0,0.25);display:inline-flex;align-items:center;justify-content:center;margin:0 auto 14px;color:var(--db-neon);">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+          </svg>
+        </div>
         <div class="empty-title">Connect your bank</div>
         <p style="margin:6px 0 18px;">
           Link your accounts securely through Stripe Financial Connections.
@@ -133,7 +137,7 @@
         {% if cfg.last_synced %}Last synced {{ cfg.last_synced.strftime('%m/%d/%Y %I:%M %p') }}.{% endif %}
       </div>
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;">
-        <button onclick="refreshSimpleFIN()" class="btn btn-outline btn-sm">🔄 Refresh SimpleFIN</button>
+        <button onclick="refreshSimpleFIN()" class="btn btn-outline btn-sm">Refresh SimpleFIN</button>
         <form method="POST" action="{{ url_for('bank_disconnect') }}" style="margin:0;"
               onsubmit="return confirm('Disconnect SimpleFIN?')">
           <button type="submit" class="btn btn-outline btn-sm"
@@ -182,14 +186,14 @@
 <script>
 async function refreshSimpleFIN() {
   const btn = event.target;
-  btn.textContent = '⏳ Refreshing…'; btn.disabled = true;
+  btn.textContent = 'Refreshing…'; btn.disabled = true;
   try {
     const r = await fetch('/api/bank/refresh');
     if (r.ok) { location.reload(); return; }
     const d = await r.json();
     alert('Error: ' + (d.error || 'Unknown'));
   } catch(e) { alert('Network error'); }
-  finally { btn.disabled = false; btn.textContent = '🔄 Refresh SimpleFIN'; }
+  finally { btn.disabled = false; btn.textContent = 'Refresh SimpleFIN'; }
 }
 </script>
 {% endblock %}
