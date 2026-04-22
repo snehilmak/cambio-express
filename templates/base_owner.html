@@ -1,20 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook — Owner{% endblock %}</title>
 <script>
-  (function(){
-    try{
-      var t = localStorage.getItem('theme');
-      if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
-      if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
-    }catch(e){}
-  })();
+  // Dark is now the only mode.
+  document.documentElement.setAttribute('data-theme', 'dark');
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='content.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='shell.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+<meta name="theme-color" content="#0b0d12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DineroBook">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -22,14 +27,18 @@
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
     <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
+
+    {# Sidebar logo — matches base.html so the owner portal reads
+       as the same product. #}
     <div class="sidebar-logo">
-      <div class="brand">DineroBook</div>
-      <div class="sub">Owner Portal</div>
+      <span class="brand-mark" aria-hidden="true">$</span>
+      <span class="brand">DineroBook</span>
     </div>
-    <div class="sidebar-user">
-      <div class="uname">{{ user.full_name or user.username }}</div>
-      <div class="urole">Owner</div>
-    </div>
+
+    {# Identity + role are carried by the topbar avatar dropdown
+       (right-hand side) and the OWNER pill next to the page title.
+       The sidebar stays focused on navigation. #}
+
     <nav class="sidebar-nav">
       <div class="nav-section">Workspace</div>
       <a href="{{ url_for('owner_dashboard') }}" class="nav-link {% if request.endpoint == 'owner_dashboard' %}active{% endif %}">
@@ -37,11 +46,18 @@
         Dashboard
       </a>
     </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="label">All systems operational</span>
+      </div>
+    </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
-      <div style="display:flex;align-items:center;min-width:0;">
+      <div style="display:flex;align-items:center;min-width:0;gap:12px;">
         <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <line x1="3" y1="6" x2="21" y2="6"/>
@@ -49,13 +65,13 @@
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
+        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{% block page_title %}{% endblock %}</div>
+        {# Owners span multiple stores, each with its own subscription,
+           so there's no single plan pill. Show an OWNER badge instead
+           — same visual slot as BASIC/PRO/TRIAL in the admin shell. #}
+        <span class="topbar-plan-pill is-paid">OWNER</span>
       </div>
       <div class="topbar-right">
-        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-        </button>
         <span class="topbar-date" id="clock"></span>
         {% set _name = (user.full_name or user.username or '?') %}
         {% set _parts = _name.split() %}
@@ -91,10 +107,13 @@
     </div>
   </div>
 </div>
+
 <script>
   function updateClock() {
     const now = new Date();
-    document.getElementById('clock').textContent =
+    const clockEl = document.getElementById('clock');
+    if (!clockEl) return;
+    clockEl.textContent =
       now.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}) +
       ' · ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
   }
@@ -116,15 +135,6 @@
     });
     window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
 
-    var themeBtn = document.getElementById('themeToggle');
-    if (themeBtn) themeBtn.addEventListener('click', function() {
-      var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-      var next = cur === 'dark' ? 'light' : 'dark';
-      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-      else document.documentElement.removeAttribute('data-theme');
-      try { localStorage.setItem('theme', next); } catch(e) {}
-    });
-
     var avatar = document.getElementById('userAvatar');
     var dropdown = document.getElementById('userDropdown');
     if (avatar && dropdown) {
@@ -142,5 +152,12 @@
   })();
 </script>
 {% block scripts %}{% endblock %}
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

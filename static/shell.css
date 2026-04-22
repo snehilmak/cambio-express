@@ -17,11 +17,16 @@
 }
 
 .sidebar-logo {
-  padding: 18px 16px;
+  /* Must match the topbar's height EXACTLY so the two bottom borders
+     (sidebar-logo + topbar) line up across the viewport at the
+     brand/title seam. */
+  height: 60px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--db-gray-2);
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-shrink: 0;
 }
 .sidebar-logo .brand-mark {
   width: 28px;
@@ -47,78 +52,15 @@
   line-height: 1.1;
 }
 .sidebar-logo .sub {
-  display: none; /* replaced by the store-name line in .sidebar-user */
+  /* Legacy markup only (`<div class="sub">…</div>` inside the logo
+     block); the current shell doesn't render it. Kept hidden so any
+     template still emitting it stays clean. */
+  display: none;
 }
 
-.sidebar-user {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--db-gray-2);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.sidebar-user .sb-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--db-neon) 0%, var(--db-neon-dim) 100%);
-  color: var(--db-neon-ink);
-  font-family: var(--db-font-display);
-  font-weight: 700;
-  font-size: 11px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.sidebar-user .sb-text {
-  flex: 1;
-  min-width: 0;
-}
-.sidebar-user .uname {
-  font-family: var(--db-font-body);
-  font-size: 12.5px;
-  color: var(--db-gray-9);
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.2;
-}
-.sidebar-user .urole {
-  font-family: var(--db-font-body);
-  font-size: 11px;
-  color: var(--db-gray-6);
-  margin-top: 1px;
-  text-transform: none;
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sidebar-user .sb-plan-pill {
-  font-family: var(--db-font-mono);
-  font-size: 9px;
-  letter-spacing: 1px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  text-transform: uppercase;
-  font-weight: 600;
-  border: 1px solid var(--db-gray-3);
-  color: var(--db-gray-7);
-  background: var(--db-bg-input);
-  flex-shrink: 0;
-}
-.sidebar-user .sb-plan-pill.is-paid {
-  color: var(--db-neon);
-  border-color: rgba(63,255,0,0.35);
-  background: var(--db-neon-glow-8);
-}
-.sidebar-user .sb-plan-pill.is-trial {
-  color: var(--db-warning);
-  border-color: rgba(255,176,32,0.35);
-  background: rgba(255,176,32,0.08);
-}
+/* The legacy .sidebar-user / .sb-avatar / .uname / .urole / .sb-plan-pill
+   block was removed from base.html and base_owner.html. Identity + plan
+   state now live in the topbar avatar dropdown + .topbar-plan-pill. */
 
 /* ── Nav ────────────────────────────────────────────────── */
 .sidebar-nav { padding: 8px 0; }
@@ -229,6 +171,46 @@
   font-weight: 600;
   color: var(--db-gray-9);
   letter-spacing: -0.02em;
+}
+/* Plan / role pill next to the page title — mono uppercase, tinted
+   by state. Reads as metadata, not a CTA.
+
+     .is-paid     → BASIC / PRO / OWNER (neon)
+     .is-trial    → TRIAL (amber)
+     .is-platform → PLATFORM (muted — superadmin context, no store) */
+.topbar-plan-pill {
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--db-gray-3);
+  color: var(--db-gray-7);
+  background: var(--db-bg-input);
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+.topbar-plan-pill.is-paid {
+  color: var(--db-neon);
+  border-color: rgba(63,255,0,0.35);
+  background: var(--db-neon-glow-8);
+}
+.topbar-plan-pill.is-trial {
+  color: var(--db-warning);
+  border-color: rgba(255,176,32,0.35);
+  background: rgba(255,176,32,0.08);
+}
+.topbar-plan-pill.is-platform {
+  color: var(--db-info);
+  border-color: rgba(94,169,255,0.35);
+  background: rgba(94,169,255,0.08);
+}
+@media (max-width: 480px) {
+  /* Hide on very narrow screens so the page title keeps room; the
+     plan state is still visible in the avatar dropdown there. */
+  .topbar-plan-pill { display: none; }
 }
 .topbar-right { gap: 12px; }
 .topbar-date {
