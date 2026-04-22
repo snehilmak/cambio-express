@@ -3,21 +3,16 @@
 {% block page_title %}My Dashboard{% endblock %}
 {% block content %}
 
+{# Only the Today card is visible to employees. The earlier "This Month"
+   and "All Time" cards exposed store-level business counts that should
+   stay with the admin. Historical transfers are still reachable via
+   the Transfers sidebar link — employees need that for customer
+   service (e.g. updating the status of a transfer from last week). #}
 <div class="stats-grid">
-  <div class="stat-card" style="--accent:#3b82f6;">
+  <div class="stat-card" style="--accent:var(--sky);">
     <div class="stat-label">Today's Transfers</div>
     <div class="stat-value">{{ my_today|length }}</div>
     <div class="stat-sub">{{ today.strftime('%b %d, %Y') }}</div>
-  </div>
-  <div class="stat-card" style="--accent:#16a34a;">
-    <div class="stat-label">This Month</div>
-    <div class="stat-value">{{ my_month }}</div>
-    <div class="stat-sub">Transfers logged</div>
-  </div>
-  <div class="stat-card" style="--accent:#c9973a;">
-    <div class="stat-label">All Time</div>
-    <div class="stat-value">{{ my_total }}</div>
-    <div class="stat-sub">Total transfers</div>
   </div>
 </div>
 
@@ -38,7 +33,12 @@
       <tbody>
         {% for t in my_today %}
         <tr>
-          <td class="mono text-sm">{{ t.created_at.strftime('%I:%M %p') }}</td>
+          {# Render created_at in the viewer's local timezone. Server stores
+             naive UTC (datetime.utcnow()); the base.html helper swaps the
+             fallback text for toLocaleTimeString on page load. #}
+          <td class="mono text-sm">
+            <time data-utc="{{ t.created_at.isoformat() }}Z" data-fmt="time">{{ t.created_at.strftime('%I:%M %p') }}</time>
+          </td>
           <td><strong>{{ t.sender_name }}</strong></td>
           <td><span class="co-{{ t.company.lower() }}">{{ t.company }}</span></td>
           <td class="mono">${{ '{:,.2f}'.format(t.send_amount) }}</td>
@@ -67,7 +67,7 @@
 </div>
 
 {% if my_today %}
-<div style="margin-top:16px;padding:14px 20px;background:var(--white);border:1px solid var(--gray2);border-radius:10px;display:flex;gap:32px;">
+<div style="margin-top:16px;padding:14px 20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;gap:32px;flex-wrap:wrap;">
   <div>
     <span class="text-sm text-muted">Today Total Sent:</span>
     <strong class="mono" style="margin-left:8px;font-size:16px;">

@@ -2133,11 +2133,14 @@ def dashboard():
             stripe_accounts=stripe_accounts,
             bank_data=bank_data,bank_error=bank_error,cfg=cfg)
     else:
-        my_today=Transfer.query.filter_by(store_id=sid,created_by=user.id,send_date=today).order_by(Transfer.created_at.desc()).all()
-        my_total=Transfer.query.filter_by(store_id=sid,created_by=user.id).count()
-        my_month=Transfer.query.filter(Transfer.store_id==sid,Transfer.created_by==user.id,Transfer.send_date>=month_start).count()
+        # Employee dashboard shows only TODAY'S transfers and only aggregates
+        # scoped to today. "This Month" and "All Time" counts were removed
+        # — those are business-level totals that belong with the admin.
+        # Historical transfers are still reachable via /transfers for
+        # customer-service lookups.
+        my_today=Transfer.query.filter_by(store_id=sid,send_date=today).order_by(Transfer.created_at.desc()).all()
         return render_template("dashboard_employee.html",user=user,store=store,today=today,
-            my_today=my_today,my_total=my_total,my_month=my_month)
+            my_today=my_today)
 
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
@@ -2278,7 +2281,13 @@ def transfers():
     if not sid:
         flash("Select a store first.","error"); return redirect(url_for("dashboard"))
     q=Transfer.query.filter_by(store_id=sid)
-    if user.role=="employee": q=q.filter_by(created_by=user.id)
+    # Employees and admins see the same store-scoped transfer list. The
+    # earlier `created_by=self` + `send_date=today` clamps hid transfers
+    # the employee genuinely needs — a customer coming back days later
+    # to update a transfer's status often asks a different cashier.
+    # Cross-store isolation is still enforced by the store_id filter;
+    # the aggregate totals that reveal business-level info are hidden
+    # separately on the employee dashboard.
     company=request.args.get("company",""); status=request.args.get("status","")
     date_from=request.args.get("date_from",""); date_to=request.args.get("date_to","")
     sender=request.args.get("sender","").strip()
@@ -2289,17 +2298,12 @@ def transfers():
     search=request.args.get("q","").strip()
     if company: q=q.filter_by(company=company)
     if status:  q=q.filter_by(status=status)
-    if user.role=="employee":
-        today=date.today()
-        q=q.filter(Transfer.send_date==today)
-        date_from=""; date_to=""
-    else:
-        if date_from:
-            try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
-            except: pass
-        if date_to:
-            try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
-            except: pass
+    if date_from:
+        try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
+        except: pass
+    if date_to:
+        try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
+        except: pass
     if sender:    q=q.filter(Transfer.sender_name.ilike(f"%{sender}%"))
     if recipient: q=q.filter(Transfer.recipient_name.ilike(f"%{recipient}%"))
     if country:   q=q.filter(Transfer.country.ilike(f"%{country}%"))
