@@ -85,18 +85,48 @@
       {% endif %}
 
       {% if user.role == 'superadmin' %}
+      {# Each Controls tab is now a top-level sidebar item — easier to
+         find, deep-linkable, and gives us obvious places to add new
+         operational tools (Monitoring) and config (Configuration). The
+         old "Controls" catch-all link is gone since every tab has a
+         direct entry point. #}
+      {% set sa_tab = request.args.get('tab', 'overview') if request.endpoint == 'superadmin_controls' else '' %}
+
       <div class="nav-section">Platform</div>
       <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <span class="icon">⬛</span> Overview
+        <span class="icon">⬛</span> Dashboard
       </a>
-      <a href="{{ url_for('superadmin_stores') }}" class="nav-link {% if request.endpoint == 'superadmin_stores' or request.endpoint == 'superadmin_new_store' or request.endpoint == 'superadmin_impersonate' %}active{% endif %}">
-        <span class="icon">🏪</span> All Stores
+      <a href="{{ url_for('superadmin_controls', tab='stores') }}"
+         class="nav-link {% if sa_tab == 'stores' or request.endpoint in ('superadmin_stores', 'superadmin_impersonate') %}active{% endif %}">
+        <span class="icon">🏪</span> Stores
       </a>
-      <a href="{{ url_for('superadmin_new_store') }}" class="nav-link">
+      <a href="{{ url_for('superadmin_new_store') }}"
+         class="nav-link {% if request.endpoint == 'superadmin_new_store' %}active{% endif %}">
         <span class="icon">＋</span> Add Store
       </a>
-      <a href="{{ url_for('superadmin_controls') }}" class="nav-link {% if request.endpoint == 'superadmin_controls' %}active{% endif %}">
-        <span class="icon">🎛️</span> Controls
+
+      <div class="nav-section">Configuration</div>
+      <a href="{{ url_for('superadmin_controls', tab='discounts') }}"
+         class="nav-link {% if sa_tab == 'discounts' %}active{% endif %}">
+        <span class="icon">🎟️</span> Discount Codes
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='features') }}"
+         class="nav-link {% if sa_tab == 'features' %}active{% endif %}">
+        <span class="icon">🚩</span> Feature Flags
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='announcements') }}"
+         class="nav-link {% if sa_tab == 'announcements' %}active{% endif %}">
+        <span class="icon">📣</span> Announcements
+      </a>
+
+      <div class="nav-section">Monitoring</div>
+      <a href="{{ url_for('superadmin_controls', tab='overview') }}"
+         class="nav-link {% if sa_tab == 'overview' %}active{% endif %}">
+        <span class="icon">🟢</span> System Status
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='audit') }}"
+         class="nav-link {% if sa_tab == 'audit' %}active{% endif %}">
+        <span class="icon">📜</span> Audit Log
       </a>
       {% endif %}
     </nav>

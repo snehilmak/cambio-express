@@ -189,13 +189,43 @@
 <div class="card">
   <div class="card-header"><span class="card-title">Quick links</span></div>
   <div class="card-body">
-    <ul style="list-style:none;padding:0;margin:0;line-height:2;">
-      <li>→ <a href="{{ url_for('superadmin_controls', tab='stores') }}">Manage stores</a> — extend trials, comp plans, toggle active.</li>
-      <li>→ <a href="{{ url_for('superadmin_controls', tab='discounts') }}">Discount codes</a> — mint Stripe-synced promo codes.</li>
-      <li>→ <a href="{{ url_for('superadmin_controls', tab='features') }}">Feature flags</a> — flip functionality globally or per store.</li>
-      <li>→ <a href="{{ url_for('superadmin_controls', tab='audit') }}">Audit log</a> — every superadmin action is recorded.</li>
-      <li>→ <a href="{{ url_for('superadmin_controls', tab='announcements') }}">Announcements</a> — push a banner to every user's screen.</li>
-    </ul>
+    <div class="quick-links-grid">
+      <a href="{{ url_for('superadmin_controls', tab='stores') }}" class="quick-link-card">
+        <div class="quick-link-icon">🏪</div>
+        <div class="quick-link-text">
+          <div class="quick-link-title">Manage Stores</div>
+          <div class="quick-link-desc">Extend trials, comp plans, toggle active.</div>
+        </div>
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='discounts') }}" class="quick-link-card">
+        <div class="quick-link-icon">🎟️</div>
+        <div class="quick-link-text">
+          <div class="quick-link-title">Discount Codes</div>
+          <div class="quick-link-desc">Mint Stripe-synced promo codes.</div>
+        </div>
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='features') }}" class="quick-link-card">
+        <div class="quick-link-icon">🚩</div>
+        <div class="quick-link-text">
+          <div class="quick-link-title">Feature Flags</div>
+          <div class="quick-link-desc">Flip functionality globally or per store.</div>
+        </div>
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='audit') }}" class="quick-link-card">
+        <div class="quick-link-icon">📜</div>
+        <div class="quick-link-text">
+          <div class="quick-link-title">Audit Log</div>
+          <div class="quick-link-desc">Every superadmin action recorded.</div>
+        </div>
+      </a>
+      <a href="{{ url_for('superadmin_controls', tab='announcements') }}" class="quick-link-card">
+        <div class="quick-link-icon">📣</div>
+        <div class="quick-link-text">
+          <div class="quick-link-title">Announcements</div>
+          <div class="quick-link-desc">Push a banner to every user's screen.</div>
+        </div>
+      </a>
+    </div>
   </div>
 </div>
 
