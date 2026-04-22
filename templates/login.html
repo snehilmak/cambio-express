@@ -108,6 +108,33 @@ input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(5
   cursor: pointer; transition: background 0.15s; margin-top: 6px;
 }
 .btn-login:hover { background: #2a5caa; }
+.employee-box {
+  margin-top: 28px; padding: 16px 18px;
+  background: #f6f4ef; border: 1px solid #e8e4da;
+  border-radius: 10px;
+}
+.employee-box-title {
+  font-size: 13px; font-weight: 600; color: #1a1a2e;
+  margin-bottom: 4px;
+}
+.employee-box-sub {
+  font-size: 12px; color: #6b7280; margin-bottom: 10px; line-height: 1.45;
+}
+.employee-box form { display: flex; gap: 8px; }
+.employee-box input {
+  flex: 1; padding: 10px 12px; font-size: 14px;
+  border: 1.5px solid #e8e8ec; border-radius: 8px; background: #fff;
+}
+.employee-box button {
+  padding: 10px 16px; background: #0f1f3d; color: #fff;
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+  font-family: 'DM Sans', sans-serif; cursor: pointer;
+}
+.employee-box button:hover { background: #1a4080; }
+[data-theme="dark"] .employee-box { background: #1a1f2e; border-color: #2a3044; }
+[data-theme="dark"] .employee-box-title { color: #e5e7eb; }
+[data-theme="dark"] .employee-box-sub { color: #9ca3af; }
+[data-theme="dark"] .employee-box input { background: #141828; border-color: #2a3044; color: #e5e7eb; }
 .login-footer { margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; }
 
 @media (max-width: 900px) {
@@ -225,6 +252,17 @@ input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(5
     </div>
     <button type="submit" class="btn-login">Sign In →</button>
   </form>
+  <div class="employee-box">
+    <div class="employee-box-title">Employee? Sign in to your store</div>
+    <div class="employee-box-sub">Enter the store code your manager gave you. We'll take you to your store's sign-in page.</div>
+    <form method="POST" action="{{ url_for('employee_login_redirect') }}">
+      <input type="text" name="store_code" placeholder="Store code"
+             autocomplete="off" autocapitalize="none" autocorrect="off"
+             spellcheck="false" required
+             value="{{ store_code_value|default('', true) }}">
+      <button type="submit">Go →</button>
+    </form>
+  </div>
   <div class="login-footer">DineroBook</div>
 </div>
 <script>

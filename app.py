@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory, make_response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -1314,10 +1314,39 @@ def apply_pending_referral_credits(referee_store):
     # plan transition that triggered it.
 
 # ── Login ────────────────────────────────────────────────────
+# Installed PWAs open at `start_url` (currently "/") and hide the address
+# bar, so a logged-out employee launching the app has no way to reach
+# their store-specific login page `/login/<slug>`. We persist the last
+# store slug they signed in to in a long-lived cookie and use it to
+# bounce `/` and `/login` to `/login/<slug>` automatically. The generic
+# `/login` page also exposes a small "enter your store code" escape
+# hatch for the first-install / cleared-cookie case.
+LAST_STORE_SLUG_COOKIE = "ds_last_store"
+LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+
+def _set_last_store_slug_cookie(resp, slug):
+    resp.set_cookie(LAST_STORE_SLUG_COOKIE, slug,
+                    max_age=LAST_STORE_SLUG_MAX_AGE,
+                    samesite="Lax", httponly=True,
+                    secure=request.is_secure)
+    return resp
+
+def _active_store_from_cookie():
+    slug = request.cookies.get(LAST_STORE_SLUG_COOKIE)
+    if not slug:
+        return None
+    store = Store.query.filter_by(slug=slug).first()
+    if store and store.is_active:
+        return store
+    return None
+
 @app.route("/")
 def landing():
     if "user_id" in session:
         return redirect(url_for("dashboard"))
+    store = _active_store_from_cookie()
+    if store:
+        return redirect(url_for("login_store", slug=store.slug))
     return render_template("landing.html")
 
 @app.route("/privacy")
@@ -1437,13 +1466,32 @@ def login():
         if u and u.role == "owner":
             return redirect(url_for("owner_dashboard"))
         return redirect(url_for("dashboard"))
+    # On a fresh GET from a device that previously signed in to a store,
+    # bounce to that store's login so installed-PWA employees aren't stuck
+    # on the generic page with the address bar hidden.
+    if request.method == "GET":
+        store = _active_store_from_cookie()
+        if store:
+            return redirect(url_for("login_store", slug=store.slug))
     error=None
     if request.method=="POST":
         username=request.form.get("username","").strip()
         u=User.query.filter_by(username=username).first()
         if u and u.is_active and u.check_password(request.form.get("password","")):
             if u.role == "employee":
-                error = "Please use your store's login link."
+                # Don't authenticate on the generic page, but leave a
+                # breadcrumb: persist the slug so their next hit to `/`
+                # or `/login` auto-redirects to `/login/<slug>` (helps
+                # PWA installs where the address bar is hidden).
+                emp_store = db.session.get(Store, u.store_id) if u.store_id else None
+                error = "Please use your store's sign-in page. Enter your store code below."
+                resp = make_response(render_template(
+                    "login.html", error=error,
+                    store_code_value=(emp_store.slug if emp_store and emp_store.is_active else ""),
+                ))
+                if emp_store and emp_store.is_active:
+                    _set_last_store_slug_cookie(resp, emp_store.slug)
+                return resp
             elif _needs_totp(u):
                 # Drop any previous partial-auth before starting a new one.
                 session.pop("pending_auth_user_id", None)
@@ -1549,9 +1597,30 @@ def login_store(slug):
             session["user_id"] = u.id
             session["role"] = u.role
             session["store_id"] = u.store_id
-            return redirect(url_for("dashboard"))
+            resp = redirect(url_for("dashboard"))
+            return _set_last_store_slug_cookie(resp, store.slug)
         error = "Invalid username or password."
-    return render_template("login_store.html", store=store, error=error)
+    resp = make_response(render_template("login_store.html", store=store, error=error))
+    return _set_last_store_slug_cookie(resp, store.slug)
+
+@app.route("/employee-login", methods=["POST"])
+def employee_login_redirect():
+    """Escape hatch for an installed-PWA employee who lands on the
+    generic /login page (cleared cookies / fresh device). They enter
+    their store code and we bounce them to /login/<slug>."""
+    raw = (request.form.get("store_code") or "").strip().lower()
+    # Accept anything that could be a slug; trim to the allowed charset.
+    slug = re.sub(r"[^a-z0-9\-]", "", raw)
+    if slug:
+        store = Store.query.filter_by(slug=slug).first()
+        if store and store.is_active:
+            resp = redirect(url_for("login_store", slug=slug))
+            return _set_last_store_slug_cookie(resp, slug)
+    return render_template(
+        "login.html",
+        error="We couldn't find a store with that code. Check with your manager for the correct code.",
+        store_code_value=raw,
+    )
 
 # ── Password reset ───────────────────────────────────────────
 PASSWORD_RESET_TTL_HOURS = 1
