@@ -71,7 +71,6 @@
           {% endfor %}
         </select>
       </div>
-      {% if user.role != 'employee' %}
       <div class="field" style="flex:1;min-width:130px;margin:0;">
         <label>From Date</label>
         <input type="date" name="date_from" value="{{ date_from }}" form="tfForm">
@@ -80,7 +79,6 @@
         <label>To Date</label>
         <input type="date" name="date_to" value="{{ date_to }}" form="tfForm">
       </div>
-      {% endif %}
       <button type="submit" class="btn btn-primary" style="height:42px;" form="tfForm">Apply</button>
       <a href="{{ url_for('transfers') }}" class="btn btn-outline" style="height:42px;">Clear</a>
       <a href="{{ url_for('new_transfer') }}" class="btn btn-gold" style="height:42px;margin-left:auto;white-space:nowrap;">＋ New Transfer</a>
@@ -91,7 +89,6 @@
 <div class="card">
   <div class="card-header" id="tfHeader">
     <span class="card-title" id="tfHeaderTitle">
-      {% if user.role == 'employee' %}Today's Transfers &middot; {% endif %}
       {{ total }} Transfer{{ 's' if total != 1 }}
     </span>
     {% if transfers %}
@@ -231,8 +228,7 @@
       applyColToggle();
       if (title) {
         const n = data.total || 0;
-        const prefix = '{% if user.role == "employee" %}Today\'s Transfers · {% endif %}';
-        title.textContent = prefix + n + ' Transfer' + (n === 1 ? '' : 's');
+        title.textContent = n + ' Transfer' + (n === 1 ? '' : 's');
       }
       if (sumEl) {
         if ((data.total || 0) > 0) {
