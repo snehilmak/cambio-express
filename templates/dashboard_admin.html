@@ -152,21 +152,21 @@
       <div class="card-body">
         {% if stripe_accounts %}
           {% for a in stripe_accounts %}
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
             <div>
               <div style="font-weight:600;font-size:14px;">
                 {{ a.display_name or 'Account' }}{% if a.last4 %} ••{{ a.last4 }}{% endif %}
               </div>
               <div class="text-sm text-muted">{{ a.institution_name or '—' }}</div>
             </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--navy);">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);">
               ${{ '{:,.2f}'.format(a.last_balance) }}
             </div>
           </div>
           {% endfor %}
         {% elif bank_data %}
           {% for acct in bank_data.get('accounts', [])[:3] %}
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--gray2);">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
             <div>
               <div style="font-weight:600;font-size:14px;">{{ acct.get('name','Account') }}</div>
               <div class="text-sm text-muted">
@@ -174,7 +174,7 @@
                 <span class="badge badge-gray" style="font-size:9px;padding:1px 6px;margin-left:4px;">legacy</span>
               </div>
             </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--navy);">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);">
               ${{ '{:,.2f}'.format(acct.get('balance', 0)) }}
             </div>
           </div>
