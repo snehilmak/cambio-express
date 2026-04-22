@@ -23,6 +23,22 @@ html, body {
 .main { background: var(--db-bg); }
 .content { padding: 24px 28px 48px; }
 
+/* Bare inline links inside the content area — the empty-state
+   "No monthly reports yet. Start this month →" kind of call-out
+   and similar prose links. Only applies to <a> tags WITHOUT a
+   class, so buttons (.btn, .btn-outline, etc.), nav-links,
+   dropdown-items, badges, quick-link-cards, and anything else
+   that's pre-styled is untouched. */
+.content a:not([class]) {
+  color: var(--db-neon);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+.content a:not([class]):hover {
+  color: var(--db-neon-bright);
+  text-decoration: underline;
+}
+
 /* ── Cards ── */
 .card {
   background: var(--db-bg-elevated);
