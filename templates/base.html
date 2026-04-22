@@ -37,8 +37,11 @@
     </div>
 
     {# Sidebar user: initial-avatar + name + store-name sub + plan pill.
-       Store name replaces role as the primary sub-text; it's more
-       useful in daily operations. Plan pill styles by state. #}
+       Sub-text shows the user's role (Admin / Employee / Owner /
+       Superadmin). If the store name is meaningfully different from
+       the user name (i.e. not the same string), prepend it.
+       Otherwise we used to show the store name twice on demo data
+       where user.full_name == store.name. #}
     {% set _sb_name = (user.full_name or user.username or '?') %}
     {% set _sb_parts = _sb_name.split() %}
     {% if _sb_parts|length > 1 %}
@@ -46,11 +49,17 @@
     {% else %}
       {% set _sb_initials = _sb_name[:2]|upper %}
     {% endif %}
+    {% set _sb_role = user.role|title %}
+    {% if store and store.name and store.name|lower != _sb_name|lower %}
+      {% set _sb_sub = _sb_role ~ ' · ' ~ store.name %}
+    {% else %}
+      {% set _sb_sub = _sb_role %}
+    {% endif %}
     <div class="sidebar-user">
       <span class="sb-avatar" aria-hidden="true">{{ _sb_initials }}</span>
       <div class="sb-text">
         <div class="uname">{{ _sb_name }}</div>
-        <div class="urole">{% if store %}{{ store.name }}{% else %}{{ user.role|title }}{% endif %}</div>
+        <div class="urole">{{ _sb_sub }}</div>
       </div>
       {% if store and store.plan %}
         {% if store.plan in ('basic', 'pro') %}
