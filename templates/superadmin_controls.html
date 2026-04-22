@@ -41,8 +41,40 @@
 
   /* Metric tiles for the Overview tab. Uses --accent like regular stat cards. */
   .metric-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 16px; margin-bottom: 28px;
+  }
+  /* BASIC and PRO cards carry a monthly+yearly breakdown below the headline
+     count, so they need more vertical room than the other metric cards
+     (which just show a label + value). */
+  .plan-split { min-height: 148px; }
+  .plan-split .stat-value { margin-bottom: 10px; font-size: 26px; }
+  .plan-split-rows {
+    display: flex; flex-direction: column; gap: 4px;
+    margin-top: 4px; padding-top: 8px;
+    border-top: 1px solid var(--db-gray-2);
+  }
+  .plan-split-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px; align-items: baseline;
+    font-size: 11.5px;
+  }
+  .plan-split-cycle {
+    font-family: var(--db-font-mono);
+    font-size: 9.5px; letter-spacing: 1.2px;
+    color: var(--db-gray-6); text-transform: uppercase;
+  }
+  .plan-split-count {
+    font-family: var(--db-font-mono);
+    color: var(--db-gray-9); font-weight: 600; font-variant-numeric: tabular-nums;
+  }
+  .plan-split-mrr {
+    font-family: var(--db-font-mono);
+    color: var(--db-gray-7); font-size: 10.5px; font-variant-numeric: tabular-nums;
+  }
+  .plan-split-amort {
+    color: var(--db-gray-5); font-size: 10px; margin-left: 1px;
   }
 </style>
 {% endblock %}
@@ -74,15 +106,37 @@
     <div class="stat-label">Trial</div>
     <div class="stat-value">{{ trial_count }}</div>
   </div>
-  <div class="stat-card" style="--accent:var(--blue)">
+  <div class="stat-card plan-split" style="--accent:var(--blue)">
     <div class="stat-label">Basic</div>
     <div class="stat-value">{{ basic_count }}</div>
-    <div class="stat-sub">${{ basic_count * 20 }}/mo</div>
+    <div class="plan-split-rows">
+      <div class="plan-split-row">
+        <span class="plan-split-cycle">Monthly</span>
+        <span class="plan-split-count">{{ basic_monthly }}</span>
+        <span class="plan-split-mrr">${{ '{:,}'.format(basic_monthly_mrr) }}/mo</span>
+      </div>
+      <div class="plan-split-row">
+        <span class="plan-split-cycle">Yearly</span>
+        <span class="plan-split-count">{{ basic_yearly }}</span>
+        <span class="plan-split-mrr">${{ '{:,}'.format(basic_yearly_mrr) }}/mo<span class="plan-split-amort">*</span></span>
+      </div>
+    </div>
   </div>
-  <div class="stat-card" style="--accent:var(--gold)">
+  <div class="stat-card plan-split" style="--accent:var(--gold)">
     <div class="stat-label">Pro</div>
     <div class="stat-value">{{ pro_count }}</div>
-    <div class="stat-sub">${{ pro_count * 30 }}/mo</div>
+    <div class="plan-split-rows">
+      <div class="plan-split-row">
+        <span class="plan-split-cycle">Monthly</span>
+        <span class="plan-split-count">{{ pro_monthly }}</span>
+        <span class="plan-split-mrr">${{ '{:,}'.format(pro_monthly_mrr) }}/mo</span>
+      </div>
+      <div class="plan-split-row">
+        <span class="plan-split-cycle">Yearly</span>
+        <span class="plan-split-count">{{ pro_yearly }}</span>
+        <span class="plan-split-mrr">${{ '{:,}'.format(pro_yearly_mrr) }}/mo<span class="plan-split-amort">*</span></span>
+      </div>
+    </div>
   </div>
   <div class="stat-card" style="--accent:var(--red)">
     <div class="stat-label">Inactive</div>
@@ -91,9 +145,12 @@
   </div>
   <div class="stat-card" style="--accent:var(--green)">
     <div class="stat-label">Est. MRR</div>
-    <div class="stat-value">${{ estimated_mrr }}</div>
-    <div class="stat-sub">basic + pro only</div>
+    <div class="stat-value">${{ '{:,}'.format(estimated_mrr) }}</div>
+    <div class="stat-sub">basic + pro · yearly amortized</div>
   </div>
+</div>
+<div class="stat-sub" style="margin:-14px 0 28px;font-family:var(--db-font-mono);font-size:10.5px;letter-spacing:.3px;">
+  * Yearly MRR is the annual price divided by 12 (Basic $200/yr ≈ $16.67/mo, Pro $300/yr = $25/mo).
 </div>
 
 {# Stripe connection health. Pulled live on this tab only. #}

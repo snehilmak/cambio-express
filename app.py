@@ -50,6 +50,11 @@ class Store(db.Model):
     phone         = db.Column(db.String(40), default="")
     address       = db.Column(db.String(255), default="")
     plan          = db.Column(db.String(30), default="trial")
+    # Billing cadence for paid plans. "" for trial / inactive; "monthly"
+    # or "yearly" for basic / pro. Set from the Stripe price_id in the
+    # checkout webhook. Lets the superadmin overview split paid counts
+    # by cycle and compute a precise MRR.
+    billing_cycle = db.Column(db.String(10), default="")
     stripe_customer_id     = db.Column(db.String(60), default="")
     stripe_subscription_id = db.Column(db.String(60), default="")
     is_active     = db.Column(db.Boolean, default=True)
@@ -3603,12 +3608,30 @@ def superadmin_controls():
     active_tab = request.args.get("tab", "overview")
 
     # Aggregate metrics — cheap, compute once for the overview + sidebar snapshot.
-    plan_counts = dict(db.session.query(Store.plan, db.func.count(Store.id))
-                       .group_by(Store.plan).all())
-    basic_count    = plan_counts.get("basic", 0)
-    pro_count      = plan_counts.get("pro", 0)
-    trial_count    = plan_counts.get("trial", 0)
-    inactive_count = plan_counts.get("inactive", 0)
+    # Split BASIC and PRO into monthly + yearly so the overview shows the full
+    # revenue picture. A store that hasn't been touched since the billing_cycle
+    # column shipped lands in the monthly bucket (empty string falls to the
+    # default case in the else branch).
+    plan_rows = db.session.query(
+        Store.plan, Store.billing_cycle, db.func.count(Store.id)
+    ).group_by(Store.plan, Store.billing_cycle).all()
+
+    basic_monthly = basic_yearly = pro_monthly = pro_yearly = 0
+    trial_count = inactive_count = 0
+    for p, cycle, n in plan_rows:
+        if p == "basic":
+            if cycle == "yearly": basic_yearly += n
+            else:                 basic_monthly += n
+        elif p == "pro":
+            if cycle == "yearly": pro_yearly += n
+            else:                 pro_monthly += n
+        elif p == "trial":
+            trial_count += n
+        elif p == "inactive":
+            inactive_count += n
+
+    basic_count    = basic_monthly + basic_yearly
+    pro_count      = pro_monthly + pro_yearly
     total_stores   = Store.query.count()
 
     retention_queue = Store.query.filter(
@@ -3616,8 +3639,14 @@ def superadmin_controls():
         Store.data_retention_until.isnot(None),
     ).count()
 
-    # Rough MRR — basic $20, pro $30. Real invoices live in Stripe.
-    estimated_mrr = basic_count * 20 + pro_count * 30
+    # MRR — monthly subs count at their monthly rate; yearly subs are
+    # amortized to /12 for the monthly view. Real invoices live in Stripe.
+    # Basic: $20/mo or $200/yr (~$16.67/mo). Pro: $30/mo or $300/yr (~$25/mo).
+    basic_monthly_mrr = basic_monthly * 20
+    basic_yearly_mrr  = round(basic_yearly * 200 / 12)
+    pro_monthly_mrr   = pro_monthly * 30
+    pro_yearly_mrr    = round(pro_yearly * 300 / 12)
+    estimated_mrr = basic_monthly_mrr + basic_yearly_mrr + pro_monthly_mrr + pro_yearly_mrr
 
     # Stripe health only hit on the overview tab (API call costs one round trip).
     stripe_health = stripe_health_check() if active_tab == "overview" else None
@@ -3670,6 +3699,10 @@ def superadmin_controls():
         stores=stores, discounts=discounts, flags=flags,
         overrides=overrides, audit=audit, announcements=announcements,
         basic_count=basic_count, pro_count=pro_count,
+        basic_monthly=basic_monthly, basic_yearly=basic_yearly,
+        pro_monthly=pro_monthly, pro_yearly=pro_yearly,
+        basic_monthly_mrr=basic_monthly_mrr, basic_yearly_mrr=basic_yearly_mrr,
+        pro_monthly_mrr=pro_monthly_mrr, pro_yearly_mrr=pro_yearly_mrr,
         trial_count=trial_count, inactive_count=inactive_count,
         retention_queue=retention_queue, estimated_mrr=estimated_mrr,
         total_stores=total_stores,
@@ -4028,10 +4061,16 @@ def stripe_webhook():
                         os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
                         os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
                     } - {""}
+                    yearly_ids = {
+                        os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
+                        os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
+                    } - {""}
                     store.plan = "basic" if price_id in basic_ids else "pro"
+                    store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
                 except Exception as e:
                     app.logger.error(f"Stripe sub retrieve error: {e}")
                     store.plan = "pro"
+                    store.billing_cycle = "monthly"
                 store.stripe_customer_id = customer_id
                 store.stripe_subscription_id = sub_id
                 # Returning customer: clear cancellation + retention timer.
@@ -4053,6 +4092,7 @@ def stripe_webhook():
         if store:
             now = datetime.utcnow()
             store.plan = "inactive"
+            store.billing_cycle = ""
             store.stripe_subscription_id = ""
             store.canceled_at = now
             store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
@@ -4189,6 +4229,11 @@ _ADDED_COLUMNS = [
     # "Money Transfer" via the DEFAULT, which preserves their current tax
     # state because the tax was already computed at save time.
     ("transfer", "service_type",         "VARCHAR(30) DEFAULT 'Money Transfer' NOT NULL"),
+    # Billing cadence. "monthly" or "yearly" for paid subscribers; ""
+    # for trial / inactive. Backfilled by the Stripe webhook on the
+    # next activation/renewal for any store that upgrades or
+    # reactivates after this column ships.
+    ("store",    "billing_cycle",        "VARCHAR(10) DEFAULT ''"),
 ]
 
 def _ensure_added_columns():
