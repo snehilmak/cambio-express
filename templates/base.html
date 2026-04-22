@@ -137,21 +137,29 @@
             <span class="ref-badge">$100</span>
           </button>
           <div class="user-dropdown ref-dropdown" id="refCrownDropdown" role="menu" hidden>
-            <div class="user-info" style="padding:14px 16px;">
-              <div style="font-size:11px;color:var(--gray4);text-transform:uppercase;letter-spacing:0.6px;">Your referral code</div>
-              <div id="refCrownCode"
-                   style="font-family:'JetBrains Mono',monospace;font-size:22px;
-                          color:var(--navy);letter-spacing:2px;margin-top:4px;">
-                {{ my_referral_code }}
+            <div class="user-info ref-info">
+              <div class="ref-info-label">Your referral code</div>
+              {# Code + inline copy button. Semantic colors so the text
+                 stays visible in both light and dark mode (the previous
+                 hardcoded var(--navy) was invisible on the dark dropdown). #}
+              <div class="ref-code-wrap">
+                <div id="refCrownCode" class="ref-code">{{ my_referral_code }}</div>
+                <button type="button" id="refCrownCopy" class="ref-copy"
+                        aria-label="Copy referral code"
+                        title="Copy referral code">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                       width="16" height="16" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
               </div>
-              <div style="font-size:12px;color:var(--gray4);margin-top:6px;line-height:1.5;">
+              <div class="ref-info-hint">
                 Share with a friend: they get <strong>$50 off</strong>,
                 you get <strong>$100 off</strong> the moment they subscribe.
               </div>
             </div>
-            <button type="button" class="dropdown-item" id="refCrownCopy" role="menuitem">
-              <span class="icon">📋</span> Copy code
-            </button>
             <a href="{{ url_for('admin_referrals') }}" class="dropdown-item" role="menuitem">
               <span class="icon">👑</span> See details &amp; history
             </a>
@@ -329,13 +337,25 @@
       });
     }
     if (crownCopy && crownCode) {
+      // Save the original SVG so we can restore it after the success flash.
+      var crownCopyIcon = crownCopy.innerHTML;
+      var crownCopyTimer = null;
       crownCopy.addEventListener('click', function(e) {
         e.stopPropagation();
         var code = crownCode.textContent.trim();
         var done = function() {
-          var orig = crownCopy.innerHTML;
-          crownCopy.innerHTML = '<span class="icon">✓</span> Copied!';
-          setTimeout(function() { crownCopy.innerHTML = orig; }, 1200);
+          // Swap to a checkmark + green styling for ~1.2s, then revert.
+          crownCopy.classList.add('copied');
+          crownCopy.innerHTML =
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" ' +
+            'width="16" height="16" aria-hidden="true">' +
+            '<polyline points="20 6 9 17 4 12"></polyline></svg>';
+          if (crownCopyTimer) clearTimeout(crownCopyTimer);
+          crownCopyTimer = setTimeout(function() {
+            crownCopy.classList.remove('copied');
+            crownCopy.innerHTML = crownCopyIcon;
+          }, 1200);
         };
         if (navigator.clipboard) {
           navigator.clipboard.writeText(code).then(done);

@@ -862,6 +862,59 @@ input[type="number"] {
 [data-theme="dark"] .ref-crown { border-color: #2a3044; color: #0f1f3d; }
 .ref-dropdown { min-width: 280px; }
 
+/* Crown dropdown body — uses semantic tokens so the code stays visible
+   in dark mode (the previous version hardcoded var(--navy), which is a
+   fixed dark-blue and disappeared against the dark dropdown surface). */
+.ref-info { padding: 14px 16px; }
+.ref-info-label {
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.6px;
+}
+.ref-info-hint {
+  font-size: 12px; color: var(--text-muted);
+  margin-top: 8px; line-height: 1.5;
+}
+.ref-info-hint strong { color: var(--text); }
+.ref-code-wrap {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 4px;
+}
+.ref-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 22px; letter-spacing: 2px;
+  color: var(--text);
+  flex: 1; min-width: 0;
+  word-break: break-all;
+}
+/* Inline copy button — small icon-only square that sits next to the
+   code instead of taking its own row in the dropdown. */
+.ref-copy {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  padding: 0;
+}
+.ref-copy:hover {
+  color: var(--blue); border-color: var(--blue);
+  background: var(--blue-bg);
+}
+.ref-copy.copied {
+  color: var(--green-dark); border-color: var(--green);
+  background: var(--green-bg);
+}
+[data-theme="dark"] .ref-copy { color: #c9d0dd; border-color: #3a4054; }
+[data-theme="dark"] .ref-copy:hover {
+  color: #93c5fd; border-color: #3b82f6; background: #0f1d3f;
+}
+[data-theme="dark"] .ref-copy.copied {
+  color: #86efac; border-color: #15803d; background: #0f2e1f;
+}
+
 /* ── USER AVATAR + DROPDOWN ─────────────────────────────── */
 .user-menu { position: relative; }
 .user-avatar {
