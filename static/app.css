@@ -178,6 +178,57 @@ html, body { overscroll-behavior-y: none; }
 .card-title { font-weight: 600; font-size: 15px; color: var(--navy); }
 .card-body { padding: 24px; }
 
+/* ── QUICK-LINK CARDS (superadmin overview) ─────────────────
+ * Grid of clickable mini-cards used for the Quick Links section. The
+ * structure (icon left, title + description right) is intentionally
+ * generic so any tab/page that needs a "pick where to go" landing
+ * grid can reuse these classes. */
+.quick-links-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+.quick-link-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.quick-link-card:hover {
+  border-color: var(--blue);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15,31,61,0.08);
+}
+.quick-link-icon {
+  font-size: 22px;
+  width: 44px; height: 44px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.quick-link-text { min-width: 0; }
+.quick-link-title {
+  font-weight: 600; font-size: 14px;
+  color: var(--text);
+  line-height: 1.2;
+}
+.quick-link-desc {
+  font-size: 12.5px; color: var(--text-muted);
+  margin-top: 4px; line-height: 1.4;
+}
+[data-theme="dark"] .quick-link-card { background: #1a1f2e; border-color: #2a3044; }
+[data-theme="dark"] .quick-link-card:hover {
+  background: #232838; border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+[data-theme="dark"] .quick-link-icon { background: #232838; }
+
 /* ── SECTION BOXES (report forms) ───────────────────────
  * Shared container for the Daily Book and Monthly P&L form
  * sections. Header color is set per-instance via
