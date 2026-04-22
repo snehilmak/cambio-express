@@ -8,7 +8,20 @@ os.environ.setdefault("STRIPE_PRO_PRICE_ID", "price_pro_test")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
 
 import pytest
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+
+# Speed up the test suite by downgrading werkzeug's password hashing to
+# 1 PBKDF2 iteration. Production uses the default 600,000 — deliberately
+# slow to defeat brute force — but tests don't need that, and before this
+# the suite spent roughly 12s inside set_password calls alone. MUST run
+# before `from app import ...` because app binds `generate_password_hash`
+# at import time via `from werkzeug.security import generate_password_hash`.
+import werkzeug.security as _wsec
+_ORIG_HASH = _wsec.generate_password_hash
+_wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=8: (
+    _ORIG_HASH(pw, method=method, salt_length=salt_length)
+)
+
 from app import app as flask_app, db
 
 flask_app.config["TESTING"] = True
@@ -67,3 +80,79 @@ def logged_in_client():
         sess["role"] = "admin"
         sess["store_id"] = sid
     return c
+
+
+# ─────────────────────────────────────────────────────────────
+# Shared test helpers
+#
+# Multiple test files were reinventing the same "find the test store",
+# "log me in as an employee", and "seed a transfer row" helpers. Pulled
+# the common ones here so new tests don't have to copy-paste.
+# ─────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def test_store_id():
+    """The Store.id of the seeded test-store fixture row."""
+    from app import Store
+    with flask_app.app_context():
+        return Store.query.filter_by(slug="test-store").first().id
+
+
+@pytest.fixture
+def test_admin_id():
+    """The User.id of the seeded admin@test.com user."""
+    from app import User
+    with flask_app.app_context():
+        return User.query.filter_by(username="admin@test.com").first().id
+
+
+def make_employee_client(store_id, *, username_suffix="emp"):
+    """Return a Flask test client authenticated as a new employee user
+    at the given store. Each call creates a fresh User row so tests
+    that need multiple employees can call this multiple times."""
+    from app import User
+    c = flask_app.test_client()
+    with flask_app.app_context():
+        emp = User(
+            store_id=store_id,
+            username=f"{username_suffix}_{store_id}_{os.urandom(2).hex()}@test.com",
+            full_name="Test Employee",
+            role="employee",
+        )
+        emp.set_password("x")
+        db.session.add(emp)
+        db.session.commit()
+        uid = emp.id
+    with c.session_transaction() as sess:
+        sess["user_id"] = uid
+        sess["role"] = "employee"
+        sess["store_id"] = store_id
+    return c
+
+
+def seed_transfer(store_id, creator_id, *, send_date=None,
+                  sender_name="Jane Doe", send_amount=500.0, fee=5.0,
+                  company="Intermex", service_type="Money Transfer",
+                  status="Sent"):
+    """Seed a single Transfer row directly (no form POST). Returns the
+    new transfer's id. federal_tax follows the default 1% rate —
+    callers that need a specific tax value can .query the row and
+    override after."""
+    from app import Transfer
+    with flask_app.app_context():
+        t = Transfer(
+            store_id=store_id,
+            created_by=creator_id,
+            send_date=send_date or date.today(),
+            company=company,
+            service_type=service_type,
+            sender_name=sender_name,
+            send_amount=send_amount,
+            fee=fee,
+            federal_tax=round(send_amount * 0.01, 2),
+            commission=0.0,
+            status=status,
+        )
+        db.session.add(t)
+        db.session.commit()
+        return t.id

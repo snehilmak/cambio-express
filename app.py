@@ -2306,11 +2306,15 @@ def transfers():
     if company: q=q.filter_by(company=company)
     if status:  q=q.filter_by(status=status)
     if date_from:
+        # ValueError on bad user input from the query string. Silently
+        # ignore — we just skip the filter if the string isn't
+        # YYYY-MM-DD. Don't catch broader Exception — we want a real
+        # bug (e.g. an unexpected AttributeError) to actually raise.
         try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
-        except: pass
+        except ValueError: pass
     if date_to:
         try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
-        except: pass
+        except ValueError: pass
     if sender:    q=q.filter(Transfer.sender_name.ilike(f"%{sender}%"))
     if recipient: q=q.filter(Transfer.recipient_name.ilike(f"%{recipient}%"))
     if country:   q=q.filter(Transfer.country.ilike(f"%{country}%"))

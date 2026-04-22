@@ -15,78 +15,34 @@ template + route context).
 """
 from datetime import date, datetime, timedelta
 from app import app as flask_app, db
+from .conftest import make_employee_client, seed_transfer
 
 
-def _logged_in_employee_client_for(store_id):
-    """A client authenticated as a store employee at the given store."""
-    from app import User
-    c = flask_app.test_client()
-    with flask_app.app_context():
-        emp = User(store_id=store_id, username=f"emp{store_id}@test.com",
-                   full_name="Employee", role="employee")
-        emp.set_password("x")
-        db.session.add(emp)
-        db.session.commit()
-        uid = emp.id
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = store_id
-    return c
-
-
-def _seed_transfer(store_id, creator_id, send_date, sender_name="Jane"):
-    from app import Transfer
-    with flask_app.app_context():
-        t = Transfer(
-            store_id=store_id, created_by=creator_id,
-            send_date=send_date, company="Intermex",
-            sender_name=sender_name, send_amount=100.0, fee=2.0,
-            federal_tax=1.0, commission=0.0, status="Sent",
-        )
-        db.session.add(t)
-        db.session.commit()
-        return t.id
-
-
-def test_employee_sees_transfers_from_past_days():
-    """The test-store admin seeds a transfer dated a week ago. An
-    employee logging in today should still see it on /transfers."""
-    from app import Store, User
-    with flask_app.app_context():
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        store_id, admin_id = store.id, admin.id
+def test_employee_sees_transfers_from_past_days(test_store_id, test_admin_id):
     last_week = date.today() - timedelta(days=7)
-    tid = _seed_transfer(store_id, admin_id, last_week, sender_name="OldCustomer")
-    c = _logged_in_employee_client_for(store_id)
+    seed_transfer(test_store_id, test_admin_id,
+                  send_date=last_week, sender_name="OldCustomer")
+    c = make_employee_client(test_store_id)
     resp = c.get("/transfers")
     assert resp.status_code == 200
     assert b"OldCustomer" in resp.data
 
 
-def test_employee_sees_transfers_created_by_others():
-    """A transfer created by the admin (different user id) is still
-    visible to an employee — anyone at the store can pick up anyone
-    else's transfer to update its status."""
-    from app import Store, User
-    with flask_app.app_context():
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        store_id, admin_id = store.id, admin.id
-    today = date.today()
-    _seed_transfer(store_id, admin_id, today, sender_name="AdminLogged")
-    c = _logged_in_employee_client_for(store_id)
+def test_employee_sees_transfers_created_by_others(test_store_id, test_admin_id):
+    """A transfer created by the admin is still visible to an employee —
+    anyone at the store can pick up anyone else's transfer to update
+    its status."""
+    seed_transfer(test_store_id, test_admin_id, sender_name="AdminLogged")
+    c = make_employee_client(test_store_id)
     resp = c.get("/transfers")
     assert resp.status_code == 200
     assert b"AdminLogged" in resp.data
 
 
-def test_employee_cannot_see_other_stores_transfers():
+def test_employee_cannot_see_other_stores_transfers(test_store_id):
     """Cross-store isolation still holds — an employee at Store A does
     NOT see transfers from Store B."""
     from app import Store, User
-    # Set up a second store with its own transfer.
     with flask_app.app_context():
         other = Store(name="Other Shop", slug="other-shop",
                       email="o@s.com", plan="trial",
@@ -99,30 +55,20 @@ def test_employee_cannot_see_other_stores_transfers():
         db.session.add(other_admin)
         db.session.commit()
         other_id, other_admin_id = other.id, other_admin.id
-        store = Store.query.filter_by(slug="test-store").first()
-        store_id = store.id
-    today = date.today()
-    _seed_transfer(other_id, other_admin_id, today, sender_name="OtherStoreOnly")
+    seed_transfer(other_id, other_admin_id, sender_name="OtherStoreOnly")
     # Sign in as an employee of the TEST store.
-    c = _logged_in_employee_client_for(store_id)
+    c = make_employee_client(test_store_id)
     resp = c.get("/transfers")
     assert resp.status_code == 200
     assert b"OtherStoreOnly" not in resp.data
 
 
-def test_employee_can_filter_by_date_range():
+def test_employee_can_filter_by_date_range(test_store_id):
     """Date filters were hidden from employees when they were locked to
     today; now they're available so cashiers can narrow a historical
     search."""
-    c = _logged_in_employee_client_for(_test_store_id())
+    c = make_employee_client(test_store_id)
     resp = c.get("/transfers")
     assert resp.status_code == 200
-    # The filter inputs are rendered regardless of role.
     assert b'name="date_from"' in resp.data
     assert b'name="date_to"' in resp.data
-
-
-def _test_store_id():
-    from app import Store
-    with flask_app.app_context():
-        return Store.query.filter_by(slug="test-store").first().id

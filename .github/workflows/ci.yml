@@ -23,6 +23,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install coverage
 
       - name: Compile check (catches syntax/indentation errors)
         run: python -m compileall -q .
@@ -37,7 +38,10 @@ jobs:
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: python -c "import app; print('import OK')"
 
-      - name: Run tests
+      - name: Run tests with coverage
+        # --fail-under is our regression guard against coverage drops. Current
+        # floor is 60 (we sit around 62); raise it each time we clear
+        # a ~5pt margin so new code is incentivized to carry its own tests.
         env:
           DATABASE_URL: "sqlite:///:memory:"
           SECRET_KEY: "ci-secret"
@@ -45,4 +49,6 @@ jobs:
           STRIPE_BASIC_PRICE_ID: "price_basic_ci"
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
-        run: pytest -q
+        run: |
+          coverage run --source=app -m pytest -q
+          coverage report --fail-under=60
