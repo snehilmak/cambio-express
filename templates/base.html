@@ -36,39 +36,12 @@
       <span class="brand">DineroBook</span>
     </div>
 
-    {# Sidebar user: initial-avatar + name + store-name sub + plan pill.
-       Sub-text shows the user's role (Admin / Employee / Owner /
-       Superadmin). If the store name is meaningfully different from
-       the user name (i.e. not the same string), prepend it.
-       Otherwise we used to show the store name twice on demo data
-       where user.full_name == store.name. #}
-    {% set _sb_name = (user.full_name or user.username or '?') %}
-    {% set _sb_parts = _sb_name.split() %}
-    {% if _sb_parts|length > 1 %}
-      {% set _sb_initials = (_sb_parts[0][0] ~ _sb_parts[-1][0])|upper %}
-    {% else %}
-      {% set _sb_initials = _sb_name[:2]|upper %}
-    {% endif %}
-    {% set _sb_role = user.role|title %}
-    {% if store and store.name and store.name|lower != _sb_name|lower %}
-      {% set _sb_sub = _sb_role ~ ' · ' ~ store.name %}
-    {% else %}
-      {% set _sb_sub = _sb_role %}
-    {% endif %}
-    <div class="sidebar-user">
-      <span class="sb-avatar" aria-hidden="true">{{ _sb_initials }}</span>
-      <div class="sb-text">
-        <div class="uname">{{ _sb_name }}</div>
-        <div class="urole">{{ _sb_sub }}</div>
-      </div>
-      {% if store and store.plan %}
-        {% if store.plan in ('basic', 'pro') %}
-          <span class="sb-plan-pill is-paid">{{ store.plan|upper }}</span>
-        {% elif store.plan == 'trial' %}
-          <span class="sb-plan-pill is-trial">TRIAL</span>
-        {% endif %}
-      {% endif %}
-    </div>
+    {# The user's identity + plan lives in the topbar avatar dropdown
+       (right-hand side) and the plan pill next to the page title.
+       The sidebar intentionally does NOT duplicate that info — it
+       stays focused on navigation. Previously we showed an avatar +
+       name + role + plan pill here and it collided visually with
+       the topbar avatar. #}
 
     <nav class="sidebar-nav">
       {# ── Operations (every non-superadmin role) ── #}
@@ -190,7 +163,7 @@
 
   <div class="main">
     <div class="topbar">
-      <div style="display:flex;align-items:center;min-width:0;">
+      <div style="display:flex;align-items:center;min-width:0;gap:12px;">
         <button type="button" class="menu-toggle" id="menuToggle" aria-label="Open menu">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
             <line x1="3" y1="6" x2="21" y2="6"/>
@@ -198,7 +171,17 @@
             <line x1="3" y1="18" x2="21" y2="18"/>
           </svg>
         </button>
-        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
+        <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{% block page_title %}{% endblock %}</div>
+        {# Plan badge — sits next to the page title so the active
+           subscription state is visible everywhere, not buried in
+           the avatar dropdown. Styles match the retired sidebar pill. #}
+        {% if store and store.plan %}
+          {% if store.plan in ('basic', 'pro') %}
+            <span class="topbar-plan-pill is-paid">{{ store.plan|upper }}</span>
+          {% elif store.plan == 'trial' %}
+            <span class="topbar-plan-pill is-trial">TRIAL</span>
+          {% endif %}
+        {% endif %}
       </div>
       <div class="topbar-right">
         <span class="topbar-date" id="clock"></span>
