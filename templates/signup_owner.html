@@ -1,91 +1,93 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Owner Sign Up — DineroBook</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<title>Create Owner Account — DineroBook</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
+<meta name="theme-color" content="#0b0d12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DineroBook">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 <style>
-  /* Logged-out auth layout: top nav bar + centered card. */
-  body { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; overscroll-behavior-y: none; }
-  .auth-nav {
-    background: var(--navy); padding: 0 40px; height: 60px;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .auth-nav .brand {
-    font-family: 'DM Serif Display', serif;
-    color: var(--gold2); font-size: 18px; text-decoration: none;
-  }
-  .auth-nav .login-link { color: rgba(255,255,255,0.55); font-size: 13px; text-decoration: none; }
-  .auth-nav .login-link:hover { color: white; }
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--db-bg);color:var(--db-gray-9);font-family:var(--db-font-body);min-height:100vh;min-height:100dvh;overscroll-behavior-y:none;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+::selection{background:var(--db-neon);color:var(--db-neon-ink)}
 
-  .auth-page {
-    flex: 1; display: flex; align-items: center;
-    justify-content: center; padding: 48px 24px;
-  }
-  .auth-card {
-    background: var(--white); border-radius: 16px;
-    border: 1px solid var(--gray2); padding: 40px 44px;
-    width: 100%; max-width: 460px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
-  }
-  .auth-card .pill {
-    display: inline-flex; align-items: center; gap: 6px;
-    background: var(--blue-bg); color: var(--blue-dark);
-    border-radius: 999px; padding: 4px 12px;
-    font-size: 12px; font-weight: 600; margin-bottom: 22px;
-  }
-  .auth-card h1 {
-    font-family: 'DM Serif Display', serif;
-    font-size: 26px; color: var(--navy); margin-bottom: 6px;
-  }
-  .auth-card .sub { font-size: 13.5px; color: var(--gray4); margin-bottom: 28px; }
-  .auth-card .field { margin-bottom: 18px; }
-  .auth-card input.has-error { border-color: var(--red); }
-  .auth-card .error-msg { font-size: 12px; color: var(--red); margin-top: 5px; }
-  .auth-card .submit-btn {
-    width: 100%; background: var(--gold); color: white;
-    border: none; padding: 13px; border-radius: 8px;
-    font-size: 15px; font-weight: 600; cursor: pointer;
-    font-family: 'DM Sans', sans-serif; margin-top: 8px;
-    transition: background 0.15s;
-  }
-  .auth-card .submit-btn:hover { background: var(--gold2); color: var(--navy); }
-  .auth-card .login-prompt {
-    text-align: center; margin-top: 20px;
-    font-size: 13px; color: var(--gray4);
-  }
-  .auth-card .login-prompt a { color: var(--blue); text-decoration: none; font-weight: 500; }
+nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--db-gray-2)}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:16px;box-shadow:0 0 12px var(--db-neon-glow-40)}
+.nav-brand .name{font-family:var(--db-font-display);color:var(--db-gray-9);font-size:17px;font-weight:600;letter-spacing:-.02em}
+.nav-login{color:var(--db-gray-7);font-size:13px;text-decoration:none;font-weight:500}
+.nav-login:hover{color:var(--db-gray-9)}
 
-  @media (max-width: 600px) {
-    .auth-nav { padding: 0 16px; height: 56px; }
-    .auth-page { padding: 24px 14px; }
-    .auth-card { padding: 28px 22px; border-radius: 14px; }
-    .auth-card h1 { font-size: 22px; }
-  }
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px;position:relative;overflow:hidden}
+.page-glow{position:absolute;inset:0;background:radial-gradient(ellipse 50% 40% at 50% 30%,var(--db-neon-glow-15),transparent 70%);pointer-events:none}
+
+.card{position:relative;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:16px;padding:36px 40px;width:100%;max-width:460px;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
+
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border:1px solid rgba(63,255,0,.3);border-radius:999px;background:var(--db-neon-glow-8);font-family:var(--db-font-mono);font-size:10px;color:var(--db-neon);letter-spacing:1.5px;margin-bottom:20px;text-transform:uppercase;font-weight:500}
+
+.card-title{font-family:var(--db-font-display);font-size:30px;color:var(--db-gray-9);font-weight:600;letter-spacing:-.025em;margin-bottom:6px}
+.card-sub{font-size:13.5px;color:var(--db-gray-7);margin-bottom:24px}
+
+.field{margin-bottom:16px}
+label{display:block;font-family:var(--db-font-mono);font-size:10.5px;font-weight:500;color:var(--db-gray-6);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+input{width:100%;padding:12px 14px;background:var(--db-bg-input);border:1px solid var(--db-gray-3);border-radius:10px;font-size:14px;color:var(--db-gray-9);font-family:var(--db-font-body);outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:var(--db-neon);box-shadow:0 0 0 3px var(--db-neon-glow-15)}
+input::placeholder{color:var(--db-gray-5)}
+input.has-error{border-color:var(--db-negative)}
+.error-msg{font-size:12px;color:var(--db-negative);margin-top:5px}
+
+.submit-btn{width:100%;background:var(--db-neon);color:var(--db-neon-ink);border:none;padding:14px;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;margin-top:10px;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
+.submit-btn:hover{background:var(--db-neon-bright)}
+
+.login-prompt{text-align:center;margin-top:16px;font-size:13px;color:var(--db-gray-7)}
+.login-prompt a{color:var(--db-neon);text-decoration:none;font-weight:500}
+
+@media (max-width:600px){
+  nav.site{padding:0 16px;height:56px}
+  .nav-brand .name{font-size:16px}
+  .nav-login{font-size:12px}
+  .page{padding:24px 14px}
+  .card{padding:28px 24px;border-radius:14px}
+  .card-title{font-size:24px}
+  input{font-size:16px;padding:13px 14px}
+}
+@media (max-width:380px){
+  .nav-login{display:none}
+}
 </style>
 </head>
 <body>
-<nav class="auth-nav">
-  <a href="/" class="brand">DineroBook</a>
-  <a href="/login" class="login-link">Already have an account? Sign in</a>
+
+<nav class="site">
+  <a href="/" class="nav-brand">
+    <span class="mark" aria-hidden="true">$</span>
+    <span class="name">DineroBook</span>
+  </a>
+  <a href="{{ url_for('login') }}" class="nav-login">Already have an account? Sign in</a>
 </nav>
-<div class="auth-page">
-  <div class="auth-card">
-    <div class="pill">★ Multi-Store Owner Account</div>
-    <h1>Create owner account</h1>
-    <div class="sub">Manage multiple store locations from one login.</div>
-    <form method="POST" action="/signup/owner">
+
+<div class="page">
+  <div class="page-glow" aria-hidden="true"></div>
+  <div class="card">
+    <div class="pill">★ MULTI-STORE OWNER</div>
+    <div class="card-title">Create owner account</div>
+    <div class="card-sub">Manage multiple store locations from one login.</div>
+
+    <form method="POST" action="{{ url_for('signup_owner') }}">
       <div class="field">
         <label>Full Name</label>
         <input type="text" name="full_name"
                value="{{ form.get('full_name','') }}"
                placeholder="Your full name"
                class="{{ 'has-error' if errors.get('full_name') else '' }}" required>
-        {% if errors.get('full_name') %}
-          <div class="error-msg">{{ errors.full_name }}</div>
-        {% endif %}
+        {% if errors.get('full_name') %}<div class="error-msg">{{ errors.full_name }}</div>{% endif %}
       </div>
       <div class="field">
         <label>Email</label>
@@ -93,24 +95,30 @@
                value="{{ form.get('email','') }}"
                placeholder="you@example.com"
                class="{{ 'has-error' if errors.get('email') else '' }}" required>
-        {% if errors.get('email') %}
-          <div class="error-msg">{{ errors.email }}</div>
-        {% endif %}
+        {% if errors.get('email') %}<div class="error-msg">{{ errors.email }}</div>{% endif %}
       </div>
       <div class="field">
         <label>Password</label>
         <input type="password" name="password"
                placeholder="Min. 8 characters"
                class="{{ 'has-error' if errors.get('password') else '' }}" required>
-        {% if errors.get('password') %}
-          <div class="error-msg">{{ errors.password }}</div>
-        {% endif %}
+        {% if errors.get('password') %}<div class="error-msg">{{ errors.password }}</div>{% endif %}
       </div>
-      <button type="submit" class="submit-btn">Create Owner Account →</button>
+      <button type="submit" class="submit-btn">Create owner account →</button>
     </form>
-    <div class="login-prompt">Already have an account? <a href="/login">Sign in</a></div>
-    <div class="login-prompt" style="margin-top:10px;">Managing a single store? <a href="/signup">Sign up as a store</a></div>
+
+    <div class="login-prompt">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></div>
+    <div class="login-prompt" style="margin-top:10px">Managing a single store? <a href="{{ url_for('signup') }}">Sign up as a store</a></div>
   </div>
 </div>
+
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js').catch(function(){});
+  });
+}
+</script>
+
 </body>
 </html>

@@ -1,120 +1,98 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Create Account — DineroBook</title>
-<script>
-(function(){
-  try{
-    var t = localStorage.getItem('theme');
-    if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
-    if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
-  }catch(e){}
-})();
-</script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-<meta name="theme-color" content="#0f1f3d">
+<meta name="theme-color" content="#0b0d12">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DineroBook">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 <style>
-:root{--navy:#0f1f3d;--blue:#1a4080;--gold:#c9973a;--gold2:#f0c060;--cream:#faf7f2;--white:#ffffff;--gray2:#e8e8ec;--gray4:#6b7280;--dark:#1a1a2e;--red:#dc2626;--sky:#3b82f6}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'DM Sans',sans-serif;background:var(--cream);min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;overscroll-behavior-y:none}
-nav{background:var(--navy);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between}
-.nav-brand{font-family:'DM Serif Display',serif;color:var(--gold2);font-size:18px;text-decoration:none}
-.nav-login{color:rgba(255,255,255,0.55);font-size:13px;text-decoration:none}
-.nav-login:hover{color:white}
-.page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px}
-.card{background:var(--white);border-radius:16px;border:1px solid var(--gray2);padding:40px 44px;width:100%;max-width:460px;box-shadow:0 4px 24px rgba(0,0,0,0.06)}
-.trial-badge{display:inline-flex;align-items:center;gap:6px;background:#dcfce7;color:#15803d;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:600;margin-bottom:22px}
-.card-title{font-family:'DM Serif Display',serif;font-size:26px;color:var(--navy);margin-bottom:6px}
-.card-sub{font-size:13.5px;color:var(--gray4);margin-bottom:28px}
-.field{margin-bottom:18px}
-label{display:block;font-size:11px;font-weight:600;color:var(--gray4);text-transform:uppercase;letter-spacing:.7px;margin-bottom:6px}
-input{width:100%;padding:11px 14px;border:1.5px solid var(--gray2);border-radius:8px;font-size:14px;font-family:'DM Sans',sans-serif;color:var(--dark);transition:border-color .15s}
-input:focus{outline:none;border-color:var(--sky);box-shadow:0 0 0 3px rgba(59,130,246,0.1)}
-input.has-error{border-color:var(--red)}
-.error-msg{font-size:12px;color:var(--red);margin-top:5px}
-.optional{color:var(--gray4);font-weight:400;font-size:10px;margin-left:4px}
-.submit-btn{width:100%;background:var(--gold);color:white;border:none;padding:13px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;transition:background .15s}
-.submit-btn:hover{background:var(--gold2);color:var(--navy)}
-.login-prompt{text-align:center;margin-top:20px;font-size:13px;color:var(--gray4)}
-.login-prompt a{color:var(--blue);text-decoration:none;font-weight:500}
-@media(max-width:600px){
-  nav{padding:0 16px;height:56px}
-  .nav-brand{font-size:16px}
+html,body{background:var(--db-bg);color:var(--db-gray-9);font-family:var(--db-font-body);min-height:100vh;min-height:100dvh;overscroll-behavior-y:none;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+::selection{background:var(--db-neon);color:var(--db-neon-ink)}
+
+nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--db-gray-2)}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:16px;box-shadow:0 0 12px var(--db-neon-glow-40)}
+.nav-brand .name{font-family:var(--db-font-display);color:var(--db-gray-9);font-size:17px;font-weight:600;letter-spacing:-.02em}
+.nav-login{color:var(--db-gray-7);font-size:13px;text-decoration:none;font-weight:500}
+.nav-login:hover{color:var(--db-gray-9)}
+
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px;position:relative;overflow:hidden}
+.page-glow{position:absolute;inset:0;background:radial-gradient(ellipse 50% 40% at 50% 30%,var(--db-neon-glow-15),transparent 70%);pointer-events:none}
+.page-grid{position:absolute;inset:0;background-image:linear-gradient(var(--db-gray-2) 1px,transparent 1px),linear-gradient(90deg,var(--db-gray-2) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,black 20%,transparent 60%);mask-image:radial-gradient(ellipse at 50% 40%,black 20%,transparent 60%);opacity:.4;pointer-events:none}
+
+.card{position:relative;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:16px;padding:36px 40px;width:100%;max-width:460px;box-shadow:0 24px 80px rgba(0,0,0,0.5)}
+
+.status-pill{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--db-gray-2);border-radius:999px;background:var(--db-bg-input);margin-bottom:20px}
+.status-pill .dot{width:6px;height:6px;border-radius:999px;background:var(--db-neon);box-shadow:0 0 8px var(--db-neon)}
+.status-pill .label{font-family:var(--db-font-mono);font-size:10px;color:var(--db-neon);letter-spacing:1.5px}
+
+.card-title{font-family:var(--db-font-display);font-size:30px;color:var(--db-gray-9);font-weight:600;letter-spacing:-.025em;margin-bottom:6px}
+.card-sub{font-size:13.5px;color:var(--db-gray-7);margin-bottom:24px}
+
+.referral-banner{background:var(--db-neon-glow-8);color:var(--db-neon);border:1px solid rgba(63,255,0,.3);border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:18px;font-family:var(--db-font-body)}
+.referral-banner strong{color:var(--db-neon-bright)}
+
+.field{margin-bottom:16px}
+label{display:block;font-family:var(--db-font-mono);font-size:10.5px;font-weight:500;color:var(--db-gray-6);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px}
+.optional{color:var(--db-gray-5);font-weight:400;font-size:10px;margin-left:4px;letter-spacing:normal;text-transform:none}
+input{width:100%;padding:12px 14px;background:var(--db-bg-input);border:1px solid var(--db-gray-3);border-radius:10px;font-size:14px;color:var(--db-gray-9);font-family:var(--db-font-body);outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:var(--db-neon);box-shadow:0 0 0 3px var(--db-neon-glow-15)}
+input::placeholder{color:var(--db-gray-5)}
+input.has-error{border-color:var(--db-negative)}
+.error-msg{font-size:12px;color:var(--db-negative);margin-top:5px}
+
+.submit-btn{width:100%;background:var(--db-neon);color:var(--db-neon-ink);border:none;padding:14px;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;margin-top:10px;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
+.submit-btn:hover{background:var(--db-neon-bright)}
+
+.login-prompt{text-align:center;margin-top:16px;font-size:13px;color:var(--db-gray-7)}
+.login-prompt a{color:var(--db-neon);text-decoration:none;font-weight:500}
+
+@media (max-width:600px){
+  nav.site{padding:0 16px;height:56px}
+  .nav-brand .name{font-size:16px}
   .nav-login{font-size:12px}
   .page{padding:24px 14px}
-  .card{padding:28px 22px;border-radius:14px}
-  .card-title{font-size:22px}
-  input{font-size:16px;padding:12px 14px}
+  .card{padding:28px 24px;border-radius:14px}
+  .card-title{font-size:24px}
+  input{font-size:16px;padding:13px 14px}
   .submit-btn{padding:14px;font-size:15px}
 }
-@media(max-width:380px){
+@media (max-width:380px){
   .nav-login{display:none}
 }
-.theme-toggle{background:transparent;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.75);width:34px;height:34px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:all .15s}
-.theme-toggle:hover{color:var(--gold2);border-color:rgba(255,255,255,0.3)}
-.theme-toggle svg{width:16px;height:16px}
-.theme-toggle .sun{display:none}
-[data-theme="dark"] .theme-toggle .sun{display:block}
-[data-theme="dark"] .theme-toggle .moon{display:none}
-.nav-right{display:flex;align-items:center;gap:12px}
-.referral-banner{
-  background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;
-  border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:16px;
-}
-[data-theme="dark"] .referral-banner{
-  background:#0f2e1f;color:#86efac;border-color:#14532d;
-}
-
-[data-theme="dark"] body{background:#0f1220}
-[data-theme="dark"] .card{background:#1a1f2e;border-color:#2a3044;box-shadow:0 4px 24px rgba(0,0,0,0.3)}
-[data-theme="dark"] .card-title{color:#f0c060}
-[data-theme="dark"] .card-sub{color:#9ca3af}
-[data-theme="dark"] label{color:#9ca3af}
-[data-theme="dark"] input{background:#0f1220;border-color:#2a3044;color:#e5e7eb}
-[data-theme="dark"] input::placeholder{color:#6b7280}
-[data-theme="dark"] .login-prompt{color:#9ca3af}
-[data-theme="dark"] .login-prompt a{color:#93c5fd}
-[data-theme="dark"] .trial-badge{background:#0f2e1f;color:#86efac}
 </style>
 </head>
 <body>
-<nav>
-  <a href="/" class="nav-brand">DineroBook</a>
-  <div class="nav-right">
-    <a href="/login" class="nav-login">Already have an account? Sign in</a>
-    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-    </button>
-  </div>
+
+<nav class="site">
+  <a href="/" class="nav-brand">
+    <span class="mark" aria-hidden="true">$</span>
+    <span class="name">DineroBook</span>
+  </a>
+  <a href="{{ url_for('login') }}" class="nav-login">Already have an account? Sign in</a>
 </nav>
-<script>
-(function(){
-  var tb=document.getElementById('themeToggle');
-  if(!tb) return;
-  tb.addEventListener('click',function(){
-    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
-    var next=cur==='dark'?'light':'dark';
-    if(next==='dark') document.documentElement.setAttribute('data-theme','dark');
-    else document.documentElement.removeAttribute('data-theme');
-    try{localStorage.setItem('theme',next);}catch(e){}
-  });
-})();
-</script>
+
 <div class="page">
+  <div class="page-grid" aria-hidden="true"></div>
+  <div class="page-glow" aria-hidden="true"></div>
+
   <div class="card">
-    <div class="trial-badge">&#10003; 7-day free trial &middot; No credit card needed</div>
-    <div class="card-title">Create your account</div>
-    <div class="card-sub">Start managing your store in minutes.</div>
-    {# Referral banner — only when a VALID code was resolved. #}
+    <div class="status-pill">
+      <span class="dot"></span>
+      <span class="label">✓ 7-DAY FREE TRIAL · NO CARD</span>
+    </div>
+    <div class="card-title">Create your store</div>
+    <div class="card-sub">Close your first daily book in ten minutes.</div>
+
     {% if referral %}
     <div class="referral-banner">
       🎉 Referred by a DineroBook user — you'll get
@@ -122,16 +100,15 @@ input.has-error{border-color:var(--red)}
       off your first paid month when you subscribe.
     </div>
     {% endif %}
-    <form method="POST" action="/signup">
+
+    <form method="POST" action="{{ url_for('signup') }}">
       <div class="field">
         <label>Store Name</label>
         <input type="text" name="store_name"
                value="{{ form.get('store_name','') }}"
                placeholder="e.g. Cambio Express Lamar"
                class="{{ 'has-error' if errors.get('store_name') else '' }}" required>
-        {% if errors.get('store_name') %}
-          <div class="error-msg">{{ errors.store_name }}</div>
-        {% endif %}
+        {% if errors.get('store_name') %}<div class="error-msg">{{ errors.store_name }}</div>{% endif %}
       </div>
       <div class="field">
         <label>Store Email</label>
@@ -139,18 +116,14 @@ input.has-error{border-color:var(--red)}
                value="{{ form.get('email','') }}"
                placeholder="store@example.com"
                class="{{ 'has-error' if errors.get('email') else '' }}" required>
-        {% if errors.get('email') %}
-          <div class="error-msg">{{ errors.email }}</div>
-        {% endif %}
+        {% if errors.get('email') %}<div class="error-msg">{{ errors.email }}</div>{% endif %}
       </div>
       <div class="field">
         <label>Password</label>
         <input type="password" name="password"
                placeholder="Min. 8 characters"
                class="{{ 'has-error' if errors.get('password') else '' }}" required>
-        {% if errors.get('password') %}
-          <div class="error-msg">{{ errors.password }}</div>
-        {% endif %}
+        {% if errors.get('password') %}<div class="error-msg">{{ errors.password }}</div>{% endif %}
       </div>
       <div class="field">
         <label>Phone <span class="optional">(optional)</span></label>
@@ -158,30 +131,29 @@ input.has-error{border-color:var(--red)}
                value="{{ form.get('phone','') }}"
                placeholder="555-000-0000">
       </div>
-      {# Visible code entry. If a ?ref= link filled it in, the hidden input
-         at the top of the form already carries it; this visible input is
-         for people who got the code verbally. Either one is fine — the
-         server reads whichever is non-empty. #}
       <div class="field">
         <label>Referral code <span class="optional">(optional)</span></label>
         <input type="text" name="ref_code"
                value="{{ form.get('ref_code', ref_code_raw or '') }}"
                placeholder="e.g. ABCD1234"
-               style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;letter-spacing:2px;"
+               style="text-transform:uppercase;font-family:var(--db-font-mono);letter-spacing:2px"
                maxlength="12">
       </div>
-      <button type="submit" class="submit-btn">Start Free Trial &rarr;</button>
+      <button type="submit" class="submit-btn">Start free trial →</button>
     </form>
-    <div class="login-prompt">Already have an account? <a href="/login">Sign in</a></div>
-    <div class="login-prompt" style="margin-top:10px;">Own multiple locations? <a href="/signup/owner">Sign up as an owner &rarr;</a></div>
+
+    <div class="login-prompt">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></div>
+    <div class="login-prompt" style="margin-top:10px">Own multiple locations? <a href="{{ url_for('signup_owner') }}">Sign up as an owner →</a></div>
   </div>
 </div>
+
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
+  window.addEventListener('load', function(){
     navigator.serviceWorker.register('/sw.js').catch(function(){});
   });
 }
 </script>
+
 </body>
 </html>
