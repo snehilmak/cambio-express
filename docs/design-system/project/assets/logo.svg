@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="20" fill="#0f1f3d"></rect>
+  <circle cx="60" cy="60" r="34" fill="none" stroke="#c9973a" stroke-width="3"></circle>
+  <text x="60" y="74" font-family="&#39;DM Serif Display&#39;, serif" font-size="48" fill="#f0c060" text-anchor="middle" font-weight="400">$</text>
+</svg>

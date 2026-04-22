@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DineroBook — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Inter', sans-serif; background: #0b0d12; min-height: 100vh; color: #e5e7eb; }
+  #root { display: flex; min-height: 100vh; }
+  input::placeholder { color: #4a5162; }
+  input:focus { border-color: #3fff00 !important; box-shadow: 0 0 0 3px rgba(63,255,0,.15); }
+  button:hover { filter: brightness(1.05); }
+  a:hover { opacity: .85; }
+  ::selection { background: #3fff00; color: #0a1a00; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="LoginLeft.jsx"></script>
+<script type="text/babel" src="LoginRight.jsx"></script>
+
+<script type="text/babel">
+function App() {
+  const [signed, setSigned] = React.useState(false);
+  if (signed) {
+    return (
+      <div style={{flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b0d12'}}>
+        <div style={{textAlign: 'center'}}>
+          <div style={{fontFamily: "'Space Grotesk', sans-serif", fontSize: 42, color: '#3fff00', marginBottom: 12, fontWeight: 700, letterSpacing: '-.03em'}}>Signed in.</div>
+          <div style={{color: '#9199a8', fontFamily: "'Inter', sans-serif"}}>In production this would redirect to /dashboard.</div>
+          <button onClick={() => setSigned(false)} style={{marginTop: 24, padding: '12px 26px', background: 'transparent', color: '#e5e7eb', border: '1px solid #363c4a', borderRadius: 10, fontFamily: "'Inter', sans-serif", fontWeight: 500, cursor: 'pointer'}}>Sign out</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <>
+      <LoginLeft />
+      <LoginRight onSignIn={() => setSigned(true)} />
+    </>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
