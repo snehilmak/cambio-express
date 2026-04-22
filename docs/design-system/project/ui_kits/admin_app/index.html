@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DineroBook — Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: 'Inter', sans-serif; background: #0b0d12; color: #e5e7eb; min-height: 100vh; }
+  .layout { display: flex; min-height: 100vh; }
+  .main { margin-left: 240px; flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .content { padding: 24px 28px 48px; flex: 1; }
+  a { cursor: pointer; }
+  input::placeholder, textarea::placeholder { color: #4a5162; }
+  button:hover, a:hover { filter: brightness(1.08); }
+  ::selection { background: #3fff00; color: #0a1a00; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: #0b0d12; }
+  ::-webkit-scrollbar-thumb { background: #272c38; border-radius: 5px; border: 2px solid #0b0d12; }
+  ::-webkit-scrollbar-thumb:hover { background: #363c4a; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="Sidebar.jsx"></script>
+<script type="text/babel" src="Topbar.jsx"></script>
+<script type="text/babel" src="TrialBanner.jsx"></script>
+<script type="text/babel" src="StatCards.jsx"></script>
+<script type="text/babel" src="TransfersTable.jsx"></script>
+<script type="text/babel" src="DailyReport.jsx"></script>
+<script type="text/babel" src="Dashboard.jsx"></script>
+
+<script type="text/babel">
+const PAGE_TITLES = {
+  dashboard: 'Dashboard',
+  transfers: 'Money Transfers',
+  new_transfer: 'New Transfer',
+  daily: 'Daily Book · Mar 14',
+  monthly: 'Monthly P&L',
+  batches: 'ACH Batches',
+  bank: 'Bank Sync',
+  billing: 'Billing',
+  team: 'Team',
+  referrals: 'Referrals',
+  settings: 'Settings',
+};
+
+function Empty({ title, sub }) {
+  return (
+    <div style={{background: '#0e1117', border: '1px solid #272c38', borderRadius: 14, padding: '96px 32px', textAlign: 'center'}}>
+      <div style={{fontFamily: "'JetBrains Mono', monospace", fontSize: 11, color: '#3fff00', letterSpacing: 2, marginBottom: 12}}>// COMING UP</div>
+      <div style={{fontFamily: "'Space Grotesk', sans-serif", fontSize: 22, color: '#e5e7eb', marginBottom: 8, fontWeight: 600, letterSpacing: '-.02em'}}>{title}</div>
+      <div style={{color: '#9199a8', fontSize: 14}}>{sub}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [page, setPage] = React.useState(() => {
+    try { return localStorage.getItem('dbook-page') || 'dashboard'; } catch { return 'dashboard'; }
+  });
+  const go = (id) => { setPage(id); try { localStorage.setItem('dbook-page', id); } catch {} };
+
+  let body;
+  if (page === 'dashboard') body = <Dashboard/>;
+  else if (page === 'transfers') body = <TransfersTable/>;
+  else if (page === 'daily') body = <DailyReport/>;
+  else if (page === 'new_transfer') body = <Empty title="Log a new transfer" sub="Sender, recipient, company, amount — wire a new transfer from here."/>;
+  else if (page === 'monthly') body = <Empty title="Monthly P&L" sub="Auto-populated from your daily books."/>;
+  else if (page === 'batches') body = <Empty title="ACH Batches" sub="Reconcile deposits against transfer totals."/>;
+  else if (page === 'bank') body = <Empty title="Bank Sync" sub="Connect via Stripe Financial Connections."/>;
+  else if (page === 'billing') body = <Empty title="Billing" sub="Plan, invoices, payment method."/>;
+  else if (page === 'team') body = <Empty title="Team" sub="Invite employees to this store."/>;
+  else if (page === 'referrals') body = <Empty title="Referrals" sub="Earn $100 — share your referral code."/>;
+  else if (page === 'settings') body = <Empty title="Settings" sub="Store profile, timezone, notifications."/>;
+
+  return (
+    <div className="layout">
+      <Sidebar current={page} onNav={go}/>
+      <div className="main">
+        <Topbar title={PAGE_TITLES[page] || 'DineroBook'}/>
+        <div className="content">{body}</div>
+      </div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

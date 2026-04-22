@@ -15,50 +15,9 @@ one **Superadmin**.
 - Flask 3.0 (intentionally monolithic; all routes in `app.py`).
 - SQLAlchemy 3.1, SQLite in dev, Postgres in prod.
 - No migrations framework — see "Migrations" below.
-- Jinja2 templates + a 3-layer stylesheet split:
-  - `static/design-tokens.css` — dark+neon tokens (`--db-*`) + legacy aliases.
-  - `static/content.css` — overrides for every legacy content class
-    (cards, stats, tables, forms, badges, banners, buttons).
-  - `static/shell.css` — sidebar + topbar overrides.
-  - `static/app.css` — legacy stylesheet, still loaded for layout
-    utilities and dark-mode semantic tokens (`--surface`, `--text`,
-    `--border`). The navy/gold/cream palette it originally shipped
-    is retired but its dark-mode block is still in use.
+- Jinja2 templates + a single shared stylesheet (`static/app.css`).
 - Stripe for billing (Checkout Sessions + Billing Portal + webhooks).
 - pytest + pytest-flask.
-
-## Design system — READ BEFORE TOUCHING ANY UI
-**Source of truth: [`docs/design-system/`](docs/design-system/).** Any
-visual/UX change — new page, new component, restyle — starts there.
-The bundle was exported from `claude.ai/design` and captures the
-**dark-first, Robinhood-inspired** direction (near-black surfaces,
-single neon-green `#3fff00` accent, Space Grotesk + Inter +
-JetBrains Mono, inline stroke SVG nav icons).
-
-Non-negotiables:
-- **Dark only.** `data-theme="dark"` is unconditional. No light mode.
-- **One saturated color.** Neon green `#3fff00` — reserved for CTAs,
-  positive values, active nav indicators, primary chart strokes.
-  Second accents = jewel tones (`--db-co-intermex/maxi/barri`) or
-  state (`--db-info/warning/negative`). **Never** introduce another
-  brand color.
-- **Token hierarchy.** Prefer `--db-*` tokens from
-  `static/design-tokens.css`. If you need something not in the palette,
-  add it there with a comment, don't inline hex. Legacy `--sky/--gold/
-  --navy/--blue` are aliased to neon/near-black — they still work but
-  prefer `--db-*` for new code.
-- **Three fonts only.** Space Grotesk (display), Inter (body),
-  JetBrains Mono (money/dates/IDs). No other faces.
-- **Component reuse.** Check
-  `docs/design-system/project/ui_kits/{marketing,admin_app,auth}/`
-  for the closest existing pattern before hand-rolling. The mapping
-  between kit components and live code lives in
-  `docs/design-system/README.md`.
-- **Emoji is retired from nav.** Replace any new emoji nav icon with
-  an inline stroke SVG matching the existing set
-  (`stroke-width:2; stroke-linecap:round; fill:none; currentColor`).
-  Emoji survives only in status/eyebrow prefixes (`⏳ ✅ 🔴 📣`) and
-  the landing hero's `$` mark.
 
 ## Production deploy target (single source of truth)
 - **Web service**: `dinerobook` on Render → `https://dinerobook.onrender.com`
@@ -81,18 +40,8 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 
 ## Critical invariants — don't break these
 
-1. **Design system is the source of truth.** See
-   [`docs/design-system/`](docs/design-system/) and the "Design
-   system" section above. Dark-only, neon `#3fff00` as sole accent,
-   Space Grotesk + Inter + JetBrains Mono. The rest of this invariant
-   #1 is historical context — follow the design system first; the
-   legacy tokens below are still loaded but mostly supplanted.
-
-   Every template `<link>`s `static/design-tokens.css` +
-   `static/content.css` + `static/shell.css` (via `base.html`); the
-   legacy `static/app.css` still loads for layout utilities (`.banner-*`,
-   `.info-box`, `.info-row`, `.empty-state`, `.coming-pill`, `.modal-*`,
-   `.section-box`, `.sb-row`, `.sb-label`, `.sb-input`, `.sb-total`,
+1. **One stylesheet + mode-aware tokens** — every template `<link>`s
+   `static/app.css`. Use the utility classes (`.banner-*`, `.info-box`,
    `.info-row`, `.empty-state`, `.coming-pill`, `.modal-*`,
    `.section-box`, `.sb-row`, `.sb-label`, `.sb-input`, `.sb-total`,
    `.sb-auto-badge`, `.sb-summary-box`, `.mt-table`, `.sticky-save-bar`,
@@ -266,29 +215,15 @@ Search for the `# ── HEADER ──` block comments. Rough order:
 
 ## Templates
 - `base.html` — admin/employee chrome (sidebar + topbar + banner zone).
-  Loads app.css → design-tokens.css → content.css → shell.css in that
-  order. Don't reorder — shell must win the cascade.
 - `base_owner.html` — multi-store owner chrome (same design system).
-- `static/design-tokens.css` — dark+neon tokens + legacy aliases.
-  **New tokens go here.**
-- `static/content.css` — overrides for every legacy content class
-  (`.card`, `.stat-card`, `.badge`, `.btn-*`, tables, forms, banners).
-  Templates that extend `base.html` inherit this for free.
-- `static/shell.css` — sidebar + topbar overrides. Loaded last.
-- `static/app.css` — retained for layout utilities and the semantic
-  dark-mode tokens (`--surface`, `--text`, `--border`). Don't add
-  new brand colors here.
-- Logged-out auth pages (`landing.html`, `login.html`, `signup.html`,
-  `signup_owner.html`, `login_store.html`, `forgot_password.html`,
-  `reset_password.html`, `offline.html`, `privacy.html`) are standalone
-  and link `design-tokens.css` directly — they don't extend a base.
-- 2FA pages use the shared `_login_chrome.html` + `_login_chrome_end.html`
-  partials (login_totp, login_totp_enroll, login_totp_recover,
-  login_totp_recovery_codes).
+- `static/app.css` — all shared styling including dark mode.
+- Logged-out auth pages (`login.html`, `signup.html`, `signup_owner.html`,
+  `forgot_password.html`, `reset_password.html`) are standalone — they
+  link `static/app.css` for tokens but don't extend a base template.
 
 ## Tests
 ```bash
-pytest tests/          # ~290 tests currently, plus ~20 skipped
+pytest tests/          # 92 tests currently
 pytest tests/ -x -q    # stop on first failure, quiet
 ```
 Fixtures live in `tests/conftest.py` and set up an in-memory SQLite with

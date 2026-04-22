@@ -1,0 +1,261 @@
+/* ==========================================================================
+   DineroBook Design System — Colors & Type
+   --------------------------------------------------------------------------
+   Dark-first, Robinhood-inspired. Near-black surfaces, restrained neon-green
+   as the sole primary accent. Use neon ONLY on CTAs, positive values, active
+   nav indicators, and the primary chart stroke. Everything else is
+   monochrome + cool gray so the green actually reads.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Core surface stack (Robinhood-style near-black, not pure black) ──
+     Five layers of depth. Near-black base, then progressively lighter
+     elevation up to popover. Pure #000 is reserved for the video/hero
+     bleed only. */
+  --bg:           #0b0d12;   /* app background */
+  --bg-elevated:  #11141b;   /* card, panel */
+  --bg-raised:    #161920;   /* raised (modal, active nav bg) */
+  --bg-input:     #0e1117;   /* inputs, insets */
+  --bg-popover:   #1c202a;   /* menus, tooltips */
+  --bg-pure:      #000000;   /* hero/video bleed only */
+
+  /* ── Neon accent (the only saturated color in the system) ── */
+  --neon:         #3fff00;   /* primary CTAs, positive, active */
+  --neon-bright:  #6fff3a;   /* hover state */
+  --neon-dim:     #2ecc00;   /* pressed / compact use */
+  --neon-ink:     #001a0f;   /* text ON neon fills */
+  --neon-glow-8:  rgba(63,255,0, 0.08);
+  --neon-glow-15: rgba(63,255,0, 0.15);
+  --neon-glow-25: rgba(63,255,0, 0.25);
+  --neon-glow-40: rgba(63,255,0, 0.40);
+
+  /* ── Cool gray scale (10 steps, dark-first) ── */
+  --gray-0:  #0b0d12;
+  --gray-1:  #11141b;
+  --gray-2:  #1c202a;
+  --gray-3:  #272c38;
+  --gray-4:  #363c4a;
+  --gray-5:  #4a5162;
+  --gray-6:  #6b7280;
+  --gray-7:  #9199a8;
+  --gray-8:  #c4cad6;
+  --gray-9:  #e5e7eb;
+  --gray-10: #ffffff;
+
+  /* ── Semantic state (muted on dark — never compete with neon) ── */
+  --positive:      #3fff00;  /* same as neon — gains, success */
+  --positive-bg:   rgba(63,255,0, 0.10);
+  --negative:      #ff4d6d;  /* losses, errors — restrained crimson */
+  --negative-bg:   rgba(255, 77, 109, 0.10);
+  --warning:       #ffb020;  /* used sparingly */
+  --warning-bg:    rgba(255, 176, 32, 0.10);
+  --info:          #5ea9ff;
+  --info-bg:       rgba(94, 169, 255, 0.10);
+
+  /* ── Company accents (muted jewel tones for dark) ── */
+  --co-intermex: #5ea9ff;
+  --co-maxi:     #b48cff;
+  --co-barri:    #4dd8e6;
+
+  /* ── Mode-aware semantic tokens (dark is default; light kept for reference) ── */
+  --surface:        var(--bg-elevated);
+  --surface-2:      var(--bg-raised);
+  --surface-input:  var(--bg-input);
+  --surface-sticky: rgba(11, 13, 18, 0.92);
+  --text:           var(--gray-9);
+  --text-muted:     var(--gray-7);
+  --text-dim:       var(--gray-6);
+  --border:         var(--gray-3);
+  --border-strong:  var(--gray-4);
+  --border-neon:    var(--neon);
+
+  /* ── Spacing (8px base) ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+  --space-9: 64px;
+
+  /* ── Radii (Robinhood leans slightly softer than fintech default) ── */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-card: 16px;
+  --radius-modal:20px;
+  --radius-pill: 999px;
+
+  /* ── Elevation — dark elevation = subtle border + inner glow, NOT drop shadows ── */
+  --shadow-card:       0 0 0 1px var(--border);
+  --shadow-card-hover: 0 0 0 1px var(--border-strong), 0 8px 24px rgba(0,0,0,0.4);
+  --shadow-neon-sm:    0 0 0 1px var(--neon), 0 0 12px var(--neon-glow-25);
+  --shadow-neon-md:    0 0 0 1px var(--neon), 0 0 24px var(--neon-glow-40);
+  --shadow-modal:      0 24px 80px rgba(0,0,0,0.6), 0 0 0 1px var(--border);
+  --shadow-dropdown:   0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px var(--border);
+
+  /* ── Typography ──
+     Display:  Space Grotesk (geometric sans — replaces DM Serif)
+     UI:       Inter (neutral sans workhorse)
+     Mono:     JetBrains Mono (numbers, ticker, code)
+     Serif is retired — did not survive dark mode. */
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  /* Type scale — slightly tightened. Dark UI reads smaller than light. */
+  --fs-xs:      11px;
+  --fs-sm:      12px;
+  --fs-ui:      13px;
+  --fs-body:    14px;
+  --fs-card:    15px;
+  --fs-h3:      18px;
+  --fs-h2:      24px;
+  --fs-h1:      32px;
+  --fs-hero:    44px;
+  --fs-display: 64px;
+  --fs-ticker:  48px;   /* big monospace readouts */
+
+  --lh-tight:  1.1;
+  --lh-snug:   1.25;
+  --lh-body:   1.5;
+  --lh-prose:  1.65;
+
+  --tracking-tight:  -0.02em;
+  --tracking-hero:   -0.03em;
+  --tracking-wide:   0.08em;
+
+  /* ── Layout ── */
+  --sidebar-w: 240px;
+  --topbar-h:  60px;
+}
+
+/* ==========================================================================
+   Base — apply dark globally
+   ========================================================================== */
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   Semantic typography classes
+   ========================================================================== */
+
+.display {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-hero);
+  color: var(--text);
+}
+
+.h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+.h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  font-weight: 600;
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+.h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-card);
+  color: var(--text);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--neon);
+}
+
+.nav-section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.p {
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  line-height: var(--lh-prose);
+  color: var(--text);
+}
+
+.small {
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.label {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-family: var(--font-mono);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.mono-lg {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.ticker {
+  font-family: var(--font-mono);
+  font-size: var(--fs-ticker);
+  font-weight: 500;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--surface-input);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.positive { color: var(--positive); }
+.negative { color: var(--negative); }
