@@ -1,276 +1,245 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DineroBook — Sign In</title>
-<script>
-(function(){
-  try{
-    var t = localStorage.getItem('theme');
-    if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
-    if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
-  }catch(e){}
-})();
-</script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-<meta name="theme-color" content="#0f1f3d">
+<meta name="theme-color" content="#0b0d12">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="DineroBook">
 <link rel="apple-touch-icon" href="{{ url_for('static', filename='logo-512.png') }}">
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: #0f1f3d;
-  /* dvh stays in sync with the visible area as the mobile address bar
-     hides/shows, so the split-screen never spills into a scroll. */
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  /* Block iOS rubber-band so the installed PWA feels native. */
-  overscroll-behavior-y: none;
-}
-.login-left {
-  flex: 1; display: flex; flex-direction: column;
-  justify-content: center; align-items: center;
-  padding: 60px;
-  background: linear-gradient(145deg, #0f1f3d 0%, #1a3a6e 100%);
-  position: relative; overflow: hidden;
-}
-.login-left::before {
-  content: '';
-  position: absolute; width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(201,151,58,0.12) 0%, transparent 70%);
-  top: -100px; right: -100px; pointer-events: none;
-}
-.login-left::after {
-  content: '';
-  position: absolute; width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(59,130,246,0.08) 0%, transparent 70%);
-  bottom: -50px; left: -50px; pointer-events: none;
-}
-.brand-block { text-align: center; position: relative; z-index: 1; }
-.brand-icon { font-size: 52px; margin-bottom: 20px; }
-.brand-name {
-  font-family: 'DM Serif Display', serif;
-  font-size: 36px; color: #f0c060;
-  letter-spacing: 1px; line-height: 1;
-}
-.brand-tagline {
-  font-size: 13px; color: rgba(255,255,255,0.45);
-  margin-top: 10px; letter-spacing: 1.5px; text-transform: uppercase;
-}
-.brand-features { margin-top: 52px; display: flex; flex-direction: column; gap: 18px; }
-.feat {
-  display: flex; align-items: center; gap: 14px;
-  color: rgba(255,255,255,0.65); font-size: 14px;
-}
-.feat-icon {
-  width: 36px; height: 36px; border-radius: 8px;
-  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
-  display: flex; align-items: center; justify-content: center; font-size: 17px;
-  flex-shrink: 0;
-}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--db-bg);color:var(--db-gray-9);font-family:var(--db-font-body);min-height:100vh;min-height:100dvh;overscroll-behavior-y:none;-webkit-font-smoothing:antialiased}
+::selection{background:var(--db-neon);color:var(--db-neon-ink)}
+body{display:flex}
 
-.login-right {
-  width: 440px; background: #faf7f2;
-  display: flex; flex-direction: column;
-  justify-content: center; padding: 60px 48px;
-}
-.login-heading {
-  font-family: 'DM Serif Display', serif;
-  font-size: 28px; color: #0f1f3d; margin-bottom: 8px;
-}
-.login-sub { font-size: 14px; color: #6b7280; margin-bottom: 36px; }
-.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.7px; }
-input {
-  padding: 12px 16px; border: 1.5px solid #e8e8ec; border-radius: 9px;
-  font-size: 15px; font-family: 'DM Sans', sans-serif; color: #1a1a2e;
-  background: #fff; transition: border-color 0.15s; width: 100%;
-}
-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
-.error-msg {
-  background: #fee2e2; color: #b91c1c;
-  border: 1px solid #fecaca; border-radius: 8px;
-  padding: 11px 16px; font-size: 13.5px; margin-bottom: 18px;
-}
-.btn-login {
-  width: 100%; padding: 13px;
-  background: #1a4080; color: #fff;
-  border: none; border-radius: 9px;
-  font-size: 15px; font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
-  cursor: pointer; transition: background 0.15s; margin-top: 6px;
-}
-.btn-login:hover { background: #2a5caa; }
-.employee-box {
-  margin-top: 28px; padding: 16px 18px;
-  background: #f6f4ef; border: 1px solid #e8e4da;
-  border-radius: 10px;
-}
-.employee-box-title {
-  font-size: 13px; font-weight: 600; color: #1a1a2e;
-  margin-bottom: 4px;
-}
-.employee-box-sub {
-  font-size: 12px; color: #6b7280; margin-bottom: 10px; line-height: 1.45;
-}
-.employee-box form { display: flex; gap: 8px; }
-.employee-box input {
-  flex: 1; padding: 10px 12px; font-size: 14px;
-  border: 1.5px solid #e8e8ec; border-radius: 8px; background: #fff;
-}
-.employee-box button {
-  padding: 10px 16px; background: #0f1f3d; color: #fff;
-  border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
-  font-family: 'DM Sans', sans-serif; cursor: pointer;
-}
-.employee-box button:hover { background: #1a4080; }
-[data-theme="dark"] .employee-box { background: #1a1f2e; border-color: #2a3044; }
-[data-theme="dark"] .employee-box-title { color: #e5e7eb; }
-[data-theme="dark"] .employee-box-sub { color: #9ca3af; }
-[data-theme="dark"] .employee-box input { background: #141828; border-color: #2a3044; color: #e5e7eb; }
-.login-footer { margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; }
+/* ── LEFT brand pane ── */
+.login-left{width:50%;min-width:480px;background:var(--db-bg);border-right:1px solid var(--db-gray-2);padding:40px 56px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.login-left .bg-grid{position:absolute;inset:0;background-image:linear-gradient(var(--db-gray-2) 1px,transparent 1px),linear-gradient(90deg,var(--db-gray-2) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 60% 40%,black 20%,transparent 70%);mask-image:radial-gradient(ellipse at 60% 40%,black 20%,transparent 70%);opacity:.5;pointer-events:none}
+.login-left .bg-glow{position:absolute;top:30%;right:-10%;width:420px;height:420px;background:radial-gradient(circle,var(--db-neon-glow-25),transparent 60%);pointer-events:none}
+.brand-row{display:flex;align-items:center;gap:12px;position:relative;z-index:1}
+.brand-row .mark{width:36px;height:36px;border-radius:10px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:22px;box-shadow:0 0 24px var(--db-neon-glow-40)}
+.brand-row .wordmark{font-family:var(--db-font-display);font-weight:600;font-size:20px;letter-spacing:-.02em;color:var(--db-gray-9)}
+.login-left-mid{flex:1;display:flex;flex-direction:column;justify-content:center;position:relative;z-index:1;max-width:480px}
+.eyebrow-pill{display:inline-flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid rgba(63,255,0,.3);border-radius:999px;background:var(--db-neon-glow-8);font-family:var(--db-font-mono);font-size:11px;color:var(--db-neon);letter-spacing:2px;text-transform:uppercase;align-self:flex-start;margin-bottom:24px;font-weight:500}
+.eyebrow-pill .dot{width:6px;height:6px;border-radius:999px;background:var(--db-neon);box-shadow:0 0 8px var(--db-neon)}
+.login-left h1{font-family:var(--db-font-display);font-size:44px;line-height:1.05;font-weight:700;letter-spacing:-.035em;margin-bottom:16px;color:var(--db-gray-9)}
+.login-left h1 .neon{color:var(--db-neon)}
+.login-left .p{font-size:15px;color:var(--db-gray-7);line-height:1.6;margin-bottom:32px}
+.iso-wrap{max-width:420px}
+.iso-wrap svg{width:100%;height:auto}
+.login-left-bottom{position:relative;z-index:1;padding-top:24px;border-top:1px solid var(--db-gray-2)}
+.quote{font-size:14px;color:var(--db-gray-8);line-height:1.55;margin-bottom:14px;max-width:440px}
+.attrib{display:flex;align-items:center;gap:10px}
+.attrib .av{width:32px;height:32px;border-radius:999px;background:linear-gradient(135deg,var(--db-neon) 0%,var(--db-neon-dim) 100%);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:13px}
+.attrib .nm{font-size:12.5px;color:var(--db-gray-9);font-weight:600}
+.attrib .rl{font-size:11px;color:var(--db-gray-7);margin-top:1px}
 
-@media (max-width: 900px) {
-  body { flex-direction: column; }
-  .login-left {
-    flex: none; padding: 28px 24px 24px;
-    min-height: auto;
-    /* iOS notch — keep the brand block clear of the status bar. */
-    padding-top: max(28px, env(safe-area-inset-top));
-  }
-  .login-left::before, .login-left::after { display: none; }
-  .brand-icon { font-size: 38px; margin-bottom: 10px; }
-  .brand-name { font-size: 26px; }
-  .brand-tagline { font-size: 11px; }
-  .brand-features { display: none; }
-  .login-right {
-    width: 100%; padding: 24px 24px 32px;
-    /* Don't grow past the form contents — without this, flex:1 + the
-       100dvh body stretch the cream pane and the user can scroll the
-       empty space underneath. */
-    flex: 0 0 auto;
-    padding-bottom: max(32px, env(safe-area-inset-bottom));
-  }
-  .login-heading { font-size: 22px; margin-bottom: 4px; }
-  .login-sub { margin-bottom: 22px; }
-  .field { margin-bottom: 14px; }
-  input { font-size: 16px; }
-  .login-footer { margin-top: 24px; }
-}
-@media (max-width: 480px) {
-  .login-left { padding: 22px 20px 18px; padding-top: max(22px, env(safe-area-inset-top)); }
-  .login-right { padding: 20px 20px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
-  .brand-icon { font-size: 34px; margin-bottom: 8px; }
-  .brand-name { font-size: 24px; }
-  .brand-tagline { margin-top: 6px; }
-}
+/* ── RIGHT form pane ── */
+.login-right{flex:1;background:var(--db-bg);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:40px 32px}
+.login-card{width:100%;max-width:400px}
+.status-pill{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border:1px solid var(--db-gray-2);border-radius:999px;background:var(--db-bg-elevated);margin-bottom:28px}
+.status-pill .dot{width:6px;height:6px;border-radius:999px;background:var(--db-neon);box-shadow:0 0 8px var(--db-neon)}
+.status-pill .label{font-family:var(--db-font-mono);font-size:10px;color:var(--db-gray-7);letter-spacing:1.2px}
+.login-heading{font-family:var(--db-font-display);font-size:36px;font-weight:600;letter-spacing:-.03em;color:var(--db-gray-9);margin-bottom:8px}
+.login-sub{font-size:14px;color:var(--db-gray-7);margin-bottom:32px}
+.field{margin-bottom:18px}
+.label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+label{display:block;font-family:var(--db-font-mono);font-size:10.5px;font-weight:500;color:var(--db-gray-6);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px}
+input[type="text"],input[type="password"],input[type="email"],input[type="tel"]{width:100%;padding:13px 14px;background:var(--db-bg-input);border:1px solid var(--db-gray-3);border-radius:10px;font-size:14px;color:var(--db-gray-9);font-family:var(--db-font-body);outline:none;transition:border-color .15s,box-shadow .15s}
+input:focus{border-color:var(--db-neon);box-shadow:0 0 0 3px var(--db-neon-glow-15)}
+input::placeholder{color:var(--db-gray-5)}
+.forgot-link{font-size:12px;color:var(--db-neon);text-decoration:none;font-family:var(--db-font-body)}
+.forgot-link:hover{color:var(--db-neon-bright)}
+.error-msg{background:rgba(255,77,109,.08);color:var(--db-negative);border:1px solid rgba(255,77,109,.3);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:18px;font-family:var(--db-font-body)}
+.btn-login{width:100%;padding:14px;background:var(--db-neon);color:var(--db-neon-ink);border:none;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s;margin-top:6px}
+.btn-login:hover{background:var(--db-neon-bright)}
 
-.theme-toggle {
-  position: fixed; top: 16px; right: 16px; z-index: 10;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.75); width: 36px; height: 36px;
-  border-radius: 8px; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-}
-.theme-toggle:hover { color: #f0c060; border-color: rgba(255,255,255,0.3); }
-.theme-toggle svg { width: 16px; height: 16px; }
-.theme-toggle .sun { display: none; }
-[data-theme="dark"] .theme-toggle .sun { display: block; }
-[data-theme="dark"] .theme-toggle .moon { display: none; }
+/* Employee quick-access box (preserved from PR #74). */
+.employee-box{margin-top:28px;padding:16px 18px;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:12px}
+.employee-box-title{font-size:13px;font-weight:600;color:var(--db-gray-9);margin-bottom:4px}
+.employee-box-sub{font-size:12px;color:var(--db-gray-7);margin-bottom:10px;line-height:1.45}
+.employee-box form{display:flex;gap:8px}
+.employee-box input{flex:1;padding:10px 12px;font-size:14px;border:1px solid var(--db-gray-3);border-radius:8px;background:var(--db-bg-input);color:var(--db-gray-9);font-family:var(--db-font-body)}
+.employee-box button{padding:10px 16px;background:transparent;color:var(--db-gray-9);border:1px solid var(--db-gray-4);border-radius:8px;font-size:14px;font-weight:600;font-family:var(--db-font-body);cursor:pointer}
+.employee-box button:hover{border-color:var(--db-neon);color:var(--db-neon)}
 
-[data-theme="dark"] body { background: #0a0f1d; }
-[data-theme="dark"] .login-right { background: #141828; }
-[data-theme="dark"] .login-heading { color: #f0c060; }
-[data-theme="dark"] .login-sub { color: #9ca3af; }
-[data-theme="dark"] label { color: #9ca3af; }
-[data-theme="dark"] input { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
-[data-theme="dark"] input::placeholder { color: #6b7280; }
-[data-theme="dark"] input:focus { border-color: #3b82f6; }
-[data-theme="dark"] .login-footer { color: #6b7280; }
-[data-theme="dark"] .error-msg { background: #2d1215; color: #fca5a5; border-color: #7f1d1d; }
+.switcher{text-align:center;font-size:13.5px;margin-top:28px;display:flex;justify-content:center;gap:6px;flex-wrap:wrap;color:var(--db-gray-7)}
+.switcher a{color:var(--db-neon);text-decoration:none;font-weight:500}
+.login-footer{margin-top:40px;text-align:center}
+.login-footer-row{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+.login-footer-item{font-size:11.5px;color:var(--db-gray-6)}
+.copyright{font-size:11px;color:var(--db-gray-5)}
+.copyright a{color:var(--db-gray-6);text-decoration:none}
+
+/* ── Mobile ── */
+@media (max-width: 900px){
+  body{flex-direction:column}
+  .login-left{width:100%;min-width:0;padding:28px 24px 24px;padding-top:max(28px,env(safe-area-inset-top));flex:none}
+  .login-left h1{font-size:32px}
+  .login-left .p{font-size:14px;margin-bottom:20px}
+  .iso-wrap{max-width:360px;margin:0 auto 8px}
+  .login-left-bottom{padding-top:18px;margin-top:8px}
+  .quote{font-size:13px}
+  .login-right{width:100%;padding:28px 24px;padding-bottom:max(28px,env(safe-area-inset-bottom));flex:0 0 auto}
+  .login-heading{font-size:26px}
+  .login-sub{margin-bottom:22px}
+  .field{margin-bottom:14px}
+  input[type="text"],input[type="password"],input[type="email"],input[type="tel"],.employee-box input{font-size:16px}
+}
+@media (max-width: 480px){
+  .login-left{padding:22px 20px 16px}
+  .brand-row .mark{width:30px;height:30px;font-size:18px}
+  .brand-row .wordmark{font-size:17px}
+  .login-left h1{font-size:28px}
+  .iso-wrap{display:none}
+  .login-right{padding:22px 20px 24px}
+  .login-heading{font-size:22px}
+}
 </style>
 </head>
 <body>
-<button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-</button>
-<script>
-(function(){
-  var tb=document.getElementById('themeToggle');
-  if(!tb) return;
-  tb.addEventListener('click',function(){
-    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
-    var next=cur==='dark'?'light':'dark';
-    if(next==='dark') document.documentElement.setAttribute('data-theme','dark');
-    else document.documentElement.removeAttribute('data-theme');
-    try{localStorage.setItem('theme',next);}catch(e){}
-  });
-})();
-</script>
+
+<!-- LEFT brand pane -->
 <div class="login-left">
-  <div class="brand-block">
-    <div class="brand-icon">💱</div>
-    <div class="brand-name">DineroBook</div>
-    <div class="brand-tagline">Money Service Business Manager</div>
-    <div class="brand-features">
-      <div class="feat"><div class="feat-icon">💸</div> Log &amp; track all customer transfers</div>
-      <div class="feat"><div class="feat-icon">📦</div> Reconcile ACH batches automatically</div>
-      <div class="feat"><div class="feat-icon">🏦</div> Live bank data via SimpleFIN</div>
-      <div class="feat"><div class="feat-icon">🔒</div> Role-based access per employee</div>
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
+
+  <div class="brand-row">
+    <span class="mark" aria-hidden="true">$</span>
+    <span class="wordmark">DineroBook</span>
+  </div>
+
+  <div class="login-left-mid">
+    <div class="eyebrow-pill"><span class="dot"></span>THE DAILY BOOK · FOR MSBs</div>
+    <h1>Close your day in<br><span class="neon">fifteen minutes.</span></h1>
+    <p class="p">Check cashing, money orders, wire transfers — every dollar that moves through your store, logged and reconciled in one place.</p>
+
+    <div class="iso-wrap">
+      <svg viewBox="0 0 420 240" aria-hidden="true">
+        <defs>
+          <linearGradient id="paneL" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#161920"/><stop offset="1" stop-color="#0e1117"/></linearGradient>
+          <filter id="glowL"><feGaussianBlur stdDeviation="2.5"/></filter>
+        </defs>
+        <g>
+          <path d="M 90 30 L 320 0 L 410 30 L 180 60 Z" fill="url(#paneL)" stroke="#272c38"/>
+          <path d="M 90 30 L 180 60 L 180 100 L 90 70 Z" fill="#0b0d12" stroke="#272c38"/>
+          <path d="M 410 30 L 180 60 L 180 100 L 410 70 Z" fill="url(#paneL)" stroke="#272c38"/>
+          <g transform="translate(200,30)">
+            <rect x="0" y="0" width="14" height="20" fill="#3fff00" opacity=".45" transform="skewY(18)"/>
+            <rect x="22" y="-6" width="14" height="26" fill="#3fff00" opacity=".7" transform="skewY(18)"/>
+            <rect x="44" y="-12" width="14" height="32" fill="#3fff00" transform="skewY(18)"/>
+            <rect x="66" y="-18" width="14" height="38" fill="#3fff00" transform="skewY(18)"/>
+            <rect x="88" y="-10" width="14" height="30" fill="#3fff00" opacity=".75" transform="skewY(18)"/>
+            <rect x="110" y="-22" width="14" height="42" fill="#3fff00" transform="skewY(18)"/>
+          </g>
+        </g>
+        <g transform="translate(-30,100)">
+          <path d="M 80 50 L 300 20 L 390 50 L 170 80 Z" fill="url(#paneL)" stroke="#3fff00" opacity=".95"/>
+          <path d="M 80 50 L 170 80 L 170 130 L 80 100 Z" fill="#0b0d12" stroke="#3fff00"/>
+          <path d="M 390 50 L 170 80 L 170 130 L 390 100 Z" fill="url(#paneL)" stroke="#3fff00"/>
+          <g transform="translate(185,40)">
+            <g transform="skewY(-9)">
+              <text x="0" y="8" font-family="JetBrains Mono" font-size="8" fill="#9199a8">DAILY BOOK · MAR 14</text>
+              <rect x="0" y="14" width="95" height="11" fill="#0b0d12" stroke="#272c38"/>
+              <text x="4" y="22" font-family="JetBrains Mono" font-size="8" fill="#e5e7eb">CASH IN $4,200</text>
+              <rect x="100" y="14" width="95" height="11" fill="#0b0d12" stroke="#272c38"/>
+              <text x="104" y="22" font-family="JetBrains Mono" font-size="8" fill="#e5e7eb">OUT $3,850</text>
+              <rect x="0" y="29" width="195" height="11" fill="#0b0d12" stroke="#3fff00"/>
+              <text x="4" y="37" font-family="JetBrains Mono" font-size="8" fill="#3fff00">NET +$350.00</text>
+            </g>
+          </g>
+        </g>
+        <g transform="translate(340,160)" filter="url(#glowL)">
+          <rect x="0" y="0" width="44" height="44" rx="10" fill="#0b0d12" stroke="#3fff00" stroke-width="1.5"/>
+          <text x="22" y="31" text-anchor="middle" font-family="Space Grotesk" font-size="26" font-weight="700" fill="#3fff00">$</text>
+        </g>
+      </svg>
     </div>
   </div>
-</div>
-<div class="login-right">
-  <div class="login-heading">Welcome back</div>
-  <div class="login-sub">Sign in to your DineroBook account</div>
-  {% if error %}
-  <div class="error-msg">{{ error }}</div>
-  {% endif %}
-  <form method="POST">
-    <div class="field">
-      <label>Username</label>
-      <input type="text" name="username" placeholder="Enter username" autofocus required>
-    </div>
-    <div class="field">
-      <label>Password</label>
-      <input type="password" name="password" placeholder="Enter password" required>
-      <div style="margin-top:6px;text-align:right;">
-        <a href="{{ url_for('forgot_password') }}"
-           style="font-size:12px;color:var(--blue,#1a4080);text-decoration:none;">
-          Forgot password?
-        </a>
+
+  <div class="login-left-bottom">
+    <div class="quote">"Our monthly close went from three days of spreadsheet chaos to one afternoon."</div>
+    <div class="attrib">
+      <span class="av" aria-hidden="true">M</span>
+      <div>
+        <div class="nm">Marcela R.</div>
+        <div class="rl">Owner · 3 stores · Miami, FL</div>
       </div>
     </div>
-    <button type="submit" class="btn-login">Sign In →</button>
-  </form>
-  <div class="employee-box">
-    <div class="employee-box-title">Employee? Sign in to your store</div>
-    <div class="employee-box-sub">Enter the store code your manager gave you. We'll take you to your store's sign-in page.</div>
-    <form method="POST" action="{{ url_for('employee_login_redirect') }}">
-      <input type="text" name="store_code" placeholder="Store code"
-             autocomplete="off" autocapitalize="none" autocorrect="off"
-             spellcheck="false" required
-             value="{{ store_code_value|default('', true) }}">
-      <button type="submit">Go →</button>
-    </form>
   </div>
-  <div class="login-footer">DineroBook</div>
 </div>
+
+<!-- RIGHT form pane -->
+<div class="login-right">
+  <div class="login-card">
+    <div class="status-pill" aria-hidden="true">
+      <span class="dot"></span>
+      <span class="label">ALL SYSTEMS OPERATIONAL</span>
+    </div>
+    <h2 class="login-heading">Sign in</h2>
+    <p class="login-sub">Welcome back. Pick up where you left off.</p>
+
+    {% if error %}
+    <div class="error-msg">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+      <div class="field">
+        <label for="lf-user">Username</label>
+        <input id="lf-user" type="text" name="username" placeholder="admin@store.com" autofocus required autocomplete="username">
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label for="lf-pass" style="margin-bottom:0">Password</label>
+          <a class="forgot-link" href="{{ url_for('forgot_password') }}">Forgot?</a>
+        </div>
+        <input id="lf-pass" type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn-login">Sign in →</button>
+    </form>
+
+    <div class="employee-box">
+      <div class="employee-box-title">Employee? Sign in to your store</div>
+      <div class="employee-box-sub">Enter the store code your manager gave you. We'll take you to your store's sign-in page.</div>
+      <form method="POST" action="{{ url_for('employee_login_redirect') }}">
+        <input type="text" name="store_code" placeholder="Store code"
+               autocomplete="off" autocapitalize="none" autocorrect="off"
+               spellcheck="false" required
+               value="{{ store_code_value|default('', true) }}">
+        <button type="submit">Go →</button>
+      </form>
+    </div>
+
+    <div class="switcher">
+      <span>New to DineroBook?</span>
+      <a href="{{ url_for('signup') }}">Create an account →</a>
+    </div>
+
+    <div class="login-footer">
+      <div class="login-footer-row">
+        <span class="login-footer-item">🔒 Bank-grade encryption</span>
+        <span class="login-footer-item">99.9% uptime</span>
+        <span class="login-footer-item">180-day retention</span>
+      </div>
+      <div class="copyright">© 2026 DineroBook · <a href="{{ url_for('privacy') }}">Privacy</a></div>
+    </div>
+  </div>
+</div>
+
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', function() {
+  window.addEventListener('load', function(){
     navigator.serviceWorker.register('/sw.js').catch(function(){});
   });
 }
 </script>
+
 </body>
 </html>

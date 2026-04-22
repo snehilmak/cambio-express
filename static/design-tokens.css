@@ -74,3 +74,29 @@
   --db-shadow-neon:      0 0 0 1px var(--db-neon), 0 0 24px var(--db-neon-glow-40);
   --db-shadow-dropdown:  0 12px 32px rgba(0,0,0,0.55), 0 0 0 1px var(--db-gray-3);
 }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Legacy-token aliases (dark-only)
+   --------------------------------------------------------------------------
+   The app is dark-only now, so the legacy semantic names from app.css
+   (--sky, --blue, --mid, --gold, --gold2, --navy, etc.) get remapped here
+   to design-system equivalents. This lets templates that still reference
+   `var(--sky)` or `var(--gold)` pick up the dark+neon styling without
+   per-template edits. We use `[data-theme="dark"]` specificity so these
+   win over app.css's `:root` defaults but don't fight app.css's own dark
+   overrides (which use the same selector).
+   ────────────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  /* Action / accent → neon */
+  --sky:   var(--db-neon);
+  --blue:  var(--db-neon);
+  --mid:   var(--db-neon-bright);
+
+  /* Gold — retired in dark+neon; alias to neon so any remaining
+     "Pro" badges, referral crowns, etc. pick up the brand green. */
+  --gold:  var(--db-neon);
+  --gold2: var(--db-neon-bright);
+
+  /* Navy → near-black surface */
+  --navy:  var(--db-bg);
+}

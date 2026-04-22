@@ -2,13 +2,15 @@
    Do not require login. Linked from the landing page footer and used as the
    privacy-policy URL in the Stripe Financial Connections dashboard. #}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Privacy Policy — DineroBook</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#0b0d12">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
 <style>
   body { background: var(--cream); }
   .privacy-nav {
