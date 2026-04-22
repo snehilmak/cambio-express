@@ -1,222 +1,234 @@
-{# Shared chrome for the 2FA login steps. Mirrors login.html's
-   split-screen layout and dark-mode rules so these pages feel like
-   one flow. Include with:
-     {% set login_subtitle = "Two-factor authentication" %}
-     {% set login_title = "Enter your code" %}
+{# Shared chrome for the 2FA login steps. Mirrors login.html's split-pane
+   layout + dark+neon styling. Include pattern:
+
+     {% set login_page_title = "Enter 6-digit code" %}
      {% include "_login_chrome.html" %}
-     {# then your form/content, closed by _login_chrome_end.html #}
-   See login_totp.html for the canonical usage. #}
+     ...per-page form content...
+     {% include "_login_chrome_end.html" %}
+
+   See login_totp.html for the canonical usage.
+   Forces data-theme="dark" — light mode is retired. #}
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ login_page_title or "Two-factor authentication" }} — DineroBook</title>
-<script>
-(function(){
-  try{
-    var t = localStorage.getItem('theme');
-    if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
-    if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
-  }catch(e){}
-})();
-</script>
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<meta name="theme-color" content="#0f1f3d">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
+<meta name="theme-color" content="#0b0d12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'DM Sans', sans-serif;
-  background: #0f1f3d;
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
+html, body {
+  background: var(--db-bg);
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  min-height: 100vh; min-height: 100dvh;
   overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
 }
+body { display: flex; }
+::selection { background: var(--db-neon); color: var(--db-neon-ink); }
+
 .login-left {
-  flex: 1; display: flex; flex-direction: column;
-  justify-content: center; align-items: center;
-  padding: 60px;
-  background: linear-gradient(145deg, #0f1f3d 0%, #1a3a6e 100%);
+  flex: 1; min-width: 360px;
+  background: var(--db-bg);
+  border-right: 1px solid var(--db-gray-2);
+  padding: 40px 48px;
+  display: flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden;
 }
-.login-left::before {
-  content: ''; position: absolute; width: 500px; height: 500px;
-  background: radial-gradient(circle, rgba(201,151,58,0.12) 0%, transparent 70%);
-  top: -100px; right: -100px; pointer-events: none;
+.login-left .bg-grid {
+  position: absolute; inset: 0;
+  background-image: linear-gradient(var(--db-gray-2) 1px, transparent 1px),
+                    linear-gradient(90deg, var(--db-gray-2) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+  mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+  opacity: 0.5; pointer-events: none;
+}
+.login-left .bg-glow {
+  position: absolute; top: 30%; right: -10%;
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, var(--db-neon-glow-25), transparent 60%);
+  pointer-events: none;
 }
 .brand-block { text-align: center; position: relative; z-index: 1; }
-.brand-icon { font-size: 52px; margin-bottom: 20px; }
+.brand-mark {
+  width: 52px; height: 52px; border-radius: 12px;
+  background: var(--db-neon); color: var(--db-neon-ink);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--db-font-display); font-weight: 700; font-size: 28px;
+  box-shadow: 0 0 24px var(--db-neon-glow-40);
+  margin-bottom: 18px;
+}
 .brand-name {
-  font-family: 'DM Serif Display', serif;
-  font-size: 36px; color: #f0c060; letter-spacing: 1px; line-height: 1;
+  font-family: var(--db-font-display);
+  font-size: 30px; font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.02em; line-height: 1;
 }
 .brand-tagline {
-  font-size: 13px; color: rgba(255,255,255,0.45);
-  margin-top: 10px; letter-spacing: 1.5px; text-transform: uppercase;
+  font-family: var(--db-font-mono);
+  font-size: 11px; color: var(--db-gray-7);
+  margin-top: 12px; letter-spacing: 1.5px; text-transform: uppercase;
 }
+
 .login-right {
-  width: 520px; background: #faf7f2;
+  width: 520px; background: var(--db-bg);
   display: flex; flex-direction: column;
-  justify-content: center; padding: 48px 48px;
+  justify-content: center;
+  padding: 48px;
   overflow-y: auto;
-  max-height: 100vh;
-  max-height: 100dvh;
+  max-height: 100vh; max-height: 100dvh;
 }
 .login-heading {
-  font-family: 'DM Serif Display', serif;
-  font-size: 28px; color: #0f1f3d; margin-bottom: 8px;
+  font-family: var(--db-font-display);
+  font-size: 30px; font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.025em;
+  margin-bottom: 6px;
 }
-.login-sub { font-size: 14px; color: #6b7280; margin-bottom: 28px; }
-.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 18px; }
-label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.7px; }
+.login-sub {
+  font-size: 14px; color: var(--db-gray-7);
+  margin-bottom: 28px; line-height: 1.55;
+}
+.field { display: flex; flex-direction: column; gap: 7px; margin-bottom: 16px; }
+label {
+  font-family: var(--db-font-mono);
+  font-size: 10.5px; font-weight: 500;
+  color: var(--db-gray-6);
+  text-transform: uppercase; letter-spacing: 1.5px;
+}
 input, textarea {
-  padding: 12px 16px; border: 1.5px solid #e8e8ec; border-radius: 9px;
-  font-size: 15px; font-family: 'DM Sans', sans-serif; color: #1a1a2e;
-  background: #fff; transition: border-color 0.15s; width: 100%;
+  padding: 13px 14px;
+  background: var(--db-bg-input);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 10px;
+  font-size: 14px; font-family: var(--db-font-body);
+  color: var(--db-gray-9);
+  width: 100%; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
+input::placeholder, textarea::placeholder { color: var(--db-gray-5); }
 input:focus, textarea:focus {
-  outline: none; border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+  border-color: var(--db-neon);
+  box-shadow: 0 0 0 3px var(--db-neon-glow-15);
 }
+
 .error-msg {
-  background: #fee2e2; color: #b91c1c;
-  border: 1px solid #fecaca; border-radius: 8px;
-  padding: 11px 16px; font-size: 13.5px; margin-bottom: 18px;
+  background: rgba(255,77,109,0.08); color: var(--db-negative);
+  border: 1px solid rgba(255,77,109,0.3);
+  border-radius: 10px; padding: 11px 14px;
+  font-size: 13px; margin-bottom: 16px;
 }
 .info-box {
-  background: #eff6ff; color: #1e3a8a;
-  border: 1px solid #bfdbfe; border-radius: 8px;
-  padding: 11px 16px; font-size: 13.5px; margin-bottom: 18px;
+  background: rgba(94,169,255,0.08); color: var(--db-info);
+  border: 1px solid rgba(94,169,255,0.3);
+  border-radius: 10px; padding: 11px 14px;
+  font-size: 13px; margin-bottom: 16px;
   line-height: 1.5;
 }
+
 .btn-login {
-  width: 100%; padding: 13px;
-  background: #1a4080; color: #fff;
-  border: none; border-radius: 9px;
-  font-size: 15px; font-weight: 600;
-  font-family: 'DM Sans', sans-serif;
-  cursor: pointer; transition: background 0.15s; margin-top: 6px;
+  width: 100%; padding: 14px;
+  background: var(--db-neon); color: var(--db-neon-ink);
+  border: none; border-radius: 10px;
+  font-size: 14.5px; font-weight: 600;
+  font-family: var(--db-font-body); letter-spacing: -0.01em;
+  cursor: pointer; margin-top: 6px;
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 28px var(--db-neon-glow-40);
+  transition: background 0.12s;
 }
-.btn-login:hover { background: #2a5caa; }
-.aux-link { margin-top: 20px; font-size: 13px; text-align: center; color: #6b7280; }
-.aux-link a { color: #1a4080; text-decoration: none; font-weight: 500; }
-.aux-link a:hover { text-decoration: underline; }
-.login-footer { margin-top: 28px; font-size: 12px; color: #9ca3af; text-align: center; }
+.btn-login:hover { background: var(--db-neon-bright); }
+
+.aux-link {
+  margin-top: 18px; font-size: 13px; text-align: center;
+  color: var(--db-gray-7);
+}
+.aux-link a { color: var(--db-neon); text-decoration: none; font-weight: 500; }
+.aux-link a:hover { color: var(--db-neon-bright); }
+
+.login-footer {
+  margin-top: 28px; font-size: 11.5px;
+  color: var(--db-gray-6); text-align: center;
+  font-family: var(--db-font-mono); letter-spacing: 0.5px;
+}
 
 .qr-wrap {
   display: flex; justify-content: center;
   margin: 6px 0 18px;
-  padding: 16px; background: #fff;
-  border: 1.5px solid #e8e8ec; border-radius: 12px;
+  padding: 16px; background: var(--db-gray-10);
+  border: 1px solid var(--db-gray-3); border-radius: 12px;
 }
 .qr-wrap svg { width: 220px; height: 220px; display: block; }
 .secret-block {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--db-font-mono);
   font-size: 16px; letter-spacing: 1px;
-  background: #f3f4f6; border: 1px solid #e8e8ec;
+  background: var(--db-bg-input); border: 1px solid var(--db-gray-3);
   border-radius: 8px; padding: 12px 14px;
-  color: #1a1a2e; word-break: break-all; text-align: center;
+  color: var(--db-gray-9); word-break: break-all; text-align: center;
 }
 .recovery-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--db-font-mono);
   font-size: 15px; letter-spacing: 1px;
-  background: #fffbeb; border: 1px solid #fde68a; color: #713f12;
+  background: rgba(255,176,32,0.08);
+  border: 1px solid rgba(255,176,32,0.3);
+  color: var(--db-warning);
   border-radius: 10px; padding: 16px; margin: 6px 0 16px;
 }
-.checkbox-row { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 18px; font-size: 14px; color: #374151; }
-.checkbox-row input[type=checkbox] { width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0; }
+.checkbox-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 14px 0 18px; font-size: 14px;
+  color: var(--db-gray-8);
+}
+.checkbox-row input[type=checkbox] {
+  width: 16px; height: 16px; margin-top: 3px; flex-shrink: 0;
+  accent-color: var(--db-neon);
+}
 
 @media (max-width: 900px) {
   body { flex-direction: column; }
   .login-left {
-    flex: none; padding: 28px 24px 24px; min-height: auto;
-    padding-top: max(28px, env(safe-area-inset-top));
+    flex: none; min-width: 0;
+    padding: 24px 24px 20px;
+    padding-top: max(24px, env(safe-area-inset-top));
+    border-right: none;
+    border-bottom: 1px solid var(--db-gray-2);
   }
-  .login-left::before { display: none; }
-  .brand-icon { font-size: 38px; margin-bottom: 10px; }
-  .brand-name { font-size: 26px; }
-  .brand-tagline { font-size: 11px; }
+  .login-left .bg-grid, .login-left .bg-glow { display: none; }
+  .brand-mark { width: 40px; height: 40px; font-size: 22px; margin-bottom: 10px; }
+  .brand-name { font-size: 22px; }
+  .brand-tagline { font-size: 10px; }
   .login-right {
     width: 100%;
     padding: 24px 24px 32px;
     padding-bottom: max(32px, env(safe-area-inset-bottom));
-    /* Let the content drive height; the 2FA enroll page (QR + secret +
-       recovery codes) will scroll within the body if it overflows the
-       viewport, which is fine and expected on small phones. */
     flex: 0 0 auto; max-height: none;
   }
-  .login-heading { font-size: 22px; margin-bottom: 4px; }
-  .login-sub { margin-bottom: 22px; }
-  .field { margin-bottom: 14px; }
+  .login-heading { font-size: 24px; }
+  .login-sub { margin-bottom: 20px; }
   input, textarea { font-size: 16px; }
   .qr-wrap svg { width: 180px; height: 180px; }
   .recovery-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
-  .login-left { padding: 22px 20px 18px; padding-top: max(22px, env(safe-area-inset-top)); }
-  .login-right { padding: 20px 20px 28px; padding-bottom: max(28px, env(safe-area-inset-bottom)); }
-  .brand-icon { font-size: 34px; }
-  .brand-name { font-size: 24px; }
+  .login-left { padding: 20px 20px 16px; padding-top: max(20px, env(safe-area-inset-top)); }
+  .login-right { padding: 20px 20px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .brand-name { font-size: 20px; }
+  .brand-mark { width: 36px; height: 36px; font-size: 20px; }
 }
-
-.theme-toggle {
-  position: fixed; top: 16px; right: 16px; z-index: 10;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.75); width: 36px; height: 36px;
-  border-radius: 8px; cursor: pointer;
-  display: inline-flex; align-items: center; justify-content: center;
-  transition: all 0.15s;
-}
-.theme-toggle:hover { color: #f0c060; border-color: rgba(255,255,255,0.3); }
-.theme-toggle svg { width: 16px; height: 16px; }
-.theme-toggle .sun { display: none; }
-[data-theme="dark"] .theme-toggle .sun { display: block; }
-[data-theme="dark"] .theme-toggle .moon { display: none; }
-
-[data-theme="dark"] body { background: #0a0f1d; }
-[data-theme="dark"] .login-right { background: #141828; }
-[data-theme="dark"] .login-heading { color: #f0c060; }
-[data-theme="dark"] .login-sub,
-[data-theme="dark"] label,
-[data-theme="dark"] .aux-link,
-[data-theme="dark"] .login-footer { color: #9ca3af; }
-[data-theme="dark"] input, [data-theme="dark"] textarea {
-  background: #1a1f2e; border-color: #2a3044; color: #e5e7eb;
-}
-[data-theme="dark"] input::placeholder, [data-theme="dark"] textarea::placeholder { color: #6b7280; }
-[data-theme="dark"] input:focus, [data-theme="dark"] textarea:focus { border-color: #3b82f6; }
-[data-theme="dark"] .error-msg { background: #2d1215; color: #fca5a5; border-color: #7f1d1d; }
-[data-theme="dark"] .info-box { background: #112246; color: #bfdbfe; border-color: #1e3a8a; }
-[data-theme="dark"] .qr-wrap { background: #f8fafc; border-color: #2a3044; }
-[data-theme="dark"] .secret-block { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
-[data-theme="dark"] .recovery-grid { background: #2a210b; border-color: #854d0e; color: #fde68a; }
-[data-theme="dark"] .checkbox-row { color: #d1d5db; }
-[data-theme="dark"] .aux-link a { color: #93c5fd; }
 </style>
 </head>
 <body>
-<button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-  <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-  <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-</button>
-<script>
-(function(){
-  var tb=document.getElementById('themeToggle');
-  if(!tb) return;
-  tb.addEventListener('click',function(){
-    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'dark':'light';
-    var next=cur==='dark'?'light':'dark';
-    if(next==='dark') document.documentElement.setAttribute('data-theme','dark');
-    else document.documentElement.removeAttribute('data-theme');
-    try{localStorage.setItem('theme',next);}catch(e){}
-  });
-})();
-</script>
 <div class="login-left">
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-glow" aria-hidden="true"></div>
   <div class="brand-block">
-    <div class="brand-icon">🔐</div>
+    <div class="brand-mark">$</div>
     <div class="brand-name">DineroBook</div>
     <div class="brand-tagline">Two-factor authentication</div>
   </div>
