@@ -42,15 +42,24 @@
     <div class="section-box">
       <div class="section-box-header" style="--sb-accent:var(--blue);">REVENUE</div>
 
-      {% macro pl_field(name, label, auto_key=None) %}
+      {# When `locked=True` the input is readonly and the value is forced
+         to the daily-book auto sum — cashier can't override. Server
+         mirrors this: for locked fields it ignores the submitted value
+         and uses auto[auto_key] directly, so a tampered POST can't
+         bypass the lock. #}
+      {% macro pl_field(name, label, auto_key=None, locked=False) %}
       <div class="sb-row pl-row">
         <span class="sb-label">
           {{ label }}
-          {% if auto_key %}<span class="pl-auto">Auto</span>{% endif %}
+          {% if locked %}<span class="pl-auto">Locked · sum of daily book</span>
+          {% elif auto_key %}<span class="pl-auto">Auto</span>{% endif %}
         </span>
         <div class="sb-input">
           <input type="number" step="0.01" min="0" name="{{ name }}"
-            value="{{ (report|attr(name)) if report else (auto.get(auto_key, 0) if auto_key else 0) }}"
+            value="{% if locked %}{{ '{:.2f}'.format(auto.get(auto_key, 0)) }}{% elif report %}{{ report|attr(name) }}{% else %}{{ auto.get(auto_key, 0) if auto_key else 0 }}{% endif %}"
+            {% if locked %}readonly tabindex="-1"
+              title="Sum of {{ label.lower() }} across every daily book in this month. Edit the daily books to change this value."
+            {% endif %}
             oninput="recalc()">
         </div>
       </div>
@@ -77,8 +86,8 @@
 
     <div class="section-box">
       <div class="section-box-header" style="--sb-accent:#7c3aed;">COST OF GOODS SOLD (Purchases)</div>
-      {{ pl_field('cash_purchases',   'Cash Purchases',   'cash_purchases') }}
-      {{ pl_field('check_purchases',  'Check Purchases',  'check_purchases') }}
+      {{ pl_field('cash_purchases',   'Cash Purchases',   'cash_purchases', locked=True) }}
+      {{ pl_field('check_purchases',  'Check Purchases',  'check_purchases', locked=True) }}
       <div class="sb-row sb-total pl-row pl-total">
         <span class="sb-label">TOTAL PURCHASES</span>
         <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;color:var(--red);font-size:15px;" id="tot-purch">—</div>
@@ -136,9 +145,9 @@
       <div class="section-box-header" style="--sb-accent:var(--red);">EXPENSES</div>
 
       <div class="expense-subhead">Operating</div>
-      {{ pl_field('cash_expenses',       'Cash Expenses',       'cash_expenses') }}
-      {{ pl_field('check_expenses',      'Check Expenses',      'check_expenses') }}
-      {{ pl_field('cash_payroll',        'Cash Payroll',        'cash_payroll') }}
+      {{ pl_field('cash_expenses',       'Cash Expenses',       'cash_expenses', locked=True) }}
+      {{ pl_field('check_expenses',      'Check Expenses',      'check_expenses', locked=True) }}
+      {{ pl_field('cash_payroll',        'Cash Payroll',        'cash_payroll', locked=True) }}
 
       <div class="expense-subhead">Bank Charges</div>
       {{ pl_field('bank_charges_210',    'Bank Charges — Acct 210') }}

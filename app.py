@@ -2909,6 +2909,14 @@ def monthly_report(year,month):
     if request.method=="POST":
         if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
+        # Fields that are sums of the store's daily books for this month.
+        # The template shows them as readonly, and the server forces them
+        # to the auto sum here — so a tampered POST (or a stale form
+        # submission after a daily-book edit) can't override the truth.
+        LOCKED_FIELDS = {
+            "cash_purchases", "check_purchases",
+            "cash_expenses", "check_expenses", "cash_payroll",
+        }
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
             "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
@@ -2917,7 +2925,10 @@ def monthly_report(year,month):
             "other_taxes","accounting_charges","return_check_gl","other_expense_1","other_expense_2",
             "other_expense_3","other_expense_4","other_expense_5","over_short",
             "borrowed_money_return","profit_distributed","cash_carry_forward"]:
-            setattr(report,f,fv(f))
+            if f in LOCKED_FIELDS:
+                setattr(report, f, float(auto.get(f, 0)))
+            else:
+                setattr(report, f, fv(f))
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
         db.session.commit(); flash(f"P&L for {calendar.month_name[month]} {year} saved.","success")
         return redirect(url_for("monthly_list"))
