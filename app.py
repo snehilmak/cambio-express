@@ -743,7 +743,12 @@ def stripe_health_check():
     }
     result = {"env": env, "ok": False, "error": "",
               "price_ok": {"basic": False, "basic_yearly": False,
-                           "pro": False, "pro_yearly": False}}
+                           "pro": False, "pro_yearly": False},
+              # Per-price error string from the Stripe API. Lets the
+              # superadmin overview show "No such price …" or "test/live
+              # mismatch" without us having to guess at the cause.
+              "price_errors": {"basic": "", "basic_yearly": "",
+                               "pro": "", "pro_yearly": ""}}
     if not env["secret_key"]:
         result["error"] = "STRIPE_SECRET_KEY is not configured."
         return result
@@ -767,8 +772,13 @@ def stripe_health_check():
         try:
             stripe.Price.retrieve(pid)
             result["price_ok"][plan] = True
-        except Exception:
-            pass
+        except Exception as e:
+            # Capture the message so the superadmin overview can show why
+            # the price didn't validate (most often: the price was made
+            # in live mode but the secret key is from test mode, or vice
+            # versa). Truncate to keep the badge readable.
+            msg = str(e)
+            result["price_errors"][plan] = msg[:160]
     return result
 
 def active_announcements():

@@ -129,50 +129,50 @@
       <span class="v">{% if stripe_health.env.secret_key %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
     <div class="info-row"><span class="k">STRIPE_WEBHOOK_SECRET</span>
       <span class="v">{% if stripe_health.env.webhook_secret %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
-    <div class="info-row"><span class="k">Basic price (monthly)</span>
+    {% macro price_row(label, env_set, ok, env_name, err) %}
+    <div class="info-row" style="flex-wrap:wrap;">
+      <span class="k">{{ label }}</span>
       <span class="v">
-        {% if not stripe_health.env.basic_price_id %}
-          <span class="badge badge-red">STRIPE_BASIC_PRICE_ID missing</span>
-        {% elif stripe_health.price_ok.basic %}
+        {% if not env_set %}
+          <span class="badge badge-yellow">{{ env_name }} not set</span>
+        {% elif ok %}
           <span class="badge badge-green">valid</span>
         {% else %}
           <span class="badge badge-yellow">unverified</span>
         {% endif %}
       </span>
+      {# Surface the actual Stripe error so the superadmin doesn't have
+         to guess. Most often this is "No such price …" which means the
+         price was created in the opposite mode (live vs test) from
+         STRIPE_SECRET_KEY. #}
+      {% if env_set and not ok and err %}
+      <div class="text-sm" style="flex-basis:100%;color:var(--red);font-family:'JetBrains Mono',monospace;font-size:11.5px;margin-top:6px;word-break:break-word;">
+        {{ err }}
+      </div>
+      {% endif %}
     </div>
-    <div class="info-row"><span class="k">Basic price (yearly)</span>
-      <span class="v">
-        {% if not stripe_health.env.basic_yearly_price_id %}
-          <span class="badge badge-yellow">STRIPE_BASIC_YEARLY_PRICE_ID not set</span>
-        {% elif stripe_health.price_ok.basic_yearly %}
-          <span class="badge badge-green">valid</span>
-        {% else %}
-          <span class="badge badge-yellow">unverified</span>
-        {% endif %}
-      </span>
-    </div>
-    <div class="info-row"><span class="k">Pro price (monthly)</span>
-      <span class="v">
-        {% if not stripe_health.env.pro_price_id %}
-          <span class="badge badge-red">STRIPE_PRO_PRICE_ID missing</span>
-        {% elif stripe_health.price_ok.pro %}
-          <span class="badge badge-green">valid</span>
-        {% else %}
-          <span class="badge badge-yellow">unverified</span>
-        {% endif %}
-      </span>
-    </div>
-    <div class="info-row"><span class="k">Pro price (yearly)</span>
-      <span class="v">
-        {% if not stripe_health.env.pro_yearly_price_id %}
-          <span class="badge badge-yellow">STRIPE_PRO_YEARLY_PRICE_ID not set</span>
-        {% elif stripe_health.price_ok.pro_yearly %}
-          <span class="badge badge-green">valid</span>
-        {% else %}
-          <span class="badge badge-yellow">unverified</span>
-        {% endif %}
-      </span>
-    </div>
+    {% endmacro %}
+
+    {{ price_row("Basic price (monthly)",
+                 stripe_health.env.basic_price_id,
+                 stripe_health.price_ok.basic,
+                 "STRIPE_BASIC_PRICE_ID",
+                 stripe_health.price_errors.basic) }}
+    {{ price_row("Basic price (yearly)",
+                 stripe_health.env.basic_yearly_price_id,
+                 stripe_health.price_ok.basic_yearly,
+                 "STRIPE_BASIC_YEARLY_PRICE_ID",
+                 stripe_health.price_errors.basic_yearly) }}
+    {{ price_row("Pro price (monthly)",
+                 stripe_health.env.pro_price_id,
+                 stripe_health.price_ok.pro,
+                 "STRIPE_PRO_PRICE_ID",
+                 stripe_health.price_errors.pro) }}
+    {{ price_row("Pro price (yearly)",
+                 stripe_health.env.pro_yearly_price_id,
+                 stripe_health.price_ok.pro_yearly,
+                 "STRIPE_PRO_YEARLY_PRICE_ID",
+                 stripe_health.price_errors.pro_yearly) }}
     {% if stripe_health.error %}
     <div class="banner banner-error mt-2" style="margin-bottom:0;">
       <span class="banner-msg"><strong>Stripe API:</strong> {{ stripe_health.error }}</span>
