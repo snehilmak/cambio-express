@@ -1,0 +1,76 @@
+/* ==========================================================================
+   DineroBook — Design Tokens (v1, dark-only, Robinhood-inspired)
+   --------------------------------------------------------------------------
+   Dark-first, near-black surfaces with a single neon-green accent. The
+   ONLY saturated color in the system is the neon. Everything else is
+   cool gray so the green actually reads.
+
+   This file is the new source of truth for tokens. It ships alongside
+   the legacy `app.css` during the migration — shell.css consumes these
+   tokens to restyle the sidebar + topbar; content-area templates
+   continue to use app.css's legacy tokens (navy/cream/gold) until
+   their own migration PRs land.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* ── Surfaces (5 layers of depth; pure #000 is reserved for bleed) ── */
+  --db-bg:          #0b0d12;
+  --db-bg-elevated: #11141b;
+  --db-bg-raised:   #161920;
+  --db-bg-input:    #0e1117;
+  --db-bg-popover:  #1c202a;
+
+  /* ── Neon accent (single saturated color in the system) ── */
+  --db-neon:        #3fff00;
+  --db-neon-bright: #6fff3a;
+  --db-neon-dim:    #2ecc00;
+  --db-neon-ink:    #001a0f;       /* text on neon fills */
+  --db-neon-glow-8:  rgba(63,255,0,0.08);
+  --db-neon-glow-15: rgba(63,255,0,0.15);
+  --db-neon-glow-25: rgba(63,255,0,0.25);
+  --db-neon-glow-40: rgba(63,255,0,0.40);
+
+  /* ── Cool gray scale ── */
+  --db-gray-0:  #0b0d12;
+  --db-gray-1:  #11141b;
+  --db-gray-2:  #1c202a;
+  --db-gray-3:  #272c38;
+  --db-gray-4:  #363c4a;
+  --db-gray-5:  #4a5162;
+  --db-gray-6:  #6b7280;
+  --db-gray-7:  #9199a8;
+  --db-gray-8:  #c4cad6;
+  --db-gray-9:  #e5e7eb;
+  --db-gray-10: #ffffff;
+
+  /* ── Semantic state (muted so they never compete with neon) ── */
+  --db-positive:    #3fff00;
+  --db-negative:    #ff4d6d;
+  --db-warning:     #ffb020;
+  --db-info:        #5ea9ff;
+
+  /* ── Company accents (muted jewel tones) ── */
+  --db-co-intermex: #5ea9ff;
+  --db-co-maxi:     #b48cff;
+  --db-co-barri:    #4dd8e6;
+
+  /* ── Type ── */
+  --db-font-display: 'Space Grotesk', 'DM Sans', sans-serif;
+  --db-font-body:    'Inter', 'DM Sans', system-ui, sans-serif;
+  --db-font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* ── Radii (slightly softer than the legacy 12px cards) ── */
+  --db-radius-sm:     6px;
+  --db-radius-md:     8px;
+  --db-radius-lg:     10px;
+  --db-radius-card:   14px;
+  --db-radius-pill:   999px;
+
+  /* ── Elevation — dark = subtle border + inner glow, never a drop shadow ── */
+  --db-shadow-card:      0 0 0 1px var(--db-gray-3);
+  --db-shadow-card-hvr:  0 0 0 1px var(--db-gray-4), 0 8px 24px rgba(0,0,0,0.4);
+  --db-shadow-neon:      0 0 0 1px var(--db-neon), 0 0 24px var(--db-neon-glow-40);
+  --db-shadow-dropdown:  0 12px 32px rgba(0,0,0,0.55), 0 0 0 1px var(--db-gray-3);
+}

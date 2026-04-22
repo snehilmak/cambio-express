@@ -1,0 +1,315 @@
+/* ==========================================================================
+   DineroBook — App Shell (v1, dark+neon)
+   --------------------------------------------------------------------------
+   Overrides the legacy `.sidebar` and `.topbar` rules in `app.css` with
+   the dark-first, neon-accented shell from the design system. Loaded
+   AFTER app.css so these rules win the cascade.
+
+   Scope: sidebar, topbar, menu-toggle, sidebar-close, sidebar-backdrop,
+   user-avatar, user-dropdown. Content-area styling (cards, forms,
+   tables, stats) stays on legacy tokens until later migration PRs.
+   ========================================================================== */
+
+/* ── Sidebar ────────────────────────────────────────────── */
+.sidebar {
+  background: var(--db-bg);
+  border-right: 1px solid var(--db-gray-2);
+}
+
+.sidebar-logo {
+  padding: 18px 16px;
+  border-bottom: 1px solid var(--db-gray-2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-logo .brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--db-neon);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--db-neon-ink);
+  font-family: var(--db-font-display);
+  font-weight: 700;
+  font-size: 16px;
+  box-shadow: 0 0 16px var(--db-neon-glow-25);
+  flex-shrink: 0;
+}
+.sidebar-logo .brand {
+  font-family: var(--db-font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.sidebar-logo .sub {
+  display: none; /* replaced by the store-name line in .sidebar-user */
+}
+
+.sidebar-user {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--db-gray-2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-user .sb-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--db-neon) 0%, var(--db-neon-dim) 100%);
+  color: var(--db-neon-ink);
+  font-family: var(--db-font-display);
+  font-weight: 700;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-user .sb-text {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-user .uname {
+  font-family: var(--db-font-body);
+  font-size: 12.5px;
+  color: var(--db-gray-9);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+.sidebar-user .urole {
+  font-family: var(--db-font-body);
+  font-size: 11px;
+  color: var(--db-gray-6);
+  margin-top: 1px;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sidebar-user .sb-plan-pill {
+  font-family: var(--db-font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-weight: 600;
+  border: 1px solid var(--db-gray-3);
+  color: var(--db-gray-7);
+  background: var(--db-bg-input);
+  flex-shrink: 0;
+}
+.sidebar-user .sb-plan-pill.is-paid {
+  color: var(--db-neon);
+  border-color: rgba(63,255,0,0.35);
+  background: var(--db-neon-glow-8);
+}
+.sidebar-user .sb-plan-pill.is-trial {
+  color: var(--db-warning);
+  border-color: rgba(255,176,32,0.35);
+  background: rgba(255,176,32,0.08);
+}
+
+/* ── Nav ────────────────────────────────────────────────── */
+.sidebar-nav { padding: 8px 0; }
+.nav-section {
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--db-gray-5);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 14px 20px 6px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 18px;
+  color: var(--db-gray-7);
+  font-family: var(--db-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  border-left: none; /* replaced by ::before indicator */
+  position: relative;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.nav-link:hover {
+  color: var(--db-gray-9);
+  background: rgba(255,255,255,0.03);
+}
+.nav-link.active {
+  color: var(--db-gray-9);
+  background: linear-gradient(90deg, var(--db-neon-glow-8), transparent 60%);
+  border-left-color: transparent;
+}
+.nav-link.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  background: var(--db-neon);
+  border-radius: 0 2px 2px 0;
+  box-shadow: 0 0 10px var(--db-neon);
+}
+.nav-link .icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--db-gray-6);
+  font-size: inherit; /* override legacy 16px — SVGs size themselves */
+  text-align: left;
+}
+.nav-link.active .icon { color: var(--db-neon); }
+.nav-link .icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+/* ── Sidebar footer (status pill replaces legacy sign-out link) ── */
+.sidebar-footer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--db-gray-2);
+}
+.sidebar-footer .status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-footer .status-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--db-radius-pill);
+  background: var(--db-neon);
+  box-shadow: 0 0 8px var(--db-neon);
+  flex-shrink: 0;
+}
+.sidebar-footer .status-pill .label {
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  color: var(--db-gray-7);
+  letter-spacing: 0.5px;
+}
+
+/* ── Sidebar backdrop (mobile) ─────────────────────────── */
+.sidebar-backdrop { background: rgba(0,0,0,0.6); }
+.sidebar-close { color: var(--db-gray-7); }
+.sidebar-close:hover { color: var(--db-gray-9); background: rgba(255,255,255,0.06); }
+
+/* ── Topbar ────────────────────────────────────────────── */
+.main { background: var(--db-bg); }
+.topbar {
+  background: var(--db-bg);
+  border-bottom: 1px solid var(--db-gray-2);
+  padding: 14px 28px;
+  height: calc(60px + env(safe-area-inset-top));
+}
+.topbar-title {
+  font-family: var(--db-font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--db-gray-9);
+  letter-spacing: -0.02em;
+}
+.topbar-right { gap: 12px; }
+.topbar-date {
+  font-family: var(--db-font-mono);
+  font-size: 11.5px;
+  color: var(--db-gray-6);
+  letter-spacing: 0.3px;
+}
+.menu-toggle {
+  color: var(--db-gray-7);
+  border: 1px solid var(--db-gray-2);
+  background: var(--db-bg-input);
+  width: 34px;
+  height: 34px;
+  border-radius: var(--db-radius-md);
+}
+.menu-toggle:hover { color: var(--db-gray-9); background: var(--db-bg-popover); }
+
+/* ── User avatar + dropdown ────────────────────────────── */
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--db-radius-md);
+  background: linear-gradient(135deg, var(--db-neon) 0%, var(--db-neon-dim) 100%);
+  color: var(--db-neon-ink);
+  border: none;
+  font-family: var(--db-font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 0 0 1px rgba(63,255,0,0.3);
+}
+.user-avatar:hover {
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 12px var(--db-neon-glow-25);
+}
+.user-dropdown {
+  background: var(--db-bg-popover);
+  border: 1px solid var(--db-gray-3);
+  border-radius: var(--db-radius-lg);
+  box-shadow: var(--db-shadow-dropdown);
+  color: var(--db-gray-9);
+  min-width: 230px;
+}
+.user-dropdown .user-info {
+  border-bottom: 1px solid var(--db-gray-3);
+  padding: 12px 14px;
+}
+.user-dropdown .user-info .nm {
+  font-family: var(--db-font-body);
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--db-gray-9);
+}
+.user-dropdown .user-info .rl {
+  font-family: var(--db-font-mono);
+  font-size: 10px;
+  color: var(--db-gray-7);
+  margin-top: 3px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.user-dropdown .dropdown-item {
+  color: var(--db-gray-9);
+  font-family: var(--db-font-body);
+  font-size: 13px;
+  padding: 10px 14px;
+}
+.user-dropdown .dropdown-item:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--db-neon);
+}
+
+/* ── Global selection + scrollbars (shell-scoped) ─────── */
+::selection {
+  background: var(--db-neon);
+  color: var(--db-neon-ink);
+}
+html { color-scheme: dark; }
+
+/* ── Mobile adjustments (<=900px drawer) ──────────────── */
+@media (max-width: 900px) {
+  .topbar { padding: 10px 16px; }
+  .sidebar { box-shadow: 0 0 30px rgba(0,0,0,0.5); }
+}
