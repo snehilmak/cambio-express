@@ -155,15 +155,26 @@
 {% elif active_tab == 'team' %}
 {% set login_url = url_for('login_store', slug=store.slug, _external=True) %}
 <div class="card mb-3" style="max-width:700px;">
-  <div class="card-header"><span class="card-title">Employee Login Link</span></div>
+  <div class="card-header"><span class="card-title">Employee Sign-In</span></div>
   <div class="card-body">
-    <div style="font-size:13px;color:var(--gray4);margin-bottom:10px;">
-      Share this link with your employees so they can sign in:
+    <div style="font-size:13px;color:var(--gray4);margin-bottom:6px;">
+      <strong style="color:var(--text);">Direct link</strong> — share this with new employees:
     </div>
-    <div style="display:flex;gap:10px;align-items:center;">
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px;">
       <input type="text" id="emp-url" value="{{ login_url }}" readonly
         style="flex:1;font-family:'JetBrains Mono',monospace;font-size:13px;">
       <button type="button" class="btn btn-outline btn-sm" onclick="copyLoginUrl()">Copy</button>
+    </div>
+    <div style="font-size:13px;color:var(--gray4);margin-bottom:6px;">
+      <strong style="color:var(--text);">Store code</strong> — give this to an employee if they
+      installed the app on their phone and got signed out. From the generic
+      sign-in page they can tap <em>"Employee? Sign in to your store"</em>
+      and type this code:
+    </div>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <input type="text" id="emp-code" value="{{ store.slug }}" readonly
+        style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.5px;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyStoreCode()">Copy</button>
     </div>
   </div>
 </div>
@@ -358,6 +369,16 @@ function copyLoginUrl() {
   el.select();
   document.execCommand('copy');
   alert('Login link copied!');
+}
+function copyStoreCode() {
+  var el = document.getElementById('emp-code');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(el.value).then(function() { alert('Store code copied!'); });
+  } else {
+    el.select();
+    document.execCommand('copy');
+    alert('Store code copied!');
+  }
 }
 function showReset(uid, name) {
   document.getElementById('reset-name').textContent = 'Setting new password for: ' + name;
