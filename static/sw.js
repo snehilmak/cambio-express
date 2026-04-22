@@ -2,7 +2,7 @@
 // - Cache-first for the /static/ shell (CSS, icons)
 // - Network-first for navigations with /offline as fallback
 // - Push notifications (show + handle click)
-const CACHE = 'dinerobook-v5';
+const CACHE = 'dinerobook-v6';
 const SHELL = [
   '/offline',
   '/static/app.css',
