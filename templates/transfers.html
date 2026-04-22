@@ -3,44 +3,73 @@
 {% block page_title %}Transfer Log{% endblock %}
 {% block head %}
 <style>
-.tf-search-row { padding: 14px 24px; border-bottom: 1px solid var(--gray2); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tf-search-row {
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--db-gray-2);
+  display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+  background: var(--db-bg-input);
+}
 .tf-search-row input[type="text"] { flex: 1; min-width: 180px; }
 .tf-col-toggle {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; border: 1px solid var(--gray2); border-radius: 6px;
-  background: var(--white); color: var(--gray4);
+  padding: 6px 12px;
+  border: 1px solid var(--db-gray-3); border-radius: 8px;
+  background: var(--db-bg-elevated); color: var(--db-gray-7);
   font-size: 12.5px; font-weight: 500; cursor: pointer;
-  font-family: 'DM Sans', sans-serif; transition: all 0.15s;
+  font-family: var(--db-font-body);
+  transition: color 0.12s, border-color 0.12s;
 }
-.tf-col-toggle:hover { border-color: var(--blue); color: var(--blue); }
-.tf-col-toggle.active { background: var(--navy); color: var(--gold2); border-color: var(--navy); }
-[data-theme="dark"] .tf-col-toggle { background: #1a1f2e; border-color: #2a3044; color: #c9d0dd; }
-[data-theme="dark"] .tf-col-toggle:hover { border-color: #3b82f6; color: #93c5fd; }
-[data-theme="dark"] .tf-col-toggle.active { background: #0f1220; color: #f0c060; border-color: #3a4054; }
-/* Per-column search inputs — hidden by default. Toggled via the
-   "Columns" button in .tf-search-row, state persisted in localStorage. */
+.tf-col-toggle:hover { border-color: var(--db-neon); color: var(--db-neon); }
+.tf-col-toggle.active {
+  background: var(--db-neon-glow-8);
+  color: var(--db-neon);
+  border-color: rgba(63,255,0,0.35);
+}
+
+/* Per-column search row inside <thead>. */
 .col-search-row { display: none; }
 .col-search-row.expanded { display: table-row; }
-.col-search-row th { padding: 6px 10px !important; background: var(--gray1); border-bottom: 1px solid var(--gray2); }
-.col-search-row input { width: 100%; padding: 6px 8px; font-size: 12px; border: 1px solid var(--gray2); border-radius: 6px; background: var(--white); }
-.tf-pager { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--gray2); flex-wrap: wrap; }
-.tf-pager .pg-info { font-size: 12.5px; color: var(--gray4); }
+.col-search-row th {
+  padding: 6px 10px !important;
+  background: var(--db-bg-input);
+  border-bottom: 1px solid var(--db-gray-3);
+}
+.col-search-row input {
+  width: 100%; padding: 6px 8px; font-size: 12px;
+  border: 1px solid var(--db-gray-3); border-radius: 6px;
+  background: var(--db-bg-elevated); color: var(--db-gray-9);
+}
+
+.tf-pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 14px 22px;
+  border-top: 1px solid var(--db-gray-2);
+  flex-wrap: wrap;
+}
+.tf-pager .pg-info {
+  font-size: 12px; color: var(--db-gray-6);
+  font-family: var(--db-font-mono); letter-spacing: 0.3px;
+}
 .tf-pager .pg-nav { display: flex; gap: 8px; align-items: center; }
-.tf-pager .pg-nav a, .tf-pager .pg-nav span.disabled { padding: 6px 12px; border: 1px solid var(--gray2); border-radius: 6px; font-size: 13px; color: var(--dark); text-decoration: none; background: var(--white); }
-.tf-pager .pg-nav a:hover { border-color: var(--blue); color: var(--blue); }
-.tf-pager .pg-nav span.disabled { color: var(--gray3); background: var(--gray1); cursor: not-allowed; }
-.tf-pager .pg-nav .current { font-weight: 600; color: var(--navy); }
-[data-theme="dark"] .col-search-row th { background: #232838; border-bottom-color: #2a3044; }
-[data-theme="dark"] .col-search-row input { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
-[data-theme="dark"] .tf-pager { border-top-color: #2a3044; }
-[data-theme="dark"] .tf-pager .pg-nav a, [data-theme="dark"] .tf-pager .pg-nav span.disabled { background: #1a1f2e; border-color: #2a3044; color: #e5e7eb; }
-[data-theme="dark"] .tf-pager .pg-nav span.disabled { background: #141828; color: #4b5563; }
-[data-theme="dark"] .tf-pager .pg-nav .current { color: #f0c060; }
-[data-theme="dark"] .tf-search-row { border-bottom-color: #2a3044; }
+.tf-pager .pg-nav a,
+.tf-pager .pg-nav span.disabled {
+  padding: 6px 12px;
+  border: 1px solid var(--db-gray-3); border-radius: 8px;
+  font-size: 13px;
+  color: var(--db-gray-9); text-decoration: none;
+  background: var(--db-bg-elevated);
+  font-family: var(--db-font-body);
+}
+.tf-pager .pg-nav a:hover { border-color: var(--db-neon); color: var(--db-neon); }
+.tf-pager .pg-nav span.disabled {
+  color: var(--db-gray-5);
+  background: var(--db-bg-input);
+  cursor: not-allowed;
+}
+.tf-pager .pg-nav .current { font-weight: 600; color: var(--db-neon); }
+
 @media (max-width: 900px) {
   .tf-search-row { padding: 12px 14px; }
-  /* Column search is still togglable on mobile — scrolls horizontally
-     with the table inside .table-wrap since the row lives in <thead>. */
 }
 </style>
 {% endblock %}
