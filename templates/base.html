@@ -5,19 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook{% endblock %}</title>
 <script>
-  // Apply saved (or system) theme before paint to avoid a light-mode flash.
-  (function(){
-    try{
-      var t = localStorage.getItem('theme');
-      if(!t){ t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'; }
-      if(t === 'dark'){ document.documentElement.setAttribute('data-theme','dark'); }
-    }catch(e){}
-  })();
+  // Dark is now the only mode — set the attribute before paint so the
+  // legacy app.css dark-mode rules always apply alongside shell.css.
+  document.documentElement.setAttribute('data-theme', 'dark');
 </script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='shell.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-<meta name="theme-color" content="#0f1f3d">
+<meta name="theme-color" content="#0b0d12">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -30,26 +27,54 @@
   <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
   <aside class="sidebar" id="sidebar">
     <button type="button" class="sidebar-close" id="sidebarClose" aria-label="Close menu">×</button>
+
+    {# Sidebar logo: neon "$" brand mark + DineroBook wordmark.
+       Replaces the old navy-gold serif lockup. #}
     <div class="sidebar-logo">
-      <div class="brand">DineroBook</div>
-      <div class="sub">{{ store.name if store else 'MSB Manager' }}</div>
+      <span class="brand-mark" aria-hidden="true">$</span>
+      <span class="brand">DineroBook</span>
     </div>
+
+    {# Sidebar user: initial-avatar + name + store-name sub + plan pill.
+       Store name replaces role as the primary sub-text; it's more
+       useful in daily operations. Plan pill styles by state. #}
+    {% set _sb_name = (user.full_name or user.username or '?') %}
+    {% set _sb_parts = _sb_name.split() %}
+    {% if _sb_parts|length > 1 %}
+      {% set _sb_initials = (_sb_parts[0][0] ~ _sb_parts[-1][0])|upper %}
+    {% else %}
+      {% set _sb_initials = _sb_name[:2]|upper %}
+    {% endif %}
     <div class="sidebar-user">
-      <div class="uname">{{ user.full_name or user.username }}</div>
-      <div class="urole">{{ user.role }}</div>
+      <span class="sb-avatar" aria-hidden="true">{{ _sb_initials }}</span>
+      <div class="sb-text">
+        <div class="uname">{{ _sb_name }}</div>
+        <div class="urole">{% if store %}{{ store.name }}{% else %}{{ user.role|title }}{% endif %}</div>
+      </div>
+      {% if store and store.plan %}
+        {% if store.plan in ('basic', 'pro') %}
+          <span class="sb-plan-pill is-paid">{{ store.plan|upper }}</span>
+        {% elif store.plan == 'trial' %}
+          <span class="sb-plan-pill is-trial">TRIAL</span>
+        {% endif %}
+      {% endif %}
     </div>
+
     <nav class="sidebar-nav">
       {# ── Operations (every non-superadmin role) ── #}
       {% if user.role != 'superadmin' %}
       <div class="nav-section">Workspace</div>
       <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <span class="icon">⬛</span> Dashboard
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+        Dashboard
       </a>
       <a href="{{ url_for('transfers') }}" class="nav-link {% if 'transfer' in (request.endpoint or '') %}active{% endif %}">
-        <span class="icon">💸</span> Transfers
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
+        Transfers
       </a>
       <a href="{{ url_for('new_transfer') }}" class="nav-link {% if request.endpoint == 'new_transfer' %}active{% endif %}">
-        <span class="icon">＋</span> New Transfer
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        New Transfer
       </a>
       {% endif %}
 
@@ -57,79 +82,100 @@
       {% if user.role == 'admin' %}
       <div class="nav-section">Books</div>
       <a href="{{ url_for('daily_list') }}" class="nav-link {% if 'daily' in (request.endpoint or '') %}active{% endif %}">
-        <span class="icon">📅</span> Daily Reports
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        Daily Reports
       </a>
       <a href="{{ url_for('monthly_list') }}" class="nav-link {% if 'monthly' in (request.endpoint or '') %}active{% endif %}">
-        <span class="icon">📊</span> Monthly P&L
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        Monthly P&amp;L
       </a>
 
       <div class="nav-section">Finance</div>
       <a href="{{ url_for('batches') }}" class="nav-link {% if 'batch' in (request.endpoint or '') %}active{% endif %}">
-        <span class="icon">📦</span> ACH Batches
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
+        ACH Batches
       </a>
       <a href="{{ url_for('bank') }}" class="nav-link {% if request.endpoint == 'bank' %}active{% endif %}">
-        <span class="icon">🏦</span> Bank Sync
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+        Bank Sync
       </a>
 
       {# Account = team, store info, billing — what every SaaS calls these settings. #}
       <div class="nav-section">Account</div>
       <a href="{{ url_for('admin_users') }}" class="nav-link {% if 'admin_user' in (request.endpoint or '') %}active{% endif %}">
-        <span class="icon">👥</span> Team
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        Team
       </a>
       <a href="{{ url_for('admin_settings') }}" class="nav-link {% if request.endpoint == 'admin_settings' or request.endpoint == 'admin_reset_employee_password' %}active{% endif %}">
-        <span class="icon">⚙️</span> Settings
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+        Settings
       </a>
       <a href="{{ url_for('admin_subscription') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('admin_subscription') %}active{% endif %}">
-        <span class="icon">💳</span> Billing &amp; Subscription
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></span>
+        Billing &amp; Subscription
       </a>
       {% endif %}
 
       {% if user.role == 'superadmin' %}
-      {# Each Controls tab is now a top-level sidebar item — easier to
-         find, deep-linkable, and gives us obvious places to add new
-         operational tools (Monitoring) and config (Configuration). The
-         old "Controls" catch-all link is gone since every tab has a
-         direct entry point. #}
+      {# Each Controls tab is a top-level sidebar item — easier to find, deep-linkable. #}
       {% set sa_tab = request.args.get('tab', 'overview') if request.endpoint == 'superadmin_controls' else '' %}
 
       <div class="nav-section">Platform</div>
       <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
-        <span class="icon">⬛</span> Dashboard
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
+        Dashboard
       </a>
       <a href="{{ url_for('superadmin_controls', tab='stores') }}"
          class="nav-link {% if sa_tab == 'stores' or request.endpoint in ('superadmin_stores', 'superadmin_impersonate') %}active{% endif %}">
-        <span class="icon">🏪</span> Stores
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></span>
+        Stores
       </a>
       <a href="{{ url_for('superadmin_new_store') }}"
          class="nav-link {% if request.endpoint == 'superadmin_new_store' %}active{% endif %}">
-        <span class="icon">＋</span> Add Store
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
+        Add Store
       </a>
 
       <div class="nav-section">Configuration</div>
       <a href="{{ url_for('superadmin_controls', tab='discounts') }}"
          class="nav-link {% if sa_tab == 'discounts' %}active{% endif %}">
-        <span class="icon">🎟️</span> Discount Codes
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M20 12V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6l8 8 10-10z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+        Discount Codes
       </a>
       <a href="{{ url_for('superadmin_controls', tab='features') }}"
          class="nav-link {% if sa_tab == 'features' %}active{% endif %}">
-        <span class="icon">🚩</span> Feature Flags
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
+        Feature Flags
       </a>
       <a href="{{ url_for('superadmin_controls', tab='announcements') }}"
          class="nav-link {% if sa_tab == 'announcements' %}active{% endif %}">
-        <span class="icon">📣</span> Announcements
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 11l18-8v18L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>
+        Announcements
       </a>
 
       <div class="nav-section">Monitoring</div>
       <a href="{{ url_for('superadmin_controls', tab='overview') }}"
          class="nav-link {% if sa_tab == 'overview' %}active{% endif %}">
-        <span class="icon">🟢</span> System Status
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        System Status
       </a>
       <a href="{{ url_for('superadmin_controls', tab='audit') }}"
          class="nav-link {% if sa_tab == 'audit' %}active{% endif %}">
-        <span class="icon">📜</span> Audit Log
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
+        Audit Log
       </a>
       {% endif %}
     </nav>
+
+    {# Persistent status footer — a live neon dot reinforces the brand
+       accent every time the sidebar is visible. Static for now; wire
+       to a real /healthz signal in a later PR. #}
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <span class="dot" aria-hidden="true"></span>
+        <span class="label">All systems operational</span>
+      </div>
+    </div>
   </aside>
 
   <div class="main">
@@ -145,10 +191,6 @@
         <div class="topbar-title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{% block page_title %}{% endblock %}</div>
       </div>
       <div class="topbar-right">
-        <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle theme" title="Toggle light/dark mode">
-          <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-        </button>
         <span class="topbar-date" id="clock"></span>
 
         {# Referral crown — visible only when the context processor populated
@@ -325,15 +367,6 @@
       if (a && window.innerWidth <= 900) shut();
     });
     window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
-
-    var themeBtn = document.getElementById('themeToggle');
-    if (themeBtn) themeBtn.addEventListener('click', function() {
-      var cur = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-      var next = cur === 'dark' ? 'light' : 'dark';
-      if (next === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-      else document.documentElement.removeAttribute('data-theme');
-      try { localStorage.setItem('theme', next); } catch(e) {}
-    });
 
     var avatar = document.getElementById('userAvatar');
     var dropdown = document.getElementById('userDropdown');

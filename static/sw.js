@@ -2,15 +2,24 @@
 // - Cache-first for the /static/ shell (CSS, icons)
 // - Network-first for navigations with /offline as fallback
 // - Push notifications (show + handle click)
-const CACHE = 'dinerobook-v3';
+const CACHE = 'dinerobook-v4';
 const SHELL = [
   '/offline',
   '/static/app.css',
+  '/static/design-tokens.css',
+  '/static/shell.css',
   '/static/logo.svg',
   '/static/logo-192.png',
   '/static/logo-512.png',
   '/static/manifest.webmanifest'
 ];
+// Stylesheets that should go network-first so deploys roll out
+// without waiting for a cache bust.
+const NETWORK_FIRST_CSS = new Set([
+  '/static/app.css',
+  '/static/design-tokens.css',
+  '/static/shell.css',
+]);
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -41,10 +50,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stylesheet: network first so CSS updates roll out immediately.
+  // Stylesheets: network first so CSS updates roll out immediately.
   // CSS is small and updated often — cache-first here has bitten users
   // who kept seeing stale layouts after deploys.
-  if (url.pathname === '/static/app.css') {
+  if (NETWORK_FIRST_CSS.has(url.pathname)) {
     event.respondWith(
       fetch(req).then((res) => {
         const copy = res.clone();
