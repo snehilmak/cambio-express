@@ -168,8 +168,10 @@
   </div>
   <div class="card-body">
     {% if stripe_health.ok %}
+    {% if stripe_health.account_email %}
     <div class="info-row"><span class="k">Account</span>
-      <span class="v">{{ stripe_health.account_email or stripe_health.account_id }}</span></div>
+      <span class="v">{{ stripe_health.account_email }}</span></div>
+    {% endif %}
     <div class="info-row"><span class="k">Account ID</span>
       <span class="v mono">{{ stripe_health.account_id }}</span></div>
     <div class="info-row"><span class="k">Mode</span>
