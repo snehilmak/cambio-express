@@ -212,13 +212,35 @@
 </details>
 {% endmacro %}
 
+{% set is_locked = report and report.locked_at %}
+
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline btn-sm">← Calendar</a>
-  {% if report %}<span class="badge badge-green">✓ Saved <time data-utc="{{ report.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}" data-fmt="time">{{ report.updated_at.strftime('%I:%M %p') }}</time></span>
-  {% else %}<span class="badge badge-yellow">New Entry</span>{% endif %}
+  {% if is_locked %}
+    <span class="badge badge-red"
+          title="Locked{% if locked_by_name %} by {{ locked_by_name }}{% endif %}">
+      🔒 Locked
+      <time data-utc="{{ report.locked_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}"
+            data-fmt="time">{{ report.locked_at.strftime('%b %d · %I:%M %p') }}</time>
+    </span>
+    <form method="POST" action="{{ url_for('daily_report_unlock', ds=report_date.isoformat()) }}"
+          style="margin:0;"
+          onsubmit="return confirm('Unlock this day? Edits will be allowed until you lock it again.');">
+      <button type="submit" class="btn btn-outline btn-sm">Unlock to Edit</button>
+    </form>
+  {% else %}
+    {% if report %}<span class="badge badge-green">✓ Saved <time data-utc="{{ report.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}" data-fmt="time">{{ report.updated_at.strftime('%I:%M %p') }}</time></span>
+    {% else %}<span class="badge badge-yellow">New Entry</span>{% endif %}
+    <form method="POST" action="{{ url_for('daily_report_lock', ds=report_date.isoformat()) }}"
+          style="margin:0;margin-left:auto;"
+          onsubmit="return confirm('Lock this day? It will stop accepting changes until you unlock it again.');">
+      <button type="submit" class="btn btn-outline btn-sm">Lock Day</button>
+    </form>
+  {% endif %}
 </div>
 
-<form method="POST" id="daily-form" data-date="{{ report_date.isoformat() }}">
+<form method="POST" id="daily-form" data-date="{{ report_date.isoformat() }}"
+      {% if is_locked %}data-locked="1"{% endif %}>
 
 {# Sticky top band: live totals + tab bar. Combined into one sticky block
    so the user can always see where they stand and switch sections
@@ -643,8 +665,13 @@
 </section><!-- /panel-transfers -->
 
 <div class="sticky-save-bar">
+  {% if is_locked %}
+  <span class="badge badge-red" style="margin-right:auto;">🔒 Locked — Unlock above to edit</span>
+  <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Back to Calendar</a>
+  {% else %}
   <button type="submit" class="btn btn-primary sticky-save-primary">Save Daily Report</button>
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Cancel</a>
+  {% endif %}
 </div>
 </form>
 {% endblock %}
@@ -1022,6 +1049,31 @@ function initLineItemWidget(kind) {
 }
 ['return_payback','cash_purchase','cash_expense','check_purchase','check_expense']
   .forEach(initLineItemWidget);
+
+/*
+ * Locked-day UI. When the form carries data-locked="1" the server has
+ * already stopped accepting writes — this just mirrors that in the UI
+ * so the user can't waste keystrokes. readonly works on text/number/
+ * date/time inputs; submit/button/checkbox get disabled.
+ */
+(function() {
+  const form = document.getElementById('daily-form');
+  if (!form || !form.dataset.locked) return;
+  form.querySelectorAll('input, textarea').forEach(function(el) {
+    const t = (el.type || '').toLowerCase();
+    if (t === 'submit' || t === 'button') { el.disabled = true; return; }
+    if (t === 'checkbox' || t === 'radio') { el.disabled = true; return; }
+    el.readOnly = true;
+  });
+  form.querySelectorAll('select, button[type="submit"], button:not([type])').forEach(function(el) {
+    el.disabled = true;
+  });
+  // Hide the line-item add rows (drops, checks, and all 5 line-item
+  // widgets share .drops-add-row) and all Remove buttons.
+  form.querySelectorAll('.drops-add-row, .drop-remove, .check-remove, .li-remove').forEach(function(el) {
+    el.hidden = true;
+  });
+})();
 
 /*
  * Tab controller. Tabs live in the sticky top bar; panels are

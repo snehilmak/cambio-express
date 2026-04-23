@@ -304,6 +304,12 @@ class DailyReport(db.Model):
     over_short            = db.Column(db.Float, default=0.0)
     notes                 = db.Column(db.Text, default="")
     updated_at            = db.Column(db.DateTime, default=datetime.utcnow)
+    # Lock state. When locked_at is not None every write to this report
+    # (and its line items — drops, check deposits, DailyLineItem rows)
+    # is rejected server-side. The user has to explicitly unlock before
+    # editing again. locked_by is the admin who set the lock.
+    locked_at             = db.Column(db.DateTime, nullable=True)
+    locked_by             = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     __table_args__ = (db.UniqueConstraint("store_id","report_date"),)
     @property
     def total_receipts(self):
@@ -3037,6 +3043,26 @@ def _ensure_daily_report(store_id, report_date):
         db.session.flush()
     return rpt
 
+_DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
+
+def _daily_is_locked(store_id, report_date):
+    """True if a DailyReport exists for (store, date) and is locked.
+    Write routes call this first and bail before touching the DB."""
+    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
+    return bool(rpt and rpt.locked_at)
+
+def _reject_if_locked(store_id, report_date, ds):
+    """Shared guard for every daily-book write route. Returns a Flask
+    response to return to the client when locked, or None when the
+    caller may proceed. JSON callers get a 403 payload; HTML callers
+    get a flash + redirect back to the report."""
+    if not _daily_is_locked(store_id, report_date):
+        return None
+    if _wants_json():
+        return jsonify({"ok": False, "error": _DAILY_LOCKED_MSG}), 403
+    flash(_DAILY_LOCKED_MSG, "error")
+    return redirect(url_for("daily_report", ds=ds))
+
 def _recompute_drops_total(store_id, report_date):
     """Sum DailyDrop rows for the given date and push the total onto
     DailyReport.outside_cash_drops. Single source of truth for the daily
@@ -3145,6 +3171,11 @@ def daily_report(ds):
             line_items[row.kind].append(row)
     line_items_total = {k: sum(r.amount for r in rows) for k, rows in line_items.items()}
     if request.method=="POST":
+        # Locked reports reject every write. We re-query to avoid TOCTOU with
+        # the view-render read above (the user could lock from another tab).
+        blocked = _reject_if_locked(sid, report_date, ds)
+        if blocked is not None:
+            return blocked
         if not report: report=DailyReport(store_id=sid,report_date=report_date); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
         for field in _DAILY_REPORT_FIELDS:
@@ -3176,11 +3207,19 @@ def daily_report(ds):
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
         return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
+    # Resolve the lock actor's display name here so the template doesn't
+    # have to join on User.
+    locked_by_name = ""
+    if report and report.locked_by:
+        actor = db.session.get(User, report.locked_by)
+        if actor:
+            locked_by_name = actor.full_name or actor.username or ""
     return render_template("daily_report.html",user=user,report_date=report_date,
         report=report,mt_rows=mt_rows,companies=companies,auto_mt=auto_mt,
         drops=drops, drops_total=drops_total,
         check_deposits=check_deposits, check_deposits_total=check_deposits_total,
-        line_items=line_items, line_items_total=line_items_total)
+        line_items=line_items, line_items_total=line_items_total,
+        locked_by_name=locked_by_name)
 
 def _wants_json():
     """Client explicitly asked for JSON (AJAX from the drops widget).
@@ -3208,6 +3247,8 @@ def daily_drop_new(ds):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     raw_time = request.form.get("drop_time", "").strip()
     raw_amt  = request.form.get("amount", "").strip()
     err = None
@@ -3248,6 +3289,8 @@ def daily_drop_delete(ds, drop_id):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     drop = (DailyDrop.query
             .filter_by(id=drop_id, store_id=sid, report_date=report_date)
             .first_or_404())
@@ -3278,6 +3321,8 @@ def daily_check_deposit_new(ds):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     raw_time = request.form.get("deposit_time", "").strip()
     raw_amt  = request.form.get("amount", "").strip()
     err = None
@@ -3318,6 +3363,8 @@ def daily_check_deposit_delete(ds, deposit_id):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     row = (CheckDeposit.query
            .filter_by(id=deposit_id, store_id=sid, report_date=report_date)
            .first_or_404())
@@ -3352,6 +3399,8 @@ def daily_line_item_new(ds, kind):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     raw_time = request.form.get("at_time", "").strip()
     raw_amt  = request.form.get("amount", "").strip()
     err = None
@@ -3393,6 +3442,8 @@ def daily_line_item_delete(ds, kind, item_id):
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    blocked = _reject_if_locked(sid, report_date, ds)
+    if blocked is not None: return blocked
     row = (DailyLineItem.query
            .filter_by(id=item_id, store_id=sid,
                       report_date=report_date, kind=kind)
@@ -3404,6 +3455,43 @@ def daily_line_item_delete(ds, kind, item_id):
     if _wants_json():
         return jsonify(_line_items_json_payload(kind, sid, report_date))
     flash(f"{label.capitalize()} deleted.", "success")
+    return redirect(url_for("daily_report", ds=ds))
+
+@app.route("/daily/<string:ds>/lock", methods=["POST"])
+@admin_required
+def daily_report_lock(ds):
+    """Lock a daily report so it stops accepting writes. Intended signal:
+    'this day's books are closed.' Creates the DailyReport row if it
+    doesn't exist yet so the user can lock an empty day on purpose."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    rpt = _ensure_daily_report(sid, report_date)
+    if not rpt.locked_at:
+        rpt.locked_at = datetime.utcnow()
+        rpt.locked_by = current_user().id
+        rpt.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} locked.", "success")
+    return redirect(url_for("daily_report", ds=ds))
+
+@app.route("/daily/<string:ds>/unlock", methods=["POST"])
+@admin_required
+def daily_report_unlock(ds):
+    """Unlock a daily report. Admin-only; same gate as locking so an
+    employee on shift can't undo a close."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    rpt = DailyReport.query.filter_by(store_id=sid, report_date=report_date).first()
+    if rpt and rpt.locked_at:
+        rpt.locked_at = None
+        rpt.locked_by = None
+        rpt.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} unlocked.", "success")
     return redirect(url_for("daily_report", ds=ds))
 
 # ── Monthly P&L ──────────────────────────────────────────────
@@ -4692,6 +4780,10 @@ _ADDED_COLUMNS = [
     # next activation/renewal for any store that upgrades or
     # reactivates after this column ships.
     ("store",    "billing_cycle",        "VARCHAR(10) DEFAULT ''"),
+    # Daily-book lock. When locked_at is not NULL the report + its
+    # line-item tables reject writes until an admin explicitly unlocks.
+    ("daily_report", "locked_at",        "TIMESTAMP NULL"),
+    ("daily_report", "locked_by",        "INTEGER NULL"),
 ]
 
 def _ensure_added_columns():
