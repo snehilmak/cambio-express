@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory, make_response
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory, make_response, Response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
@@ -13,6 +13,20 @@ import qrcode
 import qrcode.image.svg
 import io
 from slugify import slugify
+# WebAuthn / passkeys. The library ships both verify_* helpers and the
+# structs we need to build registration options. Lazy imports inside
+# helper bodies would work too, but these are cheap and centralizing
+# them here keeps the passkey routes lean.
+from webauthn import (
+    generate_registration_options, verify_registration_response,
+    generate_authentication_options, verify_authentication_response,
+    options_to_json, base64url_to_bytes,
+)
+from webauthn.helpers import bytes_to_base64url
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria, ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
@@ -582,6 +596,35 @@ class RecoveryCode(db.Model):
     used_at    = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint("user_id", "code_hash",
                                           name="uq_recovery_user_code"),)
+
+class Passkey(db.Model):
+    """A WebAuthn credential (passkey) registered to a user.
+
+    One user can have many passkeys (laptop Touch ID, phone, hardware key).
+    credential_id is the unique identifier the browser presents at login;
+    public_key is the CBOR-encoded COSE key we use to verify assertions.
+    sign_count is the authenticator-reported counter — we accept
+    equal-or-greater values and reject resets to protect against cloned
+    authenticators. name is the user-supplied nickname shown in the UI.
+
+    A passkey login is treated as MFA-sufficient for every role including
+    superadmin — the credential is phishing-resistant and device-bound by
+    construction, so requiring TOTP on top would be redundant friction
+    without adding security.
+    """
+    __tablename__ = "passkey"
+    id             = db.Column(db.Integer, primary_key=True)
+    user_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    # credential_id is up to 1023 bytes per spec; we store the raw bytes
+    # so the server-side verifier doesn't have to re-decode on every use.
+    credential_id  = db.Column(db.LargeBinary, unique=True, nullable=False)
+    public_key     = db.Column(db.LargeBinary, nullable=False)
+    sign_count     = db.Column(db.Integer, default=0, nullable=False)
+    name           = db.Column(db.String(120), default="")
+    aaguid         = db.Column(db.String(36), default="")
+    transports     = db.Column(db.String(120), default="")
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    last_used_at   = db.Column(db.DateTime, nullable=True)
 
 class ReferralCode(db.Model):
     """One code per store, minted the first time the store goes onto a
@@ -1705,6 +1748,51 @@ def _finalize_2fa_login(user):
     session["role"]     = user.role
     session["store_id"] = user.store_id
 
+# ── Passkeys (WebAuthn) ──────────────────────────────────────
+#
+# A passkey is phishing-resistant MFA by construction — the credential
+# is device-bound, user-presence-proven, and the RP ID prevents replay
+# on a look-alike domain. So a successful passkey login is treated as
+# MFA-sufficient for every role including superadmin (see the carve-out
+# in CLAUDE.md invariant #13). Password login still gates superadmin
+# through TOTP; passkey is the parallel path.
+
+def _webauthn_rp_id():
+    """The effective RP ID. Passkeys are cryptographically bound to
+    this string — it has to match across registration + authentication
+    and survive a login from any path on the same host. Prefer an
+    explicit env var (prod sets WEBAUTHN_RP_ID=dinerobook.onrender.com);
+    otherwise strip the port off the request Host (localhost:5000 → localhost)."""
+    explicit = os.environ.get("WEBAUTHN_RP_ID", "").strip()
+    if explicit:
+        return explicit
+    return request.host.split(":", 1)[0]
+
+def _webauthn_rp_name():
+    return "DineroBook"
+
+def _webauthn_origin():
+    """Expected Origin header for WebAuthn verification — scheme + host.
+    The browser signs this alongside the challenge; a mismatch means
+    the request came from a different tab/frame and is rejected."""
+    return f"{request.scheme}://{request.host}"
+
+def _passkey_exclude_list(user):
+    """Credential descriptors for every passkey this user already has,
+    passed to the browser as excludeCredentials so the same physical
+    authenticator can't be registered twice on one account."""
+    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+    return [
+        PublicKeyCredentialDescriptor(id=p.credential_id)
+        for p in Passkey.query.filter_by(user_id=user.id).all()
+    ]
+
+def _passkey_eligible(user):
+    """Who can enroll a passkey. v1: admin-equivalent roles only. The
+    enrollment UI lives on admin_settings (admin_required); employees
+    would need their own page to enroll, which is a follow-up."""
+    return bool(user and user.role in ("admin", "owner", "superadmin"))
+
 def _require_pending_auth():
     """Shared guard for /login/2fa* routes: redirect back to /login if
     there's no partial-auth in flight (expired session, direct visit,
@@ -1878,6 +1966,154 @@ def employee_login_redirect():
         error="We couldn't find a store with that code. Check with your manager for the correct code.",
         store_code_value=raw,
     )
+
+# ── Passkey authentication (WebAuthn) ────────────────────────
+#
+# Three POST pairs:
+#   /account/passkeys/register/begin + /finish   — enroll a new passkey
+#   /login/passkey/begin + /finish               — sign in with a passkey
+#   /account/passkeys/<id>/delete                — remove an enrolled passkey
+# Registration is login-gated + role-gated (_passkey_eligible); sign-in is
+# anonymous because it IS the login. Challenges round-trip through the
+# session (single-use — popped on finish) so the browser can't replay a
+# previous attestation / assertion on a later request.
+
+@app.route("/account/passkeys/register/begin", methods=["POST"])
+@login_required
+def passkey_register_begin():
+    user = current_user()
+    if not _passkey_eligible(user):
+        return jsonify({"ok": False,
+                        "error": "Passkeys aren't enabled for this account."}), 403
+    options = generate_registration_options(
+        rp_id=_webauthn_rp_id(),
+        rp_name=_webauthn_rp_name(),
+        user_id=str(user.id).encode("utf-8"),
+        user_name=user.username,
+        user_display_name=user.full_name or user.username,
+        exclude_credentials=_passkey_exclude_list(user),
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.REQUIRED,
+            user_verification=UserVerificationRequirement.PREFERRED,
+        ),
+    )
+    # Challenge is single-use — stored base64url-encoded in the session
+    # so it survives the round-trip and the finish route can decode it back.
+    session["pk_reg_challenge"] = bytes_to_base64url(options.challenge)
+    return Response(options_to_json(options), mimetype="application/json")
+
+@app.route("/account/passkeys/register/finish", methods=["POST"])
+@login_required
+def passkey_register_finish():
+    user = current_user()
+    if not _passkey_eligible(user):
+        return jsonify({"ok": False,
+                        "error": "Passkeys aren't enabled for this account."}), 403
+    challenge_b64 = session.pop("pk_reg_challenge", None)
+    if not challenge_b64:
+        return jsonify({"ok": False,
+                        "error": "No registration in progress. Start again."}), 400
+    body = request.get_json(silent=True) or {}
+    credential = body.get("credential")
+    if not credential:
+        return jsonify({"ok": False, "error": "Missing credential."}), 400
+    name = (body.get("name") or "").strip()[:120] or "Passkey"
+    try:
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_origin=_webauthn_origin(),
+            expected_rp_id=_webauthn_rp_id(),
+            require_user_verification=False,
+        )
+    except Exception as e:
+        # Normalize the error message — library raises a mix of
+        # InvalidRegistrationResponse / InvalidJSONStructure / …; the
+        # user just needs to know it didn't work.
+        return jsonify({"ok": False,
+                        "error": f"Passkey could not be verified ({type(e).__name__})."}), 400
+    db.session.add(Passkey(
+        user_id=user.id,
+        credential_id=verification.credential_id,
+        public_key=verification.credential_public_key,
+        sign_count=verification.sign_count,
+        name=name,
+        aaguid=str(verification.aaguid or ""),
+    ))
+    db.session.commit()
+    return jsonify({"ok": True, "name": name})
+
+@app.route("/account/passkeys/<int:pk_id>/delete", methods=["POST"])
+@login_required
+def passkey_delete(pk_id):
+    user = current_user()
+    pk = Passkey.query.filter_by(id=pk_id, user_id=user.id).first_or_404()
+    db.session.delete(pk)
+    db.session.commit()
+    flash("Passkey removed.", "success")
+    return redirect(url_for("admin_settings", tab="security"))
+
+@app.route("/login/passkey/begin", methods=["POST"])
+def passkey_login_begin():
+    """Discoverable-credential sign-in. No username needed — the browser
+    asks the platform to pick one of the user's stored passkeys for
+    this RP ID. The server just generates a challenge and lets the
+    authenticator decide which credential to use."""
+    options = generate_authentication_options(
+        rp_id=_webauthn_rp_id(),
+        user_verification=UserVerificationRequirement.PREFERRED,
+    )
+    session["pk_login_challenge"] = bytes_to_base64url(options.challenge)
+    return Response(options_to_json(options), mimetype="application/json")
+
+@app.route("/login/passkey/finish", methods=["POST"])
+def passkey_login_finish():
+    challenge_b64 = session.pop("pk_login_challenge", None)
+    if not challenge_b64:
+        return jsonify({"ok": False,
+                        "error": "No sign-in challenge in progress."}), 400
+    body = request.get_json(silent=True) or {}
+    credential = body.get("credential")
+    if not credential:
+        return jsonify({"ok": False, "error": "Missing credential."}), 400
+    raw_cred_id_b64 = credential.get("rawId") or credential.get("id")
+    if not raw_cred_id_b64:
+        return jsonify({"ok": False, "error": "Invalid credential."}), 400
+    try:
+        cred_bytes = base64url_to_bytes(raw_cred_id_b64)
+    except Exception:
+        return jsonify({"ok": False, "error": "Invalid credential."}), 400
+    pk = Passkey.query.filter_by(credential_id=cred_bytes).first()
+    if not pk:
+        return jsonify({"ok": False, "error": "Passkey not recognized."}), 400
+    user = db.session.get(User, pk.user_id)
+    if not user or not user.is_active:
+        return jsonify({"ok": False, "error": "Account unavailable."}), 403
+    try:
+        verification = verify_authentication_response(
+            credential=credential,
+            expected_challenge=base64url_to_bytes(challenge_b64),
+            expected_origin=_webauthn_origin(),
+            expected_rp_id=_webauthn_rp_id(),
+            credential_public_key=pk.public_key,
+            credential_current_sign_count=pk.sign_count,
+            require_user_verification=False,
+        )
+    except Exception:
+        return jsonify({"ok": False,
+                        "error": "Passkey verification failed."}), 400
+    pk.sign_count = verification.new_sign_count
+    pk.last_used_at = datetime.utcnow()
+    # Passkey IS MFA — skip the TOTP gate per the carve-out in CLAUDE.md
+    # invariant #13. Clear any stale pending-auth too.
+    session.pop("pending_auth_user_id", None)
+    session.pop("totp_enrollment_codes", None)
+    session["user_id"]  = user.id
+    session["role"]     = user.role
+    session["store_id"] = user.store_id
+    db.session.commit()
+    redirect_url = url_for("owner_dashboard") if user.role == "owner" else url_for("dashboard")
+    return jsonify({"ok": True, "redirect": redirect_url})
 
 # ── Password reset ───────────────────────────────────────────
 PASSWORD_RESET_TTL_HOURS = 1
@@ -3917,6 +4153,8 @@ def admin_settings():
         StoreEmployee.is_active.desc(), StoreEmployee.name.asc()
     ).all()
 
+    passkeys = (Passkey.query.filter_by(user_id=user.id)
+                .order_by(Passkey.created_at.desc()).all())
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
@@ -3928,6 +4166,8 @@ def admin_settings():
         current_company_set=current_set,
         custom_companies=custom_companies,
         roster=roster,
+        passkeys=passkeys,
+        passkeys_eligible=_passkey_eligible(user),
     )
 
 @app.route("/admin/settings/roster/add", methods=["POST"])
@@ -4677,6 +4917,15 @@ def purge_expired_stores():
     ).all()
     purged = 0
     for s in expired:
+        # User-scoped auth rows have to go before the Users themselves so
+        # the User FK doesn't orphan on Postgres. Collect user ids in the
+        # store, wipe their Passkey rows, then let the regular loop purge
+        # the User rows.
+        user_ids = [uid for (uid,) in
+                    db.session.query(User.id).filter_by(store_id=s.id).all()]
+        if user_ids:
+            Passkey.query.filter(Passkey.user_id.in_(user_ids)).delete(
+                synchronize_session=False)
         for model_name in _STORE_OWNED_MODELS:
             model = globals().get(model_name)
             if model is not None:
