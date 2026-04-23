@@ -44,6 +44,92 @@
   text-align: center; color: var(--text-muted);
   font-size: 12.5px; padding: 12px !important;
 }
+
+/* ── Sticky totals strip + tab bar ──────────────────────── */
+.db-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--db-bg);
+  border-bottom: 1px solid var(--db-gray-3);
+  margin: 0 -16px 16px;  /* bleed past the page padding so the shadow reaches edges */
+  padding: 0 16px;
+}
+.db-totals-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0;
+}
+.db-total-card {
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 10px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.db-total-label {
+  font-family: var(--db-font-mono);
+  font-size: 9.5px; letter-spacing: 1.2px;
+  color: var(--db-gray-6); text-transform: uppercase;
+}
+.db-total-value {
+  font-family: var(--db-font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 15px; font-weight: 600;
+  color: var(--db-gray-9); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.db-total-card.is-rec .db-total-value { color: var(--db-neon); }
+.db-total-card.is-dis .db-total-value { color: var(--db-negative); }
+.db-total-card.is-net .db-total-value { color: var(--db-neon); }
+.db-total-card.is-net.neg .db-total-value { color: var(--db-negative); }
+
+.db-tab-bar {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--db-gray-3);
+  margin-bottom: 0;
+}
+.db-tab-bar::-webkit-scrollbar { display: none; }
+.db-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--db-gray-7);
+  font-family: var(--db-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 10px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: color 0.12s, border-color 0.12s;
+}
+.db-tab-btn:hover { color: var(--db-gray-9); }
+.db-tab-btn[aria-selected="true"] {
+  color: var(--db-gray-9);
+  font-weight: 600;
+  border-bottom-color: var(--db-neon);
+}
+.db-tab-panel[hidden] { display: none; }
+.db-tab-panel > .section-box { margin-bottom: 16px; }
+
+/* Desktop: give the Transfers tab room to breathe with a 2-col split */
+@media (min-width: 901px) {
+  .db-totals-strip { gap: 14px; padding: 14px 0; }
+  .db-total-card { padding: 10px 14px; }
+  .db-total-value { font-size: 18px; }
+  .db-tab-btn { font-size: 14px; padding: 12px 18px; }
+  .db-transfers-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
+  .db-transfers-grid > .section-box { margin-bottom: 0; }
+}
 </style>
 {% endblock %}
 {% block content %}
@@ -132,9 +218,41 @@
   {% else %}<span class="badge badge-yellow">New Entry</span>{% endif %}
 </div>
 
-<form method="POST" id="daily-form">
-<div class="grid-2">
-<div>
+<form method="POST" id="daily-form" data-date="{{ report_date.isoformat() }}">
+
+{# Sticky top band: live totals + tab bar. Combined into one sticky block
+   so the user can always see where they stand and switch sections
+   without scrolling. The tabs are plain buttons driving aria-selected +
+   [hidden] panels below — no heavy JS, same idea as the Drops details
+   disclosure above. Active tab persists in sessionStorage per date. #}
+<div class="db-topbar">
+  <div class="db-totals-strip">
+    <div class="db-total-card is-rec">
+      <span class="db-total-label">Receipts</span>
+      <span class="db-total-value" id="top-sum-rec">$0.00</span>
+    </div>
+    <div class="db-total-card is-dis">
+      <span class="db-total-label">Disbursements</span>
+      <span class="db-total-value" id="top-sum-dis">$0.00</span>
+    </div>
+    <div class="db-total-card is-net" id="top-net-card">
+      <span class="db-total-label">Net Position</span>
+      <span class="db-total-value" id="top-sum-net">$0.00</span>
+    </div>
+  </div>
+  <div class="db-tab-bar" role="tablist" id="db-tabs">
+    <button type="button" class="db-tab-btn" role="tab" aria-selected="true"
+            aria-controls="panel-receipts" data-tab="receipts">Receipts</button>
+    <button type="button" class="db-tab-btn" role="tab" aria-selected="false"
+            aria-controls="panel-disbursements" data-tab="disbursements">Disbursements</button>
+    <button type="button" class="db-tab-btn" role="tab" aria-selected="false"
+            aria-controls="panel-transfers" data-tab="transfers">Money Transfers</button>
+    <button type="button" class="db-tab-btn" role="tab" aria-selected="false"
+            aria-controls="panel-summary" data-tab="summary">Over / Short &amp; Notes</button>
+  </div>
+</div>
+
+<section class="db-tab-panel" id="panel-receipts" role="tabpanel" aria-labelledby="tab-receipts">
 
 <!-- RECEIPTS -->
 <div class="section-box">
@@ -178,6 +296,10 @@
     <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--green);" id="total-receipts">$0.00</div>
   </div>
 </div>
+
+</section><!-- /panel-receipts -->
+
+<section class="db-tab-panel" id="panel-disbursements" role="tabpanel" aria-labelledby="tab-disbursements" hidden>
 
 <!-- DISBURSEMENTS -->
 <div class="section-box">
@@ -371,6 +493,10 @@
   </div>
 </div>
 
+</section><!-- /panel-disbursements -->
+
+<section class="db-tab-panel" id="panel-summary" role="tabpanel" aria-labelledby="tab-summary" hidden>
+
 <!-- OVER / SHORT -->
 <div class="section-box">
   <div class="section-box-header" style="--sb-accent:var(--gold);">OVER / SHORT</div>
@@ -405,8 +531,10 @@
   </div>
 </div>
 
-</div><!-- end left col -->
-<div>
+</section><!-- /panel-summary -->
+
+<section class="db-tab-panel" id="panel-transfers" role="tabpanel" aria-labelledby="tab-transfers" hidden>
+<div class="db-transfers-grid">
 
 <!-- MONEY TRANSFERS -->
 <div class="section-box">
@@ -511,8 +639,8 @@
   </div>
 </div>
 
-</div><!-- end right col -->
-</div><!-- end grid -->
+</div><!-- /db-transfers-grid -->
+</section><!-- /panel-transfers -->
 
 <div class="sticky-save-bar">
   <button type="submit" class="btn btn-primary sticky-save-primary">Save Daily Report</button>
@@ -534,12 +662,21 @@ function recalc(){
   const rec=RECEIPT_FIELDS.reduce((s,f)=>s+gv(f),0);
   const dis=DISB_FIELDS.reduce((s,f)=>s+gv(f),0);
   const os=gv('over_short'); const net=rec-dis+os;
-  document.getElementById('total-receipts').textContent=fmt(rec);
-  document.getElementById('total-disb').textContent=fmt(dis);
-  document.getElementById('sum-rec').textContent=fmt(rec);
-  document.getElementById('sum-dis').textContent=fmt(dis);
+  const setText = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = fmt(v); };
+  // Section-level totals (TOTAL RECEIPTS / TOTAL DISBURSEMENTS rows)
+  setText('total-receipts', rec);
+  setText('total-disb', dis);
+  // Summary tab's reconciliation mini-box
+  setText('sum-rec', rec);
+  setText('sum-dis', dis);
   const n=document.getElementById('net-pos');
-  n.textContent=fmt(net); n.style.color=net>=0?'var(--green)':'var(--red)';
+  if (n) { n.textContent=fmt(net); n.style.color=net>=0?'var(--green)':'var(--red)'; }
+  // Sticky top strip — visible on every tab
+  setText('top-sum-rec', rec);
+  setText('top-sum-dis', dis);
+  setText('top-sum-net', net);
+  const netCard = document.getElementById('top-net-card');
+  if (netCard) netCard.classList.toggle('neg', net < 0);
 }
 function recalcMT(key){
   const a=parseFloat(document.getElementById('amt_'+key)?.value)||0;
@@ -885,5 +1022,59 @@ function initLineItemWidget(kind) {
 }
 ['return_payback','cash_purchase','cash_expense','check_purchase','check_expense']
   .forEach(initLineItemWidget);
+
+/*
+ * Tab controller. Tabs live in the sticky top bar; panels are
+ * [hidden]-toggled <section>s below. We persist the active tab per
+ * report date in sessionStorage so a save round-trip or reload keeps
+ * the user where they were. If the browser ever jumps to a specific
+ * form field via a hash (#fieldname), we auto-activate the tab that
+ * contains it so the field isn't hidden.
+ */
+(function() {
+  const form = document.getElementById('daily-form');
+  const bar  = document.getElementById('db-tabs');
+  if (!form || !bar) return;
+  const dateStr = form.dataset.date || '';
+  const STORAGE_KEY = 'dailyBookTab:' + dateStr;
+  const btns   = Array.from(bar.querySelectorAll('.db-tab-btn'));
+  const panels = Array.from(document.querySelectorAll('.db-tab-panel'));
+
+  function activate(tab) {
+    let matched = false;
+    btns.forEach(function(b) {
+      const on = b.dataset.tab === tab;
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) matched = true;
+    });
+    panels.forEach(function(p) {
+      const id = p.id;                              // "panel-receipts" etc.
+      const panelTab = id.replace(/^panel-/, '');
+      p.hidden = (panelTab !== tab);
+    });
+    if (matched) sessionStorage.setItem(STORAGE_KEY, tab);
+  }
+
+  bar.addEventListener('click', function(e) {
+    const btn = e.target.closest('.db-tab-btn');
+    if (!btn) return;
+    activate(btn.dataset.tab);
+  });
+
+  // If the URL hash points at a field, find its owning panel and activate.
+  function tabForHash() {
+    if (!location.hash) return null;
+    const el = document.querySelector(location.hash);
+    if (!el) return null;
+    const panel = el.closest('.db-tab-panel');
+    if (!panel) return null;
+    return panel.id.replace(/^panel-/, '');
+  }
+
+  const initial = tabForHash()
+    || sessionStorage.getItem(STORAGE_KEY)
+    || 'receipts';
+  activate(initial);
+})();
 </script>
 {% endblock %}
