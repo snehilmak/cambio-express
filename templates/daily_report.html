@@ -50,6 +50,82 @@
 
 {% macro field_val(fname) %}{{ (report | attr(fname)) if report else 0 }}{% endmacro %}
 
+{# Generic line-item disclosure widget. `kind` matches one of
+   app.py::_LINE_ITEM_KINDS; every DOM id is namespaced so 5 widgets
+   can coexist on the same page. Reuses the page-local .drops-*
+   styles — they're not drop-specific, just the first widget that
+   needed them. #}
+{% macro line_item_widget(kind, field_name, label, rows, total, placeholder='') %}
+<details class="drops-disclosure" id="li-{{ kind }}-details"
+         data-kind="{{ kind }}"
+         data-url-new="{{ url_for('daily_line_item_new', ds=report_date.isoformat(), kind=kind) }}"
+         data-url-delete-base="{{ url_for('daily_report', ds=report_date.isoformat()) }}/line-items/{{ kind }}/"
+         data-date="{{ report_date.isoformat() }}">
+  <summary>
+    <div class="sb-row">
+      <span class="sb-label">
+        {{ label }}
+        <span class="drops-caret" aria-hidden="true">▸</span>
+        <span class="drops-count" id="li-{{ kind }}-count">{{ rows|length }} {{ 'entry' if rows|length == 1 else 'entries' }}</span>
+      </span>
+      <div class="sb-input">
+        <input type="number" step="0.01" name="{{ field_name }}"
+          id="li-{{ kind }}-field"
+          value="{{ '%.2f'|format(total or 0) }}"
+          readonly tabindex="-1"
+          title="Click the row to log {{ label|lower }} — this total updates automatically.">
+      </div>
+    </div>
+  </summary>
+  <div class="drops-panel">
+    <div class="drops-add-row">
+      <div class="field" style="flex:0 0 130px;">
+        <label>Time</label>
+        <input type="time" id="li-{{ kind }}-time">
+      </div>
+      <div class="field" style="flex:0 0 150px;">
+        <label>Amount ($)</label>
+        <input type="number" step="0.01" min="0.01" id="li-{{ kind }}-amount" placeholder="0.00">
+      </div>
+      <div class="field" style="flex:1;min-width:180px;">
+        <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <input type="text" id="li-{{ kind }}-note" maxlength="120"
+               placeholder="{{ placeholder }}">
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" id="li-{{ kind }}-add">＋ Add</button>
+    </div>
+    <div id="li-{{ kind }}-err" class="drops-err" hidden></div>
+    <table class="drops-table">
+      <thead>
+        <tr>
+          <th style="width:100px;">Time</th>
+          <th style="width:130px;">Amount</th>
+          <th>Note</th>
+          <th style="width:72px;"></th>
+        </tr>
+      </thead>
+      <tbody id="li-{{ kind }}-tbody">
+        {% for r in rows %}
+        <tr data-id="{{ r.id }}">
+          <td class="mono">{{ r.at_time.strftime('%H:%M') }}</td>
+          <td class="mono">${{ '{:,.2f}'.format(r.amount) }}</td>
+          <td>{{ r.note or '—' }}</td>
+          <td>
+            <button type="button" class="btn btn-outline btn-sm li-remove"
+                    data-id="{{ r.id }}"
+                    style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot id="li-{{ kind }}-empty" {% if rows %}hidden{% endif %}>
+        <tr><td colspan="4" class="drops-empty-cell">No {{ label|lower }} logged yet. Add one above.</td></tr>
+      </tfoot>
+    </table>
+  </div>
+</details>
+{% endmacro %}
+
 <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline btn-sm">← Calendar</a>
   {% if report %}<span class="badge badge-green">✓ Saved <time data-utc="{{ report.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}" data-fmt="time">{{ report.updated_at.strftime('%I:%M %p') }}</time></span>
@@ -71,6 +147,12 @@
     ('return_check_paid_back','Return Check Paid Back'),('forward_balance','Forward Balance'),
     ('from_bank','From Bank'),('other_cash_in','Other Cash In'),('rebates_commissions','Rebates & Commissions')
   ] %}
+  {% if fname == 'return_check_paid_back' %}
+    {# Derived from DailyLineItem(kind='return_payback') rows. #}
+    {{ line_item_widget('return_payback', 'return_check_paid_back', label,
+                        line_items['return_payback'], line_items_total['return_payback'],
+                        placeholder='Customer name, invoice #, …') }}
+  {% else %}
   {# money_transfer is derived from the Money Transfer table below
      (matches the spreadsheet's subtotal formula). Rendered as readonly
      with an Auto badge; JS mirrors the MT-table total into this input
@@ -89,6 +171,7 @@
         {% else %}oninput="recalc()"{% endif %}>
     </div>
   </div>
+  {% endif %}
   {% endfor %}
   <div class="sb-row sb-total pl-total">
     <span class="sb-label">TOTAL RECEIPTS</span>
@@ -99,19 +182,23 @@
 <!-- DISBURSEMENTS -->
 <div class="section-box">
   <div class="section-box-header" style="--sb-accent:#7c3aed;">DISBURSEMENTS</div>
-  {% for fname, label in [
-    ('cash_purchases','Cash Purchases'),('cash_expense','Cash Expense'),
-    ('check_purchases','Check Purchases'),('check_expense','Check Expense')
-  ] %}
-  <div class="sb-row">
-    <span class="sb-label">{{ label }}</span>
-    <div class="sb-input">
-      <input type="number" step="0.01" min="0" name="{{ fname }}"
-        value="{% if report %}{{ report[fname] if report[fname] is not none else 0 }}{% else %}0{% endif %}"
-        oninput="recalc()">
-    </div>
-  </div>
-  {% endfor %}
+
+  {# All four of these are line-item driven: a store may log multiple
+     purchases / expenses across a day and the daily-book field becomes
+     a read-only sum. Kinds + DailyReport fields are declared in
+     app.py::_LINE_ITEM_KINDS. #}
+  {{ line_item_widget('cash_purchase',  'cash_purchases',  'Cash Purchases',
+                      line_items['cash_purchase'],  line_items_total['cash_purchase'],
+                      placeholder='Supplier, invoice #, …') }}
+  {{ line_item_widget('cash_expense',   'cash_expense',    'Cash Expense',
+                      line_items['cash_expense'],   line_items_total['cash_expense'],
+                      placeholder='Gas, fee, utility, …') }}
+  {{ line_item_widget('check_purchase', 'check_purchases', 'Check Purchases',
+                      line_items['check_purchase'], line_items_total['check_purchase'],
+                      placeholder='Vendor, check #, …') }}
+  {{ line_item_widget('check_expense',  'check_expense',   'Check Expense',
+                      line_items['check_expense'],  line_items_total['check_expense'],
+                      placeholder='Utility, check #, …') }}
 
     {# Outside Cash & Drops is read-only; value is the sum of DailyDrop
        line items. Click the row to expand the inline drops panel. The
@@ -696,5 +783,107 @@ recalcMTTotals(); recalc();
     } catch (e) { btn.disabled = false; }
   });
 })();
+
+/*
+ * Generic line-item widget — one wiring for every kind in
+ * app.py::_LINE_ITEM_KINDS. Expects a fixed set of DOM ids,
+ * all namespaced under "li-<kind>-". The server response always
+ * carries {ok, kind, total, items} so the render is identical.
+ */
+function initLineItemWidget(kind) {
+  const q = (suffix) => document.getElementById('li-' + kind + '-' + suffix);
+  const root    = q('details');
+  if (!root) return;
+  const tbody   = q('tbody');
+  const empty   = q('empty');
+  const field   = q('field');
+  const count   = q('count');
+  const errBox  = q('err');
+  const tInput  = q('time');
+  const aInput  = q('amount');
+  const nInput  = q('note');
+  const addBtn  = q('add');
+  const urlNew  = root.dataset.urlNew;
+  const urlDel  = root.dataset.urlDeleteBase;  // trailing slash; append "<id>/delete"
+  const dateStr = root.dataset.date;
+
+  const OPEN_KEY = 'liOpen:' + kind + ':' + dateStr;
+  if (sessionStorage.getItem(OPEN_KEY) === '1') root.open = true;
+  root.addEventListener('toggle', function() {
+    sessionStorage.setItem(OPEN_KEY, root.open ? '1' : '0');
+  });
+
+  function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
+  function fmt2(n) { return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function render(items, total) {
+    tbody.innerHTML = items.map(function(r) {
+      return (
+        '<tr data-id="' + r.id + '">' +
+          '<td class="mono">' + r.time + '</td>' +
+          '<td class="mono">' + fmt2(r.amount) + '</td>' +
+          '<td>' + (r.note ? escapeHTML(r.note) : '—') + '</td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm li-remove" ' +
+                      'data-id="' + r.id + '" ' +
+                      'style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button></td>' +
+        '</tr>'
+      );
+    }).join('');
+    empty.hidden = items.length > 0;
+    field.value = Number(total).toFixed(2);
+    count.textContent = items.length + ' ' + (items.length === 1 ? 'entry' : 'entries');
+    if (typeof recalc === 'function') recalc();
+  }
+
+  addBtn.addEventListener('click', async function() {
+    showError('');
+    const fd = new FormData();
+    fd.append('at_time', tInput.value);
+    fd.append('amount', aInput.value);
+    fd.append('note', nInput.value);
+    addBtn.disabled = true;
+    try {
+      const resp = await fetch(urlNew, {
+        method: 'POST', body: fd,
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false, error:'Unexpected response.'}; });
+      if (!resp.ok || !data.ok) { showError(data.error || 'Could not add.'); return; }
+      render(data.items, data.total);
+      tInput.value = ''; aInput.value = ''; nInput.value = '';
+      tInput.focus();
+    } catch (e) {
+      showError('Network error. Try again.');
+    } finally {
+      addBtn.disabled = false;
+    }
+  });
+
+  tbody.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.li-remove');
+    if (!btn) return;
+    if (!confirm('Delete this entry?')) return;
+    const id = btn.getAttribute('data-id');
+    btn.disabled = true;
+    try {
+      const resp = await fetch(urlDel + id + '/delete', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false}; });
+      if (!resp.ok || !data.ok) { btn.disabled = false; return; }
+      render(data.items, data.total);
+    } catch (e) { btn.disabled = false; }
+  });
+}
+['return_payback','cash_purchase','cash_expense','check_purchase','check_expense']
+  .forEach(initLineItemWidget);
 </script>
 {% endblock %}
