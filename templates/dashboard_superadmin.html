@@ -3,57 +3,381 @@
 {% block page_title %}Platform Overview{% endblock %}
 {% block head %}
 <style>
-.sa-hero { background: linear-gradient(135deg,var(--navy),var(--blue)); border-radius: 14px; padding: 28px 32px; margin-bottom: 28px; color: white; }
-.sa-hero-title { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--gold2); margin-bottom: 6px; }
-.sa-hero-sub { font-size: 14px; opacity: 0.7; }
-.sa-hero-stats { display: flex; gap: 32px; margin-top: 20px; }
-.sa-stat-label { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; }
-.sa-stat-value { font-size: 28px; font-weight: 700; }
-.sa-view-btn { white-space: nowrap; }
-.sa-store-row td { vertical-align: middle; }
-.sa-store-name { min-width: 140px; }
-.sa-actions-cell { text-align: right; }
-@media (max-width: 900px) {
-  .sa-hero { padding: 20px 18px; margin-bottom: 20px; border-radius: 12px; }
-  .sa-hero-title { font-size: 18px; }
-  .sa-hero-sub { font-size: 13px; }
-  .sa-hero-stats { gap: 24px; margin-top: 16px; }
-  .sa-stat-value { font-size: 22px; }
-  .sa-store-name { min-width: 120px; }
-}
+  .dash-hero {
+    background: linear-gradient(135deg, rgba(63,255,0,0.12), rgba(63,255,0,0.02));
+    border: 1px solid rgba(63,255,0,0.25);
+    border-radius: 14px;
+    padding: 22px 26px;
+    margin-bottom: 22px;
+    display: flex; gap: 28px; align-items: center; flex-wrap: wrap;
+  }
+  .dash-hero-title {
+    font-family: var(--db-font-display);
+    font-size: 20px; font-weight: 600;
+    color: var(--db-neon); letter-spacing: -0.01em;
+    margin-bottom: 4px;
+  }
+  .dash-hero-sub { font-size: 13px; color: var(--db-gray-7); max-width: 560px; }
+  .dash-hero-cta { margin-left: auto; }
+
+  .dash-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 14px; margin-bottom: 22px;
+  }
+  .dash-kpi { position: relative; }
+  .dash-kpi .stat-value { font-size: 26px; }
+  .dash-delta {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: var(--db-font-mono);
+    font-size: 10.5px; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px;
+    letter-spacing: 0.3px;
+    margin-top: 6px;
+  }
+  .dash-delta.pos { background: rgba(63,255,0,0.10); color: var(--db-neon); }
+  .dash-delta.neg { background: rgba(255,77,109,0.10); color: var(--db-negative); }
+  .dash-delta.zero { background: var(--db-bg-input); color: var(--db-gray-6); }
+
+  .dash-row {
+    display: grid; gap: 18px; margin-bottom: 20px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .dash-row.uneven { grid-template-columns: 2fr 1fr; }
+  @media (max-width: 900px) { .dash-row, .dash-row.uneven { grid-template-columns: 1fr; } }
+
+  .chart-card .card-body { padding: 16px 18px 12px; }
+  .chart-box { min-height: 260px; }
+  .chart-box.short { min-height: 220px; }
+
+  /* Referral / MRR breakdown tables — tighter than the default table */
+  .mini-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .mini-table th {
+    font-family: var(--db-font-mono); font-size: 10px; font-weight: 500;
+    color: var(--db-gray-6); text-transform: uppercase; letter-spacing: 1.2px;
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--db-gray-3);
+  }
+  .mini-table th.num, .mini-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mini-table td {
+    padding: 10px; color: var(--db-gray-9);
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .mini-table tr:last-child td { border-bottom: none; }
+  .mini-table td.mono { font-family: var(--db-font-mono); color: var(--db-gray-8); }
+  .mini-table td.amt-neon { color: var(--db-neon); font-family: var(--db-font-mono); font-weight: 600; }
+
+  .ref-split {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 14px;
+  }
+  .ref-split .ref-tile {
+    background: var(--db-bg-input);
+    border: 1px solid var(--db-gray-3);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .ref-tile .ref-label {
+    font-family: var(--db-font-mono); font-size: 10px;
+    color: var(--db-gray-6); text-transform: uppercase; letter-spacing: 1.2px;
+  }
+  .ref-tile .ref-value {
+    font-family: var(--db-font-display); font-size: 22px;
+    color: var(--db-gray-9); margin-top: 4px; font-variant-numeric: tabular-nums;
+  }
+  .ref-tile .ref-value.neon { color: var(--db-neon); }
+  .ref-tile .ref-sub { font-size: 11px; color: var(--db-gray-6); margin-top: 2px; }
+
+  /* Activity feed */
+  .activity-feed { list-style: none; padding: 0; margin: 0; }
+  .activity-feed li {
+    display: grid;
+    grid-template-columns: 8px 1fr auto;
+    gap: 12px; align-items: baseline;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .activity-feed li:last-child { border-bottom: none; }
+  .activity-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; }
+  .activity-dot.signup { background: var(--db-neon); box-shadow: 0 0 8px rgba(63,255,0,0.5); }
+  .activity-dot.cancel { background: var(--db-negative); }
+  .activity-main .act-store { font-weight: 600; color: var(--db-gray-9); }
+  .activity-main .act-detail {
+    font-size: 12px; color: var(--db-gray-7);
+    font-family: var(--db-font-mono);
+  }
+  .activity-time {
+    font-family: var(--db-font-mono); font-size: 11px;
+    color: var(--db-gray-6); white-space: nowrap;
+  }
+  .activity-empty {
+    padding: 28px 0; text-align: center;
+    color: var(--db-gray-6); font-size: 13px;
+  }
+
+  .dash-total-strip {
+    display: flex; gap: 24px; padding: 10px 16px 14px;
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .dash-total-strip .ts-item .ts-label {
+    font-family: var(--db-font-mono); font-size: 10px;
+    color: var(--db-gray-6); text-transform: uppercase; letter-spacing: 1.2px;
+  }
+  .dash-total-strip .ts-item .ts-value {
+    font-family: var(--db-font-display); font-size: 18px;
+    color: var(--db-gray-9); font-variant-numeric: tabular-nums; margin-top: 2px;
+  }
+
+  .sa-view-btn { white-space: nowrap; }
+  .sa-actions-cell { text-align: right; }
+
+  @media (max-width: 900px) {
+    .dash-hero { padding: 18px; }
+    .dash-hero-title { font-size: 17px; }
+    .dash-hero-cta { margin-left: 0; width: 100%; }
+    .dash-kpi .stat-value { font-size: 22px; }
+    .dash-total-strip { flex-wrap: wrap; gap: 16px; }
+  }
 </style>
 {% endblock %}
 {% block content %}
 
-<div class="sa-hero">
-  <div class="sa-hero-title">DineroBook Platform</div>
-  <div class="sa-hero-sub">You are the platform owner. All stores and their data are managed here.</div>
-  <div class="sa-hero-stats">
-    <div><div class="sa-stat-label">Total Stores</div>
-      <div class="sa-stat-value">{{ stores|length }}</div></div>
-    <div><div class="sa-stat-label">Active</div>
-      <div class="sa-stat-value">{{ stores|selectattr('is_active')|list|length }}</div></div>
+<div class="dash-hero">
+  <div>
+    <div class="dash-hero-title">DineroBook Platform</div>
+    <div class="dash-hero-sub">Everything the business looks like right now — signups, revenue, referrals, transfer volume, and what changed in the last 30 days.</div>
+  </div>
+  <a href="{{ url_for('superadmin_new_store') }}" class="btn btn-primary dash-hero-cta">＋ Add Store</a>
+</div>
+
+{# ── KPI strip ──────────────────────────────────────────── #}
+<div class="dash-kpi-grid">
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">Total stores</div>
+    <div class="stat-value">{{ total_stores }}</div>
+    <div class="stat-sub">{{ active_count }} active · {{ inactive_count }} inactive</div>
+  </div>
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">Trial</div>
+    <div class="stat-value">{{ trial_count }}</div>
+    <div class="stat-sub">currently evaluating</div>
+  </div>
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">Paid</div>
+    <div class="stat-value">{{ paid_count }}</div>
+    <div class="stat-sub">{{ basic_count }} basic · {{ pro_count }} pro</div>
+  </div>
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">Est. MRR</div>
+    <div class="stat-value">${{ '{:,}'.format(estimated_mrr) }}</div>
+    <div class="stat-sub">yearly plans amortized</div>
+  </div>
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">New stores · 30d</div>
+    <div class="stat-value">{{ new_stores_30d }}</div>
+    {% if new_stores_delta > 0 %}
+      <span class="dash-delta pos">▲ {{ new_stores_delta }} vs prior 30d</span>
+    {% elif new_stores_delta < 0 %}
+      <span class="dash-delta neg">▼ {{ new_stores_delta|abs }} vs prior 30d</span>
+    {% else %}
+      <span class="dash-delta zero">— flat vs prior 30d</span>
+    {% endif %}
+  </div>
+  <div class="stat-card dash-kpi">
+    <div class="stat-label">Churn · 30d</div>
+    <div class="stat-value">{{ churn_30d }}</div>
+    {% if churn_delta > 0 %}
+      <span class="dash-delta neg">▲ {{ churn_delta }} vs prior 30d</span>
+    {% elif churn_delta < 0 %}
+      <span class="dash-delta pos">▼ {{ churn_delta|abs }} vs prior 30d</span>
+    {% else %}
+      <span class="dash-delta zero">— flat vs prior 30d</span>
+    {% endif %}
   </div>
 </div>
 
-<div class="flex items-center justify-between mb-3 gap-2" style="flex-wrap:wrap;">
-  <div class="section-title" style="margin:0;">All Stores</div>
-  <a href="{{ url_for('superadmin_new_store') }}" class="btn btn-primary">＋ Add Store</a>
+{# ── Row 1: signups trend + plan distribution ────────────── #}
+<div class="dash-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Signups, last 90 days</div>
+      <div class="stat-sub">Direct signups vs. referral-sourced signups, by day.</div>
+    </div>
+    <div class="card-body">
+      <div id="chartSignups" class="chart-box"></div>
+    </div>
+  </div>
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Plan distribution</div>
+      <div class="stat-sub">Where every store sits right now.</div>
+    </div>
+    <div class="card-body">
+      <div id="chartPlan" class="chart-box"></div>
+    </div>
+  </div>
 </div>
 
+{# ── Row 2: MRR breakdown + Referral performance ─────────── #}
+<div class="dash-row">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Revenue breakdown</div>
+      <div class="stat-sub">Monthly vs. yearly subscriptions across Basic and Pro.</div>
+    </div>
+    <div class="card-body">
+      <table class="mini-table">
+        <thead>
+          <tr>
+            <th>Plan</th><th>Cycle</th>
+            <th class="num">Stores</th><th class="num">MRR</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Basic</td><td class="mono">Monthly</td>
+            <td class="num">{{ basic_monthly }}</td>
+            <td class="num amt-neon">${{ '{:,}'.format(basic_monthly_mrr) }}</td>
+          </tr>
+          <tr>
+            <td>Basic</td><td class="mono">Yearly</td>
+            <td class="num">{{ basic_yearly }}</td>
+            <td class="num amt-neon">${{ '{:,}'.format(basic_yearly_mrr) }}</td>
+          </tr>
+          <tr>
+            <td>Pro</td><td class="mono">Monthly</td>
+            <td class="num">{{ pro_monthly }}</td>
+            <td class="num amt-neon">${{ '{:,}'.format(pro_monthly_mrr) }}</td>
+          </tr>
+          <tr>
+            <td>Pro</td><td class="mono">Yearly</td>
+            <td class="num">{{ pro_yearly }}</td>
+            <td class="num amt-neon">${{ '{:,}'.format(pro_yearly_mrr) }}</td>
+          </tr>
+          <tr style="border-top:1px solid var(--db-gray-3);">
+            <td style="font-weight:600;">Total</td><td></td>
+            <td class="num" style="font-weight:600;">{{ paid_count }}</td>
+            <td class="num amt-neon" style="font-size:15px;">${{ '{:,}'.format(estimated_mrr) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Referrals</div>
+      <div class="stat-sub">How many stores came through the referral program.</div>
+    </div>
+    <div class="card-body">
+      <div class="ref-split">
+        <div class="ref-tile">
+          <div class="ref-label">Direct</div>
+          <div class="ref-value">{{ direct_signups }}</div>
+          <div class="ref-sub">all-time</div>
+        </div>
+        <div class="ref-tile">
+          <div class="ref-label">Referral</div>
+          <div class="ref-value neon">{{ referral_signups }}</div>
+          <div class="ref-sub">
+            {% if total_stores > 0 %}
+              {{ (referral_signups * 100 // total_stores) }}% of signups
+            {% else %}— of signups{% endif %}
+          </div>
+        </div>
+      </div>
+      {% if top_referrers %}
+      <table class="mini-table">
+        <thead>
+          <tr>
+            <th>Top referrer</th><th>Code</th>
+            <th class="num">Redeemed</th><th class="num">Paid out</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in top_referrers %}
+          <tr>
+            <td>{{ r.store_name }}</td>
+            <td class="mono">{{ r.code }}</td>
+            <td class="num">{{ r.redeemed }}</td>
+            <td class="num amt-neon">${{ '{:,}'.format(r.reward_total_cents // 100) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="activity-empty">No referral redemptions yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Row 3: transfer volume + activity feed ──────────────── #}
+<div class="dash-row uneven">
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Platform transfer volume · last 30 days</div>
+      <div class="stat-sub">What your stores' customers are moving — a leading indicator of churn.</div>
+    </div>
+    <div class="dash-total-strip">
+      <div class="ts-item">
+        <div class="ts-label">Total volume</div>
+        <div class="ts-value">${{ '{:,.0f}'.format(total_volume_30d) }}</div>
+      </div>
+      <div class="ts-item">
+        <div class="ts-label">Transfers</div>
+        <div class="ts-value">{{ '{:,}'.format(total_transfers_30d) }}</div>
+      </div>
+    </div>
+    <div class="card-body">
+      {% if volume_by_company %}
+        <div id="chartVolume" class="chart-box short"></div>
+      {% else %}
+        <div class="activity-empty">No transfer activity in the last 30 days.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Recent activity</div>
+      <div class="stat-sub">Last signups and cancellations.</div>
+    </div>
+    <div class="card-body">
+      {% if activity %}
+      <ul class="activity-feed">
+        {% for a in activity %}
+        <li>
+          <span class="activity-dot {{ a.kind }}"></span>
+          <div class="activity-main">
+            <div><span class="act-store">{{ a.store_name }}</span></div>
+            <div class="act-detail">{{ a.detail }} · {{ a.plan }}</div>
+          </div>
+          <span class="activity-time">{{ a.when.strftime('%b %d') if a.when else '—' }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="activity-empty">No activity yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── All stores table (retained for quick access) ───────── #}
+<div class="section-title" style="margin-top:32px;">All stores</div>
 <div class="card">
   <div class="table-wrap">
     <table>
       <thead>
-        <tr><th>Store Name</th><th>Plan</th><th>Status</th><th>Created</th><th>Admin Login</th><th></th></tr>
+        <tr><th>Store name</th><th>Plan</th><th>Status</th><th>Created</th><th>Admin login</th><th></th></tr>
       </thead>
       <tbody>
         {% for s in stores %}
-        <tr class="sa-store-row">
-          <td class="sa-store-name"><strong>{{ s.name }}</strong><br><span class="mono text-sm text-muted">{{ s.slug }}</span></td>
+        <tr>
+          <td><strong>{{ s.name }}</strong><br><span class="mono text-sm text-muted">{{ s.slug }}</span></td>
           <td>
-            {% if s.plan == 'pro' %}<span class="badge badge-navy">Pro</span>
+            {% if s.plan == 'pro' %}<span class="badge badge-green">Pro</span>
             {% elif s.plan == 'basic' %}<span class="badge badge-blue">Basic</span>
+            {% elif s.plan == 'inactive' %}<span class="badge badge-red">Inactive</span>
             {% else %}<span class="badge badge-yellow">Trial</span>{% endif %}
           </td>
           <td>{% if s.is_active %}<span class="badge badge-green">Active</span>
@@ -65,10 +389,160 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray4);">No stores yet. Add your first one.</td></tr>
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--db-gray-6);">No stores yet. Add your first one.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{# ── Hidden JSON payloads for ApexCharts (keeps inline JS tidy) ── #}
+<script id="dash-data" type="application/json">
+{
+  "signups": {
+    "labels": {{ signup_labels|tojson }},
+    "direct": {{ signup_direct|tojson }},
+    "referral": {{ signup_referral|tojson }}
+  },
+  "plan": {
+    "labels": {{ plan_dist|map(attribute='label')|list|tojson }},
+    "counts": {{ plan_dist|map(attribute='count')|list|tojson }},
+    "colors": {{ plan_dist|map(attribute='color')|list|tojson }}
+  },
+  "volume": {
+    "companies": {{ volume_by_company|map(attribute='company')|list|tojson }},
+    "totals":    {{ volume_by_company|map(attribute='total')|list|tojson }},
+    "counts":    {{ volume_by_company|map(attribute='count')|list|tojson }}
+  }
+}
+</script>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+<script>
+(function () {
+  if (typeof ApexCharts === 'undefined') return;
+  var dataEl = document.getElementById('dash-data');
+  if (!dataEl) return;
+  var DATA;
+  try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
+
+  var NEON = '#3fff00';
+  var NEG  = '#ff4d6d';
+  var INFO = '#5ea9ff';
+  var GRAY7 = '#9199a8';
+  var GRAY3 = '#272c38';
+  var GRAY6 = '#6b7280';
+
+  var common = {
+    chart: {
+      background: 'transparent',
+      foreColor: GRAY7,
+      toolbar: { show: false },
+      fontFamily: "'Inter', system-ui, sans-serif",
+      animations: { enabled: true, speed: 240 },
+      zoom: { enabled: false }
+    },
+    grid: { borderColor: GRAY3, strokeDashArray: 3 },
+    tooltip: { theme: 'dark', fillSeriesColor: false }
+  };
+
+  // ── Signups line chart ───────────────────────────────
+  var signupsEl = document.querySelector('#chartSignups');
+  if (signupsEl && DATA.signups) {
+    new ApexCharts(signupsEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'area', height: 260 }),
+      series: [
+        { name: 'Direct',   data: DATA.signups.direct },
+        { name: 'Referral', data: DATA.signups.referral }
+      ],
+      colors: [INFO, NEON],
+      stroke: { curve: 'smooth', width: 2 },
+      fill: {
+        type: 'gradient',
+        gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] }
+      },
+      dataLabels: { enabled: false },
+      xaxis: {
+        type: 'datetime',
+        categories: DATA.signups.labels,
+        labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" } },
+        axisBorder: { color: GRAY3 },
+        axisTicks:  { color: GRAY3 }
+      },
+      yaxis: {
+        labels: {
+          style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" },
+          formatter: function (v) { return Math.round(v); }
+        }
+      },
+      legend: { position: 'top', horizontalAlign: 'right', labels: { colors: GRAY7 }, markers: { radius: 4 } }
+    })).render();
+  }
+
+  // ── Plan distribution donut ──────────────────────────
+  var planEl = document.querySelector('#chartPlan');
+  if (planEl && DATA.plan && DATA.plan.counts.some(function (c) { return c > 0; })) {
+    new ApexCharts(planEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'donut', height: 260 }),
+      series: DATA.plan.counts,
+      labels: DATA.plan.labels,
+      colors: DATA.plan.colors,
+      stroke: { show: true, width: 2, colors: ['#0b0d12'] },
+      dataLabels: { enabled: false },
+      legend: { position: 'right', labels: { colors: GRAY7 }, markers: { radius: 4 } },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '70%',
+            labels: {
+              show: true,
+              name:  { color: GRAY7, fontFamily: "'Inter', system-ui", fontSize: '12px' },
+              value: { color: '#e5e7eb', fontFamily: "'Space Grotesk', sans-serif", fontSize: '24px', fontWeight: 600 },
+              total: { show: true, label: 'Total', color: GRAY7,
+                       formatter: function (w) { return w.globals.seriesTotals.reduce(function (a, b) { return a + b; }, 0); } }
+            }
+          }
+        }
+      }
+    })).render();
+  } else if (planEl) {
+    planEl.innerHTML = '<div style="padding:40px 0;text-align:center;color:var(--db-gray-6);font-size:13px;">No stores yet.</div>';
+  }
+
+  // ── Transfer volume stacked bar ──────────────────────
+  var volEl = document.querySelector('#chartVolume');
+  if (volEl && DATA.volume && DATA.volume.companies.length) {
+    new ApexCharts(volEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'bar', height: 220 }),
+      series: [{ name: 'Volume', data: DATA.volume.totals }],
+      colors: [NEON],
+      plotOptions: { bar: { horizontal: true, borderRadius: 4, barHeight: '60%', distributed: true } },
+      dataLabels: {
+        enabled: true,
+        textAnchor: 'start',
+        offsetX: 4,
+        style: { colors: ['#001a0f'], fontFamily: "'JetBrains Mono'", fontSize: '11px', fontWeight: 600 },
+        formatter: function (v) { return '$' + Math.round(v).toLocaleString(); }
+      },
+      xaxis: {
+        categories: DATA.volume.companies,
+        labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono'" } },
+        axisBorder: { color: GRAY3 }, axisTicks: { color: GRAY3 }
+      },
+      yaxis: { labels: { style: { colors: GRAY7, fontSize: '12px' } } },
+      legend: { show: false },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v, opts) {
+          var i = opts.dataPointIndex;
+          var count = DATA.volume.counts[i] || 0;
+          return '$' + Math.round(v).toLocaleString() + ' · ' + count + ' transfers';
+        } }
+      }
+    })).render();
+  }
+})();
+</script>
 {% endblock %}

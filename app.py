@@ -807,6 +807,188 @@ def active_announcements():
         out.append(a)
     return out
 
+
+def _superadmin_dashboard_context():
+    """Platform-wide BI metrics for the superadmin Dashboard.
+
+    Returns the kwargs dict that dashboard_superadmin.html expects: KPI
+    counters (with 30d deltas), 90-day signup trend split by direct vs
+    referral, plan distribution, MRR breakdown, referral leaderboard,
+    30-day transfer volume by company, and a merged activity feed.
+
+    MRR math mirrors superadmin_controls so the two pages agree; if the
+    pricing tiers change, update both in lockstep.
+    """
+    from sqlalchemy import case
+    now = datetime.utcnow()
+    today_d = date.today()
+    d30_ago = now - timedelta(days=30)
+    d60_ago = now - timedelta(days=60)
+    d90_ago = now - timedelta(days=90)
+
+    plan_rows = db.session.query(
+        Store.plan, Store.billing_cycle, db.func.count(Store.id)
+    ).group_by(Store.plan, Store.billing_cycle).all()
+
+    basic_monthly = basic_yearly = pro_monthly = pro_yearly = 0
+    trial_count = inactive_count = 0
+    for p, cycle, n in plan_rows:
+        if p == "basic":
+            if cycle == "yearly": basic_yearly += n
+            else:                 basic_monthly += n
+        elif p == "pro":
+            if cycle == "yearly": pro_yearly += n
+            else:                 pro_monthly += n
+        elif p == "trial":
+            trial_count += n
+        elif p == "inactive":
+            inactive_count += n
+
+    basic_count = basic_monthly + basic_yearly
+    pro_count   = pro_monthly + pro_yearly
+    paid_count  = basic_count + pro_count
+    total_stores = Store.query.count()
+    active_count = Store.query.filter_by(is_active=True).count()
+
+    basic_monthly_mrr = basic_monthly * 20
+    basic_yearly_mrr  = round(basic_yearly * 200 / 12)
+    pro_monthly_mrr   = pro_monthly * 30
+    pro_yearly_mrr    = round(pro_yearly * 300 / 12)
+    estimated_mrr = (basic_monthly_mrr + basic_yearly_mrr
+                     + pro_monthly_mrr + pro_yearly_mrr)
+
+    new_stores_30d = Store.query.filter(Store.created_at >= d30_ago).count()
+    new_stores_prev30 = Store.query.filter(
+        Store.created_at >= d60_ago, Store.created_at < d30_ago
+    ).count()
+    new_stores_delta = new_stores_30d - new_stores_prev30
+
+    churn_30d = Store.query.filter(
+        Store.canceled_at.isnot(None), Store.canceled_at >= d30_ago
+    ).count()
+    churn_prev30 = Store.query.filter(
+        Store.canceled_at.isnot(None),
+        Store.canceled_at >= d60_ago, Store.canceled_at < d30_ago
+    ).count()
+    churn_delta = churn_30d - churn_prev30
+
+    # 90-day daily signup series, split by direct vs referral. SQLite's
+    # date(col) returns an ISO string, Postgres' returns a date — normalize.
+    signup_rows = db.session.query(
+        db.func.date(Store.created_at).label("d"),
+        db.func.sum(case((Store.referred_by_code_id.is_(None), 1), else_=0)).label("direct"),
+        db.func.sum(case((Store.referred_by_code_id.isnot(None), 1), else_=0)).label("referral"),
+    ).filter(Store.created_at >= d90_ago).group_by("d").all()
+
+    by_day = {}
+    for d_val, direct, referral in signup_rows:
+        key = d_val.isoformat() if hasattr(d_val, "isoformat") else str(d_val)
+        by_day[key] = (int(direct or 0), int(referral or 0))
+
+    signup_labels, signup_direct, signup_referral = [], [], []
+    for i in range(89, -1, -1):
+        d = today_d - timedelta(days=i)
+        key = d.isoformat()
+        direct, referral = by_day.get(key, (0, 0))
+        signup_labels.append(key)
+        signup_direct.append(direct)
+        signup_referral.append(referral)
+
+    plan_dist = [
+        {"label": "Trial",    "count": trial_count,    "color": "#ffb020"},
+        {"label": "Basic",    "count": basic_count,    "color": "#5ea9ff"},
+        {"label": "Pro",      "count": pro_count,      "color": "#3fff00"},
+        {"label": "Inactive", "count": inactive_count, "color": "#ff4d6d"},
+    ]
+
+    top_referrers_raw = (
+        db.session.query(ReferralCode, Store)
+        .join(Store, ReferralCode.owner_store_id == Store.id)
+        .filter(ReferralCode.redeemed_count > 0)
+        .order_by(ReferralCode.redeemed_count.desc())
+        .limit(5).all()
+    )
+    top_referrers = [
+        {
+            "store_name": s.name,
+            "slug": s.slug,
+            "code": rc.code,
+            "redeemed": rc.redeemed_count,
+            "reward_total_cents": rc.redeemed_count * rc.reward_self_cents,
+        }
+        for rc, s in top_referrers_raw
+    ]
+    referral_signups = Store.query.filter(Store.referred_by_code_id.isnot(None)).count()
+    direct_signups = total_stores - referral_signups
+
+    volume_rows = (
+        db.session.query(
+            Transfer.company,
+            db.func.count(Transfer.id),
+            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        )
+        .filter(Transfer.created_at >= d30_ago,
+                Transfer.status.notin_(["Canceled", "Rejected"]))
+        .group_by(Transfer.company)
+        .order_by(db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc())
+        .limit(6).all()
+    )
+    volume_by_company = [
+        {"company": co or "—", "count": int(cnt), "total": float(tot or 0)}
+        for co, cnt, tot in volume_rows
+    ]
+    total_volume_30d = sum(v["total"] for v in volume_by_company)
+    total_transfers_30d = sum(v["count"] for v in volume_by_company)
+
+    recent_signups = Store.query.order_by(Store.created_at.desc()).limit(10).all()
+    recent_cancels = (Store.query
+        .filter(Store.canceled_at.isnot(None))
+        .order_by(Store.canceled_at.desc()).limit(10).all())
+    activity = []
+    for s in recent_signups:
+        activity.append({
+            "when": s.created_at,
+            "kind": "signup",
+            "store_name": s.name,
+            "detail": "via referral" if s.referred_by_code_id else "direct signup",
+            "plan": s.plan,
+        })
+    for s in recent_cancels:
+        activity.append({
+            "when": s.canceled_at,
+            "kind": "cancel",
+            "store_name": s.name,
+            "detail": "canceled subscription",
+            "plan": s.plan,
+        })
+    activity.sort(key=lambda a: a["when"] or datetime.min, reverse=True)
+    activity = activity[:12]
+
+    stores = Store.query.order_by(Store.created_at.desc()).all()
+
+    return dict(
+        total_stores=total_stores, active_count=active_count,
+        trial_count=trial_count, paid_count=paid_count,
+        estimated_mrr=estimated_mrr, inactive_count=inactive_count,
+        new_stores_30d=new_stores_30d, new_stores_delta=new_stores_delta,
+        churn_30d=churn_30d, churn_delta=churn_delta,
+        basic_monthly=basic_monthly, basic_yearly=basic_yearly,
+        pro_monthly=pro_monthly, pro_yearly=pro_yearly,
+        basic_monthly_mrr=basic_monthly_mrr, basic_yearly_mrr=basic_yearly_mrr,
+        pro_monthly_mrr=pro_monthly_mrr, pro_yearly_mrr=pro_yearly_mrr,
+        basic_count=basic_count, pro_count=pro_count,
+        signup_labels=signup_labels, signup_direct=signup_direct,
+        signup_referral=signup_referral,
+        plan_dist=plan_dist,
+        volume_by_company=volume_by_company,
+        total_volume_30d=total_volume_30d,
+        total_transfers_30d=total_transfers_30d,
+        top_referrers=top_referrers,
+        direct_signups=direct_signups, referral_signups=referral_signups,
+        activity=activity,
+        stores=stores,
+    )
+
 def login_required(f):
     @wraps(f)
     def d(*a, **k):
@@ -2196,8 +2378,9 @@ def dashboard():
     user=current_user(); store=current_store(); today=date.today()
     month_start=date(today.year,today.month,1)
     if user.role=="superadmin":
-        stores=Store.query.order_by(Store.created_at.desc()).all()
-        return render_template("dashboard_superadmin.html",user=user,stores=stores,today=today)
+        return render_template("dashboard_superadmin.html",
+                               user=user, today=today,
+                               **_superadmin_dashboard_context())
     sid=store.id
     if user.role=="admin":
         total_transfers=Transfer.query.filter_by(store_id=sid).count()
