@@ -295,3 +295,35 @@ html { color-scheme: dark; }
   .topbar { padding: 10px 16px; }
   .sidebar { box-shadow: 0 0 30px rgba(0,0,0,0.5); }
 }
+
+/* ── Desktop readability bump (>=901px) ──────────────────
+   Mobile was already at comfortable touch-friendly sizes, but
+   desktop felt tight at the old 13–14px scale — nav labels and
+   topbar chrome were closer to 12px effective reading size.
+   This bumps the baseline across the shell without touching
+   mobile, where existing sizes already work. */
+@media (min-width: 901px) {
+  .sidebar-logo { height: 64px; gap: 12px; }
+  .sidebar-logo .brand-mark { width: 32px; height: 32px; font-size: 18px; border-radius: 9px; }
+  .sidebar-logo .brand      { font-size: 18px; }
+
+  .nav-section { font-size: 11px; padding: 16px 20px 8px; letter-spacing: 1.6px; }
+  .nav-link    { font-size: 14px; padding: 11px 20px; gap: 12px; }
+  .nav-link .icon { width: 20px; height: 20px; }
+  .nav-link .icon svg { width: 18px; height: 18px; }
+  .nav-link.active::before { height: 20px; }
+
+  .sidebar-footer .status-pill .label { font-size: 11px; }
+
+  /* Topbar must match the taller sidebar-logo so their bottom
+     borders continue to line up pixel-perfect. */
+  .topbar       { padding: 16px 28px; height: calc(64px + env(safe-area-inset-top)); }
+  .topbar-title { font-size: 22px; }
+  .topbar-date  { font-size: 12.5px; }
+  .topbar-plan-pill { font-size: 11px; padding: 4px 10px; }
+
+  .user-avatar  { width: 36px; height: 36px; font-size: 13px; }
+  .user-dropdown .user-info .nm { font-size: 14.5px; }
+  .user-dropdown .user-info .rl { font-size: 10.5px; letter-spacing: 1.1px; }
+  .user-dropdown .dropdown-item { font-size: 14px; padding: 11px 16px; }
+}
