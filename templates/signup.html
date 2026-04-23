@@ -108,7 +108,7 @@ input.has-error{border-color:var(--db-negative)}
         <label>Store Name</label>
         <input type="text" name="store_name"
                value="{{ form.get('store_name','') }}"
-               placeholder="e.g. Cambio Express Lamar"
+               placeholder="e.g. Lamar Money Center"
                class="{{ 'has-error' if errors.get('store_name') else '' }}" required>
         {% if errors.get('store_name') %}<div class="error-msg">{{ errors.store_name }}</div>{% endif %}
       </div>

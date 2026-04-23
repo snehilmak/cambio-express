@@ -16,7 +16,7 @@ from slugify import slugify
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "cambio-dev-secret-change-in-prod")
+app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-prod")
 
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
@@ -31,7 +31,7 @@ except OSError:
     STATIC_VERSION = str(int(_t.time()))
 app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///cambio.db")
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///dinerobook.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
