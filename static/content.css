@@ -341,3 +341,47 @@ select {
   .stats-grid { grid-template-columns: 1fr; }
   .content { padding: 12px; }
 }
+
+/* ── Desktop readability bump (>=901px) ──────────────────
+   Same rationale as shell.css — mobile sizes already land in
+   the comfortable 14–16px range (plus the explicit 16px input
+   rule for iOS anti-zoom). Desktop was sitting on a tighter
+   13–14px baseline that users reported as small. Bumps each
+   element family by ~1px across the board. */
+@media (min-width: 901px) {
+  .content { padding: 28px 32px 56px; }
+
+  /* Cards */
+  .card-header { padding: 18px 24px; }
+  .card-title  { font-size: 17px; }
+  .card-body   { padding: 22px 24px; }
+
+  /* Stat cards */
+  .stat-card   { padding: 20px; min-height: 132px; }
+  .stat-label  { font-size: 11.5px; letter-spacing: 1.3px; }
+  .stat-value  { font-size: 30px; margin-top: 12px; }
+  .stat-sub    { font-size: 12.5px; margin-top: 10px; }
+
+  /* Tables */
+  table        { font-size: 14.5px; }
+  thead th     { padding: 13px 18px; font-size: 11px; letter-spacing: 1.3px; }
+  tbody td     { padding: 14px 18px; }
+  .mono        { font-size: 13.5px; }
+
+  /* Forms */
+  label        { font-size: 11.5px; letter-spacing: 1.6px; }
+  input, select, textarea { padding: 12px 14px; font-size: 15px; }
+
+  /* Buttons */
+  .btn         { padding: 11px 20px; font-size: 14px; }
+  .btn-sm      { padding: 7px 14px; font-size: 13px; }
+
+  /* Badges + flashes + banners */
+  .badge       { font-size: 11.5px; padding: 4px 11px; }
+  .flash       { font-size: 14px; padding: 12px 18px; }
+  .banner      { font-size: 14px; padding: 13px 20px; }
+
+  /* Section title + muted text + grids */
+  .section-title { font-size: 11.5px; letter-spacing: 1.6px; margin: 32px 0 16px; }
+  .text-muted    { font-size: inherit; }
+}
