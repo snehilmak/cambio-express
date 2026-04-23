@@ -184,9 +184,89 @@
       </div>
     </details>
 
+    <div class="sb-row">
+      <span class="sb-label">Cash Deposit</span>
+      <div class="sb-input">
+        <input type="number" step="0.01" min="0" name="cash_deposit"
+          value="{% if report %}{{ report.cash_deposit if report.cash_deposit is not none else 0 }}{% else %}0{% endif %}"
+          oninput="recalc()">
+      </div>
+    </div>
+
+    {# Checks Deposit is read-only; value is the sum of CheckDeposit
+       line items. Click the row to expand the inline deposits panel.
+       Same contract as Outside Cash & Drops: the server recomputes
+       from CheckDeposit on save, so a stale value can't overwrite
+       the truth. #}
+    <details class="drops-disclosure" id="checksDetails"
+             data-url-new="{{ url_for('daily_check_deposit_new', ds=report_date.isoformat()) }}"
+             data-date="{{ report_date.isoformat() }}">
+      <summary>
+        <div class="sb-row">
+          <span class="sb-label">
+            Checks Deposit
+            <span class="drops-caret" aria-hidden="true">▸</span>
+            <span class="drops-count"
+                  id="checks-count">{{ check_deposits|length }} deposit{{ 's' if check_deposits|length != 1 else '' }}</span>
+          </span>
+          <div class="sb-input">
+            <input type="number" step="0.01" name="checks_deposit"
+              id="checks_deposit_field"
+              value="{{ '%.2f'|format(check_deposits_total or 0) }}"
+              readonly tabindex="-1"
+              title="Click the row to log deposits — this total updates automatically.">
+          </div>
+        </div>
+      </summary>
+      <div class="drops-panel">
+        <div class="drops-add-row">
+          <div class="field" style="flex:0 0 130px;">
+            <label>Time</label>
+            <input type="time" id="check-time">
+          </div>
+          <div class="field" style="flex:0 0 150px;">
+            <label>Amount ($)</label>
+            <input type="number" step="0.01" min="0.01" id="check-amount" placeholder="0.00">
+          </div>
+          <div class="field" style="flex:1;min-width:180px;">
+            <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+            <input type="text" id="check-note" maxlength="120" placeholder="Morning run, BoA deposit, …">
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" id="check-add-btn">＋ Add</button>
+        </div>
+        <div id="check-err" class="drops-err" hidden></div>
+        <table class="drops-table" id="checks-table">
+          <thead>
+            <tr>
+              <th style="width:100px;">Time</th>
+              <th style="width:130px;">Amount</th>
+              <th>Note</th>
+              <th style="width:72px;"></th>
+            </tr>
+          </thead>
+          <tbody id="checks-tbody">
+            {% for c in check_deposits %}
+            <tr data-id="{{ c.id }}">
+              <td class="mono">{{ c.deposit_time.strftime('%H:%M') }}</td>
+              <td class="mono">${{ '{:,.2f}'.format(c.amount) }}</td>
+              <td>{{ c.note or '—' }}</td>
+              <td>
+                <button type="button" class="btn btn-outline btn-sm check-remove"
+                        data-id="{{ c.id }}"
+                        style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot id="checks-empty" {% if check_deposits %}hidden{% endif %}>
+            <tr><td colspan="4" class="drops-empty-cell">No check deposits logged yet. Add one above.</td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </details>
+
     {% for fname, label in [
-      ('cash_deposit','Cash Deposit'),
-      ('checks_deposit','Checks Deposit'),('safe_balance','Safe Balance'),
+      ('safe_balance','Safe Balance'),
       ('payroll_expense','Payroll Expense'),('other_cash_out','Other Cash Out')
     ] %}
     <div class="sb-row">
@@ -513,6 +593,106 @@ recalcMTTotals(); recalc();
       const data = await resp.json().catch(function() { return {ok:false}; });
       if (!resp.ok || !data.ok) { btn.disabled = false; return; }
       renderDrops(data.drops, data.total);
+    } catch (e) { btn.disabled = false; }
+  });
+})();
+
+/*
+ * Inline Check Deposits widget — same contract as the Drops widget
+ * above, kept as its own IIFE so the two are wired independently and
+ * can't share state bugs. JSON shape from the server uses
+ * `check_deposits` as the list key.
+ */
+(function() {
+  const root = document.getElementById('checksDetails');
+  if (!root) return;
+  const url = root.dataset.urlNew;
+  const dateStr = root.dataset.date;
+  const tbody = document.getElementById('checks-tbody');
+  const empty = document.getElementById('checks-empty');
+  const totalField = document.getElementById('checks_deposit_field');
+  const count = document.getElementById('checks-count');
+  const errBox = document.getElementById('check-err');
+  const timeInput = document.getElementById('check-time');
+  const amtInput  = document.getElementById('check-amount');
+  const noteInput = document.getElementById('check-note');
+  const addBtn    = document.getElementById('check-add-btn');
+
+  const OPEN_KEY = 'checksOpen:' + dateStr;
+  if (sessionStorage.getItem(OPEN_KEY) === '1') root.open = true;
+  root.addEventListener('toggle', function() {
+    sessionStorage.setItem(OPEN_KEY, root.open ? '1' : '0');
+  });
+
+  function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
+  function fmt2(n) { return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  function renderChecks(rows, total) {
+    tbody.innerHTML = rows.map(function(r) {
+      return (
+        '<tr data-id="' + r.id + '">' +
+          '<td class="mono">' + r.time + '</td>' +
+          '<td class="mono">' + fmt2(r.amount) + '</td>' +
+          '<td>' + (r.note ? escapeHTML(r.note) : '—') + '</td>' +
+          '<td><button type="button" class="btn btn-outline btn-sm check-remove" ' +
+                      'data-id="' + r.id + '" ' +
+                      'style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button></td>' +
+        '</tr>'
+      );
+    }).join('');
+    empty.hidden = rows.length > 0;
+    totalField.value = Number(total).toFixed(2);
+    count.textContent = rows.length + ' deposit' + (rows.length === 1 ? '' : 's');
+    if (typeof recalc === 'function') recalc();
+  }
+
+  addBtn.addEventListener('click', async function() {
+    showError('');
+    const fd = new FormData();
+    fd.append('deposit_time', timeInput.value);
+    fd.append('amount', amtInput.value);
+    fd.append('note', noteInput.value);
+    addBtn.disabled = true;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST', body: fd,
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false, error:'Unexpected response.'}; });
+      if (!resp.ok || !data.ok) {
+        showError(data.error || 'Could not add the check deposit.'); return;
+      }
+      renderChecks(data.check_deposits, data.total);
+      timeInput.value = ''; amtInput.value = ''; noteInput.value = '';
+      timeInput.focus();
+    } catch (e) {
+      showError('Network error. Try again.');
+    } finally {
+      addBtn.disabled = false;
+    }
+  });
+
+  tbody.addEventListener('click', async function(e) {
+    const btn = e.target.closest('.check-remove');
+    if (!btn) return;
+    if (!confirm('Delete this check deposit?')) return;
+    const id = btn.getAttribute('data-id');
+    btn.disabled = true;
+    try {
+      const resp = await fetch('/daily/' + dateStr + '/check-deposits/' + id + '/delete', {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin',
+      });
+      const data = await resp.json().catch(function() { return {ok:false}; });
+      if (!resp.ok || !data.ok) { btn.disabled = false; return; }
+      renderChecks(data.check_deposits, data.total);
     } catch (e) { btn.disabled = false; }
   });
 })();

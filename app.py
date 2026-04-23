@@ -343,6 +343,34 @@ class DailyDrop(db.Model):
             "note": self.note or "",
         }
 
+class CheckDeposit(db.Model):
+    """Individual check-deposit entry — logged as it happens by time and
+    amount, then summed into DailyReport.checks_deposit.
+
+    Same shape as DailyDrop: a store can record multiple check deposits
+    across a single day (e.g. morning run + afternoon run), and the
+    daily-book's Checks Deposit line becomes a read-only sum of these
+    rows. The server recomputes from CheckDeposit on every add / delete
+    / daily-report save so the two can never drift.
+    """
+    __tablename__ = "check_deposit"
+    id           = db.Column(db.Integer, primary_key=True)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    report_date  = db.Column(db.Date, nullable=False)
+    deposit_time = db.Column(db.Time, nullable=False)
+    amount       = db.Column(db.Float, nullable=False)
+    note         = db.Column(db.String(120), default="")
+    created_by   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "time": self.deposit_time.strftime("%H:%M") if self.deposit_time else "",
+            "amount": float(self.amount or 0),
+            "note": self.note or "",
+        }
+
 class MoneyTransferSummary(db.Model):
     __tablename__ = "mt_summary"
     id           = db.Column(db.Integer, primary_key=True)
@@ -2984,14 +3012,27 @@ def _recompute_drops_total(store_id, report_date):
     rpt.updated_at = datetime.utcnow()
     return total
 
-# Fields on DailyReport the main form still edits. outside_cash_drops is
-# intentionally omitted — it's derived from DailyDrop line items.
+def _recompute_check_deposits_total(store_id, report_date):
+    """Sum CheckDeposit rows for the given date and push the total onto
+    DailyReport.checks_deposit. Same contract as _recompute_drops_total:
+    the daily-book field is derived, so saves from a stale form can't
+    overwrite the truth."""
+    total = (db.session.query(db.func.coalesce(db.func.sum(CheckDeposit.amount), 0.0))
+             .filter_by(store_id=store_id, report_date=report_date).scalar()) or 0.0
+    rpt = _ensure_daily_report(store_id, report_date)
+    rpt.checks_deposit = float(total)
+    rpt.updated_at = datetime.utcnow()
+    return total
+
+# Fields on DailyReport the main form still edits. outside_cash_drops +
+# checks_deposit are intentionally omitted — both are derived from their
+# respective line-item tables (DailyDrop, CheckDeposit).
 _DAILY_REPORT_FIELDS = [
     "taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
     "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
     "return_check_paid_back","forward_balance","from_bank","other_cash_in","rebates_commissions",
     "cash_purchases","cash_expense","check_purchases","check_expense",
-    "cash_deposit","checks_deposit","safe_balance","payroll_expense","other_cash_out","over_short",
+    "cash_deposit","safe_balance","payroll_expense","other_cash_out","over_short",
 ]
 
 @app.route("/daily/<string:ds>",methods=["GET","POST"])
@@ -3023,14 +3064,20 @@ def daily_report(ds):
     drops = (DailyDrop.query.filter_by(store_id=sid, report_date=report_date)
              .order_by(DailyDrop.drop_time).all())
     drops_total = sum(d.amount for d in drops)
+    check_deposits = (CheckDeposit.query
+                      .filter_by(store_id=sid, report_date=report_date)
+                      .order_by(CheckDeposit.deposit_time).all())
+    check_deposits_total = sum(c.amount for c in check_deposits)
     if request.method=="POST":
         if not report: report=DailyReport(store_id=sid,report_date=report_date); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
         for field in _DAILY_REPORT_FIELDS:
             setattr(report,field,fv(field))
-        # outside_cash_drops is derived — always pull from DailyDrop so an old
-        # form submission with a stale value can't overwrite the truth.
+        # outside_cash_drops + checks_deposit are derived — always pull from
+        # the line-item tables so a stale form submission can't overwrite
+        # the truth.
         report.outside_cash_drops = float(drops_total)
+        report.checks_deposit = float(check_deposits_total)
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
         # money_transfer is derived — the spreadsheet treats this line as a
         # subtotal of the MT table below. Compute from the submitted MT row
@@ -3052,7 +3099,8 @@ def daily_report(ds):
         return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
     return render_template("daily_report.html",user=user,report_date=report_date,
         report=report,mt_rows=mt_rows,companies=companies,auto_mt=auto_mt,
-        drops=drops, drops_total=drops_total)
+        drops=drops, drops_total=drops_total,
+        check_deposits=check_deposits, check_deposits_total=check_deposits_total)
 
 def _wants_json():
     """Client explicitly asked for JSON (AJAX from the drops widget).
@@ -3130,6 +3178,76 @@ def daily_drop_delete(ds, drop_id):
     if _wants_json():
         return jsonify(_drops_json_payload(sid, report_date))
     flash("Drop deleted.", "success")
+    return redirect(url_for("daily_report", ds=ds))
+
+def _check_deposits_json_payload(store_id, report_date):
+    """Current state of the check-deposits widget for a given day."""
+    rows = (CheckDeposit.query
+            .filter_by(store_id=store_id, report_date=report_date)
+            .order_by(CheckDeposit.deposit_time).all())
+    total = sum(r.amount for r in rows)
+    return {"ok": True, "total": float(total),
+            "check_deposits": [r.to_dict() for r in rows]}
+
+@app.route("/daily/<string:ds>/check-deposits/new", methods=["POST"])
+@admin_required
+def daily_check_deposit_new(ds):
+    """Append a single Check Deposit line item for this report date."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    raw_time = request.form.get("deposit_time", "").strip()
+    raw_amt  = request.form.get("amount", "").strip()
+    err = None
+    deposit_time = amount = None
+    try:
+        deposit_time = datetime.strptime(raw_time, "%H:%M").time()
+    except ValueError:
+        err = "Enter a valid time (HH:MM)."
+    if err is None:
+        try:
+            amount = float(raw_amt)
+            if amount <= 0: raise ValueError
+        except ValueError:
+            err = "Amount must be greater than zero."
+    if err:
+        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
+        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
+    db.session.add(CheckDeposit(
+        store_id=sid, report_date=report_date,
+        deposit_time=deposit_time, amount=amount,
+        note=request.form.get("note", "").strip()[:120],
+        created_by=current_user().id,
+    ))
+    db.session.flush()
+    _recompute_check_deposits_total(sid, report_date)
+    db.session.commit()
+    if _wants_json():
+        return jsonify(_check_deposits_json_payload(sid, report_date))
+    flash(f"Check deposit of ${amount:,.2f} at {deposit_time.strftime('%H:%M')} added.", "success")
+    return redirect(url_for("daily_report", ds=ds))
+
+@app.route("/daily/<string:ds>/check-deposits/<int:deposit_id>/delete", methods=["POST"])
+@admin_required
+def daily_check_deposit_delete(ds, deposit_id):
+    """Delete a single Check Deposit and refresh the rolled-up total."""
+    sid = session["store_id"]
+    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
+    except ValueError:
+        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
+        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
+    row = (CheckDeposit.query
+           .filter_by(id=deposit_id, store_id=sid, report_date=report_date)
+           .first_or_404())
+    db.session.delete(row)
+    db.session.flush()
+    _recompute_check_deposits_total(sid, report_date)
+    db.session.commit()
+    if _wants_json():
+        return jsonify(_check_deposits_json_payload(sid, report_date))
+    flash("Check deposit deleted.", "success")
     return redirect(url_for("daily_report", ds=ds))
 
 # ── Monthly P&L ──────────────────────────────────────────────
@@ -4290,7 +4408,7 @@ _STORE_OWNED_MODELS = [
     # and StoreEmployee before any row that FKs to it — we null/ignore employee
     # FKs on purge via the audit table's nullable column, but order still
     # matters for cascade sanity.
-    "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "MoneyTransferSummary",
+    "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit", "MoneyTransferSummary",
     "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
