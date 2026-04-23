@@ -49,8 +49,7 @@ def test_admin_can_open_security_page(logged_in_client):
     resp = logged_in_client.get("/account/security")
     assert resp.status_code == 200
     body = resp.data.decode()
-    # Three cards always present (eligible-everyone)
-    assert "Display name" in body
+    # Two cards always present (display name moved to /account/profile)
     assert "Change password" in body
     assert "Passkeys" in body
     # JS bundle pulled in for passkey enrollment
@@ -66,7 +65,7 @@ def test_superadmin_can_open_security_page(client):
     resp = sa.get("/account/security")
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "Display name" in body
+    assert "Change password" in body
     assert "Passkeys" in body
 
 
@@ -92,7 +91,6 @@ def test_employee_can_open_security_page(client, test_store_id):
     resp = emp.get("/account/security")
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "Display name" in body
     assert "Passkeys" in body, \
         "employees should now see the Passkeys card on /account/security"
 
@@ -123,37 +121,15 @@ def test_admin_settings_no_longer_renders_inline_security_form(logged_in_client)
     assert 'href="/account/security"' in body or "/account/security" in body
 
 
-def test_display_name_update_persists(logged_in_client, test_admin_id):
+def test_display_name_action_rejected_here(logged_in_client):
+    """Display name moved to /account/profile. Posting it to the
+    Security endpoint with an _action it no longer handles must 400 —
+    not silently fall through and accidentally update something else."""
     resp = logged_in_client.post("/account/security", data={
         "_action": "display_name",
         "full_name": "Brand New Name",
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        assert u.full_name == "Brand New Name"
-
-
-def test_display_name_blank_rejected(logged_in_client, test_admin_id):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "display_name",
-        "full_name": "   ",
     })
-    assert resp.status_code == 200
-    body = resp.data.decode().lower()
-    assert "can't be empty" in body or "cannot be empty" in body
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        assert u.full_name and u.full_name.strip() != ""
-
-
-def test_display_name_too_long_rejected(logged_in_client, test_admin_id):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "display_name",
-        "full_name": "A" * 200,
-    })
-    assert resp.status_code == 200
-    assert b"too long" in resp.data.lower()
+    assert resp.status_code == 400
 
 
 def test_unknown_action_400(logged_in_client):

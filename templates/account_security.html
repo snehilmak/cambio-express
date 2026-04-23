@@ -5,42 +5,19 @@
 
 {# Personal-account Security page. Reachable from every role's chrome
    (admin sidebar, owner sidebar, employee dashboard, superadmin
-   sidebar). Hosts only fields a user controls about THEIR OWN login;
-   anything store-scoped lives elsewhere. #}
+   sidebar). Hosts only authentication concerns; profile fields
+   (display name, email, phone, timezone) live on /account/profile. #}
+
+{% if user.last_login_at %}
+<div class="info-box" style="max-width:640px;margin-bottom:18px;">
+  <strong>Last sign-in:</strong>
+  <span class="mono">{{ user.last_login_at.strftime('%b %d, %Y %H:%M UTC') }}</span>
+  — if that wasn't you, change your password and remove any passkey
+  you don't recognize below.
+</div>
+{% endif %}
 
 <div class="card" style="max-width:480px;">
-  <div class="card-header"><span class="card-title">Display name</span></div>
-  <div class="card-body">
-    <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
-      Shown next to your activity in audit logs and visible to your
-      teammates. Username and email are managed separately.
-    </p>
-    <form method="POST">
-      <input type="hidden" name="_action" value="display_name">
-      <div class="form-grid cols-1">
-        <div class="field">
-          <label>Display name</label>
-          <input type="text" name="full_name" maxlength="120"
-                 value="{{ user.full_name or '' }}" required>
-          {% if errors.full_name %}<div class="field-error">{{ errors.full_name }}</div>{% endif %}
-        </div>
-        <div class="field">
-          <label>Username</label>
-          <input type="text" value="{{ user.username }}" disabled>
-        </div>
-        <div class="field">
-          <label>Role</label>
-          <input type="text" value="{{ user.role|capitalize }}" disabled>
-        </div>
-      </div>
-      <div style="margin-top:24px;">
-        <button type="submit" class="btn btn-primary">Save</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="card" style="max-width:480px;margin-top:24px;">
   <div class="card-header"><span class="card-title">Change password</span></div>
   <div class="card-body">
     <form method="POST">
