@@ -62,6 +62,14 @@ input::placeholder{color:var(--db-gray-5)}
 .error-msg{background:rgba(255,77,109,.08);color:var(--db-negative);border:1px solid rgba(255,77,109,.3);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:18px;font-family:var(--db-font-body)}
 .btn-login{width:100%;padding:14px;background:var(--db-neon);color:var(--db-neon-ink);border:none;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s;margin-top:6px}
 .btn-login:hover{background:var(--db-neon-bright)}
+/* Passkey sign-in: secondary path, shown above the password form when
+   the browser supports WebAuthn. Outline style so it doesn't compete
+   with the primary Sign in button. */
+.btn-passkey{width:100%;padding:13px;background:transparent;color:var(--db-gray-9);border:1px solid var(--db-gray-4);border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;display:flex;align-items:center;justify-content:center;gap:8px;transition:border-color .12s,color .12s}
+.btn-passkey:hover{border-color:var(--db-neon);color:var(--db-neon)}
+.btn-passkey:disabled{opacity:.6;cursor:wait}
+.or-divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--db-gray-6);font-size:11px;letter-spacing:1px;font-family:var(--db-font-mono);text-transform:uppercase}
+.or-divider::before,.or-divider::after{content:"";flex:1;height:1px;background:var(--db-gray-3)}
 
 /* Employee quick-access box (preserved from PR #74). */
 .employee-box{margin-top:28px;padding:16px 18px;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:12px}
@@ -192,6 +200,12 @@ input::placeholder{color:var(--db-gray-5)}
     <div class="error-msg">{{ error }}</div>
     {% endif %}
 
+    <div id="pk-login-error" class="error-msg" hidden></div>
+    <button type="button" id="pk-login-btn" class="btn-passkey" hidden>
+      Sign in with a passkey
+    </button>
+    <div id="pk-login-divider" class="or-divider" hidden>or password</div>
+
     <form method="POST">
       <div class="field">
         <label for="lf-user">Username</label>
@@ -235,12 +249,47 @@ input::placeholder{color:var(--db-gray-5)}
   </div>
 </div>
 
+<script src="{{ url_for('static', filename='passkeys.js') }}"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function(){
     navigator.serviceWorker.register('/sw.js').catch(function(){});
   });
 }
+
+/*
+ * Passkey sign-in button. Hidden by default; revealed only when the
+ * browser exposes the WebAuthn API. Success → redirect to the URL
+ * returned by /login/passkey/finish (dashboard or owner_dashboard,
+ * depending on the authenticated user's role).
+ */
+(function () {
+  var btn     = document.getElementById('pk-login-btn');
+  var divider = document.getElementById('pk-login-divider');
+  var errBox  = document.getElementById('pk-login-error');
+  if (!btn || !window.Passkeys || !window.Passkeys.isSupported()) return;
+  btn.hidden = false;
+  if (divider) divider.hidden = false;
+  function showError(msg) {
+    if (!errBox) return;
+    errBox.textContent = msg || '';
+    errBox.hidden = !msg;
+  }
+  btn.addEventListener('click', async function () {
+    showError('');
+    btn.disabled = true;
+    try {
+      var res = await window.Passkeys.loginWithPasskey();
+      window.location.href = res.redirect || '/dashboard';
+    } catch (err) {
+      // AbortError is what the browser throws when the user closes
+      // the picker — no need to surface it as a failure.
+      if (err && err.name === 'NotAllowedError') { /* cancelled */ }
+      else { showError((err && err.message) || 'Passkey sign-in failed.'); }
+      btn.disabled = false;
+    }
+  });
+})();
 </script>
 
 </body>

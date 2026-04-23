@@ -79,6 +79,11 @@ First boot seeds a superadmin (`superadmin / super2025!`) and demo store
 admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 `ADMIN_PASSWORD` env vars in prod.
 
+Passkey env (optional): `WEBAUTHN_RP_ID` pins the WebAuthn Relying
+Party ID in prod (set to `dinerobook.onrender.com`). Dev falls back to
+`request.host` with the port stripped, so `localhost:5000` works out
+of the box.
+
 ## Critical invariants — don't break these
 
 1. **Design system is the source of truth.** See
@@ -194,20 +199,34 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
     lockout row and `Store.referee_credit_applied_at` gates retries. The
     topbar crown reads `my_referral_code` from the context processor —
     empty string hides it, so the button self-gates on role + plan.
-13. **2FA (TOTP) is mandatory for superadmin.** Login routes are the
-    only source of truth:
-    - `/login` POST → if creds valid AND `_needs_totp(user)` returns
-      True, set `session["pending_auth_user_id"]` (NOT `user_id`) and
-      redirect to `/login/2fa/enroll` (first time) or `/login/2fa`.
-    - `/login/2fa/*` is the only flow that may call
-      `_finalize_2fa_login(user)`, which promotes `pending_auth_user_id`
-      → real `user_id`. **Never set `session["user_id"]` directly for
+13. **2FA (TOTP) is mandatory for superadmin — *unless* they sign in
+    with a passkey.** Login routes are the only source of truth:
+    - `/login` POST (password flow) → if creds valid AND
+      `_needs_totp(user)` returns True, set
+      `session["pending_auth_user_id"]` (NOT `user_id`) and redirect
+      to `/login/2fa/enroll` (first time) or `/login/2fa`.
+    - `/login/2fa/*` may call `_finalize_2fa_login(user)`, which
+      promotes `pending_auth_user_id` → real `user_id`. **Never set
+      `session["user_id"]` directly from the password-login path for
       a role that `_needs_totp` returns True for.**
+    - **Passkey carve-out:** `/login/passkey/finish` sets
+      `session["user_id"]` directly *after* successfully verifying a
+      WebAuthn assertion, even when `_needs_totp(user)` is True. A
+      passkey is phishing-resistant MFA by construction (device-bound,
+      user-presence-proven, RP-ID-bound) — stacking TOTP on top adds
+      friction without adding security. The invariant is: full-auth
+      promotion requires either a TOTP factor OR a verified passkey
+      assertion; no other code path may set `user_id` directly.
     - Recovery codes: 10 per user, sha256-hashed, single-use
       (`RecoveryCode.used_at`). Shown in plaintext exactly once on the
       post-enrollment recovery-codes page.
     - TOTP secret (`User.totp_secret`) is base32 plaintext in the DB —
       the DB is the trust boundary, same as `password_hash`.
+    - Passkey storage: `Passkey` table holds `(user_id, credential_id,
+      public_key, sign_count, aaguid, name)`. `credential_id` is
+      unique and the lookup key at login time. `sign_count` is
+      authenticator-reported; we accept equal-or-greater values and
+      reject resets to protect against cloned authenticators.
     - To extend 2FA to other roles, change the single `_needs_totp()`
       predicate; do NOT scatter role checks through the login routes.
 14. **Table search UX — live-search is the standard.** Every paginated
