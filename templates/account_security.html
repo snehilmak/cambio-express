@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}Security — DineroBook{% endblock %}
+{% block page_title %}Security{% endblock %}
+{% block content %}
+
+{# Personal-account Security page. Reachable from every role's chrome
+   (admin sidebar, owner sidebar, employee dashboard, superadmin
+   sidebar). Hosts only fields a user controls about THEIR OWN login;
+   anything store-scoped lives elsewhere. #}
+
+<div class="card" style="max-width:480px;">
+  <div class="card-header"><span class="card-title">Display name</span></div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
+      Shown next to your activity in audit logs and visible to your
+      teammates. Username and email are managed separately.
+    </p>
+    <form method="POST">
+      <input type="hidden" name="_action" value="display_name">
+      <div class="form-grid cols-1">
+        <div class="field">
+          <label>Display name</label>
+          <input type="text" name="full_name" maxlength="120"
+                 value="{{ user.full_name or '' }}" required>
+          {% if errors.full_name %}<div class="field-error">{{ errors.full_name }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" value="{{ user.username }}" disabled>
+        </div>
+        <div class="field">
+          <label>Role</label>
+          <input type="text" value="{{ user.role|capitalize }}" disabled>
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="max-width:480px;margin-top:24px;">
+  <div class="card-header"><span class="card-title">Change password</span></div>
+  <div class="card-body">
+    <form method="POST">
+      <input type="hidden" name="_action" value="password">
+      <div class="form-grid cols-1">
+        <div class="field">
+          <label>Current password *</label>
+          <input type="password" name="current_password" required autocomplete="current-password">
+          {% if errors.current_password %}<div class="field-error">{{ errors.current_password }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>New password *</label>
+          <input type="password" name="new_password" placeholder="Min 8 characters" required autocomplete="new-password">
+          {% if errors.new_password %}<div class="field-error">{{ errors.new_password }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Confirm new password *</label>
+          <input type="password" name="confirm_password" required autocomplete="new-password">
+          {% if errors.confirm_password %}<div class="field-error">{{ errors.confirm_password }}</div>{% endif %}
+        </div>
+      </div>
+      <div style="margin-top:24px;">
+        <button type="submit" class="btn btn-primary">Update password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if passkeys_eligible %}
+<div class="card" style="max-width:640px;margin-top:24px;" id="passkeys-card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <span class="card-title">Passkeys</span>
+    <button type="button" id="pk-add-btn" class="btn btn-outline btn-sm" hidden>
+      + Add a passkey
+    </button>
+  </div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
+      Sign in with your device (Touch ID, Face ID, Windows Hello, or a hardware
+      key) instead of a password. You can register more than one — phone,
+      laptop, backup key. Passkeys are phishing-resistant and count as
+      two-factor auth, so a passkey login skips the verification-code step.
+    </p>
+    <div id="pk-unsupported" class="info-box" hidden>
+      This browser doesn't expose the WebAuthn API, so passkeys aren't
+      available here. Use a modern Chrome, Safari, Firefox, or Edge build.
+    </div>
+    <div id="pk-err" class="field-error" hidden></div>
+    <div id="pk-add-panel" hidden style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px;background:var(--surface-2);">
+      <div class="field" style="margin-bottom:10px;">
+        <label>Nickname for this passkey</label>
+        <input type="text" id="pk-name" maxlength="120" placeholder="e.g. MacBook Touch ID">
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-primary btn-sm" id="pk-add-go">Create passkey</button>
+        <button type="button" class="btn btn-outline btn-sm" id="pk-add-cancel">Cancel</button>
+      </div>
+    </div>
+    <table class="pk-table" style="width:100%;border-collapse:collapse;font-size:13.5px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Name</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Added</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Last used</th>
+          <th style="width:88px;"></th>
+        </tr>
+      </thead>
+      <tbody id="pk-tbody">
+        {% for pk in passkeys %}
+        <tr data-id="{{ pk.id }}">
+          <td style="padding:10px;border-bottom:1px solid var(--border);">{{ pk.name or 'Passkey' }}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);" class="mono">{{ pk.created_at.strftime('%b %d, %Y') }}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);" class="mono">{% if pk.last_used_at %}{{ pk.last_used_at.strftime('%b %d, %Y') }}{% else %}—{% endif %}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">
+            <form method="POST" action="{{ url_for('passkey_delete', pk_id=pk.id) }}"
+                  style="margin:0;"
+                  onsubmit="return confirm('Remove this passkey? You won't be able to sign in with this device again until you enroll a new one.');">
+              <button type="submit" class="btn btn-outline btn-sm"
+                      style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot id="pk-empty" {% if passkeys %}hidden{% endif %}>
+        <tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;font-size:13px;">
+          No passkeys registered yet.
+        </td></tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='passkeys.js') }}"></script>
+<script>
+/*
+ * Passkey enrollment wiring. Identical to the snippet that previously
+ * lived inside admin_settings.html — moved here when the Security
+ * surface graduated into a shared per-user page.
+ */
+(function () {
+  var card = document.getElementById('passkeys-card');
+  if (!card || !window.Passkeys) return;
+  var addBtn   = document.getElementById('pk-add-btn');
+  var panel    = document.getElementById('pk-add-panel');
+  var nameInp  = document.getElementById('pk-name');
+  var goBtn    = document.getElementById('pk-add-go');
+  var cancel   = document.getElementById('pk-add-cancel');
+  var errBox   = document.getElementById('pk-err');
+  var unsupp   = document.getElementById('pk-unsupported');
+  if (!window.Passkeys.isSupported()) {
+    if (unsupp) unsupp.hidden = false;
+    return;
+  }
+  if (addBtn) addBtn.hidden = false;
+  function showError(msg) {
+    if (!errBox) return;
+    errBox.textContent = msg || '';
+    errBox.hidden = !msg;
+  }
+  addBtn.addEventListener('click', function () {
+    showError('');
+    panel.hidden = false;
+    addBtn.hidden = true;
+    nameInp.focus();
+  });
+  cancel.addEventListener('click', function () {
+    panel.hidden = true;
+    addBtn.hidden = false;
+    showError('');
+    nameInp.value = '';
+  });
+  goBtn.addEventListener('click', async function () {
+    showError('');
+    goBtn.disabled = true;
+    try {
+      await window.Passkeys.registerPasskey(nameInp.value.trim());
+      window.location.reload();
+    } catch (err) {
+      showError((err && err.message) || 'Could not create passkey.');
+      goBtn.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1788,10 +1788,37 @@ def _passkey_exclude_list(user):
     ]
 
 def _passkey_eligible(user):
-    """Who can enroll a passkey. v1: admin-equivalent roles only. The
-    enrollment UI lives on admin_settings (admin_required); employees
-    would need their own page to enroll, which is a follow-up."""
-    return bool(user and user.role in ("admin", "owner", "superadmin"))
+    """Whether a user may enroll passkeys. Now: any logged-in user.
+    Kept as a single predicate so future tightening (e.g. "deny pending
+    self-deletion accounts") has one place to land."""
+    return bool(user)
+
+def _update_user_password(user, current_pw, new_pw, confirm_pw):
+    """Validate + apply a password change. Returns ({} on success,
+    {field: message} on failure). Caller commits the session and
+    flashes; we keep this pure so it works from /admin/settings,
+    /account/security, or any future surface."""
+    errors = {}
+    if not user.check_password(current_pw or ""):
+        errors["current_password"] = "Current password is incorrect."
+    elif len(new_pw or "") < 8:
+        errors["new_password"] = "Password must be at least 8 characters."
+    elif new_pw != confirm_pw:
+        errors["confirm_password"] = "Passwords do not match."
+    if not errors:
+        user.set_password(new_pw)
+    return errors
+
+def _update_user_display_name(user, raw):
+    """Validate + apply a display-name change. Same return contract as
+    _update_user_password — empty dict means apply, else field errors."""
+    name = (raw or "").strip()
+    if not name:
+        return {"full_name": "Display name cannot be empty."}
+    if len(name) > 120:
+        return {"full_name": "Display name is too long (max 120 characters)."}
+    user.full_name = name
+    return {}
 
 def _require_pending_auth():
     """Shared guard for /login/2fa* routes: redirect back to /login if
@@ -2051,7 +2078,63 @@ def passkey_delete(pk_id):
     db.session.delete(pk)
     db.session.commit()
     flash("Passkey removed.", "success")
-    return redirect(url_for("admin_settings", tab="security"))
+    return redirect(url_for("account_security"))
+
+# ── Shared account settings ──────────────────────────────────
+#
+# /account/security is the per-user "personal security" page reachable
+# from every role (admin, owner, employee, superadmin). It hosts the
+# things a user manages about THEIR OWN login: display name, password,
+# passkeys. Anything store-scoped (companies, team, billing) lives on
+# the role-specific settings hubs (admin_settings, owner_dashboard,
+# superadmin_controls).
+#
+# A single POST handler dispatches by an `_action` field so the same
+# URL can serve every form on the page — keeps the redirect target
+# stable for the PRG pattern.
+
+@app.route("/account/security", methods=["GET", "POST"])
+@login_required
+def account_security():
+    user = current_user()
+    errors = {}
+    if request.method == "POST":
+        action = (request.form.get("_action") or "").strip()
+        if action == "password":
+            errors = _update_user_password(
+                user,
+                request.form.get("current_password", ""),
+                request.form.get("new_password", ""),
+                request.form.get("confirm_password", ""),
+            )
+            if not errors:
+                db.session.commit()
+                flash("Password updated.", "success")
+                return redirect(url_for("account_security"))
+        elif action == "display_name":
+            errors = _update_user_display_name(
+                user, request.form.get("full_name", ""))
+            if not errors:
+                db.session.commit()
+                flash("Display name updated.", "success")
+                return redirect(url_for("account_security"))
+        else:
+            abort(400)
+
+    passkeys = (Passkey.query.filter_by(user_id=user.id)
+                .order_by(Passkey.created_at.desc()).all())
+    return render_template("account_security.html",
+        user=user, errors=errors,
+        passkeys=passkeys,
+        passkeys_eligible=_passkey_eligible(user),
+    )
+
+@app.route("/admin/settings/security", methods=["GET"])
+@login_required
+def admin_settings_security_redirect():
+    """Permanent redirect from the old admin-only Security tab to the
+    new shared page. Keeps any bookmarks / external docs working."""
+    return redirect(url_for("account_security"), code=301)
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():
@@ -4041,6 +4124,10 @@ def admin_settings():
     user = current_user()
     store = current_store()
     active_tab = request.args.get("tab", "store")
+    # The Security tab graduated to /account/security (a per-user page
+    # reachable from every role's chrome). Old bookmarks land here.
+    if active_tab == "security" and request.method == "GET":
+        return redirect(url_for("account_security"), code=301)
     errors = {}
 
     if request.method == "POST":
@@ -4091,22 +4178,16 @@ def admin_settings():
                 return redirect(url_for("admin_settings", tab="store"))
 
         elif form_tab == "security":
-            current_pw = request.form.get("current_password", "")
-            new_pw = request.form.get("new_password", "")
-            confirm_pw = request.form.get("confirm_password", "")
-
-            if not user.check_password(current_pw):
-                errors["current_password"] = "Current password is incorrect."
-            elif len(new_pw) < 8:
-                errors["new_password"] = "Password must be at least 8 characters."
-            elif new_pw != confirm_pw:
-                errors["confirm_password"] = "Passwords do not match."
-
+            errors = _update_user_password(
+                user,
+                request.form.get("current_password", ""),
+                request.form.get("new_password", ""),
+                request.form.get("confirm_password", ""),
+            )
             if not errors:
-                user.set_password(new_pw)
                 db.session.commit()
                 flash("Password updated.", "success")
-                return redirect(url_for("admin_settings", tab="security"))
+                return redirect(url_for("account_security"))
 
         elif form_tab == "companies":
             # Known companies come in as checkboxes ("company_known" list);
@@ -4153,8 +4234,6 @@ def admin_settings():
         StoreEmployee.is_active.desc(), StoreEmployee.name.asc()
     ).all()
 
-    passkeys = (Passkey.query.filter_by(user_id=user.id)
-                .order_by(Passkey.created_at.desc()).all())
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
@@ -4166,8 +4245,6 @@ def admin_settings():
         current_company_set=current_set,
         custom_companies=custom_companies,
         roster=roster,
-        passkeys=passkeys,
-        passkeys_eligible=_passkey_eligible(user),
     )
 
 @app.route("/admin/settings/roster/add", methods=["POST"])
