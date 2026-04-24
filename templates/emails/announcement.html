@@ -1,0 +1,48 @@
+{% extends "emails/_base.html" %}
+{% from "emails/_base.html" import cta %}
+{% block title %}A message from DineroBook{% endblock %}
+
+{% block content %}
+{# Level accent stripe — mirrors the in-app banner's level color
+   without depending on custom classes that email clients would
+   strip. Info/success = neon green, warning = amber, error = red. #}
+{% set accent_color = {
+  'info':    '#3fff00',
+  'success': '#3fff00',
+  'warning': '#f59e0b',
+  'error':   '#ef4444',
+}[level] or '#3fff00' %}
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 22px;border-left:4px solid {{ accent_color }};background:#f9fafb;border-radius:8px;">
+  <tr>
+    <td style="padding:14px 16px;">
+      <div style="font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b7280;">
+        {% if level == 'warning' %}Heads up{% elif level == 'error' %}Important{% elif level == 'success' %}Update{% else %}Announcement{% endif %}
+      </div>
+      <div style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:18px;font-weight:700;color:#0a0a0a;margin-top:4px;letter-spacing:-0.01em;">
+        {{ subject }}
+      </div>
+    </td>
+  </tr>
+</table>
+
+{# Preserve superadmin-authored line breaks — announcements are
+   short free-text, not HTML. Jinja autoescape keeps it safe. #}
+<div style="white-space:pre-wrap;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2937;">{{ message }}</div>
+
+{% if app_url %}
+<p style="margin:22px 0 0;color:#6b7280;font-size:13.5px;">
+  Signed in already?
+  <a href="{{ app_url }}" style="color:#0a0a0a;">Open DineroBook</a> to
+  see the full banner in context.
+</p>
+{% endif %}
+{% endblock %}
+
+{% block footer_extra %}
+<p style="margin:0 0 8px;font-size:11.5px;color:#9ca3af;">
+  Don't want announcement emails? Turn them off on your
+  <a href="{{ notifications_url }}" style="color:#6b7280;">notifications page</a>.
+  You'll still see announcements as in-app banners when you sign in.
+</p>
+{% endblock %}

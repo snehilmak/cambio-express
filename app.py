@@ -129,6 +129,9 @@ class User(db.Model):
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
     # column per channel here + the matching sender.
     notify_trial_reminders = db.Column(db.Boolean, default=True)
+    # Announcement broadcast emails are higher-volume (every superadmin
+    # announcement fans out to every opted-in user), so opt-in by default.
+    notify_announcement_email = db.Column(db.Boolean, default=False)
     # Deliverability suppression — stamped when Resend reports a hard
     # bounce on this user's email. `_send_email()` skips suppressed
     # recipients.
@@ -803,6 +806,13 @@ class Announcement(db.Model):
     expires_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    # Broadcast-email flags. `broadcast_requested` is set when the
+    # superadmin ticks the "Also email all users" checkbox at create
+    # time. `broadcast_sent_at` is stamped the first time
+    # broadcast_announcement() actually sends; used to dedup if the
+    # announcement is edited later or the sender is run manually.
+    broadcast_requested  = db.Column(db.Boolean, default=False)
+    broadcast_sent_at    = db.Column(db.DateTime, nullable=True)
 
 class PushSubscription(db.Model):
     """Web Push endpoint for a user — one row per browser/device they
@@ -2303,6 +2313,7 @@ def account_notifications():
     store = current_store()
     if request.method == "POST":
         user.notify_trial_reminders = bool(request.form.get("notify_trial_reminders"))
+        user.notify_announcement_email = bool(request.form.get("notify_announcement_email"))
         db.session.commit()
         flash("Notification preferences saved.", "success")
         return redirect(url_for("account_notifications"))
@@ -5180,7 +5191,9 @@ def superadmin_set_feature_override(key, store_id):
 @app.route("/superadmin/announcements/new", methods=["POST"])
 @superadmin_required
 def superadmin_new_announcement():
-    """Post a banner shown to every user on every page until it expires."""
+    """Post a banner shown to every user on every page until it expires.
+    Optionally also email the announcement to every opted-in user if
+    the `broadcast` checkbox is ticked."""
     message = request.form.get("message", "").strip()
     if not message:
         flash("Announcement message is required.", "error")
@@ -5193,16 +5206,32 @@ def superadmin_new_announcement():
     except ValueError:
         days = 0
     expires_at = datetime.utcnow() + timedelta(days=days) if days else None
+    broadcast = bool(request.form.get("broadcast"))
     a = Announcement(
         message=message[:2000], level=level,
         is_active=True, expires_at=expires_at,
         created_by=current_user().id,
+        broadcast_requested=broadcast,
     )
     db.session.add(a); db.session.flush()
     record_audit("create_announcement", target_type="announcement", target_id=a.id,
-                 details=f"{level}: {message[:80]}")
+                 details=f"{level}: {message[:80]}"
+                         + (" [broadcast]" if broadcast else ""))
     db.session.commit()
-    flash("Announcement posted.", "success")
+    # Broadcast synchronously. At current scale (a few hundred users)
+    # this is sub-second. If we ever grow past ~2k opted-in users,
+    # convert to a queued job — the sender is already idempotent.
+    if broadcast:
+        try:
+            sent = broadcast_announcement(a.id)
+            flash(f"Announcement posted and emailed to {sent} user(s).",
+                  "success")
+        except Exception as e:
+            app.logger.warning(f"announcement broadcast failed: {e}")
+            flash("Announcement posted, but the broadcast email failed. "
+                  "Check the Email service card for details.", "warning")
+    else:
+        flash("Announcement posted.", "success")
     return redirect(url_for("superadmin_controls", tab="announcements"))
 
 @app.route("/superadmin/announcements/<int:ann_id>/toggle", methods=["POST"])
@@ -5655,6 +5684,83 @@ def send_trial_reminders_cmd():
     n = send_trial_reminders()
     print(f"Sent {n} trial reminder email(s).")
 
+# ── Announcement broadcast email ─────────────────────────────
+#
+# `broadcast_announcement(announcement_id)` is the sender. Called:
+#   1) Inline from POST /superadmin/announcements/new when the
+#      superadmin tickcd the broadcast checkbox.
+#   2) Ad-hoc via `flask broadcast-announcement <id>` — lets us
+#      resend if the first run partially failed, since the sender is
+#      idempotent on broadcast_sent_at.
+#
+# Recipient filter:
+#   - User.is_active = True
+#   - User.email != ''
+#   - User.notify_announcement_email = True (opt-in; default False)
+#   - User.email_bounced_at IS NULL (suppression, from PR A)
+# Each send goes through _send_email() which also runs the suppression
+# check — belt-and-suspenders so a race (bounce arrives mid-broadcast)
+# still protects the sender.
+
+def broadcast_announcement(announcement_id, base_url=None):
+    """Fan out an announcement email to every opted-in user. Returns
+    the count of emails actually attempted (not counting users filtered
+    out). Idempotent: the first successful run stamps broadcast_sent_at
+    and subsequent calls no-op."""
+    base_url = base_url or os.environ.get("APP_BASE_URL",
+                                          "https://dinerobook.com")
+    ann = db.session.get(Announcement, announcement_id)
+    if ann is None:
+        return 0
+    if ann.broadcast_sent_at is not None:
+        return 0  # already sent — idempotent
+    # First line of the message becomes the subject if it looks like
+    # a sentence; otherwise use a generic subject. Cap at 100 chars.
+    first_line = (ann.message or "").strip().split("\n", 1)[0]
+    subject = first_line[:100] if first_line else "A message from DineroBook"
+
+    recipients = User.query.filter(
+        User.is_active == True,
+        User.email != "",
+        User.notify_announcement_email == True,
+        User.email_bounced_at.is_(None),
+    ).all()
+    now = datetime.utcnow()
+    notifications_url = f"{base_url}/account/notifications"
+    plain_body = (
+        f"Announcement from DineroBook\n\n"
+        f"{ann.message}\n\n"
+        f"— DineroBook ({base_url})\n\n"
+        f"Don't want announcement emails? Turn them off:\n"
+        f"  {notifications_url}\n"
+    )
+    sent = 0
+    for u in recipients:
+        with app.test_request_context("/"):
+            html = render_template(
+                "emails/announcement.html",
+                preheader=ann.message[:120],
+                subject=subject,
+                message=ann.message,
+                level=ann.level or "info",
+                app_url=base_url,
+                notifications_url=notifications_url,
+                year=now.year,
+                base_url=base_url,
+            )
+        _send_email(u.email, subject, plain_body, html=html)
+        sent += 1
+    ann.broadcast_sent_at = now
+    db.session.commit()
+    return sent
+
+@app.cli.command("broadcast-announcement")
+@click.argument("announcement_id", type=int)
+def broadcast_announcement_cmd(announcement_id):
+    """Resend an announcement email (no-op if already broadcast)."""
+    n = broadcast_announcement(announcement_id)
+    print(f"Broadcast announcement {announcement_id}: {n} email(s) sent.")
+
 @app.cli.command("reset-superadmin")
 @click.argument("username", required=False)
 @click.option("--reset-2fa", is_flag=True,
@@ -5776,6 +5882,13 @@ _ADDED_COLUMNS = [
     # for later when we have a user who fixes their mailbox and
     # wants to un-bounce).
     ("user",     "email_bounced_at",     "TIMESTAMP NULL"),
+    # Announcement broadcast — per-user opt-in flag + per-announcement
+    # "send requested" + dedup stamp. Opt-in default False because
+    # announcements fan out to every user (unlike trial reminders
+    # which only hit the user's own store).
+    ("user",         "notify_announcement_email", "BOOLEAN DEFAULT FALSE"),
+    ("announcement", "broadcast_requested",       "BOOLEAN DEFAULT FALSE"),
+    ("announcement", "broadcast_sent_at",         "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():
