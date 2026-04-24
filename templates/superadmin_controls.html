@@ -245,6 +245,62 @@
 </div>
 {% endif %}
 
+{# Email delivery (SMTP) health. Reads _last_smtp_attempt — no live
+   probe, so page loads stay cheap. The "Send test email" button is
+   how you populate the status for the first time after a deploy. #}
+{% if smtp_health %}
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Email service</span>
+    {% if not smtp_health.configured %}
+      <span class="badge badge-yellow">Not configured</span>
+    {% elif smtp_health.status == 'sent' %}
+      <span class="badge badge-green">Connected</span>
+    {% elif smtp_health.status == 'failed' %}
+      <span class="badge badge-red">Failing</span>
+    {% else %}
+      <span class="badge badge-yellow">Untested</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="info-row"><span class="k">SMTP_HOST</span>
+      <span class="v">{% if smtp_health.env.host %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">SMTP_USER</span>
+      <span class="v">{% if smtp_health.env.user %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">SMTP_PASS</span>
+      <span class="v">{% if smtp_health.env.password %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">SMTP_FROM</span>
+      <span class="v">{% if smtp_health.env.from %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-yellow">optional — falls back to SMTP_USER</span>{% endif %}</span></div>
+
+    {% if smtp_health.when %}
+    <div class="info-row"><span class="k">Last attempt</span>
+      <span class="v mono">{{ smtp_health.when.strftime('%b %d, %Y %H:%M UTC') }}</span></div>
+    {% endif %}
+    {% if smtp_health.last_to_domain %}
+    <div class="info-row"><span class="k">Last recipient</span>
+      <span class="v mono">*@{{ smtp_health.last_to_domain }}</span></div>
+    {% endif %}
+    {% if smtp_health.status == 'failed' and smtp_health.error %}
+    <div class="banner banner-error mt-2" style="margin-bottom:0;">
+      <span class="banner-msg"><strong>SMTP:</strong> {{ smtp_health.error }}</span>
+    </div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('superadmin_send_test_email') }}"
+          style="margin-top:14px;">
+      <button type="submit" class="btn btn-outline btn-sm"
+              {% if not smtp_health.configured %}disabled title="Set SMTP env vars first"{% endif %}>
+        Send test email
+      </button>
+      <span class="text-sm text-muted" style="margin-left:10px;">
+        Sends to your account email (on
+        <a href="{{ url_for('account_profile') }}">/account/profile</a>).
+      </span>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header"><span class="card-title">Quick links</span></div>
   <div class="card-body">
