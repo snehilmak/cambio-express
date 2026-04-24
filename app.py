@@ -2354,18 +2354,40 @@ def _hash_token(raw):
     """sha256-hex — matches the column size and is fine for single-use tokens."""
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
+# Last SMTP attempt state. Updated by _send_email() on every call so the
+# superadmin Overview can surface the most recent delivery outcome
+# without a live probe on every page load (which would itself be noise
+# in SMTP logs + a latency hit). Keys: status ∈ {"unconfigured",
+# "sent", "failed", "unknown"}, error (str, "" on success), when
+# (datetime or None), last_to (obscured — we show only the domain
+# part so the page doesn't leak user email addresses), last_subject.
+_last_smtp_attempt = {
+    "status": "unknown", "error": "", "when": None,
+    "last_to_domain": "", "last_subject": "",
+}
+
 def _send_email(to_addr, subject, body):
-    """Send a transactional email. Silent no-op if SMTP isn't configured.
+    """Send a transactional email. Returns True on success, False on
+    failure or when SMTP isn't configured. Every attempt updates
+    _last_smtp_attempt so the superadmin health card can show the
+    most recent outcome.
 
     Env vars required: SMTP_HOST, SMTP_USER, SMTP_PASS. Optional: SMTP_PORT
     (default 587), SMTP_FROM (default SMTP_USER). When SMTP isn't configured
     the caller is expected to log enough context that a superadmin can
     retrieve the link manually.
     """
+    global _last_smtp_attempt
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
     pw   = os.environ.get("SMTP_PASS")
+    now = datetime.utcnow()
+    to_domain = to_addr.split("@", 1)[1] if to_addr and "@" in to_addr else ""
     if not (host and user and pw):
+        _last_smtp_attempt = {
+            "status": "unconfigured", "error": "SMTP env vars not set",
+            "when": now, "last_to_domain": to_domain, "last_subject": subject,
+        }
         return False
     port = int(os.environ.get("SMTP_PORT", "587"))
     sender = os.environ.get("SMTP_FROM", user)
@@ -2379,10 +2401,44 @@ def _send_email(to_addr, subject, body):
             s.starttls()
             s.login(user, pw)
             s.send_message(msg)
+        _last_smtp_attempt = {
+            "status": "sent", "error": "", "when": now,
+            "last_to_domain": to_domain, "last_subject": subject,
+        }
         return True
     except Exception as e:
-        app.logger.error(f"SMTP send failed: {e}")
+        # Cheap type + message is enough for the superadmin to see whether
+        # the auth creds are wrong, the host is unreachable, etc. — without
+        # dumping a traceback into the HTML.
+        err = f"{type(e).__name__}: {e}"
+        app.logger.warning(f"SMTP send failed to {to_domain or '(no-to)'}: {err}")
+        _last_smtp_attempt = {
+            "status": "failed", "error": err, "when": now,
+            "last_to_domain": to_domain, "last_subject": subject,
+        }
         return False
+
+def smtp_health_check():
+    """Return a dict describing the email-delivery integration state,
+    matching the shape of stripe_health_check so the template stays
+    symmetric. Doesn't do a live probe — reads _last_smtp_attempt,
+    which every real _send_email() call updates."""
+    env = {
+        "host":     bool(os.environ.get("SMTP_HOST")),
+        "user":     bool(os.environ.get("SMTP_USER")),
+        "password": bool(os.environ.get("SMTP_PASS")),
+        "from":     bool(os.environ.get("SMTP_FROM")),
+    }
+    configured = env["host"] and env["user"] and env["password"]
+    return {
+        "env":         env,
+        "configured":  configured,
+        "status":      _last_smtp_attempt["status"],
+        "error":       _last_smtp_attempt["error"],
+        "when":        _last_smtp_attempt["when"],
+        "last_to_domain":  _last_smtp_attempt["last_to_domain"],
+        "last_subject":    _last_smtp_attempt["last_subject"],
+    }
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
@@ -2427,7 +2483,12 @@ def forgot_password():
                     "If you didn't request this you can safely ignore this email — your "
                     "current password will keep working.\n"
                 )
-                delivered = _send_email(u.username, "Reset your DineroBook password", body)
+                # Prefer the explicit email field (landed with /account/profile)
+                # over the username. Username doubles as email for most admins
+                # today, but owners often have a display username that isn't
+                # an address — without this fallback their reset mail bounces.
+                to_addr = (u.email or u.username).strip()
+                delivered = _send_email(to_addr, "Reset your DineroBook password", body)
                 if not delivered:
                     # No SMTP configured (or send failed): log the URL so the
                     # superadmin can retrieve it from the server logs and
@@ -4661,6 +4722,8 @@ def superadmin_controls():
 
     # Stripe health only hit on the overview tab (API call costs one round trip).
     stripe_health = stripe_health_check() if active_tab == "overview" else None
+    # SMTP health is free (reads _last_smtp_attempt in-process, no network).
+    smtp_health = smtp_health_check() if active_tab == "overview" else None
 
     # ── Stores tab: search, filters, pagination ──
     q_text        = request.args.get("q", "").strip()
@@ -4718,11 +4781,52 @@ def superadmin_controls():
         retention_queue=retention_queue, estimated_mrr=estimated_mrr,
         total_stores=total_stores,
         stripe_health=stripe_health,
+        smtp_health=smtp_health,
         # Pagination + filter state for the Stores tab.
         q=q_text, plan_filter=plan_filter, status_filter=status_filter,
         page=page, total_pages=total_pages, stores_matching=stores_matching,
         stores_per_page=STORES_PER_PAGE,
     )
+
+# ── Email delivery test (superadmin) ─────────────────────────
+@app.route("/superadmin/send-test-email", methods=["POST"])
+@superadmin_required
+def superadmin_send_test_email():
+    """One-click deliverability probe. Sends a plain email to the
+    superadmin's own User.email (they populate it from /account/profile)
+    so they can verify the SMTP env vars are wired correctly without
+    waiting for a real trigger like password reset.
+
+    No dedup, no rate limit — superadmin-only, and the worst case is
+    they spam their own inbox. The response is a flash + redirect back
+    to the Overview so the SMTP health card updates with the new
+    _last_smtp_attempt state on the next render."""
+    user = current_user()
+    to_addr = (user.email or "").strip()
+    if not to_addr:
+        flash("Set your email on /account/profile first — "
+              "nowhere to send a test to.", "warning")
+        return redirect(url_for("superadmin_controls", tab="overview"))
+    subject = "DineroBook test email"
+    body = (
+        "This is a deliverability test from DineroBook.\n\n"
+        f"Sent to: {to_addr}\n"
+        f"Sent at: {datetime.utcnow().isoformat()}Z\n\n"
+        "If you're reading this, SMTP is configured correctly and "
+        "transactional email (password reset, trial reminders) will "
+        "reach your users.\n"
+    )
+    ok = _send_email(to_addr, subject, body)
+    if ok:
+        flash(f"Test email sent to {to_addr}. Check your inbox in a minute.", "success")
+    else:
+        # _last_smtp_attempt now holds the error; it'll render on the
+        # same page's SMTP health card. Keep the flash message terse —
+        # the card has the detail.
+        flash("Test email failed. See the Email service card for the error.", "warning")
+    record_audit("send_test_email", "superadmin", None, f"to={to_addr} ok={ok}")
+    db.session.commit()
+    return redirect(url_for("superadmin_controls", tab="overview"))
 
 # ── Per-store actions (superadmin) ───────────────────────────
 def _store_or_404(store_id): return Store.query.get_or_404(store_id)
