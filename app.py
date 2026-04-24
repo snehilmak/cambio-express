@@ -125,6 +125,11 @@ class User(db.Model):
     phone            = db.Column(db.String(40), default="")
     timezone         = db.Column(db.String(60), default="")
     last_login_at    = db.Column(db.DateTime, nullable=True)
+    # UI theme preference. Dark is the design-system default; users
+    # who want light explicitly opt in via /account/profile. Stored
+    # per-user (not per-device) so the preference follows the user
+    # across browsers / devices. Logged-out pages always render dark.
+    theme_preference = db.Column(db.String(8), default="dark")
     # Notification preferences. Opt-out (default True) for the one we
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
     # column per channel here + the matching sender.
@@ -836,7 +841,8 @@ _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout
                  "owner_dashboard", "owner_locations", "owner_store_detail",
                  "owner_link_store", "owner_unlink_store",
                  "admin_subscription", "admin_subscription_billing_portal",
-                 "admin_subscription_toggle_addon", "admin_subscription_cancel"}
+                 "admin_subscription_toggle_addon", "admin_subscription_cancel",
+                 "account_theme"}
 
 # ── Add-ons catalog ──────────────────────────────────────────
 # Each add-on has a stable key used in the Store.addons CSV column.
@@ -1290,6 +1296,28 @@ def inject_impersonation_context():
         "is_impersonating": True,
         "impersonated_store_name": store.name if store else "(unknown store)",
     }
+
+
+@app.context_processor
+def inject_theme():
+    """Expose the active UI theme to every template.
+
+    Logged-in users get whatever they've saved on their profile
+    (defaults to 'dark' for new accounts and any legacy row that
+    pre-dates the column). Logged-out pages always render dark — the
+    theme preference is per-user, so it has no meaning before login,
+    and dark is the historical default + landing-page hero design.
+
+    `theme` should be wired into the base templates via
+    `<html data-theme="{{ theme }}">` so design tokens flip in unison.
+    """
+    user = current_user()
+    if user is None:
+        return {"theme": "dark"}
+    pref = getattr(user, "theme_preference", None)
+    if pref not in ("dark", "light"):
+        return {"theme": "dark"}
+    return {"theme": pref}
 
 # ── SimpleFIN (FIXED) ────────────────────────────────────────
 def require_store_context():
@@ -2296,6 +2324,30 @@ def admin_settings_security_redirect():
     """Permanent redirect from the old admin-only Security tab to the
     new shared page. Keeps any bookmarks / external docs working."""
     return redirect(url_for("account_security"), code=301)
+
+
+@app.route("/account/theme", methods=["POST"])
+@login_required
+def account_theme():
+    """Persist the user's UI theme preference.
+
+    Lives as its own endpoint (not folded into /account/profile) so the
+    toggle can be a one-click action with its own redirect target —
+    submitting it from any page returns the user to where they were.
+    Validates strictly: anything other than "dark" / "light" is treated
+    as a no-op rather than wiping the column.
+    """
+    user = current_user()
+    choice = (request.form.get("theme") or "").strip().lower()
+    if choice in ("dark", "light"):
+        user.theme_preference = choice
+        db.session.commit()
+        flash(f"Switched to {choice} mode.", "success")
+    else:
+        flash("Invalid theme — no change.", "error")
+    # Bounce back to the referring page so the toggle works from anywhere.
+    nxt = request.form.get("next") or request.referrer or url_for("account_profile")
+    return redirect(nxt)
 
 @app.route("/account/notifications", methods=["GET", "POST"])
 @login_required
@@ -6161,6 +6213,9 @@ _ADDED_COLUMNS = [
     ("user",         "notify_announcement_email", "BOOLEAN DEFAULT FALSE"),
     ("announcement", "broadcast_requested",       "BOOLEAN DEFAULT FALSE"),
     ("announcement", "broadcast_sent_at",         "TIMESTAMP NULL"),
+    # UI theme preference (dark | light). Default dark to match the
+    # historical behavior — users opt in to light explicitly.
+    ("user",         "theme_preference",          "VARCHAR(8) DEFAULT 'dark'"),
 ]
 
 def _ensure_added_columns():

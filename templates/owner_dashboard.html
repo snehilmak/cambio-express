@@ -269,9 +269,20 @@
   var DATA;
   try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
 
-  var NEON = '#3fff00';
-  var INTERMEX = '#5ea9ff', MAXI = '#b48cff', BARRI = '#4dd8e6';
-  var GRAY7 = '#9199a8', GRAY3 = '#272c38', GRAY6 = '#6b7280';
+  // Read theme tokens at runtime so the chart re-themes when the user
+  // switches between dark and light without a hardcoded fallback drift.
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  var NEON     = cssVar('--db-neon',        '#3fff00');
+  var INTERMEX = cssVar('--db-co-intermex', '#5ea9ff');
+  var MAXI     = cssVar('--db-co-maxi',     '#b48cff');
+  var BARRI    = cssVar('--db-co-barri',    '#4dd8e6');
+  var GRAY7    = cssVar('--db-gray-7',      '#9199a8');
+  var GRAY3    = cssVar('--db-gray-3',      '#272c38');
+  var GRAY6    = cssVar('--db-gray-6',      '#6b7280');
+  var PAGE_BG  = cssVar('--db-bg',          '#0b0d12');
   function colorFor(co) {
     var k = (co || '').toLowerCase();
     if (k === 'intermex') return INTERMEX;
@@ -337,7 +348,7 @@
       series: DATA.company.totals,
       labels: labels,
       colors: colors,
-      stroke: { show: true, width: 2, colors: ['#0b0d12'] },
+      stroke: { show: true, width: 2, colors: [PAGE_BG] },
       dataLabels: { enabled: false },
       legend: { position: 'bottom', labels: { colors: GRAY7 }, markers: { radius: 4 } },
       plotOptions: {

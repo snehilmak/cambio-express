@@ -370,6 +370,75 @@ select {
   color: var(--db-gray-7);
 }
 
+/* ── Theme chooser on /account/profile.
+   Two radio "tiles" with mini swatches showing what each mode looks
+   like. Active state is conveyed by a neon ring + tinted background;
+   the actual <input> is screen-reader-only but still keyboard-
+   focusable. */
+.theme-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.theme-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  gap: 4px 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid var(--db-gray-3);
+  border-radius: 12px;
+  background: var(--db-bg-elevated);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.theme-choice:hover { border-color: var(--db-gray-4); }
+.theme-choice.is-active {
+  border-color: var(--db-neon);
+  box-shadow: 0 0 0 1px var(--db-neon), 0 0 14px var(--db-neon-glow-15);
+}
+.theme-choice > input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0; height: 0;
+  margin: 0; padding: 0;
+}
+.theme-swatch {
+  grid-row: span 2;
+  width: 48px; height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--db-gray-3);
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.theme-swatch-dark { background: #0b0d12; }
+.theme-swatch-light { background: #fafafa; }
+.theme-swatch-bar {
+  position: absolute; top: 0; left: 0; right: 0; height: 8px;
+}
+.theme-swatch-dark .theme-swatch-bar  { background: #11141b; border-bottom: 1px solid #272c38; }
+.theme-swatch-light .theme-swatch-bar { background: #ffffff; border-bottom: 1px solid #d8dadf; }
+.theme-swatch-card {
+  position: absolute; left: 8px; right: 8px; bottom: 6px; height: 14px;
+  border-radius: 3px;
+}
+.theme-swatch-dark .theme-swatch-card  { background: #11141b; border: 1px solid #272c38; }
+.theme-swatch-light .theme-swatch-card { background: #ffffff; border: 1px solid #d8dadf; }
+.theme-choice-label {
+  font-family: var(--db-font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--db-gray-9);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.theme-choice-sub {
+  font-size: 12px;
+  color: var(--db-gray-7);
+}
+
 /* ── Sticky save bar: locked-state modifier.
    The default .sticky-save-bar has only a border-top and a
    near-transparent background — intentional for the "save + cancel"

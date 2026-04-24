@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+{# `theme` is injected by inject_theme context processor — defaults to
+   "dark" for logged-out users and for accounts that haven't opted into
+   light mode on /account/profile. Setting it server-side via the
+   attribute (instead of via JS post-render) avoids a flash of
+   unstyled-mode content on first paint. #}
+<html lang="en" data-theme="{{ theme|default('dark') }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook{% endblock %}</title>
-<script>
-  // Dark is now the only mode — set the attribute before paint so the
-  // legacy app.css dark-mode rules always apply alongside shell.css.
-  document.documentElement.setAttribute('data-theme', 'dark');
-</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">

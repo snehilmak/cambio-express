@@ -265,9 +265,15 @@
   var DATA;
   try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
 
-  var NEON = '#3fff00';
-  var INFO = '#5ea9ff';
-  var GRAY7 = '#9199a8', GRAY3 = '#272c38', GRAY6 = '#6b7280';
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  var NEON  = cssVar('--db-neon',    '#3fff00');
+  var INFO  = cssVar('--db-info',    '#5ea9ff');
+  var GRAY7 = cssVar('--db-gray-7',  '#9199a8');
+  var GRAY3 = cssVar('--db-gray-3',  '#272c38');
+  var GRAY6 = cssVar('--db-gray-6',  '#6b7280');
 
   var common = {
     chart: {

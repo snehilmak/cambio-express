@@ -1,13 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+{# Owner shell — same theme contract as base.html (server-rendered
+   data-theme avoids a paint flash). #}
+<html lang="en" data-theme="{{ theme|default('dark') }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook — Owner{% endblock %}</title>
-<script>
-  // Dark is now the only mode.
-  document.documentElement.setAttribute('data-theme', 'dark');
-</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
