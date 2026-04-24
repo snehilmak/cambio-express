@@ -2366,11 +2366,17 @@ _last_smtp_attempt = {
     "last_to_domain": "", "last_subject": "",
 }
 
-def _send_email(to_addr, subject, body):
+def _send_email(to_addr, subject, body, html=None):
     """Send a transactional email. Returns True on success, False on
     failure or when SMTP isn't configured. Every attempt updates
     _last_smtp_attempt so the superadmin health card can show the
     most recent outcome.
+
+    When `html` is provided, the message is sent multipart/alternative
+    so email clients that strip HTML (or users who prefer plain text)
+    see `body`, and everyone else sees the rendered branded template.
+    Keep both — plaintext fallback is a deliverability signal (spam
+    filters flag HTML-only messages) and a real accessibility win.
 
     Env vars required: SMTP_HOST, SMTP_USER, SMTP_PASS. Optional: SMTP_PORT
     (default 587), SMTP_FROM (default SMTP_USER). When SMTP isn't configured
@@ -2396,6 +2402,8 @@ def _send_email(to_addr, subject, body):
     msg["To"] = to_addr
     msg["Subject"] = subject
     msg.set_content(body)
+    if html:
+        msg.add_alternative(html, subtype="html")
     try:
         with smtplib.SMTP(host, port, timeout=15) as s:
             s.starttls()
@@ -2483,12 +2491,20 @@ def forgot_password():
                     "If you didn't request this you can safely ignore this email — your "
                     "current password will keep working.\n"
                 )
+                html = render_template(
+                    "emails/password_reset.html",
+                    preheader="Reset your DineroBook password — link expires in 1 hour.",
+                    name=u.full_name or "",
+                    reset_url=reset_url,
+                    year=datetime.utcnow().year,
+                    base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
+                )
                 # Prefer the explicit email field (landed with /account/profile)
                 # over the username. Username doubles as email for most admins
                 # today, but owners often have a display username that isn't
                 # an address — without this fallback their reset mail bounces.
                 to_addr = (u.email or u.username).strip()
-                delivered = _send_email(to_addr, "Reset your DineroBook password", body)
+                delivered = _send_email(to_addr, "Reset your DineroBook password", body, html=html)
                 if not delivered:
                     # No SMTP configured (or send failed): log the URL so the
                     # superadmin can retrieve it from the server logs and
@@ -4808,15 +4824,24 @@ def superadmin_send_test_email():
               "nowhere to send a test to.", "warning")
         return redirect(url_for("superadmin_controls", tab="overview"))
     subject = "DineroBook test email"
+    sent_at = datetime.utcnow().isoformat(timespec="seconds")
     body = (
         "This is a deliverability test from DineroBook.\n\n"
         f"Sent to: {to_addr}\n"
-        f"Sent at: {datetime.utcnow().isoformat()}Z\n\n"
+        f"Sent at: {sent_at}Z\n\n"
         "If you're reading this, SMTP is configured correctly and "
         "transactional email (password reset, trial reminders) will "
         "reach your users.\n"
     )
-    ok = _send_email(to_addr, subject, body)
+    html = render_template(
+        "emails/test.html",
+        preheader="Deliverability test from your DineroBook superadmin panel.",
+        to_addr=to_addr, sent_at=sent_at + "Z",
+        sender=os.environ.get("SMTP_FROM", "no-reply@dinerobook.com"),
+        year=datetime.utcnow().year,
+        base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
+    )
+    ok = _send_email(to_addr, subject, body, html=html)
     if ok:
         flash(f"Test email sent to {to_addr}. Check your inbox in a minute.", "success")
     else:
@@ -5367,8 +5392,27 @@ def send_trial_reminders(now=None, base_url=None):
                 subscribe_url=subscribe_url,
                 notifications_url=notifications_url,
             )
+            # Context processors (inject_trial_context / impersonation)
+            # read request / session state, which isn't present when
+            # `flask send-trial-reminders` runs from cron. Fabricate a
+            # minimal request context so render_template works. The URL
+            # we feed it doesn't matter — the template references nothing
+            # that depends on it.
+            with app.test_request_context("/"):
+                html = render_template(
+                    "emails/trial_reminder.html",
+                    preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
+                    name=u.full_name or "",
+                    store_name=store.name,
+                    trial_end_date=trial_end_str,
+                    days=days_left,
+                    subscribe_url=subscribe_url,
+                    notifications_url=notifications_url,
+                    year=now.year,
+                    base_url=base_url,
+                )
             subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
-            _send_email(u.email, subject, body)
+            _send_email(u.email, subject, body, html=html)
             any_sent = True
             sent += 1
         if any_sent:
