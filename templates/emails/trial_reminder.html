@@ -1,0 +1,43 @@
+{% extends "emails/_base.html" %}
+{% from "emails/_base.html" import cta %}
+{% block title %}Your DineroBook trial ends in {{ days }} days{% endblock %}
+
+{% block content %}
+<h1 style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#0a0a0a;margin:0 0 16px;letter-spacing:-0.02em;">
+  Your trial ends in {{ days }} days
+</h1>
+<p style="margin:0 0 14px;">
+  Hi{% if name %} {{ name }}{% endif %},
+</p>
+<p style="margin:0 0 14px;">
+  Just a heads up &mdash; the DineroBook trial for
+  <strong style="color:#0a0a0a;">{{ store_name }}</strong> ends on
+  <strong style="color:#0a0a0a;">{{ trial_end_date }}</strong>.
+  To keep your books, reports, and transfer history, subscribe
+  before then.
+</p>
+
+{{ cta(subscribe_url, "Subscribe now") }}
+
+<p style="margin:22px 0 6px;color:#6b7280;font-size:13.5px;">
+  Or paste this into your browser:<br/>
+  <a href="{{ subscribe_url }}" style="color:#0a0a0a;word-break:break-all;">{{ subscribe_url }}</a>
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;border-top:1px solid #e5e7eb;">
+  <tr>
+    <td style="padding-top:18px;font-size:12.5px;color:#6b7280;line-height:1.55;">
+      No action required if you'd rather let the trial expire. We
+      keep your data for 180 days after cancellation, so you can
+      come back without losing history.
+    </td>
+  </tr>
+</table>
+{% endblock %}
+
+{% block footer_extra %}
+<p style="margin:0 0 8px;font-size:11.5px;color:#9ca3af;">
+  Don't want trial reminders? Turn them off on your
+  <a href="{{ notifications_url }}" style="color:#6b7280;">notifications page</a>.
+</p>
+{% endblock %}

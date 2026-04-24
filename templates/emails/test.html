@@ -1,0 +1,28 @@
+{% extends "emails/_base.html" %}
+{% from "emails/_base.html" import cta %}
+{% block title %}DineroBook email deliverability test{% endblock %}
+
+{% block content %}
+<h1 style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#0a0a0a;margin:0 0 16px;letter-spacing:-0.02em;">
+  Deliverability test
+</h1>
+<p style="margin:0 0 14px;">
+  This is a test email from your DineroBook superadmin panel. If
+  you're reading it, your SMTP wiring is correct and real emails
+  (password reset, trial-ending reminders) will reach your users.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 6px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;">
+  <tr>
+    <td style="padding:16px 18px;font-family:'JetBrains Mono','Menlo',Consolas,monospace;font-size:12.5px;color:#374151;">
+      <div><strong style="color:#0a0a0a;">Sent to:</strong> {{ to_addr }}</div>
+      <div style="margin-top:4px;"><strong style="color:#0a0a0a;">Sent at:</strong> {{ sent_at }} UTC</div>
+      <div style="margin-top:4px;"><strong style="color:#0a0a0a;">From:</strong> {{ sender }}</div>
+    </td>
+  </tr>
+</table>
+
+<p style="margin:18px 0 0;color:#6b7280;font-size:13.5px;">
+  No action needed. You can safely archive or delete this message.
+</p>
+{% endblock %}

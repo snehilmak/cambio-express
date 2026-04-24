@@ -1,0 +1,97 @@
+{#
+  Branded email layout. Shared by every email DineroBook sends —
+  the test, password reset, and trial reminder (for now).
+
+  Email HTML is its own discipline: table-for-layout (Outlook still
+  lives in 2005), inline styles only (Gmail strips <style> blocks),
+  system-font fallbacks (web fonts load unreliably), max width 600
+  pixels, real images with explicit dims. Don't refactor this into
+  the app's regular CSS — it won't survive the trip.
+
+  Child templates fill the {% block content %} with their message
+  body. Keep the body visually simple: one h1 heading, paragraphs,
+  one CTA button via the `cta()` macro.
+#}
+{% macro cta(href, label) %}
+<table cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 8px;">
+  <tr>
+    <td bgcolor="#3fff00" align="center" style="border-radius:8px;">
+      <a href="{{ href }}" style="display:inline-block;padding:14px 32px;color:#000;text-decoration:none;font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-weight:700;font-size:15px;letter-spacing:-0.01em;border-radius:8px;">
+        {{ label }}
+      </a>
+    </td>
+  </tr>
+</table>
+{% endmacro %}
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>{% block title %}DineroBook{% endblock %}</title>
+  {# Preheader — the preview text Gmail/Apple Mail shows next to the
+     subject. Hidden in the body, visible in the inbox list. #}
+  {% if preheader %}
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    {{ preheader }}
+  </div>
+  {% endif %}
+</head>
+<body style="margin:0;padding:0;background:#f4f4f7;font-family:'Inter','Segoe UI',Arial,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f7;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+
+          {# Neon green accent bar — our only use of the brand color
+             above the fold. Survives every email client; dark-mode
+             inverters usually leave it alone because it's such a
+             saturated hex. #}
+          <tr>
+            <td style="background:#3fff00;height:5px;line-height:5px;font-size:0;">&nbsp;</td>
+          </tr>
+
+          {# Header — wordmark in Space Grotesk with full fallback
+             stack. Most clients will show Arial/Helvetica, which is
+             fine; Apple Mail + native iOS Mail show Space Grotesk. #}
+          <tr>
+            <td style="padding:32px 40px 12px;">
+              <span style="font-family:'Space Grotesk','Inter','Segoe UI',Arial,sans-serif;font-size:22px;font-weight:700;color:#0a0a0a;letter-spacing:-0.02em;">
+                DineroBook
+              </span>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:0 40px 40px;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:15px;line-height:1.55;color:#1f2937;">
+              {% block content %}{% endblock %}
+            </td>
+          </tr>
+
+          {# Footer — muted background, ledger-gray text. No logo
+             here on purpose; the wordmark + green bar at the top
+             carry the brand and the footer is just meta. #}
+          <tr>
+            <td style="padding:24px 40px 28px;background:#f9fafb;border-top:1px solid #e5e7eb;font-family:'Inter','Segoe UI',Arial,sans-serif;font-size:12px;color:#6b7280;line-height:1.55;">
+              {% block footer_extra %}{% endblock %}
+              <p style="margin:0;">
+                &copy; {{ year or 2026 }} DineroBook &middot;
+                <a href="https://dinerobook.com" style="color:#6b7280;text-decoration:underline;">dinerobook.com</a>
+              </p>
+              <p style="margin:6px 0 0;color:#9ca3af;font-size:11px;">
+                You're receiving this because your DineroBook account is
+                set to receive transactional notifications. Manage
+                preferences on your
+                <a href="{{ base_url or 'https://dinerobook.com' }}/account/notifications" style="color:#9ca3af;">notifications page</a>.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
