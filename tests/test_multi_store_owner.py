@@ -189,6 +189,9 @@ def test_owner_dashboard_loads_no_stores(owner_client):
 
 
 def test_owner_dashboard_shows_store_after_link(owner_client):
+    """Dashboard's "Linked stores" KPI reflects newly linked stores. The
+    store list itself moved to /owner/locations, so we check the count
+    here and the per-store rendering on the locations page below."""
     with flask_app.app_context():
         from app import User, Store, StoreOwnerLink
         owner = User.query.filter_by(username="owner@dashboard.com").first()
@@ -197,6 +200,20 @@ def test_owner_dashboard_shows_store_after_link(owner_client):
         db.session.add(link)
         db.session.commit()
     rv = owner_client.get("/owner/dashboard")
+    assert rv.status_code == 200
+    assert b"Linked stores" in rv.data
+
+
+def test_owner_locations_shows_store_after_link(owner_client):
+    """/owner/locations card grid lists the store name after linking."""
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        store = Store.query.filter_by(slug="test-store").first()
+        link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
+        db.session.add(link)
+        db.session.commit()
+    rv = owner_client.get("/owner/locations")
     assert rv.status_code == 200
     assert b"Test Store" in rv.data
 
@@ -449,3 +466,246 @@ def test_admin_remove_owner_access(logged_in_client):
         store = Store.query.filter_by(slug="test-store").first()
         link = StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=oid).first()
         assert link is None
+
+
+# ── /owner/locations: searchable list of linked stores ──────────
+#
+# The dashboard pivoted to a metrics-only view; the per-store grid
+# moved here. The route also serves a `?partial=1` JSON payload for
+# the debounced live-search swap pattern.
+
+def _link_owner_to_test_store(owner_username):
+    """Helper: fetch (or seed) the owner_username user and link them to
+    the seeded test-store. Returns (owner_id, store_id)."""
+    from app import User, Store, StoreOwnerLink
+    with flask_app.app_context():
+        owner = User.query.filter_by(username=owner_username).first()
+        store = Store.query.filter_by(slug="test-store").first()
+        if not StoreOwnerLink.query.filter_by(
+            owner_id=owner.id, store_id=store.id
+        ).first():
+            db.session.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
+            db.session.commit()
+        return owner.id, store.id
+
+
+def test_owner_locations_loads_no_stores(owner_client):
+    rv = owner_client.get("/owner/locations")
+    assert rv.status_code == 200
+    assert b"No stores connected" in rv.data
+
+
+def test_owner_locations_lists_linked_stores(owner_client):
+    _link_owner_to_test_store("owner@dashboard.com")
+    rv = owner_client.get("/owner/locations")
+    assert rv.status_code == 200
+    assert b"Test Store" in rv.data
+
+
+def test_owner_locations_search_filters_by_name(owner_client):
+    """Empty query returns all; substring matches; non-match shows empty
+    state but does NOT 404."""
+    _link_owner_to_test_store("owner@dashboard.com")
+    rv = owner_client.get("/owner/locations?q=Test")
+    assert rv.status_code == 200
+    assert b"Test Store" in rv.data
+    rv = owner_client.get("/owner/locations?q=NoSuchStore")
+    assert rv.status_code == 200
+    assert b"No matches" in rv.data
+    assert b"Test Store" not in rv.data
+
+
+def test_owner_locations_partial_returns_json(owner_client):
+    """?partial=1 must return JSON (not HTML page). Used by the
+    debounced live-search fetcher to swap just the result region."""
+    _link_owner_to_test_store("owner@dashboard.com")
+    rv = owner_client.get("/owner/locations?partial=1&q=Test")
+    assert rv.status_code == 200
+    assert rv.headers["Content-Type"].startswith("application/json")
+    payload = rv.get_json()
+    assert "html" in payload
+    assert "matched" in payload
+    assert "total" in payload
+    assert payload["matched"] == 1
+    assert "Test Store" in payload["html"]
+
+
+def test_owner_locations_period_filter_accepts_today_month_year(owner_client):
+    _link_owner_to_test_store("owner@dashboard.com")
+    for p in ("today", "month", "year"):
+        rv = owner_client.get(f"/owner/locations?period={p}")
+        assert rv.status_code == 200, f"period={p} failed"
+
+
+def test_owner_locations_blocks_unauthenticated(client):
+    rv = client.get("/owner/locations")
+    assert rv.status_code == 302
+    assert "/login" in rv.headers["Location"]
+
+
+def test_owner_locations_blocks_non_owner(logged_in_client):
+    """An admin trying to reach /owner/locations should hit the same 403
+    as /owner/dashboard — the owner_required gate is on every owner route."""
+    rv = logged_in_client.get("/owner/locations")
+    assert rv.status_code == 403
+
+
+def test_owner_locations_only_lists_owned_stores(owner_client):
+    """Sanity: an unrelated store the owner is NOT linked to must not
+    appear in the locations list, regardless of search query."""
+    from datetime import datetime, timedelta
+    _link_owner_to_test_store("owner@dashboard.com")
+    with flask_app.app_context():
+        from app import Store
+        unrelated = Store(name="Other Owner Shop", slug="other-shop",
+                          email="other@example.com", plan="trial")
+        if hasattr(Store, "trial_ends_at"):
+            unrelated.trial_ends_at = datetime.utcnow() + timedelta(days=7)
+        db.session.add(unrelated)
+        db.session.commit()
+    rv = owner_client.get("/owner/locations")
+    assert b"Other Owner Shop" not in rv.data
+    rv = owner_client.get("/owner/locations?q=Other")
+    assert b"Other Owner Shop" not in rv.data
+
+
+# ── /owner/store/<id>: drill-down ─────────────────────────────
+
+def test_owner_store_detail_loads(owner_client):
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    rv = owner_client.get(f"/owner/store/{sid}")
+    assert rv.status_code == 200
+    assert b"Test Store" in rv.data
+    # KPI labels render
+    assert b"Transfers" in rv.data
+    assert b"Volume" in rv.data
+    assert b"Fees collected" in rv.data
+
+
+def test_owner_store_detail_shows_company_breakdown(owner_client):
+    """Drill-down's per-company table aggregates Transfer.send_amount by
+    company. Owners view by company is the whole reason this page exists."""
+    from datetime import date
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    with flask_app.app_context():
+        from app import User, Transfer
+        admin = User.query.filter_by(username="admin@test.com").first()
+        for co, amt in [("Intermex", 200.0), ("Maxi", 150.0), ("Intermex", 50.0)]:
+            db.session.add(Transfer(
+                store_id=sid, created_by=admin.id, send_date=date.today(),
+                company=co, sender_name="J", send_amount=amt, fee=2.0,
+                status="Sent",
+            ))
+        db.session.commit()
+    rv = owner_client.get(f"/owner/store/{sid}?period=month")
+    assert rv.status_code == 200
+    body = rv.data
+    # Company labels rendered
+    assert b"Intermex" in body
+    assert b"Maxi" in body
+    # Aggregated volume rendered (Intermex = 250, Maxi = 150)
+    assert b"$250" in body
+    assert b"$150" in body
+
+
+def test_owner_store_detail_blocks_unrelated_store(owner_client):
+    """An owner must NOT be able to drill into a store they're not linked
+    to — the route enforces StoreOwnerLink before rendering."""
+    from datetime import datetime, timedelta
+    with flask_app.app_context():
+        from app import Store
+        other = Store(name="Other Shop", slug="other-shop2",
+                      email="x@example.com", plan="trial")
+        if hasattr(Store, "trial_ends_at"):
+            other.trial_ends_at = datetime.utcnow() + timedelta(days=7)
+        db.session.add(other)
+        db.session.commit()
+        other_id = other.id
+    rv = owner_client.get(f"/owner/store/{other_id}", follow_redirects=False)
+    assert rv.status_code == 302
+    assert "/owner/locations" in rv.headers["Location"]
+
+
+def test_owner_store_detail_blocks_unauthenticated(client):
+    rv = client.get("/owner/store/1")
+    assert rv.status_code == 302
+    assert "/login" in rv.headers["Location"]
+
+
+def test_owner_store_detail_blocks_non_owner(logged_in_client):
+    rv = logged_in_client.get("/owner/store/1")
+    assert rv.status_code == 403
+
+
+def test_owner_store_detail_period_filter_accepts_today_month_year(owner_client):
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    for p in ("today", "month", "year"):
+        rv = owner_client.get(f"/owner/store/{sid}?period={p}")
+        assert rv.status_code == 200, f"period={p} failed"
+
+
+def test_owner_store_detail_renders_recent_transfers(owner_client):
+    """The "Recent transfers" section lists the latest 10 transfers by
+    created_at, regardless of period selector."""
+    from datetime import date
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    with flask_app.app_context():
+        from app import User, Transfer
+        admin = User.query.filter_by(username="admin@test.com").first()
+        db.session.add(Transfer(
+            store_id=sid, created_by=admin.id, send_date=date.today(),
+            company="Barri", sender_name="Alice Q",
+            send_amount=42.0, fee=1.0, status="Sent",
+        ))
+        db.session.commit()
+    rv = owner_client.get(f"/owner/store/{sid}")
+    assert b"Alice Q" in rv.data
+    assert b"Barri" in rv.data
+
+
+# ── /owner/dashboard: rich metrics view ───────────────────────
+
+def test_owner_dashboard_shows_company_breakdown_table(owner_client):
+    """Dashboard's "Company breakdown" mini-table aggregates across
+    every linked store. With one Intermex transfer for $300, the
+    Intermex row should appear with $300 in volume."""
+    from datetime import date
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    with flask_app.app_context():
+        from app import User, Transfer
+        admin = User.query.filter_by(username="admin@test.com").first()
+        db.session.add(Transfer(
+            store_id=sid, created_by=admin.id, send_date=date.today(),
+            company="Intermex", sender_name="X",
+            send_amount=300.0, fee=3.0, status="Sent",
+        ))
+        db.session.commit()
+    rv = owner_client.get("/owner/dashboard?period=month")
+    assert rv.status_code == 200
+    assert b"Intermex" in rv.data
+    assert b"$300" in rv.data
+
+
+def test_owner_dashboard_excludes_canceled_transfers_from_volume(owner_client):
+    """Canceled / Rejected transfers must not inflate the dashboard's
+    volume KPI (matches the superadmin dashboard's same exclusion)."""
+    from datetime import date
+    _, sid = _link_owner_to_test_store("owner@dashboard.com")
+    with flask_app.app_context():
+        from app import User, Transfer
+        admin = User.query.filter_by(username="admin@test.com").first()
+        # 100 Sent + 9999 Canceled — only the 100 should count.
+        db.session.add(Transfer(
+            store_id=sid, created_by=admin.id, send_date=date.today(),
+            company="Intermex", sender_name="X",
+            send_amount=100.0, fee=1.0, status="Sent",
+        ))
+        db.session.add(Transfer(
+            store_id=sid, created_by=admin.id, send_date=date.today(),
+            company="Intermex", sender_name="Y",
+            send_amount=9999.0, fee=1.0, status="Canceled",
+        ))
+        db.session.commit()
+    rv = owner_client.get("/owner/dashboard?period=today")
+    assert b"$9,999" not in rv.data
+    assert b"$100" in rv.data

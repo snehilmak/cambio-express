@@ -1,0 +1,83 @@
+{# Partial for /owner/locations — re-rendered by the AJAX live-search.
+   Always lists every visible store; the page-level template wraps it
+   in a stable swap container. Each row stays a self-contained card
+   (no shared layout state between rows) so the partial is dropped in
+   without rebuilding the surrounding chrome. #}
+{% if rows %}
+<div class="ol-grid">
+  {% for r in rows %}
+  <div class="card ol-card">
+    <div class="ol-card-head">
+      <div class="ol-card-title">
+        <a href="{{ url_for('owner_store_detail', store_id=r.store.id, period=period) }}">{{ r.store.name }}</a>
+        {% if r.store.plan == 'pro' %}
+          <span class="badge badge-green">Pro</span>
+        {% elif r.store.plan == 'basic' %}
+          <span class="badge badge-blue">Basic</span>
+        {% elif r.store.plan == 'inactive' %}
+          <span class="badge badge-red">Inactive</span>
+        {% else %}
+          <span class="badge badge-yellow">Trial</span>
+        {% endif %}
+      </div>
+      <form method="POST" action="{{ url_for('owner_unlink_store', store_id=r.store.id) }}"
+            style="margin:0;"
+            onsubmit="return confirm('Remove {{ r.store.name }} from your account?');">
+        <button type="submit" class="btn btn-outline btn-sm ol-unlink">Unlink</button>
+      </form>
+    </div>
+
+    <div class="ol-stats">
+      <div class="ol-stat">
+        <div class="ol-stat-label">Transfers</div>
+        <div class="ol-stat-value">{{ '{:,}'.format(r.transfer_count) }}</div>
+      </div>
+      <div class="ol-stat">
+        <div class="ol-stat-label">Volume</div>
+        <div class="ol-stat-value">${{ '{:,.0f}'.format(r.volume) }}</div>
+      </div>
+      <div class="ol-stat">
+        <div class="ol-stat-label">Daily reports</div>
+        <div class="ol-stat-value">{{ r.report_count }}</div>
+      </div>
+      <div class="ol-stat">
+        <div class="ol-stat-label">Over / Short</div>
+        <div class="ol-stat-value {% if r.over_short < 0 %}is-neg{% elif r.over_short > 0 %}is-pos{% endif %}">
+          ${{ '{:,.2f}'.format(r.over_short) }}
+        </div>
+      </div>
+    </div>
+
+    {% if r.companies %}
+    <div class="ol-chips">
+      {% for c in r.companies %}
+      <span class="ol-chip co-{{ c.company|lower }}" title="{{ c.count }} transfers">
+        <span class="ol-chip-name">{{ c.company }}</span>
+        <span class="ol-chip-num">${{ '{:,.0f}'.format(c.volume) }}</span>
+      </span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="ol-card-foot">
+      <a href="{{ url_for('owner_store_detail', store_id=r.store.id, period=period) }}"
+         class="btn btn-outline btn-sm">View details →</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body">
+    <div class="empty-state">
+      {% if query %}
+      <div class="empty-title">No matches for "{{ query }}"</div>
+      <div>Try a different name or clear the search.</div>
+      {% else %}
+      <div class="empty-title">No stores connected yet</div>
+      <div>Use the connect form below to link your first store.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}

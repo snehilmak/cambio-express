@@ -833,7 +833,8 @@ def current_user():  return db.session.get(User,  session["user_id"])  if "user_
 def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
 _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
-                 "owner_dashboard", "owner_link_store", "owner_unlink_store",
+                 "owner_dashboard", "owner_locations", "owner_store_detail",
+                 "owner_link_store", "owner_unlink_store",
                  "admin_subscription", "admin_subscription_billing_portal",
                  "admin_subscription_toggle_addon", "admin_subscription_cancel"}
 
@@ -2779,88 +2780,359 @@ def logout():
         return redirect(url_for("login_store", slug=slug))
     return redirect(url_for("login"))
 
+# ── Owner-side helpers ──────────────────────────────────────────
+#
+# Owners read across many stores at once and want the same depth of BI
+# the superadmin has, scoped to their umbrella. The helpers below carry
+# the heavy lifting; the routes below just wire them to templates.
+#
+# Period selector vocabulary (today / month / year) matches the existing
+# UI; "previous-period" windows are the same length, ending the day
+# before the current window — that's what the delta badges compare to.
+
+_OWNER_TRANSFER_EXCLUDED = ["Canceled", "Rejected"]
+
+def _owner_period_window(period, today):
+    """Map a `today|month|year` selector to current + prior windows.
+
+    Returns (start, end, prev_start, prev_end, prev_label). The prior
+    window has the same number of days as the current and ends the day
+    before the current one starts, so KPI deltas are like-for-like.
+    """
+    if period == "month":
+        start = today.replace(day=1)
+        end = today
+        days = (end - start).days
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days)
+        return start, end, prev_start, prev_end, "vs prior month"
+    if period == "year":
+        start = date(today.year, 1, 1)
+        end = today
+        days = (end - start).days
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=days)
+        return start, end, prev_start, prev_end, "vs prior year"
+    # default: today
+    return today, today, today - timedelta(days=1), today - timedelta(days=1), "vs yesterday"
+
+
+def _owner_store_ids(user):
+    """Store IDs the given owner is linked to. Empty if none."""
+    links = StoreOwnerLink.query.filter_by(owner_id=user.id).all()
+    return [l.store_id for l in links]
+
+
+def _owner_kpis(store_ids, start, end):
+    """Aggregate (transfer_count, volume, over_short) across the given
+    stores and date window. Excludes canceled/rejected transfers."""
+    if not store_ids:
+        return 0, 0.0, 0.0
+    tx_count = Transfer.query.filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).count()
+    vol = db.session.query(db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0)).filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).scalar() or 0.0
+    os_total = db.session.query(db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0)).filter(
+        DailyReport.store_id.in_(store_ids),
+        DailyReport.report_date >= start, DailyReport.report_date <= end,
+    ).scalar() or 0.0
+    return int(tx_count), float(vol), float(os_total)
+
+
+def _owner_dashboard_context(user, period):
+    """Rich metrics for /owner/dashboard.
+
+    Mirrors the superadmin dashboard pattern: KPI cards with prior-period
+    deltas, a 30-day daily volume area chart (always 30d so the trend
+    shape is independent of the selector), per-company donut for the
+    selected window, and a per-store volume comparison bar.
+    """
+    today = date.today()
+    start, end, prev_start, prev_end, prev_label = _owner_period_window(period, today)
+    store_ids = _owner_store_ids(user)
+    stores = (Store.query.filter(Store.id.in_(store_ids)).order_by(Store.name).all()
+              if store_ids else [])
+
+    agg_transfers, agg_volume, agg_over_short = _owner_kpis(store_ids, start, end)
+    prev_transfers, prev_volume, prev_over_short = _owner_kpis(store_ids, prev_start, prev_end)
+
+    # 30-day daily volume series — fixed window, used for the area chart.
+    d30_ago = today - timedelta(days=29)
+    daily_rows = (db.session.query(
+        Transfer.send_date,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+    ).filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= d30_ago, Transfer.send_date <= today,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.send_date).all() if store_ids else [])
+    by_day_vol = {d: float(v or 0) for d, _c, v in daily_rows}
+    by_day_cnt = {d: int(c or 0) for d, c, _v in daily_rows}
+    series_labels, series_volume, series_count = [], [], []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        series_labels.append(d.isoformat())
+        series_volume.append(round(by_day_vol.get(d, 0.0), 2))
+        series_count.append(by_day_cnt.get(d, 0))
+
+    # Per-company breakdown for the selected period.
+    co_rows = (db.session.query(
+        Transfer.company,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+    ).filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.company).order_by(
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc()
+    ).all() if store_ids else [])
+    company_breakdown = [
+        {"company": (co or "—"), "count": int(cnt),
+         "volume": float(v or 0), "fees": float(f or 0)}
+        for co, cnt, v, f in co_rows
+    ]
+
+    # Per-store volume comparison for the selected period.
+    store_rows = (db.session.query(
+        Transfer.store_id,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+    ).filter(
+        Transfer.store_id.in_(store_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.store_id).all() if store_ids else [])
+    store_stat = {sid: (int(c), float(v or 0)) for sid, c, v in store_rows}
+    store_comparison = []
+    for s in stores:
+        c, v = store_stat.get(s.id, (0, 0.0))
+        store_comparison.append({"id": s.id, "name": s.name, "count": c, "volume": v})
+    store_comparison.sort(key=lambda x: x["volume"], reverse=True)
+
+    return dict(
+        user=user, period=period, prev_label=prev_label,
+        period_start=start, period_end=end,
+        store_count=len(stores), stores=stores,
+        agg_transfers=agg_transfers, agg_volume=agg_volume,
+        agg_over_short=agg_over_short,
+        agg_transfers_delta=agg_transfers - prev_transfers,
+        agg_volume_delta=agg_volume - prev_volume,
+        agg_over_short_delta=agg_over_short - prev_over_short,
+        series_labels=series_labels, series_volume=series_volume,
+        series_count=series_count,
+        company_breakdown=company_breakdown,
+        store_comparison=store_comparison,
+    )
+
+
+def _owner_locations_payload(user, period, query):
+    """Per-store rows for /owner/locations.
+
+    Each row has the basic period-scoped stats (transfers, volume,
+    over/short) plus a per-company chip list so the owner sees provider
+    mix at a glance without drilling in. `query` is a substring matched
+    case-insensitively against store name.
+    """
+    today = date.today()
+    start, end, *_ = _owner_period_window(period, today)
+    store_ids = _owner_store_ids(user)
+    if not store_ids:
+        return [], 0
+
+    base_q = Store.query.filter(Store.id.in_(store_ids))
+    if query:
+        ql = "%{}%".format(query.lower())
+        base_q = base_q.filter(db.func.lower(Store.name).like(ql))
+    stores = base_q.order_by(Store.name).all()
+    if not stores:
+        return [], len(store_ids)
+
+    visible_ids = [s.id for s in stores]
+
+    transfer_rows = db.session.query(
+        Transfer.store_id,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+    ).filter(
+        Transfer.store_id.in_(visible_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.store_id).all()
+    transfer_stat = {sid: (int(c), float(v or 0)) for sid, c, v in transfer_rows}
+
+    daily_rows = db.session.query(
+        DailyReport.store_id,
+        db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0),
+        db.func.count(DailyReport.id),
+    ).filter(
+        DailyReport.store_id.in_(visible_ids),
+        DailyReport.report_date >= start, DailyReport.report_date <= end,
+    ).group_by(DailyReport.store_id).all()
+    daily_stat = {sid: (float(os_v or 0), int(rc or 0)) for sid, os_v, rc in daily_rows}
+
+    # Per-store, per-company chips (small, ≤ 6 each in practice).
+    co_rows = db.session.query(
+        Transfer.store_id, Transfer.company,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+    ).filter(
+        Transfer.store_id.in_(visible_ids),
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.store_id, Transfer.company).all()
+    co_by_store = {}
+    for sid, co, c, v in co_rows:
+        co_by_store.setdefault(sid, []).append({
+            "company": (co or "—"), "count": int(c), "volume": float(v or 0),
+        })
+    for sid in co_by_store:
+        co_by_store[sid].sort(key=lambda x: x["volume"], reverse=True)
+
+    rows = []
+    for s in stores:
+        c, v = transfer_stat.get(s.id, (0, 0.0))
+        os_v, rc = daily_stat.get(s.id, (0.0, 0))
+        rows.append({
+            "store": s,
+            "transfer_count": c,
+            "volume": v,
+            "over_short": os_v,
+            "report_count": rc,
+            "companies": co_by_store.get(s.id, []),
+        })
+    return rows, len(store_ids)
+
+
 @app.route("/owner/dashboard")
 @owner_required
 def owner_dashboard():
     u = current_user()
-    period = request.args.get("period", "today")
-    today = date.today()
-
-    links = StoreOwnerLink.query.filter_by(owner_id=u.id).all()
-    store_ids = [l.store_id for l in links]
-    stores = Store.query.filter(Store.id.in_(store_ids)).order_by(Store.name).all() if store_ids else []
-
-    if period == "today":
-        date_start = date_end = today
-    elif period == "month":
-        date_start = date(today.year, today.month, 1)
-        date_end = today
-    else:
-        date_start = date(today.year, 1, 1)
-        date_end = today
-
-    if store_ids:
-        agg_transfer_count = Transfer.query.filter(
-            Transfer.store_id.in_(store_ids),
-            Transfer.send_date >= date_start,
-            Transfer.send_date <= date_end
-        ).count()
-        agg_volume = db.session.query(db.func.sum(Transfer.send_amount)).filter(
-            Transfer.store_id.in_(store_ids),
-            Transfer.send_date >= date_start,
-            Transfer.send_date <= date_end
-        ).scalar() or 0.0
-        agg_over_short = db.session.query(db.func.sum(DailyReport.over_short)).filter(
-            DailyReport.store_id.in_(store_ids),
-            DailyReport.report_date >= date_start,
-            DailyReport.report_date <= date_end
-        ).scalar() or 0.0
-    else:
-        agg_transfer_count = 0
-        agg_volume = 0.0
-        agg_over_short = 0.0
-
-    # Batch Transfer stats for all stores in one query
-    transfer_rows = db.session.query(
-        Transfer.store_id,
-        db.func.count(Transfer.id),
-        db.func.sum(Transfer.send_amount),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= date_start,
-        Transfer.send_date <= date_end,
-    ).group_by(Transfer.store_id).all() if store_ids else []
-    transfer_stats = {sid: (cnt, vol or 0.0) for sid, cnt, vol in transfer_rows}
-
-    # Batch DailyReport rows for all stores in one query
-    all_reports = DailyReport.query.filter(
-        DailyReport.store_id.in_(store_ids),
-        DailyReport.report_date >= date_start,
-        DailyReport.report_date <= date_end,
-    ).all() if store_ids else []
-    reports_by_store = {}
-    for r in all_reports:
-        reports_by_store.setdefault(r.store_id, []).append(r)
-
-    store_data = []
-    for store in stores:
-        t_count, t_volume = transfer_stats.get(store.id, (0, 0.0))
-        reports = reports_by_store.get(store.id, [])
-        store_data.append({
-            "store": store,
-            "transfer_count": t_count,
-            "volume": t_volume,
-            "total_receipts": sum(r.total_receipts for r in reports),
-            "over_short": sum(r.over_short for r in reports),
-        })
-
+    period = request.args.get("period", "month")
+    if period not in ("today", "month", "year"):
+        period = "month"
     return render_template("owner_dashboard.html",
-        user=u, period=period,
-        agg_transfer_count=agg_transfer_count,
-        agg_volume=agg_volume,
-        agg_over_short=agg_over_short,
-        store_count=len(stores),
-        store_data=store_data,
+                           **_owner_dashboard_context(u, period))
+
+
+@app.route("/owner/locations")
+@owner_required
+def owner_locations():
+    """Searchable list of stores the owner is linked to.
+
+    Supports `?partial=1` for the live-search AJAX swap pattern (same
+    contract as /transfers): returns JSON `{html, total, query}` and
+    the page-level template wraps the partial in a stable swap container.
+    """
+    u = current_user()
+    period = request.args.get("period", "month")
+    if period not in ("today", "month", "year"):
+        period = "month"
+    query = (request.args.get("q") or "").strip()
+    rows, total = _owner_locations_payload(u, period, query)
+    if request.args.get("partial") == "1":
+        from flask import jsonify
+        html = render_template("_owner_locations_table.html",
+                               rows=rows, period=period, query=query)
+        return jsonify({"html": html, "total": total,
+                        "matched": len(rows), "query": query})
+    return render_template("owner_locations.html",
+                           user=u, period=period, query=query,
+                           rows=rows, total=total)
+
+
+@app.route("/owner/store/<int:store_id>")
+@owner_required
+def owner_store_detail(store_id):
+    """Drill-down view for a single store the owner is linked to.
+
+    Read-only — owner can't edit transfers/reports here, only inspect.
+    Access is gated on StoreOwnerLink so an owner can't poke at a
+    store they don't own by guessing IDs.
+    """
+    u = current_user()
+    link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first()
+    if not link:
+        flash("That store is not linked to your account.", "error")
+        return redirect(url_for("owner_locations"))
+    period = request.args.get("period", "month")
+    if period not in ("today", "month", "year"):
+        period = "month"
+    today = date.today()
+    start, end, prev_start, prev_end, prev_label = _owner_period_window(period, today)
+    store = db.session.get(Store, store_id)
+
+    co_rows = db.session.query(
+        Transfer.company,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
+    ).filter(
+        Transfer.store_id == store_id,
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.company).order_by(
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc()
+    ).all()
+    company_rows = [
+        {"company": (co or "—"), "count": int(c),
+         "volume": float(v or 0), "fees": float(f or 0), "tax": float(t or 0)}
+        for co, c, v, f, t in co_rows
+    ]
+    period_count = sum(r["count"] for r in company_rows)
+    period_volume = sum(r["volume"] for r in company_rows)
+    period_fees = sum(r["fees"] for r in company_rows)
+    period_tax = sum(r["tax"] for r in company_rows)
+
+    prev_count, prev_volume, _ = _owner_kpis([store_id], prev_start, prev_end)
+
+    # 30-day over/short trend, fixed window — independent of selector.
+    d30_ago = today - timedelta(days=29)
+    daily_reports = DailyReport.query.filter(
+        DailyReport.store_id == store_id,
+        DailyReport.report_date >= d30_ago,
+        DailyReport.report_date <= today,
+    ).all()
+    by_day = {r.report_date: r for r in daily_reports}
+    daily_labels, over_short_data, receipts_data = [], [], []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        r = by_day.get(d)
+        daily_labels.append(d.isoformat())
+        over_short_data.append(round(float(r.over_short) if r else 0.0, 2))
+        receipts_data.append(round(float(r.total_receipts) if r else 0.0, 2))
+
+    # Recent activity for context.
+    recent_transfers = (Transfer.query.filter_by(store_id=store_id)
+                        .order_by(Transfer.created_at.desc()).limit(10).all())
+
+    period_over_short = db.session.query(
+        db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0)
+    ).filter(
+        DailyReport.store_id == store_id,
+        DailyReport.report_date >= start, DailyReport.report_date <= end,
+    ).scalar() or 0.0
+
+    return render_template("owner_store_detail.html",
+        user=u, store=store, period=period, prev_label=prev_label,
+        period_start=start, period_end=end,
+        company_rows=company_rows,
+        period_count=period_count, period_volume=period_volume,
+        period_fees=period_fees, period_tax=period_tax,
+        period_over_short=float(period_over_short),
+        prev_count=prev_count, prev_volume=prev_volume,
+        daily_labels=daily_labels,
+        over_short_data=over_short_data, receipts_data=receipts_data,
+        recent_transfers=recent_transfers,
     )
 
 @app.route("/owner/link", methods=["POST"])

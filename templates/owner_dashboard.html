@@ -3,148 +3,368 @@
 {% block page_title %}Owner Dashboard{% endblock %}
 {% block head %}
 <style>
-  /* Page-specific layout: stat strip, store grid, and code-entry form. */
-  .period-bar { display: flex; gap: 8px; margin-bottom: 24px; align-items: center; }
-  .period-bar .label { font-size: 13px; color: var(--gray4); font-weight: 500; }
-
-  .store-grid { display: grid; gap: 16px; margin-bottom: 32px; }
-  .store-stats {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
+  /* Owner dashboard layout — mirrors the superadmin chart-grid pattern
+     (KPIs, two-up chart rows, mini-tables) so the visual rhythm is the
+     same across roles. The actual metric semantics differ. */
+  .period-bar {
+    display: flex; gap: 8px; margin-bottom: 22px; align-items: center;
+    flex-wrap: wrap;
   }
-  .store-stat .num {
-    font-size: 22px; font-family: 'DM Serif Display', serif;
-    color: var(--navy); margin-top: 4px;
-  }
-  [data-theme="dark"] .store-stat .num { color: #f3f4f6; }
-
-  .unlink-btn {
-    color: var(--red); border-color: var(--red);
-    background: transparent;
+  .period-bar .label {
+    font-family: var(--db-font-mono); font-size: 10.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; margin-right: 4px;
   }
 
-  .code-input {
-    text-transform: uppercase;
-    font-family: 'JetBrains Mono', monospace;
-    letter-spacing: 2px;
+  .od-kpi-grid {
+    display: grid; gap: 14px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .od-kpi .stat-value { font-size: 26px; }
+  .od-delta {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: var(--db-font-mono);
+    font-size: 10.5px; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px;
+    letter-spacing: 0.3px; margin-top: 6px;
+  }
+  .od-delta.pos { background: rgba(63,255,0,0.10); color: var(--db-neon); }
+  .od-delta.neg { background: rgba(255,77,109,0.10); color: var(--db-negative); }
+  .od-delta.zero { background: var(--db-bg-input); color: var(--db-gray-6); }
+
+  .od-row {
+    display: grid; gap: 18px; margin-bottom: 20px;
+    grid-template-columns: 2fr 1fr;
+  }
+  @media (max-width: 900px) { .od-row { grid-template-columns: 1fr; } }
+
+  .chart-card .card-body { padding: 16px 18px 12px; }
+  .chart-box { min-height: 260px; }
+  .chart-box.short { min-height: 220px; }
+
+  .od-mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .od-mini th {
+    font-family: var(--db-font-mono); font-size: 10px; font-weight: 500;
+    color: var(--db-gray-6); text-transform: uppercase; letter-spacing: 1.2px;
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--db-gray-3);
+  }
+  .od-mini th.num, .od-mini td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .od-mini td {
+    padding: 10px; color: var(--db-gray-9);
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .od-mini tr:last-child td { border-bottom: none; }
+  .od-mini td.mono { font-family: var(--db-font-mono); color: var(--db-gray-8); }
+  .od-mini td.amt-neon { color: var(--db-neon); font-family: var(--db-font-mono); font-weight: 600; }
+  .od-mini td.amt-neg { color: var(--db-negative); font-family: var(--db-font-mono); font-weight: 600; }
+  .od-mini a { color: var(--db-neon); text-decoration: none; }
+  .od-mini a:hover { text-decoration: underline; }
+
+  .od-empty {
+    padding: 28px 0; text-align: center;
+    color: var(--db-gray-6); font-size: 13px;
   }
 </style>
 {% endblock %}
 {% block content %}
 
-{# Period filter — controls aggregate window for stats below. #}
+{# Period filter — controls the KPI window and the per-company /
+   per-store breakdowns. The 30-day daily volume chart is always 30
+   days regardless, so the trend shape is comparable across visits. #}
 <div class="period-bar">
-  <span class="label">Period:</span>
+  <span class="label">Period</span>
   <a href="{{ url_for('owner_dashboard', period='today') }}"
      class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-outline{% endif %}">Today</a>
   <a href="{{ url_for('owner_dashboard', period='month') }}"
      class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-outline{% endif %}">This Month</a>
   <a href="{{ url_for('owner_dashboard', period='year') }}"
      class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-outline{% endif %}">This Year</a>
+  <span class="text-muted" style="margin-left:auto;font-size:12px;">
+    {{ period_start.strftime('%b %d, %Y') }}
+    {%- if period_start != period_end %} – {{ period_end.strftime('%b %d, %Y') }}{% endif %}
+  </span>
 </div>
 
-{# Aggregate stats — sums across every store this owner has linked. #}
-<div class="stats-grid">
-  <div class="stat-card" style="--accent:var(--sky)">
-    <div class="stat-label">Transfers</div>
-    <div class="stat-value">{{ agg_transfer_count }}</div>
-    <div class="stat-sub">across all stores</div>
-  </div>
-  <div class="stat-card" style="--accent:var(--green)">
-    <div class="stat-label">Volume</div>
-    <div class="stat-value">${{ "%.0f"|format(agg_volume) }}</div>
-    <div class="stat-sub">total sent</div>
-  </div>
-  <div class="stat-card" style="--accent:var(--gold)">
-    <div class="stat-label">Stores</div>
-    <div class="stat-value">{{ store_count }}</div>
-    <div class="stat-sub">linked locations</div>
-  </div>
-  <div class="stat-card" style="--accent:{% if agg_over_short < 0 %}var(--red){% else %}var(--green){% endif %}">
-    <div class="stat-label">Over / Short</div>
-    <div class="stat-value {% if agg_over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
-      ${{ "%.2f"|format(agg_over_short) }}
-    </div>
-    <div class="stat-sub">daily reports</div>
-  </div>
-</div>
-
-{# Per-store breakdown. Empty state if the owner has not linked any stores yet. #}
-{% if store_data %}
-<div class="section-title">Locations</div>
-<div class="store-grid">
-  {% for sd in store_data %}
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <span class="card-title">{{ sd.store.name }}</span>
-        {% if sd.store.plan == 'pro' %}
-          <span class="badge badge-navy" style="margin-left:8px;">Pro</span>
-        {% elif sd.store.plan == 'basic' %}
-          <span class="badge badge-blue" style="margin-left:8px;">Basic</span>
-        {% else %}
-          <span class="badge badge-gray" style="margin-left:8px;">Trial</span>
-        {% endif %}
-      </div>
-      <form method="POST" action="{{ url_for('owner_unlink_store', store_id=sd.store.id) }}"
-            onsubmit="return confirm('Remove {{ sd.store.name }} from your account?')">
-        <button type="submit" class="btn btn-sm unlink-btn">Unlink</button>
-      </form>
-    </div>
-    <div class="card-body">
-      <div class="store-stats">
-        <div class="store-stat">
-          <div class="text-muted text-sm">Transfers</div>
-          <div class="num">{{ sd.transfer_count }}</div>
-          <div class="text-muted text-sm">${{ "%.0f"|format(sd.volume) }} volume</div>
-        </div>
-        <div class="store-stat">
-          <div class="text-muted text-sm">Receipts</div>
-          <div class="num">${{ "%.0f"|format(sd.total_receipts) }}</div>
-          <div class="text-muted text-sm">daily reports</div>
-        </div>
-        <div class="store-stat">
-          <div class="text-muted text-sm">Over/Short</div>
-          <div class="num {% if sd.over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
-            ${{ "%.2f"|format(sd.over_short) }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-<div class="card mb-3" style="max-width:560px;">
+{% if store_count == 0 %}
+{# Empty state — no stores linked yet. Big call-to-action so the owner
+   knows where to start. #}
+<div class="card">
   <div class="card-body">
     <div class="empty-state">
       <div style="width:52px;height:52px;border-radius:12px;background:rgba(63,255,0,0.08);border:1px solid rgba(63,255,0,0.25);display:inline-flex;align-items:center;justify-content:center;margin:0 auto 12px;color:var(--db-neon);">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg>
       </div>
       <div class="empty-title">No stores connected yet</div>
-      <div>Enter an invite code from your store manager to connect your first store.</div>
+      <div>Connect your first store to start seeing metrics.</div>
+      <div style="margin-top:14px;">
+        <a href="{{ url_for('owner_locations') }}" class="btn btn-primary">Connect a store →</a>
+      </div>
     </div>
   </div>
 </div>
-{% endif %}
+{% else %}
 
-{# Code entry form is always visible so owners can add additional stores. #}
-<div class="card" style="max-width:480px;">
-  <div class="card-header"><span class="card-title">Connect a Store</span></div>
-  <div class="card-body">
-    <p class="text-sm text-muted mb-2">
-      Enter the 8-character invite code from your store manager.
-    </p>
-    <form method="POST" action="{{ url_for('owner_link_store') }}"
-          style="display:flex;gap:10px;align-items:flex-end;">
-      <div class="field" style="flex:1;margin-bottom:0;">
-        <label>Invite Code</label>
-        <input type="text" name="code" class="code-input"
-               placeholder="e.g. AB12CD34" maxlength="8" required>
-      </div>
-      <button type="submit" class="btn btn-primary">Connect</button>
-    </form>
+{# ── KPI strip ─────────────────────────────────────────── #}
+<div class="od-kpi-grid">
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Transfers</div>
+    <div class="stat-value">{{ '{:,}'.format(agg_transfers) }}</div>
+    {% if agg_transfers_delta > 0 %}
+      <span class="od-delta pos">▲ {{ '{:,}'.format(agg_transfers_delta) }} {{ prev_label }}</span>
+    {% elif agg_transfers_delta < 0 %}
+      <span class="od-delta neg">▼ {{ '{:,}'.format(agg_transfers_delta|abs) }} {{ prev_label }}</span>
+    {% else %}
+      <span class="od-delta zero">— flat {{ prev_label }}</span>
+    {% endif %}
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Volume</div>
+    <div class="stat-value">${{ '{:,.0f}'.format(agg_volume) }}</div>
+    {% if agg_volume_delta > 0.5 %}
+      <span class="od-delta pos">▲ ${{ '{:,.0f}'.format(agg_volume_delta) }} {{ prev_label }}</span>
+    {% elif agg_volume_delta < -0.5 %}
+      <span class="od-delta neg">▼ ${{ '{:,.0f}'.format(agg_volume_delta|abs) }} {{ prev_label }}</span>
+    {% else %}
+      <span class="od-delta zero">— flat {{ prev_label }}</span>
+    {% endif %}
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Linked stores</div>
+    <div class="stat-value">{{ store_count }}</div>
+    <div class="stat-sub">
+      <a href="{{ url_for('owner_locations') }}" style="color:var(--db-neon);text-decoration:none;">manage →</a>
+    </div>
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Over / Short</div>
+    <div class="stat-value {% if agg_over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+      ${{ '{:,.2f}'.format(agg_over_short) }}
+    </div>
+    <div class="stat-sub">across all daily reports</div>
   </div>
 </div>
 
+{# ── Row 1: 30-day volume trend + per-company donut ─────── #}
+<div class="od-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Transfer volume · last 30 days</div>
+      <div class="stat-sub">Daily total across every linked store. Independent of the period selector.</div>
+    </div>
+    <div class="card-body">
+      <div id="odVolumeChart" class="chart-box"></div>
+    </div>
+  </div>
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">By company</div>
+      <div class="stat-sub">Selected period.</div>
+    </div>
+    <div class="card-body">
+      {% if company_breakdown %}
+        <div id="odCompanyChart" class="chart-box short"></div>
+      {% else %}
+        <div class="od-empty">No transfers in this window.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Row 2: per-company table + per-store comparison ────── #}
+<div class="od-row">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Company breakdown</div>
+      <div class="stat-sub">Volume, count and fees by money-transfer company.</div>
+    </div>
+    <div class="card-body">
+      {% if company_breakdown %}
+      <table class="od-mini">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th class="num">Transfers</th>
+            <th class="num">Volume</th>
+            <th class="num">Fees</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in company_breakdown %}
+          <tr>
+            <td><span class="co-{{ c.company|lower }}">{{ c.company }}</span></td>
+            <td class="num mono">{{ '{:,}'.format(c.count) }}</td>
+            <td class="num amt-neon">${{ '{:,.0f}'.format(c.volume) }}</td>
+            <td class="num mono">${{ '{:,.2f}'.format(c.fees) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="od-empty">No transfers logged in this window.</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Top stores by volume</div>
+      <div class="stat-sub">Selected period — click to drill in.</div>
+    </div>
+    <div class="card-body">
+      {% if store_comparison and (store_comparison|map(attribute='volume')|sum) > 0 %}
+      <table class="od-mini">
+        <thead>
+          <tr>
+            <th>Store</th>
+            <th class="num">Transfers</th>
+            <th class="num">Volume</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in store_comparison[:8] %}
+          <tr>
+            <td>
+              <a href="{{ url_for('owner_store_detail', store_id=s.id, period=period) }}">{{ s.name }}</a>
+            </td>
+            <td class="num mono">{{ '{:,}'.format(s.count) }}</td>
+            <td class="num amt-neon">${{ '{:,.0f}'.format(s.volume) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="od-empty">No store activity in this window.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# Hidden JSON for ApexCharts. Keeps the inline JS clean and dodges
+   Jinja-inside-JS escaping headaches. #}
+<script id="od-data" type="application/json">
+{
+  "volume": {
+    "labels": {{ series_labels|tojson }},
+    "totals": {{ series_volume|tojson }},
+    "counts": {{ series_count|tojson }}
+  },
+  "company": {
+    "labels":  {{ company_breakdown|map(attribute='company')|list|tojson }},
+    "totals":  {{ company_breakdown|map(attribute='volume')|list|tojson }},
+    "counts":  {{ company_breakdown|map(attribute='count')|list|tojson }}
+  }
+}
+</script>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+{% if store_count > 0 %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+<script>
+(function () {
+  if (typeof ApexCharts === 'undefined') return;
+  var dataEl = document.getElementById('od-data');
+  if (!dataEl) return;
+  var DATA;
+  try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
+
+  var NEON = '#3fff00';
+  var INTERMEX = '#5ea9ff', MAXI = '#b48cff', BARRI = '#4dd8e6';
+  var GRAY7 = '#9199a8', GRAY3 = '#272c38', GRAY6 = '#6b7280';
+  function colorFor(co) {
+    var k = (co || '').toLowerCase();
+    if (k === 'intermex') return INTERMEX;
+    if (k === 'maxi')     return MAXI;
+    if (k === 'barri')    return BARRI;
+    return NEON;
+  }
+
+  var common = {
+    chart: {
+      background: 'transparent', foreColor: GRAY7,
+      toolbar: { show: false },
+      fontFamily: "'Inter', system-ui, sans-serif",
+      animations: { enabled: true, speed: 240 },
+      zoom: { enabled: false }
+    },
+    grid: { borderColor: GRAY3, strokeDashArray: 3 },
+    tooltip: { theme: 'dark', fillSeriesColor: false }
+  };
+
+  var volEl = document.querySelector('#odVolumeChart');
+  if (volEl && DATA.volume) {
+    new ApexCharts(volEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'area', height: 260 }),
+      series: [{ name: 'Volume', data: DATA.volume.totals }],
+      colors: [NEON],
+      stroke: { curve: 'smooth', width: 2 },
+      fill: {
+        type: 'gradient',
+        gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02, stops: [0, 100] }
+      },
+      dataLabels: { enabled: false },
+      xaxis: {
+        type: 'datetime',
+        categories: DATA.volume.labels,
+        labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" } },
+        axisBorder: { color: GRAY3 }, axisTicks: { color: GRAY3 }
+      },
+      yaxis: {
+        labels: {
+          style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" },
+          formatter: function (v) { return '$' + Math.round(v).toLocaleString(); }
+        }
+      },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v, opts) {
+          var i = opts.dataPointIndex;
+          var count = (DATA.volume.counts && DATA.volume.counts[i]) || 0;
+          return '$' + Math.round(v).toLocaleString() + ' · ' + count + ' transfers';
+        } }
+      },
+      legend: { show: false }
+    })).render();
+  }
+
+  var coEl = document.querySelector('#odCompanyChart');
+  if (coEl && DATA.company && DATA.company.totals.length) {
+    var labels = DATA.company.labels;
+    var colors = labels.map(colorFor);
+    new ApexCharts(coEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'donut', height: 220 }),
+      series: DATA.company.totals,
+      labels: labels,
+      colors: colors,
+      stroke: { show: true, width: 2, colors: ['#0b0d12'] },
+      dataLabels: { enabled: false },
+      legend: { position: 'bottom', labels: { colors: GRAY7 }, markers: { radius: 4 } },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '68%',
+            labels: {
+              show: true,
+              name:  { color: GRAY7, fontFamily: "'Inter', system-ui", fontSize: '12px' },
+              value: { color: '#e5e7eb', fontFamily: "'Space Grotesk', sans-serif", fontSize: '20px', fontWeight: 600,
+                       formatter: function (v) { return '$' + Math.round(v).toLocaleString(); } },
+              total: { show: true, label: 'Total', color: GRAY7,
+                       formatter: function (w) {
+                         var sum = w.globals.seriesTotals.reduce(function (a, b) { return a + b; }, 0);
+                         return '$' + Math.round(sum).toLocaleString();
+                       } }
+            }
+          }
+        }
+      },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v) { return '$' + Math.round(v).toLocaleString(); } }
+      }
+    })).render();
+  }
+})();
+</script>
+{% endif %}
 {% endblock %}

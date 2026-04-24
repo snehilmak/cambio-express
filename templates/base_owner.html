@@ -47,6 +47,10 @@
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
         Dashboard
       </a>
+      <a href="{{ url_for('owner_locations') }}" class="nav-link {% if request.endpoint in ('owner_locations', 'owner_store_detail') %}active{% endif %}">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></span>
+        Locations
+      </a>
     </nav>
 
     <div class="sidebar-footer">
