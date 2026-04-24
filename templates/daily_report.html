@@ -664,7 +664,7 @@
 </div><!-- /db-transfers-grid -->
 </section><!-- /panel-transfers -->
 
-<div class="sticky-save-bar">
+<div class="sticky-save-bar{% if is_locked %} is-locked{% endif %}">
   {% if is_locked %}
   <span class="badge badge-red" style="margin-right:auto;">🔒 Locked — Unlock above to edit</span>
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Back to Calendar</a>

@@ -321,6 +321,24 @@ select {
 .grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
 
+/* ── Sticky save bar: locked-state modifier.
+   The default .sticky-save-bar has only a border-top and a
+   near-transparent background — intentional for the "save + cancel"
+   footer on an unlocked form. In the locked state there's no save
+   action, just a "🔒 Locked" badge + Back link, and the bare strip
+   reads as an unfinished open-top box. Give it a complete card
+   surround instead, and drop the sticky behaviour — the page's
+   sticky top bar already keeps Back reachable. */
+.sticky-save-bar.is-locked {
+  position: static;
+  backdrop-filter: none;
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-top: 20px;
+}
+
 /* ── Mobile ── */
 @media (max-width: 900px) {
   .content { padding: 16px; }
