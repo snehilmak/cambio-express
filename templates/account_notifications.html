@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Notifications — DineroBook{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+
+{# Personal notifications page. Controls the real senders, catalogs
+   the rest honestly. Every new sender adds a row below and (if
+   user-controllable) a toggle in the form. #}
+
+<div class="card" style="max-width:640px;">
+  <div class="card-header"><span class="card-title">Your preferences</span></div>
+  <div class="card-body">
+    <form method="POST">
+      <div class="sb-row" style="display:flex;align-items:flex-start;gap:14px;padding:16px 0;border-bottom:1px solid var(--border);">
+        <input type="checkbox" id="ntr" name="notify_trial_reminders"
+               {% if user.notify_trial_reminders %}checked{% endif %}
+               {% if not trial_toggle_applies %}disabled{% endif %}
+               style="margin-top:3px;">
+        <div style="flex:1;">
+          <label for="ntr" style="display:block;font-weight:600;font-size:14px;margin:0 0 4px;">
+            Trial-ending reminder email
+          </label>
+          <div class="text-muted" style="font-size:13px;line-height:1.45;">
+            Send me one email during the last 3 days of my trial so I can
+            subscribe before the books lock. Turned off means you'll only
+            see the in-app banner.
+            {% if not trial_toggle_applies %}
+            <br><em>Not applicable for your account right now — you're on
+            {% if user.role not in ('admin','owner') %}a role that doesn't
+            own a trial{% else %}a paid plan (or no active trial){% endif %}.</em>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:18px;">
+        <button type="submit" class="btn btn-primary">Save preferences</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="max-width:640px;margin-top:24px;">
+  <div class="card-header"><span class="card-title">What DineroBook sends you</span></div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
+      We send as little as possible. Here's the complete list — anything
+      user-controllable has a toggle above; the rest is either essential
+      (password reset) or not yet implemented.
+    </p>
+    <table class="pk-table" style="width:100%;border-collapse:collapse;font-size:13.5px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Channel</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">What</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Control</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Email</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Password reset link</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:left;" class="text-muted">
+            Always on — you initiate it.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Email</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Trial-ending reminder (last 3 days)</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:left;">
+            Toggle above.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Browser push</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Test pings only (announcement push in roadmap)</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:left;" class="text-muted">
+            Enable/disable from the top-right bell in your avatar menu.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">In-app banner</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">Announcements, trial status, retention notices</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:left;" class="text-muted">
+            Not dismissible per-user (yet).
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-muted" style="margin-top:14px;font-size:12.5px;">
+      More channels coming (announcement broadcast emails, daily summary
+      emails). Each one will land here as a toggle alongside its real
+      sender — we don't ship controls for imaginary notifications.
+    </p>
+  </div>
+</div>
+
+{% endblock %}

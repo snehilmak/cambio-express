@@ -78,6 +78,10 @@ class Store(db.Model):
     addons        = db.Column(db.String(255), default="")
     canceled_at           = db.Column(db.DateTime, nullable=True)
     data_retention_until  = db.Column(db.DateTime, nullable=True)
+    # Trial-reminder dedup. send_trial_reminders() stamps this the
+    # first time it sends; cleared on checkout.session.completed so a
+    # second trial (post-reactivation) gets its own fresh reminder.
+    trial_reminder_sent_at = db.Column(db.DateTime, nullable=True)
     # Comma-separated list of money-transfer companies this store works
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
@@ -121,6 +125,10 @@ class User(db.Model):
     phone            = db.Column(db.String(40), default="")
     timezone         = db.Column(db.String(60), default="")
     last_login_at    = db.Column(db.DateTime, nullable=True)
+    # Notification preferences. Opt-out (default True) for the one we
+    # ship in v1 — a trial-ending reminder. Adding more toggles is one
+    # column per channel here + the matching sender.
+    notify_trial_reminders = db.Column(db.Boolean, default=True)
     __table_args__ = (db.UniqueConstraint("store_id","username"),)
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
@@ -2239,6 +2247,42 @@ def admin_settings_security_redirect():
     """Permanent redirect from the old admin-only Security tab to the
     new shared page. Keeps any bookmarks / external docs working."""
     return redirect(url_for("account_security"), code=301)
+
+@app.route("/account/notifications", methods=["GET", "POST"])
+@login_required
+def account_notifications():
+    """Per-user notification preferences. v1 ships a single real
+    toggle — trial-reminder emails — because that's the only sender
+    (beyond password reset) we actually have today. The rest of the
+    page is an honest catalog: what DineroBook sends you, and what
+    you can control.
+
+    Checkbox semantics: unchecked checkboxes don't appear in the POST
+    body at all, so we always default the "trial reminder" pref to
+    False on POST and flip it True only if the checkbox is present.
+    """
+    user = current_user()
+    store = current_store()
+    if request.method == "POST":
+        user.notify_trial_reminders = bool(request.form.get("notify_trial_reminders"))
+        db.session.commit()
+        flash("Notification preferences saved.", "success")
+        return redirect(url_for("account_notifications"))
+
+    # "Does the trial-reminder toggle apply to me?" — only for
+    # admins/owners of a store that's actually trialing today. For
+    # employees + superadmin + paid stores the toggle is shown as
+    # informational (greyed out with a note) rather than hidden, so
+    # users understand the full preferences surface.
+    trial_toggle_applies = bool(
+        user.role in ("admin", "owner")
+        and store is not None
+        and get_trial_status(store) in ("active", "expiring_soon", "grace")
+    )
+    return render_template("account_notifications.html",
+        user=user, store=store,
+        trial_toggle_applies=trial_toggle_applies,
+    )
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():
@@ -5043,6 +5087,10 @@ def stripe_webhook():
                 # Returning customer: clear cancellation + retention timer.
                 store.canceled_at = None
                 store.data_retention_until = None
+                # Reset the trial-reminder dedup flag too, so if this
+                # subscription later lapses and a NEW trial ever begins,
+                # the reminder cron sends fresh instead of no-oping.
+                store.trial_reminder_sent_at = None
                 # Referral flow: mint the referrer's own code so they get
                 # the topbar crown immediately, and apply any pending
                 # referee credit from the code they signed up with.
@@ -5124,6 +5172,112 @@ def purge_expired_stores_cmd():
     """Delete inactive stores past their retention deadline. Run daily."""
     n = purge_expired_stores()
     print(f"Purged {n} expired store(s).")
+
+# ── Trial-reminder emails ───────────────────────────────────
+#
+# send_trial_reminders() is the only notification sender v1 ships
+# beyond the password-reset one at /forgot-password. It runs daily
+# via `flask send-trial-reminders` (hook to cron alongside
+# purge-expired-stores). Logic:
+#
+#   - Find every store in "expiring_soon" status (trial ends within
+#     3 days — see get_trial_status).
+#   - Skip stores already stamped trial_reminder_sent_at.
+#   - For each, find admin/owner users who (a) have `email` set,
+#     (b) have `notify_trial_reminders` True. Send them an email
+#     with the trial end date + a subscribe CTA.
+#   - Stamp trial_reminder_sent_at on the store so we don't resend
+#     tomorrow. Cleared on resubscribe by the Stripe webhook so a
+#     second trial (post-reactivation) gets its own fresh reminder.
+
+_TRIAL_REMINDER_SUBJECT = "Your DineroBook trial ends in {days} days"
+
+_TRIAL_REMINDER_BODY = """\
+Hi {name},
+
+Just a heads-up that your DineroBook trial for "{store_name}" ends on
+{trial_end_date}. That's {days} days from today.
+
+To keep your books, reports, and transfer history, subscribe before
+then:
+    {subscribe_url}
+
+No action is required if you'd rather let the trial expire; we keep
+your data for 180 days after cancellation so you can come back.
+
+Don't want trial reminders anymore? Turn them off on your
+notifications page:
+    {notifications_url}
+
+— DineroBook
+"""
+
+def _trial_reminder_recipients(store):
+    """Users who should get the reminder for this store: admins +
+    owners of this store with email + notify_trial_reminders=True."""
+    owner_user_ids = [
+        link.user_id for link in
+        StoreOwnerLink.query.filter_by(store_id=store.id).all()
+    ]
+    conds = [User.store_id == store.id]
+    if owner_user_ids:
+        # Owners live in a different store's user row but link back.
+        conds.append(User.id.in_(owner_user_ids))
+    candidates = User.query.filter(
+        User.is_active == True,
+        User.role.in_(("admin", "owner")),
+        User.email != "",
+        User.notify_trial_reminders == True,
+        db.or_(*conds),
+    ).all()
+    # Dedup — same user could be an owner AND an admin of this store.
+    return list({u.id: u for u in candidates}.values())
+
+def send_trial_reminders(now=None, base_url=None):
+    """Mail every eligible user whose store is in expiring_soon. Returns
+    the count of emails actually sent (not counting users skipped for
+    no-email or notify_trial_reminders=False). Idempotent thanks to
+    trial_reminder_sent_at; rerunning on the same day is a no-op."""
+    now = now or datetime.utcnow()
+    base_url = base_url or os.environ.get("APP_BASE_URL",
+                                          "https://dinerobook.onrender.com")
+    sent = 0
+    for store in Store.query.filter(
+        Store.plan == "trial",
+        Store.trial_ends_at.isnot(None),
+        Store.trial_reminder_sent_at.is_(None),
+    ).all():
+        if get_trial_status(store) != "expiring_soon":
+            continue
+        days_left = max(0, (store.trial_ends_at - now).days)
+        trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
+        subscribe_url = f"{base_url}/subscribe"
+        notifications_url = f"{base_url}/account/notifications"
+        any_sent = False
+        for u in _trial_reminder_recipients(store):
+            body = _TRIAL_REMINDER_BODY.format(
+                name=u.full_name or u.username,
+                store_name=store.name,
+                trial_end_date=trial_end_str,
+                days=days_left,
+                subscribe_url=subscribe_url,
+                notifications_url=notifications_url,
+            )
+            subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
+            _send_email(u.email, subject, body)
+            any_sent = True
+            sent += 1
+        if any_sent:
+            store.trial_reminder_sent_at = now
+    if sent:
+        db.session.commit()
+    return sent
+
+@app.cli.command("send-trial-reminders")
+def send_trial_reminders_cmd():
+    """Email admins/owners of stores in expiring_soon. Run daily."""
+    n = send_trial_reminders()
+    print(f"Sent {n} trial reminder email(s).")
 
 @app.cli.command("reset-superadmin")
 @click.argument("username", required=False)
@@ -5226,6 +5380,17 @@ _ADDED_COLUMNS = [
     ("user",     "phone",                "VARCHAR(40) DEFAULT ''"),
     ("user",     "timezone",             "VARCHAR(60) DEFAULT ''"),
     ("user",     "last_login_at",        "TIMESTAMP NULL"),
+    # Notification preferences. Opt-out defaults (reminder emails are
+    # the kind of thing users want by default; only silence them
+    # explicitly). Employees and superadmin ignore the trial column
+    # since they aren't tied to a trialing store.
+    ("user",     "notify_trial_reminders", "BOOLEAN DEFAULT TRUE"),
+    # Trial-reminder dedup. Stamped the first time the reminder
+    # cron sends an email for a given trial; cleared on resubscribe
+    # (so a second trial, e.g. after reactivation, gets a fresh
+    # reminder). Without this the cron would spam daily once the
+    # store enters expiring_soon.
+    ("store",    "trial_reminder_sent_at", "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():
