@@ -95,6 +95,47 @@ PR #94 landed `/account/profile` + `/account/security` as the per-user
 pages every role reaches. The rest of the Settings surface still has
 gaps. Ordered by "what I'd do next" at the top.
 
+## Email deliverability polish
+- [ ] **BIMI logo in Gmail** — the sender avatar currently shows as a
+      gray circle. Fixing it takes three pieces of work, all small:
+      (1) tighten the DMARC record from `p=none` to `p=quarantine` at
+      Cloudflare DNS (safe given only Resend sends from `dinerobook.com`
+      today); (2) host a DineroBook logo in SVG Tiny 1.2 format at a
+      stable public URL (e.g. `https://dinerobook.com/static/bimi.svg`
+      — needs a square viewBox, no raster images, no gradients);
+      (3) add a BIMI DNS record at Cloudflare: `default._bimi.dinerobook.com`
+      TXT `v=BIMI1; l=https://dinerobook.com/static/bimi.svg;`.
+      Gmail starts showing the logo within a day or two once DMARC is
+      enforced. A Verified Mark Certificate (~$1500/yr from DigiCert
+      or Entrust) would make the logo appear on more clients, but
+      Google's unverified variant is free and covers Gmail + Apple
+      Mail for the vast majority of users. Defer the VMC until
+      Gmail's unverified logo is actually live + we've seen real user
+      impact.
+- [ ] **Resend delivery webhooks** — Resend posts events (delivered /
+      bounced / complained / opened / clicked) to a URL we register.
+      Wire a new `/webhooks/resend` handler that verifies the Resend
+      signature header and stamps a new `email_send_event` table.
+      Unblocks: bounce-suppression (don't keep emailing addresses that
+      hard-bounce), complaint auto-unsubscribe (mark notify_* False on
+      spam report), and per-message status surfacing on the superadmin
+      health card beyond "last attempt succeeded/failed."
+- [ ] **Announcement-broadcast email** — when a superadmin posts an
+      announcement, optionally email the full audience. Pairs with an
+      opt-out toggle on `/account/notifications` + a new email template
+      (`emails/announcement.html`). Fanout strategy is the real work:
+      at 500 stores × 3 users = 1,500 emails, inline in the webhook POST
+      is fine. At higher scale it'd need a queue.
+- [ ] **Daily summary email** — cron-based per-store nightly digest of
+      transfers, totals, new customers. New toggle on notifications
+      page + new template + new `flask send-daily-summaries` CLI.
+- [ ] **DMARC reporting mailbox + dashboard** — once DMARC is tightened
+      for BIMI, the `rua=` address receives daily XML aggregate reports
+      from receivers. Parse them into a superadmin page showing which
+      senders are passing/failing SPF/DKIM for our domain. Catches
+      misconfigured Google Workspace setups before they break
+      deliverability.
+
 ### Personal (`/account/*`)
 - [ ] **Notifications page** — toggles for email + push. v1 below;
       follow-ups include announcement-broadcast email (needs a new
