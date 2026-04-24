@@ -34,6 +34,27 @@
   width: 8px; height: 8px; border-radius: 50%;
   background: var(--green); display: block; margin-top: 3px;
 }
+/* Locked-day marker — a small padlock in the top-right corner. Stroke
+   SVG so it inherits currentColor and scales crisp on every pixel
+   ratio. Muted text color so it reads as "informational" not "danger"
+   (a locked day is a good state — the book is finalized). */
+.cal-lock {
+  width: 14px; height: 14px;
+  color: var(--text-muted);
+  display: block; margin-top: 1px;
+  flex: 0 0 auto;
+}
+.cal-cell.locked .cal-lock { color: var(--gold2, var(--gold)); }
+/* Locked cells dim slightly so the "has-report" green accent doesn't
+   dominate, and the muted look signals non-editable. Still clickable
+   (users go here to view / print / unlock), so keep hover states. */
+.cal-cell.locked {
+  background: var(--surface-2);
+  border-style: dashed;
+  opacity: 0.92;
+}
+.cal-cell.locked .cal-money { opacity: 0.85; }
+[data-theme="dark"] .cal-cell.locked { background: rgba(255,255,255,0.02); }
 .cal-pill {
   font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
 }
@@ -140,11 +161,24 @@
     {% set report = reports.get(day_num) %}
     {% set ds = '%04d-%02d-%02d'|format(year, month, day_num) %}
     {% set is_today = (today.year == year and today.month == month and today.day == day_num) %}
+    {% set is_locked = report and report.locked_at %}
     <a href="{{ url_for('daily_report', ds=ds) }}"
-       class="cal-cell {% if is_today %}today{% elif report %}has-report{% endif %}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+       class="cal-cell{% if is_today %} today{% elif report %} has-report{% endif %}{% if is_locked %} locked{% endif %}"
+       {% if is_locked %}title="Locked on {{ report.locked_at.strftime('%b %d, %Y') }} — view only until unlocked"{% endif %}>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
         <span class="cal-day-num">{{ day_num }}</span>
-        {% if report %}<span class="cal-dot"></span>{% endif %}
+        {% if is_locked %}
+          {# Stroke-SVG padlock — matches the sidebar icon set (stroke-width:2,
+             stroke-linecap:round, fill:none, currentColor). #}
+          <svg class="cal-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               aria-label="Locked">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+        {% elif report %}
+          <span class="cal-dot"></span>
+        {% endif %}
       </div>
       {% if report %}
         <div style="margin-top:8px;">
@@ -179,6 +213,15 @@
 
 <div class="cal-legend">
   <span><span class="cal-dot" style="display:inline-block;margin-right:5px;"></span>Report entered</span>
+  <span style="display:inline-flex;align-items:center;gap:5px;">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+         style="color:var(--gold2, var(--gold));">
+      <rect x="3" y="11" width="18" height="11" rx="2"/>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+    </svg>
+    Locked
+  </span>
   <span class="cal-legend-swatch today">Today</span>
   <span class="cal-legend-swatch no-entry">No entry</span>
 </div>
