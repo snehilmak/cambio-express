@@ -321,6 +321,55 @@ select {
 .grid-2 { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 16px; }
 
+/* ── Account / settings two-column grid.
+   Personal-account pages (notifications, profile, security) want their
+   cards to flow full-width on mobile and pair up on desktop so a thin
+   "preferences" card doesn't sit alone above an empty stretch of bg.
+   `align-items:start` keeps the shorter card from stretching to match
+   its taller neighbour. */
+.account-grid { display: flex; flex-direction: column; gap: 24px; }
+@media (min-width: 901px) {
+  .account-grid {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    align-items: start;
+  }
+}
+
+/* ── Toggle/preference row.
+   The global <label> rule styles labels as mono uppercase eyebrows,
+   which is right for form-field labels but wrong for toggle titles
+   ("Trial-ending reminder email" should read as prose). The
+   `.pref-row-title` class explicitly opts out — body font, sentence
+   case, normal letter-spacing. */
+.pref-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--db-gray-3);
+}
+.pref-row:first-child { padding-top: 4px; }
+.pref-row:last-of-type { border-bottom: none; }
+.pref-row > input[type="checkbox"] { width: auto; margin-top: 3px; flex: 0 0 auto; }
+.pref-row-content { flex: 1; min-width: 0; }
+.pref-row-title {
+  display: block;
+  font-family: var(--db-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--db-gray-9);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0 0 4px;
+  cursor: pointer;
+}
+.pref-row-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--db-gray-7);
+}
+
 /* ── Sticky save bar: locked-state modifier.
    The default .sticky-save-bar has only a border-top and a
    near-transparent background — intentional for the "save + cancel"
