@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
-import requests, base64, os, calendar, logging, re, secrets, string, hashlib, smtplib
+import requests, base64, os, calendar, logging, re, secrets, string, hashlib, hmac, smtplib
 from email.message import EmailMessage
 import stripe
 import click
@@ -129,6 +129,10 @@ class User(db.Model):
     # ship in v1 — a trial-ending reminder. Adding more toggles is one
     # column per channel here + the matching sender.
     notify_trial_reminders = db.Column(db.Boolean, default=True)
+    # Deliverability suppression — stamped when Resend reports a hard
+    # bounce on this user's email. `_send_email()` skips suppressed
+    # recipients.
+    email_bounced_at    = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint("store_id","username"),)
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
@@ -592,6 +596,40 @@ class PasswordResetToken(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     expires_at = db.Column(db.DateTime, nullable=False)
     used_at    = db.Column(db.DateTime, nullable=True)
+
+class EmailEvent(db.Model):
+    """A delivery-status event posted to us by Resend's webhook.
+
+    One row per event — Resend sends one-per-recipient events even for
+    multipart sends, so a single `_send_email()` call that goes to N
+    addresses produces N email.delivered events (or .bounced, .complained,
+    .opened, .clicked).
+
+    `user_id` is best-effort — we match the recipient address against
+    User.email at webhook time. It can be NULL for addresses we've
+    removed (purged user) or never matched (superadmin test email to a
+    personal address, for example).
+
+    `payload` is the raw JSON Resend sent us, in case we want to mine it
+    later for fields we didn't parse out (the provider adds fields over
+    time). Size-bounded to 8KB to keep runaway events from ballooning
+    the table.
+    """
+    __tablename__ = "email_event"
+    id           = db.Column(db.Integer, primary_key=True)
+    # Resend's provider-side message id. Same message_id will have multiple
+    # events over its lifecycle (sent → delivered → opened → …).
+    message_id   = db.Column(db.String(80), default="", index=True)
+    # The normalized to-address (lowercased, trimmed) the event is about.
+    to_addr      = db.Column(db.String(255), default="", index=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    # "email.sent" | "email.delivered" | "email.bounced" | "email.complained"
+    # | "email.opened" | "email.clicked" | "email.delivery_delayed"
+    event_type   = db.Column(db.String(40), nullable=False, index=True)
+    # For bounces: "hard" | "soft". Empty string for non-bounce events.
+    bounce_type  = db.Column(db.String(16), default="")
+    payload      = db.Column(db.Text, default="")
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
 class RecoveryCode(db.Model):
     """One-time-use 2FA recovery code for a user.
@@ -2388,7 +2426,27 @@ def _send_email(to_addr, subject, body, html=None):
     user = os.environ.get("SMTP_USER")
     pw   = os.environ.get("SMTP_PASS")
     now = datetime.utcnow()
-    to_domain = to_addr.split("@", 1)[1] if to_addr and "@" in to_addr else ""
+    to_norm = (to_addr or "").strip().lower()
+    to_domain = to_norm.split("@", 1)[1] if "@" in to_norm else ""
+    # Bounce suppression: if a User row with this email got stamped by a
+    # hard-bounce webhook, skip the send. Keeps us from hammering the
+    # provider with guaranteed-failing addresses, which Resend (and every
+    # other reputable provider) penalizes as a sender-reputation hit.
+    # NOTE: we only skip when we can positively match to a User with the
+    # stamp — superadmin test sends to personal addresses aren't gated.
+    suppressed = (db.session.query(User.id)
+                  .filter(db.func.lower(User.email) == to_norm,
+                          User.email_bounced_at.isnot(None))
+                  .first())
+    if suppressed:
+        _last_smtp_attempt = {
+            "status": "suppressed",
+            "error": f"{to_norm} is on the bounce suppression list",
+            "when": now, "last_to_domain": to_domain, "last_subject": subject,
+        }
+        app.logger.warning(
+            f"SMTP send suppressed (prior hard bounce) to *@{to_domain}")
+        return False
     if not (host and user and pw):
         _last_smtp_attempt = {
             "status": "unconfigured", "error": "SMTP env vars not set",
@@ -2429,15 +2487,45 @@ def _send_email(to_addr, subject, body, html=None):
 def smtp_health_check():
     """Return a dict describing the email-delivery integration state,
     matching the shape of stripe_health_check so the template stays
-    symmetric. Doesn't do a live probe — reads _last_smtp_attempt,
-    which every real _send_email() call updates."""
+    symmetric. Doesn't do a live SMTP probe — reads _last_smtp_attempt
+    (updated on every _send_email call) and joins in delivery-event
+    totals from EmailEvent (updated by the Resend webhook)."""
     env = {
         "host":     bool(os.environ.get("SMTP_HOST")),
         "user":     bool(os.environ.get("SMTP_USER")),
         "password": bool(os.environ.get("SMTP_PASS")),
         "from":     bool(os.environ.get("SMTP_FROM")),
+        "webhook_secret": bool(os.environ.get("RESEND_WEBHOOK_SECRET")),
     }
     configured = env["host"] and env["user"] and env["password"]
+
+    # Event totals over the last 7 days — a quick signal that:
+    #   - the webhook is wired (any events at all)
+    #   - bounce/complaint rate is under the ~2% Resend flags
+    # Safe to run every Overview load; indexed on created_at.
+    recent_events = {"delivered": 0, "bounced": 0, "complained": 0,
+                     "sent": 0, "opened": 0, "clicked": 0}
+    suppressed_count = 0
+    last_event_at = None
+    try:
+        since = datetime.utcnow() - timedelta(days=7)
+        rows = (db.session.query(EmailEvent.event_type, db.func.count(EmailEvent.id))
+                .filter(EmailEvent.created_at >= since)
+                .group_by(EmailEvent.event_type).all())
+        for t, n in rows:
+            # event_type comes in as "email.delivered" etc.
+            key = t.split(".", 1)[-1] if "." in t else t
+            if key in recent_events:
+                recent_events[key] = n
+        latest = (db.session.query(db.func.max(EmailEvent.created_at)).scalar())
+        last_event_at = latest
+        suppressed_count = User.query.filter(
+            User.email_bounced_at.isnot(None)).count()
+    except Exception:
+        # EmailEvent / User columns may not exist on a pristine test DB
+        # between migrations; don't blow up the Overview.
+        pass
+
     return {
         "env":         env,
         "configured":  configured,
@@ -2446,6 +2534,9 @@ def smtp_health_check():
         "when":        _last_smtp_attempt["when"],
         "last_to_domain":  _last_smtp_attempt["last_to_domain"],
         "last_subject":    _last_smtp_attempt["last_subject"],
+        "recent_events":   recent_events,
+        "last_event_at":   last_event_at,
+        "suppressed_count": suppressed_count,
     }
 
 @app.route("/forgot-password", methods=["GET", "POST"])
@@ -5162,6 +5253,138 @@ def superadmin_audit_export():
     }
 
 # ── Stripe webhook ───────────────────────────────────────────
+# ── Resend webhook (delivery events) ─────────────────────────
+#
+# Resend posts events to this endpoint as each message moves through
+# its lifecycle: sent → delivered → (opened → clicked) OR (bounced |
+# complained | delivery_delayed). We persist everything and react to
+# two events that matter for sending hygiene:
+#   - email.bounced with bounce.type=hard → stamp User.email_bounced_at
+#     so future _send_email calls skip the address.
+#   - email.complained → same stamp, plus flip every notify_* toggle
+#     to False. A spam-report is the strongest "stop emailing me" signal
+#     a user can send short of unsubscribing.
+#
+# Resend signs webhook requests using Svix-style headers
+# (svix-id, svix-timestamp, svix-signature). Secret is a whsec_...
+# string set via RESEND_WEBHOOK_SECRET. We verify with HMAC-SHA256
+# over `{id}.{timestamp}.{raw_body}` and reject mismatches with 400.
+
+_RESEND_REPLAY_WINDOW_SECONDS = 5 * 60  # 5 minutes
+
+def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
+                              raw_body):
+    """Return True if `raw_body` carries a valid Svix signature under
+    `secret`. `secret` is the whsec_... string Resend gave us.
+
+    The signed value is `{id}.{timestamp}.{body}`. The sig header can
+    contain multiple space-separated `v1,{base64}` entries (older keys
+    after rotation); we accept any match.
+    """
+    if not (secret and svix_id and svix_timestamp and svix_signature):
+        return False
+    # Replay-window check — reject messages older than the window. Prevents
+    # an attacker who captured a valid webhook from replaying it later.
+    try:
+        ts_int = int(svix_timestamp)
+        now_int = int(datetime.utcnow().timestamp())
+        if abs(now_int - ts_int) > _RESEND_REPLAY_WINDOW_SECONDS:
+            return False
+    except ValueError:
+        return False
+    # secret looks like "whsec_BASE64". Strip the prefix and decode.
+    if not secret.startswith("whsec_"):
+        return False
+    try:
+        secret_bytes = base64.b64decode(secret[len("whsec_"):])
+    except Exception:
+        return False
+    signed_payload = f"{svix_id}.{svix_timestamp}.".encode() + raw_body
+    expected = hmac.new(secret_bytes, signed_payload, hashlib.sha256).digest()
+    expected_b64 = base64.b64encode(expected).decode()
+    # Header may carry multiple versions: "v1,sig1 v1,sig2"
+    for sig in svix_signature.split():
+        if "," not in sig:
+            continue
+        version, value = sig.split(",", 1)
+        if version != "v1":
+            continue
+        if hmac.compare_digest(value, expected_b64):
+            return True
+    return False
+
+def _apply_resend_side_effects(event_type, to_addr, bounce_type):
+    """For a bounce/complaint event, stamp the matching User row. For
+    a complaint, also flip every notify_* toggle off — the user is
+    actively telling receivers this was spam."""
+    if not to_addr:
+        return
+    users = (User.query
+             .filter(db.func.lower(User.email) == to_addr.lower())
+             .all())
+    if not users:
+        return
+    now = datetime.utcnow()
+    for u in users:
+        if event_type == "email.bounced" and bounce_type == "hard":
+            u.email_bounced_at = now
+        elif event_type == "email.complained":
+            u.email_bounced_at = now
+            u.notify_trial_reminders = False
+            # Future notify_* columns should be flipped here too.
+
+@app.route("/webhooks/resend", methods=["POST"])
+def resend_webhook():
+    """Resend delivery-event receiver. See comment above for the full
+    shape and policy."""
+    secret = os.environ.get("RESEND_WEBHOOK_SECRET", "")
+    raw = request.get_data()
+    svix_id        = request.headers.get("svix-id", "")
+    svix_timestamp = request.headers.get("svix-timestamp", "")
+    svix_signature = request.headers.get("svix-signature", "")
+    if not _verify_resend_signature(secret, svix_id, svix_timestamp,
+                                     svix_signature, raw):
+        return jsonify({"error": "Invalid signature"}), 400
+
+    try:
+        event = request.get_json(force=True, silent=False)
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
+    event_type = (event or {}).get("type", "") or ""
+    data = (event or {}).get("data", {}) or {}
+    message_id = data.get("email_id") or ""
+    bounce_type = ""
+    if isinstance(data.get("bounce"), dict):
+        bounce_type = data["bounce"].get("type", "") or ""
+    recipients = data.get("to") or []
+    if isinstance(recipients, str):
+        recipients = [recipients]
+
+    # One EmailEvent row per (event, recipient) tuple so we can query
+    # "has this address bounced" without joining through a message.
+    payload_json = ""
+    try:
+        import json as _json
+        payload_json = _json.dumps(event)[:8000]
+    except Exception:
+        payload_json = ""
+    for raw_to in recipients:
+        to_norm = (raw_to or "").strip().lower()
+        user_id = None
+        if to_norm:
+            matched = (db.session.query(User.id)
+                       .filter(db.func.lower(User.email) == to_norm)
+                       .first())
+            user_id = matched[0] if matched else None
+        db.session.add(EmailEvent(
+            message_id=message_id[:80], to_addr=to_norm[:255],
+            user_id=user_id, event_type=event_type[:40],
+            bounce_type=bounce_type[:16], payload=payload_json,
+        ))
+        _apply_resend_side_effects(event_type, to_norm, bounce_type)
+    db.session.commit()
+    return jsonify({"ok": True})
+
 @app.route("/webhooks/stripe", methods=["POST"])
 def stripe_webhook():
     """Stripe webhook receiver.
@@ -5285,6 +5508,11 @@ def purge_expired_stores():
         if user_ids:
             Passkey.query.filter(Passkey.user_id.in_(user_ids)).delete(
                 synchronize_session=False)
+            # EmailEvent.user_id is a nullable FK; we null it out for
+            # purged users so the event history (useful for
+            # post-purge forensics) doesn't block the User delete.
+            EmailEvent.query.filter(EmailEvent.user_id.in_(user_ids)).update(
+                {"user_id": None}, synchronize_session=False)
         for model_name in _STORE_OWNED_MODELS:
             model = globals().get(model_name)
             if model is not None:
@@ -5539,6 +5767,15 @@ _ADDED_COLUMNS = [
     # reminder). Without this the cron would spam daily once the
     # store enters expiring_soon.
     ("store",    "trial_reminder_sent_at", "TIMESTAMP NULL"),
+    # Email deliverability suppression. When Resend posts an
+    # `email.bounced` webhook with bounce_type=hard for this user's
+    # address, we stamp this column. `_send_email()` skips any
+    # recipient whose matching User row is stamped, so we stop
+    # hammering Resend with guaranteed-failing addresses. Cleared by
+    # a superadmin "clear suppression" action (not yet built — one
+    # for later when we have a user who fixes their mailbox and
+    # wants to un-bounce).
+    ("user",     "email_bounced_at",     "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():
