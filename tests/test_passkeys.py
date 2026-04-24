@@ -143,16 +143,19 @@ def test_register_begin_requires_login(client):
     assert resp.status_code in (302, 401)
 
 
-def test_register_blocked_for_employee_role(logged_in_client, test_store_id):
-    """Employees aren't _passkey_eligible in v1 — the UI hides the card
-    on /admin/settings (admin_required), but the route itself should
-    also refuse so a forged POST from an employee session still fails."""
+def test_register_now_open_to_employee_role(logged_in_client, test_store_id):
+    """v1 explicitly excluded employees from passkey enrollment. The
+    shared /account/security page drops that gate — every logged-in
+    user can enroll, including employees. This test was previously
+    asserting the opposite; flipped here to lock in the new behavior
+    so a future refactor doesn't quietly re-introduce the role gate."""
     from tests.conftest import make_employee_client
     emp = make_employee_client(test_store_id)
     resp = emp.post("/account/passkeys/register/begin")
-    # Employee can't even reach this — either 403 (role gate) or a
-    # redirect/401 depending on how admin_required handles employees.
-    assert resp.status_code in (302, 401, 403)
+    assert resp.status_code == 200
+    import json
+    payload = json.loads(resp.data)
+    assert "challenge" in payload
 
 
 def test_delete_only_removes_own_passkey(logged_in_client, test_admin_id):
@@ -224,34 +227,36 @@ def test_login_finish_unknown_credential_rejects(client):
 
 
 def test_passkey_eligible_helper():
+    """v1 admitted only admin/owner/superadmin. The helper now admits
+    every logged-in user; the role-deeper check moved to the rendering
+    template (which always shows the card for any non-None user)."""
     from app import _passkey_eligible
     class U:
         def __init__(self, role): self.role = role
     assert _passkey_eligible(U("admin")) is True
     assert _passkey_eligible(U("owner")) is True
     assert _passkey_eligible(U("superadmin")) is True
-    assert _passkey_eligible(U("employee")) is False
+    assert _passkey_eligible(U("employee")) is True
     assert _passkey_eligible(None) is False
 
 
-def test_admin_settings_security_tab_shows_passkey_card(logged_in_client):
-    resp = logged_in_client.get("/admin/settings?tab=security")
+def test_account_security_page_shows_passkey_card(logged_in_client):
+    """The Passkeys card moved off /admin/settings's Security tab and
+    onto the shared /account/security page. Same markup contract."""
+    resp = logged_in_client.get("/account/security")
     assert resp.status_code == 200
     body = resp.data.decode()
     assert 'id="passkeys-card"' in body
     assert "Add a passkey" in body
     assert "passkeys.js" in body
-    # Empty state visible when no passkeys registered
     assert "No passkeys registered yet" in body
 
 
-def test_admin_settings_lists_registered_passkeys(logged_in_client, test_admin_id):
+def test_account_security_page_lists_registered_passkeys(logged_in_client, test_admin_id):
     _make_passkey(logged_in_client.application, test_admin_id,
                   credential_id=b"one-key", name="iPhone")
-    body = logged_in_client.get("/admin/settings?tab=security").data.decode()
+    body = logged_in_client.get("/account/security").data.decode()
     assert "iPhone" in body
-    # Empty-state tfoot is still in the DOM but carries the hidden attribute
-    # so the message doesn't show when passkeys exist.
     import re
     m = re.search(r'<tfoot id="pk-empty"([^>]*)>', body)
     assert m, "tfoot pk-empty missing"

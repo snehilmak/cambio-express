@@ -115,6 +115,12 @@ class User(db.Model):
     # is base32 and stored plaintext — the DB itself is the trust boundary.
     totp_secret      = db.Column(db.String(64), nullable=True)
     totp_enrolled_at = db.Column(db.DateTime, nullable=True)
+    # Profile fields. email is freeform on save (we coerce-strip-lower);
+    # validation lives in _update_user_profile.
+    email            = db.Column(db.String(255), default="")
+    phone            = db.Column(db.String(40), default="")
+    timezone         = db.Column(db.String(60), default="")
+    last_login_at    = db.Column(db.DateTime, nullable=True)
     __table_args__ = (db.UniqueConstraint("store_id","username"),)
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
@@ -1747,6 +1753,7 @@ def _finalize_2fa_login(user):
     session["user_id"]  = user.id
     session["role"]     = user.role
     session["store_id"] = user.store_id
+    _record_login(user); db.session.commit()
 
 # ── Passkeys (WebAuthn) ──────────────────────────────────────
 #
@@ -1788,10 +1795,111 @@ def _passkey_exclude_list(user):
     ]
 
 def _passkey_eligible(user):
-    """Who can enroll a passkey. v1: admin-equivalent roles only. The
-    enrollment UI lives on admin_settings (admin_required); employees
-    would need their own page to enroll, which is a follow-up."""
-    return bool(user and user.role in ("admin", "owner", "superadmin"))
+    """Whether a user may enroll passkeys. Now: any logged-in user.
+    Kept as a single predicate so future tightening (e.g. "deny pending
+    self-deletion accounts") has one place to land."""
+    return bool(user)
+
+def _update_user_password(user, current_pw, new_pw, confirm_pw):
+    """Validate + apply a password change. Returns ({} on success,
+    {field: message} on failure). Caller commits the session and
+    flashes; we keep this pure so it works from /admin/settings,
+    /account/security, or any future surface."""
+    errors = {}
+    if not user.check_password(current_pw or ""):
+        errors["current_password"] = "Current password is incorrect."
+    elif len(new_pw or "") < 8:
+        errors["new_password"] = "Password must be at least 8 characters."
+    elif new_pw != confirm_pw:
+        errors["confirm_password"] = "Passwords do not match."
+    if not errors:
+        user.set_password(new_pw)
+    return errors
+
+def _update_user_display_name(user, raw):
+    """Validate + apply a display-name change. Same return contract as
+    _update_user_password — empty dict means apply, else field errors."""
+    name = (raw or "").strip()
+    if not name:
+        return {"full_name": "Display name cannot be empty."}
+    if len(name) > 120:
+        return {"full_name": "Display name is too long (max 120 characters)."}
+    user.full_name = name
+    return {}
+
+# Loose email regex — RFC 5322 is famously underspecified, so we just
+# require "something@something.something" to catch obvious typos. Final
+# validity is whether mail actually delivers.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Phone: keep generous. Strip whitespace + hyphens + parens; require
+# 7–20 digits with an optional leading +. We don't normalize beyond
+# that — region codes vary too much for a one-size validator.
+_PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
+
+def _update_user_profile(user, raw_full_name, raw_email, raw_phone, raw_tz):
+    """Validate + apply a profile change in one shot. All four fields
+    are optional except full_name; empty string clears phone/email/tz."""
+    errors = {}
+    name = (raw_full_name or "").strip()
+    if not name:
+        errors["full_name"] = "Display name cannot be empty."
+    elif len(name) > 120:
+        errors["full_name"] = "Display name is too long (max 120 characters)."
+
+    email = (raw_email or "").strip().lower()
+    if email and not _EMAIL_RE.match(email):
+        errors["email"] = "Enter a valid email address."
+    elif len(email) > 255:
+        errors["email"] = "Email is too long (max 255 characters)."
+
+    phone_clean = re.sub(r"[\s\-\(\)]", "", raw_phone or "")
+    if phone_clean and not _PHONE_DIGITS_RE.match(phone_clean):
+        errors["phone"] = "Enter a valid phone number (7–20 digits, optional leading +)."
+
+    tz = (raw_tz or "").strip()
+    if tz and tz not in PROFILE_TIMEZONES:
+        errors["timezone"] = "Pick a timezone from the list."
+
+    if errors:
+        return errors
+    user.full_name = name
+    user.email = email
+    user.phone = phone_clean
+    user.timezone = tz
+    return {}
+
+# Curated timezone list — Americas + the handful of Asia/Europe zones
+# our owner-operators have actually asked for. Adding a zone is one
+# line; we deliberately don't expose the full ~600 IANA list because
+# that's a UX trap for non-technical cashiers. The empty string means
+# "fall back to UTC / store default".
+PROFILE_TIMEZONES = [
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "America/Mexico_City",
+    "America/Bogota",
+    "America/Lima",
+    "America/Santiago",
+    "America/Buenos_Aires",
+    "America/Sao_Paulo",
+    "Europe/London",
+    "Europe/Madrid",
+    "Asia/Manila",
+    "Asia/Karachi",
+    "UTC",
+]
+
+def _record_login(user):
+    """Stamp last_login_at on a successful sign-in. Called by every
+    login path (password, store-scoped, owner, passkey). Caller must
+    commit; we don't, because some login paths batch other writes
+    (sign_count update on passkey login) into the same transaction."""
+    user.last_login_at = datetime.utcnow()
 
 def _require_pending_auth():
     """Shared guard for /login/2fa* routes: redirect back to /login if
@@ -1847,6 +1955,7 @@ def login():
                 return redirect(url_for("login_totp_enroll"))
             else:
                 session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
+                _record_login(u); db.session.commit()
                 if u.role == "owner":
                     return redirect(url_for("owner_dashboard"))
                 return redirect(url_for("dashboard"))
@@ -1942,6 +2051,7 @@ def login_store(slug):
             session["user_id"] = u.id
             session["role"] = u.role
             session["store_id"] = u.store_id
+            _record_login(u); db.session.commit()
             resp = redirect(url_for("dashboard"))
             return _set_last_store_slug_cookie(resp, store.slug)
         error = "Invalid username or password."
@@ -2051,7 +2161,84 @@ def passkey_delete(pk_id):
     db.session.delete(pk)
     db.session.commit()
     flash("Passkey removed.", "success")
-    return redirect(url_for("admin_settings", tab="security"))
+    return redirect(url_for("account_security"))
+
+# ── Shared account settings ──────────────────────────────────
+#
+# /account/security is the per-user "personal security" page reachable
+# from every role (admin, owner, employee, superadmin). It hosts the
+# things a user manages about THEIR OWN login: display name, password,
+# passkeys. Anything store-scoped (companies, team, billing) lives on
+# the role-specific settings hubs (admin_settings, owner_dashboard,
+# superadmin_controls).
+#
+# A single POST handler dispatches by an `_action` field so the same
+# URL can serve every form on the page — keeps the redirect target
+# stable for the PRG pattern.
+
+@app.route("/account/security", methods=["GET", "POST"])
+@login_required
+def account_security():
+    user = current_user()
+    errors = {}
+    if request.method == "POST":
+        action = (request.form.get("_action") or "").strip()
+        if action == "password":
+            errors = _update_user_password(
+                user,
+                request.form.get("current_password", ""),
+                request.form.get("new_password", ""),
+                request.form.get("confirm_password", ""),
+            )
+            if not errors:
+                db.session.commit()
+                flash("Password updated.", "success")
+                return redirect(url_for("account_security"))
+        else:
+            abort(400)
+
+    passkeys = (Passkey.query.filter_by(user_id=user.id)
+                .order_by(Passkey.created_at.desc()).all())
+    return render_template("account_security.html",
+        user=user, errors=errors,
+        passkeys=passkeys,
+        passkeys_eligible=_passkey_eligible(user),
+    )
+
+@app.route("/account/profile", methods=["GET", "POST"])
+@login_required
+def account_profile():
+    """Personal profile — display name, email, phone, timezone. Same
+    accessibility model as /account/security: every logged-in role can
+    reach it, none of these fields cascade into store-scoped data, and
+    the form is single-POST with no `_action` since there's only one
+    action (save the whole form)."""
+    user = current_user()
+    errors = {}
+    if request.method == "POST":
+        errors = _update_user_profile(
+            user,
+            request.form.get("full_name", ""),
+            request.form.get("email", ""),
+            request.form.get("phone", ""),
+            request.form.get("timezone", ""),
+        )
+        if not errors:
+            db.session.commit()
+            flash("Profile updated.", "success")
+            return redirect(url_for("account_profile"))
+
+    return render_template("account_profile.html",
+        user=user, errors=errors,
+        timezone_choices=PROFILE_TIMEZONES,
+    )
+
+@app.route("/admin/settings/security", methods=["GET"])
+@login_required
+def admin_settings_security_redirect():
+    """Permanent redirect from the old admin-only Security tab to the
+    new shared page. Keeps any bookmarks / external docs working."""
+    return redirect(url_for("account_security"), code=301)
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():
@@ -2104,6 +2291,7 @@ def passkey_login_finish():
                         "error": "Passkey verification failed."}), 400
     pk.sign_count = verification.new_sign_count
     pk.last_used_at = datetime.utcnow()
+    _record_login(user)
     # Passkey IS MFA — skip the TOTP gate per the carve-out in CLAUDE.md
     # invariant #13. Clear any stale pending-auth too.
     session.pop("pending_auth_user_id", None)
@@ -4041,6 +4229,10 @@ def admin_settings():
     user = current_user()
     store = current_store()
     active_tab = request.args.get("tab", "store")
+    # The Security tab graduated to /account/security (a per-user page
+    # reachable from every role's chrome). Old bookmarks land here.
+    if active_tab == "security" and request.method == "GET":
+        return redirect(url_for("account_security"), code=301)
     errors = {}
 
     if request.method == "POST":
@@ -4091,22 +4283,16 @@ def admin_settings():
                 return redirect(url_for("admin_settings", tab="store"))
 
         elif form_tab == "security":
-            current_pw = request.form.get("current_password", "")
-            new_pw = request.form.get("new_password", "")
-            confirm_pw = request.form.get("confirm_password", "")
-
-            if not user.check_password(current_pw):
-                errors["current_password"] = "Current password is incorrect."
-            elif len(new_pw) < 8:
-                errors["new_password"] = "Password must be at least 8 characters."
-            elif new_pw != confirm_pw:
-                errors["confirm_password"] = "Passwords do not match."
-
+            errors = _update_user_password(
+                user,
+                request.form.get("current_password", ""),
+                request.form.get("new_password", ""),
+                request.form.get("confirm_password", ""),
+            )
             if not errors:
-                user.set_password(new_pw)
                 db.session.commit()
                 flash("Password updated.", "success")
-                return redirect(url_for("admin_settings", tab="security"))
+                return redirect(url_for("account_security"))
 
         elif form_tab == "companies":
             # Known companies come in as checkboxes ("company_known" list);
@@ -4153,8 +4339,6 @@ def admin_settings():
         StoreEmployee.is_active.desc(), StoreEmployee.name.asc()
     ).all()
 
-    passkeys = (Passkey.query.filter_by(user_id=user.id)
-                .order_by(Passkey.created_at.desc()).all())
     return render_template("admin_settings.html",
         user=user, store=store,
         active_tab=active_tab, errors=errors,
@@ -4166,8 +4350,6 @@ def admin_settings():
         current_company_set=current_set,
         custom_companies=custom_companies,
         roster=roster,
-        passkeys=passkeys,
-        passkeys_eligible=_passkey_eligible(user),
     )
 
 @app.route("/admin/settings/roster/add", methods=["POST"])
@@ -5033,6 +5215,17 @@ _ADDED_COLUMNS = [
     # line-item tables reject writes until an admin explicitly unlocks.
     ("daily_report", "locked_at",        "TIMESTAMP NULL"),
     ("daily_report", "locked_by",        "INTEGER NULL"),
+    # Per-user profile fields. Email is the headline addition — today
+    # username doubles as email for most accounts but isn't validated
+    # as one, and the password-reset flow currently uses username
+    # which gets messy when the username isn't an email. phone +
+    # timezone are quality-of-life. last_login_at is read-only
+    # (login routes set it) and surfaces as a "you last signed in
+    # from X" signal on the Security page.
+    ("user",     "email",                "VARCHAR(255) DEFAULT ''"),
+    ("user",     "phone",                "VARCHAR(40) DEFAULT ''"),
+    ("user",     "timezone",             "VARCHAR(60) DEFAULT ''"),
+    ("user",     "last_login_at",        "TIMESTAMP NULL"),
 ]
 
 def _ensure_added_columns():

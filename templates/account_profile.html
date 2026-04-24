@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Profile — DineroBook{% endblock %}
+{% block page_title %}Profile{% endblock %}
+{% block content %}
+
+{# Personal profile. Reachable from every role's chrome via the topbar
+   avatar dropdown. Anything that affects how YOU sign in (password,
+   passkeys) lives on /account/security; anything store-scoped lives
+   on /admin/settings, owner_dashboard, or superadmin_controls. #}
+
+<div class="card" style="max-width:560px;">
+  <div class="card-header"><span class="card-title">Personal info</span></div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;margin-bottom:18px;font-size:13.5px;">
+      Used for things addressed to you personally — receipts, password-reset
+      emails, audit-log attribution. Your username and role are set by your
+      store admin and shown here for reference.
+    </p>
+    <form method="POST">
+      <div class="form-grid cols-1">
+        <div class="field">
+          <label>Display name *</label>
+          <input type="text" name="full_name" maxlength="120"
+                 value="{{ user.full_name or '' }}" required>
+          {% if errors.full_name %}<div class="field-error">{{ errors.full_name }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" name="email" maxlength="255"
+                 value="{{ user.email or '' }}"
+                 placeholder="you@example.com" autocomplete="email">
+          {% if errors.email %}<div class="field-error">{{ errors.email }}</div>{% endif %}
+          <div class="text-muted" style="font-size:12px;margin-top:4px;">
+            We use this for password reset and account notices. Leave blank
+            if you'd rather not receive email.
+          </div>
+        </div>
+        <div class="field">
+          <label>Phone</label>
+          <input type="tel" name="phone" maxlength="40"
+                 value="{{ user.phone or '' }}"
+                 placeholder="+1 555 123 4567" autocomplete="tel">
+          {% if errors.phone %}<div class="field-error">{{ errors.phone }}</div>{% endif %}
+        </div>
+        <div class="field">
+          <label>Timezone</label>
+          <select name="timezone">
+            <option value="">— Use store / UTC default —</option>
+            {% for tz in timezone_choices %}
+            <option value="{{ tz }}" {% if user.timezone == tz %}selected{% endif %}>{{ tz }}</option>
+            {% endfor %}
+          </select>
+          {% if errors.timezone %}<div class="field-error">{{ errors.timezone }}</div>{% endif %}
+          <div class="text-muted" style="font-size:12px;margin-top:4px;">
+            Daily reports + audit timestamps render in this zone for you.
+            Don't see yours? Ask your admin to add it.
+          </div>
+        </div>
+      </div>
+
+      <hr style="border:0;border-top:1px solid var(--border);margin:24px 0 18px;">
+
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label>Username</label>
+          <input type="text" value="{{ user.username }}" disabled>
+        </div>
+        <div class="field">
+          <label>Role</label>
+          <input type="text" value="{{ user.role|capitalize }}" disabled>
+        </div>
+        <div class="field">
+          <label>Member since</label>
+          <input type="text"
+                 value="{{ user.created_at.strftime('%b %d, %Y') if user.created_at else '—' }}" disabled>
+        </div>
+        <div class="field">
+          <label>Last sign-in</label>
+          <input type="text"
+                 value="{% if user.last_login_at %}{{ user.last_login_at.strftime('%b %d, %Y %H:%M UTC') }}{% else %}—{% endif %}"
+                 disabled>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;">
+        <button type="submit" class="btn btn-primary">Save profile</button>
+        <a href="{{ url_for('account_security') }}" class="btn btn-outline" style="margin-left:8px;">Security &rarr;</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

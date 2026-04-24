@@ -156,11 +156,11 @@ def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
         assert s.email == "admin@test.com"  # unchanged
 
 
-# ── Task 4: Security tab ─────────────────────────────────────
+# ── Task 4: Password change (now lives on /account/security) ─
 
 def test_security_wrong_current_password(logged_in_client):
-    resp = logged_in_client.post("/admin/settings", data={
-        "_tab": "security",
+    resp = logged_in_client.post("/account/security", data={
+        "_action": "password",
         "current_password": "wrongpassword",
         "new_password": "newpassword123!",
         "confirm_password": "newpassword123!"
@@ -175,8 +175,8 @@ def test_security_wrong_current_password(logged_in_client):
 
 
 def test_security_new_password_too_short(logged_in_client):
-    resp = logged_in_client.post("/admin/settings", data={
-        "_tab": "security",
+    resp = logged_in_client.post("/account/security", data={
+        "_action": "password",
         "current_password": "testpass123!",
         "new_password": "short",
         "confirm_password": "short"
@@ -186,8 +186,8 @@ def test_security_new_password_too_short(logged_in_client):
 
 
 def test_security_passwords_do_not_match(logged_in_client):
-    resp = logged_in_client.post("/admin/settings", data={
-        "_tab": "security",
+    resp = logged_in_client.post("/account/security", data={
+        "_action": "password",
         "current_password": "testpass123!",
         "new_password": "newpassword123!",
         "confirm_password": "differentpassword!"
@@ -197,8 +197,8 @@ def test_security_passwords_do_not_match(logged_in_client):
 
 
 def test_security_valid_password_change(logged_in_client):
-    resp = logged_in_client.post("/admin/settings", data={
-        "_tab": "security",
+    resp = logged_in_client.post("/account/security", data={
+        "_action": "password",
         "current_password": "testpass123!",
         "new_password": "brandnew123!",
         "confirm_password": "brandnew123!"
