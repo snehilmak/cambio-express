@@ -271,6 +271,8 @@
       <span class="v">{% if smtp_health.env.password %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
     <div class="info-row"><span class="k">SMTP_FROM</span>
       <span class="v">{% if smtp_health.env.from %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-yellow">optional — falls back to SMTP_USER</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">RESEND_WEBHOOK_SECRET</span>
+      <span class="v">{% if smtp_health.env.webhook_secret %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-yellow">missing — delivery events not tracked</span>{% endif %}</span></div>
 
     {% if smtp_health.when %}
     <div class="info-row"><span class="k">Last attempt</span>
@@ -283,6 +285,47 @@
     {% if smtp_health.status == 'failed' and smtp_health.error %}
     <div class="banner banner-error mt-2" style="margin-bottom:0;">
       <span class="banner-msg"><strong>SMTP:</strong> {{ smtp_health.error }}</span>
+    </div>
+    {% elif smtp_health.status == 'suppressed' %}
+    <div class="banner banner-warn mt-2" style="margin-bottom:0;">
+      <span class="banner-msg"><strong>Skipped:</strong> {{ smtp_health.error }}</span>
+    </div>
+    {% endif %}
+
+    {# Delivery events from the Resend webhook — 7-day roll-up. Only
+       shown if either (a) there are any events at all (webhook is
+       actually firing) or (b) suppression list is non-empty. #}
+    {% if smtp_health.last_event_at or smtp_health.suppressed_count %}
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
+      <div class="text-sm text-muted" style="margin-bottom:8px;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;">
+        Delivery events &middot; last 7 days
+      </div>
+      <div class="info-row"><span class="k">Delivered</span>
+        <span class="v mono">{{ smtp_health.recent_events.delivered }}</span></div>
+      <div class="info-row"><span class="k">Opened</span>
+        <span class="v mono">{{ smtp_health.recent_events.opened }}</span></div>
+      <div class="info-row"><span class="k">Bounced</span>
+        <span class="v mono">
+          {% if smtp_health.recent_events.bounced > 0 %}
+            <span class="badge badge-yellow">{{ smtp_health.recent_events.bounced }}</span>
+          {% else %}
+            0
+          {% endif %}
+        </span></div>
+      <div class="info-row"><span class="k">Complained</span>
+        <span class="v mono">
+          {% if smtp_health.recent_events.complained > 0 %}
+            <span class="badge badge-red">{{ smtp_health.recent_events.complained }}</span>
+          {% else %}
+            0
+          {% endif %}
+        </span></div>
+      <div class="info-row"><span class="k">Suppressed addresses</span>
+        <span class="v mono">{{ smtp_health.suppressed_count }}</span></div>
+      {% if smtp_health.last_event_at %}
+      <div class="info-row"><span class="k">Last event</span>
+        <span class="v mono">{{ smtp_health.last_event_at.strftime('%b %d, %Y %H:%M UTC') }}</span></div>
+      {% endif %}
     </div>
     {% endif %}
 
