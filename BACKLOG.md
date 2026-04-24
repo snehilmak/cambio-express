@@ -88,3 +88,59 @@ any cadence.
       `superadmin`, `transfers`, `reports`.
 - [ ] Replace the PR description smoke-test lists with committed tests
       so the "Test plan" checklist can stay short.
+
+## Settings surface — roadmap
+
+PR #94 landed `/account/profile` + `/account/security` as the per-user
+pages every role reaches. The rest of the Settings surface still has
+gaps. Ordered by "what I'd do next" at the top.
+
+### Personal (`/account/*`)
+- [ ] **Notifications page** — toggles for email + push. v1 below;
+      follow-ups include announcement-broadcast email (needs a new
+      sender in the superadmin announcement POST) and daily-summary
+      email (needs a new cron). Ship the senders alongside the
+      toggles, not before — empty toggles are a trust-eroder.
+- [ ] **Sessions / active devices** — "you're signed in on 3 devices,
+      sign out the others." Needs a session-store table; pairs with
+      passkeys nicely as a security-signal feature.
+- [ ] **Audit log (mine)** — filtered view of `TransferAudit`
+      showing everything the current user did. Data already exists;
+      just a scoped-query page.
+- [ ] **Personal API tokens** — scoped tokens for scripts /
+      integrations. Postpone until someone asks.
+- [ ] **Connected accounts (Google / Apple SSO)** — premature today;
+      passkeys cover most of the "sign in without a password" need.
+
+### Store (`/admin/settings`)
+- [ ] **Store timezone** — one column on `Store`. Fallback chain for
+      date rendering: user TZ → store TZ → UTC. Today we render
+      everything UTC. Small schema change, bigger refactor if we want
+      it to flow through every `.strftime()` in the codebase — so
+      start with one high-value page (daily report) and spread from
+      there.
+- [ ] **Store hours** (open/close per day) — gate "no transfers
+      outside business hours" rule; useful for peak-hour heatmap.
+- [ ] **Receipt customization** — logo + footer text + tax-ID line.
+      Customers already ask for this.
+- [ ] **Currency / locale** — hardcoded USD today. Needed before any
+      non-US expansion.
+- [ ] **Data export (`/admin/settings/export`)** — consolidate the
+      scattered CSV exports. Useful for GDPR-style requests too.
+- [ ] **Webhooks** — "notify my POS / accounting app when a transfer
+      is saved."
+- [ ] **Integrations (QuickBooks, Square, Zapier)** — big-ticket
+      feature, high owner-operator value.
+- [ ] **Receipt printer setup** — USB / Bluetooth thermal printer
+      picker. Today cashiers print from the browser dialog.
+
+### Owner umbrella (`/owner/settings` — doesn't exist yet)
+- [ ] **Cross-store defaults** — apply a fed-tax rate / company list /
+      receipt template to all my stores at once.
+- [ ] **Bulk user management** — add an admin to multiple stores at
+      once.
+- [ ] **Consolidated billing** — one Stripe customer for N stores
+      instead of one-per-store. Big architectural change, meaningful
+      revenue upside.
+- [ ] **Business legal info** — legal name, EIN, address. Avoid
+      duplicating on each store.
