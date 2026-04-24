@@ -5,65 +5,64 @@
 
 {# Personal notifications page. Controls the real senders, catalogs
    the rest honestly. Every new sender adds a row below and (if
-   user-controllable) a toggle in the form. #}
+   user-controllable) a toggle in the form.
 
-<div class="card" style="max-width:640px;">
-  <div class="card-header"><span class="card-title">Your preferences</span></div>
-  <div class="card-body">
-    <form method="POST">
-      <div class="sb-row" style="display:flex;align-items:flex-start;gap:14px;padding:16px 0;border-bottom:1px solid var(--border);">
-        <input type="checkbox" id="ntr" name="notify_trial_reminders"
-               {% if user.notify_trial_reminders %}checked{% endif %}
-               {% if not trial_toggle_applies %}disabled{% endif %}
-               style="margin-top:3px;">
-        <div style="flex:1;">
-          <label for="ntr" style="display:block;font-weight:600;font-size:14px;margin:0 0 4px;">
-            Trial-ending reminder email
-          </label>
-          <div class="text-muted" style="font-size:13px;line-height:1.45;">
-            Send me one email during the last 3 days of my trial so I can
-            subscribe before the books lock. Turned off means you'll only
-            see the in-app banner.
-            {% if not trial_toggle_applies %}
-            <br><em>Not applicable for your account right now — you're on
-            {% if user.role not in ('admin','owner') %}a role that doesn't
-            own a trial{% else %}a paid plan (or no active trial){% endif %}.</em>
-            {% endif %}
+   Layout: two cards stack on mobile and sit side-by-side on desktop.
+   `.pref-row-*` classes opt out of the global mono/caps <label> style
+   (which is meant for form-field eyebrows, not toggle titles). #}
+
+<div class="account-grid">
+  <div class="card">
+    <div class="card-header"><span class="card-title">Your preferences</span></div>
+    <div class="card-body">
+      <form method="POST">
+        <div class="pref-row">
+          <input type="checkbox" id="ntr" name="notify_trial_reminders"
+                 {% if user.notify_trial_reminders %}checked{% endif %}
+                 {% if not trial_toggle_applies %}disabled{% endif %}>
+          <div class="pref-row-content">
+            <label for="ntr" class="pref-row-title">Trial-ending reminder email</label>
+            <div class="pref-row-desc">
+              Send me one email during the last 3 days of my trial so I can
+              subscribe before the books lock. Turned off means you'll only
+              see the in-app banner.
+              {% if not trial_toggle_applies %}
+              <br><em>Not applicable for your account right now — you're on
+              {% if user.role not in ('admin','owner') %}a role that doesn't
+              own a trial{% else %}a paid plan (or no active trial){% endif %}.</em>
+              {% endif %}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div class="sb-row" style="display:flex;align-items:flex-start;gap:14px;padding:16px 0;border-bottom:1px solid var(--border);">
-        <input type="checkbox" id="nae" name="notify_announcement_email"
-               {% if user.notify_announcement_email %}checked{% endif %}
-               style="margin-top:3px;">
-        <div style="flex:1;">
-          <label for="nae" style="display:block;font-weight:600;font-size:14px;margin:0 0 4px;">
-            Announcement emails
-          </label>
-          <div class="text-muted" style="font-size:13px;line-height:1.45;">
-            Get a copy of platform announcements (new features, outages,
-            policy changes) by email. Off by default — you'll still see
-            every announcement as a banner when you sign in.
+        <div class="pref-row">
+          <input type="checkbox" id="nae" name="notify_announcement_email"
+                 {% if user.notify_announcement_email %}checked{% endif %}>
+          <div class="pref-row-content">
+            <label for="nae" class="pref-row-title">Announcement emails</label>
+            <div class="pref-row-desc">
+              Get a copy of platform announcements (new features, outages,
+              policy changes) by email. Off by default — you'll still see
+              every announcement as a banner when you sign in.
+            </div>
           </div>
         </div>
-      </div>
 
-      <div style="margin-top:18px;">
-        <button type="submit" class="btn btn-primary">Save preferences</button>
-      </div>
-    </form>
+        <div style="margin-top:18px;">
+          <button type="submit" class="btn btn-primary">Save preferences</button>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
 
-<div class="card" style="max-width:640px;margin-top:24px;">
-  <div class="card-header"><span class="card-title">What DineroBook sends you</span></div>
-  <div class="card-body">
-    <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
-      We send as little as possible. Here's the complete list — anything
-      user-controllable has a toggle above; the rest is either essential
-      (password reset) or not yet implemented.
-    </p>
+  <div class="card">
+    <div class="card-header"><span class="card-title">What DineroBook sends you</span></div>
+    <div class="card-body">
+      <p class="text-muted" style="margin-top:0;margin-bottom:14px;font-size:13.5px;">
+        We send as little as possible. Here's the complete list — anything
+        user-controllable has a toggle on the left; the rest is either essential
+        (password reset) or not yet implemented.
+      </p>
     <table class="pk-table" style="width:100%;border-collapse:collapse;font-size:13.5px;">
       <thead>
         <tr>
@@ -115,6 +114,7 @@
       emails). Each one will land here as a toggle alongside its real
       sender — we don't ship controls for imaginary notifications.
     </p>
+    </div>
   </div>
 </div>
 
