@@ -1,0 +1,326 @@
+{% extends "base_owner.html" %}
+{% block title %}{{ store.name }} — DineroBook Owner{% endblock %}
+{% block page_title %}{{ store.name }}{% endblock %}
+{% block head %}
+<style>
+  /* Drill-down for one store. Read-only — owner role can only inspect. */
+  .sd-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--db-gray-7); text-decoration: none;
+    font-size: 13px; margin-bottom: 14px;
+  }
+  .sd-back:hover { color: var(--db-neon); }
+
+  .sd-toolbar {
+    display: flex; gap: 10px; align-items: center;
+    margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .sd-toolbar .label {
+    font-family: var(--db-font-mono); font-size: 10.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; margin-right: 4px;
+  }
+  .sd-period { display: flex; gap: 6px; align-items: center; }
+
+  .sd-kpi-grid {
+    display: grid; gap: 14px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .sd-delta {
+    display: inline-flex; align-items: center; gap: 3px;
+    font-family: var(--db-font-mono);
+    font-size: 10.5px; font-weight: 600;
+    padding: 2px 6px; border-radius: 4px;
+    letter-spacing: 0.3px; margin-top: 6px;
+  }
+  .sd-delta.pos { background: rgba(63,255,0,0.10); color: var(--db-neon); }
+  .sd-delta.neg { background: rgba(255,77,109,0.10); color: var(--db-negative); }
+  .sd-delta.zero { background: var(--db-bg-input); color: var(--db-gray-6); }
+
+  .sd-row {
+    display: grid; gap: 18px; margin-bottom: 20px;
+    grid-template-columns: 2fr 1fr;
+  }
+  @media (max-width: 900px) { .sd-row { grid-template-columns: 1fr; } }
+  .sd-row-even { grid-template-columns: 1fr 1fr; }
+
+  .chart-card .card-body { padding: 16px 18px 12px; }
+  .chart-box { min-height: 240px; }
+
+  .sd-mini { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .sd-mini th {
+    font-family: var(--db-font-mono); font-size: 10px; font-weight: 500;
+    color: var(--db-gray-6); text-transform: uppercase; letter-spacing: 1.2px;
+    text-align: left; padding: 8px 10px;
+    border-bottom: 1px solid var(--db-gray-3);
+  }
+  .sd-mini th.num, .sd-mini td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sd-mini td {
+    padding: 10px; color: var(--db-gray-9);
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .sd-mini tr:last-child td { border-bottom: none; }
+  .sd-mini td.mono { font-family: var(--db-font-mono); color: var(--db-gray-8); }
+  .sd-mini td.amt-neon { color: var(--db-neon); font-family: var(--db-font-mono); font-weight: 600; }
+
+  .sd-empty {
+    padding: 28px 0; text-align: center;
+    color: var(--db-gray-6); font-size: 13px;
+  }
+
+  .sd-plan-pill {
+    display: inline-block; vertical-align: middle;
+    margin-left: 8px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<a href="{{ url_for('owner_locations', period=period) }}" class="sd-back">
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+  All locations
+</a>
+
+<div class="sd-toolbar">
+  <div class="sd-period">
+    <span class="label">Period</span>
+    <a href="{{ url_for('owner_store_detail', store_id=store.id, period='today') }}"
+       class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-outline{% endif %}">Today</a>
+    <a href="{{ url_for('owner_store_detail', store_id=store.id, period='month') }}"
+       class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-outline{% endif %}">This Month</a>
+    <a href="{{ url_for('owner_store_detail', store_id=store.id, period='year') }}"
+       class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-outline{% endif %}">This Year</a>
+  </div>
+  <span class="text-muted" style="margin-left:auto;font-size:12px;">
+    {{ period_start.strftime('%b %d, %Y') }}
+    {%- if period_start != period_end %} – {{ period_end.strftime('%b %d, %Y') }}{% endif %}
+  </span>
+  {% if store.plan == 'pro' %}
+    <span class="badge badge-green sd-plan-pill">Pro</span>
+  {% elif store.plan == 'basic' %}
+    <span class="badge badge-blue sd-plan-pill">Basic</span>
+  {% elif store.plan == 'inactive' %}
+    <span class="badge badge-red sd-plan-pill">Inactive</span>
+  {% else %}
+    <span class="badge badge-yellow sd-plan-pill">Trial</span>
+  {% endif %}
+</div>
+
+{# ── KPI strip ─────────────────────────────────────────── #}
+<div class="sd-kpi-grid">
+  <div class="stat-card">
+    <div class="stat-label">Transfers</div>
+    <div class="stat-value">{{ '{:,}'.format(period_count) }}</div>
+    {% set tx_delta = period_count - prev_count %}
+    {% if tx_delta > 0 %}
+      <span class="sd-delta pos">▲ {{ '{:,}'.format(tx_delta) }} {{ prev_label }}</span>
+    {% elif tx_delta < 0 %}
+      <span class="sd-delta neg">▼ {{ '{:,}'.format(tx_delta|abs) }} {{ prev_label }}</span>
+    {% else %}
+      <span class="sd-delta zero">— flat {{ prev_label }}</span>
+    {% endif %}
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Volume</div>
+    <div class="stat-value">${{ '{:,.0f}'.format(period_volume) }}</div>
+    {% set vol_delta = period_volume - prev_volume %}
+    {% if vol_delta > 0.5 %}
+      <span class="sd-delta pos">▲ ${{ '{:,.0f}'.format(vol_delta) }} {{ prev_label }}</span>
+    {% elif vol_delta < -0.5 %}
+      <span class="sd-delta neg">▼ ${{ '{:,.0f}'.format(vol_delta|abs) }} {{ prev_label }}</span>
+    {% else %}
+      <span class="sd-delta zero">— flat {{ prev_label }}</span>
+    {% endif %}
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Fees collected</div>
+    <div class="stat-value">${{ '{:,.2f}'.format(period_fees) }}</div>
+    <div class="stat-sub">store revenue · ${{ '{:,.2f}'.format(period_tax) }} federal tax pass-through</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Over / Short</div>
+    <div class="stat-value {% if period_over_short < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+      ${{ '{:,.2f}'.format(period_over_short) }}
+    </div>
+    <div class="stat-sub">across daily reports</div>
+  </div>
+</div>
+
+{# ── Row 1: 30-day over/short trend + per-company table ── #}
+<div class="sd-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Receipts &amp; over/short · last 30 days</div>
+      <div class="stat-sub">From locked or in-progress daily reports.</div>
+    </div>
+    <div class="card-body">
+      <div id="sdTrendChart" class="chart-box"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">By company</div>
+      <div class="stat-sub">Selected period.</div>
+    </div>
+    <div class="card-body">
+      {% if company_rows %}
+      <table class="sd-mini">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th class="num">Cnt</th>
+            <th class="num">Volume</th>
+            <th class="num">Fees</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in company_rows %}
+          <tr>
+            <td><span class="co-{{ c.company|lower }}">{{ c.company }}</span></td>
+            <td class="num mono">{{ '{:,}'.format(c.count) }}</td>
+            <td class="num amt-neon">${{ '{:,.0f}'.format(c.volume) }}</td>
+            <td class="num mono">${{ '{:,.2f}'.format(c.fees) }}</td>
+          </tr>
+          {% endfor %}
+          <tr style="border-top:1px solid var(--db-gray-3);">
+            <td style="font-weight:600;">Total</td>
+            <td class="num" style="font-weight:600;">{{ '{:,}'.format(period_count) }}</td>
+            <td class="num amt-neon" style="font-size:14px;">${{ '{:,.0f}'.format(period_volume) }}</td>
+            <td class="num mono" style="font-weight:600;">${{ '{:,.2f}'.format(period_fees) }}</td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <div class="sd-empty">No transfers in this window.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Row 2: recent transfers (full width) ───────────────── #}
+<div class="card">
+  <div class="card-header">
+    <div class="card-title">Recent transfers</div>
+    <div class="stat-sub">Latest 10 entries — read-only view.</div>
+  </div>
+  <div class="card-body">
+    {% if recent_transfers %}
+    <table class="sd-mini">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Company</th>
+          <th>Sender</th>
+          <th>Recipient</th>
+          <th class="num">Amount</th>
+          <th class="num">Fee</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in recent_transfers %}
+        <tr>
+          <td class="mono">{{ t.send_date.strftime('%b %d') }}</td>
+          <td><span class="co-{{ (t.company or '')|lower }}">{{ t.company or '—' }}</span></td>
+          <td>{{ t.sender_name or '—' }}</td>
+          <td>{{ t.recipient_name or '—' }}</td>
+          <td class="num amt-neon">${{ '{:,.2f}'.format(t.send_amount or 0) }}</td>
+          <td class="num mono">${{ '{:,.2f}'.format(t.fee or 0) }}</td>
+          <td>
+            {% if t.status == 'Sent' %}
+              <span class="badge badge-green">Sent</span>
+            {% elif t.status == 'Canceled' or t.status == 'Rejected' %}
+              <span class="badge badge-red">{{ t.status }}</span>
+            {% else %}
+              <span class="badge badge-yellow">{{ t.status or 'Pending' }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="sd-empty">No transfers logged for this store yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script id="sd-data" type="application/json">
+{
+  "trend": {
+    "labels":     {{ daily_labels|tojson }},
+    "overShort":  {{ over_short_data|tojson }},
+    "receipts":   {{ receipts_data|tojson }}
+  }
+}
+</script>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.49.1/dist/apexcharts.min.js"></script>
+<script>
+(function () {
+  if (typeof ApexCharts === 'undefined') return;
+  var dataEl = document.getElementById('sd-data');
+  if (!dataEl) return;
+  var DATA;
+  try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
+
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  var NEON  = cssVar('--db-neon',    '#3fff00');
+  var INFO  = cssVar('--db-info',    '#5ea9ff');
+  var GRAY7 = cssVar('--db-gray-7',  '#9199a8');
+  var GRAY3 = cssVar('--db-gray-3',  '#272c38');
+  var GRAY6 = cssVar('--db-gray-6',  '#6b7280');
+
+  var common = {
+    chart: {
+      background: 'transparent', foreColor: GRAY7,
+      toolbar: { show: false },
+      fontFamily: "'Inter', system-ui, sans-serif",
+      animations: { enabled: true, speed: 240 },
+      zoom: { enabled: false }
+    },
+    grid: { borderColor: GRAY3, strokeDashArray: 3 },
+    tooltip: { theme: 'dark', fillSeriesColor: false }
+  };
+
+  var trendEl = document.querySelector('#sdTrendChart');
+  if (trendEl && DATA.trend) {
+    new ApexCharts(trendEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, { type: 'line', height: 260 }),
+      series: [
+        { name: 'Receipts',    type: 'area', data: DATA.trend.receipts },
+        { name: 'Over / Short', type: 'line', data: DATA.trend.overShort }
+      ],
+      colors: [INFO, NEON],
+      stroke: { curve: 'smooth', width: [2, 2] },
+      fill: {
+        type: ['gradient', 'solid'],
+        gradient: { shadeIntensity: 1, opacityFrom: 0.3, opacityTo: 0.02, stops: [0, 100] }
+      },
+      dataLabels: { enabled: false },
+      xaxis: {
+        type: 'datetime', categories: DATA.trend.labels,
+        labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" } },
+        axisBorder: { color: GRAY3 }, axisTicks: { color: GRAY3 }
+      },
+      yaxis: [
+        { labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" },
+                    formatter: function (v) { return '$' + Math.round(v).toLocaleString(); } } },
+        { opposite: true,
+          labels: { style: { colors: GRAY6, fontSize: '11px', fontFamily: "'JetBrains Mono', ui-monospace" },
+                    formatter: function (v) { return '$' + v.toFixed(2); } } }
+      ],
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v) { return '$' + v.toFixed(2); } }
+      },
+      legend: { position: 'top', horizontalAlign: 'right', labels: { colors: GRAY7 }, markers: { radius: 4 } }
+    })).render();
+  }
+})();
+</script>
+{% endblock %}

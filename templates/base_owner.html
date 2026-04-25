@@ -1,13 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+{# Owner shell — same theme contract as base.html (server-rendered
+   data-theme avoids a paint flash). #}
+<html lang="en" data-theme="{{ theme|default('dark') }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}DineroBook — Owner{% endblock %}</title>
-<script>
-  // Dark is now the only mode.
-  document.documentElement.setAttribute('data-theme', 'dark');
-</script>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <link href="{{ url_for('static', filename='app.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
@@ -46,6 +44,10 @@
       <a href="{{ url_for('owner_dashboard') }}" class="nav-link {% if request.endpoint == 'owner_dashboard' %}active{% endif %}">
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
         Dashboard
+      </a>
+      <a href="{{ url_for('owner_locations') }}" class="nav-link {% if request.endpoint in ('owner_locations', 'owner_store_detail') %}active{% endif %}">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></span>
+        Locations
       </a>
     </nav>
 

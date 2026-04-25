@@ -428,12 +428,19 @@
   var DATA;
   try { DATA = JSON.parse(dataEl.textContent); } catch (e) { return; }
 
-  var NEON = '#3fff00';
-  var NEG  = '#ff4d6d';
-  var INFO = '#5ea9ff';
-  var GRAY7 = '#9199a8';
-  var GRAY3 = '#272c38';
-  var GRAY6 = '#6b7280';
+  // Read tokens from the live stylesheet so the charts pick up
+  // light-mode values when the user toggles their theme.
+  function cssVar(name, fallback) {
+    var v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  var NEON    = cssVar('--db-neon',     '#3fff00');
+  var NEG     = cssVar('--db-negative', '#ff4d6d');
+  var INFO    = cssVar('--db-info',     '#5ea9ff');
+  var GRAY7   = cssVar('--db-gray-7',   '#9199a8');
+  var GRAY3   = cssVar('--db-gray-3',   '#272c38');
+  var GRAY6   = cssVar('--db-gray-6',   '#6b7280');
+  var PAGE_BG = cssVar('--db-bg',       '#0b0d12');
 
   var common = {
     chart: {
@@ -489,7 +496,7 @@
       series: DATA.plan.counts,
       labels: DATA.plan.labels,
       colors: DATA.plan.colors,
-      stroke: { show: true, width: 2, colors: ['#0b0d12'] },
+      stroke: { show: true, width: 2, colors: [PAGE_BG] },
       dataLabels: { enabled: false },
       legend: { position: 'right', labels: { colors: GRAY7 }, markers: { radius: 4 } },
       plotOptions: {

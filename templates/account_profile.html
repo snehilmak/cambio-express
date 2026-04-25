@@ -90,4 +90,47 @@
   </div>
 </div>
 
+{# Appearance — separate card because the theme POSTs to its own route
+   (account_theme), independent of the profile-save flow. Submitting
+   either radio toggles immediately on the next page paint. #}
+<div class="card" style="max-width:560px;margin-top:24px;">
+  <div class="card-header"><span class="card-title">Appearance</span></div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;margin-bottom:18px;font-size:13.5px;">
+      Choose how DineroBook looks. Dark is the default — light mode is
+      easier on the eyes in bright environments. Logged-out pages
+      always render dark.
+    </p>
+    <form method="POST" action="{{ url_for('account_theme') }}">
+      <input type="hidden" name="next" value="{{ url_for('account_profile') }}">
+      {% set _theme = user.theme_preference if user.theme_preference in ('dark','light') else 'dark' %}
+      <div class="theme-choice-grid">
+        <label class="theme-choice {% if _theme == 'dark' %}is-active{% endif %}">
+          <input type="radio" name="theme" value="dark"
+                 {% if _theme == 'dark' %}checked{% endif %}>
+          <span class="theme-swatch theme-swatch-dark" aria-hidden="true">
+            <span class="theme-swatch-bar"></span>
+            <span class="theme-swatch-card"></span>
+          </span>
+          <span class="theme-choice-label">Dark</span>
+          <span class="theme-choice-sub">Default</span>
+        </label>
+        <label class="theme-choice {% if _theme == 'light' %}is-active{% endif %}">
+          <input type="radio" name="theme" value="light"
+                 {% if _theme == 'light' %}checked{% endif %}>
+          <span class="theme-swatch theme-swatch-light" aria-hidden="true">
+            <span class="theme-swatch-bar"></span>
+            <span class="theme-swatch-card"></span>
+          </span>
+          <span class="theme-choice-label">Light</span>
+          <span class="theme-choice-sub">Easier on the eyes in daylight</span>
+        </label>
+      </div>
+      <div style="margin-top:18px;">
+        <button type="submit" class="btn btn-primary">Save appearance</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}

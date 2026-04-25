@@ -78,13 +78,13 @@
 /* ──────────────────────────────────────────────────────────────────────────
    Legacy-token aliases (dark-only)
    --------------------------------------------------------------------------
-   The app is dark-only now, so the legacy semantic names from app.css
-   (--sky, --blue, --mid, --gold, --gold2, --navy, etc.) get remapped here
-   to design-system equivalents. This lets templates that still reference
-   `var(--sky)` or `var(--gold)` pick up the dark+neon styling without
-   per-template edits. We use `[data-theme="dark"]` specificity so these
-   win over app.css's `:root` defaults but don't fight app.css's own dark
-   overrides (which use the same selector).
+   The legacy semantic names from app.css (--sky, --blue, --mid, --gold,
+   --gold2, --navy, etc.) get remapped here to design-system equivalents.
+   Templates that still reference `var(--sky)` or `var(--gold)` pick up
+   the dark+neon styling without per-template edits. We use
+   `[data-theme="dark"]` specificity so these win over app.css's `:root`
+   defaults but don't fight app.css's own dark overrides (which use the
+   same selector).
    ────────────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] {
   /* Action / accent → neon */
@@ -99,4 +99,74 @@
 
   /* Navy → near-black surface */
   --navy:  var(--db-bg);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Light-mode token overrides
+   --------------------------------------------------------------------------
+   Dark is the design-system default and the unconditional baseline above.
+   Light mode flips:
+
+     - The five surface layers from near-black to off-white / white.
+     - The cool gray scale, end-to-end inverted (gray-9 was light text on
+       dark; in light mode it becomes dark text on light).
+     - The neon accent from #3fff00 to a slightly darker green that still
+       reads "brand" but has WCAG-acceptable contrast on white. Pure
+       #3fff00 on white is unreadable as text (contrast ~1.4:1) — using
+       a deeper green for `--db-neon` itself means every `var(--db-neon)`
+       text-color callsite (positive amounts, links, active nav) becomes
+       readable without per-template edits.
+
+   Company colors and most state colors stay the same — they already had
+   adequate contrast on both surfaces. `--db-shadow-*` references the
+   gray scale so it auto-flips.
+   ────────────────────────────────────────────────────────────────────────── */
+[data-theme="light"] {
+  --db-bg:          #fafafa;
+  --db-bg-elevated: #ffffff;
+  --db-bg-raised:   #ffffff;
+  --db-bg-input:    #f5f5f7;
+  --db-bg-popover:  #ffffff;
+
+  --db-neon:        #16a34a;
+  --db-neon-bright: #15803d;
+  --db-neon-dim:    #166534;
+  --db-neon-ink:    #ffffff;
+  --db-neon-glow-8:  rgba(22,163,74,0.08);
+  --db-neon-glow-15: rgba(22,163,74,0.15);
+  --db-neon-glow-25: rgba(22,163,74,0.22);
+  --db-neon-glow-40: rgba(22,163,74,0.35);
+
+  --db-gray-0:  #ffffff;
+  --db-gray-1:  #f5f5f7;
+  --db-gray-2:  #eaeaee;
+  --db-gray-3:  #d8dadf;
+  --db-gray-4:  #b3b7c1;
+  --db-gray-5:  #8a8f9c;
+  --db-gray-6:  #6b7280;
+  --db-gray-7:  #4a5162;
+  --db-gray-8:  #272c38;
+  --db-gray-9:  #11141b;
+  --db-gray-10: #0b0d12;
+
+  --db-positive: #16a34a;
+
+  --db-shadow-card:      0 0 0 1px var(--db-gray-3);
+  --db-shadow-card-hvr:  0 0 0 1px var(--db-gray-4), 0 4px 14px rgba(15,18,32,0.08);
+  --db-shadow-neon:      0 0 0 1px var(--db-neon), 0 0 16px var(--db-neon-glow-25);
+  --db-shadow-dropdown:  0 12px 32px rgba(15,18,32,0.12), 0 0 0 1px var(--db-gray-3);
+}
+
+[data-theme="light"] {
+  /* Legacy aliases re-pointed for light. The legacy app.css `:root` has
+     light-mode values (--white, --gray*, --navy as #1a1a2e) that mostly
+     suit a light theme already — we just override --sky/--blue/--mid
+     here so the neon-tinted accent surfaces use the darker green
+     instead of the bright #3fff00. */
+  --sky:   var(--db-neon);
+  --blue:  var(--db-neon);
+  --mid:   var(--db-neon-bright);
+  --gold:  var(--db-neon);
+  --gold2: var(--db-neon-bright);
+  --navy:  #1a1a2e;
 }

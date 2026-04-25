@@ -1,0 +1,243 @@
+{% extends "base_owner.html" %}
+{% block title %}Locations — DineroBook Owner{% endblock %}
+{% block page_title %}Locations{% endblock %}
+{% block head %}
+<style>
+  /* Locations grid + redesigned cards. Consistent typography across
+     every number (mono, tabular-nums) so the card no longer mixes
+     three different weights/families. Per-company chips replace the
+     old "$5622 volume" label-sub-with-mismatched-font pattern. */
+  .ol-toolbar {
+    display: flex; gap: 10px; align-items: center;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .ol-search {
+    position: relative; flex: 1 1 280px; min-width: 240px;
+  }
+  .ol-search input {
+    width: 100%; padding-left: 38px;
+    padding: 11px 14px 11px 38px;
+  }
+  .ol-search .ol-search-icon {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); color: var(--db-gray-6);
+    pointer-events: none;
+  }
+  .ol-period {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .ol-period .label {
+    font-family: var(--db-font-mono); font-size: 10.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; margin-right: 4px;
+  }
+  .ol-meta {
+    margin-bottom: 14px; font-size: 12.5px; color: var(--db-gray-7);
+    font-family: var(--db-font-mono);
+  }
+
+  .ol-grid {
+    display: grid; gap: 16px; margin-bottom: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+  .ol-card {
+    display: flex; flex-direction: column;
+    padding: 18px 20px;
+  }
+  .ol-card-head {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .ol-card-title {
+    display: flex; align-items: center; gap: 8px;
+    flex: 1; min-width: 0; font-size: 15px; font-weight: 600;
+  }
+  .ol-card-title a {
+    color: var(--db-gray-9); text-decoration: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ol-card-title a:hover { color: var(--db-neon); }
+  .ol-unlink {
+    color: var(--db-negative); border-color: rgba(255,77,109,0.4);
+  }
+  .ol-unlink:hover {
+    background: rgba(255,77,109,0.10); color: var(--db-negative);
+  }
+
+  .ol-stats {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 12px; margin-bottom: 14px;
+  }
+  @media (max-width: 480px) {
+    .ol-stats { grid-template-columns: repeat(2, 1fr); }
+  }
+  .ol-stat-label {
+    font-family: var(--db-font-mono); font-size: 9.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; margin-bottom: 3px;
+  }
+  .ol-stat-value {
+    font-family: var(--db-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 17px; font-weight: 600; color: var(--db-gray-9);
+    white-space: nowrap;
+  }
+  .ol-stat-value.is-pos { color: var(--db-neon); }
+  .ol-stat-value.is-neg { color: var(--db-negative); }
+
+  .ol-chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px 0; border-top: 1px solid var(--db-gray-2);
+    margin-top: auto;
+  }
+  .ol-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 999px;
+    background: var(--db-bg-input);
+    border: 1px solid var(--db-gray-3);
+    font-size: 11.5px;
+  }
+  .ol-chip-name {
+    font-weight: 600; letter-spacing: 0.2px;
+  }
+  .ol-chip.co-intermex .ol-chip-name { color: var(--db-co-intermex); }
+  .ol-chip.co-maxi     .ol-chip-name { color: var(--db-co-maxi); }
+  .ol-chip.co-barri    .ol-chip-name { color: var(--db-co-barri); }
+  .ol-chip-num {
+    font-family: var(--db-font-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--db-gray-8);
+  }
+
+  .ol-card-foot {
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--db-gray-2);
+    display: flex; justify-content: flex-end;
+  }
+
+  .code-input {
+    text-transform: uppercase;
+    font-family: var(--db-font-mono);
+    letter-spacing: 2px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="ol-toolbar">
+  <label class="ol-search">
+    <span class="ol-search-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    </span>
+    <input type="search" id="olSearch" placeholder="Search locations by name…"
+           value="{{ query }}" autocomplete="off">
+  </label>
+
+  <div class="ol-period">
+    <span class="label">Period</span>
+    <a href="{{ url_for('owner_locations', period='today', q=query) }}"
+       class="btn btn-sm {% if period == 'today' %}btn-primary{% else %}btn-outline{% endif %}">Today</a>
+    <a href="{{ url_for('owner_locations', period='month', q=query) }}"
+       class="btn btn-sm {% if period == 'month' %}btn-primary{% else %}btn-outline{% endif %}">Month</a>
+    <a href="{{ url_for('owner_locations', period='year', q=query) }}"
+       class="btn btn-sm {% if period == 'year' %}btn-primary{% else %}btn-outline{% endif %}">Year</a>
+  </div>
+</div>
+
+<div class="ol-meta" id="olMeta">
+  {% if query %}
+    Showing {{ rows|length }} of {{ total }} stores · matching "{{ query }}"
+  {% else %}
+    {{ total }} location{{ '' if total == 1 else 's' }}
+  {% endif %}
+</div>
+
+{# Live-search target. The partial inside is replaced via fetch on
+   debounced input changes — same contract as /transfers. #}
+<div id="olResult">
+  {% include "_owner_locations_table.html" %}
+</div>
+
+<div class="card" style="max-width:480px;margin-top:24px;">
+  <div class="card-header"><span class="card-title">Connect a store</span></div>
+  <div class="card-body">
+    <p class="text-sm text-muted mb-2">
+      Enter the 8-character invite code from your store manager.
+    </p>
+    <form method="POST" action="{{ url_for('owner_link_store') }}"
+          style="display:flex;gap:10px;align-items:flex-end;">
+      <div class="field" style="flex:1;margin-bottom:0;">
+        <label>Invite code</label>
+        <input type="text" name="code" class="code-input"
+               placeholder="e.g. AB12CD34" maxlength="8" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Connect</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  // Live-search wiring — debounced 300ms, 2-char minimum (or empty),
+  // AbortController-cancelled, URL kept in sync via history.replaceState
+  // so the result is shareable. Mirrors templates/transfers.html.
+  var input = document.getElementById('olSearch');
+  var result = document.getElementById('olResult');
+  var meta = document.getElementById('olMeta');
+  if (!input || !result) return;
+
+  var DEBOUNCE_MS = 300;
+  var timer = null;
+  var ctrl  = null;
+
+  function currentPeriod() {
+    var btn = document.querySelector('.ol-period .btn-primary');
+    if (!btn) return 'month';
+    var href = btn.getAttribute('href') || '';
+    var m = href.match(/period=([a-z]+)/);
+    return (m && m[1]) || 'month';
+  }
+
+  function syncUrl(q) {
+    var url = new URL(window.location.href);
+    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+    history.replaceState(null, '', url);
+  }
+
+  function fetchAndSwap(q) {
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    var period = currentPeriod();
+    var qs = new URLSearchParams({ partial: '1', period: period, q: q });
+    fetch('{{ url_for("owner_locations") }}?' + qs.toString(), {
+      headers: { 'X-Requested-With': 'fetch' },
+      signal: ctrl.signal
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        result.innerHTML = data.html || '';
+        if (meta) {
+          if (q) {
+            meta.textContent = 'Showing ' + data.matched + ' of ' + data.total +
+                               ' stores · matching "' + q + '"';
+          } else {
+            meta.textContent = data.total + ' location' + (data.total === 1 ? '' : 's');
+          }
+        }
+      })
+      .catch(function (e) { if (e.name !== 'AbortError') console.error(e); });
+  }
+
+  input.addEventListener('input', function () {
+    var q = input.value.trim();
+    if (timer) clearTimeout(timer);
+    if (q.length === 1) return;  // 2-char minimum, like /transfers
+    timer = setTimeout(function () {
+      syncUrl(q);
+      fetchAndSwap(q);
+    }, DEBOUNCE_MS);
+  });
+})();
+</script>
+{% endblock %}
