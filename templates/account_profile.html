@@ -1,4 +1,9 @@
-{% extends "base.html" %}
+{# Owners run their own shell (base_owner.html) — picking the right
+   base here means a single account_profile.html serves every role
+   without duplicating chrome. Same trick is used in account_security
+   and account_notifications. The two bases share an identical block
+   contract (title, head, page_title, content, scripts). #}
+{% extends "base_owner.html" if user.role == "owner" else "base.html" %}
 {% block title %}Profile — DineroBook{% endblock %}
 {% block page_title %}Profile{% endblock %}
 {% block content %}

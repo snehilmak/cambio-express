@@ -58,12 +58,19 @@ def _extends_app_chrome(html: str) -> bool:
     """True when the template extends base.html or base_owner.html — those
     are the only templates that inherit the sidebar + topbar + theme
     toggle and therefore must be dark-mode-safe. Logged-out auth pages,
-    the public landing, and the error page are exempt."""
+    the public landing, and the error page are exempt.
+
+    Also matches the conditional-extends pattern that account_* and
+    error.html now use to pick the right shell per role
+    (`{% extends "base_owner.html" if user.role == "owner" else "base.html" %}`).
+    """
+    if "{% extends" not in html:
+        return False
     return (
-        "{% extends \"base.html\" %}" in html
-        or "{% extends 'base.html' %}" in html
-        or '{% extends "base_owner.html" %}' in html
-        or "{% extends 'base_owner.html' %}" in html
+        '"base.html"' in html
+        or "'base.html'" in html
+        or '"base_owner.html"' in html
+        or "'base_owner.html'" in html
     )
 
 

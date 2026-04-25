@@ -1,4 +1,8 @@
-{% extends "base.html" %}
+{# Picks the right shell so an owner hitting an error doesn't see the
+   admin sidebar (and so the "Back to Dashboard" link routes to their
+   own dashboard, not the admin one — the admin /dashboard 500s for
+   owners since they have no current_store). #}
+{% extends "base_owner.html" if user and user.role == "owner" else "base.html" %}
 {% block title %}{{ code }} Error{% endblock %}
 {% block page_title %}Error {{ code }}{% endblock %}
 {% block content %}
@@ -16,6 +20,10 @@
     {{ code }} — {% if code == 404 %}Page Not Found{% elif code == 500 %}Server Error{% else %}Access Denied{% endif %}
   </div>
   <div style="color:var(--db-gray-7);font-size:15px;margin-bottom:32px;">{{ message }}</div>
-  <a href="{{ url_for('dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
+  {% if user and user.role == "owner" %}
+    <a href="{{ url_for('owner_dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
+  {% else %}
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
+  {% endif %}
 </div>
 {% endblock %}

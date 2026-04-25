@@ -3422,6 +3422,16 @@ def dashboard():
         return render_template("dashboard_superadmin.html",
                                user=user, today=today,
                                **_superadmin_dashboard_context())
+    # Owners don't have a `current_store` — they live across multiple
+    # stores under their umbrella. /dashboard previously crashed on
+    # `store.id` for owner sessions; route them to their own dashboard.
+    if user.role == "owner":
+        return redirect(url_for("owner_dashboard"))
+    if store is None:
+        # Defensive: any other role without a store context (shouldn't
+        # happen for admin/employee under normal login) gets bounced
+        # back to login rather than 500'ing on store.id below.
+        return redirect(url_for("login"))
     sid=store.id
     if user.role=="admin":
         total_transfers=Transfer.query.filter_by(store_id=sid).count()
