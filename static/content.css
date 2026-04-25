@@ -237,6 +237,14 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--db-neon);
   box-shadow: 0 0 0 3px var(--db-neon-glow-15);
 }
+/* Disabled fields read-only-ish: dim text + a slightly inset surface
+   so they read as "you can't edit this" without going to a hard-light
+   color that would break dark mode (the bug on /admin/users edit). */
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--db-bg);
+  color: var(--db-gray-6);
+  cursor: not-allowed;
+}
 textarea { resize: vertical; min-height: 80px; }
 select {
   appearance: none;
@@ -368,6 +376,24 @@ select {
   font-size: 13px;
   line-height: 1.5;
   color: var(--db-gray-7);
+}
+
+/* ── Informational callout card.
+   For "this is a key, not an action" panels (e.g. the Access Levels
+   legend below the user-management table). Uses the standard card
+   surface so it flips with the theme — the previous template
+   hard-coded `background: var(--paper)` (#f3ede3, light-only) which
+   left this box visually broken in dark mode. The neon left accent
+   conveys "callout" without competing with the card above. */
+.card.info-callout {
+  border-left: 3px solid var(--db-neon);
+}
+.info-callout .info-callout-title {
+  font-family: var(--db-font-body);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--db-gray-9);
+  margin-bottom: 6px;
 }
 
 /* ── Theme chooser on /account/profile.

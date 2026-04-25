@@ -43,10 +43,18 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
 # Other fixed tokens (--gray4 for muted labels, --sky/--blue/--gold for
 # accents, --white / --gray1 backgrounds on brand heroes) are dimmer
 # contrast in dark mode but not invisible, and some of them are
-# intentional brand surfaces. We do NOT flag those here; if they turn
-# out to be a problem we widen the blocklist or move those surfaces
-# into named CSS classes with dark-mode overrides.
+# intentional brand surfaces. We do NOT flag those here if they're for
+# `color:`; if they turn out to be a problem we widen the blocklist or
+# move those surfaces into named CSS classes with dark-mode overrides.
 _BANNED_COLOR_TOKENS = ("--dark", "--navy")
+
+# The "always-light surface" tokens — using these for an inline
+# `background:` produces a bright cream/white card in dark mode (the
+# Access Levels callout regression that triggered this guard). The
+# legacy palette intentionally keeps these tokens at light values; for
+# adaptive surfaces use --surface / --surface-2 (semantic) or
+# --db-bg-elevated / --db-bg-input (design-system).
+_BANNED_BG_TOKENS = ("--paper", "--cream", "--white", "--gray1", "--gray2")
 
 # style="…" attribute matcher. Non-greedy to avoid eating across tags.
 _STYLE_RE = re.compile(r'''style=["'](.*?)["']''', re.DOTALL)
@@ -86,6 +94,22 @@ def _violations(html: str):
                     yield prop, value.strip(), tok
 
 
+def _bg_violations(html: str):
+    """Yield (property, value, token) tuples for every inline
+    `background: …` (or `background-color: …`) declaration that uses
+    one of the always-light surface tokens. These render as bright
+    cream/white panels in dark mode."""
+    for style in _STYLE_RE.findall(html):
+        for prop, value in _DECL_RE.findall(style):
+            if prop not in ("background", "background-color"):
+                continue
+            for tok in _BANNED_BG_TOKENS:
+                # Match `var(--paper)` etc. — guard against substring
+                # collisions like --gray10 containing --gray1.
+                if "var(" + tok + ")" in value:
+                    yield prop, value.strip(), tok
+
+
 @pytest.mark.parametrize("template",
     sorted(p for p in TEMPLATES_DIR.glob("*.html")),
     ids=lambda p: p.name,
@@ -111,5 +135,39 @@ def test_no_invisible_color_tokens_inline(template):
         f"{template.name} has inline `color:` declarations using "
         f"dark-mode-invisible tokens. Use var(--text) instead. "
         f"Violations: "
+        + ", ".join(f"{prop}: {val} ({tok})" for prop, val, tok in violations)
+    )
+
+
+@pytest.mark.parametrize("template",
+    sorted(p for p in TEMPLATES_DIR.glob("*.html")),
+    ids=lambda p: p.name,
+)
+def test_no_light_only_background_tokens_inline(template):
+    """Templates extending the app chrome must not use one of the
+    always-light surface tokens (--paper / --cream / --white / --gray1 /
+    --gray2) for an inline `background` — those produce a bright panel
+    in dark mode (the Access Levels callout regression on
+    /admin/users).
+
+    If this test fails on a template you just edited:
+      - Drop the inline `background: var(--paper)` and let the card use
+        its default surface (handled by content.css's `.card` rule,
+        which flips with the theme).
+      - If you want a callout/aside look, use the `.info-callout` class
+        instead — neon left accent over the standard adaptive surface.
+      - For genuinely-not-flipping brand surfaces (a navy hero, a gold
+        accent band), move the styling into a named CSS class in
+        app.css with documented intent.
+    """
+    html = template.read_text(encoding="utf-8")
+    if not _extends_app_chrome(html):
+        pytest.skip("template does not extend base.html / base_owner.html")
+    violations = list(_bg_violations(html))
+    assert not violations, (
+        f"{template.name} has inline `background:` declarations using "
+        f"always-light tokens (broken in dark mode). Use --surface / "
+        f"--surface-2 / --db-bg-elevated, or the `.info-callout` "
+        f"class. Violations: "
         + ", ".join(f"{prop}: {val} ({tok})" for prop, val, tok in violations)
     )

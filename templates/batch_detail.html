@@ -56,10 +56,10 @@
         <div class="text-sm text-muted mt-1">Check for missing or mismatched transfers</div>
       </div>
       {% endif %}
-      <div style="margin-top:12px;padding:14px;background:var(--gray1);border-radius:8px;">
+      <div style="margin-top:12px;padding:14px;background:var(--surface-2);border-radius:8px;">
         <div class="flex justify-between mb-1"><span class="text-sm">Bank Debit</span><span class="mono">${{ '{:,.2f}'.format(batch.ach_amount) }}</span></div>
         <div class="flex justify-between mb-1"><span class="text-sm">Logged Transfers</span><span class="mono">${{ '{:,.2f}'.format(batch.transfers_total) }}</span></div>
-        <div class="flex justify-between" style="border-top:1px solid var(--gray2);padding-top:8px;margin-top:4px;">
+        <div class="flex justify-between" style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
           <span class="text-sm fw-600">Difference</span>
           <span class="mono {% if var == 0 %}var-ok{% else %}var-bad{% endif %}">${{ '{:,.2f}'.format(var) }}</span>
         </div>
