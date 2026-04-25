@@ -3904,6 +3904,22 @@ _TRANSFER_AUDIT_FIELDS = [
 SERVICE_TYPES = ("Money Transfer", "Bill Payment", "Top Up", "Recharge")
 _TAX_EXEMPT_SERVICES = frozenset(SERVICE_TYPES) - {"Money Transfer"}
 
+# Recipient countries that don't carry the federal-tax remittance.
+# The tax is the percentage the IRS collects on money sent ABROAD —
+# domestic transfers (within the US) skip it entirely. Same enforcement
+# pattern as _TAX_EXEMPT_SERVICES: server zeros tax when the country
+# matches; the JS toggles the field's visibility for live UX.
+_DOMESTIC_COUNTRIES = frozenset({"United States"})
+
+# Countries shown in the recipient-country dropdown on the transfer
+# form. Single source so server validation, template, and tests agree.
+# 'United States' is included so admins can log a domestic transfer
+# (no federal tax). 'Other' stays as the catch-all for anything else.
+TRANSFER_COUNTRIES = (
+    "United States", "Mexico", "Guatemala", "El Salvador", "Honduras",
+    "Dominican Republic", "Colombia", "Ecuador", "Peru", "Other",
+)
+
 def _normalize_service_type(raw):
     """Coerce the form input to a known service type. Anything we don't
     recognize falls back to Money Transfer (the historical default), so a
@@ -3911,12 +3927,16 @@ def _normalize_service_type(raw):
     val = (raw or "").strip()
     return val if val in SERVICE_TYPES else "Money Transfer"
 
-def _federal_tax_for(send_amount, service_type, store):
+def _federal_tax_for(send_amount, service_type, store, country=None):
     """The single source of truth for transfer tax. Bill Payment / Top Up /
     Recharge skip the tax entirely; Money Transfer applies the store's
-    configured rate. Both new_transfer and edit_transfer call this so the
+    configured rate UNLESS the recipient country is domestic (US), in
+    which case the tax also skips (it's only owed on money leaving the
+    country). Both new_transfer and edit_transfer call this so the
     rule can't drift between create and update."""
     if service_type in _TAX_EXEMPT_SERVICES:
+        return 0.0
+    if country and country.strip() in _DOMESTIC_COUNTRIES:
         return 0.0
     rate = (store.federal_tax_rate if store else None) or 0
     return round((send_amount or 0) * rate, 2)
@@ -3977,6 +3997,7 @@ def new_transfer():
         )
         send_amount_v = float(request.form.get("send_amount") or 0)
         service_type_v = _normalize_service_type(request.form.get("service_type"))
+        country_v = (request.form.get("country","") or "").strip()
         t=Transfer(store_id=sid,created_by=user.id,customer_id=cust.id,
             send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
             company=request.form["company"],
@@ -3985,12 +4006,14 @@ def new_transfer():
             send_amount=send_amount_v,
             fee=float(request.form.get("fee") or 0),
             # Federal tax is server-computed via _federal_tax_for — the rule
-            # (Money Transfer = taxed, others = exempt) lives in one place
-            # so the form, edit, and recompute paths can't drift apart.
-            federal_tax=_federal_tax_for(send_amount_v, service_type_v, current_store()),
+            # (Money Transfer = taxed, but domestic / non-MT exempt) lives
+            # in one place so the form, edit, and recompute paths can't
+            # drift apart.
+            federal_tax=_federal_tax_for(send_amount_v, service_type_v,
+                                         current_store(), country=country_v),
             commission=float(request.form.get("commission") or 0),
             recipient_name=request.form.get("recipient_name",""),
-            country=request.form.get("country",""),
+            country=country_v,
             recipient_phone=request.form.get("recipient_phone",""),
             sender_phone=sender_phone,
             sender_phone_country=sender_phone_cc,
@@ -4014,6 +4037,8 @@ def new_transfer():
         roster=_active_roster(sid), audit_entries=[],
         service_types=SERVICE_TYPES,
         tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
+        transfer_countries=TRANSFER_COUNTRIES,
+        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
         federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
@@ -4041,12 +4066,16 @@ def edit_transfer(tid):
         t.service_type=_normalize_service_type(request.form.get("service_type"))
         t.send_amount=float(request.form.get("send_amount") or 0)
         t.fee=float(request.form.get("fee") or 0)
-        # Always recompute federal_tax server-side via _federal_tax_for so
-        # changing the send amount OR the service type both flip the tax.
-        t.federal_tax=_federal_tax_for(t.send_amount, t.service_type, current_store())
         t.commission=float(request.form.get("commission") or 0)
         t.recipient_name=request.form.get("recipient_name","")
-        t.country=request.form.get("country","")
+        # Set country FIRST so the federal_tax recompute below sees the
+        # newly-chosen country (domestic transfers skip tax).
+        t.country=(request.form.get("country","") or "").strip()
+        # Always recompute federal_tax server-side via _federal_tax_for so
+        # changing the send amount OR the service type OR the country
+        # all flip the tax.
+        t.federal_tax=_federal_tax_for(t.send_amount, t.service_type,
+                                       current_store(), country=t.country)
         t.recipient_phone=request.form.get("recipient_phone","")
         t.sender_phone=request.form.get("sender_phone","").strip()
         t.sender_phone_country=(request.form.get("sender_phone_country") or "+1").strip()
@@ -4101,6 +4130,8 @@ def edit_transfer(tid):
         roster=roster, audit_entries=audit_entries,
         service_types=SERVICE_TYPES,
         tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
+        transfer_countries=TRANSFER_COUNTRIES,
+        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
         federal_tax_rate=(current_store().federal_tax_rate or 0))
 
 
