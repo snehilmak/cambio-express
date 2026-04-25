@@ -161,7 +161,11 @@
       {{ pl_field('texas_workforce',     'Texas Workforce') }}
       {{ pl_field('other_taxes',         'Other Taxes') }}
       {{ pl_field('accounting_charges',  'Accounting Charges') }}
-      {{ pl_field('return_check_gl',     'Return Check (G/L)') }}
+      {# Locked: net G/L from the Books → Return Checks workflow
+         (Σ recoveries − Σ losses+fraud, by status_changed_on this
+         month). Edit this number by marking return checks recovered
+         or as a loss / fraud, not by typing it. #}
+      {{ pl_field('return_check_gl',     'Return Check (G/L)',         'return_check_gl', locked=True) }}
       {{ pl_field('other_expense_1',     'Other Expense') }}
       {{ pl_field('other_expense_2',     'Other Expense') }}
       {{ pl_field('other_expense_3',     'Other Expense') }}

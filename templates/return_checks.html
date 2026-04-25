@@ -1,0 +1,548 @@
+{% extends "base.html" %}
+{% block title %}Return Checks — DineroBook{% endblock %}
+{% block page_title %}Return Checks{% endblock %}
+{% block head %}
+<style>
+  /* Return-check list: KPI strip + add form + filter bar + live-search
+     table. Same visual rhythm as /transfers and /owner/locations
+     (300ms debounce, 2-char minimum, history.replaceState URL sync). */
+  .rc-kpi-grid {
+    display: grid; gap: 14px; margin-bottom: 22px;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .rc-add-card { margin-bottom: 22px; }
+  .rc-add-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: end;
+  }
+  .rc-add-grid .field { margin-bottom: 0; }
+  .rc-add-grid label {
+    font-size: 10.5px; letter-spacing: 1.2px;
+  }
+  .rc-add-grid .rc-add-submit { align-self: end; }
+
+  .rc-toolbar {
+    display: flex; gap: 10px; align-items: center;
+    margin-bottom: 18px; flex-wrap: wrap;
+  }
+  .rc-search {
+    position: relative; flex: 1 1 280px; min-width: 220px;
+  }
+  .rc-search input {
+    width: 100%;
+    padding: 11px 14px 11px 38px;
+  }
+  .rc-search .rc-search-icon {
+    position: absolute; left: 12px; top: 50%;
+    transform: translateY(-50%); color: var(--db-gray-6);
+    pointer-events: none;
+  }
+  .rc-status-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .rc-status-pills .label {
+    font-family: var(--db-font-mono); font-size: 10.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; margin-right: 4px;
+    align-self: center;
+  }
+
+  .rc-meta {
+    margin-bottom: 10px; font-size: 12.5px;
+    color: var(--db-gray-7); font-family: var(--db-font-mono);
+  }
+
+  .rc-table-wrap { overflow-x: auto; }
+  .rc-table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  .rc-table th {
+    padding: 10px 12px; background: var(--surface-2);
+    font-size: 10px; font-family: var(--db-font-mono);
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px; text-align: left;
+    border-bottom: 1px solid var(--db-gray-3);
+  }
+  .rc-table th.num, .rc-table td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+  }
+  .rc-table td {
+    padding: 12px; border-bottom: 1px solid var(--db-gray-2);
+    color: var(--db-gray-9); vertical-align: top;
+  }
+  .rc-table tbody tr:last-child td { border-bottom: none; }
+  .rc-table .mono { font-family: var(--db-font-mono); }
+  .rc-row.rc-status-recovered td.rc-bounced { color: var(--db-gray-7); }
+  .rc-row.rc-status-loss td.rc-bounced,
+  .rc-row.rc-status-fraud td.rc-bounced { color: var(--db-gray-7); }
+  .rc-row .rc-notes-preview {
+    font-size: 11.5px; color: var(--db-gray-6); margin-top: 4px;
+  }
+  .rc-row .rc-status-meta {
+    font-size: 11.5px; color: var(--db-gray-6); margin-top: 4px;
+  }
+  .rc-actions { white-space: nowrap; }
+  .rc-actions form { display: inline; }
+  .rc-actions .btn { margin-left: 4px; padding: 5px 10px; font-size: 12px; }
+  .rc-actions .rc-act-delete {
+    color: var(--db-negative); border-color: rgba(255,77,109,0.4);
+    padding: 5px 10px;
+  }
+  .rc-actions-th { width: 0; }
+  .rc-progress-th { width: 130px; }
+
+  /* Per-row recovery progress bar — neon fill on a muted track.
+     Caps at 100% even if recovered_total exceeds amount (it can't,
+     but defense in depth). */
+  .rc-progress {
+    height: 6px; border-radius: 3px;
+    background: var(--db-bg-input);
+    overflow: hidden;
+  }
+  .rc-progress-bar {
+    height: 100%; background: var(--db-neon);
+    transition: width 0.2s ease;
+  }
+  .rc-progress-meta {
+    font-size: 10.5px; color: var(--db-gray-7); margin-top: 4px;
+    letter-spacing: 0.4px;
+  }
+  .amt-pos { color: var(--db-neon); }
+
+  /* Inline payment-history sub-row, toggled by the History button on
+     the parent row. Sits under its parent in the same <tbody> so
+     it scrolls with the row. */
+  .rc-payments-panel {
+    background: var(--db-bg-input);
+    border: 1px solid var(--db-gray-3);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 4px 0 10px;
+  }
+  .rc-payments-title {
+    font-family: var(--db-font-mono);
+    font-size: 10.5px; color: var(--db-gray-6);
+    text-transform: uppercase; letter-spacing: 1.2px;
+    margin-bottom: 10px;
+  }
+  .rc-payments-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .rc-payments-table th {
+    text-align: left; padding: 6px 10px;
+    color: var(--db-gray-6); font-weight: 500;
+    font-family: var(--db-font-mono); font-size: 10px;
+    text-transform: uppercase; letter-spacing: 1.2px;
+    border-bottom: 1px solid var(--db-gray-3);
+  }
+  .rc-payments-table th.num,
+  .rc-payments-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .rc-payments-table td {
+    padding: 8px 10px; color: var(--db-gray-9);
+    border-bottom: 1px solid var(--db-gray-2);
+  }
+  .rc-payments-table tr:last-child td { border-bottom: none; }
+
+  /* Aging strip — small horizontal bars under the KPI grid showing
+     how stale the pending balance is. Useful for the admin to spot
+     receivables they should chase or write off. */
+  .rc-aging {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 10px; margin-bottom: 22px;
+  }
+  .rc-aging-tile {
+    background: var(--db-bg-elevated);
+    border: 1px solid var(--db-gray-3);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .rc-aging-label {
+    font-family: var(--db-font-mono); font-size: 9.5px;
+    color: var(--db-gray-6); text-transform: uppercase;
+    letter-spacing: 1.2px;
+  }
+  .rc-aging-amount {
+    font-family: var(--db-font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 16px; font-weight: 600; margin-top: 4px;
+    color: var(--db-gray-9);
+  }
+  .rc-aging-count {
+    font-size: 11.5px; color: var(--db-gray-6); margin-top: 2px;
+  }
+  .rc-aging-tile.is-stale { border-color: rgba(255,77,109,0.45); }
+  .rc-aging-tile.is-stale .rc-aging-amount { color: var(--db-negative); }
+
+  /* Modal scaffolding for Recover / Loss / Fraud confirmations.
+     Mirrors the existing .modal-* convention so it doesn't fight
+     anything in app.css. */
+  .rc-modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: none; align-items: flex-start; justify-content: center;
+    z-index: 200; padding: 60px 20px;
+  }
+  .rc-modal-back.open { display: flex; }
+  .rc-modal {
+    background: var(--db-bg-elevated);
+    border: 1px solid var(--db-gray-3);
+    border-radius: 14px;
+    width: 100%; max-width: 440px;
+    padding: 22px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+  .rc-modal h3 {
+    font-family: var(--db-font-display);
+    font-size: 17px; color: var(--db-gray-9);
+    margin: 0 0 6px;
+  }
+  .rc-modal .rc-modal-sub {
+    font-size: 12.5px; color: var(--db-gray-7); margin-bottom: 14px;
+  }
+  .rc-modal .rc-modal-actions {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px;
+  }
+</style>
+{% endblock %}
+{% block content %}
+
+<p class="text-sm text-muted" style="margin-bottom:18px;">
+  Log every bounced check here. Customers who pay back in installments
+  get one row with multiple <strong>+ Payment</strong> entries —
+  each payment posts to the daily book on the day it was received and
+  contributes to that month's <strong>Return Check (G/L)</strong> on
+  the P&amp;L. Mark <strong>Loss</strong> or <strong>Fraud</strong>
+  when you give up on a balance; the unpaid remainder hits the P&amp;L
+  for the month you marked it.
+</p>
+
+<div class="rc-kpi-grid">
+  <div class="stat-card">
+    <div class="stat-label">Pending balance</div>
+    <div class="stat-value" id="rcPendingValue">${{ '{:,.2f}'.format(mtd.pending) }}</div>
+    <div class="stat-sub"><span id="rcPendingCount">{{ mtd.pending_count }}</span> open</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Recoveries · MTD</div>
+    <div class="stat-value amount-pos">${{ '{:,.2f}'.format(mtd.recoveries) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Losses · MTD</div>
+    <div class="stat-value amount-neg">${{ '{:,.2f}'.format(mtd.losses) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Fraud · MTD</div>
+    <div class="stat-value amount-neg">${{ '{:,.2f}'.format(mtd.fraud) }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Net G/L · MTD</div>
+    <div class="stat-value {% if mtd.net_gl < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+      ${{ '{:,.2f}'.format(mtd.net_gl) }}
+    </div>
+    <div class="stat-sub">positive = recoveries beat losses</div>
+  </div>
+</div>
+
+<div class="rc-aging">
+  {% for b in aging %}
+  <div class="rc-aging-tile {% if loop.index0 == 3 and b.amount > 0 %}is-stale{% endif %}">
+    <div class="rc-aging-label">{{ b.label }}</div>
+    <div class="rc-aging-amount">${{ '{:,.0f}'.format(b.amount) }}</div>
+    <div class="rc-aging-count">{{ b.count }} pending</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card rc-add-card">
+  <div class="card-header"><span class="card-title">Log a return check</span></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('return_check_new') }}">
+      <div class="rc-add-grid">
+        <div class="field">
+          <label>Bounced on *</label>
+          <input type="date" name="bounced_on" value="{{ today.isoformat() }}" required>
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label>Customer *</label>
+          <input type="text" name="customer_name" maxlength="120" required
+                 placeholder="Name on the check">
+        </div>
+        <div class="field">
+          <label>Check #</label>
+          <input type="text" name="check_number" maxlength="40">
+        </div>
+        <div class="field">
+          <label>Payer bank</label>
+          <input type="text" name="payer_bank" maxlength="120">
+        </div>
+        <div class="field">
+          <label>Amount *</label>
+          <input type="number" name="amount" step="0.01" min="0.01" required>
+        </div>
+        <div class="field" style="grid-column:span 2;">
+          <label>Notes</label>
+          <input type="text" name="notes" placeholder="Optional context">
+        </div>
+        <div class="rc-add-submit">
+          <button type="submit" class="btn btn-primary">＋ Log return check</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="rc-toolbar">
+  <label class="rc-search">
+    <span class="rc-search-icon" aria-hidden="true">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    </span>
+    <input type="search" id="rcSearch" placeholder="Search customer, check #, or bank…"
+           value="{{ query }}" autocomplete="off">
+  </label>
+  <div class="rc-status-pills">
+    <span class="label">Status</span>
+    {% for key, lbl in [('pending','Pending'),('recovered','Recovered'),
+                       ('loss','Loss'),('fraud','Fraud'),
+                       ('closed','Closed'),('all','All')] %}
+    <a href="{{ url_for('return_checks', status=key, q=query) }}"
+       class="btn btn-sm {% if status == key %}btn-primary{% else %}btn-outline{% endif %}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="rc-meta" id="rcMeta">
+  Showing {{ rows|length }} {{ 'row' if rows|length == 1 else 'rows' }} ·
+  filter <strong>{{ status }}</strong>
+  {% if query %} · matching "{{ query }}"{% endif %}
+</div>
+
+<div id="rcResult">
+  {% include "_return_checks_table.html" %}
+</div>
+
+{# Add-payment modal — supports installments. Auto-flips the parent
+   to status='recovered' on the server when the running total reaches
+   the original amount. #}
+<div class="rc-modal-back" id="rcPaymentModal" role="dialog" aria-modal="true">
+  <div class="rc-modal">
+    <h3>Add payment</h3>
+    <div class="rc-modal-sub" id="rcPaymentWho">—</div>
+    <form method="POST" id="rcPaymentForm">
+      <div class="field">
+        <label>Payment amount</label>
+        <input type="number" name="amount" step="0.01" min="0.01" required id="rcPaymentAmount">
+        <div class="text-sm text-muted" style="margin-top:4px;" id="rcPaymentHint">
+          Up to the remaining balance. Split across multiple payments if you got partial.
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Method</label>
+        <select name="payment_method">
+          <option value="cash">Cash</option>
+          <option value="check">Check</option>
+          <option value="zelle">Zelle</option>
+          <option value="wire">Wire</option>
+          <option value="money_order">Money order</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Paid on</label>
+        <input type="date" name="paid_on" value="{{ today.isoformat() }}">
+        <div class="text-sm text-muted" style="margin-top:4px;">
+          The month containing this date is the one credited on the P&amp;L
+          and on the daily book.
+        </div>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>Note <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <input type="text" name="note" maxlength="200" placeholder="Receipt #, who handed it over, …">
+      </div>
+      <div class="rc-modal-actions">
+        <button type="button" class="btn btn-outline" data-rc-close>Cancel</button>
+        <button type="submit" class="btn btn-primary">Log payment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# Loss / Fraud modal — same form reused, label and action URL swap. #}
+<div class="rc-modal-back" id="rcLossModal" role="dialog" aria-modal="true">
+  <div class="rc-modal">
+    <h3 id="rcLossTitle">Mark as loss</h3>
+    <div class="rc-modal-sub" id="rcLossWho">—</div>
+    <form method="POST" id="rcLossForm">
+      <div class="field">
+        <label>Date</label>
+        <input type="date" name="status_changed_on" value="{{ today.isoformat() }}">
+        <div class="text-sm text-muted" style="margin-top:4px;">
+          The remaining unpaid balance hits this month's
+          Return Check (G/L) on the P&amp;L.
+        </div>
+      </div>
+      <div class="rc-modal-actions">
+        <button type="button" class="btn btn-outline" data-rc-close>Cancel</button>
+        <button type="submit" class="btn btn-primary" id="rcLossSubmit">Mark loss</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  // ── Live search ──────────────────────────────────────────
+  // Same contract as templates/transfers.html: 300ms debounce, 2-char
+  // minimum (or empty), AbortController-cancelled, history.replaceState
+  // for shareable URLs. Status pills are server-rendered links so they
+  // do a full page load — they're filter changes, not searches.
+  var input  = document.getElementById('rcSearch');
+  var result = document.getElementById('rcResult');
+  var meta   = document.getElementById('rcMeta');
+  var pendingValue = document.getElementById('rcPendingValue');
+  var pendingCount = document.getElementById('rcPendingCount');
+
+  function currentStatus() {
+    var btn = document.querySelector('.rc-status-pills .btn-primary');
+    if (!btn) return 'pending';
+    var href = btn.getAttribute('href') || '';
+    var m = href.match(/status=([a-z]+)/);
+    return (m && m[1]) || 'pending';
+  }
+
+  var DEBOUNCE_MS = 300, timer = null, ctrl = null;
+
+  function syncUrl(q) {
+    var url = new URL(window.location.href);
+    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+    history.replaceState(null, '', url);
+  }
+
+  function fetchAndSwap(q) {
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    var qs = new URLSearchParams({ partial: '1', status: currentStatus(), q: q });
+    fetch('{{ url_for("return_checks") }}?' + qs.toString(), {
+      headers: { 'X-Requested-With': 'fetch' },
+      signal: ctrl.signal
+    }).then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!result) return;
+        result.innerHTML = data.html || '';
+        if (meta) {
+          meta.innerHTML = 'Showing ' + data.matched +
+            ' ' + (data.matched === 1 ? 'row' : 'rows') +
+            ' · filter <strong>' + (data.status || 'pending') + '</strong>' +
+            (q ? ' · matching "' + q + '"' : '');
+        }
+        if (pendingValue && typeof data.pending_balance === 'number') {
+          pendingValue.textContent = '$' +
+            data.pending_balance.toLocaleString('en-US',
+              { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        if (pendingCount && typeof data.pending_count === 'number') {
+          pendingCount.textContent = data.pending_count;
+        }
+        bindRowActions();
+      })
+      .catch(function (e) { if (e.name !== 'AbortError') console.error(e); });
+  }
+
+  if (input) {
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (timer) clearTimeout(timer);
+      if (q.length === 1) return;
+      timer = setTimeout(function () { syncUrl(q); fetchAndSwap(q); }, DEBOUNCE_MS);
+    });
+  }
+
+  // ── Modal controllers ────────────────────────────────────
+  var paymentModal = document.getElementById('rcPaymentModal');
+  var paymentForm  = document.getElementById('rcPaymentForm');
+  var paymentWho   = document.getElementById('rcPaymentWho');
+  var paymentAmt   = document.getElementById('rcPaymentAmount');
+  var paymentHint  = document.getElementById('rcPaymentHint');
+
+  var lossModal  = document.getElementById('rcLossModal');
+  var lossForm   = document.getElementById('rcLossForm');
+  var lossWho    = document.getElementById('rcLossWho');
+  var lossTitle  = document.getElementById('rcLossTitle');
+  var lossSubmit = document.getElementById('rcLossSubmit');
+
+  function openModal(el) { if (el) el.classList.add('open'); }
+  function closeModal(el) { if (el) el.classList.remove('open'); }
+
+  document.addEventListener('click', function (e) {
+    if (e.target.matches('[data-rc-close]')) {
+      var back = e.target.closest('.rc-modal-back');
+      closeModal(back);
+    }
+    if (e.target === paymentModal) closeModal(paymentModal);
+    if (e.target === lossModal)    closeModal(lossModal);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      closeModal(paymentModal); closeModal(lossModal);
+    }
+  });
+
+  function fmtMoney(n) {
+    return parseFloat(n).toLocaleString('en-US',
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function bindRowActions() {
+    // Add Payment — opens the payment modal with the row's remaining
+    // balance pre-filled. Cashier can override down (partial) but
+    // server enforces the cap.
+    document.querySelectorAll('.rc-act-payment').forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id, name = btn.dataset.name,
+            remaining = btn.dataset.remaining;
+        paymentForm.action = '/return-checks/' + id + '/payment';
+        paymentWho.textContent = name + ' · remaining $' + fmtMoney(remaining);
+        paymentAmt.value = remaining;
+        paymentAmt.max = remaining;
+        if (paymentHint) {
+          paymentHint.textContent =
+            'Up to $' + fmtMoney(remaining) +
+            '. Split across multiple payments if you got partial.';
+        }
+        openModal(paymentModal);
+        setTimeout(function () { paymentAmt.focus(); paymentAmt.select(); }, 0);
+      });
+    });
+
+    document.querySelectorAll('.rc-act-loss').forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id, name = btn.dataset.name,
+            st = btn.dataset.status, remaining = btn.dataset.remaining;
+        lossForm.action = '/return-checks/' + id + '/' + st;
+        lossTitle.textContent = (st === 'fraud' ? 'Mark as fraud' : 'Mark as loss');
+        lossSubmit.textContent = (st === 'fraud' ? 'Mark fraud' : 'Mark loss');
+        lossWho.textContent = name + ' · ${ ' + fmtMoney(remaining || 0) + ' } unpaid';
+        openModal(lossModal);
+      });
+    });
+
+    // History toggle — expands the per-row payment-history table.
+    document.querySelectorAll('.rc-act-history').forEach(function (btn) {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', function () {
+        var id = btn.dataset.id;
+        var row = document.querySelector(
+          '.rc-payments-row[data-rc-id="' + id + '"]');
+        if (!row) return;
+        if (row.hasAttribute('hidden')) row.removeAttribute('hidden');
+        else row.setAttribute('hidden', '');
+      });
+    });
+  }
+  bindRowActions();
+})();
+</script>
+{% endblock %}

@@ -57,6 +57,7 @@
   .od-mini tr:last-child td { border-bottom: none; }
   .od-mini td.mono { font-family: var(--db-font-mono); color: var(--db-gray-8); }
   .od-mini td.amt-neon { color: var(--db-neon); font-family: var(--db-font-mono); font-weight: 600; }
+  .od-mini td.amt-neg  { color: var(--db-negative); font-family: var(--db-font-mono); font-weight: 600; }
   .od-mini td.amt-neg { color: var(--db-negative); font-family: var(--db-font-mono); font-weight: 600; }
   .od-mini a { color: var(--db-neon); text-decoration: none; }
   .od-mini a:hover { text-decoration: underline; }
@@ -239,6 +240,83 @@
   </div>
 </div>
 
+{# ── Return-checks section ──────────────────────────────
+   Owner-only view of the bounced-check workflow across the whole
+   umbrella. KPI tiles for the selected period + aging buckets for
+   pending balance + a 12-month bars chart of recoveries vs
+   losses+fraud so the owner can spot trends and stale receivables. #}
+<div class="section-title" style="margin-top:32px;">Return checks</div>
+
+<div class="od-kpi-grid">
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Pending balance</div>
+    <div class="stat-value">${{ '{:,.0f}'.format(rc_period.pending) }}</div>
+    <div class="stat-sub">{{ rc_period.pending_count }} open · across all stores</div>
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Recoveries · period</div>
+    <div class="stat-value amount-pos">${{ '{:,.0f}'.format(rc_period.recoveries) }}</div>
+    <div class="stat-sub">marked recovered in window</div>
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Losses · period</div>
+    <div class="stat-value amount-neg">${{ '{:,.0f}'.format(rc_period.losses) }}</div>
+    <div class="stat-sub">written off as a loss</div>
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Fraud · period</div>
+    <div class="stat-value amount-neg">${{ '{:,.0f}'.format(rc_period.fraud) }}</div>
+    <div class="stat-sub">written off as fraud</div>
+  </div>
+  <div class="stat-card od-kpi">
+    <div class="stat-label">Net G/L · period</div>
+    <div class="stat-value {% if rc_period.net_gl < 0 %}amount-neg{% else %}amount-pos{% endif %}">
+      ${{ '{:,.0f}'.format(rc_period.net_gl) }}
+    </div>
+    <div class="stat-sub">positive = recoveries beat write-offs</div>
+  </div>
+</div>
+
+<div class="od-row">
+  <div class="card chart-card">
+    <div class="card-header">
+      <div class="card-title">Return checks · last 12 months</div>
+      <div class="stat-sub">Recoveries (gain) vs losses+fraud (loss) by month, across the umbrella.</div>
+    </div>
+    <div class="card-body">
+      <div id="odReturnChecksChart" class="chart-box short"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Aging</div>
+      <div class="stat-sub">Pending balance by how long it's been outstanding.</div>
+    </div>
+    <div class="card-body">
+      <table class="od-mini">
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th class="num">Open</th>
+            <th class="num">Balance</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in rc_aging %}
+          <tr>
+            <td>{{ b.label }}</td>
+            <td class="num mono">{{ b.count }}</td>
+            <td class="num {% if loop.index0 == 3 and b.amount > 0 %}amt-neg{% else %}mono{% endif %}">
+              ${{ '{:,.0f}'.format(b.amount) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 {# Hidden JSON for ApexCharts. Keeps the inline JS clean and dodges
    Jinja-inside-JS escaping headaches. #}
 <script id="od-data" type="application/json">
@@ -252,6 +330,11 @@
     "labels":  {{ company_breakdown|map(attribute='company')|list|tojson }},
     "totals":  {{ company_breakdown|map(attribute='volume')|list|tojson }},
     "counts":  {{ company_breakdown|map(attribute='count')|list|tojson }}
+  },
+  "returnChecks": {
+    "labels":     {{ rc_labels|tojson }},
+    "recoveries": {{ rc_recoveries|tojson }},
+    "losses":     {{ rc_losses|tojson }}
   }
 }
 </script>
@@ -369,6 +452,45 @@
           }
         }
       },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: function (v) { return '$' + Math.round(v).toLocaleString(); } }
+      }
+    })).render();
+  }
+
+  // ── Return checks: 12-month grouped bars (recoveries vs losses) ──
+  var rcEl = document.querySelector('#odReturnChecksChart');
+  if (rcEl && DATA.returnChecks) {
+    var REC_COLOR = NEON;
+    var LOSS_COLOR = cssVar('--db-negative', '#ff4d6d');
+    new ApexCharts(rcEl, Object.assign({}, common, {
+      chart: Object.assign({}, common.chart, {
+        type: 'bar', height: 220, stacked: false
+      }),
+      series: [
+        { name: 'Recoveries',     data: DATA.returnChecks.recoveries },
+        { name: 'Losses + Fraud', data: DATA.returnChecks.losses }
+      ],
+      colors: [REC_COLOR, LOSS_COLOR],
+      plotOptions: { bar: { columnWidth: '60%', borderRadius: 3 } },
+      dataLabels: { enabled: false },
+      stroke: { show: false },
+      xaxis: {
+        categories: DATA.returnChecks.labels,
+        labels: { style: { colors: GRAY6, fontSize: '10.5px',
+                           fontFamily: "'JetBrains Mono', ui-monospace" } },
+        axisBorder: { color: GRAY3 }, axisTicks: { color: GRAY3 }
+      },
+      yaxis: {
+        labels: {
+          style: { colors: GRAY6, fontSize: '11px',
+                   fontFamily: "'JetBrains Mono', ui-monospace" },
+          formatter: function (v) { return '$' + Math.round(v).toLocaleString(); }
+        }
+      },
+      legend: { position: 'top', horizontalAlign: 'right',
+                labels: { colors: GRAY7 }, markers: { radius: 4 } },
       tooltip: {
         theme: 'dark',
         y: { formatter: function (v) { return '$' + Math.round(v).toLocaleString(); } }

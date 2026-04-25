@@ -1,0 +1,163 @@
+{# Partial for /return-checks. Replaced by the AJAX live-search.
+   Each row carries its own action forms so the partial swap doesn't
+   need to rebuild surrounding chrome. #}
+{% if rows %}
+<div class="rc-table-wrap">
+<table class="rc-table">
+  <thead>
+    <tr>
+      <th>Bounced</th>
+      <th>Customer</th>
+      <th>Check #</th>
+      <th>Bank</th>
+      <th class="num">Amount</th>
+      <th class="num">Recovered</th>
+      <th class="rc-progress-th">Progress</th>
+      <th>Status</th>
+      <th class="num">Age</th>
+      <th class="rc-actions-th"></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    {% set rec_total = r.recovered_total %}
+    {% set remaining = r.remaining %}
+    {% set pct = ((rec_total / r.amount) * 100) if r.amount else 0 %}
+    <tr class="rc-row rc-status-{{ r.status }}">
+      <td class="mono rc-bounced">{{ r.bounced_on.strftime('%b %d, %Y') }}</td>
+      <td><strong>{{ r.customer_name }}</strong>
+          {% if r.notes %}
+          <div class="rc-notes-preview" title="{{ r.notes }}">{{ r.notes[:60] }}{% if r.notes|length > 60 %}…{% endif %}</div>
+          {% endif %}
+      </td>
+      <td class="mono">{{ r.check_number or '—' }}</td>
+      <td>{{ r.payer_bank or '—' }}</td>
+      <td class="num mono">${{ '{:,.2f}'.format(r.amount or 0) }}</td>
+      <td class="num mono">
+        {% if rec_total > 0 %}
+          ${{ '{:,.2f}'.format(rec_total) }}
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if rec_total > 0 %}
+        <div class="rc-progress" title="{{ pct|round(0) }}% recovered">
+          <div class="rc-progress-bar"
+               style="width:{{ pct if pct < 100 else 100 }}%;"></div>
+        </div>
+        <div class="rc-progress-meta mono">
+          {% if remaining > 0 %}${{ '{:,.0f}'.format(remaining) }} left{% else %}Paid in full{% endif %}
+        </div>
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if r.status == 'pending' %}
+          <span class="badge badge-yellow">Pending</span>
+        {% elif r.status == 'recovered' %}
+          <span class="badge badge-green">Recovered</span>
+          <div class="rc-status-meta mono">
+            on {{ r.status_changed_on.strftime('%b %d') if r.status_changed_on else '—' }}
+          </div>
+        {% elif r.status == 'loss' %}
+          <span class="badge badge-red">Loss</span>
+          <div class="rc-status-meta mono">
+            on {{ r.status_changed_on.strftime('%b %d') if r.status_changed_on else '—' }}
+          </div>
+        {% elif r.status == 'fraud' %}
+          <span class="badge badge-red">Fraud</span>
+          <div class="rc-status-meta mono">
+            on {{ r.status_changed_on.strftime('%b %d') if r.status_changed_on else '—' }}
+          </div>
+        {% else %}
+          <span class="badge">{{ r.status }}</span>
+        {% endif %}
+      </td>
+      <td class="num mono">
+        {% set age_days = (today - r.bounced_on).days if r.status == 'pending' else r.days_outstanding %}
+        {{ age_days }}d
+      </td>
+      <td class="rc-actions">
+        {% if r.status == 'pending' %}
+        <button type="button" class="btn btn-sm btn-outline rc-act-payment"
+                data-id="{{ r.id }}"
+                data-name="{{ r.customer_name }}"
+                data-remaining="{{ '{:.2f}'.format(remaining) }}">＋ Payment</button>
+        <button type="button" class="btn btn-sm btn-outline rc-act-loss"
+                data-id="{{ r.id }}"
+                data-name="{{ r.customer_name }}"
+                data-remaining="{{ '{:.2f}'.format(remaining) }}"
+                data-status="loss">Loss</button>
+        <button type="button" class="btn btn-sm btn-outline rc-act-loss"
+                data-id="{{ r.id }}"
+                data-name="{{ r.customer_name }}"
+                data-remaining="{{ '{:.2f}'.format(remaining) }}"
+                data-status="fraud">Fraud</button>
+        {% else %}
+        <form method="POST" action="{{ url_for('return_check_reopen', rc_id=r.id) }}"
+              style="display:inline;margin:0;"
+              onsubmit="return confirm('Reopen this return check? It goes back to Pending and the prior month\'s P&L impact reverses. Existing payments are kept.');">
+          <button type="submit" class="btn btn-sm btn-outline">Reopen</button>
+        </form>
+        {% endif %}
+        {% if r.payments %}
+        <button type="button" class="btn btn-sm btn-outline rc-act-history"
+                data-id="{{ r.id }}"
+                data-name="{{ r.customer_name }}">History</button>
+        {% endif %}
+        <form method="POST" action="{{ url_for('return_check_delete', rc_id=r.id) }}"
+              style="display:inline;margin:0;"
+              onsubmit="return confirm('Delete this return check and all its payments? This cannot be undone.');">
+          <button type="submit" class="btn btn-sm btn-outline rc-act-delete">×</button>
+        </form>
+      </td>
+    </tr>
+    {% if r.payments %}
+    <tr class="rc-payments-row" data-rc-id="{{ r.id }}" hidden>
+      <td colspan="10">
+        <div class="rc-payments-panel">
+          <div class="rc-payments-title">Payment history · {{ r.customer_name }}</div>
+          <table class="rc-payments-table">
+            <thead>
+              <tr>
+                <th>Paid on</th>
+                <th class="num">Amount</th>
+                <th>Method</th>
+                <th>Note</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for p in r.payments %}
+              <tr>
+                <td class="mono">{{ p.paid_on.strftime('%b %d, %Y') }}</td>
+                <td class="num mono amt-pos">+${{ '{:,.2f}'.format(p.amount) }}</td>
+                <td>{{ p.payment_method or '—' }}</td>
+                <td>{{ p.note or '—' }}</td>
+                <td>
+                  <form method="POST" action="{{ url_for('return_check_payment_delete', rc_id=r.id, pid=p.id) }}"
+                        style="display:inline;margin:0;"
+                        onsubmit="return confirm('Delete this payment? The matching daily-book line will also be removed.');">
+                    <button type="submit" class="btn btn-sm btn-outline rc-act-delete">×</button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-body">
+    <div class="empty-state">
+      <div class="empty-title">No return checks match these filters</div>
+      <div>Add the first one above, or change the filters.</div>
+    </div>
+  </div>
+</div>
+{% endif %}

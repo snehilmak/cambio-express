@@ -19,12 +19,20 @@ KINDS = [
     ("check_expense",  "check_expense",          "Check Expense"),
 ]
 
+# Kinds whose widget is editable in the daily book. `return_payback`
+# moved to a read-only auto-populated mode (source of truth is
+# Books → Return Checks). The widget render + AJAX-add tests only
+# apply to editable kinds; the still-derived-from-line-items
+# semantics (test_field_is_derived_on_daily_save) apply to all kinds
+# including the read-only one.
+EDITABLE_KINDS = [(k, f, l) for (k, f, l) in KINDS if k != "return_payback"]
+
 
 def _today_ds():
     return date.today().isoformat()
 
 
-@pytest.mark.parametrize("kind,field,label", KINDS)
+@pytest.mark.parametrize("kind,field,label", EDITABLE_KINDS)
 def test_widget_renders_on_daily_report(logged_in_client, test_store_id,
                                         kind, field, label):
     from app import DailyLineItem, db
@@ -79,7 +87,7 @@ def test_field_is_derived_on_daily_save(logged_in_client, test_store_id,
             f"{field} not derived: expected 500.0, got {getattr(rpt, field)}"
 
 
-@pytest.mark.parametrize("kind,field,_", KINDS)
+@pytest.mark.parametrize("kind,field,_", EDITABLE_KINDS)
 def test_ajax_add_delete_round_trip(logged_in_client, test_store_id,
                                     kind, field, _):
     """Add, add, delete — payload shape and DailyReport field update
