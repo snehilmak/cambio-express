@@ -417,6 +417,143 @@ class CheckDeposit(db.Model):
             "note": self.note or "",
         }
 
+# Status values for ReturnCheck.status. Kept as module-level constants
+# so the route handlers, P&L aggregator, and tests all reference the
+# same vocabulary.
+RETURN_CHECK_STATUSES = ("pending", "recovered", "loss", "fraud")
+RETURN_CHECK_BOOKED   = ("recovered", "loss", "fraud")  # i.e. closed; affect P&L
+
+
+class ReturnCheck(db.Model):
+    """A bounced customer check — the workflow lives entirely on this
+    row, not split across multiple events.
+
+    Why this exists: cashiers used to track bounced checks in a
+    separate Excel tab, manually carrying pending items forward each
+    month and writing the eventual gain or loss into the monthly P&L's
+    "Return Check (G/L)" line by hand. We model the exact same
+    workflow here:
+
+      bounced_on   the date the check came back from the bank. Never
+                   moves once set; it's the historical fact.
+
+      status       'pending'   — sitting on the books, owner is
+                                  still trying to recover
+                   'recovered' — fully or partially repaid; the gain
+                                  is the recovered_amount
+                   'loss'      — written off; the entire `amount` is
+                                  the loss
+                   'fraud'     — same accounting as 'loss', kept as a
+                                  distinct status for reporting (repeat
+                                  offender lists, fraud KPIs)
+
+      status_changed_on
+                   the date status moved out of `pending`. This is
+                   what drives which month's P&L the gain/loss lands
+                   on. A pending row never touches any month's P&L —
+                   only marking it (recovered / loss / fraud) does.
+
+      recovered_amount
+                   only meaningful when status='recovered'. May be
+                   less than `amount` (partial recovery); the
+                   difference is the implicit shortfall the cashier
+                   chose to accept. If they later mark the row 'loss'
+                   instead, the FULL `amount` becomes the loss
+                   (recovered_amount is reset).
+
+    P&L formula for a given month (locked field on monthly_report):
+
+        Σ recovered_amount where status='recovered'
+                                AND status_changed_on in the month
+      − Σ amount             where status in ('loss','fraud')
+                                AND status_changed_on in the month
+
+    Positive = net gain (recoveries beat write-offs); negative = net
+    loss. Pending balance does NOT enter the P&L — it's a separate
+    KPI on the list page and owner dashboard.
+    """
+    __tablename__ = "return_check"
+    id              = db.Column(db.Integer, primary_key=True)
+    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    bounced_on      = db.Column(db.Date, nullable=False)
+    customer_name   = db.Column(db.String(120), nullable=False)
+    check_number    = db.Column(db.String(40),  default="")
+    payer_bank      = db.Column(db.String(120), default="")
+    amount          = db.Column(db.Float,       nullable=False)
+    status          = db.Column(db.String(16),  default="pending", nullable=False)
+    status_changed_on = db.Column(db.Date,      nullable=True)
+    notes           = db.Column(db.Text,        default="")
+    created_by      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at      = db.Column(db.DateTime, default=datetime.utcnow,
+                                onupdate=datetime.utcnow)
+
+    payments = db.relationship(
+        "ReturnCheckPayment",
+        backref="return_check",
+        cascade="all, delete-orphan",
+        order_by="ReturnCheckPayment.paid_on, ReturnCheckPayment.id",
+    )
+
+    @property
+    def recovered_total(self):
+        """Sum of all installment payments. Source of truth for
+        'how much have we got back so far'."""
+        return float(sum((p.amount or 0.0) for p in (self.payments or [])))
+
+    @property
+    def remaining(self):
+        """Outstanding balance. When status='loss' / 'fraud' the
+        write-off equals this value. Never goes negative because the
+        payment endpoint caps each installment at remaining."""
+        return max(0.0, float(self.amount or 0.0) - self.recovered_total)
+
+    @property
+    def days_outstanding(self):
+        """Calendar days since the check bounced. Used for aging
+        buckets on the list and owner dashboard. Closed rows freeze
+        at the days-to-close so the value is meaningful for fraud /
+        write-off reporting too."""
+        end = self.status_changed_on if self.status != "pending" else date.today()
+        if not self.bounced_on or not end:
+            return 0
+        return (end - self.bounced_on).days
+
+
+class ReturnCheckPayment(db.Model):
+    """One installment of repayment against a ReturnCheck.
+
+    Splitting payments off into their own table is what lets the
+    workflow handle the realistic case the user described: a customer
+    bounces a $1,000 check, brings $300 in cash on April 15, $400 by
+    Zelle on May 10, then the rest in June. Each row here represents
+    one of those events, posts to its own day's daily book + P&L, and
+    independently rolls up into the parent ReturnCheck's
+    `recovered_total`.
+
+    Auto-creates a matching `DailyLineItem(kind='return_payback')` on
+    `paid_on` when inserted via the route handler — that's how the
+    daily-book "Return Check Paid Back" line stays in sync without
+    double-entry.
+    """
+    __tablename__ = "return_check_payment"
+    id                 = db.Column(db.Integer, primary_key=True)
+    return_check_id    = db.Column(db.Integer,
+                                   db.ForeignKey("return_check.id"),
+                                   nullable=False, index=True)
+    amount             = db.Column(db.Float, nullable=False)
+    paid_on            = db.Column(db.Date,  nullable=False)
+    # cash / check / zelle / wire / money_order / other — see
+    # _PAYMENT_METHODS for the canonical set. Free-form on save so a
+    # future method can be added by widening the form's <select>
+    # without a migration.
+    payment_method     = db.Column(db.String(20), default="")
+    note               = db.Column(db.String(200), default="")
+    created_by         = db.Column(db.Integer, db.ForeignKey("user.id"),
+                                   nullable=True)
+    created_at         = db.Column(db.DateTime, default=datetime.utcnow)
+
+
 class DailyLineItem(db.Model):
     """Generic time-amount-note line item that rolls up into a single
     DailyReport field, discriminated by `kind`.
@@ -442,6 +579,13 @@ class DailyLineItem(db.Model):
     at_time     = db.Column(db.Time, nullable=False)
     amount      = db.Column(db.Float, nullable=False)
     note        = db.Column(db.String(120), default="")
+    # When this line item was auto-created by marking a ReturnCheck as
+    # recovered, this FK links back to the source ReturnCheck. Lets us
+    # find + update + delete the shadow line item when the return
+    # check is edited or reopened, instead of leaving stale rows
+    # behind. NULL for line items the cashier added manually.
+    return_check_id = db.Column(db.Integer, db.ForeignKey("return_check.id"),
+                                nullable=True)
     created_by  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -2970,6 +3114,15 @@ def _owner_dashboard_context(user, period):
         store_comparison.append({"id": s.id, "name": s.name, "count": c, "volume": v})
     store_comparison.sort(key=lambda x: x["volume"], reverse=True)
 
+    # Return-check rollups across the owner's whole umbrella. Owner
+    # cares about: outstanding pending balance, period recoveries
+    # vs. losses, aging buckets (chase candidates), and a 12-month
+    # bar chart of recoveries vs losses+fraud.
+    rc_period = _return_check_period_aggregates(store_ids, start, end)
+    rc_aging = _return_check_aging_buckets(store_ids, today=today)
+    rc_labels, rc_recoveries, rc_losses = _return_check_monthly_series(
+        store_ids, today=today)
+
     return dict(
         user=user, period=period, prev_label=prev_label,
         period_start=start, period_end=end,
@@ -2983,6 +3136,9 @@ def _owner_dashboard_context(user, period):
         series_count=series_count,
         company_breakdown=company_breakdown,
         store_comparison=store_comparison,
+        rc_period=rc_period, rc_aging=rc_aging,
+        rc_labels=rc_labels, rc_recoveries=rc_recoveries,
+        rc_losses=rc_losses,
     )
 
 
@@ -4376,6 +4532,17 @@ def daily_line_item_new(ds, kind):
     malformed URL can't silently create an orphan row."""
     _, label, _ = _line_item_kind_or_404(kind)
     sid = session["store_id"]
+    # Return-check paybacks come exclusively from the Return Checks
+    # page (via /return-checks/<id>/payment). Blocking the manual
+    # path here keeps the daily book in sync with that single source
+    # of truth and matches the read-only UI the cashier sees.
+    if kind == "return_payback":
+        msg = ("Log return-check paybacks via Books → Return Checks "
+               "(Add Payment). The daily-book line auto-populates.")
+        if _wants_json():
+            return jsonify({"ok": False, "error": msg}), 403
+        flash(msg, "error")
+        return redirect(url_for("daily_report", ds=ds))
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
         if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
@@ -4429,6 +4596,18 @@ def daily_line_item_delete(ds, kind, item_id):
            .filter_by(id=item_id, store_id=sid,
                       report_date=report_date, kind=kind)
            .first_or_404())
+    # Return-check-linked paybacks are owned by the Return Checks page
+    # — letting the cashier delete them here would diverge the daily
+    # book from the source of truth. Front-end hides the Remove button
+    # for these rows; this is the server-side guard against a hand-
+    # crafted POST.
+    if row.return_check_id is not None:
+        msg = ("This payback is linked to a return check. Remove it "
+               "from Books → Return Checks (delete the payment).")
+        if _wants_json():
+            return jsonify({"ok": False, "error": msg}), 403
+        flash(msg, "error")
+        return redirect(url_for("daily_report", ds=ds))
     db.session.delete(row)
     db.session.flush()
     _recompute_line_items_total(kind, sid, report_date)
@@ -4505,7 +4684,12 @@ def monthly_report(year,month):
           "cash_expenses":sum(r.cash_expense for r in daily_rows),
           "check_expenses":sum(r.check_expense for r in daily_rows),
           "cash_payroll":sum(r.payroll_expense for r in daily_rows),
-          "over_short":sum(r.over_short for r in daily_rows)}
+          "over_short":sum(r.over_short for r in daily_rows),
+          # Net G/L for the month from the ReturnCheck workflow
+          # (recoveries minus losses+fraud, by status_changed_on).
+          # Stored as the signed P&L amount; the monthly_report
+          # template renders it as a locked, editable-looking field.
+          "return_check_gl":_return_check_monthly_pl(sid, year, month)}
     if request.method=="POST":
         if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
@@ -4521,6 +4705,10 @@ def monthly_report(year,month):
             # mirrors what the cashier logged daily and a stale or
             # tampered POST can't override the truth.
             "check_cashing_fees",
+            # Net G/L from the ReturnCheck workflow (recoveries minus
+            # losses+fraud, by status_changed_on within the month).
+            # See _return_check_monthly_pl().
+            "return_check_gl",
         }
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
@@ -4544,6 +4732,650 @@ def monthly_report(year,month):
 @admin_required
 def monthly_new():
     today=date.today(); return redirect(url_for("monthly_report",year=today.year,month=today.month))
+
+
+# ── Return Checks ────────────────────────────────────────────
+#
+# Replaces the legacy "Return Check (G/L)" hand-edited line on the
+# monthly P&L. Cashiers now log every bounced check here and mark each
+# one recovered / loss / fraud — the P&L pulls the netted G/L for the
+# month automatically (locked field, like check_cashing_fees).
+#
+# Pending balance and aging come straight off the same table, so the
+# admin list page + owner dashboard share queries.
+
+def _return_check_period_aggregates(store_ids, start, end):
+    """Sum recoveries (by payment date) and losses+fraud (by parent
+    status-change date), plus the still-pending balance.
+
+    Recoveries are measured at the PAYMENT level — a $300 installment
+    in April and $400 in May contribute to those months separately,
+    even though the parent ReturnCheck is the same row. This matches
+    the user's mental model: money received this month = recovery
+    this month, regardless of when the original check bounced.
+
+    Losses + fraud are measured at the parent level — they're a
+    single closing event, not a stream. The amount is the REMAINING
+    balance at the time of the write-off (parent.amount minus
+    payments already received), so a partially-recovered check that
+    eventually goes bad only reports the unrecovered portion as the
+    loss.
+
+    Empty store list returns zeros — caller doesn't need to short-
+    circuit. Returns gain-positive `net_gl` (used by owner dashboard);
+    `_return_check_monthly_pl` flips the sign for the P&L expense
+    column.
+    """
+    if not store_ids:
+        return {"recoveries": 0.0, "losses": 0.0, "fraud": 0.0,
+                "net_gl": 0.0, "pending": 0.0, "pending_count": 0}
+
+    # Recoveries: Σ payments by paid_on, joined to parent for the
+    # store filter. Note the payment itself doesn't carry store_id —
+    # the parent does — so we join through.
+    rec = db.session.query(
+        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
+    ).join(
+        ReturnCheck, ReturnCheckPayment.return_check_id == ReturnCheck.id
+    ).filter(
+        ReturnCheck.store_id.in_(store_ids),
+        ReturnCheckPayment.paid_on >= start,
+        ReturnCheckPayment.paid_on <= end,
+    ).scalar() or 0.0
+
+    # Losses + fraud: closed ReturnChecks whose status_changed_on falls
+    # in the window. The contribution is the REMAINING balance, not
+    # the original amount — partial recoveries before the close were
+    # already booked as recoveries on their own months.
+    def _writeoff_in_status(status_value):
+        rows = (db.session.query(ReturnCheck.id, ReturnCheck.amount)
+                .filter(
+                    ReturnCheck.store_id.in_(store_ids),
+                    ReturnCheck.status == status_value,
+                    ReturnCheck.status_changed_on >= start,
+                    ReturnCheck.status_changed_on <= end,
+                ).all())
+        if not rows:
+            return 0.0
+        rc_ids = [rid for rid, _ in rows]
+        # Sum payments per parent, all in one query so we don't N+1
+        # for stores with lots of write-offs.
+        paid_rows = (db.session.query(
+            ReturnCheckPayment.return_check_id,
+            db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0),
+        ).filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
+         .group_by(ReturnCheckPayment.return_check_id).all())
+        paid_by = {rid: float(s or 0.0) for rid, s in paid_rows}
+        total = 0.0
+        for rid, amt in rows:
+            total += max(0.0, float(amt or 0.0) - paid_by.get(rid, 0.0))
+        return total
+
+    loss = _writeoff_in_status("loss")
+    fraud = _writeoff_in_status("fraud")
+
+    pending_q = db.session.query(
+        db.func.coalesce(db.func.sum(ReturnCheck.amount), 0.0),
+        db.func.count(ReturnCheck.id),
+    ).filter(
+        ReturnCheck.store_id.in_(store_ids),
+        ReturnCheck.status == "pending",
+        ReturnCheck.bounced_on <= end,
+    ).first()
+    pending_amount_total = float(pending_q[0] or 0.0)
+    pending_count = int(pending_q[1] or 0)
+    # Subtract installments already received against pending parents
+    # so the "Pending balance" KPI shows the OUTSTANDING owed, not
+    # the original face value.
+    if pending_count > 0:
+        pending_paid = (db.session.query(
+            db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
+        ).join(ReturnCheck,
+               ReturnCheckPayment.return_check_id == ReturnCheck.id)
+         .filter(
+             ReturnCheck.store_id.in_(store_ids),
+             ReturnCheck.status == "pending",
+             ReturnCheck.bounced_on <= end,
+         ).scalar() or 0.0)
+        pending = max(0.0, pending_amount_total - float(pending_paid))
+    else:
+        pending = 0.0
+
+    return {
+        "recoveries":   float(rec),
+        "losses":       float(loss),
+        "fraud":        float(fraud),
+        "net_gl":       float(rec) - float(loss) - float(fraud),
+        "pending":      pending,
+        "pending_count": pending_count,
+    }
+
+
+def _return_check_aging_buckets(store_ids, today=None):
+    """Pending balance sliced into 0–30 / 31–60 / 61–90 / 90+ day
+    buckets by `bounced_on`. Helps the owner spot stale receivables
+    that probably won't recover."""
+    if today is None:
+        today = date.today()
+    if not store_ids:
+        return [
+            {"label": "0–30 d",  "amount": 0.0, "count": 0},
+            {"label": "31–60 d", "amount": 0.0, "count": 0},
+            {"label": "61–90 d", "amount": 0.0, "count": 0},
+            {"label": "90+ d",   "amount": 0.0, "count": 0},
+        ]
+    rows = ReturnCheck.query.filter(
+        ReturnCheck.store_id.in_(store_ids),
+        ReturnCheck.status == "pending",
+    ).all()
+    buckets = [
+        {"label": "0–30 d",  "amount": 0.0, "count": 0, "max": 30},
+        {"label": "31–60 d", "amount": 0.0, "count": 0, "max": 60},
+        {"label": "61–90 d", "amount": 0.0, "count": 0, "max": 90},
+        {"label": "90+ d",   "amount": 0.0, "count": 0, "max": None},
+    ]
+    for r in rows:
+        age = (today - r.bounced_on).days if r.bounced_on else 0
+        for b in buckets:
+            if b["max"] is None or age <= b["max"]:
+                b["amount"] += float(r.amount or 0.0)
+                b["count"]  += 1
+                break
+    for b in buckets:
+        b.pop("max", None)
+    return buckets
+
+
+def _return_check_monthly_pl(store_id, year, month):
+    """Signed value for the monthly P&L's Return Check (G/L) line,
+    using EXPENSE convention so it slots correctly into the
+    expense column on monthly_report (which subtracts from net income).
+
+      positive  → net loss for the month (losses + fraud > recoveries)
+      negative  → net gain for the month (recoveries > losses + fraud)
+
+    Note: _return_check_period_aggregates['net_gl'] uses the OPPOSITE
+    convention (positive = gain) because that's what the owner
+    dashboard shows. We deliberately negate here so each consumer
+    reads the right sign for its context.
+    """
+    from calendar import monthrange
+    start = date(year, month, 1)
+    end   = date(year, month, monthrange(year, month)[1])
+    agg = _return_check_period_aggregates([store_id], start, end)
+    # Flip the sign: dashboard's "net_gl" is gain-positive, P&L line
+    # is loss-positive (expense convention).
+    return -agg["net_gl"]
+
+
+def _return_check_monthly_series(store_ids, today=None):
+    """12-month bars for the owner dashboard: per-month recoveries
+    (positive) and losses+fraud (negative). Labels are 'YYYY-MM' so
+    ApexCharts renders them as a date axis."""
+    if today is None:
+        today = date.today()
+    months = []
+    y, m = today.year, today.month
+    for _ in range(12):
+        months.append((y, m))
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    months.reverse()  # oldest → newest
+    labels, recoveries, losses = [], [], []
+    if not store_ids:
+        for (yy, mm) in months:
+            labels.append(f"{yy:04d}-{mm:02d}")
+            recoveries.append(0.0)
+            losses.append(0.0)
+        return labels, recoveries, losses
+    from calendar import monthrange
+    for (yy, mm) in months:
+        s = date(yy, mm, 1)
+        e = date(yy, mm, monthrange(yy, mm)[1])
+        agg = _return_check_period_aggregates(store_ids, s, e)
+        labels.append(f"{yy:04d}-{mm:02d}")
+        recoveries.append(round(agg["recoveries"], 2))
+        # Combine loss + fraud — both are write-offs from the P&L's POV.
+        losses.append(round(agg["losses"] + agg["fraud"], 2))
+    return labels, recoveries, losses
+
+
+def _return_check_list_payload(store_id, status, query, date_from, date_to):
+    """Filtered list rows for /return-checks. Status filter values:
+    'pending' (default), 'recovered', 'loss', 'fraud', 'closed'
+    (recovered+loss+fraud), 'all'."""
+    q = ReturnCheck.query.filter_by(store_id=store_id)
+    if status == "pending":
+        q = q.filter(ReturnCheck.status == "pending")
+    elif status == "recovered":
+        q = q.filter(ReturnCheck.status == "recovered")
+    elif status == "loss":
+        q = q.filter(ReturnCheck.status == "loss")
+    elif status == "fraud":
+        q = q.filter(ReturnCheck.status == "fraud")
+    elif status == "closed":
+        q = q.filter(ReturnCheck.status.in_(["recovered", "loss", "fraud"]))
+    # status="all" (or anything unknown) → no status filter
+
+    if query:
+        ql = "%{}%".format(query.lower())
+        q = q.filter(db.or_(
+            db.func.lower(ReturnCheck.customer_name).like(ql),
+            db.func.lower(ReturnCheck.check_number).like(ql),
+            db.func.lower(ReturnCheck.payer_bank).like(ql),
+        ))
+    if date_from:
+        try:
+            df = datetime.strptime(date_from, "%Y-%m-%d").date()
+            q = q.filter(ReturnCheck.bounced_on >= df)
+        except (ValueError, TypeError):
+            pass
+    if date_to:
+        try:
+            dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+            q = q.filter(ReturnCheck.bounced_on <= dt)
+        except (ValueError, TypeError):
+            pass
+    # Pending first (sorted by oldest bounced_on so stale items rise to
+    # the top), then closed rows by most-recently-changed.
+    return q.order_by(
+        # Pending sorts before closed via the custom case() expression
+        # because all closed rows have status_changed_on set, and we
+        # want pending at the top regardless of how old they are.
+        db.case((ReturnCheck.status == "pending", 0), else_=1),
+        db.case((ReturnCheck.status == "pending", ReturnCheck.bounced_on),
+                else_=None).asc(),
+        ReturnCheck.status_changed_on.desc().nullslast()
+            if hasattr(ReturnCheck.status_changed_on.desc(), "nullslast")
+            else ReturnCheck.status_changed_on.desc(),
+        ReturnCheck.bounced_on.desc(),
+    ).all()
+
+
+@app.route("/return-checks")
+@admin_required
+def return_checks():
+    """Searchable list of return checks for the current store, with a
+    pending-balance KPI strip and inline status filter (Pending /
+    Recovered / Loss / Fraud / All).
+
+    Same `?partial=1` JSON contract as /transfers and /owner/locations
+    so the live-search swap works without a full page reload.
+    """
+    user = current_user()
+    sid  = session["store_id"]
+    today_d = date.today()
+    status = (request.args.get("status") or "pending").lower()
+    if status not in ("pending", "recovered", "loss", "fraud", "closed", "all"):
+        status = "pending"
+    query = (request.args.get("q") or "").strip()
+    date_from = request.args.get("from") or ""
+    date_to   = request.args.get("to") or ""
+
+    rows = _return_check_list_payload(sid, status, query, date_from, date_to)
+
+    # Month-to-date aggregates for the KPI strip.
+    month_start = date(today_d.year, today_d.month, 1)
+    mtd = _return_check_period_aggregates([sid], month_start, today_d)
+    aging = _return_check_aging_buckets([sid], today=today_d)
+
+    if request.args.get("partial") == "1":
+        from flask import jsonify
+        html = render_template("_return_checks_table.html",
+                               rows=rows, today=today_d)
+        return jsonify({"html": html, "matched": len(rows),
+                        "status": status, "query": query,
+                        "pending_balance": round(mtd["pending"], 2),
+                        "pending_count":   mtd["pending_count"]})
+
+    return render_template("return_checks.html",
+        user=user, today=today_d, rows=rows,
+        status=status, query=query,
+        date_from=date_from, date_to=date_to,
+        mtd=mtd, aging=aging,
+    )
+
+
+@app.route("/return-checks/new", methods=["POST"])
+@admin_required
+def return_check_new():
+    sid = session["store_id"]
+    user = current_user()
+    bounced_on_s = (request.form.get("bounced_on") or "").strip()
+    customer = (request.form.get("customer_name") or "").strip()
+    amount_s = (request.form.get("amount") or "").strip()
+    if not bounced_on_s or not customer or not amount_s:
+        flash("Date, customer, and amount are required.", "error")
+        return redirect(url_for("return_checks"))
+    try:
+        bounced_on = datetime.strptime(bounced_on_s, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid bounce date.", "error")
+        return redirect(url_for("return_checks"))
+    try:
+        amount = float(amount_s)
+    except ValueError:
+        flash("Invalid amount.", "error")
+        return redirect(url_for("return_checks"))
+    if amount <= 0:
+        flash("Amount must be greater than zero.", "error")
+        return redirect(url_for("return_checks"))
+
+    rc = ReturnCheck(
+        store_id=sid,
+        bounced_on=bounced_on,
+        customer_name=customer[:120],
+        check_number=(request.form.get("check_number") or "").strip()[:40],
+        payer_bank=(request.form.get("payer_bank") or "").strip()[:120],
+        amount=amount,
+        notes=(request.form.get("notes") or "").strip(),
+        status="pending",
+        created_by=user.id,
+    )
+    db.session.add(rc)
+    db.session.commit()
+    flash(f"Return check logged for {rc.customer_name} (${rc.amount:,.2f}).",
+          "success")
+    return redirect(url_for("return_checks"))
+
+
+def _get_owned_return_check(rc_id):
+    """Lookup a ReturnCheck scoped to the current store. Returns
+    (rc, error_response) — exactly one is non-None. Used by the
+    mark-* + edit + delete routes so cross-store IDs can't slip in."""
+    sid = session["store_id"]
+    rc = db.session.get(ReturnCheck, rc_id)
+    if rc is None or rc.store_id != sid:
+        flash("Return check not found.", "error")
+        return None, redirect(url_for("return_checks"))
+    return rc, None
+
+
+_PAYMENT_METHODS = ("cash", "check", "zelle", "wire", "money_order", "other")
+
+
+def _payback_note_for(rc, payment):
+    """Human-readable note for the auto-created DailyLineItem so the
+    daily-book widget shows useful context. Each installment gets its
+    own line, so the note describes THAT installment specifically."""
+    bits = [f"Return check from {rc.customer_name}"]
+    if rc.check_number:
+        bits.append(f"#{rc.check_number}")
+    if payment.payment_method:
+        bits.append(f"via {payment.payment_method}")
+    if payment.note:
+        bits.append(payment.note)
+    return " · ".join(bits)[:120]
+
+
+def _create_daily_payback_for(rc, payment):
+    """Create the shadow DailyLineItem for one ReturnCheckPayment.
+
+    One installment → one line item, on the payment's `paid_on`. The
+    FK on DailyLineItem points back at the parent ReturnCheck (not
+    the payment) so the daily-book widget can show "this came from
+    a return check" context without joining through the payment.
+    The line item rows for repeated payments to the same parent are
+    differentiated by their distinct timestamps + amounts.
+
+    Returns the created DailyLineItem (caller does NOT need to add to
+    session — already added).
+    """
+    user = current_user()
+    li = DailyLineItem(
+        store_id=rc.store_id,
+        report_date=payment.paid_on,
+        kind="return_payback",
+        at_time=datetime.utcnow().time(),
+        amount=float(payment.amount or 0.0),
+        note=_payback_note_for(rc, payment),
+        return_check_id=rc.id,
+        created_by=user.id if user else None,
+    )
+    db.session.add(li)
+    return li
+
+
+def _delete_daily_paybacks_for_payment(rc, payment_amount, payment_paid_on):
+    """Find and delete the shadow line item for a specific payment.
+
+    Match by (return_check_id, report_date, amount). Since multiple
+    payments on the SAME date for the SAME amount on the SAME parent
+    is possible-but-rare, we delete just the first match — re-running
+    deletes the next one if needed. Better than ambiguously deleting
+    all of them.
+    """
+    li = DailyLineItem.query.filter_by(
+        store_id=rc.store_id,
+        return_check_id=rc.id,
+        kind="return_payback",
+        report_date=payment_paid_on,
+        amount=float(payment_amount),
+    ).first()
+    if li is not None:
+        db.session.delete(li)
+
+
+@app.route("/return-checks/<int:rc_id>/payment", methods=["POST"])
+@admin_required
+def return_check_payment_new(rc_id):
+    """Log one installment of repayment.
+
+    Validates the amount fits within the still-outstanding balance.
+    On a fully-paid parent we auto-flip status='recovered' so the
+    admin doesn't have to click a separate "close" button — and the
+    P&L doesn't double-count: the closing event simply marks WHEN it
+    became fully recovered, the actual recovered $ already counted at
+    the payment level.
+    """
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    if rc.status in ("loss", "fraud"):
+        flash("This return check is closed (loss/fraud) — reopen it first.",
+              "error")
+        return redirect(url_for("return_checks"))
+
+    amt_s    = (request.form.get("amount") or "").strip()
+    paid_s   = (request.form.get("paid_on") or "").strip()
+    method   = (request.form.get("payment_method") or "").strip().lower()
+    note     = (request.form.get("note") or "").strip()
+    if method and method not in _PAYMENT_METHODS:
+        method = "other"
+    try:
+        amt = float(amt_s)
+    except ValueError:
+        flash("Invalid payment amount.", "error")
+        return redirect(url_for("return_checks"))
+    remaining = rc.remaining
+    if amt <= 0:
+        flash("Payment amount must be greater than zero.", "error")
+        return redirect(url_for("return_checks"))
+    # Allow a tiny float epsilon on the cap so $999.999... rounding
+    # from the front-end doesn't trip the validation.
+    if amt > remaining + 0.005:
+        flash(
+            f"Payment $ {amt:,.2f} exceeds remaining balance "
+            f"${remaining:,.2f}. Lower the amount or split into "
+            f"multiple payments.", "error")
+        return redirect(url_for("return_checks"))
+    try:
+        paid_on = (datetime.strptime(paid_s, "%Y-%m-%d").date()
+                   if paid_s else date.today())
+    except ValueError:
+        flash("Invalid payment date.", "error")
+        return redirect(url_for("return_checks"))
+
+    user = current_user()
+    payment = ReturnCheckPayment(
+        return_check_id=rc.id,
+        amount=amt,
+        paid_on=paid_on,
+        payment_method=method,
+        note=note[:200],
+        created_by=user.id if user else None,
+    )
+    # Snapshot the prior total BEFORE adding the new row — the
+    # `payments` relationship is lazy-loaded once and won't see the
+    # uncommitted insert without an explicit refresh. Cheaper to just
+    # add the new payment's amount to what we already had.
+    prior_total = rc.recovered_total
+    db.session.add(payment)
+    db.session.flush()
+    _create_daily_payback_for(rc, payment)
+    # Auto-close when the cumulative payments reach the original
+    # amount. Use the new payment's date as status_changed_on so the
+    # dashboard's "marked recovered" badge ties back to the same day.
+    new_total = prior_total + amt
+    if new_total + 0.005 >= float(rc.amount or 0.0):
+        rc.status = "recovered"
+        rc.status_changed_on = paid_on
+    db.session.commit()
+    flash(
+        f"Logged ${amt:,.2f} payment for {rc.customer_name}"
+        + (f" via {method}" if method else "") + ".",
+        "success")
+    return redirect(url_for("return_checks"))
+
+
+@app.route("/return-checks/<int:rc_id>/payment/<int:pid>/delete",
+           methods=["POST"])
+@admin_required
+def return_check_payment_delete(rc_id, pid):
+    """Remove one installment. Drops the shadow daily-book line item
+    and, if the parent was auto-flipped to 'recovered' but the
+    deletion now leaves the balance > 0, walks status back to
+    'pending' so the row reappears in the active list."""
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    payment = db.session.get(ReturnCheckPayment, pid)
+    if payment is None or payment.return_check_id != rc.id:
+        flash("Payment not found.", "error")
+        return redirect(url_for("return_checks"))
+    _delete_daily_paybacks_for_payment(rc, payment.amount, payment.paid_on)
+    db.session.delete(payment)
+    db.session.flush()
+    # If this was a recovered case and the deletion drops below full
+    # payment, reopen so the admin's UI stays accurate.
+    if rc.status == "recovered" and rc.recovered_total + 0.005 < float(rc.amount or 0.0):
+        rc.status = "pending"
+        rc.status_changed_on = None
+    db.session.commit()
+    flash("Payment removed.", "success")
+    return redirect(url_for("return_checks"))
+
+
+def _close_as_writeoff(rc_id, status):
+    """Shared body for /loss and /fraud: only the status word + flash
+    message differ. The remaining balance (amount − payments) is what
+    lands on the P&L for status_changed_on's month."""
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    on_s = (request.form.get("status_changed_on") or "").strip()
+    try:
+        when = (datetime.strptime(on_s, "%Y-%m-%d").date()
+                if on_s else date.today())
+    except ValueError:
+        flash("Invalid date.", "error")
+        return redirect(url_for("return_checks"))
+    rc.status = status
+    rc.status_changed_on = when
+    db.session.commit()
+    label = "fraud" if status == "fraud" else "loss"
+    flash(
+        f"Marked {label}: {rc.customer_name} "
+        f"(remaining balance ${rc.remaining:,.2f}).", "success")
+    return redirect(url_for("return_checks"))
+
+
+@app.route("/return-checks/<int:rc_id>/loss", methods=["POST"])
+@admin_required
+def return_check_loss(rc_id):
+    return _close_as_writeoff(rc_id, "loss")
+
+
+@app.route("/return-checks/<int:rc_id>/fraud", methods=["POST"])
+@admin_required
+def return_check_fraud(rc_id):
+    return _close_as_writeoff(rc_id, "fraud")
+
+
+@app.route("/return-checks/<int:rc_id>/reopen", methods=["POST"])
+@admin_required
+def return_check_reopen(rc_id):
+    """Undo a recover / loss / fraud — returns the row to pending.
+    Payments themselves are NOT deleted (they represent real money
+    that came in); only the closing status is reverted. To remove an
+    individual payment, use the payment-delete route."""
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    rc.status = "pending"
+    rc.status_changed_on = None
+    db.session.commit()
+    flash(f"Reopened: {rc.customer_name}.", "success")
+    return redirect(url_for("return_checks"))
+
+
+@app.route("/return-checks/<int:rc_id>/edit", methods=["POST"])
+@admin_required
+def return_check_edit(rc_id):
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    customer = (request.form.get("customer_name") or "").strip()
+    if customer:
+        rc.customer_name = customer[:120]
+    rc.check_number = (request.form.get("check_number") or "").strip()[:40]
+    rc.payer_bank   = (request.form.get("payer_bank") or "").strip()[:120]
+    rc.notes        = (request.form.get("notes") or "").strip()
+    # Allow editing amount only on pending rows — once booked, the P&L
+    # for the closed month is fixed and we don't want a quiet retroactive
+    # change.
+    if rc.status == "pending":
+        amt_s = (request.form.get("amount") or "").strip()
+        if amt_s:
+            try:
+                amt = float(amt_s)
+                if amt > 0:
+                    rc.amount = amt
+            except ValueError:
+                pass
+        on_s = (request.form.get("bounced_on") or "").strip()
+        if on_s:
+            try:
+                rc.bounced_on = datetime.strptime(on_s, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+    db.session.commit()
+    flash("Return check updated.", "success")
+    return redirect(url_for("return_checks"))
+
+
+@app.route("/return-checks/<int:rc_id>/delete", methods=["POST"])
+@admin_required
+def return_check_delete(rc_id):
+    rc, err = _get_owned_return_check(rc_id)
+    if err is not None:
+        return err
+    # Sweep up the shadow line items first so the daily-book stays
+    # consistent — the FK column on DailyLineItem isn't ON DELETE
+    # CASCADE because we want to track who created which line item,
+    # so the cleanup is explicit here.
+    DailyLineItem.query.filter_by(
+        store_id=rc.store_id,
+        return_check_id=rc.id,
+        kind="return_payback",
+    ).delete(synchronize_session=False)
+    db.session.delete(rc)
+    db.session.commit()
+    flash("Return check deleted.", "success")
+    return redirect(url_for("return_checks"))
+
 
 # ── ACH Batches ──────────────────────────────────────────────
 @app.route("/batches")
@@ -5843,7 +6675,7 @@ _STORE_OWNED_MODELS = [
     # FKs on purge via the audit table's nullable column, but order still
     # matters for cascade sanity.
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
-    "DailyLineItem", "MoneyTransferSummary",
+    "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
@@ -6231,6 +7063,11 @@ _ADDED_COLUMNS = [
     # UI theme preference (dark | light). Default dark to match the
     # historical behavior — users opt in to light explicitly.
     ("user",         "theme_preference",          "VARCHAR(8) DEFAULT 'dark'"),
+    # Return-check workflow ↔ daily-book payback line item link.
+    # Auto-created line items carry the source ReturnCheck.id so we
+    # can update / delete the shadow row when the return check is
+    # edited or reopened.
+    ("daily_line_item", "return_check_id",        "INTEGER NULL"),
 ]
 
 def _ensure_added_columns():

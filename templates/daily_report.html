@@ -141,16 +141,17 @@
    can coexist on the same page. Reuses the page-local .drops-*
    styles — they're not drop-specific, just the first widget that
    needed them. #}
-{% macro line_item_widget(kind, field_name, label, rows, total, placeholder='') %}
+{% macro line_item_widget(kind, field_name, label, rows, total, placeholder='', read_only=False) %}
 <details class="drops-disclosure" id="li-{{ kind }}-details"
          data-kind="{{ kind }}"
-         data-url-new="{{ url_for('daily_line_item_new', ds=report_date.isoformat(), kind=kind) }}"
-         data-url-delete-base="{{ url_for('daily_report', ds=report_date.isoformat()) }}/line-items/{{ kind }}/"
+         {% if not read_only %}data-url-new="{{ url_for('daily_line_item_new', ds=report_date.isoformat(), kind=kind) }}"
+         data-url-delete-base="{{ url_for('daily_report', ds=report_date.isoformat()) }}/line-items/{{ kind }}/"{% endif %}
          data-date="{{ report_date.isoformat() }}">
   <summary>
     <div class="sb-row">
       <span class="sb-label">
         {{ label }}
+        {% if read_only %}<span class="sb-auto-badge">Auto</span>{% endif %}
         <span class="drops-caret" aria-hidden="true">▸</span>
         <span class="drops-count" id="li-{{ kind }}-count">{{ rows|length }} {{ 'entry' if rows|length == 1 else 'entries' }}</span>
       </span>
@@ -159,11 +160,18 @@
           id="li-{{ kind }}-field"
           value="{{ '%.2f'|format(total or 0) }}"
           readonly tabindex="-1"
-          title="Click the row to log {{ label|lower }} — this total updates automatically.">
+          title="{% if read_only %}Auto-populated from Books → Return Checks. Mark a return check recovered there to add to this list.{% else %}Click the row to log {{ label|lower }} — this total updates automatically.{% endif %}">
       </div>
     </div>
   </summary>
   <div class="drops-panel">
+    {% if read_only %}
+    <div class="text-sm text-muted" style="margin-bottom:10px;">
+      Auto-populated from <a href="{{ url_for('return_checks') }}">Return Checks</a> —
+      mark a return check recovered there and it appears here for the date you logged the recovery.
+      Edits made here would be overwritten on the next sync; do them in Return Checks instead.
+    </div>
+    {% else %}
     <div class="drops-add-row">
       <div class="field" style="flex:0 0 130px;">
         <label>Time</label>
@@ -181,13 +189,14 @@
       <button type="button" class="btn btn-primary btn-sm" id="li-{{ kind }}-add">＋ Add</button>
     </div>
     <div id="li-{{ kind }}-err" class="drops-err" hidden></div>
+    {% endif %}
     <table class="drops-table">
       <thead>
         <tr>
           <th style="width:100px;">Time</th>
           <th style="width:130px;">Amount</th>
           <th>Note</th>
-          <th style="width:72px;"></th>
+          {% if not read_only %}<th style="width:72px;"></th>{% endif %}
         </tr>
       </thead>
       <tbody id="li-{{ kind }}-tbody">
@@ -196,16 +205,18 @@
           <td class="mono">{{ r.at_time.strftime('%H:%M') }}</td>
           <td class="mono">${{ '{:,.2f}'.format(r.amount) }}</td>
           <td>{{ r.note or '—' }}</td>
+          {% if not read_only %}
           <td>
             <button type="button" class="btn btn-outline btn-sm li-remove"
                     data-id="{{ r.id }}"
                     style="color:var(--red);border-color:var(--red);padding:4px 10px;">Remove</button>
           </td>
+          {% endif %}
         </tr>
         {% endfor %}
       </tbody>
       <tfoot id="li-{{ kind }}-empty" {% if rows %}hidden{% endif %}>
-        <tr><td colspan="4" class="drops-empty-cell">No {{ label|lower }} logged yet. Add one above.</td></tr>
+        <tr><td colspan="{% if read_only %}3{% else %}4{% endif %}" class="drops-empty-cell">{% if read_only %}No return-check paybacks logged on this day yet.{% else %}No {{ label|lower }} logged yet. Add one above.{% endif %}</td></tr>
       </tfoot>
     </table>
   </div>
@@ -288,10 +299,14 @@
     ('from_bank','From Bank'),('other_cash_in','Other Cash In'),('rebates_commissions','Rebates & Commissions')
   ] %}
   {% if fname == 'return_check_paid_back' %}
-    {# Derived from DailyLineItem(kind='return_payback') rows. #}
+    {# Derived from DailyLineItem(kind='return_payback') rows. Now
+       read-only — the cashier logs paybacks via Books → Return
+       Checks (Add Payment), and each payment auto-creates the
+       matching line item here. Editing here would diverge from the
+       Return Checks page so we lock it. #}
     {{ line_item_widget('return_payback', 'return_check_paid_back', label,
                         line_items['return_payback'], line_items_total['return_payback'],
-                        placeholder='Customer name, invoice #, …') }}
+                        placeholder='Customer name, invoice #, …', read_only=True) }}
   {% else %}
   {# money_transfer is derived from the Money Transfer table below
      (matches the spreadsheet's subtotal formula). Rendered as readonly
