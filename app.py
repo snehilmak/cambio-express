@@ -4516,6 +4516,11 @@ def monthly_report(year,month):
         LOCKED_FIELDS = {
             "cash_purchases", "check_purchases",
             "cash_expenses", "check_expenses", "cash_payroll",
+            # Check Cashing Fees is the per-day fee receipts column on
+            # DailyReport — adding it here means the monthly P&L always
+            # mirrors what the cashier logged daily and a stale or
+            # tampered POST can't override the truth.
+            "check_cashing_fees",
         }
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
