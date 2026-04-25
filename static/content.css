@@ -394,7 +394,13 @@ select {
   transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .theme-choice:hover { border-color: var(--db-gray-4); }
-.theme-choice.is-active {
+/* Selected state — driven by the actual radio's :checked state via
+   :has() so clicking a tile highlights it immediately without JS,
+   AND server-rendered .is-active still works as a fallback for
+   browsers that don't support :has(). The selector list lets either
+   path light up the same styles. */
+.theme-choice.is-active,
+.theme-choice:has(input[type="radio"]:checked) {
   border-color: var(--db-neon);
   box-shadow: 0 0 0 1px var(--db-neon), 0 0 14px var(--db-neon-glow-15);
 }

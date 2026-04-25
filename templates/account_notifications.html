@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "base_owner.html" if user.role == "owner" else "base.html" %}
 {% block title %}Notifications — DineroBook{% endblock %}
 {% block page_title %}Notifications{% endblock %}
 {% block content %}

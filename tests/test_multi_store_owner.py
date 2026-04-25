@@ -644,6 +644,52 @@ def test_owner_store_detail_period_filter_accepts_today_month_year(owner_client)
         assert rv.status_code == 200, f"period={p} failed"
 
 
+def test_owner_get_admin_dashboard_redirects_to_owner_dashboard(owner_client):
+    """REGRESSION: /dashboard used to dereference store.id directly,
+    which 500'd for owners (they have no current_store). Now the route
+    must redirect any owner session to /owner/dashboard before that
+    access path runs."""
+    rv = owner_client.get("/dashboard", follow_redirects=False)
+    assert rv.status_code == 302, (
+        f"owner GET /dashboard should redirect, got {rv.status_code} "
+        f"(this used to 500 — see commit history)"
+    )
+    assert "/owner/dashboard" in rv.headers["Location"]
+
+
+def test_owner_account_profile_uses_owner_shell(owner_client):
+    """REGRESSION: account_profile/security/notifications all extended
+    base.html unconditionally, so owners viewing their profile saw the
+    admin sidebar (Dashboard / Transfers / etc.) — links they don't
+    have access to. They should see base_owner.html chrome instead.
+
+    We assert presence of the owner-only Locations nav link AND the
+    OWNER topbar badge, plus absence of the admin Transfers nav link.
+    """
+    rv = owner_client.get("/account/profile")
+    assert rv.status_code == 200
+    body = rv.data.decode()
+    assert 'href="/owner/locations"' in body, "owner sidebar should appear"
+    assert ">OWNER<" in body, "owner topbar badge should appear"
+    # Admin sidebar's Transfers link is `href="/transfers"` inside a
+    # nav-link <a>; for owner shell that link doesn't exist at all.
+    assert 'href="/transfers"' not in body, "admin Transfers nav must not appear"
+
+
+def test_owner_account_security_uses_owner_shell(owner_client):
+    rv = owner_client.get("/account/security")
+    assert rv.status_code == 200
+    assert b'href="/owner/locations"' in rv.data
+    assert b'href="/transfers"' not in rv.data
+
+
+def test_owner_account_notifications_uses_owner_shell(owner_client):
+    rv = owner_client.get("/account/notifications")
+    assert rv.status_code == 200
+    assert b'href="/owner/locations"' in rv.data
+    assert b'href="/transfers"' not in rv.data
+
+
 def test_owner_store_detail_renders_recent_transfers(owner_client):
     """The "Recent transfers" section lists the latest 10 transfers by
     created_at, regardless of period selector."""

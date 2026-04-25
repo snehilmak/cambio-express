@@ -179,3 +179,21 @@ def test_owner_dashboard_carries_theme_attr(client):
     rv = client.get("/owner/dashboard")
     assert rv.status_code == 200
     assert b'data-theme="dark"' in rv.data
+
+
+def test_theme_chooser_uses_has_selector_for_click_highlight(logged_in_client):
+    """REGRESSION: the radio chooser used to only highlight the active
+    tile via a server-rendered `is-active` class — clicking a different
+    radio toggled the input but didn't move the visual ring until form
+    save + reload. CSS now uses `:has(input:checked)` so clicks are
+    immediate. We can't assert browser behavior in pytest, but we CAN
+    assert the CSS selector is present so a refactor doesn't silently
+    drop it."""
+    # The static CSS is served by Flask via /static/...
+    rv = logged_in_client.get("/static/content.css")
+    assert rv.status_code == 200
+    body = rv.data.decode()
+    assert ":has(input[type=\"radio\"]:checked)" in body, (
+        "theme-choice tile must use :has(input:checked) so the active "
+        "ring follows the radio without JS"
+    )
