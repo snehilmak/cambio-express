@@ -1,10 +1,10 @@
 """Tests for the read-only daily-book-derived fields on the Monthly P&L.
 
-Cash Purchases, Check Purchases, Cash Expenses, Check Expenses, and
-Cash Payroll are all sums of DailyReport rows for the month. They
-render readonly in the form AND the server forces them to the auto
-sum on save — so a tampered POST (or a stale submission after a
-daily-book edit) can't override the truth.
+Cash Purchases, Check Purchases, Cash Expenses, Check Expenses,
+Cash Payroll, and Check Cashing Fees are all sums of DailyReport rows
+for the month. They render readonly in the form AND the server forces
+them to the auto sum on save — so a tampered POST (or a stale
+submission after a daily-book edit) can't override the truth.
 """
 from datetime import date
 from app import app as flask_app, db
@@ -100,6 +100,53 @@ def test_unlocked_fields_still_save_submitted_values(logged_in_client, test_stor
         assert abs(r.mt_commission_in_bank - 250.0) < 0.01
         assert abs(r.bank_charges_210 - 12.5) < 0.01
         assert abs(r.other_income_1 - 33.0) < 0.01
+
+
+# ── Check Cashing Fees: locked the same way as the COGS/expense fields ─
+#
+# Originally Check Cashing Fees was prefilled from the daily book but
+# left editable, which let cashiers (or a stale form) inflate revenue
+# on the P&L. Same treatment as the rest of the daily-derived fields:
+# readonly UI + server forces the auto sum on save.
+
+def test_check_cashing_fees_renders_readonly_with_daily_sum(logged_in_client, test_store_id):
+    y, m = 2026, 8
+    _seed_daily_report(test_store_id, date(y, m, 4),  check_cashing_fees=12.50)
+    _seed_daily_report(test_store_id, date(y, m, 19), check_cashing_fees=37.75)
+    resp = logged_in_client.get(f"/monthly/{y}/{m}")
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert 'name="check_cashing_fees"' in html
+    assert 'value="50.25"' in html, "expected daily sum 50.25 in the readonly input"
+    # Look for the readonly attr on the check_cashing_fees input — find
+    # the input markup, then look at the surrounding window for `readonly`.
+    idx = html.find('name="check_cashing_fees"')
+    assert idx != -1
+    # The readonly attr lives within the same <input> tag — bound a
+    # small window forward to keep the assertion tight.
+    nearby = html[idx:idx + 400]
+    assert "readonly" in nearby, (
+        "check_cashing_fees input must render readonly so it can't "
+        "be hand-edited on the monthly P&L"
+    )
+
+
+def test_server_overrides_tampered_check_cashing_fees(logged_in_client, test_store_id):
+    """Same anti-tamper guarantee as the other locked fields — the
+    server must persist the daily-book sum, not the inflated POST."""
+    from app import MonthlyFinancial
+    y, m = 2026, 9
+    _seed_daily_report(test_store_id, date(y, m, 11), check_cashing_fees=42.00)
+    resp = _post_monthly(logged_in_client, y, m, {"check_cashing_fees": "99999"})
+    assert resp.status_code == 302
+    with flask_app.app_context():
+        r = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=y, month=m).first()
+        assert r is not None
+        assert abs(r.check_cashing_fees - 42.00) < 0.01, (
+            f"server must ignore tampered check_cashing_fees POST and "
+            f"use the daily sum (42.00); got {r.check_cashing_fees}"
+        )
 
 
 # ── Saved report still shows fresh daily sums, not stale values ──
