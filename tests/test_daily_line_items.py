@@ -17,6 +17,8 @@ KINDS = [
     ("cash_expense",   "cash_expense",           "Cash Expense"),
     ("check_purchase", "check_purchases",        "Check Purchases"),
     ("check_expense",  "check_expense",          "Check Expense"),
+    ("other_cash_in",  "other_cash_in",          "Other Cash In"),
+    ("other_cash_out", "other_cash_out",         "Other Cash Out"),
 ]
 
 # Kinds whose widget is editable in the daily book. `return_payback`

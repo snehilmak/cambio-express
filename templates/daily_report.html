@@ -354,6 +354,14 @@
     {{ line_item_widget('return_payback', 'return_check_paid_back', label,
                         line_items['return_payback'], line_items_total['return_payback'],
                         placeholder='Customer name, invoice #, …', read_only=True) }}
+  {% elif fname == 'other_cash_in' %}
+    {# Multiple ad-hoc cash-ins per day are common (refunds, owner
+       contributions, etc.). Same pattern as cash_purchase / cash_expense:
+       each row time + amount + note, the field becomes a derived
+       sum. #}
+    {{ line_item_widget('other_cash_in', 'other_cash_in', label,
+                        line_items['other_cash_in'], line_items_total['other_cash_in'],
+                        placeholder='Source, reference, …') }}
   {% else %}
   {# money_transfer is derived from the Money Transfer table below
      (matches the spreadsheet's subtotal formula). Rendered as readonly
@@ -560,7 +568,7 @@
 
     {% for fname, label in [
       ('safe_balance','Safe Balance'),
-      ('payroll_expense','Payroll Expense'),('other_cash_out','Other Cash Out')
+      ('payroll_expense','Payroll Expense'),
     ] %}
     <div class="sb-row">
       <span class="sb-label">{{ label }}</span>
@@ -571,6 +579,15 @@
       </div>
     </div>
   {% endfor %}
+
+  {# Multiple ad-hoc cash-outs are common — one-off payouts, refunds
+     issued, money handed to a vendor between scheduled payments —
+     so treat the field the same way as cash_expense / payroll: each
+     row carries time + amount + note, the daily-book field is the
+     derived sum. #}
+  {{ line_item_widget('other_cash_out', 'other_cash_out', 'Other Cash Out',
+                      line_items['other_cash_out'], line_items_total['other_cash_out'],
+                      placeholder='Recipient, reason, …') }}
   <div class="sb-row sb-total pl-total">
     <span class="sb-label">TOTAL DISBURSEMENTS</span>
     <div class="sb-input" style="text-align:right;font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--red);" id="total-disb">$0.00</div>
@@ -1121,7 +1138,8 @@ function initLineItemWidget(kind) {
     } catch (e) { btn.disabled = false; }
   });
 }
-['return_payback','cash_purchase','cash_expense','check_purchase','check_expense']
+['return_payback','cash_purchase','cash_expense','check_purchase','check_expense',
+ 'other_cash_in','other_cash_out']
   .forEach(initLineItemWidget);
 
 /*
