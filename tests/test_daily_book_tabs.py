@@ -222,3 +222,91 @@ def test_daily_book_tab_switcher_iife_present(logged_in_client):
     assert "getElementById('db-tabs')" in body
     # And the click listener that drives `activate(btn.dataset.tab)`
     assert "btn.dataset.tab" in body
+
+
+# ── Desktop grid layout (≥901px): all four panels visible at once ──
+#
+# The cashier's existing spreadsheet has Receipts + Disbursements
+# side-by-side and Money Transfers + Other Reports below — much less
+# clicking than tabs. The .db-grid wrapper makes the same 2×2 layout
+# happen on desktop while leaving mobile (which uses the tab bar) alone.
+
+def test_db_grid_wrapper_wraps_all_four_panels(logged_in_client):
+    """The four panels must sit inside <div class='db-grid'> so the
+    desktop 2x2 grid CSS has something to attach to. The wrapper opens
+    BEFORE panel-receipts and closes AFTER panel-transfers."""
+    body = _get_body(logged_in_client)
+    grid_open  = body.find('class="db-grid"')
+    rec_open   = body.find('id="panel-receipts"')
+    tx_close   = body.rfind('</section><!-- /panel-transfers -->')
+    grid_close = body.find('</div><!-- /db-grid -->')
+    for name, idx in [('db-grid open', grid_open),
+                      ('panel-receipts', rec_open),
+                      ('panel-transfers close', tx_close),
+                      ('db-grid close', grid_close)]:
+        assert idx != -1, f"missing: {name}"
+    assert grid_open < rec_open < tx_close < grid_close, (
+        "db-grid wrapper must enclose ALL four panels (receipts first, "
+        "transfers last in DOM order)")
+
+
+def test_desktop_css_hides_tab_bar_and_shows_all_panels(logged_in_client):
+    """Pin the desktop CSS contract so a future refactor doesn't drop
+    one of the rules and silently re-break either the mobile tab UX
+    or the desktop all-visible layout."""
+    body = _get_body(logged_in_client)
+    # Find the @media (min-width: 901px) block. Must contain:
+    #   .db-grid { display: grid; ... 1fr 1fr ... }
+    #   .db-grid > .db-tab-panel[hidden] { display: block ...}
+    #   .db-tab-bar { display: none; }
+    media_idx = body.find("@media (min-width: 901px)")
+    assert media_idx != -1
+    media_end = body.find("</style>", media_idx)
+    block = body[media_idx:media_end]
+
+    assert ".db-grid {" in block, "db-grid block missing on desktop"
+    assert "grid-template-columns: 1fr 1fr" in block, \
+        "desktop should use 2-column grid"
+    assert "[hidden]" in block and "display: block" in block, (
+        "desktop must override the [hidden] attribute so all four "
+        "panels are visible at once")
+    assert ".db-tab-bar { display: none; }" in block, (
+        "desktop should hide the tab bar (everything's already on "
+        "screen, the bar would be visual noise)")
+
+
+def test_desktop_panel_order_matches_excel_layout(logged_in_client):
+    """The legacy spreadsheet has Receipts + Disbursements on the top
+    row and Money Transfers + Over/Short on the bottom — the grid
+    `order:` rules in the desktop CSS must reproduce that pairing.
+    DOM order is receipts/disbursements/summary/transfers, so without
+    the order overrides the grid would lay out as receipts |
+    disbursements / summary | transfers — wrong (transfers and
+    summary swapped)."""
+    body = _get_body(logged_in_client)
+    media_idx = body.find("@media (min-width: 901px)")
+    block = body[media_idx:body.find("</style>", media_idx)]
+    # Each panel needs an explicit order. Receipts must be 1, disb 2,
+    # transfers 3 (NOT 4), summary 4 (NOT 3).
+    import re
+    def order_for(panel):
+        m = re.search(r"#panel-" + panel + r"\s*\{\s*order:\s*(\d+)", block)
+        assert m, f"#panel-{panel} missing an `order:` rule on desktop"
+        return int(m.group(1))
+    assert order_for("receipts") == 1
+    assert order_for("disbursements") == 2
+    assert order_for("transfers") == 3
+    assert order_for("summary") == 4
+
+
+def test_mobile_tab_bar_still_renders(logged_in_client):
+    """Sanity: hiding the tab bar is gated on the desktop @media
+    block. The default markup must still render the bar so mobile
+    keeps its navigation."""
+    body = _get_body(logged_in_client)
+    # The bar is server-rendered unconditionally; CSS at ≥901px hides
+    # it. The element must be present in the DOM.
+    assert 'class="db-tab-bar"' in body
+    # And the four tab buttons that drive the mobile single-panel view.
+    for tab in ("receipts", "disbursements", "transfers", "summary"):
+        assert f'data-tab="{tab}"' in body

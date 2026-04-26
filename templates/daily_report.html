@@ -121,7 +121,22 @@
 .db-tab-panel[hidden] { display: none; }
 .db-tab-panel > .section-box { margin-bottom: 16px; }
 
-/* Desktop: give the Transfers tab room to breathe with a 2-col split */
+/* Desktop: 2x2 grid layout for the four data-entry panels — mirrors
+   the legacy spreadsheet so cashiers see Receipts + Disbursements on
+   the top row and Money Transfers + Over/Short on the bottom row,
+   instead of clicking through tabs to reach each box. The tab bar
+   itself is hidden because there's nothing for it to navigate when
+   every panel is already visible.
+
+   Two specifics:
+     1. `.db-grid > .db-tab-panel[hidden]` overrides the [hidden]
+        attribute that the tab JS still sets on page-load — the JS
+        runs unchanged, but on desktop its hide-other-panels effect
+        becomes a no-op via this CSS override.
+     2. `order:` on the panels remaps the DOM order (receipts,
+        disbursements, summary, transfers) to the grid order
+        (receipts, disbursements, transfers, summary) without moving
+        the markup around (which would be a much riskier diff). */
 @media (min-width: 901px) {
   .db-totals-strip { gap: 14px; padding: 14px 0; }
   .db-total-card { padding: 10px 14px; }
@@ -129,6 +144,29 @@
   .db-tab-btn { font-size: 14px; padding: 12px 18px; }
   .db-transfers-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; }
   .db-transfers-grid > .section-box { margin-bottom: 0; }
+
+  .db-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;  /* shorter panels don't stretch to fill */
+  }
+  .db-grid > .db-tab-panel { margin: 0; }
+  .db-grid > .db-tab-panel[hidden] { display: block; }
+  /* DOM order: receipts → disbursements → summary → transfers.
+     Grid order: receipts | disbursements / transfers | summary. */
+  #panel-receipts      { order: 1; }
+  #panel-disbursements { order: 2; }
+  #panel-transfers     { order: 3; }
+  #panel-summary       { order: 4; }
+  /* Tab bar is the navigation for mobile; on desktop every panel is
+     already on screen so the bar would just be visual noise. */
+  .db-tab-bar { display: none; }
+  /* Section boxes inside grid panels don't need the inter-panel
+     margin (the grid `gap` handles spacing), but they DO need their
+     own internal vertical rhythm. */
+  .db-grid .db-tab-panel > .section-box { margin-bottom: 16px; }
+  .db-grid .db-tab-panel > .section-box:last-child { margin-bottom: 0; }
 }
 </style>
 {% endblock %}
@@ -284,6 +322,15 @@
             aria-controls="panel-summary" data-tab="summary">Over / Short &amp; Notes</button>
   </div>
 </div>
+
+{# Wraps the four data-entry panels. On desktop (≥901px) this becomes
+   a 2×2 grid so all panels are visible side-by-side — same layout
+   cashiers know from the legacy spreadsheet (Receipts | Disbursements
+   on top, Money Transfers | Over/Short below). On mobile the tab bar
+   is the navigation; the grid styles are no-ops and the existing tab
+   JS keeps working unchanged. CSS handles both modes via the
+   .db-grid selector + [data-tab-mode="grid"] toggle below. #}
+<div class="db-grid">
 
 <section class="db-tab-panel" id="panel-receipts" role="tabpanel" aria-labelledby="tab-receipts">
 
@@ -678,6 +725,8 @@
 
 </div><!-- /db-transfers-grid -->
 </section><!-- /panel-transfers -->
+
+</div><!-- /db-grid -->
 
 <div class="sticky-save-bar{% if is_locked %} is-locked{% endif %}">
   {% if is_locked %}
