@@ -6087,14 +6087,30 @@ def superadmin_send_test_email():
 def _store_or_404(store_id): return Store.query.get_or_404(store_id)
 
 @app.route("/superadmin/stores/<int:store_id>/extend-trial", methods=["POST"])
+def _parse_extend_days(form, default, maximum):
+    """Read `days` from the POST form, default to `default`, clamp to
+    [1, maximum]. Used by every route that pushes a deadline forward;
+    centralizes the bounds so an admin can't accidentally extend a
+    trial by 10,000 days."""
+    return max(1, min(int(form.get("days", default) or default), maximum))
+
+
+def _extended_deadline(existing, days):
+    """Push `existing` (a UTC datetime) forward by `days` — but if
+    it's already in the past (or unset), push from `now()` instead.
+    This avoids the regression where re-extending an already-lapsed
+    trial just adds days to a stale past date and stays expired."""
+    now = datetime.utcnow()
+    base = existing if (existing and existing > now) else now
+    return base + timedelta(days=days)
+
+
 @superadmin_required
 def superadmin_extend_trial(store_id):
     """Push the store's trial/grace deadlines forward by N days (default 7)."""
     store = _store_or_404(store_id)
-    days = max(1, min(int(request.form.get("days", 7) or 7), 180))
-    now = datetime.utcnow()
-    base = store.trial_ends_at if (store.trial_ends_at and store.trial_ends_at > now) else now
-    store.trial_ends_at = base + timedelta(days=days)
+    days = _parse_extend_days(request.form, default=7, maximum=180)
+    store.trial_ends_at = _extended_deadline(store.trial_ends_at, days)
     store.grace_ends_at = store.trial_ends_at + timedelta(days=4)
     if store.plan == "inactive":
         store.plan = "trial"
@@ -6140,9 +6156,9 @@ def superadmin_toggle_active(store_id):
 def superadmin_extend_retention(store_id):
     """Push the 6-month data purge deadline out by N days (default 30)."""
     store = _store_or_404(store_id)
-    days = max(1, min(int(request.form.get("days", 30) or 30), 720))
-    base = store.data_retention_until if store.data_retention_until else datetime.utcnow()
-    store.data_retention_until = base + timedelta(days=days)
+    days = _parse_extend_days(request.form, default=30, maximum=720)
+    store.data_retention_until = _extended_deadline(
+        store.data_retention_until, days)
     record_audit("extend_retention", target_type="store", target_id=store.id,
                  details=f"+{days}d → {store.data_retention_until.isoformat()}")
     db.session.commit()
