@@ -140,3 +140,173 @@ def test_sticky_save_bar_remains_outside_the_panels(logged_in_client):
     last_panel_close = body.rfind("</section><!-- /panel-")
     assert last_panel_close != -1 and last_panel_close < save_pos, \
         "save bar is nested inside a tab panel; switching tabs would hide it"
+
+
+# ── Regression: tabs broke when a read-only line-item widget had no
+#                Add button. initLineItemWidget('return_payback') threw
+#                a TypeError on addBtn.addEventListener, which halted
+#                the <script> tag and prevented the tab-switcher IIFE
+#                below it from binding the click handler. Result:
+#                cashier was stuck on the Receipts tab.
+#
+# The fix is a `if (!addBtn) return;` guard inside initLineItemWidget,
+# placed AFTER the toggle wiring (which uses `root` only) and BEFORE
+# the addBtn / tbody event bindings. These tests pin both surfaces of
+# the contract so a future refactor can't silently re-break the
+# tabs.
+
+def test_return_payback_widget_has_no_add_button(logged_in_client):
+    """The read-only return_payback widget must NOT render an
+    `id='li-return_payback-add'` element. If a future change re-adds
+    one, the guard test below stops being meaningful — but on the
+    other hand the original crash path also stops applying."""
+    body = _get_body(logged_in_client)
+    assert 'id="li-return_payback-details"' in body, \
+        "return_payback widget should still mount"
+    assert 'id="li-return_payback-add"' not in body, \
+        "read-only widget shouldn't render an Add button"
+
+
+def test_init_line_item_widget_guards_against_missing_add_button(logged_in_client):
+    """The inline JS must early-return when the Add button isn't on
+    the page — otherwise binding `addBtn.addEventListener` throws a
+    TypeError, halts the <script> tag, and the tab switcher (defined
+    in the same script block) never wires up. That bug stranded
+    cashiers on the Receipts tab.
+
+    We can't execute JS in pytest cheaply, so we pin the source: the
+    guard `if (!addBtn) return;` must appear AFTER `addBtn = q('add')`
+    and BEFORE `addBtn.addEventListener`. The exact text of the guard
+    doesn't matter, but its existence and position do.
+    """
+    body = _get_body(logged_in_client)
+    # Find the relevant slice of the script tag.
+    fn_start = body.find("function initLineItemWidget(")
+    assert fn_start != -1, "initLineItemWidget function must be in the script"
+    # End of function = the .forEach(initLineItemWidget) call site.
+    fn_end = body.find(".forEach(initLineItemWidget)", fn_start)
+    assert fn_end != -1
+    fn_body = body[fn_start:fn_end]
+
+    add_decl_idx = fn_body.find("addBtn  = q('add')")
+    if add_decl_idx == -1:
+        add_decl_idx = fn_body.find('addBtn = q("add")')
+    assert add_decl_idx != -1, "addBtn decl must exist"
+
+    # Anchor on `addBtn.addEventListener(` (with paren) so any prose
+    # comment that mentions the call doesn't get matched first.
+    add_listen_idx = fn_body.find("addBtn.addEventListener(")
+    assert add_listen_idx != -1
+    assert add_listen_idx > add_decl_idx
+
+    # The guard must sit between the decl and the listener-bind.
+    guard_idx = fn_body.find("if (!addBtn) return;")
+    assert guard_idx != -1, (
+        "initLineItemWidget is missing the `if (!addBtn) return;` "
+        "guard — without it, read-only line-item widgets crash the "
+        "<script> tag and break the daily-book tab switcher."
+    )
+    assert add_decl_idx < guard_idx < add_listen_idx, (
+        "the `if (!addBtn) return;` guard is in the wrong place — "
+        "it must sit AFTER addBtn is declared and BEFORE the first "
+        "addBtn.addEventListener call."
+    )
+
+
+def test_daily_book_tab_switcher_iife_present(logged_in_client):
+    """Pin that the tab-switcher IIFE is still in the rendered page
+    (a guard against accidentally deleting the whole block)."""
+    body = _get_body(logged_in_client)
+    # The IIFE binds a click on `#db-tabs` and toggles aria-selected;
+    # match on the click registration to be resilient to whitespace.
+    assert "getElementById('db-tabs')" in body
+    # And the click listener that drives `activate(btn.dataset.tab)`
+    assert "btn.dataset.tab" in body
+
+
+# ── Desktop grid layout (≥901px): all four panels visible at once ──
+#
+# The cashier's existing spreadsheet has Receipts + Disbursements
+# side-by-side and Money Transfers + Other Reports below — much less
+# clicking than tabs. The .db-grid wrapper makes the same 2×2 layout
+# happen on desktop while leaving mobile (which uses the tab bar) alone.
+
+def test_db_grid_wrapper_wraps_all_four_panels(logged_in_client):
+    """The four panels must sit inside <div class='db-grid'> so the
+    desktop 2x2 grid CSS has something to attach to. The wrapper opens
+    BEFORE panel-receipts and closes AFTER panel-transfers."""
+    body = _get_body(logged_in_client)
+    grid_open  = body.find('class="db-grid"')
+    rec_open   = body.find('id="panel-receipts"')
+    tx_close   = body.rfind('</section><!-- /panel-transfers -->')
+    grid_close = body.find('</div><!-- /db-grid -->')
+    for name, idx in [('db-grid open', grid_open),
+                      ('panel-receipts', rec_open),
+                      ('panel-transfers close', tx_close),
+                      ('db-grid close', grid_close)]:
+        assert idx != -1, f"missing: {name}"
+    assert grid_open < rec_open < tx_close < grid_close, (
+        "db-grid wrapper must enclose ALL four panels (receipts first, "
+        "transfers last in DOM order)")
+
+
+def test_desktop_css_hides_tab_bar_and_shows_all_panels(logged_in_client):
+    """Pin the desktop CSS contract so a future refactor doesn't drop
+    one of the rules and silently re-break either the mobile tab UX
+    or the desktop all-visible layout."""
+    body = _get_body(logged_in_client)
+    # Find the @media (min-width: 901px) block. Must contain:
+    #   .db-grid { display: grid; ... 1fr 1fr ... }
+    #   .db-grid > .db-tab-panel[hidden] { display: block ...}
+    #   .db-tab-bar { display: none; }
+    media_idx = body.find("@media (min-width: 901px)")
+    assert media_idx != -1
+    media_end = body.find("</style>", media_idx)
+    block = body[media_idx:media_end]
+
+    assert ".db-grid {" in block, "db-grid block missing on desktop"
+    assert "grid-template-columns: 1fr 1fr" in block, \
+        "desktop should use 2-column grid"
+    assert "[hidden]" in block and "display: block" in block, (
+        "desktop must override the [hidden] attribute so all four "
+        "panels are visible at once")
+    assert ".db-tab-bar { display: none; }" in block, (
+        "desktop should hide the tab bar (everything's already on "
+        "screen, the bar would be visual noise)")
+
+
+def test_desktop_panel_order_matches_excel_layout(logged_in_client):
+    """The legacy spreadsheet has Receipts + Disbursements on the top
+    row and Money Transfers + Over/Short on the bottom — the grid
+    `order:` rules in the desktop CSS must reproduce that pairing.
+    DOM order is receipts/disbursements/summary/transfers, so without
+    the order overrides the grid would lay out as receipts |
+    disbursements / summary | transfers — wrong (transfers and
+    summary swapped)."""
+    body = _get_body(logged_in_client)
+    media_idx = body.find("@media (min-width: 901px)")
+    block = body[media_idx:body.find("</style>", media_idx)]
+    # Each panel needs an explicit order. Receipts must be 1, disb 2,
+    # transfers 3 (NOT 4), summary 4 (NOT 3).
+    import re
+    def order_for(panel):
+        m = re.search(r"#panel-" + panel + r"\s*\{\s*order:\s*(\d+)", block)
+        assert m, f"#panel-{panel} missing an `order:` rule on desktop"
+        return int(m.group(1))
+    assert order_for("receipts") == 1
+    assert order_for("disbursements") == 2
+    assert order_for("transfers") == 3
+    assert order_for("summary") == 4
+
+
+def test_mobile_tab_bar_still_renders(logged_in_client):
+    """Sanity: hiding the tab bar is gated on the desktop @media
+    block. The default markup must still render the bar so mobile
+    keeps its navigation."""
+    body = _get_body(logged_in_client)
+    # The bar is server-rendered unconditionally; CSS at ≥901px hides
+    # it. The element must be present in the DOM.
+    assert 'class="db-tab-bar"' in body
+    # And the four tab buttons that drive the mobile single-panel view.
+    for tab in ("receipts", "disbursements", "transfers", "summary"):
+        assert f'data-tab="{tab}"' in body
