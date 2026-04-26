@@ -483,6 +483,7 @@
     });
   })();
 </script>
+<script src="{{ url_for('static', filename='search.js', v=STATIC_VERSION) }}" defer></script>
 {% block scripts %}{% endblock %}
 <script>
 if ('serviceWorker' in navigator) {

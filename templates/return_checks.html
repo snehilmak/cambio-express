@@ -390,11 +390,10 @@
 <script>
 (function () {
   // ── Live search ──────────────────────────────────────────
-  // Same contract as templates/transfers.html: 300ms debounce, 2-char
-  // minimum (or empty), AbortController-cancelled, history.replaceState
-  // for shareable URLs. Status pills are server-rendered links so they
-  // do a full page load — they're filter changes, not searches.
-  var input  = document.getElementById('rcSearch');
+  // Universal mechanics (debounce, abort, URL sync) live in
+  // static/search.js::attachSearchDebounce. Page-specific concerns
+  // — current status filter, multiple result targets, post-swap
+  // action re-binding — stay here in the onResult callback.
   var result = document.getElementById('rcResult');
   var meta   = document.getElementById('rcMeta');
   var pendingValue = document.getElementById('rcPendingValue');
@@ -408,52 +407,34 @@
     return (m && m[1]) || 'pending';
   }
 
-  var DEBOUNCE_MS = 300, timer = null, ctrl = null;
-
-  function syncUrl(q) {
-    var url = new URL(window.location.href);
-    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
-    history.replaceState(null, '', url);
-  }
-
-  function fetchAndSwap(q) {
-    if (ctrl) ctrl.abort();
-    ctrl = new AbortController();
-    var qs = new URLSearchParams({ partial: '1', status: currentStatus(), q: q });
-    fetch('{{ url_for("return_checks") }}?' + qs.toString(), {
-      headers: { 'X-Requested-With': 'fetch' },
-      signal: ctrl.signal
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (!result) return;
-        result.innerHTML = data.html || '';
-        if (meta) {
-          meta.innerHTML = 'Showing ' + data.matched +
-            ' ' + (data.matched === 1 ? 'row' : 'rows') +
-            ' · filter <strong>' + (data.status || 'pending') + '</strong>' +
-            (q ? ' · matching "' + q + '"' : '');
-        }
-        if (pendingValue && typeof data.pending_balance === 'number') {
-          pendingValue.textContent = '$' +
-            data.pending_balance.toLocaleString('en-US',
-              { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-        if (pendingCount && typeof data.pending_count === 'number') {
-          pendingCount.textContent = data.pending_count;
-        }
-        bindRowActions();
-      })
-      .catch(function (e) { if (e.name !== 'AbortError') console.error(e); });
-  }
-
-  if (input) {
-    input.addEventListener('input', function () {
-      var q = input.value.trim();
-      if (timer) clearTimeout(timer);
-      if (q.length === 1) return;
-      timer = setTimeout(function () { syncUrl(q); fetchAndSwap(q); }, DEBOUNCE_MS);
-    });
-  }
+  attachSearchDebounce({
+    input: document.getElementById('rcSearch'),
+    buildUrl: function (q) {
+      var qs = new URLSearchParams({
+        partial: '1', status: currentStatus(), q: q
+      });
+      return '{{ url_for("return_checks") }}?' + qs.toString();
+    },
+    onResult: function (data, q) {
+      if (!result) return;
+      result.innerHTML = data.html || '';
+      if (meta) {
+        meta.innerHTML = 'Showing ' + data.matched +
+          ' ' + (data.matched === 1 ? 'row' : 'rows') +
+          ' · filter <strong>' + (data.status || 'pending') + '</strong>' +
+          (q ? ' · matching "' + q + '"' : '');
+      }
+      if (pendingValue && typeof data.pending_balance === 'number') {
+        pendingValue.textContent = '$' +
+          data.pending_balance.toLocaleString('en-US',
+            { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      if (pendingCount && typeof data.pending_count === 'number') {
+        pendingCount.textContent = data.pending_count;
+      }
+      bindRowActions();
+    }
+  });
 
   // ── Modal controllers ────────────────────────────────────
   var paymentModal = document.getElementById('rcPaymentModal');

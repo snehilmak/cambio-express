@@ -180,17 +180,12 @@
 {% block scripts %}
 <script>
 (function () {
-  // Live-search wiring — debounced 300ms, 2-char minimum (or empty),
-  // AbortController-cancelled, URL kept in sync via history.replaceState
-  // so the result is shareable. Mirrors templates/transfers.html.
-  var input = document.getElementById('olSearch');
+  // Live-search wiring. Universal mechanics (debounce, abort, URL
+  // sync) live in static/search.js::attachSearchDebounce; the
+  // page-specific bits (which period pill is active, custom meta
+  // text) stay here in the buildUrl + onResult callbacks.
   var result = document.getElementById('olResult');
   var meta = document.getElementById('olMeta');
-  if (!input || !result) return;
-
-  var DEBOUNCE_MS = 300;
-  var timer = null;
-  var ctrl  = null;
 
   function currentPeriod() {
     var btn = document.querySelector('.ol-period .btn-primary');
@@ -200,43 +195,26 @@
     return (m && m[1]) || 'month';
   }
 
-  function syncUrl(q) {
-    var url = new URL(window.location.href);
-    if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
-    history.replaceState(null, '', url);
-  }
-
-  function fetchAndSwap(q) {
-    if (ctrl) ctrl.abort();
-    ctrl = new AbortController();
-    var period = currentPeriod();
-    var qs = new URLSearchParams({ partial: '1', period: period, q: q });
-    fetch('{{ url_for("owner_locations") }}?' + qs.toString(), {
-      headers: { 'X-Requested-With': 'fetch' },
-      signal: ctrl.signal
-    }).then(function (r) { return r.json(); })
-      .then(function (data) {
-        result.innerHTML = data.html || '';
-        if (meta) {
-          if (q) {
-            meta.textContent = 'Showing ' + data.matched + ' of ' + data.total +
-                               ' stores · matching "' + q + '"';
-          } else {
-            meta.textContent = data.total + ' location' + (data.total === 1 ? '' : 's');
-          }
+  attachSearchDebounce({
+    input: document.getElementById('olSearch'),
+    buildUrl: function (q) {
+      var qs = new URLSearchParams({
+        partial: '1', period: currentPeriod(), q: q
+      });
+      return '{{ url_for("owner_locations") }}?' + qs.toString();
+    },
+    onResult: function (data, q) {
+      if (!result) return;
+      result.innerHTML = data.html || '';
+      if (meta) {
+        if (q) {
+          meta.textContent = 'Showing ' + data.matched + ' of ' + data.total +
+                             ' stores · matching "' + q + '"';
+        } else {
+          meta.textContent = data.total + ' location' + (data.total === 1 ? '' : 's');
         }
-      })
-      .catch(function (e) { if (e.name !== 'AbortError') console.error(e); });
-  }
-
-  input.addEventListener('input', function () {
-    var q = input.value.trim();
-    if (timer) clearTimeout(timer);
-    if (q.length === 1) return;  // 2-char minimum, like /transfers
-    timer = setTimeout(function () {
-      syncUrl(q);
-      fetchAndSwap(q);
-    }, DEBOUNCE_MS);
+      }
+    }
   });
 })();
 </script>
