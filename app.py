@@ -4231,28 +4231,77 @@ def _reject_if_locked(store_id, report_date, ds):
     flash(_DAILY_LOCKED_MSG, "error")
     return redirect(url_for("daily_report", ds=ds))
 
-def _recompute_drops_total(store_id, report_date):
-    """Sum DailyDrop rows for the given date and push the total onto
-    DailyReport.outside_cash_drops. Single source of truth for the daily
-    book's outside-cash-drops line."""
-    total = (db.session.query(db.func.coalesce(db.func.sum(DailyDrop.amount), 0.0))
-             .filter_by(store_id=store_id, report_date=report_date).scalar()) or 0.0
-    rpt = _ensure_daily_report(store_id, report_date)
-    rpt.outside_cash_drops = float(total)
-    rpt.updated_at = datetime.utcnow()
-    return total
 
-def _recompute_check_deposits_total(store_id, report_date):
-    """Sum CheckDeposit rows for the given date and push the total onto
-    DailyReport.checks_deposit. Same contract as _recompute_drops_total:
-    the daily-book field is derived, so saves from a stale form can't
-    overwrite the truth."""
-    total = (db.session.query(db.func.coalesce(db.func.sum(CheckDeposit.amount), 0.0))
-             .filter_by(store_id=store_id, report_date=report_date).scalar()) or 0.0
-    rpt = _ensure_daily_report(store_id, report_date)
-    rpt.checks_deposit = float(total)
-    rpt.updated_at = datetime.utcnow()
-    return total
+
+def _migrate_legacy_line_item_tables():
+    """One-time, idempotent migration: copy legacy DailyDrop and
+    CheckDeposit rows into DailyLineItem with discriminator kinds
+    ('drop' and 'check_deposit'). Runs at boot after db.create_all().
+
+    Why this exists: DailyDrop and CheckDeposit predated the generic
+    DailyLineItem(kind=...) model. They were kept side-by-side because
+    they had the same shape but the migration cost wasn't worth it
+    until enough other kinds (return_payback, cash_purchase, etc.)
+    accumulated. Now that we want a single code path for every
+    "log multiple things in a day with time + amount + note" widget,
+    the migration is finally worth running.
+
+    Idempotency: for each legacy row, we look for a matching
+    DailyLineItem (same store_id + report_date + kind + at_time +
+    amount). If one exists we skip — a re-run inserts nothing new.
+    The legacy tables themselves are NOT dropped; their rows stay
+    intact as a safety net + forensic record. A future cleanup PR can
+    remove the model classes and tables once a few weeks of main
+    have confirmed nothing references them.
+
+    Returns the number of rows inserted (useful for boot logs +
+    test assertions). Quiet no-op on a fresh DB where neither legacy
+    table has any rows.
+    """
+    inserted = 0
+    try:
+        legacy_drops = DailyDrop.query.all()
+    except Exception:
+        # Tables don't exist yet on a brand-new boot before
+        # db.create_all() finishes. Caller wraps this in a try block
+        # but we belt-and-suspenders here too.
+        legacy_drops = []
+    for dd in legacy_drops:
+        existing = DailyLineItem.query.filter_by(
+            store_id=dd.store_id, report_date=dd.report_date,
+            kind="drop", at_time=dd.drop_time,
+        ).filter(DailyLineItem.amount == dd.amount).first()
+        if existing is None:
+            db.session.add(DailyLineItem(
+                store_id=dd.store_id, report_date=dd.report_date,
+                kind="drop", at_time=dd.drop_time,
+                amount=dd.amount, note=dd.note or "",
+                created_by=dd.created_by,
+                created_at=dd.created_at or datetime.utcnow(),
+            ))
+            inserted += 1
+    try:
+        legacy_checks = CheckDeposit.query.all()
+    except Exception:
+        legacy_checks = []
+    for cd in legacy_checks:
+        existing = DailyLineItem.query.filter_by(
+            store_id=cd.store_id, report_date=cd.report_date,
+            kind="check_deposit", at_time=cd.deposit_time,
+        ).filter(DailyLineItem.amount == cd.amount).first()
+        if existing is None:
+            db.session.add(DailyLineItem(
+                store_id=cd.store_id, report_date=cd.report_date,
+                kind="check_deposit", at_time=cd.deposit_time,
+                amount=cd.amount, note=cd.note or "",
+                created_by=cd.created_by,
+                created_at=cd.created_at or datetime.utcnow(),
+            ))
+            inserted += 1
+    if inserted:
+        db.session.commit()
+    return inserted
+
 
 # Generic line-item kinds that sum into a single DailyReport field.
 # Each entry: (daily_report_field, singular_label, plural_label_for_count).
@@ -4271,6 +4320,15 @@ _LINE_ITEM_KINDS = {
     # the rest of the kinds above.
     "other_cash_in":  ("other_cash_in",          "other cash in",        "entries"),
     "other_cash_out": ("other_cash_out",         "other cash out",       "entries"),
+    # Outside-cash drops (ATM drops, safe drops). Originally lived in
+    # its own DailyDrop table + bespoke routes/IIFE — collapsed into
+    # the generic kind system after the data migration. The legacy
+    # DailyDrop table is preserved (data not deleted) but the code
+    # path no longer references it.
+    "drop":           ("outside_cash_drops",     "drop",                 "drops"),
+    # Check deposits (morning/afternoon trips to the bank). Same
+    # story as drops — was its own CheckDeposit table; now a kind.
+    "check_deposit":  ("checks_deposit",         "check deposit",        "deposits"),
 }
 
 def _line_item_kind_or_404(kind):
@@ -4327,13 +4385,11 @@ def daily_report(ds):
             "federal_tax":sum((r.federal_tax or 0) for r in rows),
             "count":      len(rows),
         }
-    drops = (DailyDrop.query.filter_by(store_id=sid, report_date=report_date)
-             .order_by(DailyDrop.drop_time).all())
-    drops_total = sum(d.amount for d in drops)
-    check_deposits = (CheckDeposit.query
-                      .filter_by(store_id=sid, report_date=report_date)
-                      .order_by(CheckDeposit.deposit_time).all())
-    check_deposits_total = sum(c.amount for c in check_deposits)
+    # Drops + Check Deposits used to live in their own DailyDrop /
+    # CheckDeposit tables. They're now `kind='drop'` and
+    # `kind='check_deposit'` rows in DailyLineItem, picked up by the
+    # generic loader below. Legacy data is migrated at boot via
+    # _migrate_legacy_line_item_tables().
     # Load + total every generic line-item kind in a single query, then
     # bucket in Python — cheaper than five separate SELECTs for a page
     # that usually has a handful of rows per kind.
@@ -4355,12 +4411,10 @@ def daily_report(ds):
         def fv(k): return float(request.form.get(k) or 0)
         for field in _DAILY_REPORT_FIELDS:
             setattr(report,field,fv(field))
-        # outside_cash_drops + checks_deposit + every DailyReport field
-        # backed by a generic line-item kind are derived — pull from the
-        # line-item tables so a stale form submission can't overwrite
-        # the truth.
-        report.outside_cash_drops = float(drops_total)
-        report.checks_deposit = float(check_deposits_total)
+        # Every DailyReport field backed by a generic line-item kind
+        # is derived — pull from the line-item totals so a stale form
+        # submission can't overwrite the truth. (Includes drops and
+        # check deposits, which are now just two more kinds.)
         for kind, (field, _, _) in _LINE_ITEM_KINDS.items():
             setattr(report, field, float(line_items_total[kind]))
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
@@ -4391,8 +4445,6 @@ def daily_report(ds):
             locked_by_name = actor.full_name or actor.username or ""
     return render_template("daily_report.html",user=user,report_date=report_date,
         report=report,mt_rows=mt_rows,companies=companies,auto_mt=auto_mt,
-        drops=drops, drops_total=drops_total,
-        check_deposits=check_deposits, check_deposits_total=check_deposits_total,
         line_items=line_items, line_items_total=line_items_total,
         locked_by_name=locked_by_name)
 
@@ -4404,153 +4456,6 @@ def _wants_json():
     """
     accept = request.accept_mimetypes
     return bool(accept and accept.best == "application/json")
-
-def _drops_json_payload(store_id, report_date):
-    """Current state of the drops widget for a given day."""
-    drops = (DailyDrop.query
-             .filter_by(store_id=store_id, report_date=report_date)
-             .order_by(DailyDrop.drop_time).all())
-    total = sum(d.amount for d in drops)
-    return {"ok": True, "total": float(total), "drops": [d.to_dict() for d in drops]}
-
-@app.route("/daily/<string:ds>/drops/new", methods=["POST"])
-@admin_required
-def daily_drop_new(ds):
-    """Append a single Outside Cash Drop for this report date."""
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    raw_time = request.form.get("drop_time", "").strip()
-    raw_amt  = request.form.get("amount", "").strip()
-    err = None
-    drop_time = amount = None
-    try:
-        drop_time = datetime.strptime(raw_time, "%H:%M").time()
-    except ValueError:
-        err = "Enter a valid time (HH:MM)."
-    if err is None:
-        try:
-            amount = float(raw_amt)
-            if amount <= 0: raise ValueError
-        except ValueError:
-            err = "Amount must be greater than zero."
-    if err:
-        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
-        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
-    db.session.add(DailyDrop(
-        store_id=sid, report_date=report_date,
-        drop_time=drop_time, amount=amount,
-        note=request.form.get("note", "").strip()[:120],
-        created_by=current_user().id,
-    ))
-    db.session.flush()
-    _recompute_drops_total(sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_drops_json_payload(sid, report_date))
-    flash(f"Drop of ${amount:,.2f} at {drop_time.strftime('%H:%M')} added.", "success")
-    return redirect(url_for("daily_report", ds=ds))
-
-@app.route("/daily/<string:ds>/drops/<int:drop_id>/delete", methods=["POST"])
-@admin_required
-def daily_drop_delete(ds, drop_id):
-    """Delete a single Outside Cash Drop and refresh the rolled-up total."""
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    drop = (DailyDrop.query
-            .filter_by(id=drop_id, store_id=sid, report_date=report_date)
-            .first_or_404())
-    db.session.delete(drop)
-    db.session.flush()
-    _recompute_drops_total(sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_drops_json_payload(sid, report_date))
-    flash("Drop deleted.", "success")
-    return redirect(url_for("daily_report", ds=ds))
-
-def _check_deposits_json_payload(store_id, report_date):
-    """Current state of the check-deposits widget for a given day."""
-    rows = (CheckDeposit.query
-            .filter_by(store_id=store_id, report_date=report_date)
-            .order_by(CheckDeposit.deposit_time).all())
-    total = sum(r.amount for r in rows)
-    return {"ok": True, "total": float(total),
-            "check_deposits": [r.to_dict() for r in rows]}
-
-@app.route("/daily/<string:ds>/check-deposits/new", methods=["POST"])
-@admin_required
-def daily_check_deposit_new(ds):
-    """Append a single Check Deposit line item for this report date."""
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    raw_time = request.form.get("deposit_time", "").strip()
-    raw_amt  = request.form.get("amount", "").strip()
-    err = None
-    deposit_time = amount = None
-    try:
-        deposit_time = datetime.strptime(raw_time, "%H:%M").time()
-    except ValueError:
-        err = "Enter a valid time (HH:MM)."
-    if err is None:
-        try:
-            amount = float(raw_amt)
-            if amount <= 0: raise ValueError
-        except ValueError:
-            err = "Amount must be greater than zero."
-    if err:
-        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
-        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
-    db.session.add(CheckDeposit(
-        store_id=sid, report_date=report_date,
-        deposit_time=deposit_time, amount=amount,
-        note=request.form.get("note", "").strip()[:120],
-        created_by=current_user().id,
-    ))
-    db.session.flush()
-    _recompute_check_deposits_total(sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_check_deposits_json_payload(sid, report_date))
-    flash(f"Check deposit of ${amount:,.2f} at {deposit_time.strftime('%H:%M')} added.", "success")
-    return redirect(url_for("daily_report", ds=ds))
-
-@app.route("/daily/<string:ds>/check-deposits/<int:deposit_id>/delete", methods=["POST"])
-@admin_required
-def daily_check_deposit_delete(ds, deposit_id):
-    """Delete a single Check Deposit and refresh the rolled-up total."""
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    row = (CheckDeposit.query
-           .filter_by(id=deposit_id, store_id=sid, report_date=report_date)
-           .first_or_404())
-    db.session.delete(row)
-    db.session.flush()
-    _recompute_check_deposits_total(sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_check_deposits_json_payload(sid, report_date))
-    flash("Check deposit deleted.", "success")
-    return redirect(url_for("daily_report", ds=ds))
 
 def _line_items_json_payload(kind, store_id, report_date):
     """Current state of a generic line-item widget for a given day + kind."""
@@ -7199,6 +7104,13 @@ def init_db():
         db.create_all()
         _ensure_added_columns()
         _rename_maxi_transfer_to_maxi()
+        # One-time copy of legacy DailyDrop + CheckDeposit rows into
+        # the generic DailyLineItem table. Idempotent — safe on every
+        # boot, no-op once the data has been migrated.
+        try:
+            _migrate_legacy_line_item_tables()
+        except Exception as e:
+            app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _seed_feature_flags()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
