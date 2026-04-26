@@ -3889,13 +3889,23 @@ def tv_display_country_edit(country_id):
                 b.sort_order = int(request.form.get(f"bank-{b.id}-sort") or 0)
             except ValueError:
                 pass
-        new_bank_name = (request.form.get("new_bank_name") or "").strip()[:120]
-        if new_bank_name:
+        # Accept one or many new banks in a single POST — the grid
+        # editor exposes "+ Insert row" which can be tapped multiple
+        # times before the operator hits Save. Backwards compatible:
+        # form.getlist returns ["x"] for a single new_bank_name=x and
+        # [] when the field is absent.
+        new_bank_names = [
+            (n or "").strip()[:120]
+            for n in request.form.getlist("new_bank_name")
+            if (n or "").strip()
+        ]
+        if new_bank_names:
             last = (db.session.query(db.func.max(TVDisplayPayoutBank.sort_order))
                      .filter_by(country_id=country.id).scalar() or 0)
-            db.session.add(TVDisplayPayoutBank(
-                country_id=country.id, bank_name=new_bank_name,
-                sort_order=last + 10))
+            for offset, name in enumerate(new_bank_names, start=1):
+                db.session.add(TVDisplayPayoutBank(
+                    country_id=country.id, bank_name=name,
+                    sort_order=last + 10 * offset))
         db.session.commit()
 
         # Now upsert the rate matrix. After the bank deletes/adds above
