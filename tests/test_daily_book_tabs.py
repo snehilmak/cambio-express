@@ -80,9 +80,13 @@ def test_section_boxes_moved_into_correct_panels(logged_in_client):
 
     dis = panel_html("disbursements")
     assert "DISBURSEMENTS" in dis and "TOTAL DISBURSEMENTS" in dis
-    # Line-item widgets + drops + checks live under Disbursements
+    # Line-item widgets + drops + checks live under Disbursements.
+    # Note: 'Outside Cash & Drops' renders HTML-escaped (`&amp;`)
+    # because the macro emits the label via `{{ label }}` (autoescape).
+    # The legacy bespoke widget hand-wrote the `&` so the older test
+    # could match the literal — the unified widget escapes consistently.
     for label in ("Cash Purchases", "Cash Expense", "Check Purchases",
-                  "Check Expense", "Outside Cash & Drops", "Checks Deposit",
+                  "Check Expense", "Outside Cash &amp; Drops", "Checks Deposit",
                   "Cash Deposit", "Safe Balance", "Payroll Expense",
                   "Other Cash Out"):
         assert label in dis, f"missing in Disbursements: {label}"

@@ -85,13 +85,16 @@ def test_main_form_save_rejected_while_locked(logged_in_client, test_store_id):
             "main form save must not persist while locked"
 
 
-def test_drops_new_returns_json_403_while_locked(logged_in_client):
-    from app import DailyDrop
+def test_drops_new_returns_json_403_while_locked(logged_in_client, test_store_id):
+    """Drops are now `kind='drop'` rows in DailyLineItem (after the
+    DailyDrop → DailyLineItem unification). The lock guard still
+    rejects the add, just via the generic line-items route."""
+    from app import DailyLineItem
     ds = _today_ds()
     _lock(logged_in_client, ds)
     r = logged_in_client.post(
-        f"/daily/{ds}/drops/new",
-        data={"drop_time": "10:00", "amount": "50"},
+        f"/daily/{ds}/line-items/drop/new",
+        data={"at_time": "10:00", "amount": "50"},
         headers={"Accept": "application/json"},
     )
     assert r.status_code == 403
@@ -99,41 +102,50 @@ def test_drops_new_returns_json_403_while_locked(logged_in_client):
     assert payload["ok"] is False
     assert "locked" in payload["error"].lower()
     with logged_in_client.application.app_context():
-        assert DailyDrop.query.count() == 0, "no drop should have been created"
+        assert DailyLineItem.query.filter_by(
+            store_id=test_store_id, kind="drop"
+        ).count() == 0, "no drop should have been created"
 
 
 def test_drops_delete_rejected_while_locked(logged_in_client, test_store_id):
-    """Drop delete must also be gated — you can't trim existing line items."""
-    from app import DailyDrop, db
+    """Drop delete is gated through the generic line-items delete
+    route — locked reports refuse to trim existing entries of any
+    kind, drops included."""
+    from app import DailyLineItem, db
     ds = _today_ds()
     with logged_in_client.application.app_context():
-        d = DailyDrop(store_id=test_store_id, report_date=date.today(),
-                      drop_time=time(9, 0), amount=100.0)
+        d = DailyLineItem(store_id=test_store_id, report_date=date.today(),
+                          kind="drop", at_time=time(9, 0), amount=100.0)
         db.session.add(d); db.session.commit()
         drop_id = d.id
     _lock(logged_in_client, ds)
     r = logged_in_client.post(
-        f"/daily/{ds}/drops/{drop_id}/delete",
+        f"/daily/{ds}/line-items/drop/{drop_id}/delete",
         headers={"Accept": "application/json"},
     )
     assert r.status_code == 403
     with logged_in_client.application.app_context():
-        assert DailyDrop.query.filter_by(id=drop_id).first() is not None, \
+        assert db.session.get(DailyLineItem, drop_id) is not None, \
             "drop must not have been deleted"
 
 
-def test_check_deposit_new_rejected_while_locked(logged_in_client):
-    from app import CheckDeposit
+def test_check_deposit_new_rejected_while_locked(logged_in_client, test_store_id):
+    """Check deposits are now `kind='check_deposit'` rows in
+    DailyLineItem. The lock guard rejects the add via the generic
+    line-items route; the legacy CheckDeposit table is untouched."""
+    from app import DailyLineItem
     ds = _today_ds()
     _lock(logged_in_client, ds)
     r = logged_in_client.post(
-        f"/daily/{ds}/check-deposits/new",
-        data={"deposit_time": "09:00", "amount": "250"},
+        f"/daily/{ds}/line-items/check_deposit/new",
+        data={"at_time": "09:00", "amount": "250"},
         headers={"Accept": "application/json"},
     )
     assert r.status_code == 403
     with logged_in_client.application.app_context():
-        assert CheckDeposit.query.count() == 0
+        assert DailyLineItem.query.filter_by(
+            store_id=test_store_id, kind="check_deposit"
+        ).count() == 0
 
 
 def test_line_item_new_rejected_for_every_kind_while_locked(logged_in_client):
