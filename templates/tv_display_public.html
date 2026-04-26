@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ display.theme or 'light' }}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>{{ display.title or 'Money Transfer Rates' }} — {{ store.name }}</title>
+{# Load DineroBook's design tokens so the board reads as part of
+   the same product. The TV view is its own page (no base.html
+   chrome) so we link tokens directly. #}
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
+<meta name="theme-color" content="#0a0a0a">
+<style>
+/*
+ * TV display public board. Standalone page (no base.html). Two
+ * themes — light and dark — both anchored to the DineroBook palette:
+ * near-black surfaces in dark mode, white in light mode, neon green
+ * (#3fff00 / --db-neon) as the only saturated accent in either case.
+ *
+ * Design intent:
+ *   - Country header band is the brand mark of each section. Uses
+ *     the neon-green-on-near-black pairing that the topbar uses, so
+ *     someone glancing at the TV recognizes it as DineroBook output.
+ *   - Rate cells stay maximum-contrast — white-on-dark or dark-on-
+ *     white — so a customer 10 feet away can read $26.18 instantly.
+ *   - JetBrains Mono on the numbers: same monetary-numerals choice
+ *     the admin app uses everywhere money is rendered.
+ *
+ * Two layout modes (orientation = auto | landscape | portrait).
+ * Auto falls through to viewport-driven media queries; explicit
+ * landscape/portrait force a specific cell density.
+ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Light theme — default. White background, near-black text.
+   Country header bands are near-black with neon-green accent rule. */
+body {
+  background: #f4f6fa;
+  color: #0a0a0a;
+}
+.tv-board { padding: 24px 28px; }
+.tv-header {
+  background: #0a0a0a;
+  color: #fff;
+  border: 1px solid #0a0a0a;
+}
+.tv-header::after {
+  background: var(--db-neon, #3fff00);
+}
+.tv-section {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+}
+.tv-section-head {
+  background: #0a0a0a;
+  color: #fff;
+}
+.tv-section-head::after {
+  background: var(--db-neon, #3fff00);
+}
+.tv-row { border-top-color: #eef0f5; }
+.tv-row:nth-child(odd) { background: #f9fafc; }
+.tv-bank { color: #0a0a0a; }
+.tv-cell {
+  color: #0a0a0a;
+  border-left-color: #eef0f5;
+}
+.tv-cell.empty { color: #b6bcc8; }
+.tv-empty { background: #ffffff; color: #4a5061; }
+.tv-empty h2 { color: #0a0a0a; }
+.tv-footer {
+  background: rgba(10, 10, 10, 0.04);
+  color: #4a5061;
+}
+.tv-footer .powered b { color: #0a0a0a; }
+
+/* Dark theme — flips surfaces, keeps neon green accent identical
+   so the brand reads consistently across both modes. */
+[data-theme="dark"] body {
+  background: #0a0a0a;
+  color: #f4f6fa;
+}
+[data-theme="dark"] .tv-header {
+  background: #14181f;
+  border-color: #1f242d;
+}
+[data-theme="dark"] .tv-section {
+  background: #14181f;
+  border-color: #1f242d;
+}
+[data-theme="dark"] .tv-section-head {
+  background: #1f242d;
+  color: #fff;
+}
+[data-theme="dark"] .tv-row { border-top-color: #1f242d; }
+[data-theme="dark"] .tv-row:nth-child(odd) { background: #181c24; }
+[data-theme="dark"] .tv-bank { color: var(--db-neon, #3fff00); }
+[data-theme="dark"] .tv-cell {
+  color: #f4f6fa;
+  border-left-color: #1f242d;
+}
+[data-theme="dark"] .tv-cell.empty { color: #4a5061; }
+[data-theme="dark"] .tv-empty { background: #14181f; color: #a3b0c8; }
+[data-theme="dark"] .tv-empty h2 { color: var(--db-neon, #3fff00); }
+[data-theme="dark"] .tv-footer {
+  background: rgba(255, 255, 255, 0.03);
+  color: #8b94a8;
+}
+[data-theme="dark"] .tv-footer .powered b { color: var(--db-neon, #3fff00); }
+
+/* ─── Layout primitives (theme-agnostic) ─── */
+
+.tv-board {
+  display: flex; flex-direction: column;
+  width: 100vw; height: 100vh;
+  gap: 16px;
+}
+
+/* Header bar — title + subtitle. Subtle neon accent stripe along
+   the bottom edge, matching the topbar pattern in the admin app. */
+.tv-header {
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  border-radius: 12px;
+  flex: 0 0 auto;
+}
+.tv-header::after {
+  content: ''; position: absolute; left: 24px; right: 24px; bottom: 0;
+  height: 3px; border-radius: 2px;
+}
+.tv-title {
+  font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+  font-size: clamp(24px, 4vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+.tv-subtitle {
+  font-size: clamp(13px, 1.5vw, 20px);
+  font-weight: 500;
+  text-align: right;
+  font-style: italic;
+  opacity: 0.85;
+}
+
+/* Country sections stack vertically; flex: 1 1 0 fills viewport. */
+.tv-sections {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.tv-section {
+  display: flex; flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.tv-section-head {
+  position: relative;
+  display: flex; align-items: center;
+  padding: 10px 18px;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+.tv-section-head::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px;
+}
+.tv-flag {
+  font-size: clamp(20px, 2.4vw, 30px);
+  flex: 0 0 auto;
+}
+.tv-country-name {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: clamp(16px, 2vw, 26px);
+  letter-spacing: 0.01em;
+  flex: 0 0 auto;
+  margin-right: auto;
+  text-transform: uppercase;
+}
+.tv-cols {
+  display: flex; gap: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+.tv-col-label {
+  font-family: 'Inter', sans-serif;
+  text-align: center;
+  font-size: clamp(10.5px, 1.2vw, 15px);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  opacity: 0.85;
+}
+
+/* Matrix body. Each row stretches to share section height equally;
+   that way "more banks" automatically rebalances cell heights. */
+.tv-section-body {
+  display: flex; flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.tv-row {
+  display: flex; align-items: stretch;
+  border-top: 1px solid;
+  flex: 1 1 0;
+  min-height: 0;
+}
+.tv-bank {
+  flex: 0 0 auto;
+  width: 22%;
+  min-width: 130px;
+  padding: 8px 16px;
+  display: flex; align-items: center;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: clamp(13px, 1.6vw, 20px);
+}
+.tv-cells {
+  display: flex; flex: 1 1 auto;
+}
+.tv-cell {
+  flex: 1 1 0;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px 4px;
+  border-left: 1px solid;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-weight: 700;
+  font-size: clamp(18px, 2.6vw, 34px);
+  white-space: nowrap;
+}
+.tv-cell .dollar {
+  font-size: 0.55em;
+  vertical-align: top;
+  margin-right: 1px;
+  font-weight: 600;
+  opacity: 0.7;
+}
+.tv-cell .cents {
+  font-size: 0.5em;
+  vertical-align: top;
+  margin-left: 2px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+/* Footer — minimal attribution. */
+.tv-footer {
+  flex: 0 0 auto;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(11px, 0.95vw, 14px);
+}
+.tv-footer .powered b { font-weight: 700; }
+
+/* Empty state when the board hasn't been populated yet. */
+.tv-empty {
+  flex: 1 1 auto;
+  display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 10px;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+}
+.tv-empty h2 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: clamp(20px, 3vw, 32px);
+}
+
+/* ─── Orientation ─── */
+.tv-board[data-orientation="portrait"] {
+  padding: 18px 14px;
+  gap: 12px;
+}
+.tv-board[data-orientation="portrait"] .tv-bank {
+  width: 30%; min-width: 110px;
+}
+
+@media (orientation: portrait) {
+  .tv-board[data-orientation="auto"] {
+    padding: 18px 14px;
+    gap: 12px;
+  }
+  .tv-board[data-orientation="auto"] .tv-bank {
+    width: 30%; min-width: 110px;
+  }
+}
+
+/* Small-viewport safety (someone tests on a laptop monitor). */
+@media (max-width: 640px) {
+  .tv-board { padding: 14px 12px; gap: 10px; }
+  .tv-bank { width: 32%; min-width: 96px; padding: 6px 10px; }
+  .tv-section-head { padding: 8px 12px; gap: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="tv-board" data-orientation="{{ display.orientation or 'auto' }}">
+
+  <header class="tv-header">
+    <div class="tv-title">{{ display.title or 'Money Transfer Rates' }}</div>
+    {% if display.subtitle %}
+    <div class="tv-subtitle">{{ display.subtitle }}</div>
+    {% endif %}
+  </header>
+
+  <div class="tv-sections">
+    {% if not sections %}
+    <div class="tv-empty">
+      <h2>{{ store.name }}</h2>
+      <p>Money transfer rates will appear here once the operator
+         adds them.</p>
+    </div>
+    {% endif %}
+    {% for section in sections %}
+    <section class="tv-section">
+      <div class="tv-section-head">
+        {% if section.country.country_code %}
+        <span class="tv-flag" aria-hidden="true">{{ _country_flag_emoji(section.country.country_code) }}</span>
+        {% endif %}
+        <span class="tv-country-name">{{ section.country.country_name }}</span>
+        {% if section.companies %}
+        <div class="tv-cols">
+          {% for company in section.companies %}
+          <div class="tv-col-label">{{ company }}</div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="tv-section-body">
+        {% for bank in section.banks %}
+        <div class="tv-row">
+          <div class="tv-bank">{{ bank.bank_name }}</div>
+          <div class="tv-cells">
+            {% for company in section.companies %}
+            {% set rate = section.rates.get((bank.id, company)) %}
+            <div class="tv-cell {% if rate is none %}empty{% endif %}">
+              {% if rate is none %}
+                —
+              {% else %}
+                {% set whole = rate|int %}
+                {% set cents_int = ((rate * 100)|round|int) - whole * 100 %}
+                <span class="dollar">$</span>{{ whole }}<span class="cents">{{ '%02d' % cents_int }}</span>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </div>
+
+  <footer class="tv-footer">
+    <span>{{ store.name }}</span>
+    <span class="powered">Powered by <b>DineroBook</b></span>
+  </footer>
+</div>
+
+<meta name="x-tv-last-updated" content="{{ display.last_updated_at.isoformat() if display.last_updated_at else '' }}">
+<script>
+/*
+ * TV-side auto-refresh. Every 30s we hit the same URL via fetch and
+ * reload only when last_updated_at changed — cheaper than full
+ * polling and avoids gratuitous layout flashes.
+ */
+(function () {
+  var meta = document.querySelector('meta[name="x-tv-last-updated"]');
+  var current = meta ? meta.content : '';
+  var REFRESH_MS = 30 * 1000;
+  function tick() {
+    fetch(window.location.href, {cache: 'no-store', credentials: 'same-origin'})
+      .then(function (r) { return r.text(); })
+      .then(function (html) {
+        var m = html.match(/name="x-tv-last-updated" content="([^"]*)"/);
+        if (!m) return;
+        if (m[1] && current && m[1] !== current) {
+          window.location.reload();
+        }
+        current = m[1] || current;
+      })
+      .catch(function () { /* network blip — retry next tick */ });
+  }
+  setInterval(tick, REFRESH_MS);
+})();
+</script>
+
+</body>
+</html>

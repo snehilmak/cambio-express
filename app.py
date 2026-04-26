@@ -45,6 +45,16 @@ except OSError:
     STATIC_VERSION = str(int(_t.time()))
 app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
 
+def _country_flag_emoji(code):
+    """ISO-2 country code → flag emoji. "MX" → "🇲🇽". Two regional-
+    indicator code points concatenated. Returns "" for empty/invalid
+    input so the template can still call it unconditionally."""
+    code = (code or "").strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return ""
+    return "".join(chr(0x1F1E6 + (ord(c) - ord("A"))) for c in code)
+app.jinja_env.globals["_country_flag_emoji"] = _country_flag_emoji
+
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///dinerobook.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -940,6 +950,92 @@ class SuperadminAuditLog(db.Model):
     details     = db.Column(db.Text, default="")             # free-form, usually short JSON/text
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
+# ── TV display add-on ────────────────────────────────────────
+#
+# Per the screenshot we're targeting, the display is a stack of
+# country sections. Each section is a matrix where rows are payout
+# banks ("Banco Industrial", "Coppel", …) and columns are the
+# money-transfer companies the store offers ("Maxi", "Cibao", "Vigo",
+# …). Each cell is the dollar rate that bank pays via that company.
+#
+# Modeled normalized across four tables so the admin can reorder /
+# add / remove banks and MT companies without manual CSV editing
+# on every save:
+#
+#   TVDisplay         per-store config + the public-facing token
+#   TVDisplayCountry  one section on the board (Mexico, Guatemala…)
+#   TVDisplayPayoutBank  one row inside a country
+#   TVDisplayRate     the cell at (bank, mt_company)
+#
+# `mt_companies` lives on Country as a CSV string — adding /
+# reordering MT-company columns is a frequent edit, and a column on
+# the parent is simpler than a fifth join table for "ordering of
+# columns within a country."
+
+class TVDisplay(db.Model):
+    """One row per store that owns the tv_display add-on. Created
+    lazily on first visit to /admin/tv-display."""
+    __tablename__ = "tv_display"
+    id              = db.Column(db.Integer, primary_key=True)
+    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"),
+                                 unique=True, nullable=False)
+    # 32-char URL-safe random token. Anyone with the URL can view —
+    # rotation is a one-click action on the admin page.
+    public_token    = db.Column(db.String(48), unique=True, nullable=False)
+    # Bilingual title bar. Defaults match the screenshot the pilot
+    # store provided ("Cheapest Money Transfer / Mejor Tipo de Cambio").
+    title           = db.Column(db.String(120), default="Cheapest Money Transfer")
+    subtitle        = db.Column(db.String(120), default="Mejor Tipo de Cambio")
+    # Display orientation: "landscape" / "portrait" / "auto" (auto =
+    # respect the device's screen orientation). The TV-side CSS
+    # adapts via media queries; this is the explicit override.
+    orientation     = db.Column(db.String(16), default="auto")
+    # Light / dark theme override for the BOARD. Independent of
+    # admin theme_preference (the operator likes dark mode in their
+    # office, the TV needs the high-contrast light board).
+    theme           = db.Column(db.String(16), default="light")
+    last_updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at      = db.Column(db.DateTime, default=datetime.utcnow)
+
+class TVDisplayCountry(db.Model):
+    """One section on the board (Mexico, Guatemala, …)."""
+    __tablename__ = "tv_display_country"
+    id            = db.Column(db.Integer, primary_key=True)
+    display_id    = db.Column(db.Integer, db.ForeignKey("tv_display.id"),
+                               nullable=False, index=True)
+    country_code  = db.Column(db.String(4), default="")  # ISO-2 — drives the flag emoji
+    country_name  = db.Column(db.String(80), nullable=False)
+    sort_order    = db.Column(db.Integer, default=0)
+    # CSV of MT-company column headers shown for this country. Order
+    # matters (defines column order). Example: "Maxi,Cibao,Vigo".
+    mt_companies  = db.Column(db.String(500), default="")
+
+class TVDisplayPayoutBank(db.Model):
+    """One row in a country's matrix — "Bancomer", "Banorte", etc."""
+    __tablename__ = "tv_display_payout_bank"
+    id          = db.Column(db.Integer, primary_key=True)
+    country_id  = db.Column(db.Integer, db.ForeignKey("tv_display_country.id"),
+                             nullable=False, index=True)
+    bank_name   = db.Column(db.String(120), nullable=False)
+    sort_order  = db.Column(db.Integer, default=0)
+
+class TVDisplayRate(db.Model):
+    """The cell value at (bank, mt_company). Sparse — a cell with no
+    rate set is rendered as "—" on the board."""
+    __tablename__ = "tv_display_rate"
+    id          = db.Column(db.Integer, primary_key=True)
+    bank_id     = db.Column(db.Integer, db.ForeignKey("tv_display_payout_bank.id"),
+                             nullable=False, index=True)
+    # The MT company column header — must match one of the strings
+    # in the parent country's mt_companies CSV. Not FK'd because the
+    # column list is a free-form list per country, not a global table.
+    mt_company  = db.Column(db.String(80), nullable=False)
+    rate        = db.Column(db.Float, nullable=False)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                             onupdate=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("bank_id", "mt_company",
+                                            name="uq_tvrate_bank_company"),)
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
@@ -996,15 +1092,17 @@ _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout
 ADDONS_CATALOG = {
     "tv_display": {
         "name": "TV Display & Live Rates",
-        "price_cents": 200,
-        "price_label": "$2 / month",
-        "tagline": "Show ads & money transfer rates on the TV behind your counter.",
+        "price_cents": 500,
+        "price_label": "$5 / month",
+        "tagline": "Show your money transfer rates on the TV behind your counter.",
         "description": (
-            "Connects this store to the upcoming DineroBook TV app on Amazon Fire TV "
-            "and Google TV. Stream your branded display ads and live money transfer "
-            "rates straight from your DineroBook account — inspired by Xenok Display."
+            "A live rate board for your shop — manage country sections, payout "
+            "banks, and the MT companies you offer in one place; the TV refreshes "
+            "automatically when you change a rate. Each store gets a tokenized "
+            "URL you point any TV browser, Chromecast, smart-TV, or our upcoming "
+            "Google TV / Fire TV apps at."
         ),
-        "status": "coming_soon",
+        "status": "active",
     },
 }
 
@@ -1441,6 +1539,14 @@ def inject_impersonation_context():
         "impersonated_store_name": store.name if store else "(unknown store)",
     }
 
+
+@app.context_processor
+def inject_active_addons():
+    """Expose the current store's active add-ons to every template
+    so the sidebar / topbar can conditionally show feature links
+    (e.g. "TV Display" only when `tv_display` is on)."""
+    store = current_store()
+    return {"active_addons": store_addon_keys(store)}
 
 @app.context_processor
 def inject_theme():
@@ -3578,9 +3684,341 @@ def admin_subscription_toggle_addon(addon_key):
         flash(f"{addon['name']} is coming soon — we'll let you know when it goes live.",
               "success")
         return redirect(url_for("admin_subscription"))
-    # Future: real activation flow (Stripe subscription item update, etc.)
-    flash("Add-on updated.", "success")
+    # Toggle the addon key in/out of the CSV. Stripe billing for the
+    # subscription item is handled separately (see BACKLOG); for now
+    # this gives the pilot store immediate access to the feature, and
+    # the "real money" wiring can land once we've validated the UX.
+    keys = store_addon_keys(store)
+    if addon_key in keys:
+        keys.discard(addon_key)
+        flash(f"{addon['name']} turned off.", "success")
+    else:
+        keys.add(addon_key)
+        flash(f"{addon['name']} is now active. Set up your display →", "success")
+    store.addons = ",".join(sorted(keys))
+    db.session.commit()
+    # When a feature has a dedicated dashboard, drop the user there
+    # right after activating so they don't have to hunt for it.
+    if addon_key == "tv_display" and addon_key in keys:
+        return redirect(url_for("admin_tv_display"))
     return redirect(url_for("admin_subscription"))
+
+def store_has_addon(store, addon_key):
+    """Single predicate every gated route uses, so future Stripe-driven
+    `customer.subscription.updated` syncs flip every gated surface in
+    one shot."""
+    return addon_key in store_addon_keys(store)
+
+# ── TV Display add-on ────────────────────────────────────────
+#
+# Routes split into three audiences:
+#
+#   - /tv-display/*                      — store admins + employees
+#                                          (feature is gated by the
+#                                          tv_display add-on; both
+#                                          roles can edit rates)
+#   - /tv/<token>                        — public, fullscreen, no auth
+#                                          (the URL the TV browser /
+#                                          Chromecast / Fire TV app
+#                                          points at)
+#   - /superadmin/stores/<id>/addons/*   — superadmin override switches
+#                                          (declared with the rest of
+#                                          the per-store actions)
+
+def _tv_required(allow_employee=True):
+    """Guard for /tv-display/* routes. Returns either:
+      - (user, store) tuple on success, or
+      - a Flask Response the caller should return verbatim
+        (redirect to subscription page when add-on isn't active)
+    Hard failures (no session / wrong role) `abort(404)` immediately."""
+    user = current_user()
+    store = current_store()
+    if not user or not store:
+        abort(404)
+    roles = ("admin", "employee") if allow_employee else ("admin",)
+    if user.role not in roles:
+        abort(404)
+    if not store_has_addon(store, "tv_display"):
+        flash("The TV Display add-on isn't active for this store. "
+              "Turn it on from your subscription page.", "warning")
+        return redirect(url_for("admin_subscription"))
+    return (user, store)
+
+def _ensure_tv_display(store):
+    """Get-or-create the store's TVDisplay row + initial token."""
+    d = TVDisplay.query.filter_by(store_id=store.id).first()
+    if d is None:
+        d = TVDisplay(store_id=store.id,
+                       public_token=secrets.token_urlsafe(24))
+        db.session.add(d); db.session.commit()
+    return d
+
+def _csv_split(s):
+    return [x.strip() for x in (s or "").split(",") if x.strip()]
+
+@app.route("/tv-display")
+@login_required
+def admin_tv_display():
+    """Landing page for the TV display add-on. Lists country sections,
+    surfaces the public-display link + token-rotate action, and
+    deep-links into the per-country edit page."""
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    user, store = guard
+    display = _ensure_tv_display(store)
+    countries = (TVDisplayCountry.query
+                  .filter_by(display_id=display.id)
+                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
+    # Quick stats per country so the index is useful at a glance.
+    country_stats = {}
+    for c in countries:
+        bank_count = TVDisplayPayoutBank.query.filter_by(country_id=c.id).count()
+        rate_count = (db.session.query(TVDisplayRate)
+                       .join(TVDisplayPayoutBank,
+                             TVDisplayRate.bank_id == TVDisplayPayoutBank.id)
+                       .filter(TVDisplayPayoutBank.country_id == c.id).count())
+        country_stats[c.id] = {"banks": bank_count, "rates": rate_count}
+    public_url = url_for("tv_public_display", token=display.public_token,
+                          _external=True)
+    return render_template("tv_display_admin.html",
+                            user=user, store=store, display=display,
+                            countries=countries, country_stats=country_stats,
+                            public_url=public_url)
+
+@app.route("/tv-display/settings", methods=["POST"])
+@login_required
+def tv_display_save_settings():
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    display.title = (request.form.get("title") or "").strip()[:120] or "Cheapest Money Transfer"
+    display.subtitle = (request.form.get("subtitle") or "").strip()[:120]
+    orient = (request.form.get("orientation") or "auto").strip()
+    if orient not in ("auto", "landscape", "portrait"):
+        orient = "auto"
+    display.orientation = orient
+    theme = (request.form.get("theme") or "light").strip()
+    if theme not in ("light", "dark"):
+        theme = "light"
+    display.theme = theme
+    display.last_updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Display settings saved.", "success")
+    return redirect(url_for("admin_tv_display"))
+
+@app.route("/tv-display/regenerate-token", methods=["POST"])
+@login_required
+def tv_display_regenerate_token():
+    """Rotate the public token. Anyone holding the old URL stops
+    seeing the board on the next page load."""
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    display.public_token = secrets.token_urlsafe(24)
+    db.session.commit()
+    flash("Display URL regenerated. Update any TV pointing at the old link.",
+          "success")
+    return redirect(url_for("admin_tv_display"))
+
+@app.route("/tv-display/countries/new", methods=["POST"])
+@login_required
+def tv_display_country_new():
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    name = (request.form.get("country_name") or "").strip()[:80]
+    code = (request.form.get("country_code") or "").strip().upper()[:4]
+    if not name:
+        flash("Country name is required.", "error")
+        return redirect(url_for("admin_tv_display"))
+    # Default sort_order = max + 10 so manual reordering has room.
+    last = (db.session.query(db.func.max(TVDisplayCountry.sort_order))
+             .filter_by(display_id=display.id).scalar() or 0)
+    c = TVDisplayCountry(display_id=display.id, country_code=code,
+                          country_name=name, sort_order=last + 10,
+                          mt_companies=(request.form.get("mt_companies") or "").strip()[:500])
+    db.session.add(c); db.session.commit()
+    display.last_updated_at = datetime.utcnow(); db.session.commit()
+    flash(f"Added {name}. Now add payout banks and rates.", "success")
+    return redirect(url_for("tv_display_country_edit", country_id=c.id))
+
+@app.route("/tv-display/countries/<int:country_id>", methods=["GET", "POST"])
+@login_required
+def tv_display_country_edit(country_id):
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    country = TVDisplayCountry.query.filter_by(
+        id=country_id, display_id=display.id).first_or_404()
+
+    if request.method == "POST":
+        # Single big form holds:
+        #   - country header fields (name, code, mt_companies CSV)
+        #   - the bank list (existing rows + optional "new bank")
+        #   - the rate matrix (one input per cell, named "rate-<bank_id>-<col_idx>")
+        # Rates that come back blank delete the cell entirely so admins
+        # can clear a value by emptying the box.
+        country.country_name = (request.form.get("country_name") or country.country_name).strip()[:80]
+        country.country_code = (request.form.get("country_code") or "").strip().upper()[:4]
+        new_companies = (request.form.get("mt_companies") or "").strip()[:500]
+        country.mt_companies = new_companies
+        companies = _csv_split(new_companies)
+
+        # Update existing banks (by id), drop ones flagged delete=1,
+        # and append a single new bank if the form supplies one.
+        for b in TVDisplayPayoutBank.query.filter_by(country_id=country.id).all():
+            if request.form.get(f"bank-{b.id}-delete"):
+                # Cascade-delete the cells under this bank too.
+                TVDisplayRate.query.filter_by(bank_id=b.id).delete(
+                    synchronize_session=False)
+                db.session.delete(b)
+                continue
+            new_name = (request.form.get(f"bank-{b.id}-name") or "").strip()[:120]
+            if new_name:
+                b.bank_name = new_name
+            try:
+                b.sort_order = int(request.form.get(f"bank-{b.id}-sort") or 0)
+            except ValueError:
+                pass
+        new_bank_name = (request.form.get("new_bank_name") or "").strip()[:120]
+        if new_bank_name:
+            last = (db.session.query(db.func.max(TVDisplayPayoutBank.sort_order))
+                     .filter_by(country_id=country.id).scalar() or 0)
+            db.session.add(TVDisplayPayoutBank(
+                country_id=country.id, bank_name=new_bank_name,
+                sort_order=last + 10))
+        db.session.commit()
+
+        # Now upsert the rate matrix. After the bank deletes/adds above
+        # we re-query so the form can include cells for both old and
+        # newly created banks.
+        banks = (TVDisplayPayoutBank.query
+                  .filter_by(country_id=country.id)
+                  .order_by(TVDisplayPayoutBank.sort_order, TVDisplayPayoutBank.id).all())
+        for b in banks:
+            for idx, company in enumerate(companies):
+                key = f"rate-{b.id}-{idx}"
+                raw = (request.form.get(key) or "").strip()
+                existing = TVDisplayRate.query.filter_by(
+                    bank_id=b.id, mt_company=company).first()
+                if not raw:
+                    if existing:
+                        db.session.delete(existing)
+                    continue
+                try:
+                    val = float(raw)
+                except ValueError:
+                    continue
+                if existing:
+                    existing.rate = val
+                else:
+                    db.session.add(TVDisplayRate(
+                        bank_id=b.id, mt_company=company, rate=val))
+        # Drop any orphan rates whose mt_company isn't in the current
+        # column list (admin removed a column). Use a subquery on
+        # bank_id rather than .join().delete(), which SQLAlchemy
+        # explicitly doesn't allow on bulk deletes.
+        bank_ids_subq = db.session.query(TVDisplayPayoutBank.id).filter_by(
+            country_id=country.id)
+        if companies:
+            (TVDisplayRate.query
+             .filter(TVDisplayRate.bank_id.in_(bank_ids_subq),
+                     ~TVDisplayRate.mt_company.in_(companies))
+             .delete(synchronize_session=False))
+        else:
+            # No columns at all — wipe every rate for this country.
+            TVDisplayRate.query.filter(
+                TVDisplayRate.bank_id.in_(bank_ids_subq)
+            ).delete(synchronize_session=False)
+        display.last_updated_at = datetime.utcnow()
+        db.session.commit()
+        flash("Saved.", "success")
+        return redirect(url_for("tv_display_country_edit", country_id=country.id))
+
+    # GET — build a {(bank_id, mt_company): rate} map for quick cell lookup.
+    banks = (TVDisplayPayoutBank.query
+              .filter_by(country_id=country.id)
+              .order_by(TVDisplayPayoutBank.sort_order,
+                        TVDisplayPayoutBank.id).all())
+    companies = _csv_split(country.mt_companies)
+    rate_lookup = {}
+    if banks:
+        for r in (TVDisplayRate.query
+                   .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
+                   .all()):
+            rate_lookup[(r.bank_id, r.mt_company)] = r.rate
+    return render_template("tv_display_country.html",
+                            user=current_user(), store=store, display=display,
+                            country=country, banks=banks, companies=companies,
+                            rate_lookup=rate_lookup)
+
+@app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
+@login_required
+def tv_display_country_delete(country_id):
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    country = TVDisplayCountry.query.filter_by(
+        id=country_id, display_id=display.id).first_or_404()
+    # Manual cascade — same pattern as the retention purge.
+    bank_ids = [b.id for b in TVDisplayPayoutBank.query.filter_by(
+        country_id=country.id).all()]
+    if bank_ids:
+        TVDisplayRate.query.filter(TVDisplayRate.bank_id.in_(bank_ids)).delete(
+            synchronize_session=False)
+    TVDisplayPayoutBank.query.filter_by(country_id=country.id).delete(
+        synchronize_session=False)
+    db.session.delete(country)
+    display.last_updated_at = datetime.utcnow()
+    db.session.commit()
+    flash(f"Removed {country.country_name}.", "success")
+    return redirect(url_for("admin_tv_display"))
+
+@app.route("/tv/<token>")
+def tv_public_display(token):
+    """Fullscreen rate board, no auth. Anyone with the URL sees it.
+    No chrome (no base.html), so it works on a smart-TV browser /
+    Chromecast / Fire TV WebView with no extra UI to confuse the
+    operator."""
+    display = TVDisplay.query.filter_by(public_token=token).first_or_404()
+    store = db.session.get(Store, display.store_id)
+    # If the store later removes the addon, the URL stops working —
+    # belt-and-suspenders, since regenerate_token is the supported path.
+    if not store or not store_has_addon(store, "tv_display"):
+        abort(404)
+    countries = (TVDisplayCountry.query
+                  .filter_by(display_id=display.id)
+                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
+    sections = []
+    for c in countries:
+        banks = (TVDisplayPayoutBank.query
+                  .filter_by(country_id=c.id)
+                  .order_by(TVDisplayPayoutBank.sort_order,
+                            TVDisplayPayoutBank.id).all())
+        companies = _csv_split(c.mt_companies)
+        rate_map = {}
+        if banks:
+            for r in (TVDisplayRate.query
+                       .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
+                       .all()):
+                rate_map[(r.bank_id, r.mt_company)] = r.rate
+        sections.append({
+            "country": c, "banks": banks, "companies": companies,
+            "rates": rate_map,
+        })
+    return render_template("tv_display_public.html",
+                            display=display, store=store, sections=sections)
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
@@ -6028,6 +6466,10 @@ def superadmin_controls():
         total_stores=total_stores,
         stripe_health=stripe_health,
         smtp_health=smtp_health,
+        # Add-on catalog so the per-store override row can iterate
+        # every add-on the platform supports (not just the ones a
+        # given store currently has).
+        addons_catalog=ADDONS_CATALOG,
         # Pagination + filter state for the Stores tab.
         q=q_text, plan_filter=plan_filter, status_filter=status_filter,
         page=page, total_pages=total_pages, stores_matching=stores_matching,
@@ -6086,7 +6528,6 @@ def superadmin_send_test_email():
 # ── Per-store actions (superadmin) ───────────────────────────
 def _store_or_404(store_id): return Store.query.get_or_404(store_id)
 
-@app.route("/superadmin/stores/<int:store_id>/extend-trial", methods=["POST"])
 def _parse_extend_days(form, default, maximum):
     """Read `days` from the POST form, default to `default`, clamp to
     [1, maximum]. Used by every route that pushes a deadline forward;
@@ -6105,6 +6546,7 @@ def _extended_deadline(existing, days):
     return base + timedelta(days=days)
 
 
+@app.route("/superadmin/stores/<int:store_id>/extend-trial", methods=["POST"])
 @superadmin_required
 def superadmin_extend_trial(store_id):
     """Push the store's trial/grace deadlines forward by N days (default 7)."""
@@ -6179,6 +6621,36 @@ def superadmin_revert_to_trial(store_id):
     record_audit("revert_to_trial", target_type="store", target_id=store.id)
     db.session.commit()
     flash(f"{store.name}: reverted to 7-day trial.", "success")
+    return redirect(url_for("superadmin_controls", tab="stores"))
+
+@app.route("/superadmin/stores/<int:store_id>/addons/<addon_key>/toggle",
+            methods=["POST"])
+@superadmin_required
+def superadmin_toggle_addon(store_id, addon_key):
+    """Override switch for a store's add-ons. Bypasses the
+    "needs paid plan" gate that admin_subscription_toggle_addon
+    enforces — sometimes superadmin needs to flip an addon on for a
+    pilot/comped store, or off for a non-paying one. Audit-logged
+    so the override path is always attributable."""
+    store = _store_or_404(store_id)
+    addon = ADDONS_CATALOG.get(addon_key)
+    if not addon:
+        flash("Unknown add-on.", "error")
+        return redirect(url_for("superadmin_controls", tab="stores"))
+    keys = {k.strip() for k in (store.addons or "").split(",") if k.strip()}
+    if addon_key in keys:
+        keys.discard(addon_key)
+        action = "remove_addon"
+        msg = f"{store.name}: {addon['name']} turned off."
+    else:
+        keys.add(addon_key)
+        action = "add_addon"
+        msg = f"{store.name}: {addon['name']} activated."
+    store.addons = ",".join(sorted(keys))
+    record_audit(action, target_type="store", target_id=store.id,
+                  details=addon_key)
+    db.session.commit()
+    flash(msg, "success")
     return redirect(url_for("superadmin_controls", tab="stores"))
 
 # ── Discount codes (superadmin) ──────────────────────────────
@@ -6652,6 +7124,9 @@ _STORE_OWNED_MODELS = [
     "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
+    # TVDisplay (store-keyed) — children handled by the explicit chain
+    # above this loop. Listing it here covers the parent row itself.
+    "TVDisplay",
     "User",
 ]
 
@@ -6686,6 +7161,29 @@ def purge_expired_stores():
             # post-purge forensics) doesn't block the User delete.
             EmailEvent.query.filter(EmailEvent.user_id.in_(user_ids)).update(
                 {"user_id": None}, synchronize_session=False)
+        # TV-display tables form a chain (display → country → bank →
+        # rate) and only the top has store_id. Walk down explicitly so
+        # the FK constraints don't reject the deletes on Postgres.
+        display_ids = [d for (d,) in
+                       db.session.query(TVDisplay.id).filter_by(store_id=s.id).all()]
+        if display_ids:
+            country_ids = [c for (c,) in
+                           db.session.query(TVDisplayCountry.id).filter(
+                               TVDisplayCountry.display_id.in_(display_ids)).all()]
+            if country_ids:
+                bank_ids = [b for (b,) in
+                            db.session.query(TVDisplayPayoutBank.id).filter(
+                                TVDisplayPayoutBank.country_id.in_(country_ids)).all()]
+                if bank_ids:
+                    TVDisplayRate.query.filter(
+                        TVDisplayRate.bank_id.in_(bank_ids)).delete(
+                            synchronize_session=False)
+                TVDisplayPayoutBank.query.filter(
+                    TVDisplayPayoutBank.country_id.in_(country_ids)).delete(
+                        synchronize_session=False)
+            TVDisplayCountry.query.filter(
+                TVDisplayCountry.display_id.in_(display_ids)).delete(
+                    synchronize_session=False)
         for model_name in _STORE_OWNED_MODELS:
             model = globals().get(model_name)
             if model is not None:

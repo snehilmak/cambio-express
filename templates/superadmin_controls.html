@@ -497,6 +497,42 @@
                 <button type="submit" class="btn-xs" title="Drop to 7-day trial">Revert</button>
               </form>
               <a href="{{ url_for('superadmin_impersonate', store_id=s.id) }}" class="btn-xs">Impersonate</a>
+              {# Add-ons override row — opens the row below this one. #}
+              {% set _store_addon_keys = (s.addons or '').split(',') | map('trim') | reject('equalto', '') | list %}
+              <button type="button" class="btn-xs sa-addons-toggle"
+                      data-target="sa-addons-{{ s.id }}"
+                      title="Toggle add-ons for this store (override switch)">
+                Add-ons{% if _store_addon_keys %} ({{ _store_addon_keys|length }}){% endif %} ▾
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr id="sa-addons-{{ s.id }}" class="sa-addons-row" hidden>
+          <td colspan="6" style="padding:12px 18px;background:var(--surface-2);border-bottom:1px solid var(--border);">
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div class="text-sm text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.6px;">
+                Add-ons for {{ s.name }} — superadmin override (bypasses paid-plan gate)
+              </div>
+              {% for key, addon in addons_catalog.items() %}
+              {% set _is_on = key in _store_addon_keys %}
+              <form method="POST"
+                    action="{{ url_for('superadmin_toggle_addon', store_id=s.id, addon_key=key) }}"
+                    style="display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <strong style="font-size:13.5px;">{{ addon.name }}</strong>
+                  <span class="badge {% if _is_on %}badge-green{% else %}badge-yellow{% endif %}">
+                    {% if _is_on %}On{% else %}Off{% endif %}
+                  </span>
+                  <span class="text-muted" style="font-size:12px;">{{ addon.price_label }}</span>
+                  {% if addon.status == 'coming_soon' %}
+                  <span class="badge badge-yellow" style="font-size:10px;">Coming soon</span>
+                  {% endif %}
+                </div>
+                <button type="submit" class="btn-xs {% if _is_on %}danger{% else %}primary{% endif %}">
+                  {% if _is_on %}Turn off{% else %}Turn on{% endif %}
+                </button>
+              </form>
+              {% endfor %}
             </div>
           </td>
         </tr>
@@ -879,4 +915,19 @@
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* Stores tab — per-store add-ons expandable row.
+   Click the "Add-ons" button in the action stack to toggle visibility
+   of the sibling row below. Independent per row, no global state. */
+document.querySelectorAll('.sa-addons-toggle').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var row = document.getElementById(btn.dataset.target);
+    if (!row) return;
+    row.hidden = !row.hidden;
+  });
+});
+</script>
 {% endblock %}
