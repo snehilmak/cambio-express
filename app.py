@@ -3510,13 +3510,19 @@ def admin_subscription():
         retention_total_days=DATA_RETENTION_DAYS,
     )
 
-@app.route("/admin/subscription/billing-portal", methods=["POST"])
-@admin_required
-def admin_subscription_billing_portal():
-    store = current_store()
-    if not store or not store.stripe_customer_id:
-        flash("No billing account found. Choose a plan to get started.", "error")
-        return redirect(url_for("subscribe"))
+def _open_billing_portal(store, error_msg, log_label="billing portal"):
+    """Open the Stripe Customer Portal for `store` and 303-redirect there.
+
+    On failure, flashes `error_msg` and redirects back to
+    /admin/subscription. Centralizes the Stripe boilerplate that the
+    portal-open and the cancel-via-portal routes used to duplicate
+    line for line — the only thing that varies is which error
+    message + log label to show when Stripe fails.
+
+    Returns a Flask response. Caller is responsible for the
+    pre-checks (does the store have a Stripe customer id, is the
+    plan paid, etc.) so this helper stays single-purpose.
+    """
     try:
         portal = stripe.billing_portal.Session.create(
             customer=store.stripe_customer_id,
@@ -3524,9 +3530,23 @@ def admin_subscription_billing_portal():
         )
         return redirect(portal.url, code=303)
     except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe billing portal error: {e}")
-        flash("Could not open billing portal. Please try again.", "error")
+        app.logger.error(f"Stripe {log_label} error: {e}")
+        flash(error_msg, "error")
         return redirect(url_for("admin_subscription"))
+
+
+@app.route("/admin/subscription/billing-portal", methods=["POST"])
+@admin_required
+def admin_subscription_billing_portal():
+    store = current_store()
+    if not store or not store.stripe_customer_id:
+        flash("No billing account found. Choose a plan to get started.", "error")
+        return redirect(url_for("subscribe"))
+    return _open_billing_portal(
+        store,
+        error_msg="Could not open billing portal. Please try again.",
+        log_label="billing portal")
+
 
 @app.route("/admin/subscription/cancel", methods=["POST"])
 @admin_required
@@ -3538,16 +3558,10 @@ def admin_subscription_cancel():
     if not store_has_paid_plan(store) or not store.stripe_customer_id:
         flash("No active subscription to cancel.", "error")
         return redirect(url_for("admin_subscription"))
-    try:
-        portal = stripe.billing_portal.Session.create(
-            customer=store.stripe_customer_id,
-            return_url=url_for("admin_subscription", _external=True),
-        )
-        return redirect(portal.url, code=303)
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe billing portal error (cancel): {e}")
-        flash("Could not open the cancellation page. Please try again.", "error")
-        return redirect(url_for("admin_subscription"))
+    return _open_billing_portal(
+        store,
+        error_msg="Could not open the cancellation page. Please try again.",
+        log_label="billing portal (cancel)")
 
 @app.route("/admin/subscription/addons/<addon_key>", methods=["POST"])
 @admin_required
