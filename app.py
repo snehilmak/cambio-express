@@ -4264,6 +4264,13 @@ _LINE_ITEM_KINDS = {
     "cash_expense":   ("cash_expense",           "cash expense",         "entries"),
     "check_purchase": ("check_purchases",        "check purchase",       "entries"),
     "check_expense":  ("check_expense",          "check expense",        "entries"),
+    # Catch-all "other" buckets — a single day can have multiple
+    # ad-hoc cash-ins (refunds, owner contributions) and cash-outs
+    # (one-off payouts that don't fit Payroll or Drops). Backed by
+    # the same DailyLineItem model + auto-derived total contract as
+    # the rest of the kinds above.
+    "other_cash_in":  ("other_cash_in",          "other cash in",        "entries"),
+    "other_cash_out": ("other_cash_out",         "other cash out",       "entries"),
 }
 
 def _line_item_kind_or_404(kind):
@@ -4290,8 +4297,8 @@ def _recompute_line_items_total(kind, store_id, report_date):
 _DAILY_REPORT_FIELDS = [
     "taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
     "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
-    "forward_balance","from_bank","other_cash_in","rebates_commissions",
-    "cash_deposit","safe_balance","payroll_expense","other_cash_out","over_short",
+    "forward_balance","from_bank","rebates_commissions",
+    "cash_deposit","safe_balance","payroll_expense","over_short",
 ]
 
 @app.route("/daily/<string:ds>",methods=["GET","POST"])
