@@ -61,6 +61,19 @@
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
         New Transfer
       </a>
+      {# TV Display add-on — admins + employees both edit rates,
+         appears only when the store has the add-on active. The
+         active_addons set is empty (not None) when the user has
+         no store or the store has no addons, so the `in` check is
+         safe without an `or` fallback. The outer `user.role !=
+         'superadmin'` guard above already ensures `user` is set. #}
+      {% if active_addons and 'tv_display' in active_addons and user.role in ('admin', 'employee') %}
+      <a href="{{ url_for('admin_tv_display') }}"
+         class="nav-link {% if request.endpoint and request.endpoint.startswith(('admin_tv_display','tv_display_')) %}active{% endif %}">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+        TV Display
+      </a>
+      {% endif %}
       {% endif %}
 
       {# ── Admin-only sections ── #}

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}TV Display — DineroBook{% endblock %}
+{% block page_title %}TV Display{% endblock %}
+{% block content %}
+
+{# Landing for the TV Display add-on. Lists country sections, a
+   settings card for title/orientation/theme, and the public URL
+   the operator points their TV / Chromecast / Fire TV browser at.
+
+   Both store admins and employees reach this page (the rate board
+   is a daily-operations job, not a back-office one). The pilot
+   store's image is the ground-truth design — see attached spec. #}
+
+<div class="card" style="max-width:760px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <span class="card-title">Public display URL</span>
+    <a href="{{ public_url }}" target="_blank" rel="noopener"
+       class="btn btn-outline btn-sm">Open in new tab ↗</a>
+  </div>
+  <div class="card-body">
+    <p class="text-muted" style="margin-top:0;font-size:13.5px;">
+      Point your TV browser, Chromecast, or upcoming Fire TV / Google TV
+      app at this URL. It auto-refreshes every 30 seconds when you
+      change a rate.
+    </p>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
+      <input type="text" id="tv-url" value="{{ public_url }}" readonly
+             style="flex:1;min-width:260px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);">
+      <button type="button" class="btn btn-outline btn-sm" id="copy-url-btn">Copy</button>
+    </div>
+    <details style="margin-top:14px;">
+      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);">
+        Lost the URL or worried it leaked? Regenerate the token.
+      </summary>
+      <form method="POST" action="{{ url_for('tv_display_regenerate_token') }}"
+            style="margin-top:10px;"
+            onsubmit="return confirm('This invalidates the current display URL. Any TV pointing at the old link will stop working until you reconfigure it. Continue?');">
+        <button type="submit" class="btn btn-outline btn-sm"
+                style="border-color:var(--red);color:var(--red);">
+          Regenerate display URL
+        </button>
+      </form>
+    </details>
+  </div>
+</div>
+
+<div class="card" style="max-width:760px;margin-top:24px;">
+  <div class="card-header"><span class="card-title">Display settings</span></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('tv_display_save_settings') }}">
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label>Title (top line)</label>
+          <input type="text" name="title" maxlength="120"
+                 value="{{ display.title or '' }}"
+                 placeholder="Cheapest Money Transfer">
+        </div>
+        <div class="field">
+          <label>Subtitle (second line, optional)</label>
+          <input type="text" name="subtitle" maxlength="120"
+                 value="{{ display.subtitle or '' }}"
+                 placeholder="Mejor Tipo de Cambio">
+        </div>
+        <div class="field">
+          <label>Orientation</label>
+          <select name="orientation">
+            <option value="auto" {% if display.orientation == 'auto' %}selected{% endif %}>Auto (follow device)</option>
+            <option value="landscape" {% if display.orientation == 'landscape' %}selected{% endif %}>Landscape (16:9)</option>
+            <option value="portrait" {% if display.orientation == 'portrait' %}selected{% endif %}>Portrait (vertical TV)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Board theme</label>
+          <select name="theme">
+            <option value="light" {% if display.theme == 'light' %}selected{% endif %}>Light (high readability)</option>
+            <option value="dark" {% if display.theme == 'dark' %}selected{% endif %}>Dark (low-light room)</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-top:18px;">
+        <button type="submit" class="btn btn-primary">Save settings</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card" style="max-width:760px;margin-top:24px;">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+    <span class="card-title">Country sections</span>
+    <a href="#new-country" class="btn btn-outline btn-sm">+ Add country</a>
+  </div>
+  <div class="card-body">
+    {% if countries %}
+    <table class="pk-table" style="width:100%;border-collapse:collapse;font-size:14px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Country</th>
+          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">MT companies</th>
+          <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Banks</th>
+          <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Rates</th>
+          <th style="width:140px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in countries %}
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid var(--border);">
+            <strong>{{ c.country_name }}</strong>
+            {% if c.country_code %}<span class="text-muted" style="margin-left:6px;font-size:12px;">{{ c.country_code }}</span>{% endif %}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-muted);">
+            {{ c.mt_companies or '—' }}
+          </td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;" class="mono">{{ country_stats[c.id].banks }}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;" class="mono">{{ country_stats[c.id].rates }}</td>
+          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">
+            <a href="{{ url_for('tv_display_country_edit', country_id=c.id) }}"
+               class="btn btn-outline btn-sm">Edit</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted" style="margin:0;font-size:14px;">
+      No country sections yet. Add one below to get started — Mexico,
+      Guatemala, Honduras, etc.
+    </p>
+    {% endif %}
+
+    <hr id="new-country" style="border:0;border-top:1px solid var(--border);margin:24px 0 18px;">
+    <form method="POST" action="{{ url_for('tv_display_country_new') }}">
+      <h4 style="margin:0 0 12px;font-size:14px;">Add a country section</h4>
+      <div class="form-grid cols-3">
+        <div class="field">
+          <label>Country name *</label>
+          <input type="text" name="country_name" maxlength="80" required
+                 placeholder="Mexico">
+        </div>
+        <div class="field">
+          <label>Country code (ISO-2)</label>
+          <input type="text" name="country_code" maxlength="4"
+                 placeholder="MX" style="text-transform:uppercase;">
+        </div>
+        <div class="field">
+          <label>MT companies (comma-separated)</label>
+          <input type="text" name="mt_companies" maxlength="500"
+                 placeholder="Maxi, Cibao, Vigo">
+        </div>
+      </div>
+      <div style="margin-top:14px;">
+        <button type="submit" class="btn btn-primary">Add country</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('copy-url-btn').addEventListener('click', function () {
+  var inp = document.getElementById('tv-url');
+  inp.select();
+  try {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(inp.value).then(function () {
+        alert('Copied to clipboard.');
+      });
+    } else {
+      document.execCommand('copy');
+      alert('Copied.');
+    }
+  } catch (e) {
+    alert('Couldn\'t copy automatically — select the text and copy manually.');
+  }
+});
+</script>
+{% endblock %}
