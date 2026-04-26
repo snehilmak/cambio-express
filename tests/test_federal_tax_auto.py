@@ -190,3 +190,138 @@ def test_transfer_form_tax_field_is_readonly(logged_in_client):
     assert start != -1
     # Look within the surrounding ~200 chars for the attribute.
     assert "readonly" in html[max(0, start - 200):start + 200]
+
+
+# ── Domestic (United States) recipient skips the tax ────────────
+#
+# The federal-tax remittance only applies to money sent ABROAD; a
+# domestic transfer (recipient in the US) carries no federal tax even
+# at the default 1% rate. Same gate as service-type exemption: server
+# enforces; the JS hides/zeros the field for live UX.
+
+def test_us_recipient_zeroes_federal_tax_on_create(logged_in_client, test_store_id):
+    """Creating a Money Transfer with country='United States' yields
+    federal_tax = 0.0 even though the store rate is 1% and the
+    service is taxed."""
+    eid = _seed_roster_row(test_store_id, name="Sara")
+    body = _transfer_form_body(eid, country="United States",
+                               send_amount="1000.00")
+    rv = logged_in_client.post("/transfers/new", data=body)
+    assert rv.status_code in (200, 302)
+    from app import Transfer
+    with flask_app.app_context():
+        t = Transfer.query.filter_by(store_id=test_store_id).order_by(
+            Transfer.id.desc()).first()
+        assert t is not None
+        assert t.country == "United States"
+        # 1000 × 1% = 10 — but US recipient skips it.
+        assert t.federal_tax == 0.0
+
+
+def test_edit_to_us_recipient_zeroes_federal_tax(logged_in_client, test_store_id):
+    """Switching an existing Mexico transfer's recipient country to
+    United States zeros out the previously-computed tax."""
+    eid = _seed_roster_row(test_store_id, name="Tom")
+    # First create with Mexico — should have 1% tax.
+    rv = logged_in_client.post("/transfers/new",
+        data=_transfer_form_body(eid, country="Mexico",
+                                 send_amount="500.00"))
+    assert rv.status_code in (200, 302)
+    from app import Transfer
+    with flask_app.app_context():
+        t = Transfer.query.filter_by(store_id=test_store_id).order_by(
+            Transfer.id.desc()).first()
+        assert t.federal_tax == 5.0
+        tid = t.id
+    # Now edit → switch country to United States. Tax should clear.
+    body = _transfer_form_body(eid, country="United States",
+                               send_amount="500.00")
+    rv = logged_in_client.post(f"/transfers/{tid}/edit", data=body)
+    assert rv.status_code in (200, 302)
+    with flask_app.app_context():
+        t = Transfer.query.filter_by(id=tid).first()
+        assert t.country == "United States"
+        assert t.federal_tax == 0.0
+
+
+def test_edit_from_us_to_foreign_recomputes_tax(logged_in_client, test_store_id):
+    """Reverse direction: a domestic transfer edited to send abroad
+    must regain the tax — symmetry of the rule."""
+    eid = _seed_roster_row(test_store_id, name="Lee")
+    rv = logged_in_client.post("/transfers/new",
+        data=_transfer_form_body(eid, country="United States",
+                                 send_amount="500.00"))
+    from app import Transfer
+    with flask_app.app_context():
+        tid = Transfer.query.filter_by(store_id=test_store_id).order_by(
+            Transfer.id.desc()).first().id
+    rv = logged_in_client.post(f"/transfers/{tid}/edit",
+        data=_transfer_form_body(eid, country="Guatemala",
+                                 send_amount="500.00"))
+    with flask_app.app_context():
+        t = Transfer.query.filter_by(id=tid).first()
+        assert t.country == "Guatemala"
+        assert t.federal_tax == 5.0  # 500 × 1%
+
+
+def test_country_dropdown_includes_united_states(logged_in_client):
+    """The recipient-country select must include United States so a
+    cashier can record a domestic transfer."""
+    rv = logged_in_client.get("/transfers/new")
+    assert rv.status_code == 200
+    body = rv.data.decode()
+    # The option text appears between <option> tags. Don't assert on
+    # the wrapper attributes (selected/value) so future template
+    # tweaks don't break this purely-existence check.
+    assert ">United States<" in body
+
+
+def test_country_dropdown_marks_us_as_tax_exempt(logged_in_client):
+    """The country select carries a data-tax-exempt JSON list that
+    includes United States — that's how the JS knows to hide the
+    federal-tax field. The list also lives server-side in
+    _DOMESTIC_COUNTRIES; this test pins them in lockstep."""
+    rv = logged_in_client.get("/transfers/new")
+    body = rv.data.decode()
+    idx = body.find('id="recipient_country"')
+    assert idx > 0
+    near = body[idx:idx + 600]
+    # JSON list rendered inline; the country name must appear inside
+    # the data-tax-exempt attribute.
+    assert "data-tax-exempt" in near
+    assert "United States" in near
+
+
+def test_confirmation_field_in_transfer_info_section(logged_in_client):
+    """Confirmation # was moved out of Sender Info into Transfer Info
+    so the field reads next to amount/fee/tax. Confirm by checking
+    the input appears BEFORE the 'Sender Info' section title in the
+    rendered DOM (top-to-bottom)."""
+    rv = logged_in_client.get("/transfers/new")
+    body = rv.data.decode()
+    sender_idx  = body.find("Sender Info")
+    confirm_idx = body.find('name="confirm_number"')
+    assert sender_idx > 0
+    assert confirm_idx > 0
+    assert confirm_idx < sender_idx, (
+        "confirm_number input should render before the Sender Info "
+        "section so the cashier sees it next to amount + fee + tax")
+
+
+def test_federal_tax_for_helper_handles_country():
+    """Unit-test the helper directly so the rule is pinned even if
+    a future refactor changes the route bodies."""
+    from app import _federal_tax_for, Store
+    with flask_app.app_context():
+        s = Store.query.filter_by(slug="test-store").first()
+        # Foreign recipient: rate × amount.
+        assert _federal_tax_for(1000.0, "Money Transfer", s,
+                                country="Mexico") == 10.0
+        # Domestic: zero, regardless of rate.
+        assert _federal_tax_for(1000.0, "Money Transfer", s,
+                                country="United States") == 0.0
+        # Service-exempt + foreign: still zero (service-exempt wins).
+        assert _federal_tax_for(1000.0, "Bill Payment", s,
+                                country="Mexico") == 0.0
+        # No country supplied: backwards-compatible — apply tax.
+        assert _federal_tax_for(1000.0, "Money Transfer", s) == 10.0

@@ -111,6 +111,15 @@
             Admins change the rate in <a href="{{ url_for('admin_settings', tab='store') }}">Store Settings</a>.
           </div>
         </div>
+        {# Confirmation # lives here (with the rest of the transaction
+           details) rather than in Sender Info — cashiers told us it
+           reads better next to amount/fee/tax than buried with phone
+           and address. #}
+        <div class="field span-2">
+          <label>Confirmation # / Reference</label>
+          <input type="text" name="confirm_number" value="{{ transfer.confirm_number if transfer else '' }}"
+            placeholder="e.g. INT-00123">
+        </div>
       </div>
 
       <div class="section-title">Sender Info</div>
@@ -159,11 +168,6 @@
             value="{{ transfer.sender_address if transfer else '' }}"
             placeholder="Street, city, state, ZIP">
         </div>
-        <div class="field span-2">
-          <label>Confirmation # / Reference</label>
-          <input type="text" name="confirm_number" value="{{ transfer.confirm_number if transfer else '' }}"
-            placeholder="e.g. INT-00123">
-        </div>
       </div>
 
       <div class="section-title">Recipient Info</div>
@@ -175,11 +179,17 @@
         </div>
         <div class="field">
           <label>Country</label>
-          <select name="country">
+          <select name="country" id="recipient_country"
+                  data-tax-exempt='{{ tax_exempt_countries|tojson }}'>
             <option value="">Select…</option>
-            {% for c in ['Mexico','Guatemala','El Salvador','Honduras','Dominican Republic','Colombia','Ecuador','Peru','Other'] %}
+            {% for c in transfer_countries %}
             <option {% if transfer and transfer.country==c %}selected{% endif %}>{{ c }}</option>
             {% endfor %}
+            {# Preserve unknown legacy values so an old transfer's
+               country isn't silently switched on edit. #}
+            {% if transfer and transfer.country and transfer.country not in transfer_countries %}
+            <option selected>{{ transfer.country }}</option>
+            {% endif %}
           </select>
         </div>
         <div class="field">
@@ -415,17 +425,29 @@
 // recomputes on save regardless (0 for exempt services, otherwise
 // send_amount × rate), so this script is pure UX affordance.
 (function() {
-  var amountEl = document.getElementById('send_amount');
-  var taxEl = document.getElementById('federal_tax');
-  var svcEl = document.getElementById('service_type');
-  var taxField = document.getElementById('federal_tax_field');
+  var amountEl  = document.getElementById('send_amount');
+  var taxEl     = document.getElementById('federal_tax');
+  var svcEl     = document.getElementById('service_type');
+  var taxField  = document.getElementById('federal_tax_field');
+  var countryEl = document.getElementById('recipient_country');
   if (!amountEl || !taxEl || !svcEl || !taxField) return;
   var rate = parseFloat(amountEl.getAttribute('data-federal-tax-rate') || '0') || 0;
-  var exempt = [];
-  try { exempt = JSON.parse(svcEl.getAttribute('data-tax-exempt') || '[]'); }
-  catch (e) { exempt = []; }
 
-  function isExempt() { return exempt.indexOf(svcEl.value) !== -1; }
+  function parseExempt(el) {
+    try { return JSON.parse((el && el.getAttribute('data-tax-exempt')) || '[]'); }
+    catch (e) { return []; }
+  }
+  var exemptServices  = parseExempt(svcEl);
+  var exemptCountries = parseExempt(countryEl);
+
+  // Domestic transfers (US recipient) skip the federal tax — the
+  // remittance is only owed on money sent abroad. Service-type
+  // exemptions (Bill Payment / Top Up / Recharge) still apply.
+  function isExempt() {
+    if (exemptServices.indexOf(svcEl.value) !== -1) return true;
+    if (countryEl && exemptCountries.indexOf(countryEl.value) !== -1) return true;
+    return false;
+  }
 
   function recompute() {
     if (isExempt()) {
@@ -440,8 +462,9 @@
   amountEl.addEventListener('input', recompute);
   amountEl.addEventListener('change', recompute);
   svcEl.addEventListener('change', recompute);
+  if (countryEl) countryEl.addEventListener('change', recompute);
   // Fire once on load so the field is hidden for existing exempt edits
-  // and visible/populated for Money Transfer entries.
+  // (incl. domestic transfers) and visible/populated for taxed ones.
   recompute();
 })();
 </script>
