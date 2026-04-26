@@ -992,6 +992,16 @@ function initLineItemWidget(kind) {
     sessionStorage.setItem(OPEN_KEY, root.open ? '1' : '0');
   });
 
+  // Read-only widgets (e.g. return_payback after the Books → Return
+  // Checks lock) don't render the Add form or Remove buttons. Bail
+  // out before binding handlers to elements that aren't on the page —
+  // a single addBtn.addEventListener on a null reference would throw
+  // a TypeError that bubbles up, halts the whole <script> tag, and
+  // prevents the daily-book tab switcher (which sits BELOW this
+  // function in the same block) from ever wiring its click handler.
+  // That's exactly the bug that left users stuck on the Receipts tab.
+  if (!addBtn) return;
+
   function showError(msg) { errBox.textContent = msg; errBox.hidden = !msg; }
   function fmt2(n) { return '$' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   function escapeHTML(s) {

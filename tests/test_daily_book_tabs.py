@@ -140,3 +140,85 @@ def test_sticky_save_bar_remains_outside_the_panels(logged_in_client):
     last_panel_close = body.rfind("</section><!-- /panel-")
     assert last_panel_close != -1 and last_panel_close < save_pos, \
         "save bar is nested inside a tab panel; switching tabs would hide it"
+
+
+# ── Regression: tabs broke when a read-only line-item widget had no
+#                Add button. initLineItemWidget('return_payback') threw
+#                a TypeError on addBtn.addEventListener, which halted
+#                the <script> tag and prevented the tab-switcher IIFE
+#                below it from binding the click handler. Result:
+#                cashier was stuck on the Receipts tab.
+#
+# The fix is a `if (!addBtn) return;` guard inside initLineItemWidget,
+# placed AFTER the toggle wiring (which uses `root` only) and BEFORE
+# the addBtn / tbody event bindings. These tests pin both surfaces of
+# the contract so a future refactor can't silently re-break the
+# tabs.
+
+def test_return_payback_widget_has_no_add_button(logged_in_client):
+    """The read-only return_payback widget must NOT render an
+    `id='li-return_payback-add'` element. If a future change re-adds
+    one, the guard test below stops being meaningful — but on the
+    other hand the original crash path also stops applying."""
+    body = _get_body(logged_in_client)
+    assert 'id="li-return_payback-details"' in body, \
+        "return_payback widget should still mount"
+    assert 'id="li-return_payback-add"' not in body, \
+        "read-only widget shouldn't render an Add button"
+
+
+def test_init_line_item_widget_guards_against_missing_add_button(logged_in_client):
+    """The inline JS must early-return when the Add button isn't on
+    the page — otherwise binding `addBtn.addEventListener` throws a
+    TypeError, halts the <script> tag, and the tab switcher (defined
+    in the same script block) never wires up. That bug stranded
+    cashiers on the Receipts tab.
+
+    We can't execute JS in pytest cheaply, so we pin the source: the
+    guard `if (!addBtn) return;` must appear AFTER `addBtn = q('add')`
+    and BEFORE `addBtn.addEventListener`. The exact text of the guard
+    doesn't matter, but its existence and position do.
+    """
+    body = _get_body(logged_in_client)
+    # Find the relevant slice of the script tag.
+    fn_start = body.find("function initLineItemWidget(")
+    assert fn_start != -1, "initLineItemWidget function must be in the script"
+    # End of function = the .forEach(initLineItemWidget) call site.
+    fn_end = body.find(".forEach(initLineItemWidget)", fn_start)
+    assert fn_end != -1
+    fn_body = body[fn_start:fn_end]
+
+    add_decl_idx = fn_body.find("addBtn  = q('add')")
+    if add_decl_idx == -1:
+        add_decl_idx = fn_body.find('addBtn = q("add")')
+    assert add_decl_idx != -1, "addBtn decl must exist"
+
+    # Anchor on `addBtn.addEventListener(` (with paren) so any prose
+    # comment that mentions the call doesn't get matched first.
+    add_listen_idx = fn_body.find("addBtn.addEventListener(")
+    assert add_listen_idx != -1
+    assert add_listen_idx > add_decl_idx
+
+    # The guard must sit between the decl and the listener-bind.
+    guard_idx = fn_body.find("if (!addBtn) return;")
+    assert guard_idx != -1, (
+        "initLineItemWidget is missing the `if (!addBtn) return;` "
+        "guard — without it, read-only line-item widgets crash the "
+        "<script> tag and break the daily-book tab switcher."
+    )
+    assert add_decl_idx < guard_idx < add_listen_idx, (
+        "the `if (!addBtn) return;` guard is in the wrong place — "
+        "it must sit AFTER addBtn is declared and BEFORE the first "
+        "addBtn.addEventListener call."
+    )
+
+
+def test_daily_book_tab_switcher_iife_present(logged_in_client):
+    """Pin that the tab-switcher IIFE is still in the rendered page
+    (a guard against accidentally deleting the whole block)."""
+    body = _get_body(logged_in_client)
+    # The IIFE binds a click on `#db-tabs` and toggles aria-selected;
+    # match on the click registration to be resilient to whitespace.
+    assert "getElementById('db-tabs')" in body
+    # And the click listener that drives `activate(btn.dataset.tab)`
+    assert "btn.dataset.tab" in body
