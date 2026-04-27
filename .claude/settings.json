@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "pip install -q -r requirements.txt 2>&1 | tail -3 || true",
-            "timeout": 180,
+            "command": "python3 -m pip install -q --ignore-installed 'setuptools<69' wheel && python3 -m pip install -q --ignore-installed -r requirements.txt 2>&1 | tail -3 || true",
+            "timeout": 240,
             "statusMessage": "Installing Python deps..."
           }
         ]
