@@ -1169,6 +1169,47 @@ class TVBankCatalog(db.Model):
     is_active    = db.Column(db.Boolean, default=True)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
+class TVCatalogLogo(db.Model):
+    """Logo image bytes for a catalog entry. Stored as a BLOB so the
+    feature works on every deploy target (Render free tier wipes the
+    filesystem on every redeploy; a persistent disk works but adds
+    infra config we'd rather avoid).
+
+    Lookup is by (catalog_type, slug) — single shared table for both
+    TVCompanyCatalog and TVBankCatalog. Discriminator is "company" or
+    "bank"; slug matches the parent catalog row.
+
+    Served via GET /tv/logo/<type>/<slug> with a year-long
+    Cache-Control. Templates bust the cache by appending
+    ?v=<updated_at_unix> when they emit the URL — re-uploads
+    invalidate downstream caches without an HTTP-level mechanism.
+
+    Size + total bytes
+    - Per file: capped at 200 KiB on upload (validated server-side).
+    - Worst case: 46 catalog rows × 200 KB ≈ 9 MB. Negligible for
+      Postgres; the BLOB column on SQLite handles it just as well.
+    """
+    __tablename__ = "tv_catalog_logo"
+    id           = db.Column(db.Integer, primary_key=True)
+    # "company" | "bank" — keep the values short, the URL embeds them.
+    catalog_type = db.Column(db.String(8), nullable=False, index=True)
+    # Matches TVCompanyCatalog.slug or TVBankCatalog.slug — NOT a
+    # foreign key, since both parent tables have their own slug
+    # constraints and we want the logo row to outlive a soft-delete.
+    slug         = db.Column(db.String(60), nullable=False, index=True)
+    # Whitelisted by the upload endpoint: image/png | image/jpeg |
+    # image/webp | image/svg+xml. SVG is allowed because it's the
+    # ideal asset for the public TV board (scales to any density).
+    mime_type    = db.Column(db.String(40), nullable=False)
+    blob         = db.Column(db.LargeBinary, nullable=False)
+    file_size    = db.Column(db.Integer, default=0)
+    updated_at   = db.Column(db.DateTime, default=datetime.utcnow,
+                              onupdate=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("catalog_type", "slug",
+                              name="uq_tv_catalog_logo_type_slug"),
+    )
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
@@ -4372,12 +4413,35 @@ def tv_display_country_edit(country_id):
                              for c in TVCompanyCatalog.query.all()}
     bank_name_by_slug = {b.slug: b.display_name
                           for b in TVBankCatalog.query.all()}
+    # Logo URLs (with cache-bust query) keyed by slug so the chip /
+    # row markup can resolve in one O(1) lookup. Empty string when
+    # no logo has been uploaded — the template falls back to text.
+    logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
+                      for r in TVCatalogLogo.query.all()}
+    company_logo_by_slug = {}
+    for c in TVCompanyCatalog.query.all():
+        if c.logo_url:
+            v = logo_versions.get(("company", c.slug), 0)
+            company_logo_by_slug[c.slug] = (
+                url_for("tv_catalog_logo", catalog_type="company", slug=c.slug)
+                + (f"?v={v}" if v else "")
+            )
+    bank_logo_by_slug = {}
+    for b in TVBankCatalog.query.all():
+        if b.logo_url:
+            v = logo_versions.get(("bank", b.slug), 0)
+            bank_logo_by_slug[b.slug] = (
+                url_for("tv_catalog_logo", catalog_type="bank", slug=b.slug)
+                + (f"?v={v}" if v else "")
+            )
     return render_template("tv_display_country.html",
                             user=current_user(), store=store, display=display,
                             country=country, banks=banks, companies=companies,
                             rate_lookup=rate_lookup,
                             company_catalog=company_catalog,
                             bank_catalog=bank_catalog,
+                            company_logo_by_slug=company_logo_by_slug,
+                            bank_logo_by_slug=bank_logo_by_slug,
                             company_name_by_slug=company_name_by_slug,
                             bank_name_by_slug=bank_name_by_slug)
 
@@ -4420,6 +4484,27 @@ def _render_tv_board(display, store):
                              for c in TVCompanyCatalog.query.all()}
     bank_name_by_slug = {b.slug: b.display_name
                           for b in TVBankCatalog.query.all()}
+    # Logo URL maps with cache-bust suffix. Only includes catalog
+    # rows whose logo_url is populated; entries without uploads are
+    # absent and the template falls back to display_name text.
+    logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
+                      for r in TVCatalogLogo.query.all()}
+    company_logo_by_slug = {}
+    for c in TVCompanyCatalog.query.all():
+        if c.logo_url:
+            v = logo_versions.get(("company", c.slug), 0)
+            company_logo_by_slug[c.slug] = (
+                url_for("tv_catalog_logo", catalog_type="company", slug=c.slug)
+                + (f"?v={v}" if v else "")
+            )
+    bank_logo_by_slug = {}
+    for b in TVBankCatalog.query.all():
+        if b.logo_url:
+            v = logo_versions.get(("bank", b.slug), 0)
+            bank_logo_by_slug[b.slug] = (
+                url_for("tv_catalog_logo", catalog_type="bank", slug=b.slug)
+                + (f"?v={v}" if v else "")
+            )
 
     countries = (TVDisplayCountry.query
                   .filter_by(display_id=display.id)
@@ -4431,9 +4516,11 @@ def _render_tv_board(display, store):
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
         # Stored slugs for the column headers; render-side gets the
-        # resolved display names alongside.
+        # resolved display names + logo URLs zipped alongside.
         company_slugs = _csv_split(c.mt_companies)
         company_labels = [company_name_by_slug.get(slug, slug)
+                          for slug in company_slugs]
+        company_logos = [company_logo_by_slug.get(slug, "")
                           for slug in company_slugs]
         rate_map = {}
         if banks:
@@ -4444,15 +4531,53 @@ def _render_tv_board(display, store):
         sections.append({
             "country": c,
             "banks": banks,
-            # Slugs (canonical) + labels (display) zipped together so
-            # the template iterates pairs without re-looking up.
-            "companies": company_slugs,
-            "company_labels": company_labels,
+            "companies":      company_slugs,    # canonical (rate-cell key)
+            "company_labels": company_labels,   # display-name fallback
+            "company_logos":  company_logos,    # URL or '' (text fallback)
             "rates": rate_map,
         })
     return render_template("tv_display_public.html",
                             display=display, store=store, sections=sections,
-                            bank_name_by_slug=bank_name_by_slug)
+                            bank_name_by_slug=bank_name_by_slug,
+                            bank_logo_by_slug=bank_logo_by_slug)
+
+# ── Catalog logo serve ──────────────────────────────────────
+#
+# Public, no auth — the TV display itself is public-by-token, and
+# the logos shown on it can't reasonably be auth-gated. Brute-force
+# enumeration is not a concern (logos are intentionally displayed
+# on-screen for customers in the shop). We DO want aggressive
+# browser caching so the rate board doesn't re-fetch every logo on
+# every 30s refresh; templates append ?v=<updated_at_unix> to bust
+# the cache when an admin re-uploads.
+
+# MIME types accepted on upload AND served back. Anything not in
+# this set returns a 404 — keeps a corrupted DB row from spitting
+# arbitrary bytes at a browser.
+_TV_LOGO_ALLOWED_MIMES = {
+    "image/png", "image/jpeg", "image/webp", "image/svg+xml",
+}
+
+@app.route("/tv/logo/<catalog_type>/<slug>")
+def tv_catalog_logo(catalog_type, slug):
+    """Stream the BLOB for a catalog logo. Year-long Cache-Control;
+    cache-bust by ?v=<timestamp> on the embedding template."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = TVCatalogLogo.query.filter_by(
+        catalog_type=catalog_type, slug=slug).first()
+    if not row or row.mime_type not in _TV_LOGO_ALLOWED_MIMES:
+        abort(404)
+    resp = make_response(row.blob)
+    resp.headers["Content-Type"] = row.mime_type
+    resp.headers["Content-Length"] = str(len(row.blob))
+    # Year-long immutable cache. Templates append ?v=<unix> so a
+    # re-upload changes the URL → fresh fetch on next render.
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Block image-format sniffing — the served bytes match the
+    # whitelisted mime exactly.
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
 
 @app.route("/tv/<token>")
 def tv_public_display(token):
@@ -6919,6 +7044,25 @@ def superadmin_controls():
 
     discounts = DiscountCode.query.order_by(DiscountCode.created_at.desc()).all()
     flags = FeatureFlag.query.order_by(FeatureFlag.key).all()
+    # TV display catalogs (Phase 2 of the logo rollout). Companies
+    # are global; banks group by country_code in the template. Both
+    # tables include inactive entries here so the curation UI can
+    # reactivate / soft-delete; the operator-side picker filters
+    # them out at render time.
+    tv_companies = (TVCompanyCatalog.query
+                     .order_by(TVCompanyCatalog.sort_order,
+                               TVCompanyCatalog.display_name).all())
+    tv_banks = (TVBankCatalog.query
+                 .order_by(TVBankCatalog.country_code,
+                           TVBankCatalog.sort_order,
+                           TVBankCatalog.display_name).all())
+    # Map (catalog_type, slug) → updated_at unix so the template can
+    # cache-bust ?v=<unix> on the logo URLs without an extra query
+    # per row.
+    tv_logo_versions = {}
+    for row in TVCatalogLogo.query.all():
+        tv_logo_versions[(row.catalog_type, row.slug)] = int(
+            row.updated_at.timestamp())
     # Feature-flag overrides are keyed by (store_id, flag_key); fetch only for visible stores.
     visible_ids = [s.id for s in stores]
     override_rows = (StoreFeatureOverride.query.filter(StoreFeatureOverride.store_id.in_(visible_ids)).all()
@@ -6947,6 +7091,10 @@ def superadmin_controls():
         # every add-on the platform supports (not just the ones a
         # given store currently has).
         addons_catalog=ADDONS_CATALOG,
+        # TV display catalog admin (curation tab).
+        tv_companies=tv_companies,
+        tv_banks=tv_banks,
+        tv_logo_versions=tv_logo_versions,
         # Pagination + filter state for the Stores tab.
         q=q_text, plan_filter=plan_filter, status_filter=status_filter,
         page=page, total_pages=total_pages, stores_matching=stores_matching,
@@ -7129,6 +7277,165 @@ def superadmin_toggle_addon(store_id, addon_key):
     db.session.commit()
     flash(msg, "success")
     return redirect(url_for("superadmin_controls", tab="stores"))
+
+# ── TV catalog admin (superadmin) ────────────────────────────
+#
+# Curate the dropdown options operators see in the country editor:
+# add new MT companies / banks, rename existing ones (display_name
+# only — slugs are immutable), upload nominative-use logos, and
+# soft-deactivate retired entries. Companies are global; banks are
+# scoped to a country (ISO-2).
+
+# 200 KiB hard cap on uploads — covers the 50 KB typical PNG with
+# headroom for retina assets, blocks accidental "I dropped a 5 MB
+# JPEG" uploads. Validated server-side; the BLOB DB column would
+# accept much more, but we'd rather reject early.
+_TV_LOGO_MAX_BYTES = 200 * 1024
+
+def _resolve_catalog_row(catalog_type, slug):
+    """Returns the parent catalog row for a (type, slug) pair, or
+    None if neither table has a match. Used by the upload + edit
+    endpoints to validate the slug before they touch the DB."""
+    if catalog_type == "company":
+        return TVCompanyCatalog.query.filter_by(slug=slug).first()
+    if catalog_type == "bank":
+        return TVBankCatalog.query.filter_by(slug=slug).first()
+    return None
+
+@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/logo",
+            methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_upload_logo(catalog_type, slug):
+    """Upload (or replace) the logo for a catalog entry."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = _resolve_catalog_row(catalog_type, slug)
+    if row is None:
+        flash("Unknown catalog entry.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        flash("Pick a file to upload.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    mime = (f.mimetype or "").lower()
+    if mime not in _TV_LOGO_ALLOWED_MIMES:
+        flash("File must be PNG, JPEG, WebP, or SVG.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    blob = f.read()
+    if len(blob) == 0:
+        flash("Uploaded file is empty.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if len(blob) > _TV_LOGO_MAX_BYTES:
+        flash(f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    existing = TVCatalogLogo.query.filter_by(
+        catalog_type=catalog_type, slug=slug).first()
+    if existing is None:
+        existing = TVCatalogLogo(catalog_type=catalog_type, slug=slug)
+        db.session.add(existing)
+    existing.mime_type = mime
+    existing.blob      = blob
+    existing.file_size = len(blob)
+    existing.updated_at = datetime.utcnow()
+
+    # Mirror the public URL into the parent row's logo_url so other
+    # call sites can hit it without doing a separate logo-table
+    # lookup. The ?v=<unix> query param is added by templates that
+    # care about cache-busting on re-upload.
+    row.logo_url = url_for("tv_catalog_logo",
+                            catalog_type=catalog_type, slug=slug)
+
+    record_audit("tv_logo_upload", target_type=catalog_type,
+                  target_id=row.id,
+                  details=f"{slug} ({len(blob)} bytes, {mime})")
+    db.session.commit()
+    flash(f"Uploaded logo for {row.display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/edit",
+            methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_edit(catalog_type, slug):
+    """Rename, re-sort, change country code (banks only), or toggle
+    is_active. Slug is intentionally NOT mutable — references on
+    TVDisplayCountry / TVDisplayPayoutBank would silently break."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = _resolve_catalog_row(catalog_type, slug)
+    if row is None:
+        flash("Unknown catalog entry.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    new_name = (request.form.get("display_name") or "").strip()[:80]
+    if new_name:
+        row.display_name = new_name
+    try:
+        row.sort_order = int(request.form.get("sort_order", row.sort_order))
+    except (TypeError, ValueError):
+        pass
+    if catalog_type == "bank":
+        new_cc = (request.form.get("country_code") or "").strip().upper()[:4]
+        if new_cc:
+            row.country_code = new_cc
+    # Checkbox semantics: present → True, absent → False.
+    row.is_active = bool(request.form.get("is_active"))
+
+    record_audit("tv_catalog_edit", target_type=catalog_type,
+                  target_id=row.id, details=slug)
+    db.session.commit()
+    flash(f"Saved {row.display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+@app.route("/superadmin/tv-catalog/new", methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_new():
+    """Add a fresh catalog entry. Slug is provided by the form and
+    must be unique within its catalog_type."""
+    catalog_type = (request.form.get("catalog_type") or "").strip()
+    if catalog_type not in ("company", "bank"):
+        flash("Pick company or bank.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    slug = (request.form.get("slug") or "").strip().lower()[:60]
+    display_name = (request.form.get("display_name") or "").strip()[:80]
+    if not slug or not display_name:
+        flash("Slug and display name are required.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    # Slug normalization: keep only [a-z0-9_].
+    slug = "".join(c for c in slug if c.isalnum() or c == "_")
+    if not slug:
+        flash("Slug must contain alphanumerics or underscores.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if _resolve_catalog_row(catalog_type, slug) is not None:
+        flash("That slug already exists.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if catalog_type == "company":
+        last = (db.session.query(db.func.max(TVCompanyCatalog.sort_order))
+                .scalar() or 0)
+        db.session.add(TVCompanyCatalog(
+            slug=slug, display_name=display_name,
+            sort_order=last + 10, is_active=True,
+        ))
+    else:
+        cc = (request.form.get("country_code") or "").strip().upper()[:4]
+        if not cc:
+            flash("Banks need a country code (ISO-2).", "error")
+            return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        last = (db.session.query(db.func.max(TVBankCatalog.sort_order))
+                .filter_by(country_code=cc).scalar() or 0)
+        db.session.add(TVBankCatalog(
+            slug=slug, display_name=display_name,
+            country_code=cc,
+            sort_order=last + 10, is_active=True,
+        ))
+    record_audit("tv_catalog_create", target_type=catalog_type,
+                  target_id=0, details=slug)
+    db.session.commit()
+    flash(f"Added {display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
 
 # ── Discount codes (superadmin) ──────────────────────────────
 def _sync_discount_to_stripe(dc):

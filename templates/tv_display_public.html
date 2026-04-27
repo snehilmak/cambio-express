@@ -210,6 +210,25 @@ body {
   min-width: 0;
   padding: 0 6px;
   opacity: 0.85;
+  display: flex; align-items: center; justify-content: center;
+}
+/* Logo treatment for column headers + bank rows. Sized to read
+   at TV viewing distance (clamp grows with viewport). max-width
+   100% lets narrow columns scale logos down without overflowing. */
+.tv-col-logo {
+  max-width: 100%;
+  max-height: clamp(24px, 3.6vw, 56px);
+  object-fit: contain;
+  /* On dark theme, white-only logos vanish against the dark
+     section header. Brand logos on the column band sit on the
+     near-black header band, matching how Xenok renders them — so
+     no special filtering needed; just trust the asset. */
+}
+.tv-bank-logo {
+  max-width: 100%;
+  max-height: clamp(28px, 4vw, 64px);
+  object-fit: contain;
+  vertical-align: middle;
 }
 
 /* Matrix body. Each row stretches to share section height equally;
@@ -342,13 +361,23 @@ body {
         <span class="tv-country-name">{{ section.country.country_name }}</span>
         {% if section.companies %}
         <div class="tv-cols">
-          {# section.company_labels is the resolved display name list
-             paired index-for-index with section.companies (slugs).
-             Backwards-compat fallback: if a label is missing — which
-             shouldn't happen after the route refactor — render the
-             slug directly. #}
-          {% for label in (section.company_labels or section.companies) %}
-          <div class="tv-col-label">{{ label }}</div>
+          {# Render logo if uploaded, otherwise the resolved
+             display_name. The visual contract: brand presence on
+             the column header is the single biggest "looks like
+             Xenok" cue. Falling back to text when no logo is
+             uploaded is intentional — a placeholder asset would
+             look worse than crisp typography. #}
+          {% for slug in section.companies %}
+          {% set _idx = loop.index0 %}
+          {% set _logo = section.company_logos[_idx] if section.company_logos else "" %}
+          {% set _label = section.company_labels[_idx] if section.company_labels else slug %}
+          <div class="tv-col-label">
+            {% if _logo %}
+            <img class="tv-col-logo" src="{{ _logo }}" alt="{{ _label }}">
+            {% else %}
+            {{ _label }}
+            {% endif %}
+          </div>
           {% endfor %}
         </div>
         {% endif %}
@@ -356,10 +385,15 @@ body {
       <div class="tv-section-body">
         {% for bank in section.banks %}
         <div class="tv-row">
-          {# Resolve bank slug → display_name via the bank catalog
-             passed in from _render_tv_board. Falls back to the
-             stored token (legacy free-text) if no catalog match. #}
-          <div class="tv-bank">{{ bank_name_by_slug.get(bank.bank_name, bank.bank_name) }}</div>
+          {% set _bank_logo = bank_logo_by_slug.get(bank.bank_name) %}
+          {% set _bank_label = bank_name_by_slug.get(bank.bank_name, bank.bank_name) %}
+          <div class="tv-bank">
+            {% if _bank_logo %}
+            <img class="tv-bank-logo" src="{{ _bank_logo }}" alt="{{ _bank_label }}">
+            {% else %}
+            {{ _bank_label }}
+            {% endif %}
+          </div>
           <div class="tv-cells">
             {% for company in section.companies %}
             {% set rate = section.rates.get((bank.id, company)) %}

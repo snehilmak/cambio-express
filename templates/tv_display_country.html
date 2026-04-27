@@ -120,13 +120,26 @@
 }
 .ce-chip {
   display: flex; align-items: center; gap: 6px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   background: var(--db-neon-glow-8);
   border: 1px solid var(--db-neon-dim);
   border-radius: 8px;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 13px; font-weight: 700;
   color: var(--text);
+}
+.ce-chip-logo {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 2px;
+  overflow: hidden;
+}
+.ce-chip-logo img {
+  max-width: 18px; max-height: 18px;
+  object-fit: contain;
 }
 .ce-chip-name {
   flex: 1 1 auto; min-width: 0;
@@ -160,6 +173,30 @@
   background: var(--surface-2);
   border-radius: 8px;
   position: sticky; left: 0; z-index: 1;
+}
+.ce-bank-cell-inner {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%;
+}
+.ce-bank-logo {
+  flex-shrink: 0;
+  width: 32px; height: 32px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  padding: 2px;
+}
+.ce-bank-logo img {
+  max-width: 26px; max-height: 26px;
+  object-fit: contain;
+}
+.ce-bank-logo.empty {
+  color: var(--text-muted);
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em;
+  font-family: 'Inter', sans-serif;
 }
 .ce-bank-select {
   width: 100%;
@@ -373,6 +410,14 @@
               {% for company in companies %}
               <th class="ce-col-head" data-col-idx="{{ loop.index0 }}">
                 <div class="ce-chip">
+                  {# Logo thumbnail when uploaded; placeholder absent
+                     so the chip just narrows by ~28 px. #}
+                  {% set _logo = company_logo_by_slug.get(company) %}
+                  {% if _logo %}
+                  <span class="ce-chip-logo">
+                    <img src="{{ _logo }}" alt="" loading="lazy">
+                  </span>
+                  {% endif %}
                   {# data-slug carries the canonical token (catalog
                      slug or legacy free-text) — JS reads this on
                      submit to rebuild the mt_companies CSV. The
@@ -413,6 +458,18 @@
               <td class="ce-bank">
                 <input type="hidden" name="bank-{{ bank.id }}-sort"
                        value="{{ bank.sort_order }}">
+                <div class="ce-bank-cell-inner">
+                  {# Thumbnail mirrors the dropdown's selected slug.
+                     Updated client-side on select change so picking
+                     a different bank flips the logo without a
+                     page reload. #}
+                  {% set _bank_logo = bank_logo_by_slug.get(bank.bank_name) %}
+                  <span class="ce-bank-logo {% if not _bank_logo %}empty{% endif %}"
+                        data-logo-for="bank-{{ bank.id }}-name">
+                    {% if _bank_logo %}
+                    <img src="{{ _bank_logo }}" alt="" loading="lazy">
+                    {% else %}—{% endif %}
+                  </span>
                 <select class="ce-bank-select"
                         name="bank-{{ bank.id }}-name"
                         aria-label="Payout bank">
@@ -435,6 +492,7 @@
                   </option>
                   {% endfor %}
                 </select>
+                </div>
               </td>
               {% for company in companies %}
               {% set _idx = loop.index0 %}
@@ -512,6 +570,12 @@
   {% endfor %}
 ]
 </script>
+{# slug → resolved logo URL maps so the JS-side "+ Add column" /
+   "+ Add row" handlers can paint the same thumbnails the server-
+   rendered chips/rows already have. Empty objects are valid (no
+   logos uploaded yet) — the JS falls back to text. #}
+<script id="ce-company-logos" type="application/json">{{ company_logo_by_slug | tojson }}</script>
+<script id="ce-bank-logos" type="application/json">{{ bank_logo_by_slug | tojson }}</script>
 <script>
 /*
  * Country grid editor — chip-based column manager + inline row inserter.
@@ -545,6 +609,17 @@
       return raw ? JSON.parse(raw.textContent) : [];
     } catch (e) { return []; }
   })();
+
+  // slug → logo URL maps for JS-side rendering of newly added
+  // chips/rows. Empty {} is fine (text-only fallback).
+  function _readLogoMap(elementId) {
+    try {
+      var raw = document.getElementById(elementId);
+      return raw ? JSON.parse(raw.textContent) : {};
+    } catch (e) { return {}; }
+  }
+  var companyLogoBySlug = _readLogoMap('ce-company-logos');
+  var bankLogoBySlug    = _readLogoMap('ce-bank-logos');
 
   function currentColumns() {
     // Each chip carries its canonical token (catalog slug or
@@ -606,14 +681,31 @@
 
     var th = document.createElement('th');
     th.className = 'ce-col-head';
-    th.innerHTML =
-      '<div class="ce-chip">' +
-        '<span class="ce-chip-name"></span>' +
-        '<button type="button" class="ce-chip-x" aria-label="Remove column">×</button>' +
-      '</div>';
-    var nameSpan = th.querySelector('.ce-chip-name');
+    var chip = document.createElement('div');
+    chip.className = 'ce-chip';
+    var logoUrl = companyLogoBySlug[slug];
+    if (logoUrl) {
+      var logoSpan = document.createElement('span');
+      logoSpan.className = 'ce-chip-logo';
+      var img = document.createElement('img');
+      img.src = logoUrl;
+      img.alt = '';
+      img.loading = 'lazy';
+      logoSpan.appendChild(img);
+      chip.appendChild(logoSpan);
+    }
+    var nameSpan = document.createElement('span');
+    nameSpan.className = 'ce-chip-name';
     nameSpan.dataset.slug = slug;
     nameSpan.textContent = displayName;
+    chip.appendChild(nameSpan);
+    var xBtn = document.createElement('button');
+    xBtn.type = 'button';
+    xBtn.className = 'ce-chip-x';
+    xBtn.setAttribute('aria-label', 'Remove column');
+    xBtn.textContent = '×';
+    chip.appendChild(xBtn);
+    th.appendChild(chip);
     // Insert before the "+ Add MT company" cell.
     var addCell = head.querySelector('.ce-col-add');
     head.insertBefore(th, addCell);
@@ -668,8 +760,16 @@
 
     var bankCell = document.createElement('td');
     bankCell.className = 'ce-bank';
-    // Build a <select> populated from the JSON-embedded bank
-    // catalog (already filtered to this country server-side).
+    // Build the same flex wrapper the server-rendered rows have:
+    // logo thumbnail (initially empty) + <select>.
+    var inner = document.createElement('div');
+    inner.className = 'ce-bank-cell-inner';
+    var logoSpan = document.createElement('span');
+    logoSpan.className = 'ce-bank-logo empty';
+    logoSpan.setAttribute('data-logo-for', 'new_bank_name');
+    logoSpan.textContent = '—';
+    inner.appendChild(logoSpan);
+
     var sel = document.createElement('select');
     sel.className = 'ce-bank-select';
     sel.name = 'new_bank_name';
@@ -683,7 +783,8 @@
       o.textContent = b.display_name;
       sel.appendChild(o);
     });
-    bankCell.appendChild(sel);
+    inner.appendChild(sel);
+    bankCell.appendChild(inner);
     tr.appendChild(bankCell);
 
     cols.forEach(function () {
@@ -725,6 +826,28 @@
     } else {
       label.classList.remove('ce-row-x--armed');
       row.classList.remove('ce-row--marked-delete');
+    }
+  });
+
+  // ── Bank-select → logo-thumbnail sync ──────────────────
+  // When the operator picks a different bank, flip the thumbnail
+  // next to the dropdown to match. Empty selection → "—" placeholder.
+  body.addEventListener('change', function (e) {
+    var sel = e.target.closest('select.ce-bank-select');
+    if (!sel) return;
+    var thumb = sel.parentElement.querySelector('.ce-bank-logo');
+    if (!thumb) return;
+    var slug = sel.value;
+    var url  = bankLogoBySlug[slug];
+    thumb.innerHTML = '';
+    if (url) {
+      thumb.classList.remove('empty');
+      var img = document.createElement('img');
+      img.src = url; img.alt = ''; img.loading = 'lazy';
+      thumb.appendChild(img);
+    } else {
+      thumb.classList.add('empty');
+      thumb.textContent = '—';
     }
   });
 
