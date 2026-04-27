@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange
-import requests, base64, os, calendar, logging, re, secrets, string, hashlib, hmac, smtplib
+import requests, base64, os, calendar, logging, re, secrets, string, hashlib, hmac, smtplib, json
 from email.message import EmailMessage
 import stripe
 import click
@@ -25,7 +25,7 @@ from webauthn import (
 from webauthn.helpers import bytes_to_base64url
 from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria, ResidentKeyRequirement,
-    UserVerificationRequirement,
+    UserVerificationRequirement, PublicKeyCredentialDescriptor,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1965,8 +1965,7 @@ def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str
     except ImportError:
         app.logger.warning("pywebpush not installed; skipping send_push")
         return 0
-    import json as _json
-    payload = _json.dumps({k: v for k, v in {"title": title, "body": body, "url": url, "tag": tag}.items() if v is not None})
+    payload = json.dumps({k: v for k, v in {"title": title, "body": body, "url": url, "tag": tag}.items() if v is not None})
     sent = 0
     subs = PushSubscription.query.filter_by(user_id=user_id).all()
     for s in subs:
@@ -2326,7 +2325,6 @@ def _passkey_exclude_list(user):
     """Credential descriptors for every passkey this user already has,
     passed to the browser as excludeCredentials so the same physical
     authenticator can't be registered twice on one account."""
-    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
     return [
         PublicKeyCredentialDescriptor(id=p.credential_id)
         for p in Passkey.query.filter_by(user_id=user.id).all()
@@ -3556,7 +3554,6 @@ def owner_locations():
     query = (request.args.get("q") or "").strip()
     rows, total = _owner_locations_payload(u, period, query)
     if request.args.get("partial") == "1":
-        from flask import jsonify
         html = render_template("_owner_locations_table.html",
                                rows=rows, period=period, query=query)
         return jsonify({"html": html, "total": total,
@@ -5057,6 +5054,18 @@ def _transfer_snapshot(t):
     """Capture the subset of Transfer fields we audit, as a dict."""
     return {field: getattr(t, field, None) for field, _ in _TRANSFER_AUDIT_FIELDS}
 
+def _transfer_form_ctx(store):
+    return dict(
+        today=date.today().isoformat(),
+        phone_country_codes=PHONE_COUNTRY_CODES,
+        mt_companies=store_mt_companies(store),
+        service_types=SERVICE_TYPES,
+        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
+        transfer_countries=TRANSFER_COUNTRIES,
+        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
+        federal_tax_rate=(store.federal_tax_rate or 0),
+    )
+
 @app.route("/transfers/new",methods=["GET","POST"])
 @login_required
 def new_transfer():
@@ -5118,14 +5127,8 @@ def new_transfer():
         db.session.commit()
         flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
     return render_template("transfer_form.html", user=user, transfer=None,
-        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
-        mt_companies=store_mt_companies(current_store()),
         roster=_active_roster(sid), audit_entries=[],
-        service_types=SERVICE_TYPES,
-        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
-        transfer_countries=TRANSFER_COUNTRIES,
-        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
-        federal_tax_rate=(current_store().federal_tax_rate or 0))
+        **_transfer_form_ctx(current_store()))
 
 @app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
 @login_required
@@ -5211,14 +5214,8 @@ def edit_transfer(tid):
         if legacy and legacy.store_id == sid:
             roster = [legacy] + roster
     return render_template("transfer_form.html", user=user, transfer=t,
-        today=date.today().isoformat(), phone_country_codes=PHONE_COUNTRY_CODES,
-        mt_companies=store_mt_companies(current_store()),
         roster=roster, audit_entries=audit_entries,
-        service_types=SERVICE_TYPES,
-        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
-        transfer_countries=TRANSFER_COUNTRIES,
-        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
-        federal_tax_rate=(current_store().federal_tax_rate or 0))
+        **_transfer_form_ctx(current_store()))
 
 
 @app.route("/transfers/<int:tid>/delete", methods=["POST"])
@@ -5928,7 +5925,6 @@ def _return_check_monthly_pl(store_id, year, month):
     dashboard shows. We deliberately negate here so each consumer
     reads the right sign for its context.
     """
-    from calendar import monthrange
     start = date(year, month, 1)
     end   = date(year, month, monthrange(year, month)[1])
     agg = _return_check_period_aggregates([store_id], start, end)
@@ -5959,7 +5955,6 @@ def _return_check_monthly_series(store_ids, today=None):
             recoveries.append(0.0)
             losses.append(0.0)
         return labels, recoveries, losses
-    from calendar import monthrange
     for (yy, mm) in months:
         s = date(yy, mm, 1)
         e = date(yy, mm, monthrange(yy, mm)[1])
@@ -6051,7 +6046,6 @@ def return_checks():
     aging = _return_check_aging_buckets([sid], today=today_d)
 
     if request.args.get("partial") == "1":
-        from flask import jsonify
         html = render_template("_return_checks_table.html",
                                rows=rows, today=today_d)
         return jsonify({"html": html, "matched": len(rows),
@@ -7366,13 +7360,12 @@ def _normalize_logo_blob(blob, mime):
 
     try:
         from PIL import Image
-        import io as _io
     except ImportError:
         # Pillow not installed (dev shell, never in prod requirements).
         return blob, mime
 
     try:
-        with Image.open(_io.BytesIO(blob)) as src:
+        with Image.open(io.BytesIO(blob)) as src:
             src.load()  # force-decode now so a corrupt image fails fast
             # thumbnail() resizes in place, preserving aspect ratio.
             scaled = src.copy()
@@ -7394,7 +7387,7 @@ def _normalize_logo_blob(blob, mime):
             y = (_TV_LOGO_CANVAS_HEIGHT - scaled.height) // 2
             canvas.paste(scaled, (x, y), scaled)
 
-            out = _io.BytesIO()
+            out = io.BytesIO()
             canvas.save(out, format="PNG", optimize=True)
             return out.getvalue(), "image/png"
     except Exception:
@@ -7828,7 +7821,7 @@ def superadmin_delete_announcement(ann_id):
 @superadmin_required
 def superadmin_audit_export():
     """Stream the full audit log as CSV for spreadsheet review."""
-    import csv, io
+    import csv
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(["timestamp_utc", "admin_id", "admin_name", "action", "target_type", "target_id", "details"])
@@ -7960,8 +7953,7 @@ def resend_webhook():
     # "has this address bounced" without joining through a message.
     payload_json = ""
     try:
-        import json as _json
-        payload_json = _json.dumps(event)[:8000]
+        payload_json = json.dumps(event)[:8000]
     except Exception:
         payload_json = ""
     for raw_to in recipients:
