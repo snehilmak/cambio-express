@@ -189,5 +189,6 @@ def test_public_board_renders_picker_country_with_flag(
     with logged_in_client.application.app_context():
         token = TVDisplay.query.first().public_token
     body = client.get(f"/tv/{token}").data.decode()
-    assert "🇲🇽" in body
+    # SVG flag (flag-icons) on the public board.
+    assert 'class="fi fi-mx"' in body
     assert "Mexico" in body

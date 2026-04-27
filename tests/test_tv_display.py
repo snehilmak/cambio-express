@@ -305,7 +305,9 @@ def test_public_render_includes_country_section(client, logged_in_client, test_s
     assert "Mexico" in body
     assert "Maxi" in body and "Cibao" in body and "Vigo" in body
     assert "Bancomer" in body
-    assert "🇲🇽" in body, "country flag emoji should render"
+    # SVG flag from flag-icons replaces emoji on the public board
+    # (emoji flags don't render on Windows / smart-TV browsers).
+    assert 'class="fi fi-mx"' in body, "country flag SVG should render"
 
 
 def test_public_render_splits_dollars_and_cents(client, logged_in_client, test_store_id):

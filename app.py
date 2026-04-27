@@ -48,12 +48,41 @@ app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
 def _country_flag_emoji(code):
     """ISO-2 country code → flag emoji. "MX" → "🇲🇽". Two regional-
     indicator code points concatenated. Returns "" for empty/invalid
-    input so the template can still call it unconditionally."""
+    input so the template can still call it unconditionally.
+
+    Kept for places that need a string (titles, aria-labels, alt
+    attrs). For visual flag rendering use country_flag_html() —
+    emoji flags don't render on Windows browsers (show as country-
+    code letter pairs in tofu boxes), and the flag-icons SVG flags
+    we wire up there cover that gap."""
     code = (code or "").strip().upper()
     if len(code) != 2 or not code.isalpha():
         return ""
     return "".join(chr(0x1F1E6 + (ord(c) - ord("A"))) for c in code)
 app.jinja_env.globals["_country_flag_emoji"] = _country_flag_emoji
+
+def country_flag_html(code, size="1em"):
+    """ISO-2 → <span class="fi fi-xx" style="..."> markup that
+    renders via the flag-icons CSS (CDN linked from base.html and
+    tv_display_public.html). Returns "" on bad input so templates
+    can call unconditionally.
+
+    Why over emoji: emoji flags don't render on Windows browsers —
+    operators on a Windows desktop see "MX" in a tofu box instead
+    of 🇲🇽. flag-icons ships SVG flags that render uniformly
+    everywhere. MIT-licensed (no nominative-use concerns)."""
+    code = (code or "").strip().lower()
+    if len(code) != 2 or not code.isalpha():
+        return ""
+    # Inline width/height so the flag matches the surrounding text
+    # without requiring per-template CSS. Aspect ratio is 4:3
+    # (flag-icons default).
+    style = f"width:{size};height:{size};"
+    from markupsafe import Markup
+    return Markup(
+        f'<span class="fi fi-{code}" style="{style}"></span>'
+    )
+app.jinja_env.globals["country_flag_html"] = country_flag_html
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///dinerobook.db")
 if DATABASE_URL.startswith("postgres://"):

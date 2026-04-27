@@ -215,6 +215,11 @@
   border-radius: 10px;
   font-size: 26px;
   line-height: 1;
+  overflow: hidden;
+}
+.tvc-country-flag .fi {
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
 }
 .tvc-country-flag.empty { color: var(--text-muted); font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
 .tvc-country-text { min-width: 0; flex: 1; }
@@ -578,7 +583,7 @@
   <a href="{{ url_for('tv_display_country_edit', country_id=c.id) }}"
      class="tvc-country-card">
     <div class="tvc-country-flag {% if not c.country_code %}empty{% endif %}">
-      {% if c.country_code %}{{ _country_flag_emoji(c.country_code) }}{% else %}—{% endif %}
+      {% if c.country_code %}{{ country_flag_html(c.country_code, size='32px') }}{% else %}—{% endif %}
     </div>
     <div class="tvc-country-text">
       <div class="tvc-country-name">
