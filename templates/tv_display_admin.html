@@ -354,6 +354,37 @@
 }
 .tvc-pair-meta b { color: var(--text); font-weight: 600; }
 .tvc-pair-meta.tvc-pair-meta--err { color: #ff4f6e; }
+
+/* ── Currently-paired Fire TV row ────────────────────────── */
+.tvc-pair-active {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--db-neon-dim);
+  border-radius: 12px;
+  display: flex; align-items: center; gap: 14px;
+  flex-wrap: wrap;
+}
+.tvc-pair-active-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--db-neon);
+  box-shadow: 0 0 0 4px var(--db-neon-glow-25);
+  flex-shrink: 0;
+}
+.tvc-pair-active-text {
+  flex: 1 1 auto; min-width: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.tvc-pair-active-text b { font-weight: 700; }
+.tvc-pair-active-text .muted {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin-top: 2px;
+  display: block;
+}
 </style>
 
 {# ── Hero: live status + brand ─────────────────────────────── #}
@@ -365,7 +396,8 @@
       <span class="tvc-status"><span class="dot"></span>Live</span>
     </div>
     <div class="tvc-meta">
-      <b>One layout</b> per store · stream to as many TVs in your shop as you like.
+      <b>One layout</b> per store · one paired Fire TV at a time, plus
+      tablets/Chromecasts on the shared URL.
       {% if display.last_updated_at %}
       Last edited <b>{{ display.last_updated_at.strftime('%b %d, %H:%M') }} UTC</b>.
       {% endif %}
@@ -412,7 +444,8 @@
     <p>
       Install the <b>DineroBook TV</b> app on your Fire TV from the
       Amazon Appstore, generate a code here, then enter it on the
-      Fire TV. The code expires in 10 minutes.
+      Fire TV. Pairing a new Fire TV automatically unpairs the old
+      one — one Fire TV per subscription.
     </p>
   </div>
   <div class="tvc-pair-action">
@@ -429,6 +462,29 @@
     </button>
   </div>
 </div>
+
+{% if active_pairing %}
+<div class="tvc-pair-active">
+  <span class="tvc-pair-active-dot" aria-hidden="true"></span>
+  <div class="tvc-pair-active-text">
+    <b>Fire TV paired{% if active_pairing.device_label %} — {{ active_pairing.device_label }}{% endif %}</b>
+    <span class="muted">
+      Paired {{ active_pairing.paired_at.strftime('%b %d, %H:%M') }} UTC ·
+      last seen
+      {% set delta_min = ((display.last_updated_at and active_pairing.last_seen_at and ((display.last_updated_at - active_pairing.last_seen_at).total_seconds() // 60))|int) %}
+      {{ active_pairing.last_seen_at.strftime('%b %d, %H:%M') }} UTC
+    </span>
+  </div>
+  <form method="POST"
+        action="{{ url_for('tv_display_revoke_pairing', pairing_id=active_pairing.id) }}"
+        onsubmit="return confirm('Unpair this Fire TV? It will stop showing the board on its next refresh, and you can pair a new device with a fresh code.');">
+    <button type="submit" class="btn btn-outline btn-sm"
+            style="border-color:#ff4f6e;color:#ff4f6e;">
+      Unpair this Fire TV
+    </button>
+  </form>
+</div>
+{% endif %}
 
 {# ── Settings + at-a-glance ────────────────────────────────── #}
 <div class="tvc-grid">

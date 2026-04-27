@@ -3818,10 +3818,38 @@ def admin_tv_display():
         country_stats[c.id] = {"banks": bank_count, "rates": rate_count}
     public_url = url_for("tv_public_display", token=display.public_token,
                           _external=True)
+    # Active Fire TV pairing for the "Currently paired" pill on the
+    # admin landing. None when no Fire TV has paired (or all prior
+    # pairings have been revoked / superseded).
+    active_pairing = (TVPairing.query
+                       .filter_by(display_id=display.id, revoked_at=None)
+                       .order_by(TVPairing.paired_at.desc())
+                       .first())
     return render_template("tv_display_admin.html",
                             user=user, store=store, display=display,
                             countries=countries, country_stats=country_stats,
-                            public_url=public_url)
+                            public_url=public_url,
+                            active_pairing=active_pairing)
+
+@app.route("/tv-display/pairings/<int:pairing_id>/revoke", methods=["POST"])
+@login_required
+def tv_display_revoke_pairing(pairing_id):
+    """Manually revoke a paired Fire TV (e.g. operator replaced it,
+    lost it, decommissioned it). Sets revoked_at = now; the device's
+    URL 404s on next refresh."""
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    pairing = TVPairing.query.filter_by(
+        id=pairing_id, display_id=display.id).first_or_404()
+    if pairing.revoked_at is None:
+        pairing.revoked_at = datetime.utcnow()
+        db.session.commit()
+        flash("Fire TV unpaired. The device will stop showing the board on its next refresh.",
+              "success")
+    return redirect(url_for("admin_tv_display"))
 
 @app.route("/tv-display/settings", methods=["POST"])
 @login_required
