@@ -8260,6 +8260,101 @@ def _seed_feature_flags():
             ))
     db.session.commit()
 
+# ── TV Display catalog seed ──────────────────────────────────
+#
+# Curated default lists for the TV-display country editor's
+# company-column picker and bank-row picker. Idempotent — only
+# inserts entries whose slug doesn't already exist, so the
+# superadmin can edit / disable / re-sort without the next boot
+# clobbering their changes.
+#
+# Slugs are URL-safe lowercase identifiers; display_name is what
+# operators see in the picker and on the public board. logo_url
+# stays empty here (Phase 1 ships text-only; Phase 2 wires up the
+# upload flow).
+_DEFAULT_TV_COMPANIES = [
+    # (slug, display_name, sort_order)
+    ("intermex",       "Intermex",         10),
+    ("maxi",           "Maxi",             20),
+    ("barri",          "Barri",            30),
+    ("vigo",           "Vigo",             40),
+    ("ria",            "RIA",              50),
+    ("moneygram",      "MoneyGram",        60),
+    ("western_union",  "Western Union",    70),
+    ("cibao",          "Cibao Express",    80),
+    ("sigue",          "Sigue",            90),
+    ("dolex",          "Dolex",           100),
+    ("boss_revolution","Boss Revolution", 110),
+    ("xoom",           "Xoom",            120),
+]
+
+# Banks scoped per country. Country codes are ISO-2 uppercase.
+# Each tuple is (slug, display_name, country_code, sort_order).
+_DEFAULT_TV_BANKS = [
+    # ── Mexico ───────────────────────────────────────────────
+    ("mx_bbva_bancomer", "BBVA Bancomer",    "MX", 10),
+    ("mx_banorte",       "Banorte",          "MX", 20),
+    ("mx_santander",     "Santander México", "MX", 30),
+    ("mx_banamex",       "Citibanamex",      "MX", 40),
+    ("mx_hsbc",          "HSBC México",      "MX", 50),
+    ("mx_scotiabank",    "Scotiabank",       "MX", 60),
+    ("mx_bancoppel",     "Bancoppel",        "MX", 70),
+    ("mx_banco_azteca",  "Banco Azteca",     "MX", 80),
+    ("mx_inbursa",       "Inbursa",          "MX", 90),
+    ("mx_elektra",       "Elektra",          "MX",100),
+    ("mx_walmart",       "Walmart",          "MX",110),
+    ("mx_soriana",       "Soriana",          "MX",120),
+
+    # ── Guatemala ────────────────────────────────────────────
+    ("gt_industrial",    "Banco Industrial", "GT", 10),
+    ("gt_banrural",      "Banrural",         "GT", 20),
+    ("gt_bac",           "BAC Credomatic",   "GT", 30),
+    ("gt_gtcontinental", "G&T Continental",  "GT", 40),
+    ("gt_bantrab",       "Bantrab",          "GT", 50),
+    ("gt_vivibanco",     "Vivibanco",        "GT", 60),
+
+    # ── Honduras ─────────────────────────────────────────────
+    ("hn_atlantida",     "Banco Atlántida",  "HN", 10),
+    ("hn_banpais",       "Banpais",          "HN", 20),
+    ("hn_ficohsa",       "Ficohsa",          "HN", 30),
+    ("hn_bac",           "BAC Credomatic",   "HN", 40),
+    ("hn_occidente",     "Banco de Occidente","HN",50),
+    ("hn_azteca",        "Banco Azteca",     "HN", 60),
+
+    # ── El Salvador ──────────────────────────────────────────
+    ("sv_agricola",      "Banco Agrícola",   "SV", 10),
+    ("sv_cuscatlan",     "Banco Cuscatlán",  "SV", 20),
+    ("sv_davivienda",    "Davivienda",       "SV", 30),
+    ("sv_bac",           "BAC Credomatic",   "SV", 40),
+    ("sv_hipotecario",   "Banco Hipotecario","SV", 50),
+
+    # ── Dominican Republic ───────────────────────────────────
+    ("do_banreservas",   "Banreservas",          "DO", 10),
+    ("do_popular",       "Banco Popular Dominicano","DO", 20),
+    ("do_bhd",           "BHD León",             "DO", 30),
+    ("do_santa_cruz",    "Banco Santa Cruz",     "DO", 40),
+    ("do_cibao",         "Asociación Cibao",     "DO", 50),
+]
+
+def _seed_tv_catalogs():
+    """Pre-load the curated MT-company + bank pickers. Idempotent —
+    re-running only inserts entries with new slugs, so superadmin
+    edits are preserved across deploys."""
+    for slug, display_name, sort_order in _DEFAULT_TV_COMPANIES:
+        if not TVCompanyCatalog.query.filter_by(slug=slug).first():
+            db.session.add(TVCompanyCatalog(
+                slug=slug, display_name=display_name,
+                sort_order=sort_order, is_active=True,
+            ))
+    for slug, display_name, country_code, sort_order in _DEFAULT_TV_BANKS:
+        if not TVBankCatalog.query.filter_by(slug=slug).first():
+            db.session.add(TVBankCatalog(
+                slug=slug, display_name=display_name,
+                country_code=country_code,
+                sort_order=sort_order, is_active=True,
+            ))
+    db.session.commit()
+
 def _rename_maxi_transfer_to_maxi():
     """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
     in every place a company name is persisted. Safe on every boot — after
@@ -8290,6 +8385,7 @@ def init_db():
         except Exception as e:
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _seed_feature_flags()
+        _seed_tv_catalogs()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
