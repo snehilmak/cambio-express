@@ -718,13 +718,6 @@ class MonthlyFinancial(db.Model):
     @property
     def net_income(self): return self.total_revenue-self.total_purchases-self.total_expenses+self.over_short
 
-class SimpleFINConfig(db.Model):
-    __tablename__ = "simplefin_config"
-    id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), unique=True, nullable=False)
-    access_url  = db.Column(db.String(500), default="")
-    last_synced = db.Column(db.DateTime, nullable=True)
-
 class StripeBankAccount(db.Model):
     """A bank account connected via Stripe Financial Connections.
 
@@ -1774,9 +1767,8 @@ def inject_theme():
 
 # ── Stripe Financial Connections ─────────────────────────────
 # Bank-sync path. SimpleFIN was the original integration; it was
-# removed in 2026 once Stripe FC was proven in production. The
-# `simplefin_config` table is intentionally left in the schema so any
-# leftover rows still purge through `_STORE_OWNED_MODELS` on retention.
+# removed in 2026 once Stripe FC was proven in production, including
+# the `simplefin_config` table (see `_drop_legacy_tables()`).
 BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
 
 def stripe_is_configured():
@@ -7967,7 +7959,7 @@ _STORE_OWNED_MODELS = [
     # matters for cascade sanity.
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
+    "MonthlyFinancial", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
     # TVDisplay (store-keyed) — children handled by the explicit chain
@@ -8656,6 +8648,19 @@ def _ensure_added_columns():
         except Exception as e:
             app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
 
+# Legacy tables that have been removed from the model registry but may
+# still exist in production databases. DROP TABLE IF EXISTS is idempotent
+# on every restart — safe to leave forever.
+_DROPPED_TABLES = ["simplefin_config"]
+
+def _drop_legacy_tables():
+    try:
+        for table in _DROPPED_TABLES:
+            with db.engine.begin() as conn:
+                conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{table}"')
+    except Exception as e:
+        app.logger.warning(f"legacy table drop skipped: {e}")
+
 # Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
 # Declaring them here means a fresh install has a real starting set for the UI.
 _DEFAULT_FEATURE_FLAGS = [
@@ -8956,6 +8961,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         _ensure_added_columns()
+        _drop_legacy_tables()
         _rename_maxi_transfer_to_maxi()
         # One-time copy of legacy DailyDrop + CheckDeposit rows into
         # the generic DailyLineItem table. Idempotent — safe on every

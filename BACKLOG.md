@@ -68,11 +68,10 @@ any cadence.
       routes (`/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`),
       legacy `<details>` section on `/bank`, `bank_data`/`bank_error`/`cfg`
       context on the dashboard, and the CLAUDE.md section-map entry —
-      all removed in 2026. `SimpleFINConfig` model + `_STORE_OWNED_MODELS`
-      entry deliberately retained so any leftover rows still purge.
-- [ ] Drop the `simplefin_config` table in a follow-up deploy. When
-      that lands, also remove the `SimpleFINConfig` model and its
-      `_STORE_OWNED_MODELS` entry.
+      all removed in 2026.
+- [x] `SimpleFINConfig` model + `_STORE_OWNED_MODELS` entry removed.
+      `simplefin_config` table dropped via `_drop_legacy_tables()` on
+      next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
 - [ ] Graduate inline chat smoke tests to committed regression tests in
