@@ -52,31 +52,32 @@
   font-size: 22px; line-height: 1;
   flex-shrink: 0;
 }
-.ce-name {
+.ce-name-select {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 18px; font-weight: 700;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 4px 8px;
+  padding: 4px 30px 4px 8px;
   color: var(--text);
-  flex: 1 1 200px; min-width: 120px;
+  flex: 1 1 200px; min-width: 180px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  /* Same chevron as the bank picker for visual consistency. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: right 14px top 14px, right 9px top 14px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
 }
-.ce-name:hover { border-color: var(--border); }
-.ce-name:focus { outline: none; border-color: var(--db-neon); background: var(--surface-2); }
-.ce-iso {
-  width: 64px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 12px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  text-align: center;
-  padding: 6px 8px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-muted);
+.ce-name-select:hover { border-color: var(--border); }
+.ce-name-select:focus {
+  outline: none; border-color: var(--db-neon);
+  background-color: var(--surface-2);
 }
-.ce-iso:focus { outline: none; border-color: var(--db-neon); color: var(--text); }
+.ce-name-select option { background: var(--surface); color: var(--text); }
 
 /* ── Grid card ────────────────────────────────────────────── */
 .ce-grid-card {
@@ -378,21 +379,45 @@
   <form method="POST" id="ce-form"
         action="{{ url_for('tv_display_country_edit', country_id=country.id) }}">
 
-    {# ── Top bar: back + flag + name + ISO ───────────────── #}
+    {# ── Top bar: back + flag + country picker ────────────
+       country_picker_codes is a flat list of ISO-2 strings, used
+       to detect legacy country values that don't match any
+       picker entry (rendered as "(custom) <name>"). #}
     <div class="ce-topbar">
       <a href="{{ url_for('admin_tv_display') }}" class="ce-back">← Back</a>
       <div class="ce-title">
         <span class="ce-flag" id="ce-flag" aria-hidden="true">
           {{ _country_flag_emoji(country.country_code) or '🌐' }}
         </span>
-        <input class="ce-name" type="text" name="country_name" required
-               maxlength="80"
-               value="{{ country.country_name }}"
-               placeholder="Country name">
-        <input class="ce-iso" type="text" name="country_code" id="ce-iso"
-               maxlength="4"
-               value="{{ country.country_code or '' }}"
-               placeholder="ISO">
+        {# Picker writes the ISO-2 to country_code; JS keeps the
+           hidden country_name in sync from data-name on the
+           selected option. Backwards compat: a country saved
+           with an ISO-2 not in the picker (or no ISO at all)
+           lands as a "(custom) <name>" pre-selected option so
+           the operator's existing data isn't lost. #}
+        <select class="ce-name-select" name="country_code"
+                id="ce-country-picker" required>
+          {% if country.country_code and country.country_code not in country_picker_codes %}
+          <option value="{{ country.country_code }}" data-name="{{ country.country_name }}" selected>
+            (custom) {{ country.country_name }}
+          </option>
+          {% elif not country.country_code and country.country_name %}
+          <option value="" data-name="{{ country.country_name }}" selected>
+            (custom) {{ country.country_name }}
+          </option>
+          {% endif %}
+          <option value="" {% if not country.country_code and not country.country_name %}selected{% endif %}>
+            — Pick a country —
+          </option>
+          {% for iso, name in country_picker %}
+          <option value="{{ iso }}" data-name="{{ name }}"
+                  {% if iso == country.country_code %}selected{% endif %}>
+            {{ _country_flag_emoji(iso) }} {{ name }}
+          </option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="country_name" id="ce-country-name"
+               value="{{ country.country_name }}">
       </div>
     </div>
 
@@ -851,9 +876,12 @@
     }
   });
 
-  // ── Flag preview when ISO changes ──────────────────────
-  // Tiny client-side ISO-2 → flag emoji helper. Same logic as the
-  // server's _country_flag_emoji — keep them in sync.
+  // ── Country picker → flag + hidden-name sync ──────────
+  // Picker writes ISO-2 as country_code (its native value).
+  // We also sync a hidden country_name input from data-name so
+  // the form contract still carries both fields, AND we update
+  // the big flag emoji in the topbar so the operator gets
+  // visual confirmation of the picked country.
   function flagFor(code) {
     if (!code) return '🌐';
     code = code.toUpperCase();
@@ -861,11 +889,16 @@
     return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65) +
            String.fromCodePoint(0x1F1E6 + code.charCodeAt(1) - 65);
   }
-  var isoInput = document.getElementById('ce-iso');
-  var flagSpan = document.getElementById('ce-flag');
-  isoInput.addEventListener('input', function () {
-    flagSpan.textContent = flagFor(isoInput.value.trim());
-  });
+  var picker     = document.getElementById('ce-country-picker');
+  var flagSpan   = document.getElementById('ce-flag');
+  var hiddenName = document.getElementById('ce-country-name');
+  if (picker && flagSpan && hiddenName) {
+    picker.addEventListener('change', function () {
+      var opt = picker.options[picker.selectedIndex];
+      hiddenName.value = (opt && opt.dataset.name) || '';
+      flagSpan.textContent = flagFor(picker.value);
+    });
+  }
 
   // ── Final sync on submit ───────────────────────────────
   form.addEventListener('submit', function () {

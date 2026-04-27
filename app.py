@@ -3966,7 +3966,8 @@ def admin_tv_display():
                             user=user, store=store, display=display,
                             countries=countries, country_stats=country_stats,
                             public_url=public_url,
-                            active_pairing=active_pairing)
+                            active_pairing=active_pairing,
+                            country_picker=_TV_COUNTRY_PICKER)
 
 @app.route("/tv-display/pairings/<int:pairing_id>/revoke", methods=["POST"])
 @login_required
@@ -4443,7 +4444,9 @@ def tv_display_country_edit(country_id):
                             company_logo_by_slug=company_logo_by_slug,
                             bank_logo_by_slug=bank_logo_by_slug,
                             company_name_by_slug=company_name_by_slug,
-                            bank_name_by_slug=bank_name_by_slug)
+                            bank_name_by_slug=bank_name_by_slug,
+                            country_picker=_TV_COUNTRY_PICKER,
+                            country_picker_codes=[c[0] for c in _TV_COUNTRY_PICKER])
 
 @app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
 @login_required
@@ -8689,6 +8692,51 @@ _DEFAULT_TV_BANKS = [
     ("do_santa_cruz",    "Banco Santa Cruz",     "DO", 40),
     ("do_cibao",         "Asociación Cibao",     "DO", 50),
 ]
+
+# Curated country list for the TV-display country picker. Phase 3
+# of the logo rollout — replaces the free-text country_name +
+# country_code inputs with a single dropdown of common destinations
+# our customers send remittances to.
+#
+# Order is intentional, not alphabetical: the heaviest US→LATAM
+# corridors appear first so the typical operator picks from the
+# top of the list. Add more here as new corridors come online.
+#
+# (iso2, country_name) — flag emoji is computed from iso2 by the
+# existing _country_flag_emoji() helper; we don't store it.
+_TV_COUNTRY_PICKER = [
+    ("MX", "Mexico"),
+    ("GT", "Guatemala"),
+    ("HN", "Honduras"),
+    ("SV", "El Salvador"),
+    ("DO", "Dominican Republic"),
+    ("NI", "Nicaragua"),
+    ("CR", "Costa Rica"),
+    ("PA", "Panama"),
+    ("CO", "Colombia"),
+    ("EC", "Ecuador"),
+    ("PE", "Peru"),
+    ("VE", "Venezuela"),
+    ("CU", "Cuba"),
+    ("HT", "Haiti"),
+    ("JM", "Jamaica"),
+    ("BR", "Brazil"),
+    ("AR", "Argentina"),
+    ("CL", "Chile"),
+    ("BO", "Bolivia"),
+    ("PY", "Paraguay"),
+    ("UY", "Uruguay"),
+    ("PH", "Philippines"),
+    ("IN", "India"),
+    ("PK", "Pakistan"),
+    ("BD", "Bangladesh"),
+    ("VN", "Vietnam"),
+    ("NG", "Nigeria"),
+    ("GH", "Ghana"),
+    ("KE", "Kenya"),
+    ("ET", "Ethiopia"),
+]
+
 
 def _seed_tv_catalogs():
     """Pre-load the curated MT-company + bank pickers. Idempotent —
