@@ -7209,6 +7209,165 @@ def superadmin_toggle_addon(store_id, addon_key):
     flash(msg, "success")
     return redirect(url_for("superadmin_controls", tab="stores"))
 
+# ── TV catalog admin (superadmin) ────────────────────────────
+#
+# Curate the dropdown options operators see in the country editor:
+# add new MT companies / banks, rename existing ones (display_name
+# only — slugs are immutable), upload nominative-use logos, and
+# soft-deactivate retired entries. Companies are global; banks are
+# scoped to a country (ISO-2).
+
+# 200 KiB hard cap on uploads — covers the 50 KB typical PNG with
+# headroom for retina assets, blocks accidental "I dropped a 5 MB
+# JPEG" uploads. Validated server-side; the BLOB DB column would
+# accept much more, but we'd rather reject early.
+_TV_LOGO_MAX_BYTES = 200 * 1024
+
+def _resolve_catalog_row(catalog_type, slug):
+    """Returns the parent catalog row for a (type, slug) pair, or
+    None if neither table has a match. Used by the upload + edit
+    endpoints to validate the slug before they touch the DB."""
+    if catalog_type == "company":
+        return TVCompanyCatalog.query.filter_by(slug=slug).first()
+    if catalog_type == "bank":
+        return TVBankCatalog.query.filter_by(slug=slug).first()
+    return None
+
+@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/logo",
+            methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_upload_logo(catalog_type, slug):
+    """Upload (or replace) the logo for a catalog entry."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = _resolve_catalog_row(catalog_type, slug)
+    if row is None:
+        flash("Unknown catalog entry.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    f = request.files.get("logo")
+    if not f or not f.filename:
+        flash("Pick a file to upload.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    mime = (f.mimetype or "").lower()
+    if mime not in _TV_LOGO_ALLOWED_MIMES:
+        flash("File must be PNG, JPEG, WebP, or SVG.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    blob = f.read()
+    if len(blob) == 0:
+        flash("Uploaded file is empty.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if len(blob) > _TV_LOGO_MAX_BYTES:
+        flash(f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    existing = TVCatalogLogo.query.filter_by(
+        catalog_type=catalog_type, slug=slug).first()
+    if existing is None:
+        existing = TVCatalogLogo(catalog_type=catalog_type, slug=slug)
+        db.session.add(existing)
+    existing.mime_type = mime
+    existing.blob      = blob
+    existing.file_size = len(blob)
+    existing.updated_at = datetime.utcnow()
+
+    # Mirror the public URL into the parent row's logo_url so other
+    # call sites can hit it without doing a separate logo-table
+    # lookup. The ?v=<unix> query param is added by templates that
+    # care about cache-busting on re-upload.
+    row.logo_url = url_for("tv_catalog_logo",
+                            catalog_type=catalog_type, slug=slug)
+
+    record_audit("tv_logo_upload", target_type=catalog_type,
+                  target_id=row.id,
+                  details=f"{slug} ({len(blob)} bytes, {mime})")
+    db.session.commit()
+    flash(f"Uploaded logo for {row.display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/edit",
+            methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_edit(catalog_type, slug):
+    """Rename, re-sort, change country code (banks only), or toggle
+    is_active. Slug is intentionally NOT mutable — references on
+    TVDisplayCountry / TVDisplayPayoutBank would silently break."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = _resolve_catalog_row(catalog_type, slug)
+    if row is None:
+        flash("Unknown catalog entry.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    new_name = (request.form.get("display_name") or "").strip()[:80]
+    if new_name:
+        row.display_name = new_name
+    try:
+        row.sort_order = int(request.form.get("sort_order", row.sort_order))
+    except (TypeError, ValueError):
+        pass
+    if catalog_type == "bank":
+        new_cc = (request.form.get("country_code") or "").strip().upper()[:4]
+        if new_cc:
+            row.country_code = new_cc
+    # Checkbox semantics: present → True, absent → False.
+    row.is_active = bool(request.form.get("is_active"))
+
+    record_audit("tv_catalog_edit", target_type=catalog_type,
+                  target_id=row.id, details=slug)
+    db.session.commit()
+    flash(f"Saved {row.display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+@app.route("/superadmin/tv-catalog/new", methods=["POST"])
+@superadmin_required
+def superadmin_tv_catalog_new():
+    """Add a fresh catalog entry. Slug is provided by the form and
+    must be unique within its catalog_type."""
+    catalog_type = (request.form.get("catalog_type") or "").strip()
+    if catalog_type not in ("company", "bank"):
+        flash("Pick company or bank.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    slug = (request.form.get("slug") or "").strip().lower()[:60]
+    display_name = (request.form.get("display_name") or "").strip()[:80]
+    if not slug or not display_name:
+        flash("Slug and display name are required.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    # Slug normalization: keep only [a-z0-9_].
+    slug = "".join(c for c in slug if c.isalnum() or c == "_")
+    if not slug:
+        flash("Slug must contain alphanumerics or underscores.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if _resolve_catalog_row(catalog_type, slug) is not None:
+        flash("That slug already exists.", "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    if catalog_type == "company":
+        last = (db.session.query(db.func.max(TVCompanyCatalog.sort_order))
+                .scalar() or 0)
+        db.session.add(TVCompanyCatalog(
+            slug=slug, display_name=display_name,
+            sort_order=last + 10, is_active=True,
+        ))
+    else:
+        cc = (request.form.get("country_code") or "").strip().upper()[:4]
+        if not cc:
+            flash("Banks need a country code (ISO-2).", "error")
+            return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        last = (db.session.query(db.func.max(TVBankCatalog.sort_order))
+                .filter_by(country_code=cc).scalar() or 0)
+        db.session.add(TVBankCatalog(
+            slug=slug, display_name=display_name,
+            country_code=cc,
+            sort_order=last + 10, is_active=True,
+        ))
+    record_audit("tv_catalog_create", target_type=catalog_type,
+                  target_id=0, details=slug)
+    db.session.commit()
+    flash(f"Added {display_name}.", "success")
+    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
 # ── Discount codes (superadmin) ──────────────────────────────
 def _sync_discount_to_stripe(dc):
     """Best-effort mirror of a DiscountCode into Stripe as a coupon + promotion code.
