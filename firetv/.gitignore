@@ -1,0 +1,15 @@
+# Gradle / Android build artifacts.
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Signing keys must NEVER be committed. Operator generates these
+# locally per the README's "Sign for release" section.
+*.jks
+*.keystore
+release-keystore.properties
