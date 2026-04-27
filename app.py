@@ -48,12 +48,41 @@ app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
 def _country_flag_emoji(code):
     """ISO-2 country code → flag emoji. "MX" → "🇲🇽". Two regional-
     indicator code points concatenated. Returns "" for empty/invalid
-    input so the template can still call it unconditionally."""
+    input so the template can still call it unconditionally.
+
+    Kept for places that need a string (titles, aria-labels, alt
+    attrs). For visual flag rendering use country_flag_html() —
+    emoji flags don't render on Windows browsers (show as country-
+    code letter pairs in tofu boxes), and the flag-icons SVG flags
+    we wire up there cover that gap."""
     code = (code or "").strip().upper()
     if len(code) != 2 or not code.isalpha():
         return ""
     return "".join(chr(0x1F1E6 + (ord(c) - ord("A"))) for c in code)
 app.jinja_env.globals["_country_flag_emoji"] = _country_flag_emoji
+
+def country_flag_html(code, size="1em"):
+    """ISO-2 → <span class="fi fi-xx" style="..."> markup that
+    renders via the flag-icons CSS (CDN linked from base.html and
+    tv_display_public.html). Returns "" on bad input so templates
+    can call unconditionally.
+
+    Why over emoji: emoji flags don't render on Windows browsers —
+    operators on a Windows desktop see "MX" in a tofu box instead
+    of 🇲🇽. flag-icons ships SVG flags that render uniformly
+    everywhere. MIT-licensed (no nominative-use concerns)."""
+    code = (code or "").strip().lower()
+    if len(code) != 2 or not code.isalpha():
+        return ""
+    # Inline width/height so the flag matches the surrounding text
+    # without requiring per-template CSS. Aspect ratio is 4:3
+    # (flag-icons default).
+    style = f"width:{size};height:{size};"
+    from markupsafe import Markup
+    return Markup(
+        f'<span class="fi fi-{code}" style="{style}"></span>'
+    )
+app.jinja_env.globals["country_flag_html"] = country_flag_html
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///dinerobook.db")
 if DATABASE_URL.startswith("postgres://"):
@@ -8757,6 +8786,120 @@ def _seed_tv_catalogs():
             ))
     db.session.commit()
 
+def _seed_tv_logos_from_disk():
+    """One-shot importer: scan static/seed-logos/{companies,banks}/
+    for files named <slug>.{svg,png,jpg,jpeg,webp} and import any
+    that aren't already in TVCatalogLogo. Idempotent — re-running
+    only inserts new entries; existing logos (uploaded via the
+    superadmin UI or a previous boot) are left alone.
+
+    The intent: drop logo files into a directory, redeploy, and
+    they auto-load. Lets a designer / contractor populate the
+    catalog by file-drop without clicking through the upload UI
+    46 times. Operators can still upload + replace via the UI;
+    that path takes precedence (we only import when no logo row
+    exists for the slug)."""
+    seed_dir = os.path.join(app.root_path, "static", "seed-logos")
+    if not os.path.isdir(seed_dir):
+        return 0
+
+    # MIME type by file extension. Keep this set in sync with
+    # _TV_LOGO_ALLOWED_MIMES (the upload-side whitelist).
+    ext_to_mime = {
+        ".svg":  "image/svg+xml",
+        ".png":  "image/png",
+        ".jpg":  "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+
+    imported = 0
+    # Plural directory names — "company" → "companies" is irregular,
+    # so spell them out explicitly rather than naïve concat.
+    type_to_dir = {"company": "companies", "bank": "banks"}
+    for catalog_type, sub_name in type_to_dir.items():
+        sub = os.path.join(seed_dir, sub_name)
+        if not os.path.isdir(sub):
+            continue
+        for filename in os.listdir(sub):
+            path = os.path.join(sub, filename)
+            if not os.path.isfile(path):
+                continue
+            slug, ext = os.path.splitext(filename)
+            slug = slug.strip().lower()
+            ext = ext.lower()
+            mime = ext_to_mime.get(ext)
+            if not mime or not slug:
+                continue
+            # Skip files that don't match a known catalog row —
+            # silently, since dropping logos for entries we'll add
+            # later shouldn't crash the boot.
+            parent = (TVCompanyCatalog if catalog_type == "company"
+                       else TVBankCatalog).query.filter_by(slug=slug).first()
+            if parent is None:
+                continue
+            # Don't override an operator's existing upload.
+            if TVCatalogLogo.query.filter_by(
+                    catalog_type=catalog_type, slug=slug).first() is not None:
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    blob = fh.read()
+            except OSError:
+                continue
+            if not blob or len(blob) > _TV_LOGO_MAX_BYTES:
+                continue
+            db.session.add(TVCatalogLogo(
+                catalog_type=catalog_type, slug=slug,
+                mime_type=mime, blob=blob, file_size=len(blob),
+                updated_at=datetime.utcnow(),
+            ))
+            # Mirror the public URL into the parent row's logo_url
+            # so non-superadmin code can resolve without a logo-table
+            # lookup. Hardcoded path (not url_for) because this seed
+            # runs inside app_context but not request_context, where
+            # url_for would refuse to build a path without SERVER_NAME.
+            parent.logo_url = f"/tv/logo/{catalog_type}/{slug}"
+            imported += 1
+    if imported:
+        db.session.commit()
+    return imported
+
+def _backfill_tv_country_codes():
+    """One-shot helper: walk TVDisplayCountry, fill in missing
+    country_code for rows whose country_name matches an entry in the
+    curated picker. Runs on every boot but is a no-op once every row
+    has a code (idempotent — only matches rows where country_code is
+    NULL or empty).
+
+    Why: pre-PR-C rows were created via free-text inputs where the
+    operator could type the name without an ISO-2. The flag emoji
+    is computed from country_code, so those legacy rows render
+    flagless on the public board until we backfill."""
+    name_to_iso = {name.lower(): iso for iso, name in _TV_COUNTRY_PICKER}
+    # Common synonyms / variations the operator might have typed.
+    # Lower-case keys; keep the list short — we want safety, not
+    # heuristics that misclassify.
+    name_to_iso.update({
+        "republica dominicana": "DO",
+        "dominican republic":   "DO",
+        "el salvador":          "SV",
+        "costa rica":            "CR",
+    })
+    fixed = 0
+    rows = TVDisplayCountry.query.filter(
+        db.or_(TVDisplayCountry.country_code.is_(None),
+               TVDisplayCountry.country_code == "")
+    ).all()
+    for row in rows:
+        guess = name_to_iso.get((row.country_name or "").strip().lower())
+        if guess:
+            row.country_code = guess
+            fixed += 1
+    if fixed:
+        db.session.commit()
+    return fixed
+
 def _rename_maxi_transfer_to_maxi():
     """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
     in every place a company name is persisted. Safe on every boot — after
@@ -8788,6 +8931,25 @@ def init_db():
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _seed_feature_flags()
         _seed_tv_catalogs()
+        # Backfill country_code on legacy TVDisplayCountry rows so
+        # the flag emoji renders. Idempotent — no-op once all rows
+        # have a code.
+        try:
+            n_fixed = _backfill_tv_country_codes()
+            if n_fixed:
+                app.logger.info(f"Backfilled country_code on {n_fixed} TV-display country rows.")
+        except Exception as e:
+            app.logger.warning(f"TV country-code backfill skipped: {e}")
+        # Auto-import logos that operators dropped into the
+        # static/seed-logos/{companies,banks}/ directory. Idempotent —
+        # never overrides UI-uploaded logos, never crashes on a
+        # missing directory.
+        try:
+            n_imported = _seed_tv_logos_from_disk()
+            if n_imported:
+                app.logger.info(f"Imported {n_imported} TV logos from static/seed-logos/.")
+        except Exception as e:
+            app.logger.warning(f"TV logo seed-disk import skipped: {e}")
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()

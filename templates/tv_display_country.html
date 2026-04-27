@@ -51,6 +51,14 @@
   border-radius: 8px;
   font-size: 22px; line-height: 1;
   flex-shrink: 0;
+  overflow: hidden;
+}
+/* flag-icons SVG fills the .ce-flag tile without distorting; the
+   inline width/height on the span (32px from the helper) sits
+   inside the 40px tile with breathing room. */
+.ce-flag .fi {
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.06);
 }
 .ce-name-select {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -386,8 +394,12 @@
     <div class="ce-topbar">
       <a href="{{ url_for('admin_tv_display') }}" class="ce-back">← Back</a>
       <div class="ce-title">
-        <span class="ce-flag" id="ce-flag" aria-hidden="true">
-          {{ _country_flag_emoji(country.country_code) or '🌐' }}
+        {# Big SVG flag from flag-icons. Placeholder globe-icon
+           background when no country picked yet. JS swaps the
+           inner content on picker change. #}
+        <span class="ce-flag" id="ce-flag" aria-hidden="true"
+              data-empty="🌐">
+          {% if country.country_code %}{{ country_flag_html(country.country_code, size='32px') }}{% else %}🌐{% endif %}
         </span>
         {# Picker writes the ISO-2 to country_code; JS keeps the
            hidden country_name in sync from data-name on the
@@ -395,7 +407,7 @@
            with an ISO-2 not in the picker (or no ISO at all)
            lands as a "(custom) <name>" pre-selected option so
            the operator's existing data isn't lost. #}
-        <select class="ce-name-select" name="country_code"
+        <select class="ce-name-select js-country-picker" name="country_code"
                 id="ce-country-picker" required>
           {% if country.country_code and country.country_code not in country_picker_codes %}
           <option value="{{ country.country_code }}" data-name="{{ country.country_name }}" selected>
@@ -411,9 +423,7 @@
           </option>
           {% for iso, name in country_picker %}
           <option value="{{ iso }}" data-name="{{ name }}"
-                  {% if iso == country.country_code %}selected{% endif %}>
-            {{ _country_flag_emoji(iso) }} {{ name }}
-          </option>
+                  {% if iso == country.country_code %}selected{% endif %}>{{ name }}</option>
           {% endfor %}
         </select>
         <input type="hidden" name="country_name" id="ce-country-name"
@@ -878,16 +888,15 @@
 
   // ── Country picker → flag + hidden-name sync ──────────
   // Picker writes ISO-2 as country_code (its native value).
-  // We also sync a hidden country_name input from data-name so
-  // the form contract still carries both fields, AND we update
-  // the big flag emoji in the topbar so the operator gets
-  // visual confirmation of the picked country.
-  function flagFor(code) {
-    if (!code) return '🌐';
-    code = code.toUpperCase();
-    if (!/^[A-Z]{2}$/.test(code)) return '🌐';
-    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65) +
-           String.fromCodePoint(0x1F1E6 + code.charCodeAt(1) - 65);
+  // We also sync the hidden country_name input from data-name on
+  // the selected option so the form contract still carries both
+  // fields, AND we re-render the big topbar flag using the same
+  // flag-icons SVG markup the server-rendered flags use.
+  function flagMarkupFor(code) {
+    code = (code || '').trim().toLowerCase();
+    if (code.length !== 2 || !/^[a-z]{2}$/.test(code)) return '🌐';
+    return '<span class="fi fi-' + code +
+           '" style="width:32px;height:32px;"></span>';
   }
   var picker     = document.getElementById('ce-country-picker');
   var flagSpan   = document.getElementById('ce-flag');
@@ -896,7 +905,7 @@
     picker.addEventListener('change', function () {
       var opt = picker.options[picker.selectedIndex];
       hiddenName.value = (opt && opt.dataset.name) || '';
-      flagSpan.textContent = flagFor(picker.value);
+      flagSpan.innerHTML = flagMarkupFor(picker.value);
     });
   }
 

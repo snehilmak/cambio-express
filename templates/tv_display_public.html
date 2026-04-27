@@ -8,6 +8,10 @@
    the same product. The TV view is its own page (no base.html
    chrome) so we link tokens directly. #}
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+{# flag-icons SVG flags (MIT) — emoji flags fail to render on
+   Windows browsers AND on most smart-TV browsers, both of which
+   are explicitly in scope for this page. #}
+<link href="https://cdn.jsdelivr.net/gh/lipis/flag-icons@7.5.0/css/flag-icons.min.css" rel="stylesheet">
 <link href="{{ url_for('static', filename='design-tokens.css', v=STATIC_VERSION) }}" rel="stylesheet">
 <meta name="theme-color" content="#0a0a0a">
 <style>
@@ -184,6 +188,19 @@ body {
 .tv-flag {
   font-size: clamp(20px, 2.4vw, 30px);
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+}
+/* flag-icons SVG flag inside .tv-flag scales with the surrounding
+   font-size. width/height come from the inline style on the span,
+   border-radius rounds the corners to match the flag's natural
+   aspect ratio (4:3) without distorting. */
+.tv-flag .fi {
+  width: 1.4em !important; height: 1em !important;
+  border-radius: 2px;
+  /* Subtle border so light flags don't disappear into a dark
+     section header band. */
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
 }
 .tv-country-name {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
@@ -356,7 +373,10 @@ body {
     <section class="tv-section">
       <div class="tv-section-head">
         {% if section.country.country_code %}
-        <span class="tv-flag" aria-hidden="true">{{ _country_flag_emoji(section.country.country_code) }}</span>
+        {# flag-icons SVG flag — renders uniformly on smart-TV +
+           Chromecast + Windows browsers where emoji flags fail.
+           Sized via CSS in .tv-flag below. #}
+        <span class="tv-flag" aria-hidden="true">{{ country_flag_html(section.country.country_code, size='1em') }}</span>
         {% endif %}
         <span class="tv-country-name">{{ section.country.country_name }}</span>
         {% if section.companies %}

@@ -53,9 +53,14 @@ def test_admin_landing_renders_country_picker(logged_in_client, test_store_id):
     assert 'id="tvc-add-country-code"' in body
     assert 'value="MX"' in body
     assert 'data-name="Mexico"' in body
-    # Flag emoji rendered alongside the name.
-    assert "🇲🇽 Mexico" in body
-    assert "🇬🇹 Guatemala" in body
+    assert 'data-name="Guatemala"' in body
+    # Choices.js wrapper class is on the underlying <select>; the
+    # flag-icons SVG is rendered into each option client-side from
+    # the option's value (ISO-2 code) by tv-country-picker.js.
+    assert 'js-country-picker' in body
+    # Display names are present somewhere in the form region.
+    assert "Mexico" in body
+    assert "Guatemala" in body
 
 
 def test_admin_landing_picker_no_longer_has_freetext_country_name(
@@ -96,7 +101,7 @@ def test_admin_landing_picker_submits_both_fields(logged_in_client, test_store_i
 def test_editor_header_renders_picker_with_current_selected(
         logged_in_client, test_store_id):
     """Editing an MX country: the picker is pre-selected on the
-    Mexico entry and the big flag emoji shows 🇲🇽."""
+    Mexico entry and the big topbar flag renders the MX SVG."""
     _activate_addon(logged_in_client, test_store_id)
     logged_in_client.get("/tv-display")
     logged_in_client.post("/tv-display/countries/new", data={
@@ -106,11 +111,12 @@ def test_editor_header_renders_picker_with_current_selected(
         country_id = TVDisplayCountry.query.first().id
     body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
     assert 'id="ce-country-picker"' in body
+    assert 'js-country-picker' in body
     # MX option is present and selected.
-    assert ('<option value="MX" data-name="Mexico"\n                  selected>'
-            in body or 'value="MX" data-name="Mexico"' in body and "selected" in body)
-    # Big flag emoji rendered.
-    assert "🇲🇽" in body
+    assert 'value="MX" data-name="Mexico"' in body
+    assert 'selected' in body
+    # Big topbar flag rendered as flag-icons SVG (mx in the class).
+    assert 'class="fi fi-mx"' in body
 
 
 def test_editor_header_preserves_legacy_freetext_country(
@@ -189,5 +195,6 @@ def test_public_board_renders_picker_country_with_flag(
     with logged_in_client.application.app_context():
         token = TVDisplay.query.first().public_token
     body = client.get(f"/tv/{token}").data.decode()
-    assert "🇲🇽" in body
+    # SVG flag (flag-icons) on the public board.
+    assert 'class="fi fi-mx"' in body
     assert "Mexico" in body
