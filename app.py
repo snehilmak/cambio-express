@@ -4495,6 +4495,44 @@ def _render_tv_board(display, store):
                             display=display, store=store, sections=sections,
                             bank_name_by_slug=bank_name_by_slug)
 
+# ── Catalog logo serve ──────────────────────────────────────
+#
+# Public, no auth — the TV display itself is public-by-token, and
+# the logos shown on it can't reasonably be auth-gated. Brute-force
+# enumeration is not a concern (logos are intentionally displayed
+# on-screen for customers in the shop). We DO want aggressive
+# browser caching so the rate board doesn't re-fetch every logo on
+# every 30s refresh; templates append ?v=<updated_at_unix> to bust
+# the cache when an admin re-uploads.
+
+# MIME types accepted on upload AND served back. Anything not in
+# this set returns a 404 — keeps a corrupted DB row from spitting
+# arbitrary bytes at a browser.
+_TV_LOGO_ALLOWED_MIMES = {
+    "image/png", "image/jpeg", "image/webp", "image/svg+xml",
+}
+
+@app.route("/tv/logo/<catalog_type>/<slug>")
+def tv_catalog_logo(catalog_type, slug):
+    """Stream the BLOB for a catalog logo. Year-long Cache-Control;
+    cache-bust by ?v=<timestamp> on the embedding template."""
+    if catalog_type not in ("company", "bank"):
+        abort(404)
+    row = TVCatalogLogo.query.filter_by(
+        catalog_type=catalog_type, slug=slug).first()
+    if not row or row.mime_type not in _TV_LOGO_ALLOWED_MIMES:
+        abort(404)
+    resp = make_response(row.blob)
+    resp.headers["Content-Type"] = row.mime_type
+    resp.headers["Content-Length"] = str(len(row.blob))
+    # Year-long immutable cache. Templates append ?v=<unix> so a
+    # re-upload changes the URL → fresh fetch on next render.
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Block image-format sniffing — the served bytes match the
+    # whitelisted mime exactly.
+    resp.headers["X-Content-Type-Options"] = "nosniff"
+    return resp
+
 @app.route("/tv/<token>")
 def tv_public_display(token):
     """Fullscreen rate board, no auth. Anyone with the URL sees it.
