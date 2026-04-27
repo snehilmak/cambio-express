@@ -294,6 +294,97 @@
   color: var(--text);
   margin: 0 0 6px;
 }
+
+/* ── Pair-a-Fire-TV panel ───────────────────────────────── */
+.tvc-pair {
+  margin-top: 14px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 14px 20px;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .tvc-pair { grid-template-columns: 1fr; }
+}
+.tvc-pair-copy h3 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 15px; font-weight: 700;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+.tvc-pair-copy p {
+  font-size: 13px; color: var(--text-muted);
+  margin: 0;
+  max-width: 60ch;
+}
+.tvc-pair-action {
+  display: flex; align-items: center; gap: 14px;
+  flex-wrap: wrap;
+}
+.tvc-pair-code {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 10px 18px;
+  background: var(--db-neon-glow-15);
+  border: 1px solid var(--db-neon-dim);
+  border-radius: 10px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-weight: 700;
+  font-size: 30px;
+  letter-spacing: 0.18em;
+  color: var(--db-neon);
+  min-width: 180px;
+  justify-content: center;
+}
+.tvc-pair-code.tvc-pair-code--placeholder {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+}
+.tvc-pair-meta {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.tvc-pair-meta b { color: var(--text); font-weight: 600; }
+.tvc-pair-meta.tvc-pair-meta--err { color: #ff4f6e; }
+
+/* ── Currently-paired Fire TV row ────────────────────────── */
+.tvc-pair-active {
+  margin-top: 14px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--db-neon-dim);
+  border-radius: 12px;
+  display: flex; align-items: center; gap: 14px;
+  flex-wrap: wrap;
+}
+.tvc-pair-active-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--db-neon);
+  box-shadow: 0 0 0 4px var(--db-neon-glow-25);
+  flex-shrink: 0;
+}
+.tvc-pair-active-text {
+  flex: 1 1 auto; min-width: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 13.5px;
+  color: var(--text);
+}
+.tvc-pair-active-text b { font-weight: 700; }
+.tvc-pair-active-text .muted {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  margin-top: 2px;
+  display: block;
+}
 </style>
 
 {# ── Hero: live status + brand ─────────────────────────────── #}
@@ -305,7 +396,8 @@
       <span class="tvc-status"><span class="dot"></span>Live</span>
     </div>
     <div class="tvc-meta">
-      <b>One layout</b> per store · stream to as many TVs in your shop as you like.
+      <b>One layout</b> per store · one paired Fire TV at a time, plus
+      tablets/Chromecasts on the shared URL.
       {% if display.last_updated_at %}
       Last edited <b>{{ display.last_updated_at.strftime('%b %d, %H:%M') }} UTC</b>.
       {% endif %}
@@ -344,6 +436,55 @@
     </button>
   </form>
 </details>
+
+{# ── Pair a Fire TV ─────────────────────────────────────── #}
+<div class="tvc-pair" id="tvc-pair">
+  <div class="tvc-pair-copy">
+    <h3>Pair a Fire TV</h3>
+    <p>
+      Install the <b>DineroBook TV</b> app on your Fire TV from the
+      Amazon Appstore, generate a code here, then enter it on the
+      Fire TV. Pairing a new Fire TV automatically unpairs the old
+      one — one Fire TV per subscription.
+    </p>
+  </div>
+  <div class="tvc-pair-action">
+    <div>
+      <div class="tvc-pair-code tvc-pair-code--placeholder" id="tvc-pair-code">
+        — — — — — —
+      </div>
+      <div class="tvc-pair-meta" id="tvc-pair-meta">
+        Click <b>Generate code</b> to start pairing.
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" id="tvc-pair-btn">
+      Generate code
+    </button>
+  </div>
+</div>
+
+{% if active_pairing %}
+<div class="tvc-pair-active">
+  <span class="tvc-pair-active-dot" aria-hidden="true"></span>
+  <div class="tvc-pair-active-text">
+    <b>Fire TV paired{% if active_pairing.device_label %} — {{ active_pairing.device_label }}{% endif %}</b>
+    <span class="muted">
+      Paired {{ active_pairing.paired_at.strftime('%b %d, %H:%M') }} UTC ·
+      last seen
+      {% set delta_min = ((display.last_updated_at and active_pairing.last_seen_at and ((display.last_updated_at - active_pairing.last_seen_at).total_seconds() // 60))|int) %}
+      {{ active_pairing.last_seen_at.strftime('%b %d, %H:%M') }} UTC
+    </span>
+  </div>
+  <form method="POST"
+        action="{{ url_for('tv_display_revoke_pairing', pairing_id=active_pairing.id) }}"
+        onsubmit="return confirm('Unpair this Fire TV? It will stop showing the board on its next refresh, and you can pair a new device with a fresh code.');">
+    <button type="submit" class="btn btn-outline btn-sm"
+            style="border-color:#ff4f6e;color:#ff4f6e;">
+      Unpair this Fire TV
+    </button>
+  </form>
+</div>
+{% endif %}
 
 {# ── Settings + at-a-glance ────────────────────────────────── #}
 <div class="tvc-grid">
@@ -510,5 +651,74 @@ document.getElementById('copy-url-btn').addEventListener('click', function () {
     }
   } catch (e) { flash('Select + copy'); }
 });
+
+/* ── Pair-a-Fire-TV controller ─────────────────────────────
+ *
+ * POSTs to /tv-display/pair-code, renders the returned 6-char code
+ * in the big neon pill, and counts down the TTL second-by-second.
+ * When the code expires we show "Code expired — generate a new one"
+ * and re-enable the button. Single-use enforcement is server-side
+ * (the code is wiped on first redeem); the UI just narrates state.
+ */
+(function () {
+  var btn   = document.getElementById('tvc-pair-btn');
+  var code  = document.getElementById('tvc-pair-code');
+  var meta  = document.getElementById('tvc-pair-meta');
+  var tickT = null;
+
+  function fmt(ms) {
+    var s = Math.max(0, Math.floor(ms / 1000));
+    var m = Math.floor(s / 60), r = s % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+  function pretty(c) {
+    // Render ABC234 as "ABC 234" — easier to read off a screen.
+    return c.length === 6 ? c.slice(0, 3) + ' ' + c.slice(3) : c;
+  }
+  function setMeta(html, isErr) {
+    meta.innerHTML = html;
+    meta.classList.toggle('tvc-pair-meta--err', !!isErr);
+  }
+  function startTimer(expiresAt) {
+    if (tickT) clearInterval(tickT);
+    tickT = setInterval(function () {
+      var left = expiresAt - Date.now();
+      if (left <= 0) {
+        clearInterval(tickT); tickT = null;
+        code.classList.add('tvc-pair-code--placeholder');
+        code.textContent = '— — — — — —';
+        setMeta('Code expired. Generate a new one to pair.', true);
+        btn.disabled = false; btn.textContent = 'Generate code';
+        return;
+      }
+      setMeta('Expires in <b>' + fmt(left) + '</b> · single-use, one Fire TV only.');
+    }, 500);
+  }
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true; btn.textContent = 'Generating…';
+    fetch('{{ url_for("tv_display_pair_code") }}', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'Accept': 'application/json'},
+    })
+    .then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      code.classList.remove('tvc-pair-code--placeholder');
+      code.textContent = pretty(data.code);
+      var expiresAt = Date.parse(data.expires_at);
+      if (!expiresAt) expiresAt = Date.now() + (data.ttl_seconds || 600) * 1000;
+      startTimer(expiresAt);
+      btn.disabled = false; btn.textContent = 'Generate new code';
+    })
+    .catch(function () {
+      setMeta('Couldn\'t generate a code. Refresh and try again.', true);
+      btn.disabled = false; btn.textContent = 'Generate code';
+    });
+  });
+})();
 </script>
 {% endblock %}
