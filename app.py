@@ -3918,9 +3918,26 @@ def tv_display_pair_code():
 @app.route("/api/tv-pair/redeem", methods=["POST"])
 def tv_pair_redeem():
     """Public endpoint for the Fire TV companion app. Trades a live
-    pair code for the long public_token. Returns 404 (not 401/403) for
-    every failure mode so brute-force attempts can't distinguish
-    "wrong code" from "code expired" from "addon off"."""
+    pair code for a per-device URL backed by a fresh TVPairing row.
+
+    Anti-misuse model:
+      1. The pair *code* is single-use — wiped from the DB after a
+         successful redeem so it can never pair a second device.
+      2. Each redeem creates a unique device_token that drives the
+         Fire TV app's URL. The Fire TV never receives the shared
+         public_token.
+      3. A redeem revokes any prior active TVPairing on the same
+         display, so generating a new code + pairing a new TV
+         immediately disables the old one. Net effect: one $5
+         subscription = one Fire TV at a time.
+
+    Tablets/Chromecasts pointed at /tv/<public_token> are unaffected
+    — that route is intentionally still live for operators without a
+    Fire TV setup.
+
+    Returns 404 (not 401/403) for every failure mode so brute-force
+    attempts can't distinguish "wrong code" from "code expired" from
+    "addon off"."""
     payload = request.get_json(silent=True) or {}
     raw = (payload.get("code") or "").strip().upper()
     # Strip whitespace / hyphens the user may have typed for legibility.
@@ -3936,16 +3953,46 @@ def tv_pair_redeem():
     store = db.session.get(Store, display.store_id)
     if not store or not store_has_addon(store, "tv_display"):
         return jsonify({"error": "not_found"}), 404
+
+    # Revoke any prior active pairing on this display. One Fire TV
+    # at a time. We mark revoked_at rather than deleting so admin
+    # audit / support can still see the lineage.
+    now = datetime.utcnow()
+    TVPairing.query.filter(
+        TVPairing.display_id == display.id,
+        TVPairing.revoked_at.is_(None),
+    ).update({"revoked_at": now}, synchronize_session=False)
+
+    # Optional device label — the app may submit "Fire TV — Counter 1".
+    device_label = (payload.get("device_label") or "").strip()[:80]
+
+    # Mint a fresh device token. 32-byte URL-safe random, same shape
+    # as public_token; collisions are astronomical but loop just in case.
+    for _ in range(8):
+        token = secrets.token_urlsafe(24)
+        if not TVPairing.query.filter_by(device_token=token).first():
+            break
+    pairing = TVPairing(
+        display_id=display.id,
+        device_token=token,
+        device_label=device_label,
+        paired_at=now,
+        last_seen_at=now,
+    )
+    db.session.add(pairing)
+
     # Single-use: invalidate the code so a leaked code can't be
-    # redeemed twice.
+    # redeemed twice (the device-token revocation above handles the
+    # multi-TV case; this handles the leaked-code case).
     display.pair_code = ""
     display.pair_code_expires_at = None
     db.session.commit()
-    public_url = url_for("tv_public_display", token=display.public_token,
-                          _external=True)
+
+    display_url = url_for("tv_device_display", device_token=token,
+                           _external=True)
     return jsonify({
-        "public_token": display.public_token,
-        "public_url":   public_url,
+        "device_token": token,
+        "display_url":  display_url,
         "store_name":   store.name,
         "title":        display.title or "Money Transfer Rates",
     })
@@ -4120,18 +4167,11 @@ def tv_display_country_delete(country_id):
     flash(f"Removed {country.country_name}.", "success")
     return redirect(url_for("admin_tv_display"))
 
-@app.route("/tv/<token>")
-def tv_public_display(token):
-    """Fullscreen rate board, no auth. Anyone with the URL sees it.
-    No chrome (no base.html), so it works on a smart-TV browser /
-    Chromecast / Fire TV WebView with no extra UI to confuse the
-    operator."""
-    display = TVDisplay.query.filter_by(public_token=token).first_or_404()
-    store = db.session.get(Store, display.store_id)
-    # If the store later removes the addon, the URL stops working —
-    # belt-and-suspenders, since regenerate_token is the supported path.
-    if not store or not store_has_addon(store, "tv_display"):
-        abort(404)
+def _render_tv_board(display, store):
+    """Build the section payload + render the public TV template.
+    Shared by the legacy /tv/<public_token> route and the per-device
+    /tv/device/<device_token> route — same content, different keys
+    in front of it."""
     countries = (TVDisplayCountry.query
                   .filter_by(display_id=display.id)
                   .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
@@ -4154,6 +4194,49 @@ def tv_public_display(token):
         })
     return render_template("tv_display_public.html",
                             display=display, store=store, sections=sections)
+
+@app.route("/tv/<token>")
+def tv_public_display(token):
+    """Fullscreen rate board, no auth. Anyone with the URL sees it.
+    No chrome (no base.html), so it works on a smart-TV browser /
+    Chromecast / Fire TV WebView with no extra UI to confuse the
+    operator.
+
+    Tablets / Chromecasts use this URL directly. Fire TV companion
+    apps go through /tv/device/<device_token> instead so the shared
+    public_token never leaves the browser/Chromecast world."""
+    display = TVDisplay.query.filter_by(public_token=token).first_or_404()
+    store = db.session.get(Store, display.store_id)
+    # If the store later removes the addon, the URL stops working —
+    # belt-and-suspenders, since regenerate_token is the supported path.
+    if not store or not store_has_addon(store, "tv_display"):
+        abort(404)
+    return _render_tv_board(display, store)
+
+@app.route("/tv/device/<device_token>")
+def tv_device_display(device_token):
+    """Per-device rate-board URL handed to a Fire TV companion app
+    after a successful pair-code redeem. Same content as
+    /tv/<public_token>, but bound to a single TVPairing row.
+
+    404s on:
+      - unknown device_token
+      - revoked TVPairing (replaced by a newer pairing or admin-revoked)
+      - addon switched off after pairing
+    On every successful render we bump TVPairing.last_seen_at so the
+    admin UI can show "last seen 2 min ago"."""
+    pairing = TVPairing.query.filter_by(device_token=device_token).first()
+    if not pairing or pairing.revoked_at is not None:
+        abort(404)
+    display = db.session.get(TVDisplay, pairing.display_id)
+    if not display:
+        abort(404)
+    store = db.session.get(Store, display.store_id)
+    if not store or not store_has_addon(store, "tv_display"):
+        abort(404)
+    pairing.last_seen_at = datetime.utcnow()
+    db.session.commit()
+    return _render_tv_board(display, store)
 
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
