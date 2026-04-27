@@ -260,6 +260,13 @@
   background: transparent;
   cursor: pointer;
 }
+/* When the operator opens the "Add a country" panel, expand it to
+   span every column in the grid so the picker dropdown has room
+   to breathe. Closed (default) state keeps the compact card form
+   that fits alongside existing country tiles. */
+.tvc-add-country[open] {
+  grid-column: 1 / -1;
+}
 .tvc-add-country summary {
   display: flex; align-items: center; gap: 14px;
   padding: 16px;
@@ -282,7 +289,22 @@
 }
 .tvc-add-country:hover .plus { color: var(--db-neon); border-color: var(--db-neon); }
 .tvc-add-country:hover summary { color: var(--text); }
-.tvc-add-form { padding: 16px; }
+/* Wider form body when the panel is open. The picker + Add button
+   sit on a horizontal row at the top with breathing room around
+   the dropdown options. */
+.tvc-add-form { padding: 18px; }
+.tvc-add-form .field { max-width: 460px; }
+.tvc-add-form .tvc-add-actions {
+  margin-top: 14px;
+  display: flex; justify-content: flex-end;
+}
+/* Choices.js drops its dropdown panel below the input by default —
+   give the picker enough horizontal space inside the add-form so
+   country names don't wrap to two lines. */
+.tvc-add-form .choices.db-country-picker {
+  width: 460px;
+  max-width: 100%;
+}
 
 .tvc-empty {
   padding: 40px 20px;
@@ -627,7 +649,7 @@
         </select>
         <input type="hidden" name="country_name" id="tvc-add-country-name" value="">
       </div>
-      <div style="margin-top:12px;display:flex;justify-content:flex-end;">
+      <div class="tvc-add-actions">
         <button type="submit" class="btn btn-primary">Add country</button>
       </div>
     </form>
