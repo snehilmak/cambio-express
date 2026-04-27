@@ -603,23 +603,23 @@
       </div>
     </summary>
     <form method="POST" action="{{ url_for('tv_display_country_new') }}"
-          class="tvc-add-form">
-      <div class="form-grid cols-2">
-        <div class="field">
-          <label>Country name *</label>
-          <input type="text" name="country_name" maxlength="80" required
-                 placeholder="Mexico">
-        </div>
-        <div class="field">
-          <label>ISO-2 code</label>
-          <input type="text" name="country_code" maxlength="4"
-                 placeholder="MX" style="text-transform:uppercase;">
-        </div>
-      </div>
-      <div class="field" style="margin-top:8px;">
-        <label>MT companies (comma-separated, become the columns)</label>
-        <input type="text" name="mt_companies" maxlength="500"
-               placeholder="Maxi, Cibao, Vigo">
+          class="tvc-add-form" id="tvc-add-country-form">
+      <div class="field">
+        <label>Country *</label>
+        {# country_code is the canonical key — the picker submits
+           its ISO-2 value as country_code. The hidden country_name
+           input is JS-synced from data-name on the selected option;
+           the server still receives both fields, preserving the
+           free-text-era form contract. #}
+        <select name="country_code" id="tvc-add-country-code" required>
+          <option value="">— Pick a country —</option>
+          {% for iso, name in country_picker %}
+          <option value="{{ iso }}" data-name="{{ name }}">
+            {{ _country_flag_emoji(iso) }} {{ name }}
+          </option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="country_name" id="tvc-add-country-name" value="">
       </div>
       <div style="margin-top:12px;display:flex;justify-content:flex-end;">
         <button type="submit" class="btn btn-primary">Add country</button>
@@ -675,6 +675,24 @@ document.getElementById('copy-url-btn').addEventListener('click', function () {
   // immediately without clicking — the pair flow is the most likely
   // reason they're on /tv-display in the first place.
   setTimeout(function () { try { input.focus(); } catch (e) {} }, 0);
+})();
+
+/* ── Country picker → hidden name sync ──────────────────────
+ *
+ * Picker writes the ISO-2 code as the form's country_code (its
+ * native value). We also need to submit the human-readable name
+ * — that's a hidden input updated from the selected option's
+ * data-name attribute on every change. Same form contract the
+ * old free-text inputs produced.
+ */
+(function () {
+  var sel    = document.getElementById('tvc-add-country-code');
+  var hidden = document.getElementById('tvc-add-country-name');
+  if (!sel || !hidden) return;
+  sel.addEventListener('change', function () {
+    var opt = sel.options[sel.selectedIndex];
+    hidden.value = (opt && opt.dataset.name) || '';
+  });
 })();
 </script>
 {% endblock %}
