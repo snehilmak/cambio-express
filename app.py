@@ -6998,6 +6998,25 @@ def superadmin_controls():
 
     discounts = DiscountCode.query.order_by(DiscountCode.created_at.desc()).all()
     flags = FeatureFlag.query.order_by(FeatureFlag.key).all()
+    # TV display catalogs (Phase 2 of the logo rollout). Companies
+    # are global; banks group by country_code in the template. Both
+    # tables include inactive entries here so the curation UI can
+    # reactivate / soft-delete; the operator-side picker filters
+    # them out at render time.
+    tv_companies = (TVCompanyCatalog.query
+                     .order_by(TVCompanyCatalog.sort_order,
+                               TVCompanyCatalog.display_name).all())
+    tv_banks = (TVBankCatalog.query
+                 .order_by(TVBankCatalog.country_code,
+                           TVBankCatalog.sort_order,
+                           TVBankCatalog.display_name).all())
+    # Map (catalog_type, slug) → updated_at unix so the template can
+    # cache-bust ?v=<unix> on the logo URLs without an extra query
+    # per row.
+    tv_logo_versions = {}
+    for row in TVCatalogLogo.query.all():
+        tv_logo_versions[(row.catalog_type, row.slug)] = int(
+            row.updated_at.timestamp())
     # Feature-flag overrides are keyed by (store_id, flag_key); fetch only for visible stores.
     visible_ids = [s.id for s in stores]
     override_rows = (StoreFeatureOverride.query.filter(StoreFeatureOverride.store_id.in_(visible_ids)).all()
@@ -7026,6 +7045,10 @@ def superadmin_controls():
         # every add-on the platform supports (not just the ones a
         # given store currently has).
         addons_catalog=ADDONS_CATALOG,
+        # TV display catalog admin (curation tab).
+        tv_companies=tv_companies,
+        tv_banks=tv_banks,
+        tv_logo_versions=tv_logo_versions,
         # Pagination + filter state for the Stores tab.
         q=q_text, plan_filter=plan_filter, status_filter=status_filter,
         page=page, total_pages=total_pages, stores_matching=stores_matching,

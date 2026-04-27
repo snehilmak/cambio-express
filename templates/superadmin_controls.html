@@ -93,6 +93,8 @@
      class="tab-link {% if active_tab == 'audit'     %}active{% endif %}">Audit Log</a>
   <a href="{{ url_for('superadmin_controls', tab='announcements') }}"
      class="tab-link {% if active_tab == 'announcements' %}active{% endif %}">Announcements</a>
+  <a href="{{ url_for('superadmin_controls', tab='tv-catalog') }}"
+     class="tab-link {% if active_tab == 'tv-catalog' %}active{% endif %}">TV Catalog</a>
 </div>
 
 {# ─────────── OVERVIEW ─────────── #}
@@ -911,6 +913,333 @@
         {% endif %}
       </tbody>
     </table>
+  </div>
+</div>
+
+{# ─────────── TV CATALOG ─────────── #}
+{% elif active_tab == 'tv-catalog' %}
+<style>
+.tvcat-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.tvcat-section-head {
+  padding: 14px 18px;
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; gap: 12px;
+}
+.tvcat-section-head h2 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 15px; font-weight: 700; margin: 0;
+  color: var(--text);
+}
+.tvcat-section-head .sub {
+  font-size: 12.5px; color: var(--text-muted);
+  margin-top: 2px;
+}
+.tvcat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+.tvcat-table th, .tvcat-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tvcat-table th {
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+.tvcat-row.inactive { opacity: 0.55; }
+.tvcat-logo-cell {
+  width: 64px;
+}
+.tvcat-logo-thumb {
+  width: 48px; height: 48px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tvcat-logo-thumb img {
+  max-width: 44px; max-height: 44px;
+  object-fit: contain;
+}
+.tvcat-logo-thumb.empty {
+  color: var(--text-muted);
+  font-size: 18px; font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+}
+.tvcat-name-input, .tvcat-num-input, .tvcat-cc-input {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+}
+.tvcat-name-input { width: 220px; }
+.tvcat-num-input  { width: 56px; text-align: center; }
+.tvcat-cc-input   {
+  width: 50px; text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}
+.tvcat-name-input:focus, .tvcat-num-input:focus, .tvcat-cc-input:focus {
+  outline: none; border-color: var(--db-neon);
+}
+.tvcat-actions {
+  display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+}
+.tvcat-add {
+  padding: 14px 18px;
+  background: var(--surface-2);
+  display: flex; gap: 10px; align-items: end; flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+}
+.tvcat-add label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.tvcat-add input[type="text"], .tvcat-add select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  min-width: 100px;
+}
+.tvcat-cc-group {
+  display: flex; flex-direction: column;
+  font-size: 10px; color: var(--text-muted); margin-top: 4px;
+}
+.tvcat-country-band {
+  background: var(--surface-2);
+  padding: 6px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--db-neon);
+}
+.tvcat-checkbox-cell { text-align: center; }
+.tvcat-checkbox-cell label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted); cursor: pointer;
+}
+</style>
+
+{# ── Companies ─────────────────────────────────────────── #}
+<div class="tvcat-section">
+  <div class="tvcat-section-head">
+    <div>
+      <h2>MT Companies</h2>
+      <div class="sub">Column headers on every TV Display board across the platform.</div>
+    </div>
+  </div>
+  <table class="tvcat-table">
+    <thead>
+      <tr>
+        <th class="tvcat-logo-cell">Logo</th>
+        <th>Display name</th>
+        <th>Slug</th>
+        <th style="width:80px;">Sort</th>
+        <th style="width:100px;" class="tvcat-checkbox-cell">Active</th>
+        <th style="width:200px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in tv_companies %}
+      <tr class="tvcat-row {% if not c.is_active %}inactive{% endif %}">
+        <td class="tvcat-logo-cell">
+          <div class="tvcat-logo-thumb {% if not c.logo_url %}empty{% endif %}">
+            {% if c.logo_url %}
+            {% set _v = tv_logo_versions.get(('company', c.slug), 0) %}
+            <img src="{{ url_for('tv_catalog_logo', catalog_type='company', slug=c.slug) }}?v={{ _v }}"
+                 alt="{{ c.display_name }}">
+            {% else %}—{% endif %}
+          </div>
+        </td>
+        <form method="POST" action="{{ url_for('superadmin_tv_catalog_edit', catalog_type='company', slug=c.slug) }}">
+        <td>
+          <input class="tvcat-name-input" type="text" name="display_name"
+                 value="{{ c.display_name }}" maxlength="80">
+        </td>
+        <td><span class="mono" style="color:var(--text-muted);font-size:12px;">{{ c.slug }}</span></td>
+        <td>
+          <input class="tvcat-num-input" type="number" name="sort_order"
+                 value="{{ c.sort_order }}">
+        </td>
+        <td class="tvcat-checkbox-cell">
+          <label>
+            <input type="checkbox" name="is_active" value="1"
+                   {% if c.is_active %}checked{% endif %}>
+            <span>{% if c.is_active %}Yes{% else %}No{% endif %}</span>
+          </label>
+        </td>
+        <td class="tvcat-actions">
+          <button type="submit" class="btn btn-outline btn-sm">Save</button>
+        </form>
+          <form method="POST" enctype="multipart/form-data"
+                action="{{ url_for('superadmin_tv_catalog_upload_logo', catalog_type='company', slug=c.slug) }}"
+                style="display:flex;align-items:center;gap:4px;">
+            <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                   style="font-size:11px;color:var(--text-muted);max-width:140px;">
+            <button type="submit" class="btn btn-outline btn-sm">Upload</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-state">No companies. Add one below.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {# Add new company #}
+  <form method="POST" action="{{ url_for('superadmin_tv_catalog_new') }}"
+        class="tvcat-add">
+    <input type="hidden" name="catalog_type" value="company">
+    <label>
+      Slug
+      <input type="text" name="slug" placeholder="ria_money"
+             pattern="[a-z0-9_]+" maxlength="40" required>
+    </label>
+    <label>
+      Display name
+      <input type="text" name="display_name" placeholder="RIA Money Transfer"
+             maxlength="80" required>
+    </label>
+    <button type="submit" class="btn btn-primary">+ Add company</button>
+  </form>
+</div>
+
+{# ── Banks (grouped by country) ───────────────────────── #}
+<div class="tvcat-section">
+  <div class="tvcat-section-head">
+    <div>
+      <h2>Payout Banks</h2>
+      <div class="sub">Row labels on TV Display boards. Picker scopes to the country being edited.</div>
+    </div>
+  </div>
+  <table class="tvcat-table">
+    <thead>
+      <tr>
+        <th class="tvcat-logo-cell">Logo</th>
+        <th>Display name</th>
+        <th style="width:80px;">Country</th>
+        <th>Slug</th>
+        <th style="width:80px;">Sort</th>
+        <th style="width:100px;" class="tvcat-checkbox-cell">Active</th>
+        <th style="width:200px;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set _last_cc = namespace(value="") %}
+      {% for b in tv_banks %}
+      {% if b.country_code != _last_cc.value %}
+      {% set _last_cc.value = b.country_code %}
+      <tr><td colspan="7" class="tvcat-country-band">
+        {{ b.country_code or 'Unscoped' }}
+      </td></tr>
+      {% endif %}
+      <tr class="tvcat-row {% if not b.is_active %}inactive{% endif %}">
+        <td class="tvcat-logo-cell">
+          <div class="tvcat-logo-thumb {% if not b.logo_url %}empty{% endif %}">
+            {% if b.logo_url %}
+            {% set _v = tv_logo_versions.get(('bank', b.slug), 0) %}
+            <img src="{{ url_for('tv_catalog_logo', catalog_type='bank', slug=b.slug) }}?v={{ _v }}"
+                 alt="{{ b.display_name }}">
+            {% else %}—{% endif %}
+          </div>
+        </td>
+        <form method="POST" action="{{ url_for('superadmin_tv_catalog_edit', catalog_type='bank', slug=b.slug) }}">
+        <td>
+          <input class="tvcat-name-input" type="text" name="display_name"
+                 value="{{ b.display_name }}" maxlength="80">
+        </td>
+        <td>
+          <input class="tvcat-cc-input" type="text" name="country_code"
+                 value="{{ b.country_code }}" maxlength="4">
+        </td>
+        <td><span class="mono" style="color:var(--text-muted);font-size:12px;">{{ b.slug }}</span></td>
+        <td>
+          <input class="tvcat-num-input" type="number" name="sort_order"
+                 value="{{ b.sort_order }}">
+        </td>
+        <td class="tvcat-checkbox-cell">
+          <label>
+            <input type="checkbox" name="is_active" value="1"
+                   {% if b.is_active %}checked{% endif %}>
+            <span>{% if b.is_active %}Yes{% else %}No{% endif %}</span>
+          </label>
+        </td>
+        <td class="tvcat-actions">
+          <button type="submit" class="btn btn-outline btn-sm">Save</button>
+        </form>
+          <form method="POST" enctype="multipart/form-data"
+                action="{{ url_for('superadmin_tv_catalog_upload_logo', catalog_type='bank', slug=b.slug) }}"
+                style="display:flex;align-items:center;gap:4px;">
+            <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                   style="font-size:11px;color:var(--text-muted);max-width:140px;">
+            <button type="submit" class="btn btn-outline btn-sm">Upload</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="empty-state">No banks. Add one below.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {# Add new bank #}
+  <form method="POST" action="{{ url_for('superadmin_tv_catalog_new') }}"
+        class="tvcat-add">
+    <input type="hidden" name="catalog_type" value="bank">
+    <label>
+      Slug
+      <input type="text" name="slug" placeholder="mx_inbursa"
+             pattern="[a-z0-9_]+" maxlength="60" required>
+    </label>
+    <label>
+      Display name
+      <input type="text" name="display_name" placeholder="Inbursa"
+             maxlength="80" required>
+    </label>
+    <label>
+      Country (ISO-2)
+      <input type="text" name="country_code" placeholder="MX"
+             maxlength="4" required style="text-transform:uppercase;width:80px;">
+    </label>
+    <button type="submit" class="btn btn-primary">+ Add bank</button>
+  </form>
+</div>
+
+{# ── Help ─────────────────────────────────────────────── #}
+<div class="tvcat-section">
+  <div class="tvcat-section-head">
+    <div>
+      <h2>Notes</h2>
+      <div class="sub">How operators see these entries.</div>
+    </div>
+  </div>
+  <div style="padding:14px 18px;font-size:13px;color:var(--text-muted);line-height:1.55;">
+    <ul style="margin:0;padding-left:18px;">
+      <li><b>Slugs are immutable.</b> Renaming a company changes only its display label; references on existing TV display sections keep working because they store the slug, not the display name.</li>
+      <li><b>Soft-delete via the Active checkbox.</b> Hides the entry from the picker on new edits but preserves rendering on already-saved sections.</li>
+      <li><b>Logo uploads:</b> PNG / JPEG / WebP / SVG only, ≤ 200 KB. Cache-busted automatically — operators see the new logo within a few seconds.</li>
+      <li><b>Nominative use.</b> Use brand logos at small sizes (≤200 px wide), no implication of partnership in the UI copy. If a brand asks us to take down their logo, set Active = No.</li>
+    </ul>
   </div>
 </div>
 {% endif %}
