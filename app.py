@@ -1169,6 +1169,47 @@ class TVBankCatalog(db.Model):
     is_active    = db.Column(db.Boolean, default=True)
     created_at   = db.Column(db.DateTime, default=datetime.utcnow)
 
+class TVCatalogLogo(db.Model):
+    """Logo image bytes for a catalog entry. Stored as a BLOB so the
+    feature works on every deploy target (Render free tier wipes the
+    filesystem on every redeploy; a persistent disk works but adds
+    infra config we'd rather avoid).
+
+    Lookup is by (catalog_type, slug) — single shared table for both
+    TVCompanyCatalog and TVBankCatalog. Discriminator is "company" or
+    "bank"; slug matches the parent catalog row.
+
+    Served via GET /tv/logo/<type>/<slug> with a year-long
+    Cache-Control. Templates bust the cache by appending
+    ?v=<updated_at_unix> when they emit the URL — re-uploads
+    invalidate downstream caches without an HTTP-level mechanism.
+
+    Size + total bytes
+    - Per file: capped at 200 KiB on upload (validated server-side).
+    - Worst case: 46 catalog rows × 200 KB ≈ 9 MB. Negligible for
+      Postgres; the BLOB column on SQLite handles it just as well.
+    """
+    __tablename__ = "tv_catalog_logo"
+    id           = db.Column(db.Integer, primary_key=True)
+    # "company" | "bank" — keep the values short, the URL embeds them.
+    catalog_type = db.Column(db.String(8), nullable=False, index=True)
+    # Matches TVCompanyCatalog.slug or TVBankCatalog.slug — NOT a
+    # foreign key, since both parent tables have their own slug
+    # constraints and we want the logo row to outlive a soft-delete.
+    slug         = db.Column(db.String(60), nullable=False, index=True)
+    # Whitelisted by the upload endpoint: image/png | image/jpeg |
+    # image/webp | image/svg+xml. SVG is allowed because it's the
+    # ideal asset for the public TV board (scales to any density).
+    mime_type    = db.Column(db.String(40), nullable=False)
+    blob         = db.Column(db.LargeBinary, nullable=False)
+    file_size    = db.Column(db.Integer, default=0)
+    updated_at   = db.Column(db.DateTime, default=datetime.utcnow,
+                              onupdate=datetime.utcnow)
+    __table_args__ = (
+        db.UniqueConstraint("catalog_type", "slug",
+                              name="uq_tv_catalog_logo_type_slug"),
+    )
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
