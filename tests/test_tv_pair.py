@@ -10,7 +10,7 @@ redeem when the store currently has the tv_display add-on active.
 from datetime import datetime, timedelta
 
 from app import (
-    db, User, Store, TVDisplay,
+    db, User, Store, TVDisplay, TVPairing,
     _PAIR_CODE_ALPHABET, _PAIR_CODE_LIFETIME,
 )
 
@@ -89,17 +89,51 @@ def test_pair_code_persists_to_tv_display_row(logged_in_client, test_store_id):
 
 # ── Public redeem ──────────────────────────────────────────────
 
-def test_redeem_returns_public_url_on_success(client, logged_in_client, test_store_id):
+def test_redeem_returns_device_url_on_success(client, logged_in_client, test_store_id):
+    """Successful redeem returns a device-specific URL bound to a
+    fresh TVPairing — NOT the shared public_token. The Fire TV must
+    never see the shared secret."""
     _activate_addon(logged_in_client, test_store_id)
     _, public_token = _ensure_display(logged_in_client)
     code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
     resp = client.post("/api/tv-pair/redeem", json={"code": code})
     assert resp.status_code == 200
     body = resp.get_json()
-    assert body["public_token"] == public_token
-    assert body["public_url"].endswith("/tv/" + public_token)
+    assert "device_token" in body
+    assert body["display_url"].endswith("/tv/device/" + body["device_token"])
+    # Defense in depth: the shared public_token must NOT appear anywhere
+    # in the response payload.
+    assert public_token not in str(body)
+    assert "public_token" not in body
     assert body["store_name"] == "Test Store"
     assert "title" in body
+
+
+def test_redeem_creates_tvpairing_row(client, logged_in_client, test_store_id):
+    """The redeem flow persists a TVPairing — it's the durable record
+    of which device is bound to this display, used by /tv/device/<t>
+    to authorize each render."""
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body = client.post("/api/tv-pair/redeem", json={"code": code}).get_json()
+    with client.application.app_context():
+        pairing = TVPairing.query.filter_by(device_token=body["device_token"]).first()
+        assert pairing is not None
+        assert pairing.revoked_at is None
+        assert pairing.last_seen_at is not None
+
+
+def test_redeem_accepts_optional_device_label(client, logged_in_client, test_store_id):
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body = client.post("/api/tv-pair/redeem", json={
+        "code": code, "device_label": "Fire TV — Counter 1",
+    }).get_json()
+    with client.application.app_context():
+        pairing = TVPairing.query.filter_by(device_token=body["device_token"]).first()
+        assert pairing.device_label == "Fire TV — Counter 1"
 
 
 def test_redeem_strips_spaces_and_lowercases(client, logged_in_client, test_store_id):
@@ -113,7 +147,7 @@ def test_redeem_strips_spaces_and_lowercases(client, logged_in_client, test_stor
     munged = code[:3].lower() + " - " + code[3:].lower()
     resp = client.post("/api/tv-pair/redeem", json={"code": munged})
     assert resp.status_code == 200
-    assert resp.get_json()["public_token"]
+    assert resp.get_json()["device_token"]
 
 
 def test_redeem_is_single_use(client, logged_in_client, test_store_id):
@@ -133,6 +167,34 @@ def test_redeem_is_single_use(client, logged_in_client, test_store_id):
         d = TVDisplay.query.first()
         assert d.pair_code == ""
         assert d.pair_code_expires_at is None
+
+
+def test_redeem_revokes_prior_pairing(client, logged_in_client, test_store_id):
+    """*** Operator concern: pairing a NEW Fire TV must immediately
+    disable the OLD one. *** Single-active-pairing per display is the
+    one-$5-sub-one-TV enforcement."""
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    # First pairing.
+    code1 = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body1 = client.post("/api/tv-pair/redeem", json={"code": code1}).get_json()
+    token1 = body1["device_token"]
+    # Old TV's URL is live.
+    assert client.get("/tv/device/" + token1).status_code == 200
+    # Second pairing — supersedes the first.
+    code2 = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body2 = client.post("/api/tv-pair/redeem", json={"code": code2}).get_json()
+    token2 = body2["device_token"]
+    assert token1 != token2
+    # Old TV is now revoked at the DB level.
+    with client.application.app_context():
+        old = TVPairing.query.filter_by(device_token=token1).first()
+        new = TVPairing.query.filter_by(device_token=token2).first()
+        assert old.revoked_at is not None
+        assert new.revoked_at is None
+    # Old TV's URL now 404s; new TV's URL works.
+    assert client.get("/tv/device/" + token1).status_code == 404
+    assert client.get("/tv/device/" + token2).status_code == 200
 
 
 def test_redeem_404s_on_unknown_code(client):
@@ -216,6 +278,121 @@ def test_employee_can_generate_pair_code(client, test_store_id):
     resp = emp.post("/tv-display/pair-code")
     assert resp.status_code == 200
     assert "code" in resp.get_json()
+
+
+# ── Device URL (the per-Fire-TV bound URL) ─────────────────────
+
+def _populate_one_country(client, store_id):
+    """Quick helper — create a Mexico section with a Bancomer row so
+    the rendered TV board has actual content to assert on."""
+    _activate_addon(client, store_id)
+    client.get("/tv-display")  # ensure display exists
+    client.post("/tv-display/countries/new", data={
+        "country_name": "Mexico", "country_code": "MX",
+        "mt_companies": "Maxi, Vigo",
+    })
+    with client.application.app_context():
+        from app import TVDisplayCountry
+        country_id = TVDisplayCountry.query.first().id
+    client.post(f"/tv-display/countries/{country_id}", data={
+        "country_name": "Mexico", "country_code": "MX",
+        "mt_companies": "Maxi, Vigo",
+        "new_bank_name": "Bancomer",
+    })
+
+
+def _redeem(client, code):
+    return client.post("/api/tv-pair/redeem", json={"code": code}).get_json()
+
+
+def test_device_url_renders_full_board(client, logged_in_client, test_store_id):
+    """The per-device URL renders the same board the legacy public
+    URL does — same template, same data."""
+    _populate_one_country(logged_in_client, test_store_id)
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body = _redeem(client, code)
+    resp = client.get("/tv/device/" + body["device_token"])
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "Mexico" in html
+    assert "Bancomer" in html
+    assert "Maxi" in html and "Vigo" in html
+    # Brand design tokens still flow through (regression-guard so a
+    # future refactor can't accidentally break the dark+neon look).
+    assert "design-tokens.css" in html
+    assert "--db-neon" in html
+
+
+def test_device_url_404s_on_unknown_token(client):
+    assert client.get("/tv/device/totally-bogus-token").status_code == 404
+
+
+def test_device_url_404s_after_being_superseded(client, logged_in_client, test_store_id):
+    """Pairing a second TV must immediately retire the first TV's URL
+    — that's the one-Fire-TV-per-sub enforcement at render time."""
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    code1 = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body1 = _redeem(client, code1)
+    code2 = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    _redeem(client, code2)
+    assert client.get("/tv/device/" + body1["device_token"]).status_code == 404
+
+
+def test_device_url_404s_when_addon_revoked(client, logged_in_client, test_store_id):
+    """Even an actively-paired Fire TV stops working the moment the
+    store's tv_display addon is switched off."""
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body = _redeem(client, code)
+    # Yank the addon.
+    with logged_in_client.application.app_context():
+        s = db.session.get(Store, test_store_id)
+        s.addons = ""; db.session.commit()
+    assert client.get("/tv/device/" + body["device_token"]).status_code == 404
+
+
+def test_device_url_bumps_last_seen_at(client, logged_in_client, test_store_id):
+    """Every successful render touches last_seen_at so the upcoming
+    admin UI can show 'Fire TV last seen 2 min ago'. Compares the
+    timestamp before and after a fetch."""
+    _activate_addon(logged_in_client, test_store_id)
+    _ensure_display(logged_in_client)
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    body = _redeem(client, code)
+    with client.application.app_context():
+        before = TVPairing.query.filter_by(
+            device_token=body["device_token"]).first().last_seen_at
+        # Force a wider gap than the redeem→fetch sub-millisecond delta
+        # so the comparison is unambiguous on fast machines.
+        TVPairing.query.filter_by(device_token=body["device_token"]).update(
+            {"last_seen_at": datetime.utcnow() - timedelta(minutes=5)})
+        db.session.commit()
+    client.get("/tv/device/" + body["device_token"])
+    with client.application.app_context():
+        after = TVPairing.query.filter_by(
+            device_token=body["device_token"]).first().last_seen_at
+        assert after > (datetime.utcnow() - timedelta(minutes=1))
+
+
+def test_legacy_public_url_still_works_for_tablets(client, logged_in_client, test_store_id):
+    """Tablets / Chromecasts use /tv/<public_token> directly without
+    pairing — the operator may not have a Fire TV setup. That flow
+    must keep working independently of any pair-code state."""
+    _populate_one_country(logged_in_client, test_store_id)
+    with client.application.app_context():
+        token = TVDisplay.query.first().public_token
+    resp = client.get("/tv/" + token)
+    assert resp.status_code == 200
+    assert "Mexico" in resp.data.decode()
+    # Even if a Fire TV has paired and been revoked, the legacy URL
+    # is not affected.
+    code = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    _redeem(client, code)
+    code2 = logged_in_client.post("/tv-display/pair-code").get_json()["code"]
+    _redeem(client, code2)  # supersede
+    assert client.get("/tv/" + token).status_code == 200
 
 
 # ── Alphabet sanity ────────────────────────────────────────────
