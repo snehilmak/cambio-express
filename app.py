@@ -4409,7 +4409,18 @@ def _render_tv_board(display, store):
     """Build the section payload + render the public TV template.
     Shared by the legacy /tv/<public_token> route and the per-device
     /tv/device/<device_token> route — same content, different keys
-    in front of it."""
+    in front of it.
+
+    Resolves catalog slugs to display_name so the public board shows
+    "BBVA Bancomer" not "mx_bbva_bancomer". Lookups include INACTIVE
+    catalog rows so legacy references keep rendering even after the
+    superadmin retires a catalog entry."""
+    # Resolve all catalog slugs in one query rather than per-section.
+    company_name_by_slug = {c.slug: c.display_name
+                             for c in TVCompanyCatalog.query.all()}
+    bank_name_by_slug = {b.slug: b.display_name
+                          for b in TVBankCatalog.query.all()}
+
     countries = (TVDisplayCountry.query
                   .filter_by(display_id=display.id)
                   .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
@@ -4419,7 +4430,11 @@ def _render_tv_board(display, store):
                   .filter_by(country_id=c.id)
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
-        companies = _csv_split(c.mt_companies)
+        # Stored slugs for the column headers; render-side gets the
+        # resolved display names alongside.
+        company_slugs = _csv_split(c.mt_companies)
+        company_labels = [company_name_by_slug.get(slug, slug)
+                          for slug in company_slugs]
         rate_map = {}
         if banks:
             for r in (TVDisplayRate.query
@@ -4427,11 +4442,17 @@ def _render_tv_board(display, store):
                        .all()):
                 rate_map[(r.bank_id, r.mt_company)] = r.rate
         sections.append({
-            "country": c, "banks": banks, "companies": companies,
+            "country": c,
+            "banks": banks,
+            # Slugs (canonical) + labels (display) zipped together so
+            # the template iterates pairs without re-looking up.
+            "companies": company_slugs,
+            "company_labels": company_labels,
             "rates": rate_map,
         })
     return render_template("tv_display_public.html",
-                            display=display, store=store, sections=sections)
+                            display=display, store=store, sections=sections,
+                            bank_name_by_slug=bank_name_by_slug)
 
 @app.route("/tv/<token>")
 def tv_public_display(token):

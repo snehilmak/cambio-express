@@ -342,8 +342,13 @@ body {
         <span class="tv-country-name">{{ section.country.country_name }}</span>
         {% if section.companies %}
         <div class="tv-cols">
-          {% for company in section.companies %}
-          <div class="tv-col-label">{{ company }}</div>
+          {# section.company_labels is the resolved display name list
+             paired index-for-index with section.companies (slugs).
+             Backwards-compat fallback: if a label is missing — which
+             shouldn't happen after the route refactor — render the
+             slug directly. #}
+          {% for label in (section.company_labels or section.companies) %}
+          <div class="tv-col-label">{{ label }}</div>
           {% endfor %}
         </div>
         {% endif %}
@@ -351,7 +356,10 @@ body {
       <div class="tv-section-body">
         {% for bank in section.banks %}
         <div class="tv-row">
-          <div class="tv-bank">{{ bank.bank_name }}</div>
+          {# Resolve bank slug → display_name via the bank catalog
+             passed in from _render_tv_board. Falls back to the
+             stored token (legacy free-text) if no catalog match. #}
+          <div class="tv-bank">{{ bank_name_by_slug.get(bank.bank_name, bank.bank_name) }}</div>
           <div class="tv-cells">
             {% for company in section.companies %}
             {% set rate = section.rates.get((bank.id, company)) %}
