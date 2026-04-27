@@ -3937,138 +3937,219 @@ def tv_display_regenerate_token():
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
 #
-# The companion app on Fire TV can't reasonably ask the operator to
-# type a 32-char URL-safe token via remote, so we expose a 6-char
-# alphanumeric pair code instead. Operator clicks "Pair a TV" on
-# /tv-display → server stamps display.pair_code + a 10-min expiry
-# → operator types the code into the Fire TV app → app POSTs to
-# /api/tv-pair/redeem and gets back the long public_token.
+# Inverted (TV-initiated) flow — matches every other TV pairing UX
+# (Netflix, YouTube, Disney+, Apple TV apps):
+#
+#   1. Fire TV opens the app → app POSTs /api/tv-pair/init.
+#   2. Server creates a TVPendingPair row with a fresh 6-char code
+#      and a stable device_token. Returns both to the Fire TV.
+#   3. Fire TV displays the code (with "go to dinerobook.com/...")
+#      and starts polling /api/tv-pair/status with its device_token
+#      every 2 seconds.
+#   4. Operator on /tv-display types the code into the claim panel.
+#      Server validates → revokes any prior active TVPairing on
+#      their display → creates a fresh TVPairing reusing the
+#      device_token from the pending row → marks the pending row
+#      claimed.
+#   5. Fire TV's next /status poll returns "claimed" + the
+#      per-device URL. App transitions to the rate board.
+#
+# Why this flow over operator-initiated:
+#   - Operator types on a real keyboard (phone/computer browser),
+#     not a Fire TV remote. ~3s vs ~15s.
+#   - Each Fire TV self-identifies on launch — visually obvious
+#     "this device wants to pair." Less ambiguous than "code
+#     belongs to the store."
+#   - Better failure feedback (errors render in the admin browser
+#     with full HTML, not a tiny Fire TV toast).
+#   - Matches every other TV pairing flow customers have used.
+#
+# Single-Fire-TV-per-subscription enforcement is identical to the
+# old flow: a successful claim revokes any prior active TVPairing
+# on the same display. Pairing a new Fire TV immediately retires
+# the old one (the old TV's WebView 404s on its next 30s refresh
+# and routes back to the pairing screen).
 #
 # Anyone can install the companion app (it lives on the Amazon
-# Appstore unrestricted) but the redeem endpoint refuses to hand out
-# a token unless the store currently has the tv_display add-on
-# active. This gates pairing on the paid subscription without
-# putting Amazon between us and the customer's billing.
+# Appstore unrestricted) but the claim endpoint refuses to bind a
+# code unless the admin's store currently has the tv_display addon
+# active. Stripe is the gatekeeper, not Amazon.
 #
 # Ambiguous chars excluded: O / 0 / I / 1 / L / B / 8.
 _PAIR_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXYZ234579"
 _PAIR_CODE_LIFETIME = timedelta(minutes=10)
 
 def _generate_pair_code():
-    """6-char code, ~308M space. Not cryptographic — paired with the
-    10-min expiry and addon gating, brute-force is infeasible."""
+    """6-char code. Not cryptographic — combined with the 10-min
+    expiry and addon gating, brute-force is impractical (27**6 ~
+    387M, /status is 404-everything for unknown tokens)."""
     return "".join(secrets.choice(_PAIR_CODE_ALPHABET) for _ in range(6))
 
-@app.route("/tv-display/pair-code", methods=["POST"])
+def _generate_device_token():
+    """32-byte URL-safe random. Same shape as public_token. Loops on
+    the (vanishingly rare) collision against either pending or
+    paired tables."""
+    for _ in range(8):
+        t = secrets.token_urlsafe(24)
+        if (not TVPairing.query.filter_by(device_token=t).first()
+                and not TVPendingPair.query.filter_by(device_token=t).first()):
+            return t
+    # All 8 collided — implausible but raise rather than silently
+    # reuse a token.
+    raise RuntimeError("Could not mint a unique device_token")
+
+@app.route("/api/tv-pair/init", methods=["POST"])
+def tv_pair_init():
+    """The Fire TV app calls this on launch. Creates a TVPendingPair
+    with a fresh code + device_token and returns both. The app
+    displays the code on screen and polls /api/tv-pair/status with
+    its device_token until claimed.
+
+    No auth — anyone with the app can request a code; the addon
+    gate sits on /tv-display/claim where the admin binds the code
+    to a paying store."""
+    payload = request.get_json(silent=True) or {}
+    device_label = (payload.get("device_label") or "").strip()[:80]
+
+    # Loop on code collision (rare with a 387M space, free to retry).
+    for _ in range(8):
+        code = _generate_pair_code()
+        if not TVPendingPair.query.filter_by(code=code).first():
+            break
+
+    now = datetime.utcnow()
+    pending = TVPendingPair(
+        code=code,
+        device_token=_generate_device_token(),
+        device_label=device_label,
+        created_at=now,
+        expires_at=now + _PAIR_CODE_LIFETIME,
+    )
+    db.session.add(pending)
+    db.session.commit()
+
+    return jsonify({
+        "code":         pending.code,
+        "device_token": pending.device_token,
+        "expires_at":   pending.expires_at.isoformat() + "Z",
+        "ttl_seconds":  int(_PAIR_CODE_LIFETIME.total_seconds()),
+    })
+
+@app.route("/api/tv-pair/status", methods=["GET"])
+def tv_pair_status():
+    """The Fire TV polls this with its device_token. Returns one of:
+       200 {status: "pending", code, ttl_seconds}    — code still on screen, waiting
+       200 {status: "claimed", display_url, ...}     — operator claimed it; load the URL
+       200 {status: "expired"}                       — code expired; app should call /init again
+
+    Always 200 so the Fire TV can branch off the JSON. Unknown
+    tokens get treated as "expired" so a fresh /init is the
+    recovery path; that's a stronger UX guarantee than 404'ing the
+    whole poll loop."""
+    token = (request.args.get("token") or "").strip()
+    if not token:
+        return jsonify({"status": "expired"}), 200
+
+    # Did this token already get claimed (i.e. there's a TVPairing
+    # row keyed by it)? If so, return claimed regardless of pending
+    # state — claim cleanup may not have run yet.
+    pairing = TVPairing.query.filter_by(
+        device_token=token, revoked_at=None).first()
+    if pairing is not None:
+        display = db.session.get(TVDisplay, pairing.display_id)
+        store = db.session.get(Store, display.store_id) if display else None
+        if (display and store and store_has_addon(store, "tv_display")):
+            display_url = url_for("tv_device_display", device_token=token,
+                                   _external=True)
+            return jsonify({
+                "status":      "claimed",
+                "display_url": display_url,
+                "store_name":  store.name,
+                "title":       display.title or "Money Transfer Rates",
+            }), 200
+        # Pairing exists but addon is gone — same as expired from
+        # the app's POV; it should re-init.
+        return jsonify({"status": "expired"}), 200
+
+    pending = TVPendingPair.query.filter_by(device_token=token).first()
+    if not pending:
+        return jsonify({"status": "expired"}), 200
+    if pending.expires_at < datetime.utcnow():
+        return jsonify({"status": "expired"}), 200
+    # Still pending. Return the code so the Fire TV can re-display
+    # it after a process death / config change without losing the
+    # bound code.
+    ttl = int((pending.expires_at - datetime.utcnow()).total_seconds())
+    return jsonify({
+        "status":       "pending",
+        "code":         pending.code,
+        "ttl_seconds":  max(0, ttl),
+    }), 200
+
+@app.route("/tv-display/claim", methods=["POST"])
 @login_required
-def tv_display_pair_code():
-    """Generate a fresh pair code for this store's TV display. Single
-    active code at a time — calling again supersedes the old one."""
+def tv_display_claim():
+    """Admin enters a 6-char code from a Fire TV showing the pairing
+    screen. Server validates the code is live and not yet claimed,
+    revokes any prior active TVPairing on this store's display, then
+    creates a fresh TVPairing reusing the device_token from the
+    pending row.
+
+    Failure modes (all flash + redirect, none reveal whether the
+    code exists):
+      - missing/short code              → "Enter the 6-character code…"
+      - unknown code                    → "Code not found or expired."
+      - expired code                    → "Code not found or expired."
+      - already claimed                 → "Code not found or expired."
+    """
     guard = _tv_required()
     if not isinstance(guard, tuple):
         return guard
     _, store = guard
     display = _ensure_tv_display(store)
-    # Loop on collision (vanishingly rare with a 308M space, but free).
-    for _ in range(8):
-        code = _generate_pair_code()
-        clash = TVDisplay.query.filter(
-            TVDisplay.pair_code == code,
-            TVDisplay.pair_code_expires_at > datetime.utcnow(),
-            TVDisplay.id != display.id,
-        ).first()
-        if not clash:
-            break
-    display.pair_code = code
-    display.pair_code_expires_at = datetime.utcnow() + _PAIR_CODE_LIFETIME
-    db.session.commit()
-    return jsonify({
-        "code": code,
-        "expires_at": display.pair_code_expires_at.isoformat() + "Z",
-        "ttl_seconds": int(_PAIR_CODE_LIFETIME.total_seconds()),
-    })
 
-@app.route("/api/tv-pair/redeem", methods=["POST"])
-def tv_pair_redeem():
-    """Public endpoint for the Fire TV companion app. Trades a live
-    pair code for a per-device URL backed by a fresh TVPairing row.
-
-    Anti-misuse model:
-      1. The pair *code* is single-use — wiped from the DB after a
-         successful redeem so it can never pair a second device.
-      2. Each redeem creates a unique device_token that drives the
-         Fire TV app's URL. The Fire TV never receives the shared
-         public_token.
-      3. A redeem revokes any prior active TVPairing on the same
-         display, so generating a new code + pairing a new TV
-         immediately disables the old one. Net effect: one $5
-         subscription = one Fire TV at a time.
-
-    Tablets/Chromecasts pointed at /tv/<public_token> are unaffected
-    — that route is intentionally still live for operators without a
-    Fire TV setup.
-
-    Returns 404 (not 401/403) for every failure mode so brute-force
-    attempts can't distinguish "wrong code" from "code expired" from
-    "addon off"."""
-    payload = request.get_json(silent=True) or {}
-    raw = (payload.get("code") or "").strip().upper()
-    # Strip whitespace / hyphens the user may have typed for legibility.
+    raw = (request.form.get("code") or "").strip().upper()
     code = "".join(c for c in raw if c in _PAIR_CODE_ALPHABET)
     if len(code) != 6:
-        return jsonify({"error": "not_found"}), 404
-    display = TVDisplay.query.filter_by(pair_code=code).first()
-    if not display:
-        return jsonify({"error": "not_found"}), 404
-    if (not display.pair_code_expires_at
-            or display.pair_code_expires_at < datetime.utcnow()):
-        return jsonify({"error": "not_found"}), 404
-    store = db.session.get(Store, display.store_id)
-    if not store or not store_has_addon(store, "tv_display"):
-        return jsonify({"error": "not_found"}), 404
+        flash("Enter the 6-character code shown on your Fire TV.", "error")
+        return redirect(url_for("admin_tv_display"))
+
+    pending = TVPendingPair.query.filter_by(code=code).first()
+    if (not pending
+            or pending.claimed_at is not None
+            or pending.expires_at < datetime.utcnow()):
+        flash("Code not found or expired. Generate a fresh code on the Fire TV and try again.",
+              "error")
+        return redirect(url_for("admin_tv_display"))
 
     # Revoke any prior active pairing on this display. One Fire TV
-    # at a time. We mark revoked_at rather than deleting so admin
-    # audit / support can still see the lineage.
+    # at a time per subscription.
     now = datetime.utcnow()
     TVPairing.query.filter(
         TVPairing.display_id == display.id,
         TVPairing.revoked_at.is_(None),
     ).update({"revoked_at": now}, synchronize_session=False)
 
-    # Optional device label — the app may submit "Fire TV — Counter 1".
-    device_label = (payload.get("device_label") or "").strip()[:80]
-
-    # Mint a fresh device token. 32-byte URL-safe random, same shape
-    # as public_token; collisions are astronomical but loop just in case.
-    for _ in range(8):
-        token = secrets.token_urlsafe(24)
-        if not TVPairing.query.filter_by(device_token=token).first():
-            break
+    # Create the new pairing, reusing the device_token the Fire TV
+    # already holds — fewer moving parts on the client.
     pairing = TVPairing(
         display_id=display.id,
-        device_token=token,
-        device_label=device_label,
+        device_token=pending.device_token,
+        device_label=pending.device_label,
         paired_at=now,
         last_seen_at=now,
     )
     db.session.add(pairing)
+    db.session.flush()  # need pairing.id before linking the pending row
 
-    # Single-use: invalidate the code so a leaked code can't be
-    # redeemed twice (the device-token revocation above handles the
-    # multi-TV case; this handles the leaked-code case).
-    display.pair_code = ""
-    display.pair_code_expires_at = None
+    pending.claimed_at = now
+    pending.claimed_pairing_id = pairing.id
+    display.last_updated_at = now
     db.session.commit()
 
-    display_url = url_for("tv_device_display", device_token=token,
-                           _external=True)
-    return jsonify({
-        "device_token": token,
-        "display_url":  display_url,
-        "store_name":   store.name,
-        "title":        display.title or "Money Transfer Rates",
-    })
+    flash("Fire TV paired. The screen will switch to the rate board within a few seconds.",
+          "success")
+    return redirect(url_for("admin_tv_display"))
 
 @app.route("/tv-display/countries/new", methods=["POST"])
 @login_required
