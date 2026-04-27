@@ -4484,6 +4484,27 @@ def _render_tv_board(display, store):
                              for c in TVCompanyCatalog.query.all()}
     bank_name_by_slug = {b.slug: b.display_name
                           for b in TVBankCatalog.query.all()}
+    # Logo URL maps with cache-bust suffix. Only includes catalog
+    # rows whose logo_url is populated; entries without uploads are
+    # absent and the template falls back to display_name text.
+    logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
+                      for r in TVCatalogLogo.query.all()}
+    company_logo_by_slug = {}
+    for c in TVCompanyCatalog.query.all():
+        if c.logo_url:
+            v = logo_versions.get(("company", c.slug), 0)
+            company_logo_by_slug[c.slug] = (
+                url_for("tv_catalog_logo", catalog_type="company", slug=c.slug)
+                + (f"?v={v}" if v else "")
+            )
+    bank_logo_by_slug = {}
+    for b in TVBankCatalog.query.all():
+        if b.logo_url:
+            v = logo_versions.get(("bank", b.slug), 0)
+            bank_logo_by_slug[b.slug] = (
+                url_for("tv_catalog_logo", catalog_type="bank", slug=b.slug)
+                + (f"?v={v}" if v else "")
+            )
 
     countries = (TVDisplayCountry.query
                   .filter_by(display_id=display.id)
@@ -4495,9 +4516,11 @@ def _render_tv_board(display, store):
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
         # Stored slugs for the column headers; render-side gets the
-        # resolved display names alongside.
+        # resolved display names + logo URLs zipped alongside.
         company_slugs = _csv_split(c.mt_companies)
         company_labels = [company_name_by_slug.get(slug, slug)
+                          for slug in company_slugs]
+        company_logos = [company_logo_by_slug.get(slug, "")
                           for slug in company_slugs]
         rate_map = {}
         if banks:
@@ -4508,15 +4531,15 @@ def _render_tv_board(display, store):
         sections.append({
             "country": c,
             "banks": banks,
-            # Slugs (canonical) + labels (display) zipped together so
-            # the template iterates pairs without re-looking up.
-            "companies": company_slugs,
-            "company_labels": company_labels,
+            "companies":      company_slugs,    # canonical (rate-cell key)
+            "company_labels": company_labels,   # display-name fallback
+            "company_logos":  company_logos,    # URL or '' (text fallback)
             "rates": rate_map,
         })
     return render_template("tv_display_public.html",
                             display=display, store=store, sections=sections,
-                            bank_name_by_slug=bank_name_by_slug)
+                            bank_name_by_slug=bank_name_by_slug,
+                            bank_logo_by_slug=bank_logo_by_slug)
 
 # ── Catalog logo serve ──────────────────────────────────────
 #
