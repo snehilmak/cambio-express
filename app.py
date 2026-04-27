@@ -8786,6 +8786,85 @@ def _seed_tv_catalogs():
             ))
     db.session.commit()
 
+def _seed_tv_logos_from_disk():
+    """One-shot importer: scan static/seed-logos/{companies,banks}/
+    for files named <slug>.{svg,png,jpg,jpeg,webp} and import any
+    that aren't already in TVCatalogLogo. Idempotent — re-running
+    only inserts new entries; existing logos (uploaded via the
+    superadmin UI or a previous boot) are left alone.
+
+    The intent: drop logo files into a directory, redeploy, and
+    they auto-load. Lets a designer / contractor populate the
+    catalog by file-drop without clicking through the upload UI
+    46 times. Operators can still upload + replace via the UI;
+    that path takes precedence (we only import when no logo row
+    exists for the slug)."""
+    seed_dir = os.path.join(app.root_path, "static", "seed-logos")
+    if not os.path.isdir(seed_dir):
+        return 0
+
+    # MIME type by file extension. Keep this set in sync with
+    # _TV_LOGO_ALLOWED_MIMES (the upload-side whitelist).
+    ext_to_mime = {
+        ".svg":  "image/svg+xml",
+        ".png":  "image/png",
+        ".jpg":  "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }
+
+    imported = 0
+    # Plural directory names — "company" → "companies" is irregular,
+    # so spell them out explicitly rather than naïve concat.
+    type_to_dir = {"company": "companies", "bank": "banks"}
+    for catalog_type, sub_name in type_to_dir.items():
+        sub = os.path.join(seed_dir, sub_name)
+        if not os.path.isdir(sub):
+            continue
+        for filename in os.listdir(sub):
+            path = os.path.join(sub, filename)
+            if not os.path.isfile(path):
+                continue
+            slug, ext = os.path.splitext(filename)
+            slug = slug.strip().lower()
+            ext = ext.lower()
+            mime = ext_to_mime.get(ext)
+            if not mime or not slug:
+                continue
+            # Skip files that don't match a known catalog row —
+            # silently, since dropping logos for entries we'll add
+            # later shouldn't crash the boot.
+            parent = (TVCompanyCatalog if catalog_type == "company"
+                       else TVBankCatalog).query.filter_by(slug=slug).first()
+            if parent is None:
+                continue
+            # Don't override an operator's existing upload.
+            if TVCatalogLogo.query.filter_by(
+                    catalog_type=catalog_type, slug=slug).first() is not None:
+                continue
+            try:
+                with open(path, "rb") as fh:
+                    blob = fh.read()
+            except OSError:
+                continue
+            if not blob or len(blob) > _TV_LOGO_MAX_BYTES:
+                continue
+            db.session.add(TVCatalogLogo(
+                catalog_type=catalog_type, slug=slug,
+                mime_type=mime, blob=blob, file_size=len(blob),
+                updated_at=datetime.utcnow(),
+            ))
+            # Mirror the public URL into the parent row's logo_url
+            # so non-superadmin code can resolve without a logo-table
+            # lookup. Hardcoded path (not url_for) because this seed
+            # runs inside app_context but not request_context, where
+            # url_for would refuse to build a path without SERVER_NAME.
+            parent.logo_url = f"/tv/logo/{catalog_type}/{slug}"
+            imported += 1
+    if imported:
+        db.session.commit()
+    return imported
+
 def _backfill_tv_country_codes():
     """One-shot helper: walk TVDisplayCountry, fill in missing
     country_code for rows whose country_name matches an entry in the
@@ -8861,6 +8940,16 @@ def init_db():
                 app.logger.info(f"Backfilled country_code on {n_fixed} TV-display country rows.")
         except Exception as e:
             app.logger.warning(f"TV country-code backfill skipped: {e}")
+        # Auto-import logos that operators dropped into the
+        # static/seed-logos/{companies,banks}/ directory. Idempotent —
+        # never overrides UI-uploaded logos, never crashes on a
+        # missing directory.
+        try:
+            n_imported = _seed_tv_logos_from_disk()
+            if n_imported:
+                app.logger.info(f"Imported {n_imported} TV logos from static/seed-logos/.")
+        except Exception as e:
+            app.logger.warning(f"TV logo seed-disk import skipped: {e}")
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
