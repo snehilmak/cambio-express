@@ -31,8 +31,6 @@
       </a>
     </div>
   </div>
-  {# Bank sync stat card. Prefers Stripe Financial Connections; falls back
-     to SimpleFIN only if a legacy connection still exists on this store. #}
   <div class="stat-card" style="--accent:#c9973a;">
     <div class="stat-label">Bank Sync</div>
     {% if stripe_accounts %}
@@ -44,12 +42,6 @@
         {% set latest = stripe_accounts[0] %}
         {% if latest.last_balance_as_of %}Last sync: {{ latest.last_balance_as_of.strftime('%m/%d %I:%M%p') }}{% else %}—{% endif %}
       </div>
-    {% elif cfg and cfg.access_url %}
-      <div class="stat-value" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px;">
-        <span style="width:8px;height:8px;border-radius:999px;background:var(--db-neon);box-shadow:0 0 8px var(--db-neon);"></span>
-        SimpleFIN <span style="font-size:10px;color:var(--db-gray-6);">legacy</span>
-      </div>
-      <div class="stat-sub">{% if cfg.last_synced %}Last sync: {{ cfg.last_synced.strftime('%m/%d %I:%M%p') }}{% else %}—{% endif %}</div>
     {% else %}
       <div class="stat-value" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px;">
         <span style="width:8px;height:8px;border-radius:999px;background:var(--db-negative);"></span>
@@ -152,8 +144,6 @@
       </div>
     </div>
 
-    {# Bank snapshot. Prefers the store's Stripe accounts; only renders the
-       legacy SimpleFIN accounts when Stripe has nothing to show. #}
     <div class="card">
       <div class="card-header">
         <span class="card-title">Bank Accounts</span>
@@ -171,21 +161,6 @@
             </div>
             <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);">
               ${{ '{:,.2f}'.format(a.last_balance) }}
-            </div>
-          </div>
-          {% endfor %}
-        {% elif bank_data %}
-          {% for acct in bank_data.get('accounts', [])[:3] %}
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
-            <div>
-              <div style="font-weight:600;font-size:14px;">{{ acct.get('name','Account') }}</div>
-              <div class="text-sm text-muted">
-                {{ acct.get('org',{}).get('name','') }}
-                <span class="badge badge-gray" style="font-size:9px;padding:1px 6px;margin-left:4px;">legacy</span>
-              </div>
-            </div>
-            <div style="font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text);">
-              ${{ '{:,.2f}'.format(acct.get('balance', 0)) }}
             </div>
           </div>
           {% endfor %}

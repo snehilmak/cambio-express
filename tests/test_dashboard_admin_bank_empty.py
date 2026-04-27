@@ -18,9 +18,9 @@ def _bank_card(body):
 
 
 def test_connect_button_is_inside_empty_state(logged_in_client):
-    """A fresh admin store has no Stripe bank connected and no SimpleFIN
-    config — the empty state + connect-button branch must render, and
-    the form must sit inside the centered .empty-state div."""
+    """A fresh admin store has no Stripe bank connected — the empty
+    state + connect-button branch must render, and the form must sit
+    inside the centered .empty-state div."""
     resp = logged_in_client.get("/dashboard")
     assert resp.status_code == 200
     body = resp.data.decode()
