@@ -7684,6 +7684,204 @@ def reset_superadmin_cmd(username, reset_2fa):
     db.session.commit()
     click.echo("Done.")
 
+# ── Amazon Appstore reviewer seed ────────────────────────────
+#
+# The DineroBook TV Fire TV app gates pairing on the tv_display
+# add-on. Amazon's reviewers don't have a paid subscription, so
+# without a comped account they'd hit the addon gate and fail
+# review with "couldn't pair." This CLI provisions (or refreshes)
+# a single sandbox store and employee user with the addon comped
+# and a few sample rates pre-seeded, so the reviewer:
+#   1. Logs in at /login/amazon-reviewer with the printed creds.
+#   2. Lands on /dashboard, navigates to TV Display in the sidebar.
+#   3. Clicks "Generate code" on /tv-display.
+#   4. Pairs the test Fire TV — sees a populated rate board.
+#
+# Idempotent: re-running rotates the password, refreshes plan +
+# addons, and tops off any missing sample data. Safe to schedule
+# via cron if you ever want pre-review password rotation.
+
+# Sample rate matrices for the seeded display. Two countries with
+# realistic-looking data so the reviewer immediately sees a useful
+# rate board instead of "No country sections yet." Numbers are
+# illustrative; refreshable via re-running the command.
+_REVIEWER_SAMPLE_DATA = [
+    {
+        "country_code": "MX",
+        "country_name": "Mexico",
+        "mt_companies": "Maxi, Cibao, Vigo",
+        "banks": [
+            {"name": "Bancomer", "rates": {"Maxi": 18.36, "Cibao": 18.07, "Vigo": 18.51}},
+            {"name": "Banorte",  "rates": {"Maxi": 18.41, "Cibao": 18.12, "Vigo": 18.56}},
+            {"name": "Santander", "rates": {"Maxi": 18.46, "Cibao": 18.17, "Vigo": 18.61}},
+        ],
+    },
+    {
+        "country_code": "GT",
+        "country_name": "Guatemala",
+        "mt_companies": "Maxi, Vigo",
+        "banks": [
+            {"name": "Banco Industrial", "rates": {"Maxi": 7.52, "Vigo": 7.59}},
+            {"name": "Banrural",         "rates": {"Maxi": 7.50, "Vigo": 7.57}},
+        ],
+    },
+]
+
+@app.cli.command("seed-amazon-reviewer")
+@click.option("--password", default=None,
+              help="Override the auto-generated password (≥ 12 chars). "
+                   "Omit to generate a fresh URL-safe random.")
+@click.option("--keep-data", is_flag=True,
+              help="Don't reseed sample countries/banks/rates if any already "
+                   "exist — useful for in-place password rotation.")
+def seed_amazon_reviewer_cmd(password, keep_data):
+    """Provision (or refresh) the Amazon Appstore reviewer test
+    account: store + employee user + comped tv_display addon + sample
+    rates. Run on the Render shell before submitting a Fire TV app
+    update for review.
+
+    Idempotent — re-running rotates the password and re-comps the
+    addon. Pass --password to set a known value (≥ 12 chars), or
+    omit to generate a random one."""
+    REVIEWER_SLUG = "amazon-reviewer"
+    REVIEWER_USERNAME = "amazon-review@dinerobook.com"
+    REVIEWER_STORE_NAME = "Amazon Reviewer Sandbox"
+
+    # 1. Find or create the store.
+    store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+    if store is None:
+        store = Store(
+            name=REVIEWER_STORE_NAME, slug=REVIEWER_SLUG,
+            email=REVIEWER_USERNAME,
+            plan="basic",
+            trial_ends_at=datetime.utcnow() + timedelta(days=3650),
+            grace_ends_at=datetime.utcnow() + timedelta(days=3650),
+            is_active=True,
+        )
+        db.session.add(store)
+        db.session.flush()
+        created_store = True
+    else:
+        created_store = False
+
+    # Force-comp the plan + addon every run — superadmin may have
+    # toggled them off, or a previous run may have set partial state.
+    store.plan = "basic"
+    store.addons = "tv_display"
+    store.is_active = True
+
+    # 2. Find or create the employee user.
+    user = User.query.filter_by(
+        store_id=store.id, username=REVIEWER_USERNAME).first()
+    if user is None:
+        user = User(
+            store_id=store.id, username=REVIEWER_USERNAME,
+            full_name="Amazon Appstore Reviewer",
+            role="employee",
+            is_active=True,
+        )
+        db.session.add(user)
+        created_user = True
+    else:
+        # Force role + active in case a prior run / superadmin left
+        # the row in a weird state.
+        user.role = "employee"
+        user.is_active = True
+        created_user = False
+
+    # 3. Set password — operator-supplied or freshly random.
+    if password is None:
+        password = secrets.token_urlsafe(12)
+    elif len(password) < 12:
+        click.echo("--password must be at least 12 chars. Aborting.", err=True)
+        raise click.Abort()
+    user.set_password(password)
+
+    db.session.commit()
+
+    # 4. Ensure the TVDisplay row exists (lazy-creates with token).
+    display = _ensure_tv_display(store)
+
+    # 5. Seed sample rate data unless the operator opted out OR data
+    #    already exists. Reseeding is destructive (wipes prior
+    #    countries + banks + rates) so the reviewer always sees the
+    #    same canonical view; --keep-data preserves whatever's there.
+    has_existing_data = TVDisplayCountry.query.filter_by(
+        display_id=display.id).first() is not None
+    seeded_counts = {"countries": 0, "banks": 0, "rates": 0}
+    if not (keep_data and has_existing_data):
+        # Wipe in chain order so FKs don't reject the deletes. We
+        # use synchronize_session='fetch' so SQLAlchemy properly
+        # removes the deleted rows from the session identity map —
+        # otherwise re-inserts on the same PKs (SQLite reuses freed
+        # auto-increment PKs aggressively) trip a collision warning.
+        existing_countries = TVDisplayCountry.query.filter_by(
+            display_id=display.id).all()
+        for c in existing_countries:
+            existing_banks = TVDisplayPayoutBank.query.filter_by(
+                country_id=c.id).all()
+            for b in existing_banks:
+                TVDisplayRate.query.filter_by(bank_id=b.id).delete(
+                    synchronize_session="fetch")
+            TVDisplayPayoutBank.query.filter_by(
+                country_id=c.id).delete(synchronize_session="fetch")
+        TVDisplayCountry.query.filter_by(
+            display_id=display.id).delete(synchronize_session="fetch")
+        db.session.commit()
+
+        for sort_idx, country in enumerate(_REVIEWER_SAMPLE_DATA, start=1):
+            c = TVDisplayCountry(
+                display_id=display.id,
+                country_code=country["country_code"],
+                country_name=country["country_name"],
+                mt_companies=country["mt_companies"],
+                sort_order=sort_idx * 10,
+            )
+            db.session.add(c)
+            db.session.flush()
+            seeded_counts["countries"] += 1
+            for bank_idx, bank in enumerate(country["banks"], start=1):
+                b = TVDisplayPayoutBank(
+                    country_id=c.id, bank_name=bank["name"],
+                    sort_order=bank_idx * 10,
+                )
+                db.session.add(b)
+                db.session.flush()
+                seeded_counts["banks"] += 1
+                for company, rate in bank["rates"].items():
+                    db.session.add(TVDisplayRate(
+                        bank_id=b.id, mt_company=company, rate=rate))
+                    seeded_counts["rates"] += 1
+        display.last_updated_at = datetime.utcnow()
+        db.session.commit()
+
+    # 6. Print everything the reviewer needs.
+    base_url = os.environ.get("BASE_URL", "https://dinerobook.onrender.com")
+    login_url = f"{base_url.rstrip('/')}/login/{REVIEWER_SLUG}"
+    click.echo("")
+    click.echo("✅ Amazon Reviewer account ready")
+    click.echo("")
+    click.echo(f"   Login URL:   {login_url}")
+    click.echo(f"   Username:    {REVIEWER_USERNAME}")
+    click.echo(f"   Password:    {password}")
+    click.echo(f"   Role:        employee  (cannot reach superadmin / billing)")
+    click.echo(f"   Store:       {REVIEWER_STORE_NAME}  (slug: {REVIEWER_SLUG})")
+    click.echo(f"   Plan:        basic  (comped — no Stripe billing)")
+    click.echo(f"   Add-ons:     tv_display")
+    if not (keep_data and has_existing_data):
+        click.echo(f"   Sample data: {seeded_counts['countries']} countries, "
+                   f"{seeded_counts['banks']} banks, {seeded_counts['rates']} rate cells")
+    else:
+        click.echo("   Sample data: untouched (--keep-data was set)")
+    click.echo("")
+    click.echo("   Submit these to Amazon as the test credentials. The")
+    click.echo("   reviewer signs in, navigates to TV Display in the")
+    click.echo("   sidebar, clicks 'Generate code', and pairs the test")
+    click.echo("   Fire TV. The board will show the seeded sample rates.")
+    click.echo("")
+    if created_store: click.echo("   (Store was created on this run.)")
+    if created_user:  click.echo("   (User was created on this run.)")
+
 # ── Error handlers ───────────────────────────────────────────
 @app.errorhandler(404)
 def not_found(e):
