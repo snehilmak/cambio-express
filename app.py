@@ -1044,6 +1044,35 @@ class TVDisplayRate(db.Model):
     __table_args__ = (db.UniqueConstraint("bank_id", "mt_company",
                                             name="uq_tvrate_bank_company"),)
 
+class TVPairing(db.Model):
+    """One row per paired companion-app device (Fire TV, Google TV).
+    The redeem endpoint mints a device_token here and returns the
+    per-device URL /tv/device/<device_token> — never the shared
+    public_token, so the Fire TV app can't sideload its credential
+    into other devices.
+
+    Single-active-pairing per display: a fresh redeem revokes any
+    prior unrevoked TVPairing for the same display. That enforces
+    'one $5 subscription = one Fire TV at a time' without affecting
+    legacy /tv/<public_token> tablet/Chromecast users.
+    """
+    __tablename__ = "tv_pairing"
+    id            = db.Column(db.Integer, primary_key=True)
+    display_id    = db.Column(db.Integer, db.ForeignKey("tv_display.id"),
+                                nullable=False, index=True)
+    # 32-byte URL-safe random; same generator as public_token.
+    device_token  = db.Column(db.String(48), unique=True, nullable=False)
+    # Free-form label the app may submit ("Fire TV — Counter 1").
+    # Empty string until the operator names it from the admin UI.
+    device_label  = db.Column(db.String(80), default="")
+    paired_at     = db.Column(db.DateTime, default=datetime.utcnow)
+    # Bumped on every successful /tv/device/<token> render so the
+    # admin UI can show "last seen 2 min ago".
+    last_seen_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    # Set when superseded by a new pairing or manually revoked. A row
+    # with revoked_at IS NOT NULL serves 404 on its device URL.
+    revoked_at    = db.Column(db.DateTime, nullable=True)
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
@@ -7270,9 +7299,13 @@ def purge_expired_stores():
         # TV-display tables form a chain (display → country → bank →
         # rate) and only the top has store_id. Walk down explicitly so
         # the FK constraints don't reject the deletes on Postgres.
+        # TVPairing also hangs off display_id, same FK story.
         display_ids = [d for (d,) in
                        db.session.query(TVDisplay.id).filter_by(store_id=s.id).all()]
         if display_ids:
+            TVPairing.query.filter(
+                TVPairing.display_id.in_(display_ids)).delete(
+                    synchronize_session=False)
             country_ids = [c for (c,) in
                            db.session.query(TVDisplayCountry.id).filter(
                                TVDisplayCountry.display_id.in_(display_ids)).all()]
