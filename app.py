@@ -996,12 +996,10 @@ class TVDisplay(db.Model):
     theme           = db.Column(db.String(16), default="light")
     last_updated_at = db.Column(db.DateTime, default=datetime.utcnow)
     created_at      = db.Column(db.DateTime, default=datetime.utcnow)
-    # Pair-code system for the Fire TV / Google TV companion app:
-    # operator hits "Pair a TV" on /tv-display → server stamps a 6-char
-    # alphanumeric code and an expiry. The Fire TV app POSTs the code
-    # to /api/tv-pair/redeem, which (if the code is live AND the store
-    # still has the addon active) returns the public_token. Single-
-    # active-code-per-display: a fresh /pair-code call overwrites.
+    # DEPRECATED — left in the schema only because CLAUDE.md
+    # forbids dropping columns from a running DB. The pair-code
+    # state lives in TVPendingPair now (TV-initiated flow). These
+    # columns can be backfill-renamed in a follow-up deploy.
     pair_code             = db.Column(db.String(8), default="")
     pair_code_expires_at  = db.Column(db.DateTime, nullable=True)
 
@@ -8131,9 +8129,11 @@ _ADDED_COLUMNS = [
     # can update / delete the shadow row when the return check is
     # edited or reopened.
     ("daily_line_item", "return_check_id",        "INTEGER NULL"),
-    # TV Display companion-app pairing (Fire TV / Google TV). Short
-    # human-typeable code with a 10-min expiry, redeemed for the long
-    # public_token by /api/tv-pair/redeem.
+    # TV Display companion-app pairing (Fire TV / Google TV).
+    # DEPRECATED columns — the pair-code state moved to the
+    # TVPendingPair table when we inverted the flow. Left in the
+    # schema because CLAUDE.md forbids dropping columns from a
+    # running DB; safe to remove via a backfill migration later.
     ("tv_display",     "pair_code",              "VARCHAR(8) DEFAULT ''"),
     ("tv_display",     "pair_code_expires_at",   "TIMESTAMP NULL"),
 ]

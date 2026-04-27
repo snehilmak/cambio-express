@@ -1,32 +1,56 @@
 # DineroBook TV — Fire TV companion app
 
-Thin WebView shell for the [TV Display add-on](../app.py). Operators
-on `/tv-display` (the Flask admin) generate a 6-character pair code;
-this app exchanges it for a per-device URL, then runs that URL
-fullscreen on a Fire TV / Google TV / sideloaded Android device.
+Thin WebView shell for the [TV Display add-on](../app.py). On launch
+the app shows a 6-character pair code; the operator types that code
+into `/tv-display` in their DineroBook account, the app polls until
+claimed, then runs the per-device rate-board URL fullscreen on a
+Fire TV / Google TV / sideloaded Android device.
 
 The app itself does almost nothing — the actual rate board is the
 existing `templates/tv_display_public.html` rendered by the backend.
 This APK exists to:
 
 1. Get listed on the Amazon Appstore so operators can install with
-   one click instead of typing a 32-character URL.
+   one click.
 2. Tie each Fire TV to a single `TVPairing` row (enforced backend-
-   side: pairing a new Fire TV revokes the old one).
+   side: claiming a new code revokes any prior pairing on that
+   store's display).
 3. Auto-recover from revocation by routing back to the pairing
    screen when the WebView hits a 404.
+
+## Pairing flow
+
+This is the standard "TV displays code, user enters code on their
+phone" pattern (Netflix, YouTube, Disney+ all work this way):
+
+1. Fire TV opens the app → POST `/api/tv-pair/init`. Server creates
+   a `TVPendingPair` with a fresh 6-char code + a stable
+   `device_token`. Returns both.
+2. App displays the code huge + the line "Open dinerobook.com/...
+   in your DineroBook account."
+3. Operator on `/tv-display` types the code into the claim input,
+   clicks Pair. Server validates → revokes any prior active
+   `TVPairing` on this display → creates a new `TVPairing` reusing
+   the `device_token` from the pending row.
+4. App polls GET `/api/tv-pair/status?token=<device_token>` every
+   2 seconds. When the response flips to `{status: "claimed",
+   display_url}`, the app stashes the URL and transitions to the
+   fullscreen WebView.
+5. If the code expires before claim (10 min), the app silently
+   re-inits — operator sees a fresh code with no manual reset
+   needed.
 
 ## Architecture
 
 | Component | File | Job |
 |-----------|------|-----|
 | `MainActivity` | `kotlin/.../MainActivity.kt` | Router — read prefs, fire either `PairingActivity` or `DisplayActivity`. |
-| `PairingActivity` | `kotlin/.../PairingActivity.kt` | Big monospace input. POSTs to `/api/tv-pair/redeem`, stashes returned `display_url`. |
+| `PairingActivity` | `kotlin/.../PairingActivity.kt` | On launch: POST `/api/tv-pair/init`, display the code, poll `/api/tv-pair/status` until claimed. No on-screen input. |
 | `DisplayActivity` | `kotlin/.../DisplayActivity.kt` | Fullscreen sticky-immersive WebView. On main-frame 404 → wipe prefs, bounce to `MainActivity` (which routes to pairing). |
-| `PairApi` | `kotlin/.../PairApi.kt` | OkHttp wrapper around the redeem endpoint. |
+| `PairApi` | `kotlin/.../PairApi.kt` | OkHttp wrapper for `/init` + `/status` (sealed result classes for compile-time pattern-matching). |
 | `Prefs` | `kotlin/.../Prefs.kt` | SharedPreferences for the single stored URL. |
 
-All five files together are ~250 lines. There is no business logic
+All five files together are ~280 lines. There is no business logic
 here that isn't on the backend.
 
 ## Build
@@ -121,9 +145,10 @@ publishers).
 > companies (Intermex, Maxi, Barri…), updated from your DineroBook
 > admin console with a 30-second refresh.
 >
-> Pair the app with your store's DineroBook subscription using a
-> 6-character code generated from the admin's TV Display page —
-> no URLs to type. Each Fire TV is tied to one paid subscription.
+> Open the app on your Fire TV — it shows a 6-character code. Type
+> the code into the TV Display page in your DineroBook admin to
+> link your shop's rates to the TV. Each Fire TV is tied to one
+> paid subscription.
 >
 > Requires an active DineroBook subscription with the TV Display
 > add-on enabled. Sign up at https://dinerobook.onrender.com/signup.
@@ -186,10 +211,11 @@ another (acquisition, relocation). Three ways to re-pair:
 2. **From the Fire TV remote**: long-press **MENU** on the remote
    while the rate board is showing. Wipes local state and shows the
    pairing screen.
-3. **From a different store admin**: generate a code in the new
-   store and enter it on the Fire TV. The new pairing automatically
-   revokes the old one (server-side enforcement — see
-   `_redeem_pair_code` in `app.py`).
+3. **From a different store admin**: open the app on the Fire TV
+   to get a fresh code, sign into the new store's admin, type the
+   code into `/tv-display`. The new pairing automatically revokes
+   the old one (server-side enforcement — see `tv_display_claim`
+   in `app.py`).
 
 ## Updating the app
 
@@ -211,7 +237,10 @@ matching string and update both sides at once:
 
 | Backend symbol | App-side reference |
 |----------------|--------------------|
-| `POST /api/tv-pair/redeem` body `code` | `PairApi.kt` `redeem()` |
-| Redeem 200 response keys (`device_token`, `display_url`, `store_name`, `title`) | `PairApi.kt` `Result.Success` |
-| Redeem 404 failure | `PairApi.kt` `Result.NotFound` |
-| `GET /tv/device/<device_token>` | `Prefs.kt` `displayUrl` (URL is opaque to the app) |
+| `POST /api/tv-pair/init` request body `device_label` | `PairApi.kt` `init()` |
+| `POST /api/tv-pair/init` response keys (`code`, `device_token`, `expires_at`, `ttl_seconds`) | `PairApi.kt` `InitResult.Success` |
+| `GET /api/tv-pair/status` query param `token` | `PairApi.kt` `pollStatus()` |
+| `/status` response variants (`pending`, `claimed`, `expired`) | `PairApi.kt` `StatusResult` sealed class |
+| `/status` claimed payload keys (`display_url`, `store_name`, `title`) | `PairApi.kt` `StatusResult.Claimed` |
+| `POST /tv-display/claim` form field `code` | admin-side template; not directly called by the app |
+| `GET /tv/device/<device_token>` | `DisplayActivity.kt` (URL is opaque to the app — comes from `/status` Claimed) |
