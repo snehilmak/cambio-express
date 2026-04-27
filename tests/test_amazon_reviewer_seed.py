@@ -221,27 +221,36 @@ def test_keep_data_flag_preserves_existing_grid(client):
 
 # ── Pair-code flow against the seeded account ──────────────────
 
-def test_seeded_account_can_actually_generate_a_pair_code(client):
+def test_seeded_account_can_actually_claim_a_pair_code(client):
     """End-to-end: the whole point of this CLI. Sign in as the
-    reviewer, hit /tv-display/pair-code, get a real 6-char code
-    back. If this test fails, the reviewer can't pair their test
-    Fire TV and our Amazon submission gets rejected."""
+    reviewer, simulate a Fire TV calling /api/tv-pair/init, then
+    have the reviewer claim the code via /tv-display/claim. If this
+    test fails, the reviewer can't pair the test Fire TV and our
+    Amazon submission gets rejected."""
     _run(client)
     with client.application.app_context():
         user = User.query.filter_by(username=REVIEWER_USERNAME).first()
         store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
         uid, sid = user.id, store.id
 
-    # Sign in as the reviewer (role employee, store_id pinned).
+    # 1. Simulate the Fire TV opening the app — public, no auth.
+    body = client.post("/api/tv-pair/init", json={}).get_json()
+    assert "code" in body and "device_token" in body
+
+    # 2. Sign in as the reviewer (role employee, store_id pinned).
     c = client.application.test_client()
     with c.session_transaction() as sess:
         sess["user_id"] = uid
         sess["role"] = "employee"
         sess["store_id"] = sid
 
-    resp = c.post("/tv-display/pair-code")
-    assert resp.status_code == 200, \
-        f"reviewer couldn't generate pair code: {resp.status_code}"
-    body = resp.get_json()
-    assert "code" in body
-    assert len(body["code"]) == 6
+    # 3. Reviewer types the code on /tv-display.
+    resp = c.post("/tv-display/claim", data={"code": body["code"]})
+    assert resp.status_code == 302, \
+        f"reviewer couldn't claim pair code: {resp.status_code}"
+
+    # 4. The Fire TV's next /status poll flips to "claimed".
+    poll = client.get("/api/tv-pair/status",
+                       query_string={"token": body["device_token"]}).get_json()
+    assert poll["status"] == "claimed"
+    assert "display_url" in poll

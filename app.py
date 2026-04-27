@@ -4076,6 +4076,13 @@ def tv_pair_status():
         return jsonify({"status": "expired"}), 200
     if pending.expires_at < datetime.utcnow():
         return jsonify({"status": "expired"}), 200
+    if pending.claimed_at is not None:
+        # Pending row was claimed but the resulting TVPairing was
+        # already revoked (someone paired a newer Fire TV with the
+        # same backing token? unlikely but possible) or the addon
+        # was yanked between claim and poll. Treat as expired so
+        # the Fire TV re-inits.
+        return jsonify({"status": "expired"}), 200
     # Still pending. Return the code so the Fire TV can re-display
     # it after a process death / config change without losing the
     # bound code.
