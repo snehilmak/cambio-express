@@ -1107,19 +1107,14 @@
       {% endfor %}
     </tbody>
   </table>
-  {# Add new company #}
+  {# Add new company — slug is auto-derived from display name. #}
   <form method="POST" action="{{ url_for('superadmin_tv_catalog_new') }}"
         class="tvcat-add">
     <input type="hidden" name="catalog_type" value="company">
     <label>
-      Slug
-      <input type="text" name="slug" placeholder="ria_money"
-             pattern="[a-z0-9_]+" maxlength="40" required>
-    </label>
-    <label>
       Display name
       <input type="text" name="display_name" placeholder="RIA Money Transfer"
-             maxlength="80" required>
+             maxlength="80" required style="min-width:280px;">
     </label>
     <button type="submit" class="btn btn-primary">+ Add company</button>
   </form>
@@ -1202,19 +1197,14 @@
       {% endfor %}
     </tbody>
   </table>
-  {# Add new bank #}
+  {# Add new bank — slug auto-derived from display name + ISO-2. #}
   <form method="POST" action="{{ url_for('superadmin_tv_catalog_new') }}"
         class="tvcat-add">
     <input type="hidden" name="catalog_type" value="bank">
     <label>
-      Slug
-      <input type="text" name="slug" placeholder="mx_inbursa"
-             pattern="[a-z0-9_]+" maxlength="60" required>
-    </label>
-    <label>
       Display name
       <input type="text" name="display_name" placeholder="Inbursa"
-             maxlength="80" required>
+             maxlength="80" required style="min-width:240px;">
     </label>
     <label>
       Country (ISO-2)

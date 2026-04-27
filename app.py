@@ -7324,6 +7324,83 @@ def superadmin_toggle_addon(store_id, addon_key):
 # accept much more, but we'd rather reject early.
 _TV_LOGO_MAX_BYTES = 200 * 1024
 
+# Standard canvas every raster logo is fit-and-padded into. 600x200
+# is high-enough resolution for 4K TV display + 3x retina laptops
+# without cropping the brand mark; 3:1 ratio fits both wordmarks
+# (e.g. "Western Union" wide) and abbreviation marks (e.g. "BBVA"
+# squarish) without one looking dwarfed against the other.
+# CSS at display time scales down via object-fit: contain.
+_TV_LOGO_CANVAS_WIDTH  = 600
+_TV_LOGO_CANVAS_HEIGHT = 200
+
+def _normalize_logo_blob(blob, mime):
+    """Standardize an uploaded logo so every catalog entry renders
+    at the same visual weight on the public TV board.
+
+    Raster (PNG/JPEG/WebP):
+      - Open with Pillow, scale (preserving aspect) to fit a
+        600x200 canvas via thumbnail + LANCZOS resampling.
+      - Center on a transparent canvas (RGBA).
+      - Save as optimized PNG. JPEG inputs that have no alpha
+        come out as PNG with a transparent surrounding area.
+      - Bytes-on-wire are uniform regardless of the source's
+        pixel dimensions.
+
+    SVG:
+      - Pass through unchanged. The viewBox is the logical
+        canvas; CSS object-fit:contain handles display scaling
+        without quality loss. (Re-rasterizing SVGs through
+        Pillow would defeat their purpose.)
+
+    Falls back to (blob, mime) unchanged on any Pillow error so a
+    malformed-but-acceptable upload still lands in the DB rather
+    than blocking the operator with an opaque error.
+
+    Returns (normalized_blob, normalized_mime). Raster always
+    becomes "image/png"; SVG stays "image/svg+xml".
+    """
+    if mime == "image/svg+xml":
+        return blob, mime
+
+    try:
+        from PIL import Image
+        import io as _io
+    except ImportError:
+        # Pillow not installed (dev shell, never in prod requirements).
+        return blob, mime
+
+    try:
+        with Image.open(_io.BytesIO(blob)) as src:
+            src.load()  # force-decode now so a corrupt image fails fast
+            # thumbnail() resizes in place, preserving aspect ratio.
+            scaled = src.copy()
+            scaled.thumbnail(
+                (_TV_LOGO_CANVAS_WIDTH, _TV_LOGO_CANVAS_HEIGHT),
+                Image.Resampling.LANCZOS,
+            )
+            # Convert to RGBA so we can paste over a transparent
+            # canvas; JPEG inputs become RGBA.
+            if scaled.mode != "RGBA":
+                scaled = scaled.convert("RGBA")
+
+            canvas = Image.new(
+                "RGBA",
+                (_TV_LOGO_CANVAS_WIDTH, _TV_LOGO_CANVAS_HEIGHT),
+                (0, 0, 0, 0),
+            )
+            x = (_TV_LOGO_CANVAS_WIDTH  - scaled.width)  // 2
+            y = (_TV_LOGO_CANVAS_HEIGHT - scaled.height) // 2
+            canvas.paste(scaled, (x, y), scaled)
+
+            out = _io.BytesIO()
+            canvas.save(out, format="PNG", optimize=True)
+            return out.getvalue(), "image/png"
+    except Exception:
+        # Corrupt image / unsupported format / Pillow stack issue —
+        # store the original bytes rather than blocking the upload.
+        # The serve route still validates mime against the whitelist.
+        return blob, mime
+
 def _resolve_catalog_row(catalog_type, slug):
     """Returns the parent catalog row for a (type, slug) pair, or
     None if neither table has a match. Used by the upload + edit
@@ -7356,13 +7433,19 @@ def superadmin_tv_catalog_upload_logo(catalog_type, slug):
         flash("File must be PNG, JPEG, WebP, or SVG.", "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
 
-    blob = f.read()
-    if len(blob) == 0:
+    raw_blob = f.read()
+    if len(raw_blob) == 0:
         flash("Uploaded file is empty.", "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
-    if len(blob) > _TV_LOGO_MAX_BYTES:
+    if len(raw_blob) > _TV_LOGO_MAX_BYTES:
         flash(f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.", "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    # Normalize raster uploads to a uniform 600x200 transparent
+    # canvas. SVG passes through unchanged. Result: every catalog
+    # logo renders at the same visual weight on the public board
+    # regardless of the source image's pixel dimensions or padding.
+    blob, mime = _normalize_logo_blob(raw_blob, mime)
 
     existing = TVCatalogLogo.query.filter_by(
         catalog_type=catalog_type, slug=slug).first()
@@ -7422,28 +7505,82 @@ def superadmin_tv_catalog_edit(catalog_type, slug):
     flash(f"Saved {row.display_name}.", "success")
     return redirect(url_for("superadmin_controls", tab="tv-catalog"))
 
+def _slugify_catalog_name(name):
+    """Display name → URL-safe lowercase slug. Wraps python-slugify
+    with our catalog conventions: '_' separator, max length 60,
+    accents stripped, non-alnum collapsed.
+
+      "BBVA Bancomer"      → "bbva_bancomer"
+      "Banamex México"     → "banamex_mexico"
+      "Cibao Express, S.A." → "cibao_express_s_a"
+    """
+    if not name:
+        return ""
+    return slugify(name, separator="_", lowercase=True,
+                    max_length=60, word_boundary=False)
+
+def _slugify_bank_name(name, country_code):
+    """Banks slug as <iso2>_<name>. Multiple countries can have a
+    "BAC Credomatic" (GT/HN/SV); the country prefix keeps them
+    distinct so each can carry its own logo."""
+    base = _slugify_catalog_name(name)
+    if not base:
+        return ""
+    cc = (country_code or "").strip().lower()
+    if cc:
+        return (cc + "_" + base)[:60]
+    return base
+
+def _next_unique_slug(catalog_type, base_slug):
+    """If base_slug exists already, append _2, _3, … until we find
+    a free one. Caps at 99 attempts (operationally impossible to
+    hit; bails out rather than infinite-looping on a pathological
+    state)."""
+    if not base_slug:
+        return ""
+    if _resolve_catalog_row(catalog_type, base_slug) is None:
+        return base_slug
+    for n in range(2, 100):
+        candidate = f"{base_slug}_{n}"[:60]
+        if _resolve_catalog_row(catalog_type, candidate) is None:
+            return candidate
+    return ""  # exhausted; caller flashes the duplicate-slug error
+
 @app.route("/superadmin/tv-catalog/new", methods=["POST"])
 @superadmin_required
 def superadmin_tv_catalog_new():
-    """Add a fresh catalog entry. Slug is provided by the form and
-    must be unique within its catalog_type."""
+    """Add a fresh catalog entry. Slug is auto-generated from the
+    display_name (and country_code for banks); dedup'd with a
+    numeric suffix on collision. The operator never types a slug."""
     catalog_type = (request.form.get("catalog_type") or "").strip()
     if catalog_type not in ("company", "bank"):
         flash("Pick company or bank.", "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
-    slug = (request.form.get("slug") or "").strip().lower()[:60]
     display_name = (request.form.get("display_name") or "").strip()[:80]
-    if not slug or not display_name:
-        flash("Slug and display name are required.", "error")
+    if not display_name:
+        flash("Display name is required.", "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
-    # Slug normalization: keep only [a-z0-9_].
-    slug = "".join(c for c in slug if c.isalnum() or c == "_")
+
+    if catalog_type == "company":
+        base_slug = _slugify_catalog_name(display_name)
+    else:
+        cc = (request.form.get("country_code") or "").strip().upper()[:4]
+        if not cc:
+            flash("Banks need a country code (ISO-2).", "error")
+            return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        base_slug = _slugify_bank_name(display_name, cc)
+
+    if not base_slug:
+        flash("Couldn't derive a slug from that name. Try a different one.",
+              "error")
+        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
+    slug = _next_unique_slug(catalog_type, base_slug)
     if not slug:
-        flash("Slug must contain alphanumerics or underscores.", "error")
+        flash("Too many entries with similar names — slug exhausted.",
+              "error")
         return redirect(url_for("superadmin_controls", tab="tv-catalog"))
-    if _resolve_catalog_row(catalog_type, slug) is not None:
-        flash("That slug already exists.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+
     if catalog_type == "company":
         last = (db.session.query(db.func.max(TVCompanyCatalog.sort_order))
                 .scalar() or 0)
@@ -7452,10 +7589,6 @@ def superadmin_tv_catalog_new():
             sort_order=last + 10, is_active=True,
         ))
     else:
-        cc = (request.form.get("country_code") or "").strip().upper()[:4]
-        if not cc:
-            flash("Banks need a country code (ISO-2).", "error")
-            return redirect(url_for("superadmin_controls", tab="tv-catalog"))
         last = (db.session.query(db.func.max(TVBankCatalog.sort_order))
                 .filter_by(country_code=cc).scalar() or 0)
         db.session.add(TVBankCatalog(
@@ -8844,14 +8977,19 @@ def _seed_tv_logos_from_disk():
                 continue
             try:
                 with open(path, "rb") as fh:
-                    blob = fh.read()
+                    raw_blob = fh.read()
             except OSError:
                 continue
-            if not blob or len(blob) > _TV_LOGO_MAX_BYTES:
+            if not raw_blob or len(raw_blob) > _TV_LOGO_MAX_BYTES:
                 continue
+            # Same normalization the upload route runs — drop-in
+            # files end up at the standard 600x200 PNG canvas (or
+            # pass through for SVG).
+            blob, normalized_mime = _normalize_logo_blob(raw_blob, mime)
             db.session.add(TVCatalogLogo(
                 catalog_type=catalog_type, slug=slug,
-                mime_type=mime, blob=blob, file_size=len(blob),
+                mime_type=normalized_mime,
+                blob=blob, file_size=len(blob),
                 updated_at=datetime.utcnow(),
             ))
             # Mirror the public URL into the parent row's logo_url
