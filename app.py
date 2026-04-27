@@ -4445,7 +4445,8 @@ def tv_display_country_edit(country_id):
                             bank_logo_by_slug=bank_logo_by_slug,
                             company_name_by_slug=company_name_by_slug,
                             bank_name_by_slug=bank_name_by_slug,
-                            country_picker=_TV_COUNTRY_PICKER)
+                            country_picker=_TV_COUNTRY_PICKER,
+                            country_picker_codes=[c[0] for c in _TV_COUNTRY_PICKER])
 
 @app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
 @login_required
