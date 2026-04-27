@@ -64,19 +64,14 @@ any cadence.
 - [ ] CSV export on the customer directory.
 
 ## SimpleFIN removal (after Stripe FC is proven)
-- [ ] Once all active stores have migrated off SimpleFIN (verify via a
-      superadmin query on `SimpleFINConfig` rows with `access_url != ''`),
-      delete:
-      - The `SimpleFINConfig` model (keep it in `_STORE_OWNED_MODELS` right
-        up to the moment you drop the table so the retention purge still
-        cleans legacy rows).
-      - `simplefin_fetch`, `simplefin_claim_token`, `get_sfin_cfg`.
-      - Routes: `/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`.
-      - The `<details>` legacy section on `/bank`.
-      - The `bank_data` / `bank_error` / `cfg` context on the dashboard.
-      - The SimpleFIN references in `CLAUDE.md` section map.
-- [ ] Drop the `simplefin_config` table in a follow-up deploy, not together
-      with the code removal.
+- [x] Helpers (`simplefin_fetch`, `simplefin_claim_token`, `get_sfin_cfg`),
+      routes (`/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`),
+      legacy `<details>` section on `/bank`, `bank_data`/`bank_error`/`cfg`
+      context on the dashboard, and the CLAUDE.md section-map entry —
+      all removed in 2026.
+- [x] `SimpleFINConfig` model + `_STORE_OWNED_MODELS` entry removed.
+      `simplefin_config` table dropped via `_drop_legacy_tables()` on
+      next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
 - [ ] Graduate inline chat smoke tests to committed regression tests in

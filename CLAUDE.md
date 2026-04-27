@@ -267,8 +267,7 @@ Search for the `# ── HEADER ──` block comments. Rough order:
 | Auth decorators | `login_required`, `admin_required`, `owner_required`, `superadmin_required`, `_TRIAL_EXEMPT` |
 | Trial status | `get_trial_status`, `inject_trial_context` |
 | Superadmin helpers | `record_audit`, `store_feature_enabled`, `stripe_health_check`, `active_announcements` |
-| Stripe Financial Connections | Primary bank sync: `/bank/stripe/connect`, `/return`, `/refresh`, `/disconnect/<id>` + `ensure_stripe_customer`, `refresh_bank_balances`, `_upsert_fc_account` |
-| SimpleFIN | Legacy bank sync (kept available, hidden behind a `<details>` on `/bank`) — scheduled for removal in BACKLOG |
+| Stripe Financial Connections | Bank sync: `/bank/stripe/connect`, `/return`, `/refresh`, `/disconnect/<id>` + `ensure_stripe_customer`, `refresh_bank_balances`, `_upsert_fc_account`. The legacy SimpleFIN integration was removed in 2026, including the `simplefin_config` table — see `_drop_legacy_tables()`. |
 | Login / signup / forgot-password | all auth routes |
 | Subscribe / billing portal / cancel | `/subscribe`, checkout, cancel, billing portal |
 | Dashboard | admin / employee / superadmin |

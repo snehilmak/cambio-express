@@ -718,13 +718,6 @@ class MonthlyFinancial(db.Model):
     @property
     def net_income(self): return self.total_revenue-self.total_purchases-self.total_expenses+self.over_short
 
-class SimpleFINConfig(db.Model):
-    __tablename__ = "simplefin_config"
-    id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), unique=True, nullable=False)
-    access_url  = db.Column(db.String(500), default="")
-    last_synced = db.Column(db.DateTime, nullable=True)
-
 class StripeBankAccount(db.Model):
     """A bank account connected via Stripe Financial Connections.
 
@@ -1772,68 +1765,10 @@ def inject_theme():
         return {"theme": "dark"}
     return {"theme": pref}
 
-# ── SimpleFIN (FIXED) ────────────────────────────────────────
-def require_store_context():
-    """Returns store_id or None. Routes needing a store should call this."""
-    return session.get("store_id")
-
-def get_sfin_cfg(store_id):
-    return SimpleFINConfig.query.filter_by(store_id=store_id).first()
-
-def simplefin_fetch(store_id):
-    cfg=get_sfin_cfg(store_id)
-    if not cfg or not cfg.access_url: return None,"SimpleFIN not configured."
-    try:
-        url=cfg.access_url.rstrip("/")
-        if not url.endswith("/accounts"): url+="/accounts"
-        r=requests.get(url,timeout=20)
-        r.raise_for_status(); data=r.json()
-        cfg.last_synced=datetime.utcnow(); db.session.commit()
-        return data,None
-    except requests.exceptions.ConnectionError: return None,"Cannot connect to SimpleFIN. Check internet."
-    except requests.exceptions.Timeout: return None,"SimpleFIN timed out. Try again."
-    except requests.exceptions.HTTPError as e:
-        code=e.response.status_code
-        if code==403: return None,"SimpleFIN access denied. Your URL may be expired — generate a new token."
-        return None,f"SimpleFIN error {code}. Try reconnecting."
-    except Exception as e:
-        app.logger.error(f"SimpleFIN: {e}"); return None,f"Error: {str(e)}"
-
-def simplefin_claim_token(token_raw,store_id):
-    token_raw=token_raw.strip()
-    # Direct access URL
-    if token_raw.startswith("https://"):
-        cfg=get_sfin_cfg(store_id) or SimpleFINConfig(store_id=store_id)
-        cfg.access_url=token_raw; db.session.add(cfg); db.session.commit()
-        return True,"Access URL saved. Testing connection..."
-    # Base64 setup token
-    try:
-        clean=token_raw.replace(" ","").replace("\n","").replace("\r","")
-        pad=4-len(clean)%4
-        if pad!=4: clean+="="*pad
-        claim_url=base64.b64decode(clean).decode("utf-8").strip()
-    except Exception as e:
-        return False,f"Invalid token — make sure you copied it completely. ({e})"
-    if not claim_url.startswith("https://"):
-        return False,"Token decoded to an unexpected value. Generate a fresh token from SimpleFIN."
-    try:
-        r=requests.post(claim_url,timeout=20)
-        if r.status_code==403: return False,"This token was already used. Generate a new one at simplefin.org."
-        r.raise_for_status()
-        access_url=r.text.strip()
-        if not access_url.startswith("https://"):
-            return False,"SimpleFIN returned unexpected data. Try a new token."
-        cfg=get_sfin_cfg(store_id) or SimpleFINConfig(store_id=store_id)
-        cfg.access_url=access_url; db.session.add(cfg); db.session.commit()
-        return True,"SimpleFIN connected successfully!"
-    except requests.exceptions.HTTPError as e:
-        return False,f"SimpleFIN claim failed ({e.response.status_code}). Token may be expired."
-    except Exception as e:
-        return False,f"Connection error: {str(e)}"
-
 # ── Stripe Financial Connections ─────────────────────────────
-# Primary bank-sync path; SimpleFIN is kept around as a legacy option
-# while this stabilizes.
+# Bank-sync path. SimpleFIN was the original integration; it was
+# removed in 2026 once Stripe FC was proven in production, including
+# the `simplefin_config` table (see `_drop_legacy_tables()`).
 BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
 
 def stripe_is_configured():
@@ -4685,23 +4620,14 @@ def dashboard():
             company_stats[co]={"count":len(rows),"total":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows)}
         today_report=DailyReport.query.filter_by(store_id=sid,report_date=today).first()
         month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=today.year,month=today.month).first()
-        # Prefer Stripe Financial Connections on the dashboard; only fall back
-        # to SimpleFIN when it's actually configured for this store (else it
-        # disappears from the UI — the legacy code still exists for anyone
-        # who connected before the switch).
         stripe_accounts = (StripeBankAccount.query
                            .filter_by(store_id=sid, enabled=True)
                            .order_by(StripeBankAccount.connected_at.desc()).limit(3).all())
-        cfg = get_sfin_cfg(sid)
-        bank_data, bank_error = (None, None)
-        if not stripe_accounts and cfg and cfg.access_url:
-            bank_data, bank_error = simplefin_fetch(sid)
         return render_template("dashboard_admin.html",user=user,store=store,today=today,
             total_transfers=total_transfers,today_transfers=today_transfers,
             pending_ach=pending_ach,recent_transfers=recent_transfers,recent_batches=recent_batches,
             company_stats=company_stats,today_report=today_report,month_report=month_report,
-            stripe_accounts=stripe_accounts,
-            bank_data=bank_data,bank_error=bank_error,cfg=cfg)
+            stripe_accounts=stripe_accounts)
     else:
         # Employee dashboard shows only TODAY'S transfers and only aggregates
         # scoped to today. "This Month" and "All Time" counts were removed
@@ -6449,19 +6375,18 @@ def batch_transfers(bid):
     rows=Transfer.query.filter_by(store_id=sid,batch_id=b.batch_ref).all()
     return render_template("batch_detail.html",user=user,batch=b,transfers=rows)
 
-# ── Bank (Stripe Financial Connections primary + SimpleFIN legacy) ──
+# ── Bank (Stripe Financial Connections) ─────────────────────────
 @app.route("/bank")
 @admin_required
 def bank():
     user = current_user()
     store = current_store()
     sid = store.id
-    # Stripe FC — primary.
     stripe_accounts = (StripeBankAccount.query
                        .filter_by(store_id=sid, enabled=True)
                        .order_by(StripeBankAccount.connected_at.desc()).all())
-    # Auto-refresh balances that are older than the staleness window so the
-    # page always shows something close to live. Silent on failure.
+    # Auto-refresh balances older than the staleness window so the page
+    # always shows something close to live. Silent on failure.
     now = datetime.utcnow()
     stale = [a for a in stripe_accounts
              if not a.last_balance_as_of or
@@ -6474,13 +6399,8 @@ def bank():
                                .order_by(StripeBankAccount.connected_at.desc()).all())
         except Exception as e:
             app.logger.warning(f"bank() auto-refresh failed: {e}")
-    # SimpleFIN — legacy (kept until FC proven in production).
-    cfg = get_sfin_cfg(sid)
-    bank_data, bank_error = (simplefin_fetch(sid)
-                             if (cfg and cfg.access_url) else (None, None))
     return render_template("bank.html", user=user,
-        stripe_accounts=stripe_accounts, stripe_ready=stripe_is_configured(),
-        bank_data=bank_data, bank_error=bank_error, cfg=cfg)
+        stripe_accounts=stripe_accounts, stripe_ready=stripe_is_configured())
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @admin_required
@@ -6574,31 +6494,6 @@ def bank_stripe_disconnect(acct_id):
     db.session.commit()
     flash("Bank account disconnected.", "success")
     return redirect(url_for("bank"))
-
-# ── SimpleFIN (legacy — hidden by default; see BACKLOG for removal) ──
-@app.route("/bank/setup",methods=["POST"])
-@admin_required
-def bank_setup():
-    sid=session["store_id"]
-    token=request.form.get("token","").strip()
-    if not token: flash("Please paste your SimpleFIN token or access URL.","error"); return redirect(url_for("bank"))
-    ok,message=simplefin_claim_token(token,sid)
-    flash(message,"success" if ok else "error")
-    return redirect(url_for("bank"))
-
-@app.route("/bank/disconnect",methods=["POST"])
-@admin_required
-def bank_disconnect():
-    cfg=get_sfin_cfg(session["store_id"])
-    if cfg: cfg.access_url=""; db.session.commit()
-    flash("SimpleFIN disconnected.","success"); return redirect(url_for("bank"))
-
-@app.route("/api/bank/refresh")
-@admin_required
-def bank_refresh():
-    data,error=simplefin_fetch(session["store_id"])
-    if error: return jsonify({"error":error}),400
-    return jsonify(data)
 
 # ── Admin Users ──────────────────────────────────────────────
 @app.route("/admin/users")
@@ -8064,7 +7959,7 @@ _STORE_OWNED_MODELS = [
     # matters for cascade sanity.
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    "MonthlyFinancial", "SimpleFINConfig", "StripeBankAccount", "StoreOwnerLink",
+    "MonthlyFinancial", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
     # TVDisplay (store-keyed) — children handled by the explicit chain
@@ -8753,13 +8648,26 @@ def _ensure_added_columns():
         except Exception as e:
             app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
 
+# Legacy tables that have been removed from the model registry but may
+# still exist in production databases. DROP TABLE IF EXISTS is idempotent
+# on every restart — safe to leave forever.
+_DROPPED_TABLES = ["simplefin_config"]
+
+def _drop_legacy_tables():
+    try:
+        for table in _DROPPED_TABLES:
+            with db.engine.begin() as conn:
+                conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{table}"')
+    except Exception as e:
+        app.logger.warning(f"legacy table drop skipped: {e}")
+
 # Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
 # Declaring them here means a fresh install has a real starting set for the UI.
 _DEFAULT_FEATURE_FLAGS = [
     ("addon_tv_display", "Add-on: TV Display & Rates",
      "Show the TV Display add-on in the subscription page.", True),
-    ("bank_sync", "Bank sync (SimpleFIN)",
-     "Enable the Pro-tier SimpleFIN bank connection for stores.", True),
+    ("bank_sync", "Bank sync (Stripe)",
+     "Enable the Pro-tier Stripe Financial Connections bank sync for stores.", True),
     ("multi_store_owner", "Multi-store owner portal",
      "Allow store admins to generate owner invite codes.", True),
 ]
@@ -9053,6 +8961,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         _ensure_added_columns()
+        _drop_legacy_tables()
         _rename_maxi_transfer_to_maxi()
         # One-time copy of legacy DailyDrop + CheckDeposit rows into
         # the generic DailyLineItem table. Idempotent — safe on every
