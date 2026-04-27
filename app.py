@@ -8757,6 +8757,41 @@ def _seed_tv_catalogs():
             ))
     db.session.commit()
 
+def _backfill_tv_country_codes():
+    """One-shot helper: walk TVDisplayCountry, fill in missing
+    country_code for rows whose country_name matches an entry in the
+    curated picker. Runs on every boot but is a no-op once every row
+    has a code (idempotent — only matches rows where country_code is
+    NULL or empty).
+
+    Why: pre-PR-C rows were created via free-text inputs where the
+    operator could type the name without an ISO-2. The flag emoji
+    is computed from country_code, so those legacy rows render
+    flagless on the public board until we backfill."""
+    name_to_iso = {name.lower(): iso for iso, name in _TV_COUNTRY_PICKER}
+    # Common synonyms / variations the operator might have typed.
+    # Lower-case keys; keep the list short — we want safety, not
+    # heuristics that misclassify.
+    name_to_iso.update({
+        "republica dominicana": "DO",
+        "dominican republic":   "DO",
+        "el salvador":          "SV",
+        "costa rica":            "CR",
+    })
+    fixed = 0
+    rows = TVDisplayCountry.query.filter(
+        db.or_(TVDisplayCountry.country_code.is_(None),
+               TVDisplayCountry.country_code == "")
+    ).all()
+    for row in rows:
+        guess = name_to_iso.get((row.country_name or "").strip().lower())
+        if guess:
+            row.country_code = guess
+            fixed += 1
+    if fixed:
+        db.session.commit()
+    return fixed
+
 def _rename_maxi_transfer_to_maxi():
     """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
     in every place a company name is persisted. Safe on every boot — after
@@ -8788,6 +8823,15 @@ def init_db():
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _seed_feature_flags()
         _seed_tv_catalogs()
+        # Backfill country_code on legacy TVDisplayCountry rows so
+        # the flag emoji renders. Idempotent — no-op once all rows
+        # have a code.
+        try:
+            n_fixed = _backfill_tv_country_codes()
+            if n_fixed:
+                app.logger.info(f"Backfilled country_code on {n_fixed} TV-display country rows.")
+        except Exception as e:
+            app.logger.warning(f"TV country-code backfill skipped: {e}")
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
