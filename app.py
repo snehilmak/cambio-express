@@ -4350,10 +4350,36 @@ def tv_display_country_edit(country_id):
                    .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
                    .all()):
             rate_lookup[(r.bank_id, r.mt_company)] = r.rate
+
+    # Catalog rows for the company-column + bank-row pickers. Banks
+    # scope to the section's country code; companies are global. Only
+    # active rows surface in the picker (is_active=False = retired
+    # but still resolvable for legacy references).
+    company_catalog = (TVCompanyCatalog.query
+                        .filter_by(is_active=True)
+                        .order_by(TVCompanyCatalog.sort_order,
+                                  TVCompanyCatalog.display_name).all())
+    bank_catalog = (TVBankCatalog.query
+                     .filter_by(is_active=True,
+                                country_code=(country.country_code or "").upper())
+                     .order_by(TVBankCatalog.sort_order,
+                               TVBankCatalog.display_name).all())
+    # Lookups for resolving stored slugs back to a friendly label
+    # in the chip / row display. Includes inactive entries so
+    # legacy data still renders. Falls back to the raw stored
+    # token when nothing matches (free-text legacy values).
+    company_name_by_slug = {c.slug: c.display_name
+                             for c in TVCompanyCatalog.query.all()}
+    bank_name_by_slug = {b.slug: b.display_name
+                          for b in TVBankCatalog.query.all()}
     return render_template("tv_display_country.html",
                             user=current_user(), store=store, display=display,
                             country=country, banks=banks, companies=companies,
-                            rate_lookup=rate_lookup)
+                            rate_lookup=rate_lookup,
+                            company_catalog=company_catalog,
+                            bank_catalog=bank_catalog,
+                            company_name_by_slug=company_name_by_slug,
+                            bank_name_by_slug=bank_name_by_slug)
 
 @app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
 @login_required
