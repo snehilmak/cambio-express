@@ -3833,6 +3833,94 @@ def tv_display_regenerate_token():
           "success")
     return redirect(url_for("admin_tv_display"))
 
+# ── Pair-code system for the Fire TV / Google TV companion app ─
+#
+# The companion app on Fire TV can't reasonably ask the operator to
+# type a 32-char URL-safe token via remote, so we expose a 6-char
+# alphanumeric pair code instead. Operator clicks "Pair a TV" on
+# /tv-display → server stamps display.pair_code + a 10-min expiry
+# → operator types the code into the Fire TV app → app POSTs to
+# /api/tv-pair/redeem and gets back the long public_token.
+#
+# Anyone can install the companion app (it lives on the Amazon
+# Appstore unrestricted) but the redeem endpoint refuses to hand out
+# a token unless the store currently has the tv_display add-on
+# active. This gates pairing on the paid subscription without
+# putting Amazon between us and the customer's billing.
+#
+# Ambiguous chars excluded: O / 0 / I / 1 / L / B / 8.
+_PAIR_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXYZ234579"
+_PAIR_CODE_LIFETIME = timedelta(minutes=10)
+
+def _generate_pair_code():
+    """6-char code, ~308M space. Not cryptographic — paired with the
+    10-min expiry and addon gating, brute-force is infeasible."""
+    return "".join(secrets.choice(_PAIR_CODE_ALPHABET) for _ in range(6))
+
+@app.route("/tv-display/pair-code", methods=["POST"])
+@login_required
+def tv_display_pair_code():
+    """Generate a fresh pair code for this store's TV display. Single
+    active code at a time — calling again supersedes the old one."""
+    guard = _tv_required()
+    if not isinstance(guard, tuple):
+        return guard
+    _, store = guard
+    display = _ensure_tv_display(store)
+    # Loop on collision (vanishingly rare with a 308M space, but free).
+    for _ in range(8):
+        code = _generate_pair_code()
+        clash = TVDisplay.query.filter(
+            TVDisplay.pair_code == code,
+            TVDisplay.pair_code_expires_at > datetime.utcnow(),
+            TVDisplay.id != display.id,
+        ).first()
+        if not clash:
+            break
+    display.pair_code = code
+    display.pair_code_expires_at = datetime.utcnow() + _PAIR_CODE_LIFETIME
+    db.session.commit()
+    return jsonify({
+        "code": code,
+        "expires_at": display.pair_code_expires_at.isoformat() + "Z",
+        "ttl_seconds": int(_PAIR_CODE_LIFETIME.total_seconds()),
+    })
+
+@app.route("/api/tv-pair/redeem", methods=["POST"])
+def tv_pair_redeem():
+    """Public endpoint for the Fire TV companion app. Trades a live
+    pair code for the long public_token. Returns 404 (not 401/403) for
+    every failure mode so brute-force attempts can't distinguish
+    "wrong code" from "code expired" from "addon off"."""
+    payload = request.get_json(silent=True) or {}
+    raw = (payload.get("code") or "").strip().upper()
+    # Strip whitespace / hyphens the user may have typed for legibility.
+    code = "".join(c for c in raw if c in _PAIR_CODE_ALPHABET)
+    if len(code) != 6:
+        return jsonify({"error": "not_found"}), 404
+    display = TVDisplay.query.filter_by(pair_code=code).first()
+    if not display:
+        return jsonify({"error": "not_found"}), 404
+    if (not display.pair_code_expires_at
+            or display.pair_code_expires_at < datetime.utcnow()):
+        return jsonify({"error": "not_found"}), 404
+    store = db.session.get(Store, display.store_id)
+    if not store or not store_has_addon(store, "tv_display"):
+        return jsonify({"error": "not_found"}), 404
+    # Single-use: invalidate the code so a leaked code can't be
+    # redeemed twice.
+    display.pair_code = ""
+    display.pair_code_expires_at = None
+    db.session.commit()
+    public_url = url_for("tv_public_display", token=display.public_token,
+                          _external=True)
+    return jsonify({
+        "public_token": display.public_token,
+        "public_url":   public_url,
+        "store_name":   store.name,
+        "title":        display.title or "Money Transfer Rates",
+    })
+
 @app.route("/tv-display/countries/new", methods=["POST"])
 @login_required
 def tv_display_country_new():
