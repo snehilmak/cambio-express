@@ -1073,6 +1073,51 @@ class TVPairing(db.Model):
     # with revoked_at IS NOT NULL serves 404 on its device URL.
     revoked_at    = db.Column(db.DateTime, nullable=True)
 
+class TVPendingPair(db.Model):
+    """Pending pair attempt — created when a Fire TV opens the app
+    and asks for a code. Lives in this table until either:
+      (a) An admin claims the code from /tv-display → we revoke any
+          prior active TVPairing on their display and create a fresh
+          TVPairing tied to this row's device_token. The Fire TV's
+          poll then transitions to "claimed" and starts loading the
+          rate board. claimed_at + claimed_pairing_id are set.
+      (b) The 10-minute window elapses → /api/tv-pair/status returns
+          "expired" and the Fire TV app calls /init for a new code.
+
+    Why a separate table from TVPairing:
+      - Pending rows don't yet have a display_id (the operator
+        hasn't entered their account yet to claim the code).
+        Keeping TVPairing.display_id NOT NULL avoids loose semantics
+        and lets the existing render path stay simple.
+      - The device_token in this row is REUSED on claim — copied
+        into the new TVPairing — so the Fire TV app stores its
+        token once at /init time and never sees a rotation.
+
+    Single-claim is enforced by claimed_at + claimed_pairing_id +
+    a uniqueness check at claim time; no two pending rows can
+    redeem to a TVPairing.
+    """
+    __tablename__ = "tv_pending_pair"
+    id            = db.Column(db.Integer, primary_key=True)
+    # 6-char alphanumeric (same alphabet as PAIR_CODE_ALPHABET).
+    # Indexed because /api/tv-pair/status does the lookup by code
+    # via a join, and so does /tv-display/claim.
+    code          = db.Column(db.String(8), unique=True, nullable=False, index=True)
+    # Stable from /init through claim. The Fire TV stores this and
+    # never receives a different one.
+    device_token  = db.Column(db.String(48), unique=True, nullable=False, index=True)
+    # Free-form label the app may submit ("Fire TV — Stick 4K Max"),
+    # carried over to TVPairing.device_label on claim.
+    device_label  = db.Column(db.String(80), default="")
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at    = db.Column(db.DateTime, nullable=False)
+    # Set on successful admin claim. Once set, this row is "spent"
+    # and the Fire TV polls find the resulting TVPairing instead.
+    claimed_at         = db.Column(db.DateTime, nullable=True)
+    claimed_pairing_id = db.Column(db.Integer,
+                                     db.ForeignKey("tv_pairing.id"),
+                                     nullable=True)
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
@@ -7411,9 +7456,20 @@ def purge_expired_stores():
         # rate) and only the top has store_id. Walk down explicitly so
         # the FK constraints don't reject the deletes on Postgres.
         # TVPairing also hangs off display_id, same FK story.
+        # TVPendingPair is loose (no display_id — pending pairs are
+        # device-side until claimed) but FK's into TVPairing via
+        # claimed_pairing_id, so we have to wipe pending rows that
+        # reference doomed pairings BEFORE the pairing delete.
         display_ids = [d for (d,) in
                        db.session.query(TVDisplay.id).filter_by(store_id=s.id).all()]
         if display_ids:
+            doomed_pairing_ids = [p for (p,) in
+                                   db.session.query(TVPairing.id).filter(
+                                       TVPairing.display_id.in_(display_ids)).all()]
+            if doomed_pairing_ids:
+                TVPendingPair.query.filter(
+                    TVPendingPair.claimed_pairing_id.in_(doomed_pairing_ids)
+                ).delete(synchronize_session=False)
             TVPairing.query.filter(
                 TVPairing.display_id.in_(display_ids)).delete(
                     synchronize_session=False)
