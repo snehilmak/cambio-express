@@ -154,23 +154,6 @@
   min-width: 130px;
   text-align: center;
 }
-.ce-col-add-btn {
-  width: 100%;
-  padding: 8px 10px;
-  background: transparent;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-family: 'Inter', sans-serif;
-  font-size: 12px; font-weight: 600;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-.ce-col-add-btn:hover {
-  color: var(--db-neon); border-color: var(--db-neon);
-  background: var(--db-neon-glow-8);
-}
-
 /* Body rows */
 .ce-bank {
   width: 220px; min-width: 200px;
@@ -178,7 +161,7 @@
   border-radius: 8px;
   position: sticky; left: 0; z-index: 1;
 }
-.ce-bank-input {
+.ce-bank-select {
   width: 100%;
   padding: 12px 14px;
   background: transparent;
@@ -187,9 +170,50 @@
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-size: 14px; font-weight: 700;
   color: var(--text);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  /* Built-in dropdown chevron — keeps each row visually self-contained
+     without needing an SVG asset. */
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: right 14px top 18px, right 9px top 18px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
 }
-.ce-bank-input:hover { border-color: var(--border); }
-.ce-bank-input:focus { outline: none; border-color: var(--db-neon); background: var(--surface); }
+.ce-bank-select:hover { border-color: var(--border); }
+.ce-bank-select:focus { outline: none; border-color: var(--db-neon); background-color: var(--surface); }
+.ce-bank-select option { background: var(--surface); color: var(--text); }
+
+/* Picker for the column header — same chevron treatment as the
+   bank select but smaller and tucked into the header cell. */
+.ce-col-add-select {
+  width: 100%;
+  padding: 8px 28px 8px 10px;
+  background-color: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: right 11px top 14px, right 7px top 14px;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.ce-col-add-select:hover {
+  color: var(--db-neon); border-color: var(--db-neon);
+  background-color: var(--db-neon-glow-8);
+}
+.ce-col-add-select option { background: var(--surface); color: var(--text); }
 
 .ce-cell {
   background: var(--surface);
@@ -235,7 +259,7 @@
 .ce-row-x.ce-row-x--armed {
   color: #ff4f6e; border-color: #ff4f6e; background: rgba(255,79,110,0.15);
 }
-.ce-row.ce-row--marked-delete .ce-bank-input,
+.ce-row.ce-row--marked-delete .ce-bank-select,
 .ce-row.ce-row--marked-delete .ce-cell-input { text-decoration: line-through; opacity: 0.5; }
 
 /* Insert-row footer */
@@ -265,7 +289,7 @@
   background: var(--db-neon-glow-8);
   border: 1px dashed var(--db-neon-dim);
 }
-.ce-row--pending .ce-bank-input {
+.ce-row--pending .ce-bank-select {
   font-weight: 700;
   color: var(--text);
 }
@@ -349,16 +373,27 @@
               {% for company in companies %}
               <th class="ce-col-head" data-col-idx="{{ loop.index0 }}">
                 <div class="ce-chip">
-                  <span class="ce-chip-name" contenteditable="false">{{ company }}</span>
+                  {# data-slug carries the canonical token (catalog
+                     slug or legacy free-text) — JS reads this on
+                     submit to rebuild the mt_companies CSV. The
+                     visible text is the resolved display name from
+                     the catalog, falling back to the slug. #}
+                  <span class="ce-chip-name" data-slug="{{ company }}">{{ company_name_by_slug.get(company, company) }}</span>
                   <button type="button" class="ce-chip-x"
                           aria-label="Remove column">×</button>
                 </div>
               </th>
               {% endfor %}
               <th class="ce-col-add">
-                <button type="button" class="ce-col-add-btn" id="ce-add-col">
-                  + Insert column
-                </button>
+                <select class="ce-col-add-select" id="ce-add-col"
+                        aria-label="Add an MT company column">
+                  <option value="">+ Add MT company</option>
+                  {% for c in company_catalog %}
+                  <option value="{{ c.slug }}" data-display="{{ c.display_name }}">
+                    {{ c.display_name }}
+                  </option>
+                  {% endfor %}
+                </select>
               </th>
             </tr>
           </thead>
@@ -372,15 +407,34 @@
             </td></tr>
             {% endif %}
 
+            {% set _catalog_slugs = bank_catalog | map(attribute='slug') | list %}
             {% for bank in banks %}
             <tr class="ce-row" data-bank-id="{{ bank.id }}">
               <td class="ce-bank">
                 <input type="hidden" name="bank-{{ bank.id }}-sort"
                        value="{{ bank.sort_order }}">
-                <input class="ce-bank-input" type="text"
-                       name="bank-{{ bank.id }}-name" maxlength="120"
-                       value="{{ bank.bank_name }}"
-                       placeholder="Bank name">
+                <select class="ce-bank-select"
+                        name="bank-{{ bank.id }}-name"
+                        aria-label="Payout bank">
+                  {# Legacy free-text bank_name preserved as a
+                     pre-selected custom option so the operator's
+                     existing data isn't lost when the catalog
+                     doesn't contain an exact match. #}
+                  {% if bank.bank_name and bank.bank_name not in _catalog_slugs %}
+                  <option value="{{ bank.bank_name }}" selected>
+                    (custom) {{ bank_name_by_slug.get(bank.bank_name, bank.bank_name) }}
+                  </option>
+                  {% endif %}
+                  <option value="" {% if not bank.bank_name %}selected{% endif %}>
+                    — Select a bank —
+                  </option>
+                  {% for b in bank_catalog %}
+                  <option value="{{ b.slug }}"
+                          {% if b.slug == bank.bank_name %}selected{% endif %}>
+                    {{ b.display_name }}
+                  </option>
+                  {% endfor %}
+                </select>
               </td>
               {% for company in companies %}
               {% set _idx = loop.index0 %}
@@ -447,6 +501,17 @@
 {% endblock %}
 
 {% block scripts %}
+{# Bank catalog dumped as JSON so the "+ Insert row" handler can
+   build a fresh <select> with the same options the server-rendered
+   ones have. Filtered server-side to the country, so the picker
+   stays scoped (e.g. Banrural appears under Guatemala only). #}
+<script id="ce-bank-catalog" type="application/json">
+[
+  {% for b in bank_catalog %}
+  {"slug": {{ b.slug | tojson }}, "display_name": {{ b.display_name | tojson }}}{{ "," if not loop.last else "" }}
+  {% endfor %}
+]
+</script>
 <script>
 /*
  * Country grid editor — chip-based column manager + inline row inserter.
@@ -471,10 +536,26 @@
   var addRowTr = document.querySelector('#ce-grid tfoot tr td');
   var csvInput = document.getElementById('ce-mt-csv');
 
+  // Bank catalog (already country-filtered) for "+ Insert row".
+  // Defaults to [] if the embedded JSON is missing or malformed —
+  // the row insert still works, it just lacks options to pick from.
+  var bankCatalogList = (function () {
+    try {
+      var raw = document.getElementById('ce-bank-catalog');
+      return raw ? JSON.parse(raw.textContent) : [];
+    } catch (e) { return []; }
+  })();
+
   function currentColumns() {
+    // Each chip carries its canonical token (catalog slug or
+    // legacy free-text fallback) on data-slug. The visible text
+    // is the resolved display name from the catalog — we never
+    // serialize that.
     return Array.prototype.map.call(
       head.querySelectorAll('.ce-col-head .ce-chip-name'),
-      function (n) { return (n.textContent || '').trim(); }
+      function (n) {
+        return (n.dataset.slug || n.textContent || '').trim();
+      }
     ).filter(Boolean);
   }
 
@@ -504,11 +585,24 @@
     csvInput.value = currentColumns().join(',');
   }
 
-  // ── Add column ──────────────────────────────────────────
-  document.getElementById('ce-add-col').addEventListener('click', function () {
-    var name = (window.prompt('MT company name (column header):') || '').trim();
-    if (!name) return;
-    name = name.slice(0, 80);
+  // ── Add column (catalog-backed picker) ──────────────────
+  // Picker is a <select> in the rightmost header cell. On change
+  // we read the chosen slug + display_name, add a chip with
+  // data-slug set, and append a matching cell to every row.
+  document.getElementById('ce-add-col').addEventListener('change', function (e) {
+    var select = e.currentTarget;
+    var slug = select.value;
+    if (!slug) return;
+    var opt = select.options[select.selectedIndex];
+    var displayName = opt.dataset.display || opt.textContent.trim();
+
+    // Don't add a duplicate column if the operator picks the same
+    // company twice — the rate matrix can't have two columns with
+    // the same key on the server side either.
+    if (currentColumns().indexOf(slug) !== -1) {
+      select.value = '';
+      return;
+    }
 
     var th = document.createElement('th');
     th.className = 'ce-col-head';
@@ -517,8 +611,10 @@
         '<span class="ce-chip-name"></span>' +
         '<button type="button" class="ce-chip-x" aria-label="Remove column">×</button>' +
       '</div>';
-    th.querySelector('.ce-chip-name').textContent = name;
-    // Insert before the "+ Insert column" cell.
+    var nameSpan = th.querySelector('.ce-chip-name');
+    nameSpan.dataset.slug = slug;
+    nameSpan.textContent = displayName;
+    // Insert before the "+ Add MT company" cell.
     var addCell = head.querySelector('.ce-col-add');
     head.insertBefore(th, addCell);
 
@@ -526,7 +622,6 @@
     Array.prototype.forEach.call(body.querySelectorAll('tr.ce-row'), function (row) {
       var cell = document.createElement('td');
       cell.className = 'ce-cell';
-      var bankId = row.dataset.bankId;
       var pending = row.classList.contains('ce-row--pending');
       cell.innerHTML =
         '<input class="ce-cell-input" type="number" step="0.01" min="0" placeholder="—"' +
@@ -538,6 +633,9 @@
 
     renumberCells();
     syncCsv();
+    // Reset the picker to its placeholder so the operator can add
+    // another column without manually deselecting.
+    select.value = '';
   });
 
   // ── Remove column ───────────────────────────────────────
@@ -570,8 +668,22 @@
 
     var bankCell = document.createElement('td');
     bankCell.className = 'ce-bank';
-    bankCell.innerHTML =
-      '<input class="ce-bank-input" type="text" name="new_bank_name" maxlength="120" placeholder="New bank name" autofocus>';
+    // Build a <select> populated from the JSON-embedded bank
+    // catalog (already filtered to this country server-side).
+    var sel = document.createElement('select');
+    sel.className = 'ce-bank-select';
+    sel.name = 'new_bank_name';
+    sel.setAttribute('aria-label', 'Payout bank');
+    var blank = document.createElement('option');
+    blank.value = ''; blank.textContent = '— Select a bank —';
+    sel.appendChild(blank);
+    bankCatalogList.forEach(function (b) {
+      var o = document.createElement('option');
+      o.value = b.slug;
+      o.textContent = b.display_name;
+      sel.appendChild(o);
+    });
+    bankCell.appendChild(sel);
     tr.appendChild(bankCell);
 
     cols.forEach(function () {

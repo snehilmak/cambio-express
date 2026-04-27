@@ -28,7 +28,12 @@ flask_app.config["TESTING"] = True
 
 
 def seed_test_data():
-    from app import User, Store
+    from app import User, Store, _seed_tv_catalogs
+    # TV-display catalogs (companies + banks) are seeded by init_db
+    # in production but the test fixture drop_all/create_all cycle
+    # resets every table — we rebuild them here so picker UI tests
+    # see the same canonical 12 + 34 entries production does.
+    _seed_tv_catalogs()
     if not User.query.filter_by(username="superadmin", store_id=None).first():
         sa = User(username="superadmin", full_name="Platform Owner",
                   role="superadmin", store_id=None)

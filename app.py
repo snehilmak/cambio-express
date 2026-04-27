@@ -1116,6 +1116,59 @@ class TVPendingPair(db.Model):
                                      db.ForeignKey("tv_pairing.id"),
                                      nullable=True)
 
+class TVCompanyCatalog(db.Model):
+    """Curated MT companies (Intermex, Maxi, Barri, etc.) selectable
+    from the column-header picker on the TV display country editor.
+
+    Why a global catalog instead of free-text per store:
+      - Two stores both type "Maxi" / "MaxiTransfer" / "Maxi Money"
+        otherwise; cross-store fraud detection and chain-wide
+        consistency need a canonical name.
+      - Eventually each row carries a logo_url (Phase 2). Decoupling
+        the slug (immutable identifier) from display_name (mutable
+        label) means we can rename / re-logo without breaking
+        existing references on TVDisplayCountry.mt_companies.
+
+    is_active=False hides the entry from the picker without losing
+    references — older country sections still resolve the slug to
+    display_name for rendering.
+    """
+    __tablename__ = "tv_company_catalog"
+    id           = db.Column(db.Integer, primary_key=True)
+    # URL-safe lowercase identifier (e.g. "maxi", "intermex"). The
+    # column header CSV on TVDisplayCountry.mt_companies stores
+    # these slugs. Immutable after creation.
+    slug         = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    # Human-friendly label rendered on the public board. Editable.
+    display_name = db.Column(db.String(80), nullable=False)
+    # Future: nominative-use logo (Phase 2 of the catalog rollout).
+    # Defaults to empty so Phase 1 ships without legal/asset
+    # acquisition blocking the picker UI.
+    logo_url     = db.Column(db.String(255), default="")
+    sort_order   = db.Column(db.Integer, default=0)
+    is_active    = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+class TVBankCatalog(db.Model):
+    """Curated payout banks (BBVA Bancomer, Banco Industrial, etc.)
+    selectable from the row-name picker on the country editor. Same
+    slug + display_name pattern as TVCompanyCatalog, plus a
+    country_code so the editor's bank picker can scope to "banks
+    for Mexico" vs "banks for Guatemala."
+    """
+    __tablename__ = "tv_bank_catalog"
+    id           = db.Column(db.Integer, primary_key=True)
+    slug         = db.Column(db.String(60), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(80), nullable=False)
+    # ISO-2; country_code IS NOT a FK to anything (countries are
+    # picked from a flat list). Indexed because the picker filters
+    # by it on every editor render.
+    country_code = db.Column(db.String(4), default="", index=True)
+    logo_url     = db.Column(db.String(255), default="")
+    sort_order   = db.Column(db.Integer, default=0)
+    is_active    = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
@@ -4297,10 +4350,36 @@ def tv_display_country_edit(country_id):
                    .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
                    .all()):
             rate_lookup[(r.bank_id, r.mt_company)] = r.rate
+
+    # Catalog rows for the company-column + bank-row pickers. Banks
+    # scope to the section's country code; companies are global. Only
+    # active rows surface in the picker (is_active=False = retired
+    # but still resolvable for legacy references).
+    company_catalog = (TVCompanyCatalog.query
+                        .filter_by(is_active=True)
+                        .order_by(TVCompanyCatalog.sort_order,
+                                  TVCompanyCatalog.display_name).all())
+    bank_catalog = (TVBankCatalog.query
+                     .filter_by(is_active=True,
+                                country_code=(country.country_code or "").upper())
+                     .order_by(TVBankCatalog.sort_order,
+                               TVBankCatalog.display_name).all())
+    # Lookups for resolving stored slugs back to a friendly label
+    # in the chip / row display. Includes inactive entries so
+    # legacy data still renders. Falls back to the raw stored
+    # token when nothing matches (free-text legacy values).
+    company_name_by_slug = {c.slug: c.display_name
+                             for c in TVCompanyCatalog.query.all()}
+    bank_name_by_slug = {b.slug: b.display_name
+                          for b in TVBankCatalog.query.all()}
     return render_template("tv_display_country.html",
                             user=current_user(), store=store, display=display,
                             country=country, banks=banks, companies=companies,
-                            rate_lookup=rate_lookup)
+                            rate_lookup=rate_lookup,
+                            company_catalog=company_catalog,
+                            bank_catalog=bank_catalog,
+                            company_name_by_slug=company_name_by_slug,
+                            bank_name_by_slug=bank_name_by_slug)
 
 @app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
 @login_required
@@ -4330,7 +4409,18 @@ def _render_tv_board(display, store):
     """Build the section payload + render the public TV template.
     Shared by the legacy /tv/<public_token> route and the per-device
     /tv/device/<device_token> route — same content, different keys
-    in front of it."""
+    in front of it.
+
+    Resolves catalog slugs to display_name so the public board shows
+    "BBVA Bancomer" not "mx_bbva_bancomer". Lookups include INACTIVE
+    catalog rows so legacy references keep rendering even after the
+    superadmin retires a catalog entry."""
+    # Resolve all catalog slugs in one query rather than per-section.
+    company_name_by_slug = {c.slug: c.display_name
+                             for c in TVCompanyCatalog.query.all()}
+    bank_name_by_slug = {b.slug: b.display_name
+                          for b in TVBankCatalog.query.all()}
+
     countries = (TVDisplayCountry.query
                   .filter_by(display_id=display.id)
                   .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
@@ -4340,7 +4430,11 @@ def _render_tv_board(display, store):
                   .filter_by(country_id=c.id)
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
-        companies = _csv_split(c.mt_companies)
+        # Stored slugs for the column headers; render-side gets the
+        # resolved display names alongside.
+        company_slugs = _csv_split(c.mt_companies)
+        company_labels = [company_name_by_slug.get(slug, slug)
+                          for slug in company_slugs]
         rate_map = {}
         if banks:
             for r in (TVDisplayRate.query
@@ -4348,11 +4442,17 @@ def _render_tv_board(display, store):
                        .all()):
                 rate_map[(r.bank_id, r.mt_company)] = r.rate
         sections.append({
-            "country": c, "banks": banks, "companies": companies,
+            "country": c,
+            "banks": banks,
+            # Slugs (canonical) + labels (display) zipped together so
+            # the template iterates pairs without re-looking up.
+            "companies": company_slugs,
+            "company_labels": company_labels,
             "rates": rate_map,
         })
     return render_template("tv_display_public.html",
-                            display=display, store=store, sections=sections)
+                            display=display, store=store, sections=sections,
+                            bank_name_by_slug=bank_name_by_slug)
 
 @app.route("/tv/<token>")
 def tv_public_display(token):
@@ -8207,6 +8307,101 @@ def _seed_feature_flags():
             ))
     db.session.commit()
 
+# ── TV Display catalog seed ──────────────────────────────────
+#
+# Curated default lists for the TV-display country editor's
+# company-column picker and bank-row picker. Idempotent — only
+# inserts entries whose slug doesn't already exist, so the
+# superadmin can edit / disable / re-sort without the next boot
+# clobbering their changes.
+#
+# Slugs are URL-safe lowercase identifiers; display_name is what
+# operators see in the picker and on the public board. logo_url
+# stays empty here (Phase 1 ships text-only; Phase 2 wires up the
+# upload flow).
+_DEFAULT_TV_COMPANIES = [
+    # (slug, display_name, sort_order)
+    ("intermex",       "Intermex",         10),
+    ("maxi",           "Maxi",             20),
+    ("barri",          "Barri",            30),
+    ("vigo",           "Vigo",             40),
+    ("ria",            "RIA",              50),
+    ("moneygram",      "MoneyGram",        60),
+    ("western_union",  "Western Union",    70),
+    ("cibao",          "Cibao Express",    80),
+    ("sigue",          "Sigue",            90),
+    ("dolex",          "Dolex",           100),
+    ("boss_revolution","Boss Revolution", 110),
+    ("xoom",           "Xoom",            120),
+]
+
+# Banks scoped per country. Country codes are ISO-2 uppercase.
+# Each tuple is (slug, display_name, country_code, sort_order).
+_DEFAULT_TV_BANKS = [
+    # ── Mexico ───────────────────────────────────────────────
+    ("mx_bbva_bancomer", "BBVA Bancomer",    "MX", 10),
+    ("mx_banorte",       "Banorte",          "MX", 20),
+    ("mx_santander",     "Santander México", "MX", 30),
+    ("mx_banamex",       "Citibanamex",      "MX", 40),
+    ("mx_hsbc",          "HSBC México",      "MX", 50),
+    ("mx_scotiabank",    "Scotiabank",       "MX", 60),
+    ("mx_bancoppel",     "Bancoppel",        "MX", 70),
+    ("mx_banco_azteca",  "Banco Azteca",     "MX", 80),
+    ("mx_inbursa",       "Inbursa",          "MX", 90),
+    ("mx_elektra",       "Elektra",          "MX",100),
+    ("mx_walmart",       "Walmart",          "MX",110),
+    ("mx_soriana",       "Soriana",          "MX",120),
+
+    # ── Guatemala ────────────────────────────────────────────
+    ("gt_industrial",    "Banco Industrial", "GT", 10),
+    ("gt_banrural",      "Banrural",         "GT", 20),
+    ("gt_bac",           "BAC Credomatic",   "GT", 30),
+    ("gt_gtcontinental", "G&T Continental",  "GT", 40),
+    ("gt_bantrab",       "Bantrab",          "GT", 50),
+    ("gt_vivibanco",     "Vivibanco",        "GT", 60),
+
+    # ── Honduras ─────────────────────────────────────────────
+    ("hn_atlantida",     "Banco Atlántida",  "HN", 10),
+    ("hn_banpais",       "Banpais",          "HN", 20),
+    ("hn_ficohsa",       "Ficohsa",          "HN", 30),
+    ("hn_bac",           "BAC Credomatic",   "HN", 40),
+    ("hn_occidente",     "Banco de Occidente","HN",50),
+    ("hn_azteca",        "Banco Azteca",     "HN", 60),
+
+    # ── El Salvador ──────────────────────────────────────────
+    ("sv_agricola",      "Banco Agrícola",   "SV", 10),
+    ("sv_cuscatlan",     "Banco Cuscatlán",  "SV", 20),
+    ("sv_davivienda",    "Davivienda",       "SV", 30),
+    ("sv_bac",           "BAC Credomatic",   "SV", 40),
+    ("sv_hipotecario",   "Banco Hipotecario","SV", 50),
+
+    # ── Dominican Republic ───────────────────────────────────
+    ("do_banreservas",   "Banreservas",          "DO", 10),
+    ("do_popular",       "Banco Popular Dominicano","DO", 20),
+    ("do_bhd",           "BHD León",             "DO", 30),
+    ("do_santa_cruz",    "Banco Santa Cruz",     "DO", 40),
+    ("do_cibao",         "Asociación Cibao",     "DO", 50),
+]
+
+def _seed_tv_catalogs():
+    """Pre-load the curated MT-company + bank pickers. Idempotent —
+    re-running only inserts entries with new slugs, so superadmin
+    edits are preserved across deploys."""
+    for slug, display_name, sort_order in _DEFAULT_TV_COMPANIES:
+        if not TVCompanyCatalog.query.filter_by(slug=slug).first():
+            db.session.add(TVCompanyCatalog(
+                slug=slug, display_name=display_name,
+                sort_order=sort_order, is_active=True,
+            ))
+    for slug, display_name, country_code, sort_order in _DEFAULT_TV_BANKS:
+        if not TVBankCatalog.query.filter_by(slug=slug).first():
+            db.session.add(TVBankCatalog(
+                slug=slug, display_name=display_name,
+                country_code=country_code,
+                sort_order=sort_order, is_active=True,
+            ))
+    db.session.commit()
+
 def _rename_maxi_transfer_to_maxi():
     """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
     in every place a company name is persisted. Safe on every boot — after
@@ -8237,6 +8432,7 @@ def init_db():
         except Exception as e:
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _seed_feature_flags()
+        _seed_tv_catalogs()
         if not User.query.filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
