@@ -6923,7 +6923,9 @@ def superadmin_new_store():
             a=User(store_id=s.id,username=request.form.get("admin_username","admin"),
                 full_name=request.form.get("admin_name","Store Admin"),role="admin")
             a.set_password(request.form.get("admin_password","changeme123!"))
-            db.session.add(a); db.session.commit()
+            db.session.add(a)
+            record_audit("create_store", target_type="store", target_id=s.id, details=s.slug)
+            db.session.commit()
             flash(f"Store '{s.name}' created.","success"); return redirect(url_for("superadmin_stores"))
     return render_template("superadmin_store_form.html",user=user,store=None)
 
