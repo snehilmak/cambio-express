@@ -407,7 +407,7 @@
            with an ISO-2 not in the picker (or no ISO at all)
            lands as a "(custom) <name>" pre-selected option so
            the operator's existing data isn't lost. #}
-        <select class="ce-name-select" name="country_code"
+        <select class="ce-name-select js-country-picker" name="country_code"
                 id="ce-country-picker" required>
           {% if country.country_code and country.country_code not in country_picker_codes %}
           <option value="{{ country.country_code }}" data-name="{{ country.country_name }}" selected>
@@ -423,9 +423,7 @@
           </option>
           {% for iso, name in country_picker %}
           <option value="{{ iso }}" data-name="{{ name }}"
-                  {% if iso == country.country_code %}selected{% endif %}>
-            {{ _country_flag_emoji(iso) }} {{ name }}
-          </option>
+                  {% if iso == country.country_code %}selected{% endif %}>{{ name }}</option>
           {% endfor %}
         </select>
         <input type="hidden" name="country_name" id="ce-country-name"

@@ -616,11 +616,12 @@
            input is JS-synced from data-name on the selected option;
            the server still receives both fields, preserving the
            free-text-era form contract. #}
-        <select name="country_code" id="tvc-add-country-code" required>
+        <select name="country_code" id="tvc-add-country-code" required
+                class="js-country-picker">
           <option value="">— Pick a country —</option>
           {% for iso, name in country_picker %}
           <option value="{{ iso }}" data-name="{{ name }}">
-            {{ _country_flag_emoji(iso) }} {{ name }}
+            {{ name }}
           </option>
           {% endfor %}
         </select>
