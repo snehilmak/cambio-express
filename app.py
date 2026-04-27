@@ -1116,6 +1116,59 @@ class TVPendingPair(db.Model):
                                      db.ForeignKey("tv_pairing.id"),
                                      nullable=True)
 
+class TVCompanyCatalog(db.Model):
+    """Curated MT companies (Intermex, Maxi, Barri, etc.) selectable
+    from the column-header picker on the TV display country editor.
+
+    Why a global catalog instead of free-text per store:
+      - Two stores both type "Maxi" / "MaxiTransfer" / "Maxi Money"
+        otherwise; cross-store fraud detection and chain-wide
+        consistency need a canonical name.
+      - Eventually each row carries a logo_url (Phase 2). Decoupling
+        the slug (immutable identifier) from display_name (mutable
+        label) means we can rename / re-logo without breaking
+        existing references on TVDisplayCountry.mt_companies.
+
+    is_active=False hides the entry from the picker without losing
+    references — older country sections still resolve the slug to
+    display_name for rendering.
+    """
+    __tablename__ = "tv_company_catalog"
+    id           = db.Column(db.Integer, primary_key=True)
+    # URL-safe lowercase identifier (e.g. "maxi", "intermex"). The
+    # column header CSV on TVDisplayCountry.mt_companies stores
+    # these slugs. Immutable after creation.
+    slug         = db.Column(db.String(40), unique=True, nullable=False, index=True)
+    # Human-friendly label rendered on the public board. Editable.
+    display_name = db.Column(db.String(80), nullable=False)
+    # Future: nominative-use logo (Phase 2 of the catalog rollout).
+    # Defaults to empty so Phase 1 ships without legal/asset
+    # acquisition blocking the picker UI.
+    logo_url     = db.Column(db.String(255), default="")
+    sort_order   = db.Column(db.Integer, default=0)
+    is_active    = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+class TVBankCatalog(db.Model):
+    """Curated payout banks (BBVA Bancomer, Banco Industrial, etc.)
+    selectable from the row-name picker on the country editor. Same
+    slug + display_name pattern as TVCompanyCatalog, plus a
+    country_code so the editor's bank picker can scope to "banks
+    for Mexico" vs "banks for Guatemala."
+    """
+    __tablename__ = "tv_bank_catalog"
+    id           = db.Column(db.Integer, primary_key=True)
+    slug         = db.Column(db.String(60), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(80), nullable=False)
+    # ISO-2; country_code IS NOT a FK to anything (countries are
+    # picked from a flat list). Indexed because the picker filters
+    # by it on every editor render.
+    country_code = db.Column(db.String(4), default="", index=True)
+    logo_url     = db.Column(db.String(255), default="")
+    sort_order   = db.Column(db.Integer, default=0)
+    is_active    = db.Column(db.Boolean, default=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
 class Announcement(db.Model):
     """Global banner the superadmin can post across the app.
 
