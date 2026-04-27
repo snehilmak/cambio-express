@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fire TV / Android TV launcher banner. Spec: 1280×720 (16:9). Shown
+  on the Fire TV home row in place of the standard square icon.
+
+  This is a placeholder — it draws "DineroBook · TV" + a "$" glyph
+  in the brand palette. For Amazon Appstore submission, also upload
+  a 1280×720 PNG via the Developer Console store-listing page;
+  Amazon's review process scrutinizes that asset more closely than
+  the in-APK banner.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="1280"
+    android:viewportHeight="720">
+
+    <!-- Near-black background -->
+    <path
+        android:fillColor="#0a0a0a"
+        android:pathData="M0,0 L1280,0 L1280,720 L0,720 Z" />
+
+    <!-- Neon accent stripe along the bottom edge (matches the
+         topbar accent in the web admin). -->
+    <path
+        android:fillColor="#3fff00"
+        android:pathData="M0,690 L1280,690 L1280,720 L0,720 Z" />
+
+    <!-- "$" glyph on the left, scaled up large so it reads from
+         across the room. Same shape as ic_launcher for brand
+         continuity. -->
+    <path
+        android:strokeColor="#3fff00"
+        android:strokeWidth="22"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M260,210 L260,260 M260,460 L260,510 M340,300 C340,260 305,240 260,240 C215,240 180,260 180,300 C180,340 215,360 260,370 C305,380 340,395 340,435 C340,475 305,495 260,495 C215,495 180,475 180,435" />
+
+    <!-- "DineroBook" wordmark — drawn as paths so we don't depend
+         on a custom font being installed. Lower-fidelity than a
+         true-type render but recognizable at TV viewing distance. -->
+    <path
+        android:fillColor="#f4f6fa"
+        android:pathData="M460,300 L460,420 L490,420 C530,420 560,400 560,360 C560,320 530,300 490,300 Z M490,330 L490,390 L500,390 C520,390 530,378 530,360 C530,342 520,330 500,330 Z" />
+
+    <!-- "TV" subtitle in neon, positioned beneath the wordmark. -->
+    <path
+        android:fillColor="#3fff00"
+        android:pathData="M460,460 L460,480 L500,480 L500,540 L520,540 L520,480 L560,480 L560,460 Z M580,460 L600,540 L620,540 L640,460 L620,460 L610,510 L600,460 Z" />
+
+</vector>

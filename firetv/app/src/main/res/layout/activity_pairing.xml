@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pair-code entry screen.
+
+  Layout intent: hero copy on top, monospace 6-char input centered,
+  Pair button below, error text reserved underneath. All elements
+  are focusable so a Fire TV remote's D-pad can navigate between
+  the input and the button without help. The input gets initial
+  focus so the IME pops up on launch — fewer keypresses for the
+  operator to actually start typing.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/db_background"
+    android:padding="48dp">
+
+    <!-- Brand wordmark / eyebrow -->
+    <TextView
+        android:id="@+id/tvBrand"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_brand_eyebrow"
+        android:textColor="@color/db_text_muted"
+        android:textSize="14sp"
+        android:letterSpacing="0.18"
+        android:fontFamily="sans-serif"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="@string/pair_title"
+        android:textColor="@color/db_text"
+        android:textSize="40sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif"
+        android:lineSpacingMultiplier="1.05"
+        app:layout_constraintTop_toBottomOf="@id/tvBrand"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/tvSubtitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="@string/pair_subtitle"
+        android:textColor="@color/db_text_muted"
+        android:textSize="18sp"
+        android:fontFamily="sans-serif"
+        android:lineSpacingMultiplier="1.3"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Big monospace code input. tracking: 0.3 makes "ABC234" feel
+         like 6 distinct slots without using a custom segmented view. -->
+    <EditText
+        android:id="@+id/codeInput"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="40dp"
+        android:gravity="center"
+        android:fontFamily="monospace"
+        android:textSize="56sp"
+        android:textStyle="bold"
+        android:letterSpacing="0.3"
+        android:textColor="@color/db_text"
+        android:textColorHint="@color/db_text_muted"
+        android:hint="@string/pair_code_hint"
+        android:inputType="textCapCharacters|textNoSuggestions|textVisiblePassword"
+        android:maxLength="6"
+        android:imeOptions="actionDone"
+        android:background="@drawable/input_background"
+        android:padding="20dp"
+        android:focusable="true"
+        android:focusableInTouchMode="true"
+        android:nextFocusDown="@id/btnPair"
+        app:layout_constraintTop_toBottomOf="@id/tvSubtitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_max="540dp" />
+
+    <Button
+        android:id="@+id/btnPair"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="@string/pair_button"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/db_neon_ink"
+        android:background="@drawable/button_neon"
+        android:padding="18dp"
+        android:focusable="true"
+        android:nextFocusUp="@id/codeInput"
+        app:layout_constraintTop_toBottomOf="@id/codeInput"
+        app:layout_constraintStart_toStartOf="@id/codeInput"
+        app:layout_constraintEnd_toEndOf="@id/codeInput" />
+
+    <TextView
+        android:id="@+id/tvError"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:textColor="@color/db_error"
+        android:textSize="15sp"
+        android:gravity="center"
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/btnPair"
+        app:layout_constraintStart_toStartOf="@id/codeInput"
+        app:layout_constraintEnd_toEndOf="@id/codeInput" />
+
+    <TextView
+        android:id="@+id/tvBaseUrl"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/db_text_muted"
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:alpha="0.6"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

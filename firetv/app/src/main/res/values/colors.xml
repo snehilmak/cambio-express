@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Brand palette — same near-black + neon green as the web app's
+  design-tokens.css. NO Xenok-blue, NO secondary brand color.
+-->
+<resources>
+    <color name="db_background">#0a0a0a</color>
+    <color name="db_surface">#14181f</color>
+    <color name="db_surface_2">#1f242d</color>
+    <color name="db_border">#2a3044</color>
+
+    <color name="db_text">#f4f6fa</color>
+    <color name="db_text_muted">#8b94a8</color>
+
+    <color name="db_neon">#3fff00</color>
+    <color name="db_neon_dim">#2ecc00</color>
+    <color name="db_neon_ink">#001a0f</color>
+
+    <color name="db_error">#ff4f6e</color>
+</resources>

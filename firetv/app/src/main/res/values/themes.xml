@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Dark NoActionBar theme — DineroBook is dark-only, no light variant.
+  The Fire TV app inherits the same constraint as the web admin.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.DineroBookTV" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">@color/db_background</item>
+        <item name="android:colorBackground">@color/db_background</item>
+        <item name="android:textColor">@color/db_text</item>
+        <item name="android:textColorPrimary">@color/db_text</item>
+        <item name="android:textColorSecondary">@color/db_text_muted</item>
+        <item name="colorAccent">@color/db_neon</item>
+        <item name="android:statusBarColor" tools:targetApi="lollipop">@color/db_background</item>
+        <item name="android:navigationBarColor" tools:targetApi="lollipop">@color/db_background</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="m">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+
+</resources>

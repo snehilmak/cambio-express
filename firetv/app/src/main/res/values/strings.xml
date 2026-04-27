@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DineroBook TV</string>
+    <string name="app_brand_eyebrow">DINEROBOOK · TV DISPLAY</string>
+
+    <!-- Pairing screen copy -->
+    <string name="pair_title">Pair this Fire TV</string>
+    <string name="pair_subtitle">On your computer or phone, open DineroBook · TV Display and tap “Generate code.” Type the 6-character code below.</string>
+    <string name="pair_code_hint">CODE</string>
+    <string name="pair_button">Pair</string>
+    <string name="pair_button_loading">Pairing…</string>
+
+    <!-- Errors. Friendly + actionable; mirror the backend's "always
+         404" failure-mode parity by collapsing all "we couldn't
+         pair" responses into a single message. -->
+    <string name="pair_error_not_found">That code didn’t match an active subscription. Generate a fresh code on /tv-display and try again.</string>
+    <string name="pair_error_network">Couldn’t reach DineroBook. Check the Fire TV’s internet and try again. (%1$s)</string>
+
+    <!-- Footer hint shown small at the bottom of the pair screen -->
+    <string name="pair_base_url_hint">%1$s</string>
+</resources>
