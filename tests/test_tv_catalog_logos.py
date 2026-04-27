@@ -436,15 +436,15 @@ def test_create_bank_requires_country_code(client):
         assert TVBankCatalog.query.filter_by(slug="fictional_bank").first() is None
 
 
-def test_create_normalizes_slug_to_safe_chars(client):
+def test_create_auto_slugs_from_display_name(client):
+    """Operator never types a slug; the route derives one from
+    display_name. 'Some Brand!' → 'some_brand'."""
     sa = _superadmin_client(client.application)
     sa.post("/superadmin/tv-catalog/new", data={
         "catalog_type": "company",
-        "slug":         "Some Brand With Spaces!",
-        "display_name": "Some Brand",
+        "display_name": "Some Brand!",
     })
     with client.application.app_context():
-        # Spaces + ! stripped; uppercase lowercased.
-        row = TVCompanyCatalog.query.filter_by(
-            slug="somebrandwithspaces").first()
+        row = TVCompanyCatalog.query.filter_by(slug="some_brand").first()
         assert row is not None
+        assert row.display_name == "Some Brand!"
