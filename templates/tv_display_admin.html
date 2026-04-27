@@ -3,156 +3,491 @@
 {% block page_title %}TV Display{% endblock %}
 {% block content %}
 
-{# Landing for the TV Display add-on. Lists country sections, a
-   settings card for title/orientation/theme, and the public URL
-   the operator points their TV / Chromecast / Fire TV browser at.
+{# Operator console for the TV Display add-on. One store = one layout
+   (enforced at the data layer; the model is one TVDisplay per store).
+   This page surfaces the single live layout, the public URL the
+   in-store TVs point at, the layout settings, and the country
+   sections that make up the rate board.
 
-   Both store admins and employees reach this page (the rate board
-   is a daily-operations job, not a back-office one). The pilot
-   store's image is the ground-truth design — see attached spec. #}
+   Strings "Public display URL", "Display settings", "Country sections"
+   are referenced by tests/test_tv_display.py — keep them. #}
 
-<div class="card" style="max-width:760px;">
-  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-    <span class="card-title">Public display URL</span>
-    <a href="{{ public_url }}" target="_blank" rel="noopener"
-       class="btn btn-outline btn-sm">Open in new tab ↗</a>
-  </div>
-  <div class="card-body">
-    <p class="text-muted" style="margin-top:0;font-size:13.5px;">
-      Point your TV browser, Chromecast, or upcoming Fire TV / Google TV
-      app at this URL. It auto-refreshes every 30 seconds when you
-      change a rate.
-    </p>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">
-      <input type="text" id="tv-url" value="{{ public_url }}" readonly
-             style="flex:1;min-width:260px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:12.5px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;color:var(--text);">
-      <button type="button" class="btn btn-outline btn-sm" id="copy-url-btn">Copy</button>
+<style>
+/* Page-local styles for the TV-display console. Everything here uses
+   semantic tokens so dark mode flips correctly; no hardcoded surfaces
+   except the neon accent (which is brand and intentional). */
+.tvc-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 22px 24px;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+}
+.tvc-hero::after {
+  content: ''; position: absolute; left: 24px; right: 24px; bottom: 0;
+  height: 2px; border-radius: 2px;
+  background: var(--db-neon);
+  opacity: 0.7;
+}
+.tvc-eyebrow {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.tvc-title-line {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+}
+.tvc-title {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--text);
+  line-height: 1.15;
+  margin: 0;
+}
+.tvc-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  background: var(--db-neon-glow-15);
+  border: 1px solid var(--db-neon-dim);
+  border-radius: 999px;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--db-neon);
+}
+.tvc-status .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--db-neon);
+  box-shadow: 0 0 0 3px var(--db-neon-glow-25);
+}
+.tvc-meta {
+  margin-top: 8px;
+  font-size: 13px; color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+}
+.tvc-meta b { color: var(--text); font-weight: 600; }
+.tvc-hero-actions {
+  display: flex; gap: 8px; align-items: center;
+}
+
+.tvc-url-bar {
+  display: flex; align-items: stretch; gap: 0;
+  margin-top: 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.tvc-url-bar .label {
+  display: inline-flex; align-items: center;
+  padding: 0 14px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.tvc-url-bar input {
+  flex: 1; min-width: 0;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+}
+.tvc-url-bar input:focus { outline: none; }
+.tvc-url-bar button,
+.tvc-url-bar a {
+  padding: 0 16px;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 600;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  transition: color 0.15s, background 0.15s;
+}
+.tvc-url-bar button:hover,
+.tvc-url-bar a:hover { color: var(--db-neon); background: var(--db-neon-glow-8); }
+
+.tvc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 22px;
+}
+@media (max-width: 900px) {
+  .tvc-grid { grid-template-columns: 1fr; }
+}
+
+.tvc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tvc-card-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+}
+.tvc-card-title {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+.tvc-card-body { padding: 18px; }
+
+.tvc-stat-rows {
+  display: flex; flex-direction: column;
+  gap: 0;
+}
+.tvc-stat-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.tvc-stat-row:last-child { border-bottom: 0; }
+.tvc-stat-row .v {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 15px; font-weight: 700;
+  color: var(--text);
+}
+
+.tvc-countries-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 30px; margin-bottom: 14px;
+  flex-wrap: wrap; gap: 12px;
+}
+.tvc-countries-head h2 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 18px; font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+.tvc-countries-head .sub {
+  font-size: 12.5px; color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.tvc-country-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+.tvc-country-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+.tvc-country-card:hover {
+  border-color: var(--db-neon);
+  background: var(--db-neon-glow-8);
+  transform: translateY(-1px);
+}
+.tvc-country-flag {
+  width: 48px; height: 48px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 26px;
+  line-height: 1;
+}
+.tvc-country-flag.empty { color: var(--text-muted); font-size: 16px; font-weight: 700; font-family: 'Space Grotesk', sans-serif; }
+.tvc-country-text { min-width: 0; flex: 1; }
+.tvc-country-name {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 15px; font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+  display: flex; align-items: baseline; gap: 8px;
+  flex-wrap: wrap;
+}
+.tvc-country-name .iso {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px; font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+.tvc-country-stats {
+  margin-top: 6px;
+  font-size: 12px; color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+}
+.tvc-country-stats .num {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  color: var(--text);
+}
+.tvc-country-arrow {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.tvc-country-card:hover .tvc-country-arrow { color: var(--db-neon); }
+
+.tvc-add-country {
+  border-style: dashed;
+  background: transparent;
+  cursor: pointer;
+}
+.tvc-add-country summary {
+  display: flex; align-items: center; gap: 14px;
+  padding: 16px;
+  list-style: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-weight: 600;
+}
+.tvc-add-country summary::-webkit-details-marker { display: none; }
+.tvc-add-country[open] summary { border-bottom: 1px dashed var(--border); }
+.tvc-add-country .plus {
+  width: 48px; height: 48px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  font-size: 24px; line-height: 1;
+  color: var(--text-muted);
+}
+.tvc-add-country:hover .plus { color: var(--db-neon); border-color: var(--db-neon); }
+.tvc-add-country:hover summary { color: var(--text); }
+.tvc-add-form { padding: 16px; }
+
+.tvc-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+.tvc-empty h3 {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 17px; font-weight: 700;
+  color: var(--text);
+  margin: 0 0 6px;
+}
+</style>
+
+{# ── Hero: live status + brand ─────────────────────────────── #}
+<div class="tvc-hero">
+  <div>
+    <div class="tvc-eyebrow">TV Display · Live layout</div>
+    <div class="tvc-title-line">
+      <h1 class="tvc-title">{{ display.title or 'Cheapest Money Transfer' }}</h1>
+      <span class="tvc-status"><span class="dot"></span>Live</span>
     </div>
-    <details style="margin-top:14px;">
-      <summary style="cursor:pointer;font-size:13px;color:var(--text-muted);">
-        Lost the URL or worried it leaked? Regenerate the token.
-      </summary>
-      <form method="POST" action="{{ url_for('tv_display_regenerate_token') }}"
-            style="margin-top:10px;"
-            onsubmit="return confirm('This invalidates the current display URL. Any TV pointing at the old link will stop working until you reconfigure it. Continue?');">
-        <button type="submit" class="btn btn-outline btn-sm"
-                style="border-color:var(--red);color:var(--red);">
-          Regenerate display URL
-        </button>
-      </form>
-    </details>
+    <div class="tvc-meta">
+      <b>One layout</b> per store · stream to as many TVs in your shop as you like.
+      {% if display.last_updated_at %}
+      Last edited <b>{{ display.last_updated_at.strftime('%b %d, %H:%M') }} UTC</b>.
+      {% endif %}
+    </div>
+  </div>
+  <div class="tvc-hero-actions">
+    <a href="{{ public_url }}" target="_blank" rel="noopener"
+       class="btn btn-primary">Open TV view ↗</a>
   </div>
 </div>
 
-<div class="card" style="max-width:760px;margin-top:24px;">
-  <div class="card-header"><span class="card-title">Display settings</span></div>
-  <div class="card-body">
-    <form method="POST" action="{{ url_for('tv_display_save_settings') }}">
-      <div class="form-grid cols-2">
-        <div class="field">
-          <label>Title (top line)</label>
-          <input type="text" name="title" maxlength="120"
-                 value="{{ display.title or '' }}"
-                 placeholder="Cheapest Money Transfer">
-        </div>
-        <div class="field">
-          <label>Subtitle (second line, optional)</label>
-          <input type="text" name="subtitle" maxlength="120"
-                 value="{{ display.subtitle or '' }}"
-                 placeholder="Mejor Tipo de Cambio">
-        </div>
-        <div class="field">
-          <label>Orientation</label>
-          <select name="orientation">
-            <option value="auto" {% if display.orientation == 'auto' %}selected{% endif %}>Auto (follow device)</option>
-            <option value="landscape" {% if display.orientation == 'landscape' %}selected{% endif %}>Landscape (16:9)</option>
-            <option value="portrait" {% if display.orientation == 'portrait' %}selected{% endif %}>Portrait (vertical TV)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Board theme</label>
-          <select name="theme">
-            <option value="light" {% if display.theme == 'light' %}selected{% endif %}>Light (high readability)</option>
-            <option value="dark" {% if display.theme == 'dark' %}selected{% endif %}>Dark (low-light room)</option>
-          </select>
-        </div>
-      </div>
-      <div style="margin-top:18px;">
-        <button type="submit" class="btn btn-primary">Save settings</button>
-      </div>
-    </form>
-  </div>
+{# ── Public display URL ─────────────────────────────────────── #}
+<div class="tvc-url-bar" aria-label="Public display URL">
+  <span class="label">Public display URL</span>
+  <input type="text" id="tv-url" value="{{ public_url }}" readonly
+         aria-label="Public TV display URL">
+  <button type="button" id="copy-url-btn" title="Copy to clipboard">Copy</button>
+  <a href="{{ public_url }}" target="_blank" rel="noopener"
+     title="Open in a new tab">Open ↗</a>
 </div>
 
-<div class="card" style="max-width:760px;margin-top:24px;">
-  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
-    <span class="card-title">Country sections</span>
-    <a href="#new-country" class="btn btn-outline btn-sm">+ Add country</a>
-  </div>
-  <div class="card-body">
-    {% if countries %}
-    <table class="pk-table" style="width:100%;border-collapse:collapse;font-size:14px;">
-      <thead>
-        <tr>
-          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Country</th>
-          <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">MT companies</th>
-          <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Banks</th>
-          <th style="text-align:right;padding:8px 10px;border-bottom:1px solid var(--border);font-size:10.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;">Rates</th>
-          <th style="width:140px;"></th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for c in countries %}
-        <tr>
-          <td style="padding:10px;border-bottom:1px solid var(--border);">
-            <strong>{{ c.country_name }}</strong>
-            {% if c.country_code %}<span class="text-muted" style="margin-left:6px;font-size:12px;">{{ c.country_code }}</span>{% endif %}
-          </td>
-          <td style="padding:10px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-muted);">
-            {{ c.mt_companies or '—' }}
-          </td>
-          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;" class="mono">{{ country_stats[c.id].banks }}</td>
-          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;" class="mono">{{ country_stats[c.id].rates }}</td>
-          <td style="padding:10px;border-bottom:1px solid var(--border);text-align:right;">
-            <a href="{{ url_for('tv_display_country_edit', country_id=c.id) }}"
-               class="btn btn-outline btn-sm">Edit</a>
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% else %}
-    <p class="text-muted" style="margin:0;font-size:14px;">
-      No country sections yet. Add one below to get started — Mexico,
-      Guatemala, Honduras, etc.
+<details style="margin-top:8px;">
+  <summary style="cursor:pointer;font-size:12.5px;color:var(--text-muted);padding:6px 4px;">
+    URL leaked or lost? Regenerate the token.
+  </summary>
+  <form method="POST" action="{{ url_for('tv_display_regenerate_token') }}"
+        style="margin-top:6px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;"
+        onsubmit="return confirm('This invalidates the current display URL. Any TV pointing at the old link will stop working until you reconfigure it. Continue?');">
+    <p style="margin:0 0 10px;font-size:13px;color:var(--text-muted);">
+      Rotating the token immediately breaks the current URL. You'll need
+      to reload every TV in your store after rotating.
     </p>
-    {% endif %}
+    <button type="submit" class="btn btn-outline btn-sm"
+            style="border-color:var(--red);color:var(--red);">
+      Regenerate display URL
+    </button>
+  </form>
+</details>
 
-    <hr id="new-country" style="border:0;border-top:1px solid var(--border);margin:24px 0 18px;">
-    <form method="POST" action="{{ url_for('tv_display_country_new') }}">
-      <h4 style="margin:0 0 12px;font-size:14px;">Add a country section</h4>
-      <div class="form-grid cols-3">
+{# ── Settings + at-a-glance ────────────────────────────────── #}
+<div class="tvc-grid">
+
+  <div class="tvc-card">
+    <div class="tvc-card-head">
+      <span class="tvc-card-title">Display settings</span>
+    </div>
+    <div class="tvc-card-body">
+      <form method="POST" action="{{ url_for('tv_display_save_settings') }}">
+        <div class="form-grid cols-2">
+          <div class="field">
+            <label>Title (top line)</label>
+            <input type="text" name="title" maxlength="120"
+                   value="{{ display.title or '' }}"
+                   placeholder="Cheapest Money Transfer">
+          </div>
+          <div class="field">
+            <label>Subtitle (second line, optional)</label>
+            <input type="text" name="subtitle" maxlength="120"
+                   value="{{ display.subtitle or '' }}"
+                   placeholder="Mejor Tipo de Cambio">
+          </div>
+          <div class="field">
+            <label>Orientation</label>
+            <select name="orientation">
+              <option value="auto" {% if display.orientation == 'auto' %}selected{% endif %}>Auto (follow device)</option>
+              <option value="landscape" {% if display.orientation == 'landscape' %}selected{% endif %}>Landscape (16:9)</option>
+              <option value="portrait" {% if display.orientation == 'portrait' %}selected{% endif %}>Portrait (vertical TV)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Board theme</label>
+            <select name="theme">
+              <option value="light" {% if display.theme == 'light' %}selected{% endif %}>Light (high readability)</option>
+              <option value="dark" {% if display.theme == 'dark' %}selected{% endif %}>Dark (low-light room)</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;">
+          <button type="submit" class="btn btn-primary">Save settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="tvc-card">
+    <div class="tvc-card-head">
+      <span class="tvc-card-title">At a glance</span>
+    </div>
+    <div class="tvc-card-body">
+      {% set total_banks = country_stats.values()|map(attribute='banks')|sum %}
+      {% set total_rates = country_stats.values()|map(attribute='rates')|sum %}
+      <div class="tvc-stat-rows">
+        <div class="tvc-stat-row">
+          <span>Country sections</span>
+          <span class="v">{{ countries|length }}</span>
+        </div>
+        <div class="tvc-stat-row">
+          <span>Payout banks</span>
+          <span class="v">{{ total_banks }}</span>
+        </div>
+        <div class="tvc-stat-row">
+          <span>Rate cells filled</span>
+          <span class="v">{{ total_rates }}</span>
+        </div>
+        <div class="tvc-stat-row">
+          <span>Subscription</span>
+          <span class="v" style="color:var(--db-neon);">$5/mo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{# ── Country sections ──────────────────────────────────────── #}
+<div class="tvc-countries-head">
+  <div>
+    <h2>Country sections</h2>
+    <div class="sub">Each country becomes one block on the TV board. Tap to edit its rate grid.</div>
+  </div>
+</div>
+
+{% if not countries %}
+<div class="tvc-empty">
+  <h3>No country sections yet</h3>
+  <p>Add Mexico, Guatemala, Honduras — anywhere your store sends money — to start the rate board.</p>
+</div>
+{% endif %}
+
+<div class="tvc-country-grid">
+  {% for c in countries %}
+  <a href="{{ url_for('tv_display_country_edit', country_id=c.id) }}"
+     class="tvc-country-card">
+    <div class="tvc-country-flag {% if not c.country_code %}empty{% endif %}">
+      {% if c.country_code %}{{ _country_flag_emoji(c.country_code) }}{% else %}—{% endif %}
+    </div>
+    <div class="tvc-country-text">
+      <div class="tvc-country-name">
+        {{ c.country_name }}
+        {% if c.country_code %}<span class="iso">{{ c.country_code }}</span>{% endif %}
+      </div>
+      <div class="tvc-country-stats">
+        <span class="num">{{ country_stats[c.id].banks }}</span> banks ·
+        <span class="num">{{ country_stats[c.id].rates }}</span> rates
+      </div>
+    </div>
+    <div class="tvc-country-arrow" aria-hidden="true">→</div>
+  </a>
+  {% endfor %}
+
+  <details class="tvc-country-card tvc-add-country" id="add-country">
+    <summary>
+      <div class="plus">+</div>
+      <div class="tvc-country-text">
+        <div class="tvc-country-name" style="color:var(--text-muted);">Add a country</div>
+        <div class="tvc-country-stats">Mexico, Guatemala, El Salvador, Honduras…</div>
+      </div>
+    </summary>
+    <form method="POST" action="{{ url_for('tv_display_country_new') }}"
+          class="tvc-add-form">
+      <div class="form-grid cols-2">
         <div class="field">
           <label>Country name *</label>
           <input type="text" name="country_name" maxlength="80" required
                  placeholder="Mexico">
         </div>
         <div class="field">
-          <label>Country code (ISO-2)</label>
+          <label>ISO-2 code</label>
           <input type="text" name="country_code" maxlength="4"
                  placeholder="MX" style="text-transform:uppercase;">
         </div>
-        <div class="field">
-          <label>MT companies (comma-separated)</label>
-          <input type="text" name="mt_companies" maxlength="500"
-                 placeholder="Maxi, Cibao, Vigo">
-        </div>
       </div>
-      <div style="margin-top:14px;">
+      <div class="field" style="margin-top:8px;">
+        <label>MT companies (comma-separated, become the columns)</label>
+        <input type="text" name="mt_companies" maxlength="500"
+               placeholder="Maxi, Cibao, Vigo">
+      </div>
+      <div style="margin-top:12px;display:flex;justify-content:flex-end;">
         <button type="submit" class="btn btn-primary">Add country</button>
       </div>
     </form>
-  </div>
+  </details>
 </div>
 
 {% endblock %}
@@ -162,18 +497,18 @@
 document.getElementById('copy-url-btn').addEventListener('click', function () {
   var inp = document.getElementById('tv-url');
   inp.select();
+  var btn = this;
+  function flash(msg) {
+    var old = btn.textContent; btn.textContent = msg;
+    setTimeout(function () { btn.textContent = old; }, 1200);
+  }
   try {
     if (navigator.clipboard) {
-      navigator.clipboard.writeText(inp.value).then(function () {
-        alert('Copied to clipboard.');
-      });
+      navigator.clipboard.writeText(inp.value).then(function () { flash('Copied'); });
     } else {
-      document.execCommand('copy');
-      alert('Copied.');
+      document.execCommand('copy'); flash('Copied');
     }
-  } catch (e) {
-    alert('Couldn\'t copy automatically — select the text and copy manually.');
-  }
+  } catch (e) { flash('Select + copy'); }
 });
 </script>
 {% endblock %}

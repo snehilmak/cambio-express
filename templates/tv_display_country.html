@@ -3,142 +3,644 @@
 {% block page_title %}{{ country.country_name }}{% endblock %}
 {% block content %}
 
-{# Edit one country section: header fields, MT-company column list,
-   bank rows, and the rate matrix all in a single POST. Cells are
-   plain number inputs — auto-save would surprise the operator
-   mid-edit, so we stick with an explicit Save button at the bottom.
+{# Edit one country section. Single big POST that:
+     - country header fields (name, code, mt_companies CSV)
+     - bank rows (existing + optional new ones via name="new_bank_name")
+     - the rate matrix, names "rate-<bank_id>-<col_idx>"
 
-   Rate inputs are named `rate-<bank_id>-<col_idx>` because the
-   column doesn't have a stable id (it's just a string in the CSV).
-   The server matches the index back to the live `mt_companies` list
-   on save, so adding a column mid-session won't drop existing
-   values for unrelated columns. #}
+   Form contract is unchanged from the previous template — only the
+   chrome got the Xenok-style data-grid treatment. The mt_companies
+   field is hidden and rebuilt from the column chips on submit. New
+   bank rows pile up as inline name inputs in the grid until the
+   operator hits Save. #}
 
-<div style="margin-bottom:14px;">
-  <a href="{{ url_for('admin_tv_display') }}"
-     class="btn btn-outline btn-sm">← Back to TV display</a>
-</div>
+<style>
+.ce-page { max-width: 1280px; }
 
-<form method="POST" action="{{ url_for('tv_display_country_edit', country_id=country.id) }}">
-  <div class="card" style="max-width:980px;">
-    <div class="card-header"><span class="card-title">Section header</span></div>
-    <div class="card-body">
-      <div class="form-grid cols-3">
-        <div class="field">
-          <label>Country name *</label>
-          <input type="text" name="country_name" maxlength="80" required
-                 value="{{ country.country_name }}">
-        </div>
-        <div class="field">
-          <label>Country code (ISO-2)</label>
-          <input type="text" name="country_code" maxlength="4"
-                 value="{{ country.country_code or '' }}"
-                 style="text-transform:uppercase;">
-        </div>
-        <div class="field">
-          <label>MT companies (comma-separated, order = column order)</label>
-          <input type="text" name="mt_companies" maxlength="500"
-                 value="{{ country.mt_companies or '' }}"
-                 placeholder="Maxi, Cibao, Vigo">
-        </div>
+.ce-topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.ce-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px; font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 6px;
+}
+.ce-back:hover { color: var(--db-neon); background: var(--db-neon-glow-8); }
+
+.ce-title {
+  display: flex; align-items: center; gap: 12px;
+  flex: 1 1 auto; min-width: 0;
+  padding: 0 8px;
+  border-left: 1px solid var(--border);
+  margin-left: 4px;
+}
+.ce-flag {
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 22px; line-height: 1;
+  flex-shrink: 0;
+}
+.ce-name {
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 18px; font-weight: 700;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text);
+  flex: 1 1 200px; min-width: 120px;
+}
+.ce-name:hover { border-color: var(--border); }
+.ce-name:focus { outline: none; border-color: var(--db-neon); background: var(--surface-2); }
+.ce-iso {
+  width: 64px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  text-align: center;
+  padding: 6px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+.ce-iso:focus { outline: none; border-color: var(--db-neon); color: var(--text); }
+
+/* ── Grid card ────────────────────────────────────────────── */
+.ce-grid-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.ce-grid-scroll {
+  overflow-x: auto;
+  padding: 8px;
+}
+.ce-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: 14px;
+  table-layout: auto;
+}
+.ce-grid th, .ce-grid td {
+  padding: 0;
+  vertical-align: middle;
+}
+
+/* Header row */
+.ce-corner {
+  width: 220px; min-width: 200px;
+  padding: 10px 14px !important;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border-radius: 8px;
+  position: sticky; left: 0; z-index: 2;
+}
+
+.ce-col-head {
+  min-width: 140px;
+}
+.ce-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 10px;
+  background: var(--db-neon-glow-8);
+  border: 1px solid var(--db-neon-dim);
+  border-radius: 8px;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+}
+.ce-chip-name {
+  flex: 1 1 auto; min-width: 0;
+  background: transparent; border: 0;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+.ce-chip-name:focus { outline: none; }
+.ce-chip-x {
+  width: 18px; height: 18px;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+}
+.ce-chip-x:hover { color: #ff4f6e; background: rgba(255,79,110,0.12); }
+
+.ce-col-add {
+  min-width: 130px;
+  text-align: center;
+}
+.ce-col-add-btn {
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 12px; font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ce-col-add-btn:hover {
+  color: var(--db-neon); border-color: var(--db-neon);
+  background: var(--db-neon-glow-8);
+}
+
+/* Body rows */
+.ce-bank {
+  width: 220px; min-width: 200px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  position: sticky; left: 0; z-index: 1;
+}
+.ce-bank-input {
+  width: 100%;
+  padding: 12px 14px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: 'Space Grotesk', 'Inter', sans-serif;
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+}
+.ce-bank-input:hover { border-color: var(--border); }
+.ce-bank-input:focus { outline: none; border-color: var(--db-neon); background: var(--surface); }
+
+.ce-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.ce-cell-input {
+  width: 100%;
+  padding: 12px 10px;
+  text-align: center;
+  background: transparent;
+  border: 0;
+  font-family: 'JetBrains Mono', Consolas, monospace;
+  font-size: 17px; font-weight: 700;
+  color: var(--text);
+}
+.ce-cell-input::placeholder { color: var(--text-muted); font-weight: 400; }
+.ce-cell-input:focus {
+  outline: 2px solid var(--db-neon);
+  outline-offset: -2px;
+  background: var(--db-neon-glow-8);
+  border-radius: 8px;
+}
+.ce-cell:has(.ce-cell-input:focus) { border-color: var(--db-neon); }
+
+.ce-row-action {
+  width: 36px;
+  text-align: center;
+}
+.ce-row-x {
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  font-size: 14px; line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ce-row-x:hover { color: #ff4f6e; border-color: #ff4f6e; background: rgba(255,79,110,0.08); }
+.ce-row-x input { display: none; }
+.ce-row-x.ce-row-x--armed {
+  color: #ff4f6e; border-color: #ff4f6e; background: rgba(255,79,110,0.15);
+}
+.ce-row.ce-row--marked-delete .ce-bank-input,
+.ce-row.ce-row--marked-delete .ce-cell-input { text-decoration: line-through; opacity: 0.5; }
+
+/* Insert-row footer */
+.ce-row-add {
+  background: transparent;
+}
+.ce-row-add-btn {
+  width: 100%;
+  padding: 12px 14px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.ce-row-add-btn:hover {
+  color: var(--db-neon); border-color: var(--db-neon);
+  background: var(--db-neon-glow-8);
+}
+
+/* Pending (unsaved) bank row */
+.ce-row--pending .ce-bank {
+  background: var(--db-neon-glow-8);
+  border: 1px dashed var(--db-neon-dim);
+}
+.ce-row--pending .ce-bank-input {
+  font-weight: 700;
+  color: var(--text);
+}
+.ce-row--pending .ce-cell {
+  background: var(--surface-2);
+  opacity: 0.55;
+}
+.ce-row--pending .ce-cell-input {
+  cursor: not-allowed;
+  pointer-events: none;
+  color: var(--text-muted);
+}
+
+/* Empty state inside the grid */
+.ce-empty {
+  padding: 32px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.ce-empty b { color: var(--text); font-weight: 700; }
+
+/* Sticky save bar */
+.ce-save-bar {
+  position: sticky; bottom: 12px;
+  margin-top: 18px;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--surface-sticky);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+  z-index: 4;
+  flex-wrap: wrap;
+}
+.ce-save-bar .hint {
+  font-size: 13px; color: var(--text-muted);
+}
+
+.ce-delete-row {
+  margin-top: 18px;
+  display: flex; justify-content: flex-end;
+}
+</style>
+
+<div class="ce-page">
+
+  <form method="POST" id="ce-form"
+        action="{{ url_for('tv_display_country_edit', country_id=country.id) }}">
+
+    {# ── Top bar: back + flag + name + ISO ───────────────── #}
+    <div class="ce-topbar">
+      <a href="{{ url_for('admin_tv_display') }}" class="ce-back">← Back</a>
+      <div class="ce-title">
+        <span class="ce-flag" id="ce-flag" aria-hidden="true">
+          {{ _country_flag_emoji(country.country_code) or '🌐' }}
+        </span>
+        <input class="ce-name" type="text" name="country_name" required
+               maxlength="80"
+               value="{{ country.country_name }}"
+               placeholder="Country name">
+        <input class="ce-iso" type="text" name="country_code" id="ce-iso"
+               maxlength="4"
+               value="{{ country.country_code or '' }}"
+               placeholder="ISO">
       </div>
     </div>
-  </div>
 
-  <div class="card" style="max-width:980px;margin-top:24px;">
-    <div class="card-header"><span class="card-title">Rates</span></div>
-    <div class="card-body">
-      {% if not companies %}
-      <div class="info-box">
-        Add at least one MT company in the section header above to start
-        entering rates.
-      </div>
-      {% elif not banks %}
-      <div class="info-box">
-        Add at least one payout bank below to start entering rates.
-      </div>
-      {% else %}
-      <div style="overflow-x:auto;">
-        <table class="rate-matrix" style="width:100%;border-collapse:separate;border-spacing:0;font-size:14px;">
+    {# Hidden CSV — re-serialized from chip order on submit. #}
+    <input type="hidden" name="mt_companies" id="ce-mt-csv"
+           value="{{ companies|join(',') }}">
+
+    {# ── The data grid ──────────────────────────────────── #}
+    <div class="ce-grid-card">
+      <div class="ce-grid-scroll">
+        <table class="ce-grid" id="ce-grid">
           <thead>
-            <tr>
-              <th style="position:sticky;left:0;background:var(--surface);text-align:left;padding:10px 12px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;min-width:160px;">Payout bank</th>
+            <tr id="ce-head">
+              <th class="ce-corner">Payout bank</th>
               {% for company in companies %}
-              <th style="text-align:center;padding:10px 8px;border-bottom:2px solid var(--border);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;min-width:96px;">{{ company }}</th>
+              <th class="ce-col-head" data-col-idx="{{ loop.index0 }}">
+                <div class="ce-chip">
+                  <span class="ce-chip-name" contenteditable="false">{{ company }}</span>
+                  <button type="button" class="ce-chip-x"
+                          aria-label="Remove column">×</button>
+                </div>
+              </th>
               {% endfor %}
-              <th style="width:88px;"></th>
+              <th class="ce-col-add">
+                <button type="button" class="ce-col-add-btn" id="ce-add-col">
+                  + Insert column
+                </button>
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="ce-body">
+            {% if not banks and not companies %}
+            <tr><td colspan="3">
+              <div class="ce-empty">
+                <b>Empty grid.</b> Add a column (MT company) and a row
+                (payout bank) to start entering rates.
+              </div>
+            </td></tr>
+            {% endif %}
+
             {% for bank in banks %}
-            <tr>
-              <td style="position:sticky;left:0;background:var(--surface);padding:10px 12px;border-bottom:1px solid var(--border);">
-                <input type="hidden" name="bank-{{ bank.id }}-sort" value="{{ bank.sort_order }}">
-                <input type="text" name="bank-{{ bank.id }}-name" maxlength="120"
+            <tr class="ce-row" data-bank-id="{{ bank.id }}">
+              <td class="ce-bank">
+                <input type="hidden" name="bank-{{ bank.id }}-sort"
+                       value="{{ bank.sort_order }}">
+                <input class="ce-bank-input" type="text"
+                       name="bank-{{ bank.id }}-name" maxlength="120"
                        value="{{ bank.bank_name }}"
-                       style="width:100%;padding:6px 8px;background:transparent;border:1px solid transparent;border-radius:4px;font-size:13.5px;font-weight:600;"
-                       onfocus="this.style.borderColor='var(--border)';"
-                       onblur="this.style.borderColor='transparent';">
+                       placeholder="Bank name">
               </td>
               {% for company in companies %}
               {% set _idx = loop.index0 %}
               {% set _val = rate_lookup.get((bank.id, company)) %}
-              <td style="padding:10px 6px;border-bottom:1px solid var(--border);text-align:center;">
-                <input type="number" step="0.01" min="0"
+              <td class="ce-cell" data-col-idx="{{ _idx }}">
+                <input class="ce-cell-input" type="number" step="0.01" min="0"
                        name="rate-{{ bank.id }}-{{ _idx }}"
                        value="{% if _val is not none %}{{ '{:.2f}'.format(_val) }}{% endif %}"
-                       placeholder="—"
-                       style="width:80px;padding:6px 8px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:13px;border:1px solid var(--border);border-radius:4px;background:var(--surface-2);color:var(--text);">
+                       placeholder="—">
               </td>
               {% endfor %}
-              <td style="padding:10px 8px;border-bottom:1px solid var(--border);text-align:right;">
-                <label style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--red);cursor:pointer;">
+              <td class="ce-row-action">
+                <label class="ce-row-x" title="Mark this row for deletion on save"
+                       aria-label="Remove row">
                   <input type="checkbox" name="bank-{{ bank.id }}-delete" value="1">
-                  Remove
+                  <span aria-hidden="true">×</span>
                 </label>
               </td>
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="{{ (companies|length) + 2 }}" class="ce-row-add">
+                <button type="button" class="ce-row-add-btn" id="ce-add-row">
+                  + Insert row (payout bank)
+                </button>
+              </td>
+            </tr>
+          </tfoot>
         </table>
       </div>
-      {% endif %}
+    </div>
 
-      <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border);">
-        <h4 style="margin:0 0 10px;font-size:13px;">Add a payout bank</h4>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input type="text" name="new_bank_name" maxlength="120"
-                 placeholder="e.g. Bancomer"
-                 style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);color:var(--text);">
-          <span class="text-muted" style="font-size:12px;">
-            Saved when you click Save below.
-          </span>
-        </div>
+    {# ── Sticky save bar ────────────────────────────────── #}
+    <div class="ce-save-bar">
+      <span class="hint">
+        Saving updates the live TV board within 30 seconds.
+      </span>
+      <div style="display:flex;gap:8px;">
+        <a href="{{ url_for('admin_tv_display') }}"
+           class="btn btn-outline">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save layout</button>
       </div>
     </div>
-  </div>
 
-  <div class="sticky-save-bar" style="display:flex;justify-content:space-between;align-items:center;margin-top:24px;padding:14px 18px;background:var(--surface-sticky);border:1px solid var(--border);border-radius:10px;">
-    <span class="text-muted" style="font-size:13px;">
-      Saving updates the live TV board within 30 seconds (next refresh).
-    </span>
-    <div style="display:flex;gap:8px;">
-      <a href="{{ url_for('admin_tv_display') }}"
-         class="btn btn-outline">Cancel</a>
-      <button type="submit" class="btn btn-primary">Save</button>
-    </div>
-  </div>
-</form>
-
-<div style="margin-top:24px;max-width:980px;display:flex;justify-content:flex-end;">
-  <form method="POST"
-        action="{{ url_for('tv_display_country_delete', country_id=country.id) }}"
-        onsubmit="return confirm('Remove this country section? Banks and rates inside it will be deleted too.');">
-    <button type="submit" class="btn btn-outline btn-sm"
-            style="border-color:var(--red);color:var(--red);">
-      Delete this country
-    </button>
   </form>
+
+  {# Delete-country lives in its own form so it can't fire by accident
+     while editing the grid. #}
+  <div class="ce-delete-row">
+    <form method="POST"
+          action="{{ url_for('tv_display_country_delete', country_id=country.id) }}"
+          onsubmit="return confirm('Remove this country section? All banks and rates inside it will be deleted too.');">
+      <button type="submit" class="btn btn-outline btn-sm"
+              style="border-color:#ff4f6e;color:#ff4f6e;">
+        Delete this country section
+      </button>
+    </form>
+  </div>
+
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+/*
+ * Country grid editor — chip-based column manager + inline row inserter.
+ *
+ * The form contract is unchanged from the legacy editor:
+ *   - <input name="mt_companies"> holds the CSV of column names.
+ *   - Each rate cell is <input name="rate-<bank_id>-<col_idx>">.
+ *   - Each existing bank row has bank-<id>-name, bank-<id>-sort, and
+ *     a hidden bank-<id>-delete checkbox toggled by the row × button.
+ *   - New (pending) bank rows submit one or more name="new_bank_name"
+ *     inputs (server uses request.form.getlist).
+ *
+ * Whenever the column set changes, every cell's `name` attribute is
+ * rewritten to match the new positional index — that's what keeps
+ * existing rates aligned with the right company after a delete or
+ * reorder.
+ */
+(function () {
+  var form    = document.getElementById('ce-form');
+  var head    = document.getElementById('ce-head');
+  var body    = document.getElementById('ce-body');
+  var addRowTr = document.querySelector('#ce-grid tfoot tr td');
+  var csvInput = document.getElementById('ce-mt-csv');
+
+  function currentColumns() {
+    return Array.prototype.map.call(
+      head.querySelectorAll('.ce-col-head .ce-chip-name'),
+      function (n) { return (n.textContent || '').trim(); }
+    ).filter(Boolean);
+  }
+
+  function renumberCells() {
+    // Re-set data-col-idx + every rate input's name so positions
+    // match the live chip order. Run after add/remove/reorder.
+    Array.prototype.forEach.call(head.querySelectorAll('.ce-col-head'),
+      function (th, idx) { th.dataset.colIdx = idx; });
+    Array.prototype.forEach.call(body.querySelectorAll('tr.ce-row'),
+      function (row) {
+        var bankId = row.dataset.bankId;
+        var cells = row.querySelectorAll('td.ce-cell');
+        Array.prototype.forEach.call(cells, function (cell, idx) {
+          cell.dataset.colIdx = idx;
+          var inp = cell.querySelector('input');
+          if (!inp) return;
+          if (bankId) inp.name = 'rate-' + bankId + '-' + idx;
+        });
+      });
+    // Update the footer colspan so the "+ Insert row" cell stays full-width.
+    if (addRowTr) {
+      addRowTr.colSpan = currentColumns().length + 2;
+    }
+  }
+
+  function syncCsv() {
+    csvInput.value = currentColumns().join(',');
+  }
+
+  // ── Add column ──────────────────────────────────────────
+  document.getElementById('ce-add-col').addEventListener('click', function () {
+    var name = (window.prompt('MT company name (column header):') || '').trim();
+    if (!name) return;
+    name = name.slice(0, 80);
+
+    var th = document.createElement('th');
+    th.className = 'ce-col-head';
+    th.innerHTML =
+      '<div class="ce-chip">' +
+        '<span class="ce-chip-name"></span>' +
+        '<button type="button" class="ce-chip-x" aria-label="Remove column">×</button>' +
+      '</div>';
+    th.querySelector('.ce-chip-name').textContent = name;
+    // Insert before the "+ Insert column" cell.
+    var addCell = head.querySelector('.ce-col-add');
+    head.insertBefore(th, addCell);
+
+    // Append a matching cell to every existing row.
+    Array.prototype.forEach.call(body.querySelectorAll('tr.ce-row'), function (row) {
+      var cell = document.createElement('td');
+      cell.className = 'ce-cell';
+      var bankId = row.dataset.bankId;
+      var pending = row.classList.contains('ce-row--pending');
+      cell.innerHTML =
+        '<input class="ce-cell-input" type="number" step="0.01" min="0" placeholder="—"' +
+        (pending ? ' disabled' : '') + '>';
+      // Insert before the row's × action cell.
+      var actionCell = row.querySelector('td.ce-row-action');
+      row.insertBefore(cell, actionCell);
+    });
+
+    renumberCells();
+    syncCsv();
+  });
+
+  // ── Remove column ───────────────────────────────────────
+  head.addEventListener('click', function (e) {
+    var x = e.target.closest('.ce-chip-x');
+    if (!x) return;
+    var th = x.closest('.ce-col-head');
+    if (!th) return;
+    var idx = parseInt(th.dataset.colIdx, 10);
+    if (isNaN(idx)) return;
+    if (!window.confirm('Remove this column? Rates entered under it will be deleted on save.')) return;
+
+    th.parentNode.removeChild(th);
+    Array.prototype.forEach.call(body.querySelectorAll('tr.ce-row'), function (row) {
+      var cell = row.querySelector('td.ce-cell[data-col-idx="' + idx + '"]');
+      if (cell) cell.parentNode.removeChild(cell);
+    });
+    renumberCells();
+    syncCsv();
+  });
+
+  // ── Add row (pending bank) ──────────────────────────────
+  var pendingCounter = 0;
+  document.getElementById('ce-add-row').addEventListener('click', function () {
+    pendingCounter += 1;
+    var cols = currentColumns();
+    var tr = document.createElement('tr');
+    tr.className = 'ce-row ce-row--pending';
+    tr.dataset.pendingId = 'pending-' + pendingCounter;
+
+    var bankCell = document.createElement('td');
+    bankCell.className = 'ce-bank';
+    bankCell.innerHTML =
+      '<input class="ce-bank-input" type="text" name="new_bank_name" maxlength="120" placeholder="New bank name" autofocus>';
+    tr.appendChild(bankCell);
+
+    cols.forEach(function () {
+      var cell = document.createElement('td');
+      cell.className = 'ce-cell';
+      cell.innerHTML =
+        '<input class="ce-cell-input" type="number" step="0.01" min="0" placeholder="Save row first" disabled>';
+      tr.appendChild(cell);
+    });
+
+    var actionCell = document.createElement('td');
+    actionCell.className = 'ce-row-action';
+    actionCell.innerHTML =
+      '<button type="button" class="ce-row-x" title="Discard this pending row" aria-label="Discard row">×</button>';
+    tr.appendChild(actionCell);
+
+    body.appendChild(tr);
+    renumberCells();
+
+    // Discard handler — pending rows just get removed from the DOM.
+    actionCell.querySelector('.ce-row-x').addEventListener('click', function () {
+      tr.parentNode.removeChild(tr);
+      renumberCells();
+    });
+
+    bankCell.querySelector('input').focus();
+  });
+
+  // ── Mark/unmark existing row for deletion ──────────────
+  body.addEventListener('change', function (e) {
+    var cb = e.target.closest('input[type="checkbox"][name$="-delete"]');
+    if (!cb) return;
+    var label = cb.closest('.ce-row-x');
+    var row   = cb.closest('tr.ce-row');
+    if (!label || !row) return;
+    if (cb.checked) {
+      label.classList.add('ce-row-x--armed');
+      row.classList.add('ce-row--marked-delete');
+    } else {
+      label.classList.remove('ce-row-x--armed');
+      row.classList.remove('ce-row--marked-delete');
+    }
+  });
+
+  // ── Flag preview when ISO changes ──────────────────────
+  // Tiny client-side ISO-2 → flag emoji helper. Same logic as the
+  // server's _country_flag_emoji — keep them in sync.
+  function flagFor(code) {
+    if (!code) return '🌐';
+    code = code.toUpperCase();
+    if (!/^[A-Z]{2}$/.test(code)) return '🌐';
+    return String.fromCodePoint(0x1F1E6 + code.charCodeAt(0) - 65) +
+           String.fromCodePoint(0x1F1E6 + code.charCodeAt(1) - 65);
+  }
+  var isoInput = document.getElementById('ce-iso');
+  var flagSpan = document.getElementById('ce-flag');
+  isoInput.addEventListener('input', function () {
+    flagSpan.textContent = flagFor(isoInput.value.trim());
+  });
+
+  // ── Final sync on submit ───────────────────────────────
+  form.addEventListener('submit', function () {
+    syncCsv();
+  });
+
+  // Init: number cells that came in from the server, in case the
+  // template's loop.index0 ever drifted (defensive).
+  renumberCells();
+  syncCsv();
+})();
+</script>
 {% endblock %}
