@@ -4413,12 +4413,35 @@ def tv_display_country_edit(country_id):
                              for c in TVCompanyCatalog.query.all()}
     bank_name_by_slug = {b.slug: b.display_name
                           for b in TVBankCatalog.query.all()}
+    # Logo URLs (with cache-bust query) keyed by slug so the chip /
+    # row markup can resolve in one O(1) lookup. Empty string when
+    # no logo has been uploaded — the template falls back to text.
+    logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
+                      for r in TVCatalogLogo.query.all()}
+    company_logo_by_slug = {}
+    for c in TVCompanyCatalog.query.all():
+        if c.logo_url:
+            v = logo_versions.get(("company", c.slug), 0)
+            company_logo_by_slug[c.slug] = (
+                url_for("tv_catalog_logo", catalog_type="company", slug=c.slug)
+                + (f"?v={v}" if v else "")
+            )
+    bank_logo_by_slug = {}
+    for b in TVBankCatalog.query.all():
+        if b.logo_url:
+            v = logo_versions.get(("bank", b.slug), 0)
+            bank_logo_by_slug[b.slug] = (
+                url_for("tv_catalog_logo", catalog_type="bank", slug=b.slug)
+                + (f"?v={v}" if v else "")
+            )
     return render_template("tv_display_country.html",
                             user=current_user(), store=store, display=display,
                             country=country, banks=banks, companies=companies,
                             rate_lookup=rate_lookup,
                             company_catalog=company_catalog,
                             bank_catalog=bank_catalog,
+                            company_logo_by_slug=company_logo_by_slug,
+                            bank_logo_by_slug=bank_logo_by_slug,
                             company_name_by_slug=company_name_by_slug,
                             bank_name_by_slug=bank_name_by_slug)
 
