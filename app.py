@@ -1864,18 +1864,26 @@ def _upsert_fc_account(store_id, api_obj):
     row.category         = category or row.category or ""
     row.subcategory      = subcategory or row.subcategory or ""
     # Balance payload lives inside the "balance" field; may be missing if
-    # the "balances" permission wasn't granted.
+    # the "balances" permission wasn't granted, or null if Stripe's
+    # async balance fetch hasn't completed yet (common right after
+    # connect when prefetch wasn't requested).
     bal = api_obj.get("balance") if isinstance(api_obj, dict) else getattr(api_obj, "balance", None)
     if bal:
         current = bal.get("current") if isinstance(bal, dict) else getattr(bal, "current", None)
         as_of   = bal.get("as_of")   if isinstance(bal, dict) else getattr(bal, "as_of", None)
-        # Stripe returns balances as a dict {"usd": <cents>}; we pick whatever
-        # matches the account currency, falling back to the first value.
-        if isinstance(current, dict):
+        # Stripe returns balances as a dict {"usd": <cents>}; we pick
+        # whatever matches the account currency, falling back to the
+        # first value. Guard against a missing/empty `current` so we
+        # don't crash with StopIteration / TypeError on partial responses.
+        cents = 0
+        if isinstance(current, dict) and current:
             cents = current.get(row.currency or "usd") or next(iter(current.values()), 0)
-        else:
-            cents = current or 0
-        row.last_balance_cents = int(cents or 0)
+        elif current is not None:
+            cents = current
+        try:
+            row.last_balance_cents = int(cents or 0)
+        except (TypeError, ValueError):
+            row.last_balance_cents = 0
         if as_of:
             try:
                 row.last_balance_as_of = datetime.utcfromtimestamp(int(as_of))
@@ -1894,10 +1902,15 @@ def refresh_bank_balances(store):
     Stripe requires the `balances` feature to be refreshed explicitly when
     the cached value is stale; we call Account.refresh(features=["balance"])
     and then retrieve to capture the new snapshot.
+
+    Returns (updated_count, error_message_or_empty). The caller can
+    surface error_message in a flash so the operator sees *why* a
+    refresh failed without grepping the server log.
     """
     if not stripe_is_configured():
-        return 0
+        return 0, "Stripe is not configured."
     updated = 0
+    last_error = ""
     for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
         try:
             stripe.financial_connections.Account.refresh(
@@ -1907,10 +1920,18 @@ def refresh_bank_balances(store):
             _upsert_fc_account(store.id, api_obj)
             updated += 1
         except stripe.error.StripeError as e:
+            msg = e.user_message or str(e)
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
             app.logger.warning(f"FC refresh failed for {acct.stripe_account_id}: {e}")
+        except Exception as e:
+            # Anything not a StripeError — usually a response-shape mismatch
+            # in _upsert_fc_account or a network blip. Logged with full
+            # traceback so the cause is visible in Render logs.
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
+            app.logger.exception(f"FC refresh crashed for {acct.stripe_account_id}")
     if updated:
         db.session.commit()
-    return updated
+    return updated, last_error
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
@@ -6457,6 +6478,10 @@ def bank():
                                .order_by(StripeBankAccount.connected_at.desc()).all())
         except Exception as e:
             app.logger.warning(f"bank() auto-refresh failed: {e}")
+    # The tuple return shape from refresh_bank_balances is intentional —
+    # the manual /bank/stripe/refresh route surfaces last_error in a flash
+    # so operators can see why a refresh failed; the auto-refresh above
+    # ignores it and renders silently.
     return render_template("bank.html", user=user,
         stripe_accounts=stripe_accounts,
         stripe_ready=stripe_is_configured(),
@@ -6483,6 +6508,12 @@ def bank_stripe_connect():
         fc_session = stripe.financial_connections.Session.create(
             account_holder={"type": "customer", "customer": customer_id},
             permissions=["balances"],
+            # Pre-fetch balances during the linking flow itself —
+            # without this, balance.current is None when we retrieve
+            # immediately after connect and the UI shows $0 until the
+            # next manual refresh. Prefetch keeps the user inside the
+            # Stripe modal until the fetch completes.
+            prefetch=["balances"],
             filters={"countries": ["US"]},
             return_url=url_for("bank_stripe_return", _external=True),
         )
@@ -6543,9 +6574,15 @@ def bank_stripe_return():
 @admin_required
 def bank_stripe_refresh():
     """Manually refresh all connected account balances."""
-    n = refresh_bank_balances(current_store())
-    flash(f"Refreshed {n} account(s)." if n else "Nothing to refresh.",
-          "success" if n else "error")
+    n, last_error = refresh_bank_balances(current_store())
+    if n and not last_error:
+        flash(f"Refreshed {n} account(s).", "success")
+    elif n and last_error:
+        flash(f"Refreshed {n} account(s); one or more failed: {last_error}", "warning")
+    elif last_error:
+        flash(f"Refresh failed: {last_error}", "error")
+    else:
+        flash("Nothing to refresh.", "error")
     return redirect(url_for("bank"))
 
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
