@@ -1,0 +1,60 @@
+{# Bank transactions table + pager. Included inline by
+   bank_transactions.html for the initial render, and returned by
+   /bank/transactions?partial=1 as HTML inside a JSON envelope for
+   live-search AJAX swaps. All variables come from bank_transactions(). #}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Posted</th>
+        <th>Account</th>
+        <th>Description</th>
+        <th>Status</th>
+        <th style="text-align:right;">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in rows %}
+      <tr>
+        <td class="mono text-sm">
+          {% if t.posted_at %}{{ t.posted_at.strftime('%Y-%m-%d') }}{% else %}—{% endif %}
+        </td>
+        <td class="text-sm text-muted">
+          {% set acct = (accounts | selectattr('id', 'equalto', t.stripe_bank_account_id) | first) %}
+          {% if acct %}
+            {{ acct.display_name or acct.institution_name or 'Account' }}{% if acct.last4 %} ••{{ acct.last4 }}{% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>{{ t.description or '—' }}</td>
+        <td>
+          {% set sc = {'posted':'green','pending':'yellow','void':'red'} %}
+          <span class="badge badge-{{ sc.get(t.status, 'gray') }}">{{ t.status }}</span>
+        </td>
+        <td class="mono" style="text-align:right;color:{% if t.amount >= 0 %}var(--db-positive){% else %}var(--db-negative){% endif %};">
+          {% if t.amount >= 0 %}+{% endif %}${{ '{:,.2f}'.format(t.amount) }}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:24px;">
+        {% if q or account_id or date_from or date_to %}
+        No transactions match these filters.
+        {% else %}
+        No transactions yet. Click Sync transactions on the Bank page to fetch.
+        {% endif %}
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pager" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:13px;">
+  <span class="text-muted">Page {{ page }} of {{ total_pages }} · {{ total }} total</span>
+  <div style="display:flex;gap:6px;">
+    {% if page > 1 %}<a class="btn btn-outline btn-sm" data-page="{{ page - 1 }}" href="?page={{ page - 1 }}">‹ Prev</a>{% endif %}
+    {% if page < total_pages %}<a class="btn btn-outline btn-sm" data-page="{{ page + 1 }}" href="?page={{ page + 1 }}">Next ›</a>{% endif %}
+  </div>
+</div>
+{% endif %}

@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Bank Transactions — DineroBook{% endblock %}
+{% block page_title %}Bank Transactions{% endblock %}
+{% block content %}
+
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">All Bank Transactions
+      <span class="text-sm text-muted" id="txnTotal" style="font-weight:400;margin-left:8px;">{{ total }} total</span>
+    </span>
+    <a href="{{ url_for('bank') }}" class="btn btn-outline btn-sm">← Bank</a>
+  </div>
+  <div class="card-body">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px;">
+      <div class="field" style="min-width:240px;flex:1;">
+        <label>Search description</label>
+        <input type="text" id="qInput" value="{{ q }}" placeholder="Type to filter (2+ chars)…" autocomplete="off">
+      </div>
+      <div class="field" style="min-width:160px;">
+        <label>Account</label>
+        <select id="accountSelect">
+          <option value="">All</option>
+          {% for a in accounts %}
+          <option value="{{ a.id }}" {% if account_id == a.id %}selected{% endif %}>
+            {{ a.display_name or a.institution_name or 'Account' }}{% if a.last4 %} ••{{ a.last4 }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field" style="min-width:140px;">
+        <label>From</label>
+        <input type="date" id="dateFromInput" value="{{ date_from }}">
+      </div>
+      <div class="field" style="min-width:140px;">
+        <label>To</label>
+        <input type="date" id="dateToInput" value="{{ date_to }}">
+      </div>
+    </div>
+
+    <div id="txnsResult">
+      {% include "_bank_transactions_table.html" %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  // Live-search for the bank-transactions table. Mirrors the pattern
+  // used by /transfers — 300ms debounce, 2-char minimum on q, in-flight
+  // fetches canceled via AbortController, URL kept in sync with
+  // history.replaceState so filters are shareable.
+  var qInput        = document.getElementById('qInput');
+  var accountSelect = document.getElementById('accountSelect');
+  var dateFromInput = document.getElementById('dateFromInput');
+  var dateToInput   = document.getElementById('dateToInput');
+  var resultBox     = document.getElementById('txnsResult');
+  var totalLabel    = document.getElementById('txnTotal');
+  var ctrl = null;
+  var debounceTimer = null;
+
+  function buildParams(extra) {
+    var p = new URLSearchParams();
+    var q = (qInput.value || '').trim();
+    if (q && q.length >= 2) p.set('q', q);
+    if (accountSelect.value) p.set('account', accountSelect.value);
+    if (dateFromInput.value) p.set('date_from', dateFromInput.value);
+    if (dateToInput.value)   p.set('date_to',   dateToInput.value);
+    if (extra && extra.page) p.set('page', extra.page);
+    return p;
+  }
+
+  function fetchAndSwap(extra) {
+    if (ctrl) ctrl.abort();
+    ctrl = new AbortController();
+    var p = buildParams(extra);
+    var partialP = new URLSearchParams(p);
+    partialP.set('partial', '1');
+    fetch('{{ url_for("bank_transactions") }}?' + partialP.toString(),
+          {signal: ctrl.signal, credentials: 'same-origin'})
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        resultBox.innerHTML = j.html;
+        if (totalLabel) totalLabel.textContent = j.total + ' total';
+        // Reflect filters in the address bar for shareable links.
+        var url = new URL(window.location.href);
+        url.search = p.toString();
+        history.replaceState(null, '', url.toString());
+      })
+      .catch(function (e) {
+        if (e.name === 'AbortError') return;
+      });
+  }
+
+  function debounced() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fetchAndSwap, 300);
+  }
+
+  qInput.addEventListener('input', debounced);
+  accountSelect.addEventListener('change', function () { fetchAndSwap(); });
+  dateFromInput.addEventListener('change', function () { fetchAndSwap(); });
+  dateToInput.addEventListener('change',   function () { fetchAndSwap(); });
+
+  // Pager links inside the swap region — intercept and AJAX the page change.
+  resultBox.addEventListener('click', function (e) {
+    var a = e.target.closest('a[data-page]');
+    if (!a) return;
+    e.preventDefault();
+    fetchAndSwap({page: a.getAttribute('data-page')});
+  });
+})();
+</script>
+{% endblock %}
