@@ -1806,6 +1806,10 @@ def inject_theme():
 # removed in 2026 once Stripe FC was proven in production, including
 # the `simplefin_config` table (see `_drop_legacy_tables()`).
 BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
+# Hard cap on linked bank accounts per store. Two is enough for the
+# typical MSB workflow (e.g., a checking account + an MSB-restricted
+# account at the same credit union). Disconnecting frees the slot.
+MAX_BANK_ACCOUNTS_PER_STORE = 2
 
 def stripe_is_configured():
     """We can only start an FC session if Stripe is wired up."""
@@ -1864,18 +1868,26 @@ def _upsert_fc_account(store_id, api_obj):
     row.category         = category or row.category or ""
     row.subcategory      = subcategory or row.subcategory or ""
     # Balance payload lives inside the "balance" field; may be missing if
-    # the "balances" permission wasn't granted.
+    # the "balances" permission wasn't granted, or null if Stripe's
+    # async balance fetch hasn't completed yet (common right after
+    # connect when prefetch wasn't requested).
     bal = api_obj.get("balance") if isinstance(api_obj, dict) else getattr(api_obj, "balance", None)
     if bal:
         current = bal.get("current") if isinstance(bal, dict) else getattr(bal, "current", None)
         as_of   = bal.get("as_of")   if isinstance(bal, dict) else getattr(bal, "as_of", None)
-        # Stripe returns balances as a dict {"usd": <cents>}; we pick whatever
-        # matches the account currency, falling back to the first value.
-        if isinstance(current, dict):
+        # Stripe returns balances as a dict {"usd": <cents>}; we pick
+        # whatever matches the account currency, falling back to the
+        # first value. Guard against a missing/empty `current` so we
+        # don't crash with StopIteration / TypeError on partial responses.
+        cents = 0
+        if isinstance(current, dict) and current:
             cents = current.get(row.currency or "usd") or next(iter(current.values()), 0)
-        else:
-            cents = current or 0
-        row.last_balance_cents = int(cents or 0)
+        elif current is not None:
+            cents = current
+        try:
+            row.last_balance_cents = int(cents or 0)
+        except (TypeError, ValueError):
+            row.last_balance_cents = 0
         if as_of:
             try:
                 row.last_balance_as_of = datetime.utcfromtimestamp(int(as_of))
@@ -1894,10 +1906,15 @@ def refresh_bank_balances(store):
     Stripe requires the `balances` feature to be refreshed explicitly when
     the cached value is stale; we call Account.refresh(features=["balance"])
     and then retrieve to capture the new snapshot.
+
+    Returns (updated_count, error_message_or_empty). The caller can
+    surface error_message in a flash so the operator sees *why* a
+    refresh failed without grepping the server log.
     """
     if not stripe_is_configured():
-        return 0
+        return 0, "Stripe is not configured."
     updated = 0
+    last_error = ""
     for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
         try:
             stripe.financial_connections.Account.refresh(
@@ -1907,10 +1924,18 @@ def refresh_bank_balances(store):
             _upsert_fc_account(store.id, api_obj)
             updated += 1
         except stripe.error.StripeError as e:
+            msg = e.user_message or str(e)
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
             app.logger.warning(f"FC refresh failed for {acct.stripe_account_id}: {e}")
+        except Exception as e:
+            # Anything not a StripeError — usually a response-shape mismatch
+            # in _upsert_fc_account or a network blip. Logged with full
+            # traceback so the cause is visible in Render logs.
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
+            app.logger.exception(f"FC refresh crashed for {acct.stripe_account_id}")
     if updated:
         db.session.commit()
-    return updated
+    return updated, last_error
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
@@ -6457,10 +6482,15 @@ def bank():
                                .order_by(StripeBankAccount.connected_at.desc()).all())
         except Exception as e:
             app.logger.warning(f"bank() auto-refresh failed: {e}")
+    # The tuple return shape from refresh_bank_balances is intentional —
+    # the manual /bank/stripe/refresh route surfaces last_error in a flash
+    # so operators can see why a refresh failed; the auto-refresh above
+    # ignores it and renders silently.
     return render_template("bank.html", user=user,
         stripe_accounts=stripe_accounts,
         stripe_ready=stripe_is_configured(),
-        stripe_publishable_key=stripe_publishable_key())
+        stripe_publishable_key=stripe_publishable_key(),
+        max_bank_accounts=MAX_BANK_ACCOUNTS_PER_STORE)
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @admin_required
@@ -6478,11 +6508,27 @@ def bank_stripe_connect():
     if not stripe_publishable_key():
         return jsonify({"error": "STRIPE_PUBLISHABLE_KEY is not set; the FC modal can't initialize."}), 503
     store = current_store()
+    # Enforce the per-store account cap before we even mint an FC
+    # session. The UI already hides the button when at the cap, but
+    # this is the authoritative check in case someone POSTs directly.
+    existing_count = StripeBankAccount.query.filter_by(
+        store_id=store.id, enabled=True).count()
+    if existing_count >= MAX_BANK_ACCOUNTS_PER_STORE:
+        return jsonify({
+            "error": (f"You've reached the {MAX_BANK_ACCOUNTS_PER_STORE}-account "
+                      "limit. Disconnect an account first to free up a slot."),
+        }), 409
     try:
         customer_id = ensure_stripe_customer(store)
         fc_session = stripe.financial_connections.Session.create(
             account_holder={"type": "customer", "customer": customer_id},
             permissions=["balances"],
+            # Pre-fetch balances during the linking flow itself —
+            # without this, balance.current is None when we retrieve
+            # immediately after connect and the UI shows $0 until the
+            # next manual refresh. Prefetch keeps the user inside the
+            # Stripe modal until the fetch completes.
+            prefetch=["balances"],
             filters={"countries": ["US"]},
             return_url=url_for("bank_stripe_return", _external=True),
         )
@@ -6522,18 +6568,39 @@ def bank_stripe_return():
         if not accounts:
             flash("No accounts were linked.", "error")
             return redirect(url_for("bank"))
+        # Per-store cap. We honor existing enabled rows AND any of the
+        # just-linked accounts that are already on file (re-link case),
+        # then accept up to the remaining slots.
+        existing_ids = {row.stripe_account_id for row in
+                        StripeBankAccount.query.filter_by(
+                            store_id=sid, enabled=True).all()}
+        slots_remaining = MAX_BANK_ACCOUNTS_PER_STORE - len(existing_ids)
+        kept = 0
+        skipped = 0
         for acct_summary in accounts:
+            already_linked = acct_summary.id in existing_ids
+            if not already_linked and slots_remaining <= 0:
+                skipped += 1
+                continue
             # The session returns a trimmed account object; retrieve it fully
             # so we get balance and institution metadata.
             full = stripe.financial_connections.Account.retrieve(acct_summary.id)
             _upsert_fc_account(sid, full)
+            if not already_linked:
+                slots_remaining -= 1
+            kept += 1
         db.session.commit()
         # Immediately pull fresh balances for the newly linked accounts.
         try:
             refresh_bank_balances(current_store())
         except Exception as e:
             app.logger.warning(f"post-connect refresh failed: {e}")
-        flash(f"Connected {len(accounts)} account(s) via Stripe.", "success")
+        if skipped:
+            flash((f"Connected {kept} account(s); skipped {skipped} because the "
+                   f"per-store limit is {MAX_BANK_ACCOUNTS_PER_STORE}. Disconnect "
+                   "an existing account to free a slot."), "warning")
+        else:
+            flash(f"Connected {kept} account(s) via Stripe.", "success")
     except stripe.error.StripeError as e:
         app.logger.error(f"FC session retrieve failed: {e}")
         flash(f"Stripe error while completing the link: {e.user_message or str(e)}", "error")
@@ -6543,9 +6610,15 @@ def bank_stripe_return():
 @admin_required
 def bank_stripe_refresh():
     """Manually refresh all connected account balances."""
-    n = refresh_bank_balances(current_store())
-    flash(f"Refreshed {n} account(s)." if n else "Nothing to refresh.",
-          "success" if n else "error")
+    n, last_error = refresh_bank_balances(current_store())
+    if n and not last_error:
+        flash(f"Refreshed {n} account(s).", "success")
+    elif n and last_error:
+        flash(f"Refreshed {n} account(s); one or more failed: {last_error}", "warning")
+    elif last_error:
+        flash(f"Refresh failed: {last_error}", "error")
+    else:
+        flash("Nothing to refresh.", "error")
     return redirect(url_for("bank"))
 
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])

@@ -18,15 +18,28 @@
 {% block content %}
 
 {# ─────── Stripe Financial Connections (primary) ─────── #}
+{# Per-store cap on linked accounts. The button hides when at the cap;
+   the backend also enforces the same limit on POST /bank/stripe/connect. #}
+{% set connected_count = stripe_accounts|length %}
+{% set at_cap = connected_count >= max_bank_accounts %}
 <div class="card mb-3">
   <div class="card-header">
-    <span class="card-title">Connected Bank Accounts</span>
+    <span class="card-title">
+      Connected Bank Accounts
+      {% if stripe_accounts %}
+      <span class="text-sm text-muted" style="font-weight:400;margin-left:8px;">
+        {{ connected_count }} of {{ max_bank_accounts }}
+      </span>
+      {% endif %}
+    </span>
     {% if stripe_accounts %}
     <div style="display:flex;gap:8px;">
       <form method="POST" action="{{ url_for('bank_stripe_refresh') }}" style="margin:0;">
         <button type="submit" class="btn btn-outline btn-sm">Refresh</button>
       </form>
+      {% if not at_cap %}
       <button type="button" class="btn btn-primary btn-sm" data-fc-connect>＋ Connect another</button>
+      {% endif %}
     </div>
     {% endif %}
   </div>
@@ -76,6 +89,12 @@
         </div>
         {% endfor %}
       </div>
+      {% if at_cap %}
+      <div class="text-sm text-muted" style="margin-top:6px;">
+        You've reached the {{ max_bank_accounts }}-account limit.
+        Disconnect an existing account above to free up a slot.
+      </div>
+      {% endif %}
     {% else %}
       {# Empty state — the main "connect" CTA lives here. Uses the
          shared .empty-state primitive instead of a page-local
