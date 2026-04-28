@@ -503,7 +503,7 @@
         action="{{ url_for('tv_display_revoke_pairing', pairing_id=active_pairing.id) }}"
         onsubmit="return confirm('Unpair this Fire TV? It will stop showing the board on its next refresh, and you can pair a new device with a fresh code.');">
     <button type="submit" class="btn btn-outline btn-sm"
-            style="border-color:#ff4f6e;color:#ff4f6e;">
+            style="border-color:var(--db-negative);color:var(--db-negative);">
       Unpair this Fire TV
     </button>
   </form>
