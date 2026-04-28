@@ -4474,18 +4474,26 @@ def _render_tv_board(display, store):
                   .filter_by(display_id=display.id)
                   .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
     sections = []
+    # Global company list, deduplicated by first appearance — every
+    # country uses the same column structure, so the public board
+    # renders ONE shared top header row instead of per-country headers.
+    # If a country happens to omit a global company, its rate cells
+    # render as "—" via the rate_map fallback (see _CELL_PLACEHOLDER).
+    seen = set()
+    global_companies = []
+    for c in countries:
+        for slug in _csv_split(c.mt_companies):
+            if slug not in seen:
+                seen.add(slug)
+                global_companies.append(slug)
+    global_company_labels = [company_name_by_slug.get(s, s) for s in global_companies]
+    global_company_logos  = [company_logo_by_slug.get(s, "") for s in global_companies]
+
     for c in countries:
         banks = (TVDisplayPayoutBank.query
                   .filter_by(country_id=c.id)
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
-        # Stored slugs for the column headers; render-side gets the
-        # resolved display names + logo URLs zipped alongside.
-        company_slugs = _csv_split(c.mt_companies)
-        company_labels = [company_name_by_slug.get(slug, slug)
-                          for slug in company_slugs]
-        company_logos = [company_logo_by_slug.get(slug, "")
-                          for slug in company_slugs]
         rate_map = {}
         if banks:
             for r in (TVDisplayRate.query
@@ -4494,14 +4502,14 @@ def _render_tv_board(display, store):
                 rate_map[(r.bank_id, r.mt_company)] = r.rate
         sections.append({
             "country": c,
-            "banks": banks,
-            "companies":      company_slugs,    # canonical (rate-cell key)
-            "company_labels": company_labels,   # display-name fallback
-            "company_logos":  company_logos,    # URL or '' (text fallback)
-            "rates": rate_map,
+            "banks":   banks,
+            "rates":   rate_map,
         })
     return render_template("tv_display_public.html",
                             display=display, store=store, sections=sections,
+                            global_companies=global_companies,
+                            global_company_labels=global_company_labels,
+                            global_company_logos=global_company_logos,
                             bank_name_by_slug=bank_name_by_slug,
                             bank_logo_by_slug=bank_logo_by_slug)
 
