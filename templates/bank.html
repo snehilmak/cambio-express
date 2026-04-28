@@ -119,6 +119,70 @@
   </div>
 </div>
 
+{# ─────── Bank transactions — recent + sync button ─────── #}
+{% if stripe_accounts %}
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">
+      Recent Transactions
+      <span class="text-sm text-muted" style="font-weight:400;margin-left:8px;">
+        {{ sync_count_today }} of {{ sync_max_per_day }} sync(s) used today
+      </span>
+    </span>
+    <div style="display:flex;gap:8px;align-items:center;">
+      {% if sync_last_at %}
+      <span class="text-sm text-muted">Last synced {{ sync_last_at.strftime('%b %d, %I:%M %p UTC') }}</span>
+      {% endif %}
+      <form method="POST" action="{{ url_for('bank_stripe_sync_transactions') }}" style="margin:0;">
+        <button type="submit" class="btn btn-primary btn-sm"
+                {% if not sync_allowed %}disabled title="{{ sync_reason }}"{% endif %}>
+          Sync transactions
+        </button>
+      </form>
+      <a href="{{ url_for('bank_transactions') }}" class="btn btn-outline btn-sm">View all →</a>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if recent_txns %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Posted</th>
+            <th>Description</th>
+            <th>Status</th>
+            <th style="text-align:right;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in recent_txns %}
+          <tr>
+            <td class="mono text-sm">{{ t.posted_at.strftime('%m/%d') if t.posted_at else '—' }}</td>
+            <td>{{ t.description or '—' }}</td>
+            <td>
+              {% set sc = {'posted':'green','pending':'yellow','void':'red'} %}
+              <span class="badge badge-{{ sc.get(t.status, 'gray') }}">{{ t.status }}</span>
+            </td>
+            <td class="mono" style="text-align:right;color:{% if t.amount >= 0 %}var(--db-positive){% else %}var(--db-negative){% endif %};">
+              {% if t.amount >= 0 %}+{% endif %}${{ '{:,.2f}'.format(t.amount) }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-sm text-muted" style="text-align:center;padding:16px;">
+      No transactions pulled yet. Click <b>Sync transactions</b> above to fetch.
+    </div>
+    {% endif %}
+    {% if not sync_allowed and sync_reason %}
+    <div class="text-sm text-muted" style="margin-top:10px;">{{ sync_reason }}</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}
 {% block scripts %}
 {% if stripe_ready and stripe_publishable_key %}

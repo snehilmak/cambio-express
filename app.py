@@ -110,6 +110,12 @@ class Store(db.Model):
     billing_cycle = db.Column(db.String(10), default="")
     stripe_customer_id     = db.Column(db.String(60), default="")
     stripe_subscription_id = db.Column(db.String(60), default="")
+    # Phase 2 bank-transaction sync rate-limit. Each Transaction.list
+    # call costs per-account; we cap manual syncs at MAX_BANK_SYNCS_PER_DAY
+    # and require BANK_SYNC_COOLDOWN_MINUTES between them.
+    bank_sync_last_at      = db.Column(db.DateTime, nullable=True)
+    bank_sync_count_today  = db.Column(db.Integer, default=0)
+    bank_sync_count_date   = db.Column(db.Date, nullable=True)
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)
     trial_ends_at = db.Column(db.DateTime, nullable=True)
@@ -746,6 +752,44 @@ class StripeBankAccount(db.Model):
     @property
     def last_balance(self):
         return (self.last_balance_cents or 0) / 100.0
+
+class BankTransaction(db.Model):
+    """A transaction pulled from Stripe Financial Connections.
+
+    Cached locally so we can render the daily list without re-hitting
+    Stripe (each Transaction.list call is billed). Idempotent on
+    `stripe_transaction_id` — re-syncing the same window safely no-ops
+    rows we've already seen.
+
+    The status field tracks Stripe's transaction lifecycle:
+      pending  — visible but not yet posted to the bank ledger
+      posted   — settled
+      void     — reversed before posting
+
+    `category_slug` and `matched_rule_id` are populated by the rule
+    engine in Phase 3. Until then they stay null.
+    """
+    __tablename__ = "bank_transaction"
+    id                       = db.Column(db.Integer, primary_key=True)
+    store_id                 = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    stripe_bank_account_id   = db.Column(db.Integer, db.ForeignKey("stripe_bank_account.id"), nullable=False)
+    stripe_transaction_id    = db.Column(db.String(80), unique=True, nullable=False)
+    amount_cents             = db.Column(db.BigInteger, nullable=False)  # signed: + credit, - debit
+    currency                 = db.Column(db.String(8), default="usd")
+    description              = db.Column(db.String(500), default="")
+    posted_at                = db.Column(db.DateTime, nullable=True)
+    status                   = db.Column(db.String(20), default="posted")
+    category_slug            = db.Column(db.String(60), default="")
+    matched_rule_id          = db.Column(db.Integer, nullable=True)
+    created_at               = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (
+        db.Index("ix_bank_transaction_store_posted",
+                 "store_id", "posted_at"),
+    )
+
+    @property
+    def amount(self):
+        return (self.amount_cents or 0) / 100.0
 
 class StoreOwnerLink(db.Model):
     __tablename__ = "store_owner_link"
@@ -1810,6 +1854,16 @@ BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
 # typical MSB workflow (e.g., a checking account + an MSB-restricted
 # account at the same credit union). Disconnecting frees the slot.
 MAX_BANK_ACCOUNTS_PER_STORE = 2
+# Cost-control on Stripe Transaction.list (billed per call).
+# Manual syncs are capped at MAX_BANK_SYNCS_PER_DAY and must be
+# BANK_SYNC_COOLDOWN_MINUTES apart. Initial-connect auto-sync does not
+# count against the cap.
+BANK_SYNC_COOLDOWN_MINUTES = 15
+MAX_BANK_SYNCS_PER_DAY = 5
+# How many days back to pull on initial connect. Per-product
+# decision: yesterday + today only — minimal cost, still catches
+# any same-day deposits that haven't been entered into the daily book.
+INITIAL_SYNC_DAYS_BACK = 1
 
 def stripe_is_configured():
     """We can only start an FC session if Stripe is wired up."""
@@ -1936,6 +1990,134 @@ def refresh_bank_balances(store):
     if updated:
         db.session.commit()
     return updated, last_error
+
+def _can_sync_bank_transactions(store, now=None):
+    """Rate-limit gate for manual bank-transaction syncs.
+
+    Returns (allowed, reason, retry_after_seconds). Resets the daily
+    counter lazily when a new UTC day rolls over.
+    """
+    now = now or datetime.utcnow()
+    today = now.date()
+    if store.bank_sync_count_date != today:
+        # Lazy daily reset. Caller commits after recording the sync.
+        store.bank_sync_count_today = 0
+        store.bank_sync_count_date = today
+    if (store.bank_sync_count_today or 0) >= MAX_BANK_SYNCS_PER_DAY:
+        return (False,
+                f"Daily limit reached ({MAX_BANK_SYNCS_PER_DAY} syncs). Resets at midnight UTC.",
+                0)
+    if store.bank_sync_last_at:
+        elapsed = (now - store.bank_sync_last_at).total_seconds()
+        cooldown = BANK_SYNC_COOLDOWN_MINUTES * 60
+        if elapsed < cooldown:
+            wait = int(cooldown - elapsed)
+            mins = max(1, (wait + 59) // 60)
+            return (False,
+                    f"Please wait {mins} more minute(s) between syncs.",
+                    wait)
+    return True, "", 0
+
+def _record_bank_sync(store, now=None):
+    """Bump the rate-limit counters. Caller commits."""
+    now = now or datetime.utcnow()
+    today = now.date()
+    if store.bank_sync_count_date != today:
+        store.bank_sync_count_today = 0
+        store.bank_sync_count_date = today
+    store.bank_sync_count_today = (store.bank_sync_count_today or 0) + 1
+    store.bank_sync_last_at = now
+
+def _upsert_bank_transaction(store_id, account_row, api_obj):
+    """Persist (or refresh) a Stripe FC Transaction into our cache.
+    Idempotent on stripe_transaction_id."""
+    txn_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
+    existing = BankTransaction.query.filter_by(stripe_transaction_id=txn_id).first()
+    row = existing or BankTransaction(
+        store_id=store_id,
+        stripe_bank_account_id=account_row.id,
+        stripe_transaction_id=txn_id,
+        amount_cents=0,
+    )
+    amt = api_obj.get("amount") if isinstance(api_obj, dict) else getattr(api_obj, "amount", 0)
+    cur = api_obj.get("currency") if isinstance(api_obj, dict) else getattr(api_obj, "currency", "usd")
+    desc = api_obj.get("description") if isinstance(api_obj, dict) else getattr(api_obj, "description", "")
+    status = api_obj.get("status") if isinstance(api_obj, dict) else getattr(api_obj, "status", "posted")
+    transacted_at = (api_obj.get("transacted_at") if isinstance(api_obj, dict)
+                     else getattr(api_obj, "transacted_at", None))
+    try:
+        row.amount_cents = int(amt or 0)
+    except (TypeError, ValueError):
+        row.amount_cents = 0
+    row.currency = (cur or "usd").lower()
+    row.description = (desc or "")[:500]
+    row.status = status or "posted"
+    if transacted_at:
+        try:
+            row.posted_at = datetime.utcfromtimestamp(int(transacted_at))
+        except (TypeError, ValueError):
+            pass
+    if existing is None:
+        db.session.add(row)
+    db.session.flush()
+    return row, (existing is None)
+
+def sync_bank_transactions(store, since=None, until=None):
+    """Pull transactions from every enabled FC account on the store.
+
+    `since` / `until` are datetimes mapped to Stripe's
+    transacted_at[gte] / transacted_at[lte] filters (Stripe expects unix
+    seconds). When `since` is None, we use the latest posted_at we've
+    already cached for that account, falling back to the
+    INITIAL_SYNC_DAYS_BACK window. Stripe Transaction.list paginates
+    in 100s; we use auto_paging_iter to walk every page.
+
+    Returns (new_rows, total_seen, last_error). new_rows is the count
+    of rows we inserted (vs updated); total_seen counts every row
+    we touched. last_error is empty unless one or more accounts errored.
+    """
+    if not stripe_is_configured():
+        return 0, 0, "Stripe is not configured."
+    new_rows = 0
+    total = 0
+    last_error = ""
+    now = datetime.utcnow()
+    fallback_since = datetime.combine(
+        (now - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
+        datetime.min.time())
+    for acct in StripeBankAccount.query.filter_by(
+            store_id=store.id, enabled=True).all():
+        try:
+            # Resolve the lower bound: caller-provided > latest cached > fallback.
+            if since is not None:
+                lo = since
+            else:
+                cached_max = (db.session.query(db.func.max(BankTransaction.posted_at))
+                              .filter_by(stripe_bank_account_id=acct.id).scalar())
+                lo = cached_max or fallback_since
+            params = {
+                "account": acct.stripe_account_id,
+                "limit": 100,
+                "transacted_at": {"gte": int(lo.timestamp())},
+            }
+            if until is not None:
+                params["transacted_at"]["lte"] = int(until.timestamp())
+            for txn in stripe.financial_connections.Transaction.list(
+                    **params).auto_paging_iter():
+                _, inserted = _upsert_bank_transaction(store.id, acct, txn)
+                if inserted:
+                    new_rows += 1
+                total += 1
+        except stripe.error.StripeError as e:
+            msg = e.user_message or str(e)
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
+            app.logger.warning(f"FC txn sync failed for {acct.stripe_account_id}: {e}")
+        except Exception as e:
+            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
+            app.logger.exception(f"FC txn sync crashed for {acct.stripe_account_id}")
+    if total:
+        db.session.commit()
+    return new_rows, total, last_error
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
@@ -6486,11 +6668,27 @@ def bank():
     # the manual /bank/stripe/refresh route surfaces last_error in a flash
     # so operators can see why a refresh failed; the auto-refresh above
     # ignores it and renders silently.
+    # Rate-limit state for the Sync transactions button. Read-only —
+    # actual gate happens server-side in /bank/stripe/sync-transactions.
+    sync_allowed, sync_reason, sync_retry_after = _can_sync_bank_transactions(store)
+    today_count = (store.bank_sync_count_today or 0) if (
+        store.bank_sync_count_date == datetime.utcnow().date()) else 0
+    recent_txns = (BankTransaction.query.filter_by(store_id=sid)
+                   .order_by(BankTransaction.posted_at.desc(),
+                             BankTransaction.id.desc())
+                   .limit(10).all())
     return render_template("bank.html", user=user,
         stripe_accounts=stripe_accounts,
         stripe_ready=stripe_is_configured(),
         stripe_publishable_key=stripe_publishable_key(),
-        max_bank_accounts=MAX_BANK_ACCOUNTS_PER_STORE)
+        max_bank_accounts=MAX_BANK_ACCOUNTS_PER_STORE,
+        recent_txns=recent_txns,
+        sync_allowed=sync_allowed,
+        sync_reason=sync_reason,
+        sync_retry_after=sync_retry_after,
+        sync_count_today=today_count,
+        sync_max_per_day=MAX_BANK_SYNCS_PER_DAY,
+        sync_last_at=store.bank_sync_last_at)
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @admin_required
@@ -6522,13 +6720,13 @@ def bank_stripe_connect():
         customer_id = ensure_stripe_customer(store)
         fc_session = stripe.financial_connections.Session.create(
             account_holder={"type": "customer", "customer": customer_id},
-            permissions=["balances"],
-            # Pre-fetch balances during the linking flow itself —
-            # without this, balance.current is None when we retrieve
-            # immediately after connect and the UI shows $0 until the
-            # next manual refresh. Prefetch keeps the user inside the
-            # Stripe modal until the fetch completes.
-            prefetch=["balances"],
+            permissions=["balances", "transactions"],
+            # Pre-fetch balances + transactions during the linking flow
+            # itself — without this, balance.current is None on retrieve
+            # and Transaction.list returns nothing until Stripe's async
+            # fetcher catches up. Prefetch keeps the user inside the
+            # Stripe modal until both feeds are populated.
+            prefetch=["balances", "transactions"],
             filters={"countries": ["US"]},
             return_url=url_for("bank_stripe_return", _external=True),
         )
@@ -6590,11 +6788,21 @@ def bank_stripe_return():
                 slots_remaining -= 1
             kept += 1
         db.session.commit()
-        # Immediately pull fresh balances for the newly linked accounts.
+        # Immediately pull fresh balances + initial transaction window
+        # (yesterday + today) for the newly-linked accounts. The initial
+        # txn sync does NOT count against the per-store daily cap — it's
+        # part of the connect flow, not a discretionary user action.
         try:
             refresh_bank_balances(current_store())
         except Exception as e:
             app.logger.warning(f"post-connect refresh failed: {e}")
+        try:
+            initial_since = datetime.combine(
+                (datetime.utcnow() - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
+                datetime.min.time())
+            sync_bank_transactions(current_store(), since=initial_since)
+        except Exception as e:
+            app.logger.warning(f"post-connect initial txn sync failed: {e}")
         if skipped:
             flash((f"Connected {kept} account(s); skipped {skipped} because the "
                    f"per-store limit is {MAX_BANK_ACCOUNTS_PER_STORE}. Disconnect "
@@ -6620,6 +6828,90 @@ def bank_stripe_refresh():
     else:
         flash("Nothing to refresh.", "error")
     return redirect(url_for("bank"))
+
+@app.route("/bank/stripe/sync-transactions", methods=["POST"])
+@admin_required
+def bank_stripe_sync_transactions():
+    """Pull new transactions for every connected account, gated by the
+    per-store rate-limiter so we don't blow through Stripe billing.
+    Each Transaction.list call is metered, and a single click can
+    fan out to up to MAX_BANK_ACCOUNTS_PER_STORE accounts."""
+    store = current_store()
+    allowed, reason, retry_after = _can_sync_bank_transactions(store)
+    if not allowed:
+        flash(reason, "error")
+        return redirect(url_for("bank"))
+    new_rows, total, last_error = sync_bank_transactions(store)
+    # Always record the sync attempt — Stripe billed us regardless of
+    # how many rows came back. Caller's commit happens here.
+    _record_bank_sync(store)
+    db.session.commit()
+    if last_error and not total:
+        flash(f"Sync failed: {last_error}", "error")
+    elif last_error:
+        flash(f"Synced {new_rows} new transaction(s); one or more accounts errored: {last_error}",
+              "warning")
+    else:
+        used = store.bank_sync_count_today
+        remaining = MAX_BANK_SYNCS_PER_DAY - used
+        flash((f"Synced {new_rows} new transaction(s) "
+               f"({remaining} sync(s) remaining today)."),
+              "success" if total else "info")
+    return redirect(url_for("bank"))
+
+@app.route("/bank/transactions")
+@admin_required
+def bank_transactions():
+    """Paginated list of pulled bank transactions. Live-search per
+    CLAUDE.md invariant #14: ?partial=1 returns JSON, full GET returns
+    the page chrome."""
+    store = current_store()
+    sid = store.id
+    is_partial = request.args.get("partial") == "1"
+    page = max(1, request.args.get("page", default=1, type=int))
+    per_page = 50
+    q          = (request.args.get("q") or "").strip()
+    account_id = request.args.get("account", type=int)
+    date_from  = (request.args.get("date_from") or "").strip()
+    date_to    = (request.args.get("date_to") or "").strip()
+
+    qry = BankTransaction.query.filter_by(store_id=sid)
+    if account_id:
+        qry = qry.filter_by(stripe_bank_account_id=account_id)
+    if q and len(q) >= 2:
+        like = f"%{q}%"
+        qry = qry.filter(BankTransaction.description.ilike(like))
+    if date_from:
+        try:
+            d = datetime.strptime(date_from, "%Y-%m-%d")
+            qry = qry.filter(BankTransaction.posted_at >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            qry = qry.filter(BankTransaction.posted_at < d)
+        except ValueError:
+            pass
+    total = qry.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = min(page, total_pages)
+    rows = (qry.order_by(BankTransaction.posted_at.desc(),
+                         BankTransaction.id.desc())
+              .offset((page - 1) * per_page).limit(per_page).all())
+    accounts = (StripeBankAccount.query
+                 .filter_by(store_id=sid, enabled=True)
+                 .order_by(StripeBankAccount.connected_at.desc()).all())
+    ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
+               accounts=accounts, q=q, account_id=account_id,
+               date_from=date_from, date_to=date_to)
+    if is_partial:
+        return jsonify({
+            "html": render_template("_bank_transactions_table.html", **ctx),
+            "total": total, "page": page, "total_pages": total_pages,
+        })
+    return render_template("bank_transactions.html",
+        user=current_user(), **ctx)
 
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
 @admin_required
@@ -8104,7 +8396,8 @@ _STORE_OWNED_MODELS = [
     # matters for cascade sanity.
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    "MonthlyFinancial", "StripeBankAccount", "StoreOwnerLink",
+    # BankTransaction must purge before StripeBankAccount — it FKs to it.
+    "MonthlyFinancial", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
     # TVDisplay (store-keyed) — children handled by the explicit chain
@@ -8742,6 +9035,12 @@ _ADDED_COLUMNS = [
     # running DB; safe to remove via a backfill migration later.
     ("tv_display",     "pair_code",              "VARCHAR(8) DEFAULT ''"),
     ("tv_display",     "pair_code_expires_at",   "TIMESTAMP NULL"),
+    # Phase 2 bank-transaction sync — rate-limit accounting on Store.
+    # Each Stripe Transaction.list call is billed, so manual syncs are
+    # gated by a per-store cooldown (15 min) and daily cap (5/day).
+    ("store",          "bank_sync_last_at",      "TIMESTAMP NULL"),
+    ("store",          "bank_sync_count_today",  "INTEGER DEFAULT 0"),
+    ("store",          "bank_sync_count_date",   "DATE NULL"),
 ]
 
 def _ensure_added_columns():
