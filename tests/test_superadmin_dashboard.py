@@ -119,10 +119,10 @@ def test_chart_payload_shape(client):
     assert len(payload["signups"]["direct"]) == 90
     assert len(payload["signups"]["referral"]) == 90
 
-    # Plan: 4 categories (Trial/Basic/Pro/Inactive)
+    # Plan: 4 categories (Trial/Basic/Pro/Inactive). Colors are derived
+    # from CSS tokens client-side — see PLAN_COLORS in dashboard_superadmin.html.
     assert payload["plan"]["labels"] == ["Trial", "Basic", "Pro", "Inactive"]
     assert len(payload["plan"]["counts"]) == 4
-    assert len(payload["plan"]["colors"]) == 4
 
     # Volume: present even when empty
     assert "companies" in payload["volume"]

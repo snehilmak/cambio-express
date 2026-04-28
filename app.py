@@ -1515,10 +1515,10 @@ def _superadmin_dashboard_context():
         signup_referral.append(referral)
 
     plan_dist = [
-        {"label": "Trial",    "count": trial_count,    "color": "#ffb020"},
-        {"label": "Basic",    "count": basic_count,    "color": "#5ea9ff"},
-        {"label": "Pro",      "count": pro_count,      "color": "#3fff00"},
-        {"label": "Inactive", "count": inactive_count, "color": "#ff4d6d"},
+        {"label": "Trial",    "count": trial_count},
+        {"label": "Basic",    "count": basic_count},
+        {"label": "Pro",      "count": pro_count},
+        {"label": "Inactive", "count": inactive_count},
     ]
 
     top_referrers_raw = (

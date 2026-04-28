@@ -4,22 +4,22 @@
 {% block content %}
 
 <div class="stats-grid">
-  <div class="stat-card" style="--accent:#3b82f6;">
+  <div class="stat-card" style="--accent:var(--db-info);">
     <div class="stat-label">Total Transfers</div>
     <div class="stat-value">{{ total_transfers }}</div>
     <div class="stat-sub">All time</div>
   </div>
-  <div class="stat-card" style="--accent:#16a34a;">
+  <div class="stat-card" style="--accent:var(--db-positive);">
     <div class="stat-label">Today's Transfers</div>
     <div class="stat-value">{{ today_transfers }}</div>
     <div class="stat-sub">{{ today.strftime('%b %d, %Y') }}</div>
   </div>
-  <div class="stat-card" style="--accent:{% if pending_ach > 0 %}#dc2626{% else %}#16a34a{% endif %};">
+  <div class="stat-card" style="--accent:{% if pending_ach > 0 %}var(--db-negative){% else %}var(--db-positive){% endif %};">
     <div class="stat-label">Unreconciled ACH</div>
     <div class="stat-value">{{ pending_ach }}</div>
     <div class="stat-sub">{% if pending_ach > 0 %}Needs attention{% else %}All clear{% endif %}</div>
   </div>
-  <div class="stat-card" style="--accent:{% if today_report %}#16a34a{% else %}#ea580c{% endif %};">
+  <div class="stat-card" style="--accent:{% if today_report %}var(--db-positive){% else %}var(--db-warning){% endif %};">
     <div class="stat-label">Today's Daily Book</div>
     <div class="stat-value" style="font-size:18px;margin-top:10px;display:flex;align-items:center;gap:8px;">
       <span style="width:8px;height:8px;border-radius:999px;background:{% if today_report %}var(--db-neon){% else %}var(--db-warning){% endif %};{% if today_report %}box-shadow:0 0 8px var(--db-neon);{% endif %}"></span>
@@ -51,7 +51,7 @@
     {% endif %}
   </div>
   {% if month_report %}
-  <div class="stat-card" style="--accent:{% if month_report.net_income >= 0 %}#16a34a{% else %}#dc2626{% endif %};">
+  <div class="stat-card" style="--accent:{% if month_report.net_income >= 0 %}var(--db-positive){% else %}var(--db-negative){% endif %};">
     <div class="stat-label">Net Income ({{ today.strftime('%b') }})</div>
     <div class="stat-value" style="font-size:22px;">${{ '{:,.0f}'.format(month_report.net_income) }}</div>
     <div class="stat-sub"><a href="{{ url_for('monthly_report', year=today.year, month=today.month) }}" style="color:var(--db-neon);">View P&L →</a></div>

@@ -406,8 +406,7 @@
   },
   "plan": {
     "labels": {{ plan_dist|map(attribute='label')|list|tojson }},
-    "counts": {{ plan_dist|map(attribute='count')|list|tojson }},
-    "colors": {{ plan_dist|map(attribute='color')|list|tojson }}
+    "counts": {{ plan_dist|map(attribute='count')|list|tojson }}
   },
   "volume": {
     "companies": {{ volume_by_company|map(attribute='company')|list|tojson }},
@@ -437,10 +436,14 @@
   var NEON    = cssVar('--db-neon',     '#3fff00');
   var NEG     = cssVar('--db-negative', '#ff4d6d');
   var INFO    = cssVar('--db-info',     '#5ea9ff');
+  var WARNING = cssVar('--db-warning',  '#ffb020');
   var GRAY7   = cssVar('--db-gray-7',   '#9199a8');
   var GRAY3   = cssVar('--db-gray-3',   '#272c38');
   var GRAY6   = cssVar('--db-gray-6',   '#6b7280');
   var PAGE_BG = cssVar('--db-bg',       '#0b0d12');
+  // Plan-distribution donut: order matches plan_dist in app.py
+  // (Trial / Basic / Pro / Inactive).
+  var PLAN_COLORS = [WARNING, INFO, NEON, NEG];
 
   var common = {
     chart: {
@@ -495,7 +498,7 @@
       chart: Object.assign({}, common.chart, { type: 'donut', height: 260 }),
       series: DATA.plan.counts,
       labels: DATA.plan.labels,
-      colors: DATA.plan.colors,
+      colors: PLAN_COLORS,
       stroke: { show: true, width: 2, colors: [PAGE_BG] },
       dataLabels: { enabled: false },
       legend: { position: 'right', labels: { colors: GRAY7 }, markers: { radius: 4 } },
