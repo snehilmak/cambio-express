@@ -177,8 +177,8 @@ body {
 .tv-section-head {
   position: relative;
   display: flex; align-items: center;
-  padding: 10px 18px;
-  gap: 14px;
+  padding: 14px 22px;
+  gap: 16px;
   flex: 0 0 auto;
 }
 .tv-section-head::after {
@@ -186,7 +186,7 @@ body {
   height: 2px;
 }
 .tv-flag {
-  font-size: clamp(20px, 2.4vw, 30px);
+  font-size: clamp(24px, 3vw, 44px);
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -205,7 +205,7 @@ body {
 .tv-country-name {
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 700;
-  font-size: clamp(16px, 2vw, 26px);
+  font-size: clamp(18px, 2.4vw, 32px);
   letter-spacing: 0.01em;
   flex: 0 0 auto;
   margin-right: auto;
@@ -219,7 +219,7 @@ body {
 .tv-col-label {
   font-family: 'Inter', sans-serif;
   text-align: center;
-  font-size: clamp(10.5px, 1.2vw, 15px);
+  font-size: clamp(12px, 1.4vw, 18px);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -230,11 +230,12 @@ body {
   display: flex; align-items: center; justify-content: center;
 }
 /* Logo treatment for column headers + bank rows. Sized to read
-   at TV viewing distance (clamp grows with viewport). max-width
-   100% lets narrow columns scale logos down without overflowing. */
+   at TV viewing distance from across a customer-service room
+   (clamp grows aggressively with viewport). max-width 100% lets
+   narrow columns scale logos down without overflowing. */
 .tv-col-logo {
   max-width: 100%;
-  max-height: clamp(24px, 3.6vw, 56px);
+  max-height: clamp(36px, 5.5vw, 88px);
   object-fit: contain;
   /* On dark theme, white-only logos vanish against the dark
      section header. Brand logos on the column band sit on the
@@ -243,7 +244,7 @@ body {
 }
 .tv-bank-logo {
   max-width: 100%;
-  max-height: clamp(28px, 4vw, 64px);
+  max-height: clamp(40px, 6vw, 96px);
   object-fit: contain;
   vertical-align: middle;
 }
@@ -263,13 +264,13 @@ body {
 }
 .tv-bank {
   flex: 0 0 auto;
-  width: 22%;
-  min-width: 130px;
-  padding: 8px 16px;
+  width: 24%;
+  min-width: 150px;
+  padding: 12px 18px;
   display: flex; align-items: center;
   font-family: 'Space Grotesk', 'Inter', sans-serif;
   font-weight: 600;
-  font-size: clamp(13px, 1.6vw, 20px);
+  font-size: clamp(14px, 1.8vw, 22px);
 }
 .tv-cells {
   display: flex; flex: 1 1 auto;
@@ -330,7 +331,7 @@ body {
   gap: 12px;
 }
 .tv-board[data-orientation="portrait"] .tv-bank {
-  width: 30%; min-width: 110px;
+  width: 32%; min-width: 130px;
 }
 
 @media (orientation: portrait) {
@@ -339,15 +340,15 @@ body {
     gap: 12px;
   }
   .tv-board[data-orientation="auto"] .tv-bank {
-    width: 30%; min-width: 110px;
+    width: 32%; min-width: 130px;
   }
 }
 
 /* Small-viewport safety (someone tests on a laptop monitor). */
 @media (max-width: 640px) {
   .tv-board { padding: 14px 12px; gap: 10px; }
-  .tv-bank { width: 32%; min-width: 96px; padding: 6px 10px; }
-  .tv-section-head { padding: 8px 12px; gap: 8px; }
+  .tv-bank { width: 34%; min-width: 110px; padding: 8px 12px; }
+  .tv-section-head { padding: 10px 14px; gap: 10px; }
 }
 </style>
 </head>
