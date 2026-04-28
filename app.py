@@ -2240,7 +2240,7 @@ def _webauthn_rp_id():
     """The effective RP ID. Passkeys are cryptographically bound to
     this string — it has to match across registration + authentication
     and survive a login from any path on the same host. Prefer an
-    explicit env var (prod sets WEBAUTHN_RP_ID=dinerobook.onrender.com);
+    explicit env var (prod sets WEBAUTHN_RP_ID=dinerobook.com);
     otherwise strip the port off the request Host (localhost:5000 → localhost)."""
     explicit = os.environ.get("WEBAUTHN_RP_ID", "").strip()
     if explicit:
@@ -8121,7 +8121,7 @@ def send_trial_reminders(now=None, base_url=None):
     trial_reminder_sent_at; rerunning on the same day is a no-op."""
     now = now or datetime.utcnow()
     base_url = base_url or os.environ.get("APP_BASE_URL",
-                                          "https://dinerobook.onrender.com")
+                                          "https://dinerobook.com")
     sent = 0
     for store in Store.query.filter(
         Store.plan == "trial",
@@ -8459,7 +8459,7 @@ def seed_amazon_reviewer_cmd(password, keep_data):
         db.session.commit()
 
     # 6. Print everything the reviewer needs.
-    base_url = os.environ.get("BASE_URL", "https://dinerobook.onrender.com")
+    base_url = os.environ.get("BASE_URL", "https://dinerobook.com")
     login_url = f"{base_url.rstrip('/')}/login/{REVIEWER_SLUG}"
     click.echo("")
     click.echo("✅ Amazon Reviewer account ready")

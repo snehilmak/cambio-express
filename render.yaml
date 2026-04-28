@@ -18,6 +18,17 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
 
+      # ── Domain / WebAuthn ────────────────────────────────────
+      # Production runs on the dinerobook.com custom domain.
+      # WEBAUTHN_RP_ID pins the WebAuthn Relying Party ID — passkeys
+      # are cryptographically bound to this string, so changing it
+      # invalidates every existing passkey. Must match the page
+      # origin's effective domain or be a registrable suffix of it.
+      - key: WEBAUTHN_RP_ID
+        value: dinerobook.com
+      - key: APP_BASE_URL
+        value: https://dinerobook.com
+
       # ── Stripe ───────────────────────────────────────────────
       # These are required for billing (subscribe + cancel) and for the
       # new bank-sync flow via Stripe Financial Connections.
