@@ -26,9 +26,7 @@
       <form method="POST" action="{{ url_for('bank_stripe_refresh') }}" style="margin:0;">
         <button type="submit" class="btn btn-outline btn-sm">Refresh</button>
       </form>
-      <form method="POST" action="{{ url_for('bank_stripe_connect') }}" style="margin:0;">
-        <button type="submit" class="btn btn-primary btn-sm">＋ Connect another</button>
-      </form>
+      <button type="button" class="btn btn-primary btn-sm" data-fc-connect>＋ Connect another</button>
     </div>
     {% endif %}
   </div>
@@ -38,6 +36,14 @@
         <span class="banner-msg">
           Bank sync needs Stripe to be configured. The platform admin sets
           <code>STRIPE_SECRET_KEY</code> on the server.
+        </span>
+      </div>
+    {% elif not stripe_publishable_key %}
+      <div class="banner banner-warning">
+        <span class="banner-msg">
+          Stripe is partially configured. The platform admin needs to set
+          <code>STRIPE_PUBLISHABLE_KEY</code> so the bank-connect modal
+          can initialize.
         </span>
       </div>
     {% elif stripe_accounts %}
@@ -86,14 +92,77 @@
           We only see balances — never your bank login.
           <br>Included with your plan; no extra setup.
         </p>
-        <form method="POST" action="{{ url_for('bank_stripe_connect') }}" style="margin:0;">
-          <button type="submit" class="btn btn-primary">
-            Connect Bank via Stripe →
-          </button>
-        </form>
+        <button type="button" class="btn btn-primary" data-fc-connect>
+          Connect Bank via Stripe →
+        </button>
       </div>
     {% endif %}
   </div>
 </div>
 
+{% endblock %}
+{% block scripts %}
+{% if stripe_ready and stripe_publishable_key %}
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+/*
+ * Stripe Financial Connections — client-driven connect flow.
+ *
+ * The FC API does not expose a server-redirect URL; instead the
+ * browser opens the Stripe-hosted modal via stripe.js with a
+ * client_secret minted server-side. On success we navigate to
+ * /bank/stripe/return?session_id=... so the server can persist the
+ * linked accounts.
+ */
+(function () {
+  var pk = {{ stripe_publishable_key|tojson }};
+  if (!pk) return;
+  var stripe = Stripe(pk);
+  var connectUrl = {{ url_for('bank_stripe_connect')|tojson }};
+  var csrfToken = document.querySelector('meta[name="csrf-token"]');
+  csrfToken = csrfToken ? csrfToken.getAttribute('content') : '';
+
+  document.querySelectorAll('[data-fc-connect]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var origText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Opening Stripe…';
+      fetch(connectUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: csrfToken ? {'X-CSRFToken': csrfToken} : {}
+      })
+      .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, data: j}; }); })
+      .then(function (res) {
+        if (!res.ok || !res.data.clientSecret) {
+          alert(res.data.error || 'Could not start the bank connection.');
+          btn.disabled = false;
+          btn.textContent = origText;
+          return;
+        }
+        return stripe.collectFinancialConnectionsAccounts({
+          clientSecret: res.data.clientSecret
+        }).then(function (result) {
+          if (result.error) {
+            alert(result.error.message || 'Bank connection canceled.');
+            btn.disabled = false;
+            btn.textContent = origText;
+            return;
+          }
+          // Stripe.js resolves whether or not accounts were linked;
+          // hand off to the server with the session id so the return
+          // handler can fetch and persist any accounts attached.
+          window.location.href = res.data.returnUrl;
+        });
+      })
+      .catch(function (e) {
+        alert('Network error: ' + e);
+        btn.disabled = false;
+        btn.textContent = origText;
+      });
+    });
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

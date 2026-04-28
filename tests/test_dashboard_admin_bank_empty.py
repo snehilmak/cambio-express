@@ -19,30 +19,28 @@ def _bank_card(body):
 
 def test_connect_button_is_inside_empty_state(logged_in_client):
     """A fresh admin store has no Stripe bank connected — the empty
-    state + connect-button branch must render, and the form must sit
-    inside the centered .empty-state div."""
+    state + connect-button branch must render, and the connect CTA
+    must sit inside the centered .empty-state div. The dashboard CTA
+    is a link to /bank (where the Stripe.js modal lives) — the FC
+    connect flow itself happens on /bank, not on the dashboard."""
     resp = logged_in_client.get("/dashboard")
     assert resp.status_code == 200
     body = resp.data.decode()
 
     card = _bank_card(body)
-    # The empty-state copy must render (confirms we're on the expected branch).
     assert "No bank connected yet" in card
     assert "Connect Bank via Stripe" in card
 
-    # The Connect form must appear before .empty-state closes — i.e.
-    # it's nested inside the centered block. We find the start of the
-    # empty-state div and the matching close tag, and assert the form
-    # is between them.
-    empty_open  = card.find('<div class="empty-state"')
+    empty_open = card.find('<div class="empty-state"')
     assert empty_open != -1, ".empty-state div missing"
-    # Naively match the next </div> after the form open: the empty-state
-    # block has exactly one level of nested form, so the next </div>
-    # after the form's close is the wrapper close.
-    form_open  = card.find("<form", empty_open)
-    form_close = card.find("</form>", form_open)
-    empty_close_after = card.find("</div>", form_close)
-    assert form_open != -1 and form_close != -1 and empty_close_after != -1
-    # The form must be bracketed by the empty-state div.
-    assert empty_open < form_open < form_close < empty_close_after, \
-        "Connect Bank form escaped the centered .empty-state block"
+    # The CTA is now an <a href="/bank">; assert it sits inside the
+    # empty-state block. The closing </a> + the wrapper </div> after
+    # it must both come before .empty-state closes.
+    link_open  = card.find('<a ', empty_open)
+    link_close = card.find("</a>", link_open)
+    after_close = card.find("</div>", link_close)
+    assert link_open != -1 and link_close != -1 and after_close != -1
+    assert empty_open < link_open < link_close < after_close, \
+        "Connect Bank CTA escaped the centered .empty-state block"
+    assert 'href="/bank"' in card or "href=\"/bank\"" in card, \
+        "Dashboard CTA must link to /bank where the Stripe.js modal lives"
