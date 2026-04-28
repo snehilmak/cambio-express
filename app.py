@@ -1806,6 +1806,10 @@ def inject_theme():
 # removed in 2026 once Stripe FC was proven in production, including
 # the `simplefin_config` table (see `_drop_legacy_tables()`).
 BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
+# Hard cap on linked bank accounts per store. Two is enough for the
+# typical MSB workflow (e.g., a checking account + an MSB-restricted
+# account at the same credit union). Disconnecting frees the slot.
+MAX_BANK_ACCOUNTS_PER_STORE = 2
 
 def stripe_is_configured():
     """We can only start an FC session if Stripe is wired up."""
@@ -6485,7 +6489,8 @@ def bank():
     return render_template("bank.html", user=user,
         stripe_accounts=stripe_accounts,
         stripe_ready=stripe_is_configured(),
-        stripe_publishable_key=stripe_publishable_key())
+        stripe_publishable_key=stripe_publishable_key(),
+        max_bank_accounts=MAX_BANK_ACCOUNTS_PER_STORE)
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @admin_required
@@ -6503,6 +6508,16 @@ def bank_stripe_connect():
     if not stripe_publishable_key():
         return jsonify({"error": "STRIPE_PUBLISHABLE_KEY is not set; the FC modal can't initialize."}), 503
     store = current_store()
+    # Enforce the per-store account cap before we even mint an FC
+    # session. The UI already hides the button when at the cap, but
+    # this is the authoritative check in case someone POSTs directly.
+    existing_count = StripeBankAccount.query.filter_by(
+        store_id=store.id, enabled=True).count()
+    if existing_count >= MAX_BANK_ACCOUNTS_PER_STORE:
+        return jsonify({
+            "error": (f"You've reached the {MAX_BANK_ACCOUNTS_PER_STORE}-account "
+                      "limit. Disconnect an account first to free up a slot."),
+        }), 409
     try:
         customer_id = ensure_stripe_customer(store)
         fc_session = stripe.financial_connections.Session.create(
@@ -6553,18 +6568,39 @@ def bank_stripe_return():
         if not accounts:
             flash("No accounts were linked.", "error")
             return redirect(url_for("bank"))
+        # Per-store cap. We honor existing enabled rows AND any of the
+        # just-linked accounts that are already on file (re-link case),
+        # then accept up to the remaining slots.
+        existing_ids = {row.stripe_account_id for row in
+                        StripeBankAccount.query.filter_by(
+                            store_id=sid, enabled=True).all()}
+        slots_remaining = MAX_BANK_ACCOUNTS_PER_STORE - len(existing_ids)
+        kept = 0
+        skipped = 0
         for acct_summary in accounts:
+            already_linked = acct_summary.id in existing_ids
+            if not already_linked and slots_remaining <= 0:
+                skipped += 1
+                continue
             # The session returns a trimmed account object; retrieve it fully
             # so we get balance and institution metadata.
             full = stripe.financial_connections.Account.retrieve(acct_summary.id)
             _upsert_fc_account(sid, full)
+            if not already_linked:
+                slots_remaining -= 1
+            kept += 1
         db.session.commit()
         # Immediately pull fresh balances for the newly linked accounts.
         try:
             refresh_bank_balances(current_store())
         except Exception as e:
             app.logger.warning(f"post-connect refresh failed: {e}")
-        flash(f"Connected {len(accounts)} account(s) via Stripe.", "success")
+        if skipped:
+            flash((f"Connected {kept} account(s); skipped {skipped} because the "
+                   f"per-store limit is {MAX_BANK_ACCOUNTS_PER_STORE}. Disconnect "
+                   "an existing account to free a slot."), "warning")
+        else:
+            flash(f"Connected {kept} account(s) via Stripe.", "success")
     except stripe.error.StripeError as e:
         app.logger.error(f"FC session retrieve failed: {e}")
         flash(f"Stripe error while completing the link: {e.user_message or str(e)}", "error")
