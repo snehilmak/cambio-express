@@ -168,11 +168,11 @@
           <div class="empty-state" style="padding:16px 0;">
             No bank connected yet. Link your accounts securely via Stripe —
             included with your plan.
-            <form method="POST" action="{{ url_for('bank_stripe_connect') }}" style="margin:12px 0 0;">
-              <button type="submit" class="btn btn-primary btn-sm">
+            <div style="margin:12px 0 0;">
+              <a href="{{ url_for('bank') }}" class="btn btn-primary btn-sm">
                 Connect Bank via Stripe →
-              </button>
-            </form>
+              </a>
+            </div>
           </div>
         {% endif %}
       </div>

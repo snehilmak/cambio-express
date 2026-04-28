@@ -1367,6 +1367,7 @@ def stripe_health_check():
     """
     env = {
         "secret_key":            bool(os.environ.get("STRIPE_SECRET_KEY")),
+        "publishable_key":       bool(os.environ.get("STRIPE_PUBLISHABLE_KEY")),
         "webhook_secret":        bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
         "basic_price_id":        bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
         "basic_yearly_price_id": bool(os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID")),
@@ -1380,7 +1381,9 @@ def stripe_health_check():
               # superadmin overview show "No such price …" or "test/live
               # mismatch" without us having to guess at the cause.
               "price_errors": {"basic": "", "basic_yearly": "",
-                               "pro": "", "pro_yearly": ""}}
+                               "pro": "", "pro_yearly": ""},
+              "fc_ok": False, "fc_error": "",
+              "key_pair_match": True}
     if not env["secret_key"]:
         result["error"] = "STRIPE_SECRET_KEY is not configured."
         return result
@@ -1411,6 +1414,39 @@ def stripe_health_check():
             # versa). Truncate to keep the badge readable.
             msg = str(e)
             result["price_errors"][plan] = msg[:160]
+    # Publishable / secret key pairing: pk_test_ must go with sk_test_
+    # and pk_live_ with sk_live_. Mismatched keys make Stripe.js fail
+    # silently in the browser ("No such session") which is hard to
+    # diagnose without this hint.
+    pk = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+    if pk:
+        pk_mode = "live" if pk.startswith("pk_live_") else "test"
+        result["key_pair_match"] = (pk_mode == result.get("mode", ""))
+    # FC dry probe: try to create + immediately discard a Financial
+    # Connections session. Confirms the secret key has FC enabled and
+    # is paired correctly with the rest of the account.
+    if env["secret_key"]:
+        try:
+            stripe.financial_connections.Session.create(
+                account_holder={"type": "customer", "customer": "cus_test_invalid"},
+                permissions=["balances"],
+                filters={"countries": ["US"]},
+            )
+            # We don't actually expect this to succeed — the customer
+            # is fake. We're testing whether the API is reachable and
+            # the FC product is enabled on this account.
+            result["fc_ok"] = True
+        except stripe.error.InvalidRequestError as e:
+            # "No such customer" is the expected branch here — it means
+            # FC is enabled and our key is good; only the placeholder
+            # customer was rejected. Anything else is a real problem.
+            msg = str(e)
+            if "No such customer" in msg or "resource_missing" in msg:
+                result["fc_ok"] = True
+            else:
+                result["fc_error"] = msg[:160]
+        except Exception as e:
+            result["fc_error"] = f"{type(e).__name__}: {e}"[:160]
     return result
 
 def active_announcements():
@@ -1774,6 +1810,20 @@ BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
 def stripe_is_configured():
     """We can only start an FC session if Stripe is wired up."""
     return bool(os.environ.get("STRIPE_SECRET_KEY"))
+
+def stripe_publishable_key():
+    """The pk_test_/pk_live_ key the browser uses to load Stripe.js.
+    Required for the FC connect modal — Stripe.js can't initialize
+    without it."""
+    return os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+
+def stripe_mode():
+    """'live' if STRIPE_SECRET_KEY starts with sk_live_, else 'test'.
+    Empty string if no key is set."""
+    sk = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not sk:
+        return ""
+    return "live" if sk.startswith("sk_live_") else "test"
 
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
@@ -6408,17 +6458,25 @@ def bank():
         except Exception as e:
             app.logger.warning(f"bank() auto-refresh failed: {e}")
     return render_template("bank.html", user=user,
-        stripe_accounts=stripe_accounts, stripe_ready=stripe_is_configured())
+        stripe_accounts=stripe_accounts,
+        stripe_ready=stripe_is_configured(),
+        stripe_publishable_key=stripe_publishable_key())
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @admin_required
 def bank_stripe_connect():
-    """Kick off a Stripe Financial Connections session and redirect the
-    admin to Stripe's hosted auth flow. On success Stripe redirects the
-    browser back to bank_stripe_return."""
+    """Create a Stripe Financial Connections session and return its
+    client_secret as JSON. The browser then opens the Stripe-hosted FC
+    modal via stripe.js (collectFinancialConnectionsAccounts), which
+    settles the linking flow and POSTs the user back to
+    /bank/stripe/return?session_id=<id> on success.
+
+    Stripe's FC API does NOT expose a server-side hosted URL — the
+    browser drives the modal directly with the client_secret."""
     if not stripe_is_configured():
-        flash("Stripe isn't configured yet — ask the platform admin.", "error")
-        return redirect(url_for("bank"))
+        return jsonify({"error": "Stripe isn't configured yet — ask the platform admin."}), 503
+    if not stripe_publishable_key():
+        return jsonify({"error": "STRIPE_PUBLISHABLE_KEY is not set; the FC modal can't initialize."}), 503
     store = current_store()
     try:
         customer_id = ensure_stripe_customer(store)
@@ -6428,29 +6486,35 @@ def bank_stripe_connect():
             filters={"countries": ["US"]},
             return_url=url_for("bank_stripe_return", _external=True),
         )
-        # The Session object exposes a hosted URL the user completes in-browser.
-        hosted_url = getattr(fc_session, "url", None) or fc_session.get("url")
-        if not hosted_url:
-            flash("Stripe did not return a hosted link. Try again in a moment.", "error")
-            return redirect(url_for("bank"))
-        # Remember the session id so the return handler can fetch its accounts.
+        # Remember the session id server-side too — gives us a fallback
+        # path if Stripe.js can't echo the id back through the URL.
         session["fc_session_id"] = fc_session.id
-        return redirect(hosted_url, code=303)
+        return jsonify({
+            "clientSecret": fc_session.client_secret,
+            "sessionId":    fc_session.id,
+            "publishableKey": stripe_publishable_key(),
+            "returnUrl":    url_for("bank_stripe_return", session_id=fc_session.id),
+        })
     except stripe.error.StripeError as e:
         app.logger.error(f"FC session create failed: {e}")
-        flash(f"Could not start the bank connection: {e.user_message or str(e)}", "error")
-        return redirect(url_for("bank"))
+        msg = e.user_message or str(e)
+        return jsonify({"error": f"Could not start the bank connection: {msg}"}), 502
 
 @app.route("/bank/stripe/return")
 @admin_required
 def bank_stripe_return():
-    """Stripe redirects here after the user finishes linking an account.
-    We retrieve the FC session by id and persist any attached accounts."""
+    """Called by the browser after the FC modal finishes. Accepts
+    session_id from the query string (Stripe.js path) or falls back to
+    the server-side session value (for browsers that lose the query
+    after a redirect chain)."""
     sid = session["store_id"]
-    fc_session_id = session.pop("fc_session_id", None)
+    fc_session_id = (request.args.get("session_id")
+                     or session.pop("fc_session_id", None))
     if not fc_session_id:
         flash("No active bank-link session found.", "error")
         return redirect(url_for("bank"))
+    # Always clear the server-side copy now that we have an id in hand.
+    session.pop("fc_session_id", None)
     try:
         fc_session = stripe.financial_connections.Session.retrieve(
             fc_session_id, expand=["accounts"])

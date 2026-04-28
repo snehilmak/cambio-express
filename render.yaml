@@ -48,6 +48,13 @@ services:
         sync: false
       - key: STRIPE_PRO_YEARLY_PRICE_ID
         sync: false
+      # STRIPE_PUBLISHABLE_KEY → Stripe → Developers → API keys →
+      # Publishable key (starts with pk_test_ or pk_live_). Required by
+      # the bank-connect page so Stripe.js can open the Financial
+      # Connections modal client-side. Pair with STRIPE_SECRET_KEY:
+      # pk_test_ goes with sk_test_ and pk_live_ with sk_live_.
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
 
       # ── SMTP for password reset emails ───────────────────────
       # Until these are set, /forgot-password still works — it just logs

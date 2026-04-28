@@ -188,8 +188,40 @@
     {% endif %}
     <div class="info-row"><span class="k">STRIPE_SECRET_KEY</span>
       <span class="v">{% if stripe_health.env.secret_key %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">STRIPE_PUBLISHABLE_KEY</span>
+      <span class="v">
+        {% if stripe_health.env.publishable_key %}
+          {% if stripe_health.key_pair_match %}
+            <span class="badge badge-green">set</span>
+          {% else %}
+            <span class="badge badge-red">mode mismatch</span>
+          {% endif %}
+        {% else %}
+          <span class="badge badge-red">missing</span>
+        {% endif %}
+      </span></div>
+    {% if stripe_health.env.publishable_key and not stripe_health.key_pair_match %}
+    <div class="text-sm" style="color:var(--red);font-family:'JetBrains Mono',monospace;font-size:11.5px;margin:-6px 0 6px 0;">
+      Publishable key mode does not match the secret key. pk_test_ pairs with sk_test_; pk_live_ pairs with sk_live_.
+    </div>
+    {% endif %}
     <div class="info-row"><span class="k">STRIPE_WEBHOOK_SECRET</span>
       <span class="v">{% if stripe_health.env.webhook_secret %}<span class="badge badge-green">set</span>{% else %}<span class="badge badge-red">missing</span>{% endif %}</span></div>
+    <div class="info-row"><span class="k">Financial Connections</span>
+      <span class="v">
+        {% if not stripe_health.env.secret_key %}
+          <span class="badge badge-yellow">no key</span>
+        {% elif stripe_health.fc_ok %}
+          <span class="badge badge-green">enabled</span>
+        {% else %}
+          <span class="badge badge-red">unavailable</span>
+        {% endif %}
+      </span></div>
+    {% if stripe_health.fc_error %}
+    <div class="text-sm" style="color:var(--red);font-family:'JetBrains Mono',monospace;font-size:11.5px;margin:-6px 0 6px 0;word-break:break-word;">
+      {{ stripe_health.fc_error }}
+    </div>
+    {% endif %}
     {% macro price_row(label, env_set, ok, env_name, err) %}
     <div class="info-row" style="flex-wrap:wrap;">
       <span class="k">{{ label }}</span>
