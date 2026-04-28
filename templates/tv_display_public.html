@@ -71,6 +71,14 @@ body {
 .tv-section-head::after {
   background: var(--db-neon, #3fff00);
 }
+.tv-board-header {
+  background: #0a0a0a;
+  color: #fff;
+  border: 1px solid #1f242d;
+}
+.tv-board-header::after {
+  background: var(--db-neon, #3fff00);
+}
 .tv-row { border-top-color: #eef0f5; }
 .tv-row:nth-child(odd) { background: #f9fafc; }
 .tv-bank { color: #0a0a0a; }
@@ -104,6 +112,11 @@ body {
 [data-theme="dark"] .tv-section-head {
   background: #1f242d;
   color: #fff;
+}
+[data-theme="dark"] .tv-board-header {
+  background: #1f242d;
+  color: #fff;
+  border-color: #2a3040;
 }
 [data-theme="dark"] .tv-row { border-top-color: #1f242d; }
 [data-theme="dark"] .tv-row:nth-child(odd) { background: #181c24; }
@@ -249,6 +262,27 @@ body {
   vertical-align: middle;
 }
 
+/* Single shared company-header row. Mirrors .tv-row's column layout
+   so each company logo sits exactly above the rate cells it labels —
+   the .tv-bank spacer fills the bank-name column on the left. flex: 0 0
+   auto keeps it from competing with section bodies for vertical space. */
+.tv-board-header {
+  position: relative;
+  display: flex; align-items: stretch;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 8px 0;
+}
+.tv-board-header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0;
+  height: 2px;
+}
+.tv-bank-spacer {
+  /* Visual placeholder above the bank-name column. Inherits .tv-bank's
+     width/min-width so columns align with the body rows. */
+}
+
 /* Matrix body. Each row stretches to share section height equally;
    that way "more banks" automatically rebalances cell heights. */
 .tv-section-body {
@@ -370,6 +404,30 @@ body {
          adds them.</p>
     </div>
     {% endif %}
+    {% if sections and global_companies %}
+    {# Single shared company-header row. Every country uses the same
+       rate-cell columns underneath, so the operator-managed brand
+       logos render once at the top instead of repeating per-country.
+       Column widths match .tv-row so the headers line up exactly
+       above their rate cells. #}
+    <div class="tv-board-header">
+      <div class="tv-bank tv-bank-spacer" aria-hidden="true"></div>
+      <div class="tv-cells">
+        {% for slug in global_companies %}
+        {% set _idx = loop.index0 %}
+        {% set _logo = global_company_logos[_idx] %}
+        {% set _label = global_company_labels[_idx] %}
+        <div class="tv-col-label">
+          {% if _logo %}
+          <img class="tv-col-logo" src="{{ _logo }}" alt="{{ _label }}">
+          {% else %}
+          {{ _label }}
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     {% for section in sections %}
     <section class="tv-section">
       <div class="tv-section-head">
@@ -380,28 +438,6 @@ body {
         <span class="tv-flag" aria-hidden="true">{{ country_flag_html(section.country.country_code, size='1em') }}</span>
         {% endif %}
         <span class="tv-country-name">{{ section.country.country_name }}</span>
-        {% if section.companies %}
-        <div class="tv-cols">
-          {# Render logo if uploaded, otherwise the resolved
-             display_name. The visual contract: brand presence on
-             the column header is the single biggest "looks like
-             Xenok" cue. Falling back to text when no logo is
-             uploaded is intentional — a placeholder asset would
-             look worse than crisp typography. #}
-          {% for slug in section.companies %}
-          {% set _idx = loop.index0 %}
-          {% set _logo = section.company_logos[_idx] if section.company_logos else "" %}
-          {% set _label = section.company_labels[_idx] if section.company_labels else slug %}
-          <div class="tv-col-label">
-            {% if _logo %}
-            <img class="tv-col-logo" src="{{ _logo }}" alt="{{ _label }}">
-            {% else %}
-            {{ _label }}
-            {% endif %}
-          </div>
-          {% endfor %}
-        </div>
-        {% endif %}
       </div>
       <div class="tv-section-body">
         {% for bank in section.banks %}
@@ -416,7 +452,7 @@ body {
             {% endif %}
           </div>
           <div class="tv-cells">
-            {% for company in section.companies %}
+            {% for company in global_companies %}
             {% set rate = section.rates.get((bank.id, company)) %}
             <div class="tv-cell {% if rate is none %}empty{% endif %}">
               {% if rate is none %}
