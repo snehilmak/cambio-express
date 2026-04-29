@@ -11,6 +11,8 @@
         <th>Description</th>
         <th>Status</th>
         <th style="text-align:right;">Amount</th>
+        <th>Category</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -35,9 +37,47 @@
         <td class="mono" style="text-align:right;color:{% if t.amount >= 0 %}var(--db-positive){% else %}var(--db-negative){% endif %};">
           {% if t.amount >= 0 %}+{% endif %}${{ '{:,.2f}'.format(t.amount) }}
         </td>
+        <td>
+          {# Inline category dropdown — selecting a value submits the
+             single-row form via JS; "Uncategorized" submits the
+             uncategorize endpoint. The form is the row-action; no
+             modal, no extra clicks. #}
+          {% if t.category_slug %}
+          <span class="badge badge-{% if t.daily_line_item_id %}green{% else %}gray{% endif %}">
+            {{ category_label(t.category_slug) }}
+          </span>
+          {% else %}
+          <span class="text-muted text-sm">Uncategorized</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;white-space:nowrap;">
+          <form method="POST"
+                action="{{ url_for('bank_transaction_categorize', txn_id=t.id) }}"
+                style="display:inline-flex;gap:4px;align-items:center;margin:0;">
+            <select name="kind" class="select-sm" style="font-size:12px;padding:4px 6px;">
+              <option value="">— Categorize as… —</option>
+              {% for group_label, choices in category_groups %}
+              <optgroup label="{{ group_label }}">
+                {% for slug, label in choices %}
+                <option value="{{ slug }}" {% if t.category_slug == slug %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;">Save</button>
+          </form>
+          {% if t.category_slug %}
+          <form method="POST"
+                action="{{ url_for('bank_transaction_uncategorize', txn_id=t.id) }}"
+                style="display:inline;margin:0;margin-left:4px;"
+                onsubmit="return confirm('Un-reconcile this row? Linked daily-book line will be removed.')">
+            <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;color:var(--db-negative);border-color:var(--db-negative);">×</button>
+          </form>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:24px;">
+      <tr><td colspan="7" class="text-muted text-sm" style="text-align:center;padding:24px;">
         {% if q or account_id or date_from or date_to %}
         No transactions match these filters.
         {% else %}

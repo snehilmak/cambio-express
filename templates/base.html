@@ -110,10 +110,19 @@
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></span>
         ACH Batches
       </a>
-      <a href="{{ url_for('bank') }}" class="nav-link {% if request.endpoint == 'bank' %}active{% endif %}">
+      {# Bank sync is a Pro-plan feature. Trial users get Pro access
+         until their trial expires; Basic / expired-Trial / Inactive
+         admins are hidden from the sidebar so they don't click into
+         a flash-and-bounce. Superadmin always sees it. `store` and
+         `trial_status` are injected by inject_trial_context. #}
+      {% if user and (user.role == 'superadmin'
+                      or (store and store.plan == 'pro')
+                      or (store and store.plan == 'trial' and trial_status != 'expired')) %}
+      <a href="{{ url_for('bank') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('bank') %}active{% endif %}">
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
         Bank Sync
       </a>
+      {% endif %}
 
       {# Account = team, store info, billing — what every SaaS calls these settings. #}
       <div class="nav-section">Account</div>

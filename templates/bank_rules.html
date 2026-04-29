@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block title %}Bank Rules — DineroBook{% endblock %}
+{% block page_title %}Bank Rules{% endblock %}
+{% block head %}
+<style>
+  .rule-grid {
+    display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px;
+    margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .rule-grid { grid-template-columns: 1fr; } }
+
+  .rule-cell { font-size: 12.5px; color: var(--text); padding: 6px 0; }
+  .rule-cell .label {
+    font-size: 10px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    font-weight: 600; margin-bottom: 2px;
+  }
+  .rule-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1.5fr) 1fr 1fr 1fr 1fr 100px;
+    gap: 14px; align-items: center;
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .rule-row:hover { background: var(--surface-2); }
+  .rule-row .actions {
+    display: flex; gap: 4px; justify-content: flex-end;
+  }
+  .rule-disabled .rule-cell { opacity: 0.45; }
+
+  .rule-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+  }
+  .rule-form-grid .span-2 { grid-column: span 2; }
+  .rule-form-grid label {
+    font-size: 10.5px; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.6px;
+    font-weight: 600; margin-bottom: 4px; display: block;
+  }
+  .rule-form-grid input,
+  .rule-form-grid select,
+  .rule-form-grid textarea {
+    width: 100%; padding: 8px 10px;
+    font-size: 13px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: inherit;
+  }
+  .rule-form-grid input[type="checkbox"] { width: auto; }
+  .rule-form-grid .check-row {
+    display: flex; gap: 8px; align-items: center;
+    font-size: 13px; color: var(--text);
+  }
+  .rule-form-grid .check-row input { margin: 0; }
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="rule-grid">
+  {# ─────── Existing rules list ─────── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Your rules
+        <span class="text-sm text-muted" style="font-weight:400;margin-left:8px;">{{ rules|length }} total</span>
+      </span>
+      <a href="{{ url_for('bank_transactions') }}" class="btn btn-outline btn-sm">← Transactions</a>
+    </div>
+    <div class="card-body">
+      {% if rules %}
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.6px;padding:0 12px 8px;">
+        <div style="display:grid;grid-template-columns:minmax(180px,1.5fr) 1fr 1fr 1fr 1fr 100px;gap:14px;">
+          <div>Description</div>
+          <div>Sign</div>
+          <div>Amount</div>
+          <div>Account</div>
+          <div>Category</div>
+          <div></div>
+        </div>
+      </div>
+      {% for r in rules %}
+      <div class="rule-row {% if not r.enabled %}rule-disabled{% endif %}">
+        <div class="rule-cell">
+          {% if r.desc_match_type %}
+            <span class="text-sm text-muted">{{ r.desc_match_type.replace('_', ' ') }}</span>
+            <div class="mono" style="font-size:13px;font-weight:600;">{{ r.desc_match_value }}</div>
+          {% else %}
+            <span class="text-muted">any description</span>
+          {% endif %}
+          {% if r.description %}
+          <div class="text-sm text-muted" style="margin-top:2px;">{{ r.description }}</div>
+          {% endif %}
+        </div>
+        <div class="rule-cell">
+          {% if r.sign_filter %}
+            <span class="badge badge-{% if r.sign_filter == 'credit' %}green{% else %}gray{% endif %}">{{ r.sign_filter }}</span>
+          {% else %}<span class="text-muted">any</span>{% endif %}
+        </div>
+        <div class="rule-cell mono" style="font-size:12px;">
+          {% if r.amount_min_cents is none and r.amount_max_cents is none %}
+            <span class="text-muted">any</span>
+          {% elif r.amount_min_cents == r.amount_max_cents %}
+            ${{ '{:,.2f}'.format(r.amount_min_cents / 100) }}
+          {% else %}
+            {% if r.amount_min_cents is not none %}≥ ${{ '{:,.2f}'.format(r.amount_min_cents / 100) }}{% endif %}
+            {% if r.amount_min_cents is not none and r.amount_max_cents is not none %}<br>{% endif %}
+            {% if r.amount_max_cents is not none %}≤ ${{ '{:,.2f}'.format(r.amount_max_cents / 100) }}{% endif %}
+          {% endif %}
+        </div>
+        <div class="rule-cell">
+          {% if r.account_filter_id %}
+            {% set acct = (accounts | selectattr('id', 'equalto', r.account_filter_id) | first) %}
+            {% if acct %}<span class="text-sm">{{ acct.display_name or 'Account' }}{% if acct.last4 %} ••{{ acct.last4 }}{% endif %}</span>{% else %}<span class="text-muted">—</span>{% endif %}
+          {% else %}
+            <span class="text-muted">any</span>
+          {% endif %}
+        </div>
+        <div class="rule-cell">
+          <span class="badge badge-blue">{{ category_label(r.target_kind) }}</span>
+          {% if r.auto_post %}
+          <div class="text-sm text-muted" style="margin-top:2px;">↳ posts to daily book</div>
+          {% endif %}
+          {% if r.match_count %}
+          <div class="text-sm text-muted" style="margin-top:2px;">{{ r.match_count }} match(es)</div>
+          {% endif %}
+        </div>
+        <div class="actions">
+          <form method="POST" action="{{ url_for('bank_rule_toggle', rule_id=r.id) }}" style="margin:0;">
+            <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;">
+              {% if r.enabled %}Disable{% else %}Enable{% endif %}
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('bank_rule_delete', rule_id=r.id) }}" style="margin:0;"
+                onsubmit="return confirm('Delete this rule? Already-categorized transactions stay categorized.')">
+            <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;color:var(--db-negative);border-color:var(--db-negative);">×</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="text-sm text-muted" style="text-align:center;padding:32px 12px;">
+        No rules yet. Create one on the right →<br>
+        Until you do, you can categorize each transaction one at a time on the
+        <a href="{{ url_for('bank_transactions') }}">transactions page</a>.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ─────── Create-rule form ─────── #}
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Create rule</span>
+    </div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('bank_rule_new') }}">
+        <div class="rule-form-grid">
+          <div class="span-2">
+            <label>Description match (optional)</label>
+            <div style="display:flex;gap:8px;">
+              <select name="desc_match_type" style="flex:0 0 150px;">
+                <option value="">— Any —</option>
+                <option value="contains">contains</option>
+                <option value="starts_with">starts with</option>
+                <option value="equals">equals</option>
+                <option value="regex">regex</option>
+              </select>
+              <input type="text" name="desc_match_value" placeholder="e.g. EmagineNet">
+            </div>
+          </div>
+
+          <div>
+            <label>Sign (optional)</label>
+            <select name="sign_filter">
+              <option value="">— Any —</option>
+              <option value="debit">Debit (money out)</option>
+              <option value="credit">Credit (money in)</option>
+            </select>
+          </div>
+
+          <div>
+            <label>Account (optional)</label>
+            <select name="account_filter_id">
+              <option value="">— Any —</option>
+              {% for a in accounts %}
+              <option value="{{ a.id }}">{{ a.display_name or 'Account' }}{% if a.last4 %} ••{{ a.last4 }}{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label>Min amount $ (optional)</label>
+            <input type="number" name="amount_min" step="0.01" min="0" placeholder="e.g. 180.00">
+          </div>
+          <div>
+            <label>Max amount $ (optional)</label>
+            <input type="number" name="amount_max" step="0.01" min="0" placeholder="(blank = unbounded)">
+          </div>
+
+          <div class="span-2">
+            <label>Category to apply *</label>
+            <select name="target_kind" required>
+              <option value="">— Pick a category —</option>
+              {% for group_label, choices in category_groups %}
+              <optgroup label="{{ group_label }}">
+                {% for slug, label in choices %}
+                <option value="{{ slug }}">{{ label }}</option>
+                {% endfor %}
+              </optgroup>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div>
+            <label>Priority</label>
+            <input type="number" name="priority" value="100" min="1" max="999">
+          </div>
+          <div>
+            <label>&nbsp;</label>
+            <div class="check-row" style="padding-top:8px;">
+              <input type="checkbox" name="enabled" id="r_enabled" checked>
+              <label for="r_enabled" style="margin:0;text-transform:none;letter-spacing:normal;font-size:13px;">Enabled</label>
+            </div>
+          </div>
+
+          <div class="span-2 check-row">
+            <input type="checkbox" name="auto_post" id="r_auto_post" checked>
+            <label for="r_auto_post" style="margin:0;text-transform:none;letter-spacing:normal;font-size:13px;">
+              Auto-post to daily book when category is a daily-book line item
+            </label>
+          </div>
+
+          <div class="span-2">
+            <label>Note (optional)</label>
+            <input type="text" name="description" placeholder="e.g. EmagineNet monthly check-cashing software charge" maxlength="200">
+          </div>
+        </div>
+
+        <div style="margin-top:14px;display:flex;justify-content:flex-end;">
+          <button type="submit" class="btn btn-primary">Create rule</button>
+        </div>
+      </form>
+
+      <div class="text-sm text-muted" style="margin-top:18px;line-height:1.55;">
+        <b>How rules work:</b><br>
+        Set just the conditions you care about — leave the rest blank. The
+        first rule (lowest priority number) that matches a transaction wins.
+        Manual category overrides on the transactions page always beat
+        rules. Disabled rules are skipped.
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
