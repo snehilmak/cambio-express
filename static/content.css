@@ -257,6 +257,24 @@ select {
   padding-right: 32px;
 }
 
+/* Compact inline select for table-row actions (e.g. categorize a
+   bank transaction without leaving the row). Matches the design
+   system's input/select baseline but trims padding + font size so
+   it fits inside dense tables. The chevron + tokens are inherited
+   from the base `select` rule above. */
+.select-inline {
+  width: auto !important;
+  min-width: 180px;
+  padding: 6px 32px 6px 10px !important;
+  font-size: 12.5px !important;
+  border-radius: 8px !important;
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50% !important;
+}
+.select-inline:focus {
+  border-color: var(--db-neon-dim);
+  box-shadow: 0 0 0 2px var(--db-neon-glow-15);
+}
+
 /* ── Flash / banners ── */
 .flash {
   padding: 11px 16px;

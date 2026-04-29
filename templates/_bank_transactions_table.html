@@ -51,10 +51,16 @@
           {% endif %}
         </td>
         <td style="text-align:right;white-space:nowrap;">
+          {# Auto-submit on change — saves the customer a click per
+             transaction, which adds up fast on a daily reconcile pass.
+             The placeholder "— Categorize as… —" submits no value;
+             the onchange guard skips that case so the route never
+             gets called with an empty kind. #}
           <form method="POST"
                 action="{{ url_for('bank_transaction_categorize', txn_id=t.id) }}"
-                style="display:inline-flex;gap:4px;align-items:center;margin:0;">
-            <select name="kind" class="select-sm" style="font-size:12px;padding:4px 6px;">
+                style="display:inline;margin:0;">
+            <select name="kind" class="select-inline"
+                    onchange="if(this.value){this.form.submit();}">
               <option value="">— Categorize as… —</option>
               {% for group_label, choices in category_groups %}
               <optgroup label="{{ group_label }}">
@@ -64,12 +70,11 @@
               </optgroup>
               {% endfor %}
             </select>
-            <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;">Save</button>
           </form>
           {% if t.category_slug %}
           <form method="POST"
                 action="{{ url_for('bank_transaction_uncategorize', txn_id=t.id) }}"
-                style="display:inline;margin:0;margin-left:4px;"
+                style="display:inline;margin:0;margin-left:6px;"
                 onsubmit="return confirm('Un-reconcile this row? Linked daily-book line will be removed.')">
             <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:4px 8px;color:var(--db-negative);border-color:var(--db-negative);">×</button>
           </form>
