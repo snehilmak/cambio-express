@@ -61,7 +61,7 @@ Non-negotiables:
   the landing hero's `$` mark.
 
 ## Production deploy target (single source of truth)
-- **Web service**: `dinerobook` on Render → `https://dinerobook.onrender.com`
+- **Web service**: `dinerobook` on Render → `https://dinerobook.com` (custom domain; the underlying Render hostname `dinerobook.onrender.com` is no longer canonical)
 - **Database**: `dinerobook-db` on Render (linked via `fromDatabase:` in `render.yaml`)
 - The older `cashnet` service / `cambio-db` database are decommissioned.
   Never add references to them, never point env vars at them, never run
@@ -80,9 +80,11 @@ admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 `ADMIN_PASSWORD` env vars in prod.
 
 Passkey env (optional): `WEBAUTHN_RP_ID` pins the WebAuthn Relying
-Party ID in prod (set to `dinerobook.onrender.com`). Dev falls back to
-`request.host` with the port stripped, so `localhost:5000` works out
-of the box.
+Party ID in prod (set to `dinerobook.com`, the canonical custom
+domain). Dev falls back to `request.host` with the port stripped,
+so `localhost:5000` works out of the box. **Changing this value
+invalidates every existing passkey** — they're bound to the rpId
+that was active at registration time.
 
 ## Critical invariants — don't break these
 
