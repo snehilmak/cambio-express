@@ -11,7 +11,7 @@
 {% block content %}
 
 <div style="max-width:800px;margin:0 auto;text-align:center;margin-bottom:40px;">
-  <div style="font-family:'DM Serif Display',serif;font-size:28px;color:var(--navy);margin-bottom:10px;">Upgrade to keep your access</div>
+  <div style="font-family:'Space Grotesk','Inter',sans-serif;font-weight:700;font-size:28px;color:var(--text);margin-bottom:10px;">Upgrade to keep your access</div>
   <div style="color:var(--gray4);font-size:14px;">No contracts. Cancel anytime.</div>
 </div>
 
@@ -19,7 +19,7 @@
 
   <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:32px 28px;">
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gray4);margin-bottom:8px;">Basic</div>
-    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:var(--navy);line-height:1;">$35<span style="font-size:18px;color:var(--gray4);"> /mo</span></div>
+    <div style="font-family:'JetBrains Mono',Consolas,monospace;font-weight:700;font-size:40px;color:var(--text);line-height:1;font-variant-numeric:tabular-nums;">$35<span style="font-size:18px;color:var(--gray4);font-weight:500;"> /mo</span></div>
     {% if basic_yearly_enabled %}
     <div style="font-size:13px;color:var(--gray4);margin-bottom:4px;">or $350 / year — save $70</div>
     <div style="font-size:11px;color:var(--blue);font-weight:600;letter-spacing:0.4px;margin-bottom:20px;">2 MONTHS FREE WITH ANNUAL</div>
@@ -35,12 +35,12 @@
     </ul>
     <form method="POST" action="/subscribe/checkout" style="margin-bottom:10px;">
       <input type="hidden" name="plan" value="basic">
-      <button type="submit" style="width:100%;background:var(--blue);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Monthly · $35 / mo</button>
+      <button type="submit" style="width:100%;background:var(--blue);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Monthly · $35 / mo</button>
     </form>
     {% if basic_yearly_enabled %}
     <form method="POST" action="/subscribe/checkout">
       <input type="hidden" name="plan" value="basic_yearly">
-      <button type="submit" style="width:100%;background:transparent;color:var(--blue);border:1.5px solid var(--blue);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Yearly · $350 / yr</button>
+      <button type="submit" style="width:100%;background:transparent;color:var(--blue);border:1.5px solid var(--blue);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Yearly · $350 / yr</button>
     </form>
     {% endif %}
   </div>
@@ -48,7 +48,7 @@
   <div style="background:var(--navy);border:2px solid var(--gold);border-radius:14px;padding:32px 28px;position:relative;">
     <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 14px;border-radius:999px;white-space:nowrap;">MOST POPULAR</div>
     <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold2);margin-bottom:8px;">Pro</div>
-    <div style="font-family:'DM Serif Display',serif;font-size:40px;color:white;line-height:1;">$45<span style="font-size:18px;color:rgba(255,255,255,0.55);"> /mo</span></div>
+    <div style="font-family:'JetBrains Mono',Consolas,monospace;font-weight:700;font-size:40px;color:white;line-height:1;font-variant-numeric:tabular-nums;">$45<span style="font-size:18px;color:rgba(255,255,255,0.55);font-weight:500;"> /mo</span></div>
     {% if pro_yearly_enabled %}
     <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:4px;">or $420 / year — save $120</div>
     <div style="font-size:11px;color:var(--gold2);font-weight:600;letter-spacing:0.4px;margin-bottom:20px;">2 MONTHS FREE WITH ANNUAL</div>
@@ -63,12 +63,12 @@
     </ul>
     <form method="POST" action="/subscribe/checkout" style="margin-bottom:10px;">
       <input type="hidden" name="plan" value="pro">
-      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Monthly · $45 / mo</button>
+      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Monthly · $45 / mo</button>
     </form>
     {% if pro_yearly_enabled %}
     <form method="POST" action="/subscribe/checkout">
       <input type="hidden" name="plan" value="pro_yearly">
-      <button type="submit" style="width:100%;background:transparent;color:var(--gold2);border:1.5px solid var(--gold2);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">Yearly · $420 / yr</button>
+      <button type="submit" style="width:100%;background:transparent;color:var(--gold2);border:1.5px solid var(--gold2);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Yearly · $420 / yr</button>
     </form>
     {% endif %}
   </div>
