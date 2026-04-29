@@ -244,6 +244,80 @@ def test_recategorize_replaces_daily_line_item(client, test_store_id):
         assert line.kind == "cash_expense"
 
 
+def test_categorize_with_explicit_report_date(client, test_store_id):
+    """RDC case: bank posted on May 2 but the deposit happened May 1 9 PM.
+    Categorizing with an explicit report_date overrides posted_at."""
+    from datetime import date as ddate
+    from app import (BankTransaction, DailyLineItem, db,
+                     _categorize_bank_transaction)
+    _admin_login(client, test_store_id)
+    app = client.application
+    acct = _make_account(app, test_store_id)
+    posted = datetime(2026, 5, 2, 9, 30)  # bank posted next morning
+    tid = _make_txn(app, test_store_id, acct, amount_cents=12500,
+                    desc="REMOTE DEP COUNT#3", when=posted)
+    actual = ddate(2026, 5, 1)            # operator's deposit was prior evening
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        _categorize_bank_transaction(t, "check_deposit", report_date=actual)
+        db.session.commit()
+        line = db.session.get(DailyLineItem,
+                              db.session.get(BankTransaction, tid).daily_line_item_id)
+        assert line.report_date == actual
+
+
+def test_move_date_route_shifts_linked_line(client, test_store_id):
+    from datetime import date as ddate
+    from app import (BankTransaction, DailyLineItem, db,
+                     _categorize_bank_transaction)
+    _admin_login(client, test_store_id)
+    app = client.application
+    acct = _make_account(app, test_store_id)
+    tid = _make_txn(app, test_store_id, acct, amount_cents=5000,
+                    desc="x", when=datetime(2026, 5, 2, 9, 0))
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        _categorize_bank_transaction(t, "check_deposit")
+        db.session.commit()
+    resp = client.post(f"/bank/transactions/{tid}/move-date",
+                       data={"report_date": "2026-05-01"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    with client.application.app_context():
+        t = db.session.get(BankTransaction, tid)
+        line = db.session.get(DailyLineItem, t.daily_line_item_id)
+        assert line.report_date == ddate(2026, 5, 1)
+
+
+def test_move_date_route_rejects_invalid_date(client, test_store_id):
+    from app import BankTransaction, db, _categorize_bank_transaction
+    _admin_login(client, test_store_id)
+    app = client.application
+    acct = _make_account(app, test_store_id)
+    tid = _make_txn(app, test_store_id, acct, amount_cents=1000, desc="x")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        _categorize_bank_transaction(t, "check_deposit")
+        db.session.commit()
+    resp = client.post(f"/bank/transactions/{tid}/move-date",
+                       data={"report_date": "not-a-date"},
+                       follow_redirects=True)
+    assert b"Invalid date" in resp.data
+
+
+def test_move_date_route_rejects_uncategorized(client, test_store_id):
+    """No DailyLineItem to move when transaction is uncategorized."""
+    from app import db
+    _admin_login(client, test_store_id)
+    app = client.application
+    acct = _make_account(app, test_store_id)
+    tid = _make_txn(app, test_store_id, acct, amount_cents=1000, desc="x")
+    resp = client.post(f"/bank/transactions/{tid}/move-date",
+                       data={"report_date": "2026-05-01"},
+                       follow_redirects=True)
+    assert b"isn&#39;t linked" in resp.data or b"isn't linked" in resp.data
+
+
 def test_uncategorize_deletes_daily_line_item(client, test_store_id):
     from app import (BankTransaction, DailyLineItem, db,
                      _categorize_bank_transaction,
