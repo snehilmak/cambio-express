@@ -1975,8 +1975,8 @@ def refresh_bank_balances(store):
     """Pull fresh balances for every enabled account on the store.
 
     Stripe requires the `balances` feature to be refreshed explicitly when
-    the cached value is stale; we call Account.refresh(features=["balance"])
-    and then retrieve to capture the new snapshot.
+    the cached value is stale; we call Account.refresh_account(
+    features=["balance"]) and then retrieve to capture the new snapshot.
 
     Returns (updated_count, error_message_or_empty). The caller can
     surface error_message in a flash so the operator sees *why* a
@@ -1988,7 +1988,11 @@ def refresh_bank_balances(store):
     last_error = ""
     for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
         try:
-            stripe.financial_connections.Account.refresh(
+            # SDK note: the operation is `refresh_account` (not `refresh`).
+            # `refresh` is the inherited APIResource instance method that
+            # only re-fetches local state; calling it with kwargs raises
+            # "got an unexpected keyword argument 'features'".
+            stripe.financial_connections.Account.refresh_account(
                 acct.stripe_account_id, features=["balance"],
             )
             api_obj = stripe.financial_connections.Account.retrieve(acct.stripe_account_id)
@@ -2105,6 +2109,18 @@ def sync_bank_transactions(store, since=None, until=None):
     for acct in StripeBankAccount.query.filter_by(
             store_id=store.id, enabled=True).all():
         try:
+            # Idempotent self-heal: ensure this account is subscribed to
+            # the transactions feature. Accounts connected before the
+            # subscribe step was added to bank_stripe_return won't have
+            # any transactions otherwise. Stripe accepts the call on
+            # already-subscribed accounts without error.
+            try:
+                stripe.financial_connections.Account.subscribe(
+                    acct.stripe_account_id, features=["transactions"])
+            except stripe.error.StripeError as e:
+                app.logger.warning(
+                    f"FC transactions subscribe (sync) failed for "
+                    f"{acct.stripe_account_id}: {e}")
             # Resolve the lower bound: caller-provided > latest cached > fallback.
             if since is not None:
                 lo = since
@@ -6801,6 +6817,26 @@ def bank_stripe_return():
             # so we get balance and institution metadata.
             full = stripe.financial_connections.Account.retrieve(acct_summary.id)
             _upsert_fc_account(sid, full)
+            # Subscribe to the transactions feature on each linked account.
+            # Session-level permission alone is NOT enough — Stripe needs an
+            # account-level subscription before it will populate Transaction
+            # data (and before Transaction.list returns anything). Idempotent;
+            # safe to call on re-link. Best-effort — we still consider the
+            # account "kept" if the subscribe call fails.
+            try:
+                stripe.financial_connections.Account.subscribe(
+                    acct_summary.id, features=["transactions"])
+            except stripe.error.StripeError as e:
+                app.logger.warning(
+                    f"FC transactions subscribe failed for {acct_summary.id}: {e}")
+            # Trigger an immediate refresh so the first sync picks up data
+            # rather than waiting for Stripe's async fetcher.
+            try:
+                stripe.financial_connections.Account.refresh_account(
+                    acct_summary.id, features=["transactions"])
+            except stripe.error.StripeError as e:
+                app.logger.warning(
+                    f"FC transactions refresh failed for {acct_summary.id}: {e}")
             if not already_linked:
                 slots_remaining -= 1
             kept += 1

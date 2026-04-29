@@ -269,6 +269,8 @@ select {
 }
 .flash-success { background: rgba(63,255,0,0.08);  color: var(--db-neon);     border-color: rgba(63,255,0,0.30); }
 .flash-error   { background: rgba(255,77,109,0.08); color: var(--db-negative); border-color: rgba(255,77,109,0.30); }
+.flash-info    { background: rgba(94,169,255,0.08); color: var(--db-info);     border-color: rgba(94,169,255,0.30); }
+.flash-warning { background: rgba(255,176,32,0.08); color: var(--db-warning);  border-color: rgba(255,176,32,0.30); }
 .banner {
   padding: 12px 18px;
   border-radius: 10px;
