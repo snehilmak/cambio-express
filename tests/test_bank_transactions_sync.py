@@ -7,11 +7,18 @@ by manual smoke testing on /bank in test mode.
 from datetime import datetime, timedelta, date
 
 
-def _admin_login(client, store_id):
-    from app import User
+def _admin_login(client, store_id, *, plan="pro"):
+    """Log in as the test-store admin. Bank routes are Pro-only via
+    pro_required, so the default plan upgrade is what most tests need;
+    pass plan="basic" or "trial" to test the gate itself."""
+    from app import User, Store, db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
+        s = db.session.get(Store, store_id)
+        s.plan = plan
+        s.billing_cycle = "monthly"
+        db.session.commit()
     with client.session_transaction() as s:
         s["user_id"] = uid
         s["role"] = "admin"

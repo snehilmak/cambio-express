@@ -8,7 +8,10 @@
     <span class="card-title">All Bank Transactions
       <span class="text-sm text-muted" id="txnTotal" style="font-weight:400;margin-left:8px;">{{ total }} total</span>
     </span>
-    <a href="{{ url_for('bank') }}" class="btn btn-outline btn-sm">← Bank</a>
+    <div style="display:flex;gap:8px;">
+      <a href="{{ url_for('bank_rules') }}" class="btn btn-outline btn-sm">Manage rules</a>
+      <a href="{{ url_for('bank') }}" class="btn btn-outline btn-sm">← Bank</a>
+    </div>
   </div>
   <div class="card-body">
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:14px;">

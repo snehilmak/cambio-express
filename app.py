@@ -766,8 +766,12 @@ class BankTransaction(db.Model):
       posted   — settled
       void     — reversed before posting
 
-    `category_slug` and `matched_rule_id` are populated by the rule
-    engine in Phase 3. Until then they stay null.
+    `category_slug` is the daily-book line-item kind (one of
+    _LINE_ITEM_KINDS) OR a non-posting tag from
+    BANK_CATEGORIES_NON_POSTING. `matched_rule_id` is the BankRule that
+    auto-categorized this row (null when set manually). When the
+    category is a daily-book kind, `daily_line_item_id` links to the
+    DailyLineItem we created — un-reconcile deletes it.
     """
     __tablename__ = "bank_transaction"
     id                       = db.Column(db.Integer, primary_key=True)
@@ -781,6 +785,9 @@ class BankTransaction(db.Model):
     status                   = db.Column(db.String(20), default="posted")
     category_slug            = db.Column(db.String(60), default="")
     matched_rule_id          = db.Column(db.Integer, nullable=True)
+    daily_line_item_id       = db.Column(db.Integer,
+                                          db.ForeignKey("daily_line_item.id"),
+                                          nullable=True)
     created_at               = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (
         db.Index("ix_bank_transaction_store_posted",
@@ -790,6 +797,49 @@ class BankTransaction(db.Model):
     @property
     def amount(self):
         return (self.amount_cents or 0) / 100.0
+
+class BankRule(db.Model):
+    """Operator-managed rule that auto-categorizes BankTransactions on sync.
+
+    All match conditions are independently optional — a rule may be as
+    minimal as "description contains EmagineNet" or as specific as
+    "description contains EmagineNet AND amount = $180.00 AND debit on
+    account ••0210". Lower priority numbers match first; the first
+    matching enabled rule wins and stops further evaluation.
+
+    Manual categorization on a transaction (via the UI) sets
+    matched_rule_id=NULL — the rule is only credited when sync auto-
+    applies it. This lets us count true automations.
+    """
+    __tablename__ = "bank_rule"
+    id                  = db.Column(db.Integer, primary_key=True)
+    store_id            = db.Column(db.Integer, db.ForeignKey("store.id"),
+                                    nullable=False, index=True)
+    enabled             = db.Column(db.Boolean, default=True)
+    priority            = db.Column(db.Integer, default=100)
+
+    # All four conditions optional. desc_match_type "" means "skip
+    # description match"; if non-empty, desc_match_value is required.
+    desc_match_type     = db.Column(db.String(20), default="")  # "" | contains | starts_with | equals | regex
+    desc_match_value    = db.Column(db.String(500), default="")
+    sign_filter         = db.Column(db.String(10), default="")  # "" | credit | debit
+    amount_min_cents    = db.Column(db.Integer, nullable=True)  # absolute cents; None = unbounded
+    amount_max_cents    = db.Column(db.Integer, nullable=True)
+    account_filter_id   = db.Column(db.Integer,
+                                     db.ForeignKey("stripe_bank_account.id"),
+                                     nullable=True)
+
+    # Output: a daily-book line-item kind from _LINE_ITEM_KINDS, OR a
+    # non-posting tag from BANK_CATEGORIES_NON_POSTING.
+    target_kind         = db.Column(db.String(40), nullable=False)
+    auto_post           = db.Column(db.Boolean, default=True)
+
+    description         = db.Column(db.String(200), default="")  # operator note
+    match_count         = db.Column(db.Integer, default=0)
+    last_matched_at     = db.Column(db.DateTime, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at          = db.Column(db.DateTime, default=datetime.utcnow,
+                                     onupdate=datetime.utcnow)
 
 class StoreOwnerLink(db.Model):
     __tablename__ = "store_owner_link"
@@ -1712,6 +1762,40 @@ def admin_required(f):
         return f(*a,**k)
     return d
 
+def pro_required(f):
+    """Admin-required + the store must have Pro-tier feature access.
+
+    Bank sync (Stripe Financial Connections, transaction sync, rules,
+    reconcile) is gated behind:
+      - plan == "pro"      — paid Pro subscriber
+      - plan == "trial"    — 7-day trial grants Pro features by default
+                             (until get_trial_status reports "expired")
+    Stores on plan == "basic" or "inactive" are bounced to /subscribe
+    with a flash. Superadmin bypasses the gate so platform debugging
+    works regardless of impersonation context.
+    """
+    @wraps(f)
+    def d(*a, **k):
+        if "user_id" not in session:
+            return redirect(url_for("login"))
+        u = current_user()
+        if not u or u.role not in ("admin", "superadmin"):
+            flash("Admin access required.", "error")
+            return redirect(url_for("dashboard"))
+        if u.role == "superadmin":
+            return f(*a, **k)
+        store = current_store()
+        if not store:
+            flash("Bank sync requires a store context.", "error")
+            return redirect(url_for("dashboard"))
+        if store.plan == "pro":
+            return f(*a, **k)
+        if store.plan == "trial" and get_trial_status(store) != "expired":
+            return f(*a, **k)
+        flash("Bank sync is a Pro plan feature. Upgrade to enable it.", "error")
+        return redirect(url_for("subscribe"))
+    return d
+
 def superadmin_required(f):
     @wraps(f)
     def d(*a,**k):
@@ -2083,6 +2167,154 @@ def _upsert_bank_transaction(store_id, account_row, api_obj):
     db.session.flush()
     return row, (existing is None)
 
+# ── Bank reconcile + rules ──────────────────────────────────
+# Categories that can appear on a BankTransaction.category_slug. The
+# canonical set is _LINE_ITEM_KINDS (which auto-creates a DailyLineItem
+# on the transaction's date) plus these non-posting tags for cases
+# where the transaction is reconciled but shouldn't double-count in
+# the daily book — internal transfers between own accounts, MT ACH
+# withdrawals that already match an ACHBatch, or "ignore" for noise.
+BANK_CATEGORIES_NON_POSTING = {
+    "internal_transfer":  "Internal transfer",
+    "mt_ach_intermex":    "MT ACH — Intermex",
+    "mt_ach_maxi":        "MT ACH — Maxi",
+    "mt_ach_barri":       "MT ACH — Barri",
+    "ignore":             "Ignore (don't reconcile)",
+}
+
+def _bank_category_label(slug):
+    """Operator-friendly label for a category slug."""
+    if not slug:
+        return "Uncategorized"
+    if slug in BANK_CATEGORIES_NON_POSTING:
+        return BANK_CATEGORIES_NON_POSTING[slug]
+    if slug in _LINE_ITEM_KINDS:
+        return _LINE_ITEM_KINDS[slug][1].title()
+    return slug
+
+def _bank_category_groups():
+    """Grouped (group_label, [(slug, label), ...]) tuples for dropdowns.
+
+    The two groups stay separate in the UI so operators don't confuse
+    auto-posting kinds with non-posting tags.
+    """
+    daily = [(slug, meta[1].title()) for slug, meta in _LINE_ITEM_KINDS.items()]
+    other = list(BANK_CATEGORIES_NON_POSTING.items())
+    return [
+        ("Daily-book line items", daily),
+        ("Other (no daily-book impact)", other),
+    ]
+
+def _is_daily_book_kind(slug):
+    return slug in _LINE_ITEM_KINDS
+
+def _bank_rule_matches(rule, txn):
+    """True if every set condition on the rule matches the transaction.
+    Conditions left unset are treated as 'any'.
+
+    `rule.enabled` is None on a transient (un-persisted) row because
+    SQLAlchemy column defaults only fire on insert; treat None as True
+    so callers can match against a freshly-constructed rule.
+    """
+    if rule.enabled is False:
+        return False
+    # Description match
+    if rule.desc_match_type and rule.desc_match_value:
+        desc = (txn.description or "")
+        val = rule.desc_match_value
+        mt = rule.desc_match_type
+        if mt == "regex":
+            try:
+                if not re.search(val, desc, re.IGNORECASE):
+                    return False
+            except re.error:
+                return False
+        else:
+            d = desc.lower()
+            v = val.lower()
+            if mt == "contains" and v not in d:
+                return False
+            if mt == "starts_with" and not d.startswith(v):
+                return False
+            if mt == "equals" and d != v:
+                return False
+    # Sign filter
+    if rule.sign_filter == "credit" and (txn.amount_cents or 0) < 0:
+        return False
+    if rule.sign_filter == "debit" and (txn.amount_cents or 0) >= 0:
+        return False
+    # Amount range — both bounds use absolute cents
+    abs_cents = abs(txn.amount_cents or 0)
+    if rule.amount_min_cents is not None and abs_cents < rule.amount_min_cents:
+        return False
+    if rule.amount_max_cents is not None and abs_cents > rule.amount_max_cents:
+        return False
+    # Account filter
+    if rule.account_filter_id and rule.account_filter_id != txn.stripe_bank_account_id:
+        return False
+    return True
+
+def _find_matching_rule(store_id, txn):
+    """First enabled rule (lowest priority first) that matches the
+    transaction. None if no rule applies."""
+    rules = (BankRule.query
+             .filter_by(store_id=store_id, enabled=True)
+             .order_by(BankRule.priority.asc(), BankRule.id.asc()).all())
+    for rule in rules:
+        if _bank_rule_matches(rule, txn):
+            return rule
+    return None
+
+def _categorize_bank_transaction(txn, target_kind, rule=None, post_to_daily=True):
+    """Set the transaction's category. If target_kind is a daily-book
+    kind AND post_to_daily is True, also create a linked DailyLineItem
+    on the transaction's posted date. Caller commits.
+
+    Idempotent: re-categorizing a row removes the previously-linked
+    DailyLineItem (if any) before creating a new one, so editing a
+    rule and re-running doesn't leave orphan lines.
+    """
+    # Drop any prior auto-created DailyLineItem.
+    if txn.daily_line_item_id:
+        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
+        if old is not None:
+            db.session.delete(old)
+        txn.daily_line_item_id = None
+
+    txn.category_slug = target_kind or ""
+    txn.matched_rule_id = rule.id if rule else None
+
+    if rule is not None:
+        rule.match_count = (rule.match_count or 0) + 1
+        rule.last_matched_at = datetime.utcnow()
+
+    if post_to_daily and target_kind and _is_daily_book_kind(target_kind):
+        when = txn.posted_at or datetime.utcnow()
+        line = DailyLineItem(
+            store_id=txn.store_id,
+            report_date=when.date(),
+            kind=target_kind,
+            at_time=when.time(),
+            # The daily-book model expects positive amounts. We store
+            # the absolute value; the kind itself encodes whether it's
+            # an inflow or outflow for the daily report.
+            amount=abs(float(txn.amount_cents or 0) / 100.0),
+            note=(txn.description or "")[:120],
+        )
+        db.session.add(line)
+        db.session.flush()
+        txn.daily_line_item_id = line.id
+
+def _uncategorize_bank_transaction(txn):
+    """Clear category + delete linked DailyLineItem if any. Caller commits."""
+    if txn.daily_line_item_id:
+        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
+        if old is not None:
+            db.session.delete(old)
+        txn.daily_line_item_id = None
+    txn.category_slug = ""
+    txn.matched_rule_id = None
+
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
 
@@ -2137,9 +2369,18 @@ def sync_bank_transactions(store, since=None, until=None):
                 params["transacted_at"]["lte"] = int(until.timestamp())
             for txn in stripe.financial_connections.Transaction.list(
                     **params).auto_paging_iter():
-                _, inserted = _upsert_bank_transaction(store.id, acct, txn)
+                row, inserted = _upsert_bank_transaction(store.id, acct, txn)
                 if inserted:
                     new_rows += 1
+                    # Auto-apply rules only on freshly-inserted rows that
+                    # aren't already categorized. Re-syncs of existing
+                    # rows preserve any operator overrides.
+                    if not row.category_slug:
+                        rule = _find_matching_rule(store.id, row)
+                        if rule is not None:
+                            _categorize_bank_transaction(
+                                row, rule.target_kind,
+                                rule=rule, post_to_daily=rule.auto_post)
                 total += 1
         except stripe.error.StripeError as e:
             msg = e.user_message or str(e)
@@ -6675,7 +6916,7 @@ def batch_transfers(bid):
 
 # ── Bank (Stripe Financial Connections) ─────────────────────────
 @app.route("/bank")
-@admin_required
+@pro_required
 def bank():
     user = current_user()
     store = current_store()
@@ -6724,7 +6965,7 @@ def bank():
         sync_last_at=store.bank_sync_last_at)
 
 @app.route("/bank/stripe/connect", methods=["POST"])
-@admin_required
+@pro_required
 def bank_stripe_connect():
     """Create a Stripe Financial Connections session and return its
     client_secret as JSON. The browser then opens the Stripe-hosted FC
@@ -6778,7 +7019,7 @@ def bank_stripe_connect():
         return jsonify({"error": f"Could not start the bank connection: {msg}"}), 502
 
 @app.route("/bank/stripe/return")
-@admin_required
+@pro_required
 def bank_stripe_return():
     """Called by the browser after the FC modal finishes. Accepts
     session_id from the query string (Stripe.js path) or falls back to
@@ -6868,7 +7109,7 @@ def bank_stripe_return():
     return redirect(url_for("bank"))
 
 @app.route("/bank/stripe/refresh", methods=["POST"])
-@admin_required
+@pro_required
 def bank_stripe_refresh():
     """Manually refresh all connected account balances."""
     n, last_error = refresh_bank_balances(current_store())
@@ -6883,7 +7124,7 @@ def bank_stripe_refresh():
     return redirect(url_for("bank"))
 
 @app.route("/bank/stripe/sync-transactions", methods=["POST"])
-@admin_required
+@pro_required
 def bank_stripe_sync_transactions():
     """Pull new transactions for every connected account, gated by the
     per-store rate-limiter so we don't blow through Stripe billing.
@@ -6913,7 +7154,7 @@ def bank_stripe_sync_transactions():
     return redirect(url_for("bank"))
 
 @app.route("/bank/transactions")
-@admin_required
+@pro_required
 def bank_transactions():
     """Paginated list of pulled bank transactions. Live-search per
     CLAUDE.md invariant #14: ?partial=1 returns JSON, full GET returns
@@ -6957,7 +7198,9 @@ def bank_transactions():
                  .order_by(StripeBankAccount.connected_at.desc()).all())
     ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
                accounts=accounts, q=q, account_id=account_id,
-               date_from=date_from, date_to=date_to)
+               date_from=date_from, date_to=date_to,
+               category_groups=_bank_category_groups(),
+               category_label=_bank_category_label)
     if is_partial:
         return jsonify({
             "html": render_template("_bank_transactions_table.html", **ctx),
@@ -6966,8 +7209,176 @@ def bank_transactions():
     return render_template("bank_transactions.html",
         user=current_user(), **ctx)
 
+# ── Reconcile actions ───────────────────────────────────────
+@app.route("/bank/transactions/<int:txn_id>/categorize", methods=["POST"])
+@pro_required
+def bank_transaction_categorize(txn_id):
+    sid = session["store_id"]
+    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
+    target = (request.form.get("kind") or "").strip()
+    if not target:
+        flash("Pick a category before saving.", "error")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    if target not in _LINE_ITEM_KINDS and target not in BANK_CATEGORIES_NON_POSTING:
+        flash("Unknown category.", "error")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    _categorize_bank_transaction(txn, target, rule=None, post_to_daily=True)
+    db.session.commit()
+    flash(f"Categorized as {_bank_category_label(target)}.", "success")
+    return redirect(request.referrer or url_for("bank_transactions"))
+
+@app.route("/bank/transactions/<int:txn_id>/uncategorize", methods=["POST"])
+@pro_required
+def bank_transaction_uncategorize(txn_id):
+    sid = session["store_id"]
+    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
+    _uncategorize_bank_transaction(txn)
+    db.session.commit()
+    flash("Uncategorized; daily-book line removed.", "success")
+    return redirect(request.referrer or url_for("bank_transactions"))
+
+# ── Rules CRUD ──────────────────────────────────────────────
+def _parse_rule_form(form, sid):
+    """Pull + validate a BankRule's fields from form data. Returns a
+    dict of attribute updates plus an error string (empty on success).
+    Reused by both new and edit handlers."""
+    desc_match_type = (form.get("desc_match_type") or "").strip()
+    desc_match_value = (form.get("desc_match_value") or "").strip()
+    sign_filter = (form.get("sign_filter") or "").strip()
+    target_kind = (form.get("target_kind") or "").strip()
+    if not target_kind:
+        return None, "Pick a category to apply when this rule matches."
+    if target_kind not in _LINE_ITEM_KINDS and target_kind not in BANK_CATEGORIES_NON_POSTING:
+        return None, "Unknown category."
+    # Description match — both fields must be set together, or both empty.
+    if desc_match_type and not desc_match_value:
+        return None, "Enter a description value to match against."
+    if desc_match_value and not desc_match_type:
+        desc_match_type = "contains"
+    if desc_match_type and desc_match_type not in ("contains", "starts_with", "equals", "regex"):
+        return None, "Unknown description match type."
+    if sign_filter and sign_filter not in ("credit", "debit"):
+        return None, "Sign filter must be credit or debit."
+    # Amounts come in as positive dollar strings; store as absolute cents.
+    def _parse_dollars(label):
+        raw = (form.get(label) or "").strip()
+        if not raw:
+            return None, ""
+        try:
+            cents = int(round(float(raw) * 100))
+            if cents < 0:
+                return None, "Amounts must be non-negative."
+            return cents, ""
+        except ValueError:
+            return None, f"Invalid amount in {label}."
+    amount_min_cents, e1 = _parse_dollars("amount_min")
+    if e1: return None, e1
+    amount_max_cents, e2 = _parse_dollars("amount_max")
+    if e2: return None, e2
+    if (amount_min_cents is not None and amount_max_cents is not None
+            and amount_min_cents > amount_max_cents):
+        return None, "Min amount can't be greater than max."
+    # Account filter — must belong to the store.
+    account_filter_id = None
+    raw_acct = (form.get("account_filter_id") or "").strip()
+    if raw_acct:
+        try:
+            acct_id = int(raw_acct)
+        except ValueError:
+            return None, "Invalid account filter."
+        owned = StripeBankAccount.query.filter_by(
+            id=acct_id, store_id=sid).first()
+        if not owned:
+            return None, "Account filter does not belong to this store."
+        account_filter_id = acct_id
+    # At least one condition must be set — an empty rule would catch
+    # every transaction and is almost always a misconfiguration.
+    if (not desc_match_type and not sign_filter
+            and amount_min_cents is None and amount_max_cents is None
+            and account_filter_id is None):
+        return None, "Set at least one condition (description, sign, amount, or account)."
+    try:
+        priority = int(form.get("priority") or 100)
+    except ValueError:
+        priority = 100
+    return {
+        "enabled":           form.get("enabled") == "on",
+        "priority":          priority,
+        "desc_match_type":   desc_match_type,
+        "desc_match_value":  desc_match_value,
+        "sign_filter":       sign_filter,
+        "amount_min_cents":  amount_min_cents,
+        "amount_max_cents":  amount_max_cents,
+        "account_filter_id": account_filter_id,
+        "target_kind":       target_kind,
+        "auto_post":         form.get("auto_post") == "on",
+        "description":       (form.get("description") or "").strip()[:200],
+    }, ""
+
+@app.route("/bank/rules")
+@pro_required
+def bank_rules():
+    sid = session["store_id"]
+    rules = (BankRule.query.filter_by(store_id=sid)
+             .order_by(BankRule.priority.asc(), BankRule.id.asc()).all())
+    accounts = (StripeBankAccount.query.filter_by(store_id=sid, enabled=True)
+                .order_by(StripeBankAccount.connected_at.desc()).all())
+    return render_template("bank_rules.html",
+        user=current_user(), rules=rules, accounts=accounts,
+        category_groups=_bank_category_groups(),
+        category_label=_bank_category_label)
+
+@app.route("/bank/rules/new", methods=["POST"])
+@pro_required
+def bank_rule_new():
+    sid = session["store_id"]
+    fields, err = _parse_rule_form(request.form, sid)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("bank_rules"))
+    rule = BankRule(store_id=sid, **fields)
+    db.session.add(rule)
+    db.session.commit()
+    flash("Rule created.", "success")
+    return redirect(url_for("bank_rules"))
+
+@app.route("/bank/rules/<int:rule_id>/edit", methods=["POST"])
+@pro_required
+def bank_rule_edit(rule_id):
+    sid = session["store_id"]
+    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
+    fields, err = _parse_rule_form(request.form, sid)
+    if err:
+        flash(err, "error")
+        return redirect(url_for("bank_rules"))
+    for k, v in fields.items():
+        setattr(rule, k, v)
+    db.session.commit()
+    flash("Rule updated.", "success")
+    return redirect(url_for("bank_rules"))
+
+@app.route("/bank/rules/<int:rule_id>/toggle", methods=["POST"])
+@pro_required
+def bank_rule_toggle(rule_id):
+    sid = session["store_id"]
+    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
+    rule.enabled = not rule.enabled
+    db.session.commit()
+    flash(f"Rule { 'enabled' if rule.enabled else 'disabled' }.", "success")
+    return redirect(url_for("bank_rules"))
+
+@app.route("/bank/rules/<int:rule_id>/delete", methods=["POST"])
+@pro_required
+def bank_rule_delete(rule_id):
+    sid = session["store_id"]
+    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
+    db.session.delete(rule)
+    db.session.commit()
+    flash("Rule deleted.", "success")
+    return redirect(url_for("bank_rules"))
+
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
-@admin_required
+@pro_required
 def bank_stripe_disconnect(acct_id):
     """Disconnect a single Stripe FC account. We both mark it disabled
     locally and tell Stripe to revoke, so the account stops counting
@@ -8450,7 +8861,9 @@ _STORE_OWNED_MODELS = [
     "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     # BankTransaction must purge before StripeBankAccount — it FKs to it.
-    "MonthlyFinancial", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
+    # BankRule + BankTransaction must purge before StripeBankAccount —
+    # both FK to it.
+    "MonthlyFinancial", "BankRule", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "OwnerInviteCode", "Customer",
     "ReferralCode", "ReferralRedemption",
     # TVDisplay (store-keyed) — children handled by the explicit chain
@@ -9094,6 +9507,10 @@ _ADDED_COLUMNS = [
     ("store",          "bank_sync_last_at",      "TIMESTAMP NULL"),
     ("store",          "bank_sync_count_today",  "INTEGER DEFAULT 0"),
     ("store",          "bank_sync_count_date",   "DATE NULL"),
+    # Phase 3 reconcile — back-link from BankTransaction to the
+    # DailyLineItem we created when the row was categorized into a
+    # daily-book bucket. Lets "Un-reconcile" delete the line item.
+    ("bank_transaction", "daily_line_item_id",   "INTEGER NULL"),
 ]
 
 def _ensure_added_columns():

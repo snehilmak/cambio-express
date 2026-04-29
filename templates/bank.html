@@ -7,10 +7,8 @@
      bank widget but larger since this is the primary bank page. */
   .bank-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
   .bank-card .inst { font-size: 11px; color: var(--gray4); text-transform: uppercase; letter-spacing: 0.6px; }
-  .bank-card .acct-name { font-weight: 600; font-size: 15px; color: var(--navy); margin-top: 2px; }
-  [data-theme="dark"] .bank-card .acct-name { color: #f3f4f6; }
-  .bank-card .bal { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--navy); margin: 10px 0 4px; }
-  [data-theme="dark"] .bank-card .bal { color: #f3f4f6; }
+  .bank-card .acct-name { font-weight: 600; font-size: 15px; color: var(--text); margin-top: 2px; }
+  .bank-card .bal { font-family: 'JetBrains Mono', Consolas, monospace; font-size: 26px; font-weight: 700; color: var(--text); margin: 10px 0 4px; font-variant-numeric: tabular-nums; }
   .bank-card .asof { font-size: 11px; color: var(--gray4); }
   .bank-card .row-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
 </style>
