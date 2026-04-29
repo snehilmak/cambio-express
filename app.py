@@ -2265,14 +2265,20 @@ def _find_matching_rule(store_id, txn):
             return rule
     return None
 
-def _categorize_bank_transaction(txn, target_kind, rule=None, post_to_daily=True):
+def _categorize_bank_transaction(txn, target_kind, rule=None,
+                                  post_to_daily=True, report_date=None):
     """Set the transaction's category. If target_kind is a daily-book
-    kind AND post_to_daily is True, also create a linked DailyLineItem
-    on the transaction's posted date. Caller commits.
+    kind AND post_to_daily is True, also create a linked DailyLineItem.
+    Caller commits.
 
-    Idempotent: re-categorizing a row removes the previously-linked
-    DailyLineItem (if any) before creating a new one, so editing a
-    rule and re-running doesn't leave orphan lines.
+    `report_date` (optional, datetime.date) overrides the daily-book
+    line's date. Used for the RDC case where the bank posts the
+    transaction next morning but the cash-handling event belongs on
+    the previous day's book. When None, defaults to the transaction's
+    posted_at date.
+
+    Idempotent: re-categorizing removes the previously-linked
+    DailyLineItem (if any) before creating a fresh one.
     """
     # Drop any prior auto-created DailyLineItem.
     if txn.daily_line_item_id:
@@ -2290,9 +2296,10 @@ def _categorize_bank_transaction(txn, target_kind, rule=None, post_to_daily=True
 
     if post_to_daily and target_kind and _is_daily_book_kind(target_kind):
         when = txn.posted_at or datetime.utcnow()
+        line_date = report_date if report_date is not None else when.date()
         line = DailyLineItem(
             store_id=txn.store_id,
-            report_date=when.date(),
+            report_date=line_date,
             kind=target_kind,
             at_time=when.time(),
             # The daily-book model expects positive amounts. We store
@@ -7196,11 +7203,21 @@ def bank_transactions():
     accounts = (StripeBankAccount.query
                  .filter_by(store_id=sid, enabled=True)
                  .order_by(StripeBankAccount.connected_at.desc()).all())
+    # Pre-fetch any linked DailyLineItems so the row template can show
+    # the current report_date in the per-row date picker without an
+    # N+1 lookup. Map by id; rows without a link get None.
+    linked_ids = [r.daily_line_item_id for r in rows if r.daily_line_item_id]
+    line_by_id = {}
+    if linked_ids:
+        for line in DailyLineItem.query.filter(
+                DailyLineItem.id.in_(linked_ids)).all():
+            line_by_id[line.id] = line
     ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
                accounts=accounts, q=q, account_id=account_id,
                date_from=date_from, date_to=date_to,
                category_groups=_bank_category_groups(),
-               category_label=_bank_category_label)
+               category_label=_bank_category_label,
+               line_by_id=line_by_id)
     if is_partial:
         return jsonify({
             "html": render_template("_bank_transactions_table.html", **ctx),
@@ -7222,7 +7239,20 @@ def bank_transaction_categorize(txn_id):
     if target not in _LINE_ITEM_KINDS and target not in BANK_CATEGORIES_NON_POSTING:
         flash("Unknown category.", "error")
         return redirect(request.referrer or url_for("bank_transactions"))
-    _categorize_bank_transaction(txn, target, rule=None, post_to_daily=True)
+    # Optional date override — supports the RDC case where the bank
+    # posted the entry the next morning but it should land on the
+    # previous day's daily book.
+    override_date = None
+    raw_date = (request.form.get("report_date") or "").strip()
+    if raw_date:
+        try:
+            override_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
+        except ValueError:
+            flash("Invalid date.", "error")
+            return redirect(request.referrer or url_for("bank_transactions"))
+    _categorize_bank_transaction(txn, target, rule=None,
+                                  post_to_daily=True,
+                                  report_date=override_date)
     db.session.commit()
     flash(f"Categorized as {_bank_category_label(target)}.", "success")
     return redirect(request.referrer or url_for("bank_transactions"))
@@ -7235,6 +7265,39 @@ def bank_transaction_uncategorize(txn_id):
     _uncategorize_bank_transaction(txn)
     db.session.commit()
     flash("Uncategorized; daily-book line removed.", "success")
+    return redirect(request.referrer or url_for("bank_transactions"))
+
+@app.route("/bank/transactions/<int:txn_id>/move-date", methods=["POST"])
+@pro_required
+def bank_transaction_move_date(txn_id):
+    """Re-date the linked DailyLineItem. Use case: the bank posted the
+    transaction next morning (e.g. RDC dropped at 9 PM) but the cash-
+    handling event belongs on the previous day's book."""
+    sid = session["store_id"]
+    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
+    if not txn.daily_line_item_id:
+        flash("This transaction isn't linked to a daily-book line.", "error")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    raw = (request.form.get("report_date") or "").strip()
+    if not raw:
+        flash("Pick a date.", "error")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    try:
+        new_date = datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        flash("Invalid date.", "error")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    line = db.session.get(DailyLineItem, txn.daily_line_item_id)
+    if line is None:
+        # Linked line was deleted out from under us — clear the link
+        # silently so the row goes back to its uncategorized look.
+        txn.daily_line_item_id = None
+        db.session.commit()
+        flash("Linked line not found; cleared the link.", "warning")
+        return redirect(request.referrer or url_for("bank_transactions"))
+    line.report_date = new_date
+    db.session.commit()
+    flash(f"Moved to {new_date.isoformat()}.", "success")
     return redirect(request.referrer or url_for("bank_transactions"))
 
 # ── Rules CRUD ──────────────────────────────────────────────

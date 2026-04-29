@@ -38,14 +38,24 @@
           {% if t.amount >= 0 %}+{% endif %}${{ '{:,.2f}'.format(t.amount) }}
         </td>
         <td>
-          {# Inline category dropdown — selecting a value submits the
-             single-row form via JS; "Uncategorized" submits the
-             uncategorize endpoint. The form is the row-action; no
-             modal, no extra clicks. #}
           {% if t.category_slug %}
           <span class="badge badge-{% if t.daily_line_item_id %}green{% else %}gray{% endif %}">
             {{ category_label(t.category_slug) }}
           </span>
+          {% if t.daily_line_item_id %}
+          {# Move-date affordance — only meaningful when a DailyLineItem
+             is linked. Use case: RDC dropped at 9 PM but bank posted
+             next morning; operator picks the previous day here. #}
+          {% set linked = (line_by_id[t.daily_line_item_id] if line_by_id else None) %}
+          <form method="POST" action="{{ url_for('bank_transaction_move_date', txn_id=t.id) }}"
+                style="margin:6px 0 0 0;display:flex;gap:4px;align-items:center;">
+            <span class="text-sm text-muted">on</span>
+            <input type="date" name="report_date"
+                   value="{% if linked %}{{ linked.report_date.isoformat() }}{% endif %}"
+                   class="select-inline" style="min-width:0;width:auto;padding:4px 8px;font-size:12px;"
+                   onchange="this.form.submit();">
+          </form>
+          {% endif %}
           {% else %}
           <span class="text-muted text-sm">Uncategorized</span>
           {% endif %}
