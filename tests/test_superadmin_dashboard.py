@@ -79,12 +79,12 @@ def test_kpi_counts_reflect_plan_split(client):
     )
     assert m and int(m.group(1)) == 3, "Paid KPI should be 3"
 
-    # Est. MRR: 2 × $20 + 1 × ($300/12 ≈ $25) = $65
+    # Est. MRR: 2 × $35 (basic monthly) + 1 × ($420/12 = $35 pro yearly) = $105
     m = re.search(
         r'<div class="stat-label">Est\. MRR</div>\s*<div class="stat-value">\$(\d[\d,]*)</div>',
         body,
     )
-    assert m and int(m.group(1).replace(",", "")) == 65, \
+    assert m and int(m.group(1).replace(",", "")) == 105, \
         f"MRR should amortize yearly plans: got {m.group(1) if m else 'nothing'}"
 
 
