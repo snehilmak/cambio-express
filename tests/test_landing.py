@@ -32,10 +32,10 @@ def test_landing_has_pricing(client):
     """All three plan prices must render so the pricing section never
     silently regresses to a single tier."""
     resp = client.get("/")
-    # Trial (free), Basic ($20), Pro ($30) — each plan's headline price.
+    # Trial (free), Basic ($35), Pro ($45) — each plan's headline price.
     assert b"$0" in resp.data
-    assert b"$20" in resp.data
-    assert b"$30" in resp.data
+    assert b"$35" in resp.data
+    assert b"$45" in resp.data
 
 def test_landing_has_signup_link(client):
     resp = client.get("/")

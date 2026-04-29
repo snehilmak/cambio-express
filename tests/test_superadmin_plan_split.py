@@ -66,35 +66,35 @@ def test_plan_counts_split_by_cycle(client):
     basic = card_text("Basic")
     # Total count in headline: 2 monthly + 1 yearly = 3
     assert ">3<" in basic
-    # Monthly row shows "2" and "$40/mo"; yearly row shows "1" and "$17/mo"
-    # ($200/yr / 12 = $16.67 → rounded to 17).
-    assert ">2<" in basic and "$40/mo" in basic
-    assert ">1<" in basic and "$17/mo" in basic
+    # Monthly row shows "2" and "$70/mo" (2 × $35); yearly row shows
+    # "1" and "$29/mo" ($350/yr / 12 = $29.17 → rounded to 29).
+    assert ">2<" in basic and "$70/mo" in basic
+    assert ">1<" in basic and "$29/mo" in basic
 
     pro = card_text("Pro")
     # Total: 1 monthly + 2 yearly = 3
     assert ">3<" in pro
-    # Monthly 1 × $30 = $30/mo; yearly 2 × $300 / 12 = $50/mo.
-    assert ">1<" in pro and "$30/mo" in pro
-    assert ">2<" in pro and "$50/mo" in pro
+    # Monthly 1 × $45 = $45/mo; yearly 2 × $420 / 12 = $70/mo.
+    assert ">1<" in pro and "$45/mo" in pro
+    assert ">2<" in pro and "$70/mo" in pro
 
 
 def test_estimated_mrr_is_amortized_total(client):
     """Est. MRR combines monthly (at rate) + yearly (at rate/12)."""
     _superadmin_client(client)
-    _make_store(client, plan="basic", billing_cycle="monthly", slug_suffix="m1")  # $20
-    _make_store(client, plan="pro",   billing_cycle="yearly",  slug_suffix="y1")  # $25
-    # Expected MRR: 20 + 25 = 45.
+    _make_store(client, plan="basic", billing_cycle="monthly", slug_suffix="m1")  # $35
+    _make_store(client, plan="pro",   billing_cycle="yearly",  slug_suffix="y1")  # $420/12 = $35
+    # Expected MRR: 35 + 35 = 70.
 
     resp = client.get("/superadmin/controls?tab=overview")
     body = resp.data.decode()
-    # The Est. MRR card shows "$45" as its stat-value.
+    # The Est. MRR card shows "$70" as its stat-value.
     m = re.search(
         r'<div class="stat-label">\s*Est\. MRR\s*</div>\s*<div class="stat-value">\$(\d[\d,]*)</div>',
         body,
     )
     assert m, "MRR card not found"
-    assert int(m.group(1).replace(",", "")) == 45
+    assert int(m.group(1).replace(",", "")) == 70
 
 
 def test_superadmin_overview_still_lists_trial_and_inactive(client):

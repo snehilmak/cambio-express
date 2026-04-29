@@ -6,28 +6,28 @@ def test_subscribe_requires_login(client):
 def test_subscribe_loads_for_logged_in_user(logged_in_client):
     resp = logged_in_client.get("/subscribe")
     assert resp.status_code == 200
-    assert b"$20" in resp.data
-    assert b"$30" in resp.data
+    assert b"$35" in resp.data
+    assert b"$45" in resp.data
     assert b"Basic" in resp.data
     assert b"Pro" in resp.data
 
 
 def test_subscribe_shows_yearly_buttons_when_configured(logged_in_client, monkeypatch):
     """When the yearly Stripe price IDs are configured, /subscribe surfaces
-    both "Yearly · $200 / yr" (Basic) and "Yearly · $300 / yr" (Pro) buttons.
+    both "Yearly · $350 / yr" (Basic) and "Yearly · $420 / yr" (Pro) buttons.
     Otherwise they're hidden so users don't hit 'Invalid plan selected.'"""
     monkeypatch.setenv("STRIPE_BASIC_YEARLY_PRICE_ID", "price_basic_yearly_test")
     monkeypatch.setenv("STRIPE_PRO_YEARLY_PRICE_ID", "price_pro_yearly_test")
     resp = logged_in_client.get("/subscribe")
     assert resp.status_code == 200
-    assert b"$200" in resp.data    # Basic yearly price
-    assert b"$300" in resp.data    # Pro yearly price
+    assert b"$350" in resp.data    # Basic yearly price
+    assert b"$420" in resp.data    # Pro yearly price
     assert b"basic_yearly" in resp.data
     assert b"pro_yearly" in resp.data
 
 
 def test_subscribe_hides_yearly_buttons_when_unset(logged_in_client):
-    """No yearly env var → no yearly button, no misleading "save $40" copy."""
+    """No yearly env var → no yearly button, no misleading "save $70" copy."""
     resp = logged_in_client.get("/subscribe")
     assert resp.status_code == 200
     assert b"basic_yearly" not in resp.data

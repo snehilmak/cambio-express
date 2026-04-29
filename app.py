@@ -1550,10 +1550,10 @@ def _superadmin_dashboard_context():
     total_stores = Store.query.count()
     active_count = Store.query.filter_by(is_active=True).count()
 
-    basic_monthly_mrr = basic_monthly * 20
-    basic_yearly_mrr  = round(basic_yearly * 200 / 12)
-    pro_monthly_mrr   = pro_monthly * 30
-    pro_yearly_mrr    = round(pro_yearly * 300 / 12)
+    basic_monthly_mrr = basic_monthly * 35
+    basic_yearly_mrr  = round(basic_yearly * 350 / 12)
+    pro_monthly_mrr   = pro_monthly * 45
+    pro_yearly_mrr    = round(pro_yearly * 420 / 12)
     estimated_mrr = (basic_monthly_mrr + basic_yearly_mrr
                      + pro_monthly_mrr + pro_yearly_mrr)
 
@@ -3996,7 +3996,7 @@ def admin_subscription():
         "pro":      "Pro",
         "inactive": "Inactive",
     }
-    plan_prices = {"basic": "$20 / month", "pro": "$30 / month"}
+    plan_prices = {"basic": "$35 / month", "pro": "$45 / month"}
     return render_template("admin_subscription.html",
         user=user, store=store,
         addons_catalog=visible_addons,
@@ -7359,11 +7359,11 @@ def superadmin_controls():
 
     # MRR — monthly subs count at their monthly rate; yearly subs are
     # amortized to /12 for the monthly view. Real invoices live in Stripe.
-    # Basic: $20/mo or $200/yr (~$16.67/mo). Pro: $30/mo or $300/yr (~$25/mo).
-    basic_monthly_mrr = basic_monthly * 20
-    basic_yearly_mrr  = round(basic_yearly * 200 / 12)
-    pro_monthly_mrr   = pro_monthly * 30
-    pro_yearly_mrr    = round(pro_yearly * 300 / 12)
+    # Basic: $35/mo or $350/yr (~$29.17/mo). Pro: $45/mo or $420/yr (= $35/mo).
+    basic_monthly_mrr = basic_monthly * 35
+    basic_yearly_mrr  = round(basic_yearly * 350 / 12)
+    pro_monthly_mrr   = pro_monthly * 45
+    pro_yearly_mrr    = round(pro_yearly * 420 / 12)
     estimated_mrr = basic_monthly_mrr + basic_yearly_mrr + pro_monthly_mrr + pro_yearly_mrr
 
     # Stripe health only hit on the overview tab (API call costs one round trip).
