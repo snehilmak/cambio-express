@@ -1890,9 +1890,26 @@ def ensure_stripe_customer(store):
     every Financial Connections session — so even trial / inactive stores
     that haven't paid yet need a customer record to link a bank account.
     We reuse the existing billing customer when present.
+
+    Self-heals when the cached id was created in a different Stripe mode
+    (e.g. test → live migration). On "No such customer" the cached id is
+    cleared and a fresh customer is minted in the current mode. Customer
+    retrieves are not metered, so the verify-then-use cost is effectively
+    zero per connect attempt.
     """
     if store.stripe_customer_id:
-        return store.stripe_customer_id
+        try:
+            stripe.Customer.retrieve(store.stripe_customer_id)
+            return store.stripe_customer_id
+        except stripe.error.InvalidRequestError as e:
+            msg = str(e)
+            if "No such customer" in msg or "resource_missing" in msg:
+                app.logger.warning(
+                    f"Stripe customer {store.stripe_customer_id} not found "
+                    f"in current mode for store {store.id}; minting fresh.")
+                store.stripe_customer_id = ""
+            else:
+                raise
     try:
         cust = stripe.Customer.create(
             email=(store.email or None),
