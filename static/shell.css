@@ -278,6 +278,22 @@
   font-size: 13px;
   padding: 10px 14px;
 }
+/* <button class="dropdown-item"> rows (e.g. Install app, notifications
+   toggle) need explicit resets — browser default styling on <button>
+   has higher specificity than the .dropdown-item class for some
+   font-* properties, so the buttons rendered with system-UI font
+   while the <a> rows rendered correctly. Resetting here keeps the
+   markup clean (no per-button inline styles). */
+.user-dropdown button.dropdown-item {
+  width: 100%;
+  background: none;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--db-font-body);
+  font-size: 13px;
+  display: block;
+}
 .user-dropdown .dropdown-item:hover {
   background: rgba(255,255,255,0.04);
   color: var(--db-neon);
