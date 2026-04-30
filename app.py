@@ -1476,11 +1476,12 @@ def stripe_health_check():
         "secret_key":            bool(os.environ.get("STRIPE_SECRET_KEY")),
         "publishable_key":       bool(os.environ.get("STRIPE_PUBLISHABLE_KEY")),
         "webhook_secret":        bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-        "basic_price_id":        bool(os.environ.get("STRIPE_BASIC_PRICE_ID")),
-        "basic_yearly_price_id": bool(os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID")),
-        "pro_price_id":          bool(os.environ.get("STRIPE_PRO_PRICE_ID")),
-        "pro_yearly_price_id":   bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")),
     }
+    prices = _stripe_price_ids()
+    env["basic_price_id"]        = bool(prices["basic"])
+    env["basic_yearly_price_id"] = bool(prices["basic_yearly"])
+    env["pro_price_id"]          = bool(prices["pro"])
+    env["pro_yearly_price_id"]   = bool(prices["pro_yearly"])
     result = {"env": env, "ok": False, "error": "",
               "price_ok": {"basic": False, "basic_yearly": False,
                            "pro": False, "pro_yearly": False},
@@ -1504,11 +1505,7 @@ def stripe_health_check():
     except Exception as e:
         result["error"] = f"{type(e).__name__}: {e}"
         return result
-    for plan, env_key in (("basic", "STRIPE_BASIC_PRICE_ID"),
-                          ("basic_yearly", "STRIPE_BASIC_YEARLY_PRICE_ID"),
-                          ("pro", "STRIPE_PRO_PRICE_ID"),
-                          ("pro_yearly", "STRIPE_PRO_YEARLY_PRICE_ID")):
-        pid = os.environ.get(env_key, "")
+    for plan, pid in prices.items():
         if not pid:
             continue
         try:
@@ -1974,6 +1971,23 @@ def stripe_mode():
     if not sk:
         return ""
     return "live" if sk.startswith("sk_live_") else "test"
+
+def _stripe_price_ids():
+    """Resolve {plan_key: price_id} for all four plan tiers.
+
+    Reads the four STRIPE_*_PRICE_ID env vars and returns a dict keyed
+    by the internal plan slug (basic / basic_yearly / pro / pro_yearly).
+    Empty string for unset env vars matches the get-or-default pattern
+    used at every prior call site. Centralised here so a future tier
+    change touches the env list once instead of grep-replacing across
+    health-check, subscribe, and webhook handlers.
+    """
+    return {
+        "basic":        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
+        "basic_yearly": os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
+        "pro":          os.environ.get("STRIPE_PRO_PRICE_ID", ""),
+        "pro_yearly":   os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
+    }
 
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
@@ -4202,9 +4216,10 @@ def subscribe():
     # Yearly buttons show up on the pricing page only if their price ID
     # is configured in the environment — otherwise a user clicking them
     # would just get bounced back with "Invalid plan selected."
+    prices = _stripe_price_ids()
     return render_template("subscribe.html", user=user, store=store,
-        basic_yearly_enabled=bool(os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID")),
-        pro_yearly_enabled=bool(os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID")))
+        basic_yearly_enabled=bool(prices["basic_yearly"]),
+        pro_yearly_enabled=bool(prices["pro_yearly"]))
 
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
@@ -4219,12 +4234,7 @@ def subscribe_checkout():
     # "_yearly" variants are separate Stripe prices but land on the same
     # Store.plan value — basic_yearly→"basic", pro_yearly→"pro" — because
     # Store.plan is about feature entitlement, not billing cadence.
-    price_map = {
-        "basic":        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-        "basic_yearly": os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
-        "pro":          os.environ.get("STRIPE_PRO_PRICE_ID", ""),
-        "pro_yearly":   os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
-    }
+    price_map = _stripe_price_ids()
     if plan not in price_map or not price_map[plan]:
         flash("Invalid plan selected.", "error")
         return redirect(url_for("subscribe"))
@@ -8892,14 +8902,9 @@ def stripe_webhook():
                     # pro + pro_yearly both grant "pro". Anything unknown
                     # falls back to "pro" (safer than locking the user out
                     # of features they paid for).
-                    basic_ids = {
-                        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-                        os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
-                    } - {""}
-                    yearly_ids = {
-                        os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
-                        os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
-                    } - {""}
+                    prices = _stripe_price_ids()
+                    basic_ids  = {prices["basic"], prices["basic_yearly"]} - {""}
+                    yearly_ids = {prices["basic_yearly"], prices["pro_yearly"]} - {""}
                     store.plan = "basic" if price_id in basic_ids else "pro"
                     store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
                 except Exception as e:
