@@ -2360,13 +2360,35 @@ def sync_bank_transactions(store, since=None, until=None):
                 app.logger.warning(
                     f"FC transactions subscribe (sync) failed for "
                     f"{acct.stripe_account_id}: {e}")
-            # Resolve the lower bound: caller-provided > latest cached > fallback.
+            # Trigger an explicit refresh so Stripe pulls fresh data
+            # from the bank before we list. The refresh is async — this
+            # call may return stale data, but the NEXT manual sync will
+            # see whatever the bank has now. Best-effort; failure is
+            # logged but doesn't abort the sync.
+            try:
+                stripe.financial_connections.Account.refresh_account(
+                    acct.stripe_account_id, features=["transactions"])
+            except stripe.error.StripeError as e:
+                app.logger.warning(
+                    f"FC transactions refresh (sync) failed for "
+                    f"{acct.stripe_account_id}: {e}")
+            # Resolve the lower bound. Two paths:
+            # - Caller-provided `since` (initial connect uses this to
+            #   request yesterday + today only).
+            # - Otherwise: rolling 7-day lookback. Stripe FC surfaces
+            #   transactions retroactively — a transaction posted on
+            #   May 1 may not appear in Stripe's feed until May 3 — so
+            #   filtering strictly by `max(posted_at) we already have`
+            #   would skip late-arriving rows. Re-fetching old rows is
+            #   free (Transaction.list is billed per call, not per row,
+            #   and _upsert_bank_transaction dedupes on
+            #   stripe_transaction_id). 7 days covers Stripe's typical
+            #   retroactive window with margin.
             if since is not None:
                 lo = since
             else:
-                cached_max = (db.session.query(db.func.max(BankTransaction.posted_at))
-                              .filter_by(stripe_bank_account_id=acct.id).scalar())
-                lo = cached_max or fallback_since
+                lo = max(datetime.utcnow() - timedelta(days=7),
+                          fallback_since)
             params = {
                 "account": acct.stripe_account_id,
                 "limit": 100,
