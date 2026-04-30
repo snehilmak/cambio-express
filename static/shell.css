@@ -273,26 +273,27 @@
   text-transform: uppercase;
 }
 .user-dropdown .dropdown-item {
+  display: block;
+  width: 100%;
   color: var(--db-gray-9);
   font-family: var(--db-font-body);
   font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
   padding: 10px 14px;
-}
-/* <button class="dropdown-item"> rows (e.g. Install app, notifications
-   toggle) need explicit resets — browser default styling on <button>
-   has higher specificity than the .dropdown-item class for some
-   font-* properties, so the buttons rendered with system-UI font
-   while the <a> rows rendered correctly. Resetting here keeps the
-   markup clean (no per-button inline styles). */
-.user-dropdown button.dropdown-item {
-  width: 100%;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  /* Button-specific resets — no-ops on <a> elements but cancel
+     iOS Safari / browser defaults that otherwise render <button>
+     text in a heavier weight or system-UI font. Promoting these
+     onto the shared .dropdown-item rule keeps anchor + button
+     items pixel-identical without per-element inline styles. */
   background: none;
   border: 0;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--db-font-body);
-  font-size: 13px;
-  display: block;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .user-dropdown .dropdown-item:hover {
   background: rgba(255,255,255,0.04);
