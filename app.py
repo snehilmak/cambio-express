@@ -27,6 +27,7 @@ from webauthn.helpers.structs import (
     AuthenticatorSelectionCriteria, ResidentKeyRequirement,
     UserVerificationRequirement, PublicKeyCredentialDescriptor,
 )
+from sqlalchemy import case
 
 logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
@@ -1416,6 +1417,18 @@ def data_retention_days_left(store):
     return max(0, delta.days)
 
 # ── Superadmin helpers ───────────────────────────────────────
+def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
+    """Return MRR components and total from subscriber counts.
+
+    Yearly subscribers are amortised to /12. Prices: Basic $35/mo or
+    $350/yr; Pro $45/mo or $420/yr.
+    """
+    bm = basic_monthly * 35
+    by_ = round(basic_yearly * 350 / 12)
+    pm = pro_monthly * 45
+    py_ = round(pro_yearly * 420 / 12)
+    return bm, by_, pm, py_, bm + by_ + pm + py_
+
 def record_audit(action, target_type="", target_id="", details=""):
     """Append a row to the superadmin audit log.
 
@@ -1566,10 +1579,8 @@ def _superadmin_dashboard_context():
     referral, plan distribution, MRR breakdown, referral leaderboard,
     30-day transfer volume by company, and a merged activity feed.
 
-    MRR math mirrors superadmin_controls so the two pages agree; if the
-    pricing tiers change, update both in lockstep.
+    MRR math is delegated to `_compute_mrr` so both pages stay in sync.
     """
-    from sqlalchemy import case
     now = datetime.utcnow()
     today_d = date.today()
     d30_ago = now - timedelta(days=30)
@@ -1600,12 +1611,9 @@ def _superadmin_dashboard_context():
     total_stores = Store.query.count()
     active_count = Store.query.filter_by(is_active=True).count()
 
-    basic_monthly_mrr = basic_monthly * 35
-    basic_yearly_mrr  = round(basic_yearly * 350 / 12)
-    pro_monthly_mrr   = pro_monthly * 45
-    pro_yearly_mrr    = round(pro_yearly * 420 / 12)
-    estimated_mrr = (basic_monthly_mrr + basic_yearly_mrr
-                     + pro_monthly_mrr + pro_yearly_mrr)
+    (basic_monthly_mrr, basic_yearly_mrr,
+     pro_monthly_mrr,   pro_yearly_mrr,
+     estimated_mrr) = _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly)
 
     new_stores_30d = Store.query.filter(Store.created_at >= d30_ago).count()
     new_stores_prev30 = Store.query.filter(
@@ -5389,7 +5397,7 @@ def transfers():
     q=q.order_by(Transfer.send_date.desc(),Transfer.created_at.desc())
     PER_PAGE=50
     try: page=max(1,int(request.args.get("page",1)))
-    except: page=1
+    except (TypeError, ValueError): page=1
     total=q.count()
     total_pages=max(1,(total+PER_PAGE-1)//PER_PAGE)
     if page>total_pages: page=total_pages
@@ -5942,7 +5950,7 @@ def daily_report(ds):
     user=current_user(); sid=session["store_id"]
     store = current_store()
     try: report_date=datetime.strptime(ds,"%Y-%m-%d").date()
-    except: flash("Invalid date.","error"); return redirect(url_for("daily_list"))
+    except ValueError: flash("Invalid date.","error"); return redirect(url_for("daily_list"))
     report=DailyReport.query.filter_by(store_id=sid,report_date=report_date).first()
     mt_rows={r.company:r for r in MoneyTransferSummary.query.filter_by(store_id=sid,report_date=report_date).all()}
     companies = store_mt_companies(store)
@@ -7815,7 +7823,7 @@ def superadmin_impersonate(store_id):
     the only way back was a full re-login. Every start AND end of an
     impersonation is written to the audit log.
     """
-    store=Store.query.get_or_404(store_id)
+    store=db.session.get(Store, store_id) or abort(404)
     admin=User.query.filter_by(store_id=store_id,role="admin").first()
     if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
     record_audit("impersonate_start", target_type="store", target_id=store.id,
@@ -7906,14 +7914,9 @@ def superadmin_controls():
         Store.data_retention_until.isnot(None),
     ).count()
 
-    # MRR — monthly subs count at their monthly rate; yearly subs are
-    # amortized to /12 for the monthly view. Real invoices live in Stripe.
-    # Basic: $35/mo or $350/yr (~$29.17/mo). Pro: $45/mo or $420/yr (= $35/mo).
-    basic_monthly_mrr = basic_monthly * 35
-    basic_yearly_mrr  = round(basic_yearly * 350 / 12)
-    pro_monthly_mrr   = pro_monthly * 45
-    pro_yearly_mrr    = round(pro_yearly * 420 / 12)
-    estimated_mrr = basic_monthly_mrr + basic_yearly_mrr + pro_monthly_mrr + pro_yearly_mrr
+    (basic_monthly_mrr, basic_yearly_mrr,
+     pro_monthly_mrr,   pro_yearly_mrr,
+     estimated_mrr) = _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly)
 
     # Stripe health only hit on the overview tab (API call costs one round trip).
     stripe_health = stripe_health_check() if active_tab == "overview" else None
@@ -8060,7 +8063,7 @@ def superadmin_send_test_email():
     return redirect(url_for("superadmin_controls", tab="overview"))
 
 # ── Per-store actions (superadmin) ───────────────────────────
-def _store_or_404(store_id): return Store.query.get_or_404(store_id)
+def _store_or_404(store_id): return db.session.get(Store, store_id) or abort(404)
 
 def _parse_extend_days(form, default, maximum):
     """Read `days` from the POST form, default to `default`, clamp to
@@ -8549,7 +8552,7 @@ def superadmin_new_discount():
 @superadmin_required
 def superadmin_toggle_discount(dc_id):
     """Activate/deactivate a discount code locally and in Stripe."""
-    dc = DiscountCode.query.get_or_404(dc_id)
+    dc = db.session.get(DiscountCode, dc_id) or abort(404)
     dc.is_active = not dc.is_active
     if dc.stripe_promotion_code_id:
         try:
