@@ -24,7 +24,7 @@
         <td class="text-sm text-muted">
           {% set acct = (accounts | selectattr('id', 'equalto', t.stripe_bank_account_id) | first) %}
           {% if acct %}
-            {{ acct.display_name or acct.institution_name or 'Account' }}{% if acct.last4 %} ••{{ acct.last4 }}{% endif %}
+            {{ acct.label }}
           {% else %}
             —
           {% endif %}

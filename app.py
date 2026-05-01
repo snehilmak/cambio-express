@@ -686,6 +686,10 @@ class MonthlyFinancial(db.Model):
     cash_payroll          = db.Column(db.Float, default=0.0)
     bank_charges_210      = db.Column(db.Float, default=0.0)
     bank_charges_230      = db.Column(db.Float, default=0.0)
+    # Single consolidated bank-charges line, fed by the bank-sync
+    # registry. The 210/230 split above is preserved for historic
+    # rows but no longer rendered separately on the P&L UI.
+    bank_charges_total    = db.Column(db.Float, default=0.0)
     credit_card_fees      = db.Column(db.Float, default=0.0)
     money_order_rent      = db.Column(db.Float, default=0.0)
     emaginenet_tech       = db.Column(db.Float, default=0.0)
@@ -749,6 +753,18 @@ class StripeBankAccount(db.Model):
     connected_at         = db.Column(db.DateTime, default=datetime.utcnow)
     disconnected_at      = db.Column(db.DateTime, nullable=True)
     enabled              = db.Column(db.Boolean, default=True)
+    # Operator-set nickname. When non-empty the transactions list +
+    # P&L breakdown show this instead of "••<last4>".
+    nickname             = db.Column(db.String(60), default="")
+
+    @property
+    def label(self):
+        """Display label: nickname when set, else ••last4, else 'Account'."""
+        if self.nickname:
+            return self.nickname
+        if self.last4:
+            return f"••{self.last4}"
+        return "Account"
 
     @property
     def last_balance(self):
@@ -2201,9 +2217,11 @@ BANK_CATEGORIES_NON_POSTING = {
     "mt_ach_intermex":    "MT ACH — Intermex",
     "mt_ach_maxi":        "MT ACH — Maxi",
     "mt_ach_barri":       "MT ACH — Barri",
-    # Bank charges flow into the MonthlyFinancial P&L's bank_charges_210
-    # / bank_charges_230 fields rather than the daily book — the user
-    # asked specifically for these to land on the monthly report.
+    # Bank charges flow into the MonthlyFinancial P&L's
+    # bank_charges_total field (single consolidated line). Historic
+    # 210/230-suffixed slugs are kept so already-tagged transactions
+    # still feed the P&L; new tagging uses the generic slug.
+    "bank_charge":        "Bank charge",
     "bank_charge_210":    "Bank charge — ••0210",
     "bank_charge_230":    "Bank charge — ••0230 (MSB)",
     "ignore":             "Ignore (don't reconcile)",
@@ -2236,8 +2254,14 @@ _BUILTIN_BANK_RULES = [
 # new category goes through here so future automations don't need
 # bespoke wiring in monthly_report().
 _BANK_CATEGORY_PL_FIELD = {
-    "bank_charge_210": "bank_charges_210",
-    "bank_charge_230": "bank_charges_230",
+    # Both Nizari-account slugs (kept for historic transaction tags)
+    # plus the generic slug all flow into the single consolidated
+    # bank_charges_total column. The auto-feed loop in monthly_report
+    # sums per-slug into the field, so multiple slugs sharing one
+    # column is supported by design.
+    "bank_charge_210": "bank_charges_total",
+    "bank_charge_230": "bank_charges_total",
+    "bank_charge":     "bank_charges_total",
 }
 
 def _match_builtin_bank_rule(txn, account):
@@ -6287,13 +6311,17 @@ def monthly_report(year,month):
           # template renders it as a locked, editable-looking field.
           "return_check_gl":_return_check_monthly_pl(sid, year, month)}
     # Auto-feed every category in _BANK_CATEGORY_PL_FIELD into its
-    # mapped P&L column. Driven by the registry so that adding a new
-    # built-in rule (e.g. "MONTHLY MAINT FEE" → bank_charge_210) auto-
-    # rolls into bank_charges_210 without any wiring change here.
-    # Conditional LOCK below preserves manual entry when the auto value
-    # is 0 (Basic plan, or no tagged transactions in the month).
+    # mapped P&L column. Multiple slugs may share one column (e.g.
+    # bank_charge / bank_charge_210 / bank_charge_230 all feed
+    # bank_charges_total) — sum per-slug into the field. Conditional
+    # LOCK below preserves manual entry when the auto value is 0.
     for slug, field in _BANK_CATEGORY_PL_FIELD.items():
-        auto[field] = _bank_charges_for_month(sid, year, month, slug)
+        auto[field] = (auto.get(field, 0) or 0) + _bank_charges_for_month(
+            sid, year, month, slug)
+    # Two-level breakdown for the expandable bank-charge view: groups
+    # transactions by description, each group expandable to its rows.
+    auto["bank_charges_breakdown"] = _bank_charges_breakdown_for_month(
+        sid, year, month)
     if request.method=="POST":
         if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
@@ -6323,7 +6351,7 @@ def monthly_report(year,month):
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
             "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
-            "cash_expenses","check_expenses","cash_payroll","bank_charges_210","bank_charges_230",
+            "cash_expenses","check_expenses","cash_payroll","bank_charges_total",
             "credit_card_fees","money_order_rent","emaginenet_tech","irs_payroll_tax","texas_workforce",
             "other_taxes","accounting_charges","return_check_gl","other_expense_1","other_expense_2",
             "other_expense_3","other_expense_4","other_expense_5","over_short",
@@ -6529,6 +6557,72 @@ def _bank_charges_for_month(store_id, year, month, category_slug):
         BankTransaction.posted_at <= month_end,
     ).scalar())
     return abs(float(cents or 0)) / 100.0
+
+def _bank_charges_breakdown_for_month(store_id, year, month):
+    """Two-level breakdown feeding the expandable Bank Charges block on
+    the monthly P&L. Groups bank-charge transactions by description
+    string; each group exposes its individual rows.
+
+    Returns a list of dicts:
+      [
+        {"description": "REMOTE DEPOSIT FEE",
+         "total":       2.10,
+         "count":       1,
+         "transactions": [
+           {"posted_at": datetime, "amount": 2.10,
+            "account_label": "••0230" or nickname,
+            "description": "REMOTE DEPOSIT FEE 04/29"},
+         ]},
+        ...
+      ]
+
+    Sorted by total descending so the biggest contributor reads first.
+    Pulls every slug listed in _BANK_CATEGORY_PL_FIELD that maps to
+    bank_charges_total — so any future built-in rule that targets a
+    bank-charge category automatically lands in the breakdown.
+    """
+    month_start = datetime(year, month, 1)
+    month_end_d = monthrange(year, month)[1]
+    month_end = datetime(year, month, month_end_d, 23, 59, 59)
+    bank_charge_slugs = [slug for slug, field in _BANK_CATEGORY_PL_FIELD.items()
+                         if field == "bank_charges_total"]
+    if not bank_charge_slugs:
+        return []
+    rows = (BankTransaction.query
+            .filter(
+                BankTransaction.store_id == store_id,
+                BankTransaction.category_slug.in_(bank_charge_slugs),
+                BankTransaction.posted_at >= month_start,
+                BankTransaction.posted_at <= month_end,
+            )
+            .order_by(BankTransaction.posted_at.desc()).all())
+    if not rows:
+        return []
+    # Map account ids → label so we don't N+1 lookup per transaction.
+    acct_ids = {r.stripe_bank_account_id for r in rows if r.stripe_bank_account_id}
+    accts = {a.id: a for a in StripeBankAccount.query.filter(
+        StripeBankAccount.id.in_(acct_ids)).all()} if acct_ids else {}
+    # Group by description. The exact full description is the key —
+    # operators want each variant visible (e.g. "REMOTE DEPOSIT FEE
+    # 04/29" and "REMOTE DEPOSIT FEE 05/02" group separately if the
+    # bank includes the date in the string). If you want strings to
+    # collapse on common prefixes that's a future enhancement.
+    groups = {}
+    for r in rows:
+        key = r.description or "(no description)"
+        g = groups.setdefault(key, {"description": key, "total": 0.0,
+                                     "count": 0, "transactions": []})
+        amt = abs(float(r.amount_cents or 0) / 100.0)
+        g["total"] += amt
+        g["count"] += 1
+        acct = accts.get(r.stripe_bank_account_id)
+        g["transactions"].append({
+            "posted_at": r.posted_at,
+            "amount":    amt,
+            "description": r.description or "",
+            "account_label": acct.label if acct else "",
+        })
+    return sorted(groups.values(), key=lambda g: g["total"], reverse=True)
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
@@ -7585,6 +7679,20 @@ def bank_rule_delete(rule_id):
     db.session.commit()
     flash("Rule deleted.", "success")
     return redirect(url_for("bank_rules"))
+
+@app.route("/bank/stripe/nickname/<int:acct_id>", methods=["POST"])
+@pro_required
+def bank_stripe_set_nickname(acct_id):
+    """Set or clear the operator-defined nickname on a connected
+    bank account. Empty input reverts to the ••<last4> label."""
+    sid = session["store_id"]
+    acct = StripeBankAccount.query.filter_by(
+        id=acct_id, store_id=sid).first_or_404()
+    nickname = (request.form.get("nickname") or "").strip()[:60]
+    acct.nickname = nickname
+    db.session.commit()
+    flash(("Nickname saved." if nickname else "Nickname cleared."), "success")
+    return redirect(url_for("bank"))
 
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
 @pro_required
@@ -9710,6 +9818,16 @@ _ADDED_COLUMNS = [
     # DailyLineItem we created when the row was categorized into a
     # daily-book bucket. Lets "Un-reconcile" delete the line item.
     ("bank_transaction", "daily_line_item_id",   "INTEGER NULL"),
+    # Single consolidated bank-charges P&L column. Replaces the
+    # Nizari-specific 210/230 split in the UI. The legacy columns stay
+    # in the schema for historic data; the read-time sum on the
+    # monthly_report page rolls them into the total.
+    ("monthly_financial", "bank_charges_total",  "REAL DEFAULT 0"),
+    # Operator-set nickname for a connected bank account. When set the
+    # transactions list and P&L breakdown show this instead of the
+    # ••<last4>. Forward-compat for stores that may add a second
+    # account at the same bank — distinct nicknames > opaque last4s.
+    ("stripe_bank_account", "nickname",          "VARCHAR(60) DEFAULT ''"),
 ]
 
 def _ensure_added_columns():

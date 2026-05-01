@@ -15,6 +15,60 @@
   font-size: 11px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.8px;
 }
+/* Bank-charges expandable breakdown. Two layers of <details> —
+   outer block lists description groups with their subtotals; each
+   group expands to its individual transactions. View-only. */
+.bc-breakdown { margin: 4px 20px 12px; border-left: 2px solid var(--border); padding-left: 10px; }
+.bc-breakdown-summary {
+  list-style: none; cursor: pointer;
+  font-size: 12px; color: var(--text-muted);
+  padding: 4px 0;
+}
+.bc-breakdown-summary::-webkit-details-marker { display: none; }
+.bc-breakdown-summary .caret { display: inline-block; transition: transform 0.15s; margin-right: 4px; }
+.bc-breakdown[open] > .bc-breakdown-summary .caret { transform: rotate(90deg); }
+.bc-groups { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.bc-group { font-size: 13px; }
+.bc-group-summary {
+  list-style: none; cursor: pointer;
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  gap: 10px; align-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.bc-group-summary:hover { background: var(--surface-2); }
+.bc-group-summary::-webkit-details-marker { display: none; }
+.bc-group-summary .caret { transition: transform 0.15s; }
+.bc-group[open] > .bc-group-summary .caret { transform: rotate(90deg); }
+.bc-group-desc { color: var(--text); font-weight: 500; }
+.bc-group-meta { font-size: 11px; color: var(--text-muted); }
+.bc-group-total { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.bc-rows {
+  display: flex; flex-direction: column;
+  margin: 4px 0 8px 24px;
+  border-left: 1px dashed var(--border);
+  padding-left: 12px;
+}
+.bc-row {
+  display: grid;
+  grid-template-columns: 100px auto 1fr auto;
+  gap: 12px; align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.bc-row-date { color: var(--text-muted); }
+.bc-row-acct {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  white-space: nowrap;
+}
+.bc-row-desc { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-row-amt  { font-variant-numeric: tabular-nums; color: var(--text); }
 </style>
 {% endblock %}
 {% block content %}
@@ -150,14 +204,44 @@
       {{ pl_field('cash_payroll',        'Cash Payroll',        'cash_payroll', locked=True) }}
 
       <div class="expense-subhead">Bank Charges</div>
-      {{ pl_field('bank_charges_210',    'Bank Charges — Acct 210',
-                  auto_key='bank_charges_210',
-                  locked=(auto.get('bank_charges_210', 0) > 0),
+      {{ pl_field('bank_charges_total',  'Bank Charges',
+                  auto_key='bank_charges_total',
+                  locked=(auto.get('bank_charges_total', 0) > 0),
                   locked_source='bank sync') }}
-      {{ pl_field('bank_charges_230',    'Bank Charges — Acct 230',
-                  auto_key='bank_charges_230',
-                  locked=(auto.get('bank_charges_230', 0) > 0),
-                  locked_source='bank sync') }}
+      {# Two-level expandable breakdown — collapsed by default. Outer
+         <details> shows description groups + their totals; each group
+         is itself a <details> that lists the individual transactions.
+         View-only; no jump-to-source link per the product spec. #}
+      {% if auto.get('bank_charges_breakdown') %}
+      <details class="bc-breakdown">
+        <summary class="bc-breakdown-summary">
+          <span class="caret">▸</span>
+          See breakdown ({{ auto.bank_charges_breakdown|length }} description{{ '' if auto.bank_charges_breakdown|length == 1 else 's' }})
+        </summary>
+        <div class="bc-groups">
+          {% for g in auto.bank_charges_breakdown %}
+          <details class="bc-group">
+            <summary class="bc-group-summary">
+              <span class="caret">▸</span>
+              <span class="bc-group-desc">{{ g.description }}</span>
+              <span class="bc-group-meta">{{ g.count }} txn{{ '' if g.count == 1 else 's' }}</span>
+              <span class="bc-group-total mono">${{ '{:,.2f}'.format(g.total) }}</span>
+            </summary>
+            <div class="bc-rows">
+              {% for t in g.transactions %}
+              <div class="bc-row">
+                <span class="bc-row-date mono">{% if t.posted_at %}{{ t.posted_at.strftime('%Y-%m-%d') }}{% else %}—{% endif %}</span>
+                <span class="bc-row-acct">{{ t.account_label or '—' }}</span>
+                <span class="bc-row-desc">{{ t.description }}</span>
+                <span class="bc-row-amt mono">${{ '{:,.2f}'.format(t.amount) }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </details>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
       {{ pl_field('credit_card_fees',    'Credit Card Fees') }}
 
       <div class="expense-subhead">Other Expenses</div>
@@ -226,7 +310,7 @@ const REV = ['taxable_sales','non_taxable','bill_payment_charge','phone_recargas
   'check_cashing_fees','return_check_hold_fees','rebates_commissions','mt_commission_in_bank',
   'other_income_1','other_income_2','other_income_3'];
 const PURCH = ['cash_purchases','check_purchases'];
-const EXP = ['cash_expenses','check_expenses','cash_payroll','bank_charges_210','bank_charges_230',
+const EXP = ['cash_expenses','check_expenses','cash_payroll','bank_charges_total',
   'credit_card_fees','money_order_rent','emaginenet_tech','irs_payroll_tax','texas_workforce',
   'other_taxes','accounting_charges','return_check_gl',
   'other_expense_1','other_expense_2','other_expense_3','other_expense_4','other_expense_5'];
