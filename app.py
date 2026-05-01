@@ -2239,6 +2239,9 @@ BANK_CATEGORIES_NON_POSTING = {
 _BUILTIN_BANK_RULES = [
     # Nizari Progressive Federal Credit Union
     ("REMOTE DEPOSIT FEE", "0230", "bank_charge_230"),
+    # Below-average-balance fee can hit either Nizari account when a
+    # balance dips below their threshold; account-agnostic match.
+    ("BELOW AVG BAL FEE",  "",     "bank_charge"),
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.

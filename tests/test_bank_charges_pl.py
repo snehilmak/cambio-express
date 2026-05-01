@@ -115,6 +115,42 @@ def test_builtin_rule_case_insensitive(client, test_store_id):
         assert _match_builtin_bank_rule(t, a) == "bank_charge_230"
 
 
+def test_builtin_below_avg_bal_fee_matches_either_account(client, test_store_id):
+    """The "BELOW AVG BAL FEE" built-in is account-agnostic — Nizari can
+    hit either account when its balance dips below their threshold.
+    Tagged generically as bank_charge (no 210/230 split)."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_bal_210")
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_bal_230")
+    t1 = _make_txn(app, test_store_id, a210, amount_cents=-500,
+                   desc="BELOW AVG BAL FEE", txn_id="bal_210")
+    t2 = _make_txn(app, test_store_id, a230, amount_cents=-500,
+                   desc="BELOW AVG BAL FEE", txn_id="bal_230")
+    with app.app_context():
+        for tid, aid in [(t1, a210), (t2, a230)]:
+            t = db.session.get(BankTransaction, tid)
+            a = db.session.get(StripeBankAccount, aid)
+            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+
+
+def test_builtin_below_avg_bal_fee_case_insensitive(client, test_store_id):
+    """Match is case-insensitive — banks vary case across statements."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-500,
+                    desc="Below Avg Bal Fee", txn_id="bal_ci")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        assert _match_builtin_bank_rule(t, a) == "bank_charge"
+
+
 # ── _bank_charges_for_month ──────────────────────────────────
 
 
