@@ -661,3 +661,101 @@ select {
 .choices.db-country-picker .choices__list--dropdown .choices__list {
   max-height: 280px;
 }
+
+/* ── Animations & micro-interactions ─────────────────────────
+   Subtle motion that makes the app feel responsive without being
+   playful. Keep durations ≤200ms — anything slower starts to feel
+   sluggish on a workflow-heavy app. Honored only when the user
+   hasn't asked for reduced motion (override at the bottom of this
+   block kills every animation + transition declared above when
+   prefers-reduced-motion: reduce). */
+
+/* Page entrance — single fade-up on every navigation. Targets the
+   shell's main column so the topbar + content rise together; not
+   per-card to avoid a cascade of staggered fades. */
+@keyframes db-page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.main { animation: db-page-enter 180ms ease-out; }
+
+/* Cards lift gently on hover. Most card families inherit this
+   without opting in — opt-out by adding .card.no-hover where the
+   surface is decorative or part of a fixed grid (e.g. the rate
+   board on the public TV display). */
+.card {
+  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s;
+}
+.card:hover:not(.no-hover) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+  border-color: var(--db-gray-3);
+}
+
+/* Buttons: hover transition exists at line 178 — extend with an
+   active-press scale so clicks feel responsive. The scale is
+   intentionally tiny (1.5%) so it reads as feedback, not a wobble. */
+.btn { transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.08s; }
+.btn:active { transform: scale(0.985); }
+.btn:disabled, .btn[disabled] { transform: none; }
+
+/* Form inputs: existing border-color + box-shadow transition stays.
+   Add a subtle focus-glow that uses the neon brand color so it
+   reads as an active state rather than a generic "outline". */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px var(--db-neon-glow-15);
+  border-color: var(--db-neon-dim);
+}
+
+/* Flash banners: slide-down + fade on mount. They render once at
+   page load; the JS doesn't re-mount them, so this only fires on
+   the navigation that triggered the flash. */
+@keyframes db-flash-enter {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.flash { animation: db-flash-enter 180ms ease-out; }
+
+/* Table-row hover already has a transition at line 130. Extend it
+   to cover color too so a hovered row's text doesn't jump abruptly. */
+tbody tr { transition: background 0.12s, color 0.12s; }
+
+/* <details> summaries (used by the bank-charges P&L breakdown,
+   tv-display legacy block, etc.). The summary rotation transition
+   already exists per-component; the panel content fades in when
+   opened so the new content doesn't pop. */
+details[open] > *:not(summary) {
+  animation: db-details-enter 160ms ease-out;
+}
+@keyframes db-details-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Badges — color shifts when status changes (e.g. a transaction
+   re-categorised on the bank-transactions list). Keeps the new
+   color from snapping in. */
+.badge { transition: background 0.12s, color 0.12s, border-color 0.12s; }
+
+/* Sidebar nav active indicator: existing rule at shell.css line 98
+   draws a 3px neon bar with box-shadow. Add a soft pulse so the
+   active section feels alive without being distracting. */
+@keyframes db-nav-active-pulse {
+  0%, 100% { box-shadow: 0 0 10px var(--db-neon); }
+  50%      { box-shadow: 0 0 16px var(--db-neon); }
+}
+.nav-link.active::before {
+  animation: db-nav-active-pulse 2.4s ease-in-out infinite;
+}
+
+/* Honor the OS-level "I don't want motion" preference. Strips
+   every animation and most transitions; keeps page-entry at a
+   single instant flip. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
