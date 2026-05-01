@@ -8,27 +8,20 @@
      set inline on the markup. */
   .customer-suggest {
     position: absolute; left: 0; right: 0; top: 100%;
-    background: var(--white); border: 1px solid var(--gray2);
-    border-radius: 8px; box-shadow: 0 8px 20px rgba(15,31,61,0.08);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.4);
     z-index: 30; max-height: 240px; overflow-y: auto; margin-top: 4px;
-  }
-  [data-theme="dark"] .customer-suggest {
-    background: #1a1f2e; border-color: #2a3044;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.4);
   }
   .customer-suggest .row {
     padding: 8px 12px; cursor: pointer;
-    border-bottom: 1px solid var(--gray2);
+    border-bottom: 1px solid var(--border);
     font-size: 13px; line-height: 1.4;
+    color: var(--text);
   }
-  [data-theme="dark"] .customer-suggest .row { border-bottom-color: #2a3044; color: #e5e7eb; }
   .customer-suggest .row:last-child { border-bottom: none; }
   .customer-suggest .row:hover,
-  .customer-suggest .row.active { background: var(--gray1); }
-  [data-theme="dark"] .customer-suggest .row:hover,
-  [data-theme="dark"] .customer-suggest .row.active { background: rgba(255,255,255,0.04); }
-  .customer-suggest .name { font-weight: 600; color: var(--navy); }
-  [data-theme="dark"] .customer-suggest .name { color: #f3f4f6; }
+  .customer-suggest .row.active { background: rgba(255,255,255,0.04); }
+  .customer-suggest .name { font-weight: 600; color: var(--text); }
   .customer-suggest .home {
     font-weight: 500; font-size: 11px; color: var(--gold);
     text-transform: uppercase; letter-spacing: 0.6px;
