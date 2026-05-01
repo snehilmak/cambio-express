@@ -2223,6 +2223,23 @@ _BUILTIN_BANK_RULES = [
     ("REMOTE DEPOSIT FEE", "0230", "bank_charge_230"),
 ]
 
+# Registry: bank-transaction category_slug → MonthlyFinancial column.
+# Any category listed here flows automatically into the named P&L
+# column at month-end (the absolute monthly sum), and the field on
+# /monthly/<year>/<month> conditionally locks when auto > 0. Adding a
+# new automation = (1) add a rule to _BUILTIN_BANK_RULES OR let the
+# operator categorise manually, (2) add a row here so the auto-feed
+# picks it up. If the target column doesn't exist on MonthlyFinancial
+# yet, also add it to the model + _ADDED_COLUMNS.
+#
+# This is the single point of truth for "auto-tagged → P&L" — every
+# new category goes through here so future automations don't need
+# bespoke wiring in monthly_report().
+_BANK_CATEGORY_PL_FIELD = {
+    "bank_charge_210": "bank_charges_210",
+    "bank_charge_230": "bank_charges_230",
+}
+
 def _match_builtin_bank_rule(txn, account):
     """Return target_kind from _BUILTIN_BANK_RULES that matches the
     transaction, or None if nothing matches."""
@@ -6268,17 +6285,15 @@ def monthly_report(year,month):
           # (recoveries minus losses+fraud, by status_changed_on).
           # Stored as the signed P&L amount; the monthly_report
           # template renders it as a locked, editable-looking field.
-          "return_check_gl":_return_check_monthly_pl(sid, year, month),
-          # Bank charges sourced from BankTransaction rows tagged with
-          # the bank_charge_210 / bank_charge_230 categories — fed by
-          # operator categorisation on /bank/transactions plus the
-          # platform-managed _BUILTIN_BANK_RULES auto-categoriser.
-          # Only override the manual P&L value when at least one
-          # bank-charge transaction exists for the month, so stores
-          # without bank sync (Basic plan, or no transactions yet)
-          # keep their manually-entered values.
-          "bank_charges_210":_bank_charges_for_month(sid, year, month, "bank_charge_210"),
-          "bank_charges_230":_bank_charges_for_month(sid, year, month, "bank_charge_230")}
+          "return_check_gl":_return_check_monthly_pl(sid, year, month)}
+    # Auto-feed every category in _BANK_CATEGORY_PL_FIELD into its
+    # mapped P&L column. Driven by the registry so that adding a new
+    # built-in rule (e.g. "MONTHLY MAINT FEE" → bank_charge_210) auto-
+    # rolls into bank_charges_210 without any wiring change here.
+    # Conditional LOCK below preserves manual entry when the auto value
+    # is 0 (Basic plan, or no tagged transactions in the month).
+    for slug, field in _BANK_CATEGORY_PL_FIELD.items():
+        auto[field] = _bank_charges_for_month(sid, year, month, slug)
     if request.method=="POST":
         if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
@@ -6299,13 +6314,12 @@ def monthly_report(year,month):
             # See _return_check_monthly_pl().
             "return_check_gl",
         }
-        # Bank charges 210/230 lock conditionally — only when there's
-        # at least one tagged bank-charge transaction. Stores without
+        # Bank-derived fields lock conditionally — only when there's
+        # at least one tagged transaction in the month. Stores without
         # bank sync (or with no charges in this month) keep manual entry.
-        if auto.get("bank_charges_210", 0) > 0:
-            LOCKED_FIELDS.add("bank_charges_210")
-        if auto.get("bank_charges_230", 0) > 0:
-            LOCKED_FIELDS.add("bank_charges_230")
+        for field in _BANK_CATEGORY_PL_FIELD.values():
+            if auto.get(field, 0) > 0:
+                LOCKED_FIELDS.add(field)
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
             "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
@@ -6492,13 +6506,16 @@ def _return_check_aging_buckets(store_ids, today=None):
 
 def _bank_charges_for_month(store_id, year, month, category_slug):
     """Sum the absolute amount of BankTransactions tagged with the given
-    category_slug (e.g. "bank_charge_210") for the given month. Stored
-    amounts are signed (debits negative); P&L expense fields use
-    positive numbers, so we abs().
+    category_slug for the given month. Generic over any bank category
+    (despite the historical name) — used by every entry in
+    _BANK_CATEGORY_PL_FIELD to feed the monthly P&L.
+
+    Stored amounts are signed (debits negative); P&L expense columns
+    use positive numbers, so we abs().
 
     Returns 0.0 when no transactions match — the monthly_report route
-    only LOCKs the field when this is > 0, leaving the manual P&L value
-    in place for stores without bank sync.
+    only LOCKs the field when this is > 0, leaving the manual P&L
+    value in place for stores without bank sync.
     """
     month_start = datetime(year, month, 1)
     month_end_d = monthrange(year, month)[1]

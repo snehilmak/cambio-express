@@ -269,3 +269,55 @@ def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=7).first()
         assert row.bank_charges_230 == 42.50
+
+
+# ── Registry-driven generic auto-feed ────────────────────────
+
+
+def test_registry_drives_monthly_auto_for_every_mapped_category(
+        client, test_store_id):
+    """Every entry in _BANK_CATEGORY_PL_FIELD must auto-flow into its
+    mapped column on the monthly P&L. This is what guarantees that
+    adding a new built-in rule + new registry row "just works" without
+    bespoke wiring in monthly_report()."""
+    from app import (BankTransaction, MonthlyFinancial,
+                     _BANK_CATEGORY_PL_FIELD, db)
+    _admin_login(client, test_store_id)
+    app = client.application
+    when = datetime(2026, 8, 15, 10, 0)
+
+    # Seed one tagged transaction per registry entry, distinct amount
+    # so we can assert each lands on the right column.
+    expected = {}
+    with app.app_context():
+        for i, (slug, field) in enumerate(_BANK_CATEGORY_PL_FIELD.items()):
+            aid = _make_account(app, test_store_id,
+                                last4=f"99{i:02d}",
+                                slug=f"fca_reg_{i}")
+            cents = -(100 * (i + 1))
+            db.session.add(BankTransaction(
+                store_id=test_store_id, stripe_bank_account_id=aid,
+                stripe_transaction_id=f"reg_{i}",
+                amount_cents=cents, description="x",
+                posted_at=when, status="posted",
+                category_slug=slug,
+            ))
+            expected[field] = abs(cents) / 100.0
+        db.session.commit()
+
+    body = client.get("/monthly/2026/8").data.decode()
+    for field, dollars in expected.items():
+        assert f'name="{field}"' in body
+        assert f'value="{dollars:.2f}"' in body, (
+            f"{field}: expected value=\"{dollars:.2f}\" in rendered P&L")
+
+    # POST should also force the locked auto value over any payload.
+    payload = {field: "999.99" for field in expected}
+    client.post("/monthly/2026/8", data=payload, follow_redirects=True)
+    with app.app_context():
+        row = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=2026, month=8).first()
+        for field, dollars in expected.items():
+            assert getattr(row, field) == dollars, (
+                f"{field}: server should have forced auto value, "
+                f"got {getattr(row, field)} instead of {dollars}")
