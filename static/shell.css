@@ -273,7 +273,9 @@
   text-transform: uppercase;
 }
 .user-dropdown .dropdown-item {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   color: var(--db-gray-9);
   font-family: var(--db-font-body);
@@ -295,6 +297,19 @@
   -webkit-appearance: none;
   appearance: none;
 }
+/* Icon span sits on the same baseline as the label. Without
+   align-items:center on the parent the inline SVG sits a couple
+   of pixels above the text cap-height. */
+.user-dropdown .dropdown-item .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--db-gray-7);
+  width: 16px;
+  height: 16px;
+}
+.user-dropdown .dropdown-item:hover .icon { color: var(--db-neon); }
 .user-dropdown .dropdown-item:hover {
   background: rgba(255,255,255,0.04);
   color: var(--db-neon);

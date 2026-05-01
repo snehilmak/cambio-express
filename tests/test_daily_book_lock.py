@@ -207,7 +207,7 @@ def test_template_renders_locked_ui(logged_in_client):
 
     body = logged_in_client.get(f"/daily/{ds}").data.decode()
     assert "Lock Day" in body
-    assert "Save Daily Report" in body
+    assert "Save Daily Book" in body
     assert "Unlock to Edit" not in body
     assert "data-locked" not in _form_tag(body), \
         "form tag should not carry data-locked when unlocked"
@@ -217,7 +217,7 @@ def test_template_renders_locked_ui(logged_in_client):
     assert "🔒 Locked" in body
     assert "Unlock to Edit" in body
     assert "Lock Day" not in body
-    assert "Save Daily Report" not in body
+    assert "Save Daily Book" not in body
     assert "Unlock above to edit" in body
     assert 'data-locked="1"' in _form_tag(body)
 
