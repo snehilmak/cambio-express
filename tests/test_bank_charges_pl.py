@@ -4,8 +4,10 @@ Built-in (platform-managed) rules fire on sync after user-defined
 rules don't match. They tag specific transactions like Nizari's
 "REMOTE DEPOSIT FEE" → bank_charge_230 so the operator never has
 to set up their own rule for these standard charges. The tagged
-transactions feed MonthlyFinancial.bank_charges_210 / _230 via
+transactions feed MonthlyFinancial.bank_charges_total via
 _bank_charges_for_month so the P&L picks them up automatically.
+The 210/230 slugs and the per-account 210/230 columns are kept for
+historic data; the consolidated UI shows ONE bank-charges line.
 """
 from datetime import datetime
 
@@ -202,9 +204,8 @@ def test_bank_charges_for_month_zero_when_no_matches(client, test_store_id):
 
 
 def test_monthly_report_renders_locked_bank_charge_amount(client, test_store_id):
-    """Regression for the bug where the auto value was computed but the
-    template still rendered report.bank_charges_230 (= 0). The locked
-    field must show the auto-computed dollars."""
+    """The single consolidated bank-charges field must show the
+    auto-computed dollars from tagged transactions."""
     from app import BankTransaction, db
     _admin_login(client, test_store_id)
     app = client.application
@@ -219,17 +220,16 @@ def test_monthly_report_renders_locked_bank_charge_amount(client, test_store_id)
         ))
         db.session.commit()
     body = client.get("/monthly/2026/5").data.decode()
-    # Field rendered with the auto value, not 0.
-    assert 'name="bank_charges_230"' in body
+    # Single consolidated field; both 210/230-tagged transactions
+    # roll into bank_charges_total.
+    assert 'name="bank_charges_total"' in body
     assert 'value="2.10"' in body
-    # The locked source label specifically calls out bank sync.
     assert "Locked · bank sync" in body
 
 
 def test_monthly_report_post_persists_locked_bank_charge(client, test_store_id):
-    """Saving the form forces the locked auto value into the row even
-    when the form payload sends 0 (or anything else). Guards against a
-    stale tab POSTing pre-categorisation values back."""
+    """Saving the form forces the locked auto value into bank_charges_total
+    even when the form payload sends 0 or anything else."""
     from app import BankTransaction, MonthlyFinancial, db
     _admin_login(client, test_store_id)
     app = client.application
@@ -244,13 +244,12 @@ def test_monthly_report_post_persists_locked_bank_charge(client, test_store_id):
         ))
         db.session.commit()
     client.post("/monthly/2026/6", data={
-        "bank_charges_230": "999.99",  # operator/stale POST trying to override
+        "bank_charges_total": "999.99",
     }, follow_redirects=True)
     with app.app_context():
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=6).first()
-        # Server forced the locked auto value over the form payload.
-        assert row.bank_charges_230 == 3.00
+        assert row.bank_charges_total == 3.00
 
 
 def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store_id):
@@ -259,16 +258,15 @@ def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store
     from app import MonthlyFinancial, db
     _admin_login(client, test_store_id)
     body = client.get("/monthly/2026/7").data.decode()
-    # Editable: not readonly, no bank-sync lock label.
-    assert 'name="bank_charges_230"' in body
+    assert 'name="bank_charges_total"' in body
     assert "Locked · bank sync" not in body
     client.post("/monthly/2026/7", data={
-        "bank_charges_230": "42.50",
+        "bank_charges_total": "42.50",
     }, follow_redirects=True)
     with client.application.app_context():
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=7).first()
-        assert row.bank_charges_230 == 42.50
+        assert row.bank_charges_total == 42.50
 
 
 # ── Registry-driven generic auto-feed ────────────────────────
@@ -277,17 +275,20 @@ def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store
 def test_registry_drives_monthly_auto_for_every_mapped_category(
         client, test_store_id):
     """Every entry in _BANK_CATEGORY_PL_FIELD must auto-flow into its
-    mapped column on the monthly P&L. This is what guarantees that
-    adding a new built-in rule + new registry row "just works" without
-    bespoke wiring in monthly_report()."""
+    mapped column on the monthly P&L. Multiple slugs may share one
+    column (current state: bank_charge / bank_charge_210 /
+    bank_charge_230 all feed bank_charges_total) — the per-slug sums
+    must add together on the column."""
     from app import (BankTransaction, MonthlyFinancial,
                      _BANK_CATEGORY_PL_FIELD, db)
     _admin_login(client, test_store_id)
     app = client.application
     when = datetime(2026, 8, 15, 10, 0)
 
-    # Seed one tagged transaction per registry entry, distinct amount
-    # so we can assert each lands on the right column.
+    # Seed one tagged transaction per registry entry, distinct amount.
+    # When multiple slugs share a column, the column's expected total
+    # is the sum of all their per-slug amounts.
+    per_slug = {}
     expected = {}
     with app.app_context():
         for i, (slug, field) in enumerate(_BANK_CATEGORY_PL_FIELD.items()):
@@ -302,7 +303,9 @@ def test_registry_drives_monthly_auto_for_every_mapped_category(
                 posted_at=when, status="posted",
                 category_slug=slug,
             ))
-            expected[field] = abs(cents) / 100.0
+            dollars = abs(cents) / 100.0
+            per_slug[slug] = dollars
+            expected[field] = expected.get(field, 0.0) + dollars
         db.session.commit()
 
     body = client.get("/monthly/2026/8").data.decode()
@@ -321,3 +324,133 @@ def test_registry_drives_monthly_auto_for_every_mapped_category(
             assert getattr(row, field) == dollars, (
                 f"{field}: server should have forced auto value, "
                 f"got {getattr(row, field)} instead of {dollars}")
+
+
+# ── Two-level breakdown helper ───────────────────────────────
+
+
+def test_breakdown_groups_transactions_by_description(client, test_store_id):
+    """The expandable bank-charges block on the P&L groups by description
+    string; each group exposes its individual rows. Sorted by total desc."""
+    from app import BankTransaction, db, _bank_charges_breakdown_for_month
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    when = datetime(2026, 9, 5, 10, 0)
+    with app.app_context():
+        # Two RDC fees + one larger MSB charge in the same month.
+        for i, (cents, desc, slug) in enumerate([
+            (-210, "REMOTE DEPOSIT FEE", "bank_charge_230"),
+            (-150, "REMOTE DEPOSIT FEE", "bank_charge_230"),
+            (-1500, "MONTHLY MSB CHARGE", "bank_charge_230"),
+        ]):
+            db.session.add(BankTransaction(
+                store_id=test_store_id, stripe_bank_account_id=aid,
+                stripe_transaction_id=f"bd_{i}",
+                amount_cents=cents, description=desc,
+                posted_at=when, status="posted",
+                category_slug=slug,
+            ))
+        db.session.commit()
+        groups = _bank_charges_breakdown_for_month(test_store_id, 2026, 9)
+        assert len(groups) == 2
+        # Sort: MONTHLY MSB CHARGE ($15.00) > REMOTE DEPOSIT FEE ($3.60).
+        assert groups[0]["description"] == "MONTHLY MSB CHARGE"
+        assert groups[0]["total"] == 15.00
+        assert groups[0]["count"] == 1
+        assert groups[1]["description"] == "REMOTE DEPOSIT FEE"
+        assert abs(groups[1]["total"] - 3.60) < 0.001
+        assert groups[1]["count"] == 2
+
+
+def test_breakdown_uses_account_label_with_nickname(client, test_store_id):
+    """Each transaction row in the breakdown shows the account label
+    (nickname when set, else ••<last4>)."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _bank_charges_breakdown_for_month)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    when = datetime(2026, 10, 5, 10, 0)
+    with app.app_context():
+        db.session.get(StripeBankAccount, aid).nickname = "MSB Checking"
+        db.session.add(BankTransaction(
+            store_id=test_store_id, stripe_bank_account_id=aid,
+            stripe_transaction_id="bd_nn",
+            amount_cents=-100, description="REMOTE DEPOSIT FEE",
+            posted_at=when, status="posted",
+            category_slug="bank_charge_230",
+        ))
+        db.session.commit()
+        groups = _bank_charges_breakdown_for_month(test_store_id, 2026, 10)
+    assert groups[0]["transactions"][0]["account_label"] == "MSB Checking"
+
+
+def test_breakdown_falls_back_to_last4(client, test_store_id):
+    """No nickname → ••<last4>."""
+    from app import BankTransaction, db, _bank_charges_breakdown_for_month
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    when = datetime(2026, 11, 5, 10, 0)
+    with app.app_context():
+        db.session.add(BankTransaction(
+            store_id=test_store_id, stripe_bank_account_id=aid,
+            stripe_transaction_id="bd_ll",
+            amount_cents=-100, description="REMOTE DEPOSIT FEE",
+            posted_at=when, status="posted",
+            category_slug="bank_charge_210",
+        ))
+        db.session.commit()
+        groups = _bank_charges_breakdown_for_month(test_store_id, 2026, 11)
+    assert groups[0]["transactions"][0]["account_label"] == "••0210"
+
+
+# ── Nickname route ───────────────────────────────────────────
+
+
+def test_set_nickname_round_trip(client, test_store_id):
+    from app import StripeBankAccount, db
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="9988")
+    resp = client.post(
+        f"/bank/stripe/nickname/{aid}",
+        data={"nickname": "  Operating Checking  "},
+        follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        a = db.session.get(StripeBankAccount, aid)
+        assert a.nickname == "Operating Checking"
+        assert a.label == "Operating Checking"
+
+
+def test_clear_nickname_reverts_to_last4(client, test_store_id):
+    from app import StripeBankAccount, db
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="9988")
+    with app.app_context():
+        db.session.get(StripeBankAccount, aid).nickname = "Old Name"
+        db.session.commit()
+    client.post(f"/bank/stripe/nickname/{aid}",
+                data={"nickname": ""}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.get(StripeBankAccount, aid)
+        assert a.nickname == ""
+        assert a.label == "••9988"
+
+
+def test_nickname_route_blocks_cross_store(client, test_store_id):
+    """An admin can't set the nickname on another store's account."""
+    from app import Store, StripeBankAccount, db
+    _admin_login(client, test_store_id)
+    app = client.application
+    with app.app_context():
+        other = Store(name="Other", slug="nick-other-shop", plan="trial")
+        db.session.add(other); db.session.commit()
+        other_id = other.id
+    other_aid = _make_account(app, other_id, last4="1111", slug="fca_other")
+    resp = client.post(f"/bank/stripe/nickname/{other_aid}",
+                       data={"nickname": "X"})
+    assert resp.status_code == 404

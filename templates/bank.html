@@ -64,7 +64,7 @@
           <div class="card-body">
             <div class="inst">{{ a.institution_name or 'Bank' }}{% if a.category %} · {{ a.category }}{% endif %}</div>
             <div class="acct-name">
-              {{ a.display_name or 'Account' }}{% if a.last4 %} ••{{ a.last4 }}{% endif %}
+              {{ a.label }}{% if a.nickname and a.last4 %} <span class="text-sm text-muted">••{{ a.last4 }}</span>{% endif %}
             </div>
             <div class="bal">${{ '{:,.2f}'.format(a.last_balance) }}</div>
             <div class="asof">
@@ -74,10 +74,23 @@
                 Balance not yet refreshed.
               {% endif %}
             </div>
+            {# Operator-set nickname. Replaces the ••<last4> label across
+               the bank-transactions list and the P&L breakdown. Saving
+               an empty value reverts to ••<last4>. #}
+            <form method="POST"
+                  action="{{ url_for('bank_stripe_set_nickname', acct_id=a.id) }}"
+                  style="margin:8px 0 0;display:flex;gap:6px;align-items:center;">
+              <input type="text" name="nickname"
+                     value="{{ a.nickname or '' }}"
+                     placeholder="Set nickname (e.g. MSB Checking)"
+                     maxlength="60"
+                     style="flex:1;padding:6px 8px;font-size:12px;">
+              <button type="submit" class="btn btn-outline btn-sm" style="font-size:11px;padding:5px 10px;">Save</button>
+            </form>
             <div class="row-actions">
               <form method="POST"
                     action="{{ url_for('bank_stripe_disconnect', acct_id=a.id) }}"
-                    onsubmit="return confirm('Disconnect {{ a.display_name or a.institution_name or 'this account' }}?')"
+                    onsubmit="return confirm('Disconnect {{ a.label }}?')"
                     style="margin:0;">
                 <button type="submit" class="btn btn-outline btn-sm"
                         style="color:var(--red);border-color:var(--red);">Disconnect</button>

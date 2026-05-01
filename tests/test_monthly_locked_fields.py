@@ -84,13 +84,13 @@ def test_server_overrides_tampered_locked_fields(logged_in_client, test_store_id
 
 def test_unlocked_fields_still_save_submitted_values(logged_in_client, test_store_id):
     """The lock is scoped only to the five daily-derived fields.
-    Manually-entered fields (mt_commission_in_bank, bank_charges_210,
+    Manually-entered fields (mt_commission_in_bank, bank_charges_total,
     other_income_1, etc.) continue to take whatever the user typed."""
     from app import MonthlyFinancial
     y, m = 2026, 6
     resp = _post_monthly(logged_in_client, y, m, {
         "mt_commission_in_bank": "250",
-        "bank_charges_210": "12.50",
+        "bank_charges_total": "12.50",
         "other_income_1": "33",
     })
     assert resp.status_code == 302
@@ -98,7 +98,7 @@ def test_unlocked_fields_still_save_submitted_values(logged_in_client, test_stor
         r = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=y, month=m).first()
         assert abs(r.mt_commission_in_bank - 250.0) < 0.01
-        assert abs(r.bank_charges_210 - 12.5) < 0.01
+        assert abs(r.bank_charges_total - 12.5) < 0.01
         assert abs(r.other_income_1 - 33.0) < 0.01
 
 
