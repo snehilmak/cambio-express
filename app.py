@@ -6282,6 +6282,36 @@ def monthly_new():
 # Pending balance and aging come straight off the same table, so the
 # admin list page + owner dashboard share queries.
 
+def _return_check_writeoff_total(store_ids, start, end, status_value):
+    """Sum the still-owed balance of return checks marked `status_value`
+    (typically 'loss' or 'fraud') whose status_changed_on falls in
+    [start, end]. Subtracts payments already received against each
+    parent — partial recoveries before the close were already booked
+    as recoveries in their own months.
+    """
+    rows = (db.session.query(ReturnCheck.id, ReturnCheck.amount)
+            .filter(
+                ReturnCheck.store_id.in_(store_ids),
+                ReturnCheck.status == status_value,
+                ReturnCheck.status_changed_on >= start,
+                ReturnCheck.status_changed_on <= end,
+            ).all())
+    if not rows:
+        return 0.0
+    rc_ids = [rid for rid, _ in rows]
+    # Sum payments per parent, all in one query so we don't N+1
+    # for stores with lots of write-offs.
+    paid_rows = (db.session.query(
+        ReturnCheckPayment.return_check_id,
+        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0),
+    ).filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
+     .group_by(ReturnCheckPayment.return_check_id).all())
+    paid_by = {rid: float(s or 0.0) for rid, s in paid_rows}
+    total = 0.0
+    for rid, amt in rows:
+        total += max(0.0, float(amt or 0.0) - paid_by.get(rid, 0.0))
+    return total
+
 def _return_check_period_aggregates(store_ids, start, end):
     """Sum recoveries (by payment date) and losses+fraud (by parent
     status-change date), plus the still-pending balance.
@@ -6324,33 +6354,11 @@ def _return_check_period_aggregates(store_ids, start, end):
     # Losses + fraud: closed ReturnChecks whose status_changed_on falls
     # in the window. The contribution is the REMAINING balance, not
     # the original amount — partial recoveries before the close were
-    # already booked as recoveries on their own months.
-    def _writeoff_in_status(status_value):
-        rows = (db.session.query(ReturnCheck.id, ReturnCheck.amount)
-                .filter(
-                    ReturnCheck.store_id.in_(store_ids),
-                    ReturnCheck.status == status_value,
-                    ReturnCheck.status_changed_on >= start,
-                    ReturnCheck.status_changed_on <= end,
-                ).all())
-        if not rows:
-            return 0.0
-        rc_ids = [rid for rid, _ in rows]
-        # Sum payments per parent, all in one query so we don't N+1
-        # for stores with lots of write-offs.
-        paid_rows = (db.session.query(
-            ReturnCheckPayment.return_check_id,
-            db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0),
-        ).filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
-         .group_by(ReturnCheckPayment.return_check_id).all())
-        paid_by = {rid: float(s or 0.0) for rid, s in paid_rows}
-        total = 0.0
-        for rid, amt in rows:
-            total += max(0.0, float(amt or 0.0) - paid_by.get(rid, 0.0))
-        return total
-
-    loss = _writeoff_in_status("loss")
-    fraud = _writeoff_in_status("fraud")
+    # already booked as recoveries on their own months. The summing
+    # logic lives in the module-level _return_check_writeoff_total
+    # helper so it can be unit-tested without spinning up the parent.
+    loss  = _return_check_writeoff_total(store_ids, start, end, "loss")
+    fraud = _return_check_writeoff_total(store_ids, start, end, "fraud")
 
     pending_q = db.session.query(
         db.func.coalesce(db.func.sum(ReturnCheck.amount), 0.0),
