@@ -300,16 +300,58 @@ silently misroutes money on a live P&L.
 
 ### How the P&L feed works
 
+The single point of truth is `_BANK_CATEGORY_PL_FIELD` — a registry
+that maps a bank-transaction `category_slug` to a `MonthlyFinancial`
+column name. Every category in the registry auto-flows to its mapped
+P&L column with no per-field wiring in `monthly_report()`:
+
+```python
+_BANK_CATEGORY_PL_FIELD = {
+    "bank_charge_210": "bank_charges_210",
+    "bank_charge_230": "bank_charges_230",
+    # Append a row here whenever a new built-in rule (or operator
+    # rule) targets a category that should hit a P&L line.
+}
+```
+
 - `_bank_charges_for_month(store_id, year, month, category_slug)` sums
   the absolute `amount_cents` of `BankTransaction` rows tagged with
-  the slug for the given month, returns dollars.
-- `monthly_report()` route exposes those sums as
-  `auto["bank_charges_210"]` / `auto["bank_charges_230"]`.
-- The fields are added to `LOCKED_FIELDS` **only when the auto value
-  is > 0**. This is the backward-compat guard: stores without bank
-  sync (or months with no bank-charge transactions) keep their
-  manually-entered P&L values. Don't unconditionally lock these or
-  you'll wipe manual entries on Basic-plan stores.
+  the slug for the given month, returns dollars. Generic over any
+  category despite the historical name.
+- `monthly_report()` iterates the registry and populates
+  `auto[field_name]` for every entry. Then it iterates the registry
+  again and adds each `field_name` to `LOCKED_FIELDS` **only when the
+  auto value is > 0** — backward-compat guard so stores without bank
+  sync (or months with no tagged transactions) keep their manually-
+  entered P&L values. Don't unconditionally lock these or you'll wipe
+  manual entries on Basic-plan stores.
+- The template (`templates/monthly_report.html`) renders each mapped
+  field through `pl_field(name, label, auto_key=…, locked=(auto.get(…)>0),
+  locked_source='bank sync')`. New entries in the registry need a
+  matching `pl_field` call in the template until we generalise the
+  template too.
+
+### Adding a new bank automation end-to-end
+
+1. Append a `_BUILTIN_BANK_RULES` entry (description substring +
+   account_last4 + target_kind) — OR let the operator categorise
+   manually via `/bank/transactions`.
+2. Append a `_BANK_CATEGORY_PL_FIELD` row mapping the slug to the
+   `MonthlyFinancial` column name.
+3. If the column doesn't exist on `MonthlyFinancial` yet, add it to
+   the model + `_ADDED_COLUMNS` (idempotent on next boot).
+4. Update the matching `pl_field` call in `monthly_report.html` to
+   pass `auto_key=...` + `locked=(auto.get(...)>0)` +
+   `locked_source='bank sync'` so the form actually displays the
+   auto value.
+5. Add a test like the ones in `tests/test_bank_charges_pl.py` that
+   covers (a) the matcher firing, (b) the `_bank_charges_for_month`
+   sum, (c) the rendered P&L showing the locked auto value.
+
+Amounts can vary across statements — built-in rules match on
+description substring (case-insensitive) + account, never on amount.
+A "REMOTE DEPOSIT FEE" of $2.10 today and $5.00 tomorrow both match
+the same rule.
 
 ### What to NOT do
 

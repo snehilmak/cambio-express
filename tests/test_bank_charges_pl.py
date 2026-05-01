@@ -196,3 +196,124 @@ def test_bank_charges_for_month_zero_when_no_matches(client, test_store_id):
     _admin_login(client, test_store_id)
     with client.application.app_context():
         assert _bank_charges_for_month(test_store_id, 2026, 5, "bank_charge_230") == 0.0
+
+
+# ── monthly_report end-to-end ────────────────────────────────
+
+
+def test_monthly_report_renders_locked_bank_charge_amount(client, test_store_id):
+    """Regression for the bug where the auto value was computed but the
+    template still rendered report.bank_charges_230 (= 0). The locked
+    field must show the auto-computed dollars."""
+    from app import BankTransaction, db
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    when = datetime(2026, 5, 12, 9, 0)
+    with app.app_context():
+        db.session.add(BankTransaction(
+            store_id=test_store_id, stripe_bank_account_id=aid,
+            stripe_transaction_id="rdc_1", amount_cents=-210,
+            description="REMOTE DEPOSIT FEE", posted_at=when,
+            status="posted", category_slug="bank_charge_230",
+        ))
+        db.session.commit()
+    body = client.get("/monthly/2026/5").data.decode()
+    assert 'name="bank_charges_230"' in body
+    assert 'value="2.10"' in body
+    assert "Locked · bank sync" in body
+
+
+def test_monthly_report_post_persists_locked_bank_charge(client, test_store_id):
+    """Saving the form forces the locked auto value into the row even
+    when the form payload sends 0 (or anything else). Guards against a
+    stale tab POSTing pre-categorisation values back."""
+    from app import BankTransaction, MonthlyFinancial, db
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    when = datetime(2026, 6, 10, 12, 0)
+    with app.app_context():
+        db.session.add(BankTransaction(
+            store_id=test_store_id, stripe_bank_account_id=aid,
+            stripe_transaction_id="rdc_2", amount_cents=-300,
+            description="REMOTE DEPOSIT FEE", posted_at=when,
+            status="posted", category_slug="bank_charge_230",
+        ))
+        db.session.commit()
+    client.post("/monthly/2026/6", data={
+        "bank_charges_230": "999.99",
+    }, follow_redirects=True)
+    with app.app_context():
+        row = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=2026, month=6).first()
+        assert row.bank_charges_230 == 3.00
+
+
+def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store_id):
+    """No tagged transactions → field rendered editable, manual entry
+    preserved on POST. Backward-compat for stores without bank sync."""
+    from app import MonthlyFinancial
+    _admin_login(client, test_store_id)
+    body = client.get("/monthly/2026/7").data.decode()
+    assert 'name="bank_charges_230"' in body
+    assert "Locked · bank sync" not in body
+    client.post("/monthly/2026/7", data={
+        "bank_charges_230": "42.50",
+    }, follow_redirects=True)
+    with client.application.app_context():
+        row = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=2026, month=7).first()
+        assert row.bank_charges_230 == 42.50
+
+
+# ── Registry-driven generic auto-feed ────────────────────────
+
+
+def test_registry_drives_monthly_auto_for_every_mapped_category(
+        client, test_store_id):
+    """Every entry in _BANK_CATEGORY_PL_FIELD must auto-flow into its
+    mapped column on the monthly P&L. This is what guarantees that
+    adding a new built-in rule + new registry row "just works" without
+    bespoke wiring in monthly_report()."""
+    from app import (BankTransaction, MonthlyFinancial,
+                     _BANK_CATEGORY_PL_FIELD, db)
+    _admin_login(client, test_store_id)
+    app = client.application
+    when = datetime(2026, 8, 15, 10, 0)
+
+    # Seed one tagged transaction per registry entry, distinct amount
+    # so we can assert each lands on the right column.
+    expected = {}
+    with app.app_context():
+        for i, (slug, field) in enumerate(_BANK_CATEGORY_PL_FIELD.items()):
+            aid = _make_account(app, test_store_id,
+                                last4=f"99{i:02d}",
+                                slug=f"fca_reg_{i}")
+            cents = -(100 * (i + 1))
+            db.session.add(BankTransaction(
+                store_id=test_store_id, stripe_bank_account_id=aid,
+                stripe_transaction_id=f"reg_{i}",
+                amount_cents=cents, description="x",
+                posted_at=when, status="posted",
+                category_slug=slug,
+            ))
+            expected[field] = abs(cents) / 100.0
+        db.session.commit()
+
+    body = client.get("/monthly/2026/8").data.decode()
+    for field, dollars in expected.items():
+        assert f'name="{field}"' in body
+        assert f'value="{dollars:.2f}"' in body, (
+            f"{field}: expected value=\"{dollars:.2f}\" in rendered P&L")
+
+    # POST should also force the locked auto value over any payload.
+    payload = {field: "999.99" for field in expected}
+    client.post("/monthly/2026/8", data=payload, follow_redirects=True)
+    with app.app_context():
+        row = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=2026, month=8).first()
+        for field, dollars in expected.items():
+            assert getattr(row, field) == dollars, (
+                f"{field}: server should have forced auto value, "
+                f"got {getattr(row, field)} instead of {dollars}")
