@@ -59,24 +59,21 @@
 
   /* Add-on tiles. */
   .addon-card {
-    background: var(--white); border: 1px solid var(--gray2);
+    background: var(--surface); border: 1px solid var(--border);
     border-radius: 12px; padding: 22px;
     display: flex; flex-direction: column; gap: 10px;
   }
-  [data-theme="dark"] .addon-card { background: #1a1f2e; border-color: #2a3044; }
   .addon-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .addon-name {
     font-family: 'Space Grotesk', 'Inter', sans-serif; font-size: 19px;
-    color: var(--navy); line-height: 1.2;
+    color: var(--text); line-height: 1.2;
   }
-  [data-theme="dark"] .addon-name { color: #f3f4f6; }
   .addon-price {
     font-family: 'JetBrains Mono', monospace; font-size: 13px;
-    color: var(--gray4); white-space: nowrap;
+    color: var(--text-muted); white-space: nowrap;
   }
-  .addon-tag  { font-size: 13px; color: var(--gray4); }
-  .addon-desc { font-size: 13px; color: var(--dark); line-height: 1.55; }
-  [data-theme="dark"] .addon-desc { color: #d1d5db; }
+  .addon-tag  { font-size: 13px; color: var(--text-muted); }
+  .addon-desc { font-size: 13px; color: var(--text-muted); line-height: 1.55; }
   .addon-foot {
     margin-top: auto; display: flex; align-items: center;
     justify-content: space-between; gap: 10px; padding-top: 6px;
