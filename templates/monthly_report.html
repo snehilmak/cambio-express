@@ -47,18 +47,18 @@
          mirrors this: for locked fields it ignores the submitted value
          and uses auto[auto_key] directly, so a tampered POST can't
          bypass the lock. #}
-      {% macro pl_field(name, label, auto_key=None, locked=False) %}
+      {% macro pl_field(name, label, auto_key=None, locked=False, locked_source='sum of daily book') %}
       <div class="sb-row pl-row">
         <span class="sb-label">
           {{ label }}
-          {% if locked %}<span class="pl-auto">Locked · sum of daily book</span>
+          {% if locked %}<span class="pl-auto">Locked · {{ locked_source }}</span>
           {% elif auto_key %}<span class="pl-auto">Auto</span>{% endif %}
         </span>
         <div class="sb-input">
           <input type="number" step="0.01" min="0" name="{{ name }}"
             value="{% if locked %}{{ '{:.2f}'.format(auto.get(auto_key, 0)) }}{% elif report %}{{ report|attr(name) }}{% else %}{{ auto.get(auto_key, 0) if auto_key else 0 }}{% endif %}"
             {% if locked %}readonly tabindex="-1"
-              title="Sum of {{ label.lower() }} across every daily book in this month. Edit the daily books to change this value."
+              title="Auto-derived from {{ locked_source }}. Edit the source data to change this value."
             {% endif %}
             oninput="recalc()">
         </div>
@@ -150,8 +150,14 @@
       {{ pl_field('cash_payroll',        'Cash Payroll',        'cash_payroll', locked=True) }}
 
       <div class="expense-subhead">Bank Charges</div>
-      {{ pl_field('bank_charges_210',    'Bank Charges — Acct 210') }}
-      {{ pl_field('bank_charges_230',    'Bank Charges — Acct 230') }}
+      {{ pl_field('bank_charges_210',    'Bank Charges — Acct 210',
+                  auto_key='bank_charges_210',
+                  locked=(auto.get('bank_charges_210', 0) > 0),
+                  locked_source='bank sync') }}
+      {{ pl_field('bank_charges_230',    'Bank Charges — Acct 230',
+                  auto_key='bank_charges_230',
+                  locked=(auto.get('bank_charges_230', 0) > 0),
+                  locked_source='bank sync') }}
       {{ pl_field('credit_card_fees',    'Credit Card Fees') }}
 
       <div class="expense-subhead">Other Expenses</div>
