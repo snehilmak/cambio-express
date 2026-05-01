@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}Daily Report {{ report_date.strftime('%b %d, %Y') }}{% endblock %}
-{% block page_title %}Daily Report — {{ report_date.strftime('%A, %B %d, %Y') }}{% endblock %}
+{% block title %}Daily Book {{ report_date.strftime('%b %d, %Y') }}{% endblock %}
+{% block page_title %}Daily Book — {{ report_date.strftime('%A, %B %d, %Y') }}{% endblock %}
 {% block head %}
 <style>
 /* Page-local styles for the inline Drops disclosure. Shared section-box,
@@ -621,7 +621,7 @@
   <span class="badge badge-red" style="margin-right:auto;">🔒 Locked — Unlock above to edit</span>
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Back to Calendar</a>
   {% else %}
-  <button type="submit" class="btn btn-primary sticky-save-primary">Save Daily Report</button>
+  <button type="submit" class="btn btn-primary sticky-save-primary">Save Daily Book</button>
   <a href="{{ url_for('daily_list', month=report_date.month, year=report_date.year) }}" class="btn btn-outline">Cancel</a>
   {% endif %}
 </div>
