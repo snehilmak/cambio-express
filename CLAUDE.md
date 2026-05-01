@@ -260,6 +260,77 @@ restart. New **tables** are picked up by `db.create_all()`. **Never drop
 a column from a running database** — rename/backfill in a follow-up
 deploy if you really need to remove one.
 
+## Bank-charge automation (built-in rules)
+Standard bank charges from a known institution shouldn't require the
+operator to set up their own rule. Examples: Nizari Progressive's
+`REMOTE DEPOSIT FEE` always lands on the MSB ••0230 account; we
+auto-categorise it and feed `MonthlyFinancial.bank_charges_230` so
+the operator doesn't have to touch the monthly P&L for it.
+
+This list will GROW. Read this section before adding a new entry —
+production stores rely on it, and a wrong slug or account_last4
+silently misroutes money on a live P&L.
+
+### How to add a new built-in rule
+
+1. **Edit `_BUILTIN_BANK_RULES`** in `app.py` (search for the constant).
+   Each entry is a 3-tuple:
+   ```python
+   ("DESCRIPTION SUBSTRING", "ACCOUNT_LAST4_OR_BLANK", "TARGET_KIND"),
+   ```
+   - **Description** is matched case-insensitively, substring-style. Keep
+     it specific enough to not collide (e.g. `"REMOTE DEPOSIT FEE"`,
+     not `"FEE"`).
+   - **Account last4** restricts the rule to one account. Use `""` to
+     match any account. The Nizari case is account-specific — the
+     same string on a different account would mean something else.
+   - **Target kind** must be a slug in `BANK_CATEGORIES_NON_POSTING`
+     OR `_LINE_ITEM_KINDS`. Today the only bank-charge slugs are
+     `bank_charge_210` and `bank_charge_230`.
+
+2. **Built-ins fire after operator rules**. Operator-managed rules in
+   `BankRule` always take precedence. Built-ins only run on freshly-
+   inserted, still-uncategorised rows during sync. Re-syncing existing
+   rows preserves any operator override.
+
+3. **Built-ins never create DailyLineItems** — `post_to_daily=False`
+   in the call site. Bank-charge transactions feed the monthly P&L
+   only, not the daily book. Don't change that without coordinating
+   with the daily-book locked-fields contract.
+
+### How the P&L feed works
+
+- `_bank_charges_for_month(store_id, year, month, category_slug)` sums
+  the absolute `amount_cents` of `BankTransaction` rows tagged with
+  the slug for the given month, returns dollars.
+- `monthly_report()` route exposes those sums as
+  `auto["bank_charges_210"]` / `auto["bank_charges_230"]`.
+- The fields are added to `LOCKED_FIELDS` **only when the auto value
+  is > 0**. This is the backward-compat guard: stores without bank
+  sync (or months with no bank-charge transactions) keep their
+  manually-entered P&L values. Don't unconditionally lock these or
+  you'll wipe manual entries on Basic-plan stores.
+
+### What to NOT do
+
+- Don't add a built-in rule that targets a daily-book kind
+  (`cash_expense`, `check_expense`, etc.) — built-ins are
+  bank-side-only by contract; daily-book auto-creation is operator-
+  managed via `BankRule.auto_post`.
+- Don't reuse `bank_charge_210` / `bank_charge_230` for non-charge
+  transactions. They feed the bank-charges P&L columns specifically.
+- Don't lower the case-insensitive match to exact-match unless the
+  bank's description is genuinely stable across statements.
+
+### Test recipe
+
+Every new rule needs at minimum:
+1. A test asserting `_match_builtin_bank_rule(txn, account)` returns
+   the expected slug for the matching description + account combo.
+2. A negative test confirming the rule does NOT fire when the account
+   filter is set and the wrong account is used.
+See `tests/test_bank_charges_pl.py` for the canonical pattern.
+
 ## Section map (app.py)
 Search for the `# ── HEADER ──` block comments. Rough order:
 
@@ -270,6 +341,7 @@ Search for the `# ── HEADER ──` block comments. Rough order:
 | Trial status | `get_trial_status`, `inject_trial_context` |
 | Superadmin helpers | `record_audit`, `store_feature_enabled`, `stripe_health_check`, `active_announcements` |
 | Stripe Financial Connections | Bank sync: `/bank/stripe/connect`, `/return`, `/refresh`, `/disconnect/<id>` + `ensure_stripe_customer`, `refresh_bank_balances`, `_upsert_fc_account`. The legacy SimpleFIN integration was removed in 2026, including the `simplefin_config` table — see `_drop_legacy_tables()`. |
+| Bank reconcile + rules | `BankTransaction`, `BankRule`, `_BUILTIN_BANK_RULES`, `_match_builtin_bank_rule`, `_categorize_bank_transaction`, `_bank_charges_for_month`. Rules fire in this order on sync: operator-defined (`BankRule`) → platform-managed (`_BUILTIN_BANK_RULES`). Bank charges feed the monthly P&L; see "Bank-charge automation" above. |
 | Login / signup / forgot-password | all auth routes |
 | Subscribe / billing portal / cancel | `/subscribe`, checkout, cancel, billing portal |
 | Dashboard | admin / employee / superadmin |
