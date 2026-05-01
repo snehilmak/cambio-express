@@ -2201,8 +2201,40 @@ BANK_CATEGORIES_NON_POSTING = {
     "mt_ach_intermex":    "MT ACH — Intermex",
     "mt_ach_maxi":        "MT ACH — Maxi",
     "mt_ach_barri":       "MT ACH — Barri",
+    # Bank charges flow into the MonthlyFinancial P&L's bank_charges_210
+    # / bank_charges_230 fields rather than the daily book — the user
+    # asked specifically for these to land on the monthly report.
+    "bank_charge_210":    "Bank charge — ••0210",
+    "bank_charge_230":    "Bank charge — ••0230 (MSB)",
     "ignore":             "Ignore (don't reconcile)",
 }
+
+# Built-in (platform-managed) rules that fire after user-defined rules
+# don't match. Used for transaction descriptions that are STANDARD across
+# all customers of a given bank — e.g. Nizari Progressive's RDC fee
+# always appears as "REMOTE DEPOSIT FEE" on the MSB ••0230 account.
+# Operators don't need to set up their own rule for these, and they
+# can't be edited via /bank/rules.
+#
+# Each entry: (description_substring, account_last4_or_None, target_kind).
+# An empty `account_last4` matches any account.
+_BUILTIN_BANK_RULES = [
+    # Nizari Progressive Federal Credit Union
+    ("REMOTE DEPOSIT FEE", "0230", "bank_charge_230"),
+]
+
+def _match_builtin_bank_rule(txn, account):
+    """Return target_kind from _BUILTIN_BANK_RULES that matches the
+    transaction, or None if nothing matches."""
+    desc = (txn.description or "").upper()
+    last4 = (account.last4 or "") if account else ""
+    for substring, want_last4, target in _BUILTIN_BANK_RULES:
+        if substring not in desc:
+            continue
+        if want_last4 and last4 != want_last4:
+            continue
+        return target
+    return None
 
 def _bank_category_label(slug):
     """Operator-friendly label for a category slug."""
@@ -2432,6 +2464,15 @@ def sync_bank_transactions(store, since=None, until=None):
                             _categorize_bank_transaction(
                                 row, rule.target_kind,
                                 rule=rule, post_to_daily=rule.auto_post)
+                        else:
+                            # Fall through to platform-managed built-in
+                            # rules (e.g. Nizari "REMOTE DEPOSIT FEE"
+                            # → bank_charge_230). Non-posting categories
+                            # only — built-ins never create DailyLineItems.
+                            builtin = _match_builtin_bank_rule(row, acct)
+                            if builtin:
+                                _categorize_bank_transaction(
+                                    row, builtin, rule=None, post_to_daily=False)
                 total += 1
         except stripe.error.StripeError as e:
             msg = e.user_message or str(e)
@@ -6227,7 +6268,17 @@ def monthly_report(year,month):
           # (recoveries minus losses+fraud, by status_changed_on).
           # Stored as the signed P&L amount; the monthly_report
           # template renders it as a locked, editable-looking field.
-          "return_check_gl":_return_check_monthly_pl(sid, year, month)}
+          "return_check_gl":_return_check_monthly_pl(sid, year, month),
+          # Bank charges sourced from BankTransaction rows tagged with
+          # the bank_charge_210 / bank_charge_230 categories — fed by
+          # operator categorisation on /bank/transactions plus the
+          # platform-managed _BUILTIN_BANK_RULES auto-categoriser.
+          # Only override the manual P&L value when at least one
+          # bank-charge transaction exists for the month, so stores
+          # without bank sync (Basic plan, or no transactions yet)
+          # keep their manually-entered values.
+          "bank_charges_210":_bank_charges_for_month(sid, year, month, "bank_charge_210"),
+          "bank_charges_230":_bank_charges_for_month(sid, year, month, "bank_charge_230")}
     if request.method=="POST":
         if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
         def fv(k): return float(request.form.get(k) or 0)
@@ -6248,6 +6299,13 @@ def monthly_report(year,month):
             # See _return_check_monthly_pl().
             "return_check_gl",
         }
+        # Bank charges 210/230 lock conditionally — only when there's
+        # at least one tagged bank-charge transaction. Stores without
+        # bank sync (or with no charges in this month) keep manual entry.
+        if auto.get("bank_charges_210", 0) > 0:
+            LOCKED_FIELDS.add("bank_charges_210")
+        if auto.get("bank_charges_230", 0) > 0:
+            LOCKED_FIELDS.add("bank_charges_230")
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
             "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
@@ -6431,6 +6489,29 @@ def _return_check_aging_buckets(store_ids, today=None):
         b.pop("max", None)
     return buckets
 
+
+def _bank_charges_for_month(store_id, year, month, category_slug):
+    """Sum the absolute amount of BankTransactions tagged with the given
+    category_slug (e.g. "bank_charge_210") for the given month. Stored
+    amounts are signed (debits negative); P&L expense fields use
+    positive numbers, so we abs().
+
+    Returns 0.0 when no transactions match — the monthly_report route
+    only LOCKs the field when this is > 0, leaving the manual P&L value
+    in place for stores without bank sync.
+    """
+    month_start = datetime(year, month, 1)
+    month_end_d = monthrange(year, month)[1]
+    month_end = datetime(year, month, month_end_d, 23, 59, 59)
+    cents = (db.session.query(
+        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0)
+    ).filter(
+        BankTransaction.store_id == store_id,
+        BankTransaction.category_slug == category_slug,
+        BankTransaction.posted_at >= month_start,
+        BankTransaction.posted_at <= month_end,
+    ).scalar())
+    return abs(float(cents or 0)) / 100.0
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
