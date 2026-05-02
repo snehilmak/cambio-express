@@ -3,20 +3,8 @@
 {% block page_title %}Settings{% endblock %}
 {% block head %}
 <style>
-/* Settings tabs use the shared semantic tokens so they read correctly
-   in both themes — matching the pattern in superadmin_controls.html. */
-.tab-bar {
-  display: flex; gap: 0; border-bottom: 2px solid var(--border);
-  margin-bottom: 28px;
-}
-.tab-link {
-  padding: 10px 20px; font-size: 13.5px; font-weight: 500;
-  color: var(--text-muted); text-decoration: none;
-  border-bottom: 2px solid transparent; margin-bottom: -2px;
-  transition: all 0.15s;
-}
-.tab-link:hover { color: var(--text); }
-.tab-link.active { color: var(--text); border-bottom-color: var(--blue); font-weight: 600; }
+/* .tab-bar / .tab-link styling lives in static/content.css so every
+   tab-bar in the app shares one shape + transitions. */
 .field-error { font-size: 12px; color: var(--red); margin-top: 3px; }
 </style>
 {% endblock %}

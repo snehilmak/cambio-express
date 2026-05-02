@@ -759,3 +759,47 @@ details[open] > *:not(summary) {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Server-rendered tab bars ──────────────────────────────────
+   Shared by admin_settings, superadmin_controls, and any future
+   page that uses the same shape. Each tab is a link that reloads
+   the page; the page-entrance animation in the Animations block
+   above gives the swap its fade-up. Hover adds a subtle background
+   tint so the tap target reads as interactive. Adding a new tab
+   bar = use this class, get the styling + transitions free. */
+.tab-bar {
+  display: flex; gap: 0;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 28px;
+  flex-wrap: wrap;
+}
+.tab-link {
+  padding: 10px 20px;
+  font-size: 13.5px; font-weight: 500;
+  color: var(--text-muted); text-decoration: none;
+  border-bottom: 2px solid transparent; margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.tab-link:hover { color: var(--text); background: var(--surface-2); }
+.tab-link.active {
+  color: var(--text);
+  border-bottom-color: var(--blue);
+  font-weight: 600;
+}
+
+/* ── Modal open animation ──────────────────────────────────────
+   Keeps the .modal-backdrop.open display:flex switch in app.css
+   intact and adds a backdrop fade + card scale-up on mount. Close
+   stays instant — fading a modal out can mask just-clicked button
+   feedback on the page beneath. */
+@keyframes db-modal-backdrop-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes db-modal-card-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-backdrop.open                 { animation: db-modal-backdrop-in 160ms ease-out; }
+.modal-backdrop.open .modal-card     { animation: db-modal-card-in 200ms cubic-bezier(0.2,0.7,0.3,1); }

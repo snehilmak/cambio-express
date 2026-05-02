@@ -112,7 +112,8 @@
   flex: 0 0 auto;
   transition: color 0.12s, border-color 0.12s;
 }
-.db-tab-btn:hover { color: var(--db-gray-9); }
+.db-tab-btn:hover { color: var(--db-gray-9); background: var(--db-gray-2); }
+.db-tab-btn { transition: color 0.12s, border-color 0.12s, background 0.12s; border-radius: 6px 6px 0 0; }
 .db-tab-btn[aria-selected="true"] {
   color: var(--db-gray-9);
   font-weight: 600;
@@ -120,6 +121,17 @@
 }
 .db-tab-panel[hidden] { display: none; }
 .db-tab-panel > .section-box { margin-bottom: 16px; }
+/* Tab-swap animation — only when the bar is visible (mobile). On
+   desktop ≥901px every panel is rendered in the 2x2 grid and the
+   .is-active class isn't toggled by tab clicks (there are none),
+   so this rule has no effect there. */
+@media (max-width: 900px) {
+  @keyframes db-tab-swap {
+    from { opacity: 0; transform: translateX(6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .db-tab-panel.is-active { animation: db-tab-swap 180ms ease-out; }
+}
 
 /* Desktop: 2x2 grid layout for the four data-entry panels — mirrors
    the legacy spreadsheet so cashiers see Receipts + Disbursements on
@@ -854,9 +866,17 @@ function initLineItemWidget(kind) {
       if (on) matched = true;
     });
     panels.forEach(function(p) {
-      const id = p.id;                              // "panel-receipts" etc.
-      const panelTab = id.replace(/^panel-/, '');
-      p.hidden = (panelTab !== tab);
+      const panelTab = p.id.replace(/^panel-/, '');
+      const shouldShow = panelTab === tab;
+      p.hidden = !shouldShow;
+      // Re-trigger the CSS slide-in animation by clearing then re-
+      // adding the class. The void offsetHeight forces a reflow so
+      // the browser commits the cleared state before re-applying.
+      p.classList.remove('is-active');
+      if (shouldShow) {
+        void p.offsetHeight;
+        p.classList.add('is-active');
+      }
     });
     if (matched) sessionStorage.setItem(STORAGE_KEY, tab);
   }
