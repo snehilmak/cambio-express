@@ -190,6 +190,131 @@ def test_builtin_msb_monthly_fee_matches_either_account(client, test_store_id):
             assert _match_builtin_bank_rule(t, a) == "bank_charge"
 
 
+# ── _apply_rules_to_uncategorized_row ────────────────────────
+
+
+def test_backfill_tags_existing_uncategorized_builtin_match(client, test_store_id):
+    """An existing uncategorised row that matches a built-in gets
+    tagged on the next sync — not just freshly-inserted rows."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _apply_rules_to_uncategorized_row)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-360,
+                    desc="REMOTE DEPOSIT FEE", txn_id="bf_rdc")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        # No category yet (simulating a row synced before the rule existed).
+        assert t.category_slug in (None, "")
+        changed = _apply_rules_to_uncategorized_row(t, a, allow_auto_post=False)
+        assert changed is True
+        assert t.category_slug == "bank_charge_230"
+
+
+def test_backfill_skips_already_categorized_rows(client, test_store_id):
+    """Operator overrides survive — backfill never overwrites a
+    non-empty category_slug, even if a built-in would now match."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _apply_rules_to_uncategorized_row)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-360,
+                    desc="REMOTE DEPOSIT FEE", txn_id="bf_keep")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        # Operator manually tagged this differently.
+        t.category_slug = "ignore"
+        db.session.commit()
+        a = db.session.get(StripeBankAccount, aid)
+        changed = _apply_rules_to_uncategorized_row(t, a, allow_auto_post=False)
+        assert changed is False
+        assert t.category_slug == "ignore"
+
+
+def test_backfill_operator_rule_wins_over_builtin(client, test_store_id):
+    """When both an operator rule and a built-in would match, the
+    operator rule wins (built-ins are the fallback)."""
+    from app import (BankRule, BankTransaction, StripeBankAccount, db,
+                     _apply_rules_to_uncategorized_row)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-360,
+                    desc="REMOTE DEPOSIT FEE", txn_id="bf_op_wins")
+    with app.app_context():
+        db.session.add(BankRule(
+            store_id=test_store_id, enabled=True, priority=10,
+            desc_match_type="contains", desc_match_value="REMOTE DEPOSIT",
+            target_kind="ignore", auto_post=False,
+        ))
+        db.session.commit()
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        _apply_rules_to_uncategorized_row(t, a, allow_auto_post=False)
+        assert t.category_slug == "ignore"
+
+
+def test_backfill_suppresses_auto_post_to_daily_book(client, test_store_id):
+    """An operator rule with auto_post=True does NOT create a
+    DailyLineItem when backfilling (allow_auto_post=False) — old rows
+    might land in already-reconciled days."""
+    from app import (BankRule, BankTransaction, DailyLineItem,
+                     StripeBankAccount, db,
+                     _apply_rules_to_uncategorized_row)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-5000,
+                    desc="ELECTRIC BILL", txn_id="bf_no_post",
+                    when=datetime(2026, 4, 15, 10))
+    with app.app_context():
+        db.session.add(BankRule(
+            store_id=test_store_id, enabled=True, priority=10,
+            desc_match_type="contains", desc_match_value="ELECTRIC",
+            target_kind="cash_expense", auto_post=True,
+        ))
+        db.session.commit()
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        _apply_rules_to_uncategorized_row(t, a, allow_auto_post=False)
+        assert t.category_slug == "cash_expense"
+        # No daily-book line was created.
+        assert t.daily_line_item_id is None
+        assert DailyLineItem.query.filter_by(
+            store_id=test_store_id).count() == 0
+
+
+def test_fresh_insert_auto_posts_to_daily_book(client, test_store_id):
+    """Fresh inserts respect rule.auto_post — that's the operator's
+    expressed intent on new data."""
+    from app import (BankRule, BankTransaction, DailyLineItem,
+                     StripeBankAccount, db,
+                     _apply_rules_to_uncategorized_row)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-5000,
+                    desc="ELECTRIC BILL", txn_id="fresh_post",
+                    when=datetime(2026, 4, 15, 10))
+    with app.app_context():
+        db.session.add(BankRule(
+            store_id=test_store_id, enabled=True, priority=10,
+            desc_match_type="contains", desc_match_value="ELECTRIC",
+            target_kind="cash_expense", auto_post=True,
+        ))
+        db.session.commit()
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        _apply_rules_to_uncategorized_row(t, a, allow_auto_post=True)
+        assert t.category_slug == "cash_expense"
+        assert t.daily_line_item_id is not None
+        line = db.session.get(DailyLineItem, t.daily_line_item_id)
+        assert line.amount == 50.00
+
+
 # ── _bank_charges_for_month ──────────────────────────────────
 
 
