@@ -59,6 +59,42 @@ Non-negotiables:
   (`stroke-width:2; stroke-linecap:round; fill:none; currentColor`).
   Emoji survives only in status/eyebrow prefixes (`⏳ ✅ 🔴 📣`) and
   the landing hero's `$` mark.
+- **Motion is part of the design system.** Every interactive surface
+  should transition between states — no instant pop-ins, no abrupt
+  swaps. Cards lift on hover, buttons scale-press on click, inputs
+  glow on focus, dropdowns + modals fade-scale on open, tab content
+  slides in on swap, flash banners slide-down on mount, page
+  navigations fade-up. Durations are tight (≤200ms) so the app
+  feels responsive, not laggy.
+
+  **When you build a new dropdown / modal / tab / popover:**
+  - Reuse the existing patterns rather than inventing your own.
+  - Dropdown / popover: server-render with `hidden`, JS toggles a
+    `.is-open` class with a delayed `hidden` re-set after the
+    transition. CSS animates `.is-open` (see `.user-dropdown` in
+    `static/shell.css` for the canonical example).
+  - Modal: `.modal-backdrop` + `.modal-card` + `.open` class. CSS
+    keyframes in `static/content.css` (`db-modal-backdrop-in` /
+    `db-modal-card-in`) handle the fade-scale. Just give the markup
+    the right classes.
+  - Tab bar (server-rendered, full reload per tab): use `.tab-bar` +
+    `.tab-link` (in `static/content.css`). No per-template style
+    duplication. The page-entrance animation handles the swap.
+  - Tab bar (in-page JS swap): use the daily-book pattern — JS
+    toggles a `.is-active` class on the visible panel, CSS animates
+    via a `db-tab-swap` keyframe. Trigger `void el.offsetHeight`
+    between class clear + add to re-fire the animation.
+  - Honor `prefers-reduced-motion: reduce` — there's a global rule
+    at the bottom of `static/content.css` that strips animations +
+    transitions. Don't write inline `style="transition: …"` that
+    bypasses it.
+
+  **Don't:**
+  - Use `display: none` ↔ `display: block` toggles without a
+    bridging class — display can't transition.
+  - Add long animations (>250ms) on workflow paths.
+  - Animate properties that cause layout shift (height/width,
+    margin) on elements above the user's reading position.
 
 ## Production deploy target (single source of truth)
 - **Web service**: `dinerobook` on Render → `https://dinerobook.com` (custom domain; the underlying Render hostname `dinerobook.onrender.com` is no longer canonical)

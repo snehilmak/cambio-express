@@ -253,7 +253,25 @@
   box-shadow: var(--db-shadow-dropdown);
   color: var(--db-gray-9);
   min-width: 230px;
+  /* Open/close animation. The dropdown is server-rendered with the
+     `hidden` attribute; the JS open/close routines toggle .is-open
+     for the visible state and delay the `hidden` re-set until after
+     the close transition completes. The from-state defined here is
+     what the dropdown looks like the instant `hidden` is removed
+     and before .is-open is applied — so the in-transition fades
+     and scales up from that origin. */
+  opacity: 0;
+  transform: translateY(-4px) scale(0.97);
+  transform-origin: top right;
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+  pointer-events: none;
 }
+.user-dropdown.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.user-dropdown[hidden] { display: none; }
 .user-dropdown .user-info {
   border-bottom: 1px solid var(--db-gray-3);
   padding: 12px 14px;

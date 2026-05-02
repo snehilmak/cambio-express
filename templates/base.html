@@ -421,17 +421,33 @@
     var avatar = document.getElementById('userAvatar');
     var dropdown = document.getElementById('userDropdown');
     if (avatar && dropdown) {
+      // Open/close uses a class toggle so CSS can transition the
+      // dropdown in/out. The `hidden` attribute is the underlying
+      // gate — set after the close transition finishes so a stale
+      // `.is-open` doesn't stick around if the close ever races.
+      var dropdownCloseTimer = null;
       function closeMenu() {
-        dropdown.setAttribute('hidden', '');
+        dropdown.classList.remove('is-open');
         avatar.setAttribute('aria-expanded', 'false');
+        clearTimeout(dropdownCloseTimer);
+        dropdownCloseTimer = setTimeout(function() {
+          if (!dropdown.classList.contains('is-open')) {
+            dropdown.setAttribute('hidden', '');
+          }
+        }, 200);
       }
       function openMenu() {
+        clearTimeout(dropdownCloseTimer);
         dropdown.removeAttribute('hidden');
+        // Force a paint so the from-state (opacity:0 + scale:0.98)
+        // commits before .is-open transitions to the visible state.
+        void dropdown.offsetHeight;
+        dropdown.classList.add('is-open');
         avatar.setAttribute('aria-expanded', 'true');
       }
       avatar.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (dropdown.hasAttribute('hidden')) openMenu(); else closeMenu();
+        if (dropdown.classList.contains('is-open')) closeMenu(); else openMenu();
       });
       document.addEventListener('click', function(e) {
         if (!dropdown.contains(e.target) && e.target !== avatar) closeMenu();
@@ -447,17 +463,27 @@
     var crownCopy = document.getElementById('refCrownCopy');
     var crownCode = document.getElementById('refCrownCode');
     if (crown && crownDrop) {
+      var crownCloseTimer = null;
       function rcClose() {
-        crownDrop.setAttribute('hidden', '');
+        crownDrop.classList.remove('is-open');
         crown.setAttribute('aria-expanded', 'false');
+        clearTimeout(crownCloseTimer);
+        crownCloseTimer = setTimeout(function() {
+          if (!crownDrop.classList.contains('is-open')) {
+            crownDrop.setAttribute('hidden', '');
+          }
+        }, 200);
       }
       function rcOpen() {
+        clearTimeout(crownCloseTimer);
         crownDrop.removeAttribute('hidden');
+        void crownDrop.offsetHeight;
+        crownDrop.classList.add('is-open');
         crown.setAttribute('aria-expanded', 'true');
       }
       crown.addEventListener('click', function(e) {
         e.stopPropagation();
-        if (crownDrop.hasAttribute('hidden')) rcOpen(); else rcClose();
+        if (crownDrop.classList.contains('is-open')) rcClose(); else rcOpen();
       });
       document.addEventListener('click', function(e) {
         if (!crownDrop.contains(e.target) && e.target !== crown) rcClose();
