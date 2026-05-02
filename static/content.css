@@ -233,6 +233,11 @@ input, select, textarea {
   outline: none;
 }
 input::placeholder, textarea::placeholder { color: var(--db-gray-5); }
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--db-gray-4);
+}
 input:focus, select:focus, textarea:focus {
   border-color: var(--db-neon);
   box-shadow: 0 0 0 3px var(--db-neon-glow-15);
@@ -246,15 +251,31 @@ input:disabled, select:disabled, textarea:disabled {
   cursor: not-allowed;
 }
 textarea { resize: vertical; min-height: 80px; }
+/* Native <select> control. The popup itself is OS-rendered and not
+   fully restyleable across browsers, but `option` rules below cover
+   Chrome/Edge/Firefox so the popup doesn't flash bright white in
+   our dark UI. The chevron is an inline SVG matching the design
+   system's stroke-icon aesthetic (replaces the older gradient-
+   triangle hack). currentColor on the SVG means it follows
+   --db-gray-7 set on the select. */
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, var(--db-gray-6) 50%),
-                    linear-gradient(135deg, var(--db-gray-6) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
-  background-size: 5px 5px, 5px 5px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%239199a8' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'><polyline points='1.5 1.75 6 6.25 10.5 1.75'/></svg>");
+  background-position: right 14px center;
   background-repeat: no-repeat;
-  padding-right: 32px;
+  padding-right: 36px;
+  cursor: pointer;
+}
+/* The native popup is OS-rendered. We can only set its base
+   background + text in Chrome/Edge/Firefox; Safari + iOS ignore
+   these and use the OS picker. We deliberately do NOT override
+   :checked or :hover — the browser's selection highlight needs
+   to remain visible against our dark background. */
+select option,
+select optgroup {
+  background-color: var(--db-bg-popover);
+  color: var(--db-gray-9);
 }
 
 /* Compact inline select for table-row actions (e.g. categorize a
