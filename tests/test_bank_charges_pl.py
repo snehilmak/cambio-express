@@ -151,6 +151,45 @@ def test_builtin_below_avg_bal_fee_case_insensitive(client, test_store_id):
         assert _match_builtin_bank_rule(t, a) == "bank_charge"
 
 
+def test_builtin_check_deposit_fee_matches_either_account(client, test_store_id):
+    """"CHECK DEPOSIT FEE" is account-agnostic and tagged generically."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_cdf_210")
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_cdf_230")
+    t1 = _make_txn(app, test_store_id, a210, amount_cents=-100,
+                   desc="CHECK DEPOSIT FEE", txn_id="cdf_210")
+    t2 = _make_txn(app, test_store_id, a230, amount_cents=-100,
+                   desc="CHECK DEPOSIT FEE", txn_id="cdf_230")
+    with app.app_context():
+        for tid, aid in [(t1, a210), (t2, a230)]:
+            t = db.session.get(BankTransaction, tid)
+            a = db.session.get(StripeBankAccount, aid)
+            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+
+
+def test_builtin_msb_monthly_fee_matches_either_account(client, test_store_id):
+    """"MSB MONTHLY FEE" is the monthly MSB-account maintenance charge,
+    matched account-agnostic."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_msb_230")
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_msb_210")
+    t1 = _make_txn(app, test_store_id, a230, amount_cents=-1500,
+                   desc="MSB MONTHLY FEE", txn_id="msb_230")
+    t2 = _make_txn(app, test_store_id, a210, amount_cents=-1500,
+                   desc="msb monthly fee", txn_id="msb_210_ci")
+    with app.app_context():
+        for tid, aid in [(t1, a230), (t2, a210)]:
+            t = db.session.get(BankTransaction, tid)
+            a = db.session.get(StripeBankAccount, aid)
+            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+
+
 # ── _bank_charges_for_month ──────────────────────────────────
 
 
