@@ -2242,6 +2242,14 @@ _BUILTIN_BANK_RULES = [
     # Below-average-balance fee can hit either Nizari account when a
     # balance dips below their threshold; account-agnostic match.
     ("BELOW AVG BAL FEE",  "",     "bank_charge"),
+    # Per-deposit fee on the MSB account when paper checks are
+    # deposited. Account-agnostic — Nizari has applied this to either
+    # account historically.
+    ("CHECK DEPOSIT FEE",  "",     "bank_charge"),
+    # Monthly MSB account maintenance fee. Hits the ••0230 MSB
+    # account; we still match account-agnostic in case Nizari ever
+    # bills it on a different account.
+    ("MSB MONTHLY FEE",    "",     "bank_charge"),
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
