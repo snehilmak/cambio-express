@@ -2250,6 +2250,8 @@ _BUILTIN_BANK_RULES = [
     # account; we still match account-agnostic in case Nizari ever
     # bills it on a different account.
     ("MSB MONTHLY FEE",    "",     "bank_charge"),
+    # Per-withdrawal fee on the MSB account. Account-agnostic.
+    ("MSB W/D FEE",        "",     "bank_charge"),
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
