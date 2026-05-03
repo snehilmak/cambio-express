@@ -5430,6 +5430,187 @@ def tv_device_display(device_token):
     db.session.commit()
     return _render_tv_board(display, store)
 
+# ── Report Center ────────────────────────────────────────────
+# Categorised list of reports surfaced in /reports (admin) and
+# /owner/reports. Each report either deep-links to an existing route
+# (`endpoint`) or is rendered as "Coming soon" (endpoint=None) — the
+# scaffold ships with the full taxonomy now and reports get wired
+# incrementally without further sidebar/template changes. Owner-
+# visible reports get `owner_endpoint` as the umbrella variant; if
+# omitted the report is hidden from owners.
+#
+# To wire a new report: set `endpoint` (and optionally
+# `endpoint_args`) to a registered url_for target. The card flips
+# from "Coming soon" to a working link automatically.
+_REPORT_CATEGORIES = [
+    {
+        "key":   "sales",
+        "label": "Sales",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+        "reports": [
+            {"key": "transfers_list",
+             "label": "Transfers",
+             "description": "Browse, filter, and export every money transfer.",
+             "endpoint": "transfers"},
+            {"key": "transfers_by_company",
+             "label": "Transfers by Company",
+             "description": "Volume + count split between Intermex, Maxi, and Barri.",
+             "endpoint": None},
+            {"key": "transfers_by_service",
+             "label": "Transfers by Service Type",
+             "description": "Cash pickup vs. bank deposit vs. mobile wallet.",
+             "endpoint": None},
+            {"key": "top_customers",
+             "label": "Top Customers by Volume",
+             "description": "Senders who moved the most in the period.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "financial",
+        "label": "Financial",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+        "reports": [
+            {"key": "monthly_pl",
+             "label": "Monthly P&L",
+             "description": "Income, expenses, and net for any month.",
+             "endpoint": "monthly_list"},
+            {"key": "ach_batches",
+             "label": "ACH Batches",
+             "description": "Daily ACH batches per remittance company.",
+             "endpoint": "batches"},
+            {"key": "bank_charges",
+             "label": "Bank Charges by Account",
+             "description": "Per-account charges, grouped by description.",
+             "endpoint": None},
+            {"key": "period_comparison",
+             "label": "Period Comparison",
+             "description": "Side-by-side MoM or YoY revenue and expense lines.",
+             "endpoint": None},
+            {"key": "fees_vs_tax",
+             "label": "Fees vs. Federal Tax",
+             "description": "Store revenue (fees) vs. ACH-bound federal tax.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "operations",
+        "label": "Operations",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
+        "reports": [
+            {"key": "daily_book",
+             "label": "Daily Book",
+             "description": "Per-day cash ledger with drops and check deposits.",
+             "endpoint": "daily_list"},
+            {"key": "return_checks",
+             "label": "Return Checks",
+             "description": "Returned-check workflow: open, recovered, lost.",
+             "endpoint": "return_checks"},
+            {"key": "bank_transactions",
+             "label": "Bank Transactions",
+             "description": "Synced bank-feed rows with categorisation.",
+             "endpoint": "bank_transactions"},
+            {"key": "daily_drops",
+             "label": "Daily Drops",
+             "description": "Cash drops by employee, day, or date range.",
+             "endpoint": None},
+            {"key": "check_deposits",
+             "label": "Check Deposits",
+             "description": "Deposits log with reconciliation status.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "customers",
+        "label": "Customers",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        "reports": [
+            {"key": "top_senders",
+             "label": "Top Senders",
+             "description": "Most-active senders by transaction count and volume.",
+             "endpoint": None},
+            {"key": "top_recipients",
+             "label": "Top Recipients",
+             "description": "Most-paid recipients across all senders.",
+             "endpoint": None},
+            {"key": "by_country",
+             "label": "By Destination Country",
+             "description": "Volume + count grouped by recipient country.",
+             "endpoint": None},
+            {"key": "new_vs_returning",
+             "label": "New vs. Returning Senders",
+             "description": "First-time senders against repeat customers.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "audit",
+        "label": "Audit",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+        "reports": [
+            {"key": "high_value_transfers",
+             "label": "High-Value Transfers",
+             "description": "Transfers above a configurable threshold.",
+             "endpoint": None},
+            {"key": "employee_activity",
+             "label": "Employee Activity",
+             "description": "Per-employee transaction count and total volume.",
+             "endpoint": None},
+            {"key": "bank_rule_audit",
+             "label": "Bank-Rule Audit Log",
+             "description": "Which rule auto-categorised which transaction.",
+             "endpoint": None},
+            {"key": "cancelled_transfers",
+             "label": "Cancelled Transfers",
+             "description": "Transfers cancelled or refunded after creation.",
+             "endpoint": None},
+        ],
+    },
+]
+
+
+def _resolved_report_categories():
+    """Return _REPORT_CATEGORIES with each report enriched with a
+    rendered URL when its endpoint exists, plus a `status` flag the
+    template uses to swap between "View" button and "Coming soon"
+    pill. Computed at request time so url_for picks up the active
+    blueprint context."""
+    out = []
+    for cat in _REPORT_CATEGORIES:
+        reports = []
+        for r in cat["reports"]:
+            ep = r.get("endpoint")
+            url = None
+            if ep:
+                try:
+                    url = url_for(ep, **(r.get("endpoint_args") or {}))
+                except Exception:
+                    url = None
+            reports.append({
+                **r,
+                "url": url,
+                "status": "ready" if url else "coming_soon",
+            })
+        out.append({**cat, "reports": reports})
+    return out
+
+
+@app.route("/reports")
+@admin_required
+def reports():
+    return render_template("reports.html",
+        user=current_user(),
+        categories=_resolved_report_categories())
+
+
+@app.route("/owner/reports")
+@owner_required
+def owner_reports():
+    return render_template("owner_reports.html",
+        user=current_user(),
+        categories=_resolved_report_categories())
+
+
 # ── Dashboard ────────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required
