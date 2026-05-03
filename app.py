@@ -5501,19 +5501,19 @@ _REPORT_CATEGORIES = [
             {"key": "returned_checks_status",
              "label": "Returned Check Status",
              "description": "Open, recovered, and lost returned checks for a period.",
-             "endpoint": None},
+             "endpoint": "report_returned_check_status"},
             {"key": "bank_txn_breakdown",
              "label": "Bank Transactions Breakdown",
              "description": "Synced bank-feed rows summarised by category.",
-             "endpoint": None},
+             "endpoint": "report_bank_txn_breakdown"},
             {"key": "daily_drops",
              "label": "Daily Drops",
-             "description": "Cash drops by employee, day, or date range.",
-             "endpoint": None},
+             "description": "Cash drops by day across the period.",
+             "endpoint": "report_daily_drops"},
             {"key": "check_deposits",
              "label": "Check Deposits",
-             "description": "Deposits log with reconciliation status.",
-             "endpoint": None},
+             "description": "Deposit log totalled by day across the period.",
+             "endpoint": "report_check_deposits"},
         ],
     },
     {
@@ -6241,6 +6241,327 @@ def report_new_vs_returning_csv():
                 f"{totals['sent']:.2f}"])
     return _csv_response(buf,
         f"new-vs-returning_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Returned Check Status ────────────────────────────────────
+def _returned_check_status_data(store_id, d_from, d_to):
+    """Group ReturnCheck rows bounced in the period by status. Each
+    bucket exposes count + total `amount` + total `recovered_amount`
+    (only meaningful for status='recovered'). Plus a derived net
+    G/L line: recovered - (loss + fraud).
+    """
+    rows_q = ReturnCheck.query.filter(
+        ReturnCheck.store_id == store_id,
+        ReturnCheck.bounced_on >= d_from,
+        ReturnCheck.bounced_on <= d_to,
+    ).all()
+    buckets = {s: {"count": 0, "amount": 0.0, "recovered": 0.0}
+               for s in RETURN_CHECK_STATUSES}
+    for rc in rows_q:
+        b = buckets.setdefault(rc.status, {"count": 0, "amount": 0.0,
+                                            "recovered": 0.0})
+        b["count"]  += 1
+        b["amount"] += float(rc.amount or 0)
+        if rc.status == "recovered":
+            # recovered_total is a property over related
+            # ReturnCheckPayment rows (the canonical recovery source).
+            b["recovered"] += float(rc.recovered_total or 0)
+    # Render in fixed display order so the cards always read the same.
+    display_order = ["pending", "recovered", "loss", "fraud"]
+    rows = []
+    for status in display_order:
+        b = buckets.get(status, {"count": 0, "amount": 0.0, "recovered": 0.0})
+        if b["count"] == 0:
+            continue
+        rows.append({
+            "status":    status.title(),
+            "status_key": status,
+            "count":     b["count"],
+            "amount":    b["amount"],
+            "recovered": b["recovered"],
+        })
+    totals = {
+        "count":      sum(b["count"]     for b in buckets.values()),
+        "amount":     sum(b["amount"]    for b in buckets.values()),
+        "recovered":  buckets.get("recovered", {}).get("recovered", 0.0),
+        "loss_fraud": (buckets.get("loss", {}).get("amount", 0.0)
+                       + buckets.get("fraud", {}).get("amount", 0.0)),
+    }
+    totals["net_gl"] = totals["recovered"] - totals["loss_fraud"]
+    return rows, totals
+
+
+@app.route("/reports/returned-check-status")
+@admin_required
+def report_returned_check_status():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _returned_check_status_data(sid, d_from, d_to)
+    return render_template("report_returned_check_status.html",
+        user=current_user(),
+        report_title="Returned Check Status",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="status" if len(rows) == 1 else "statuses",
+        kpis=[
+            {"label": "Total Checks",  "value": f"{totals['count']:,}",         "tone": "primary"},
+            {"label": "Total Amount",  "value": f"${totals['amount']:,.2f}",    "tone": "muted"},
+            {"label": "Recovered",     "value": f"${totals['recovered']:,.2f}", "tone": "neon"},
+            {"label": "Net G/L",       "value": f"${totals['net_gl']:,.2f}",
+             "tone": "neon" if totals["net_gl"] >= 0 else "muted"},
+        ],
+        export_url=url_for("report_returned_check_status_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/returned-check-status.csv")
+@admin_required
+def report_returned_check_status_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _returned_check_status_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Status", "Count", "Amount", "Recovered"])
+    for r in rows:
+        w.writerow([r["status"], r["count"],
+                    f"{r['amount']:.2f}", f"{r['recovered']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"],
+                f"{totals['amount']:.2f}",
+                f"{totals['recovered']:.2f}"])
+    w.writerow(["NET G/L", "", "", f"{totals['net_gl']:.2f}"])
+    return _csv_response(buf,
+        f"returned-checks_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Bank Transactions Breakdown ──────────────────────────────
+def _bank_txn_breakdown_data(store_id, d_from, d_to):
+    """Group BankTransaction rows posted in the period by category_slug,
+    summing absolute amount + count. Uncategorised rows bucketed under
+    "(uncategorised)". Sorted by absolute amount desc."""
+    month_start = datetime(d_from.year, d_from.month, d_from.day)
+    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    rows_q = (db.session.query(
+        BankTransaction.category_slug,
+        db.func.count(BankTransaction.id),
+        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
+    ).filter(
+        BankTransaction.store_id == store_id,
+        BankTransaction.posted_at >= month_start,
+        BankTransaction.posted_at <= month_end,
+    ).group_by(BankTransaction.category_slug).all())
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "inflow": 0.0, "outflow": 0.0}
+    for slug, count, cents in rows_q:
+        c = int(count or 0)
+        signed = float(cents or 0) / 100.0
+        rows.append({
+            "slug":   slug or "",
+            "label":  _bank_category_label(slug or ""),
+            "count":  c,
+            "signed": signed,
+            "amount": abs(signed),
+        })
+        totals["count"]  += c
+        totals["amount"] += abs(signed)
+        if signed >= 0:
+            totals["inflow"]  += signed
+        else:
+            totals["outflow"] += signed
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+@app.route("/reports/bank-transactions-breakdown")
+@admin_required
+def report_bank_txn_breakdown():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _bank_txn_breakdown_data(sid, d_from, d_to)
+    return render_template("report_bank_txn_breakdown.html",
+        user=current_user(),
+        report_title="Bank Transactions Breakdown",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="category" if len(rows) == 1 else "categories",
+        kpis=[
+            {"label": "Inflows",     "value": f"${totals['inflow']:,.2f}",  "tone": "neon"},
+            {"label": "Outflows",    "value": f"${abs(totals['outflow']):,.2f}", "tone": "muted"},
+            {"label": "Net Flow",    "value": f"${(totals['inflow'] + totals['outflow']):,.2f}", "tone": "primary"},
+            {"label": "Transaction Count", "value": f"{totals['count']:,}", "tone": "muted"},
+        ],
+        export_url=url_for("report_bank_txn_breakdown_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/bank-transactions-breakdown.csv")
+@admin_required
+def report_bank_txn_breakdown_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _bank_txn_breakdown_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Category", "Count", "Signed Amount", "Absolute Amount"])
+    for r in rows:
+        w.writerow([r["label"], r["count"],
+                    f"{r['signed']:.2f}", f"{r['amount']:.2f}"])
+    return _csv_response(buf,
+        f"bank-txn-breakdown_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Daily Drops ──────────────────────────────────────────────
+def _daily_drops_data(store_id, d_from, d_to):
+    """Sum DailyDrop rows in the period, grouped by report_date.
+    Each row: date + count + total. Plus a roll-up total."""
+    rows_q = (db.session.query(
+        DailyDrop.report_date,
+        db.func.count(DailyDrop.id),
+        db.func.coalesce(db.func.sum(DailyDrop.amount), 0.0),
+    ).filter(
+        DailyDrop.store_id == store_id,
+        DailyDrop.report_date >= d_from,
+        DailyDrop.report_date <= d_to,
+    ).group_by(DailyDrop.report_date).all())
+    rows = [{
+        "date":   d,
+        "count":  int(count or 0),
+        "amount": float(amount or 0),
+    } for d, count, amount in rows_q]
+    rows.sort(key=lambda r: r["date"], reverse=True)
+    totals = {
+        "count":  sum(r["count"]  for r in rows),
+        "amount": sum(r["amount"] for r in rows),
+    }
+    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
+    return rows, totals
+
+
+@app.route("/reports/daily-drops")
+@admin_required
+def report_daily_drops():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _daily_drops_data(sid, d_from, d_to)
+    return render_template("report_daily_drops.html",
+        user=current_user(),
+        report_title="Daily Drops",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="day" if len(rows) == 1 else "days",
+        kpis=[
+            {"label": "Total Dropped", "value": f"${totals['amount']:,.2f}",      "tone": "primary"},
+            {"label": "Drop Count",    "value": f"{totals['count']:,}",            "tone": "neon"},
+            {"label": "Active Days",   "value": f"{len(rows)}",                    "tone": "muted"},
+            {"label": "Avg / Day",     "value": f"${totals['avg_per_day']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_daily_drops_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/daily-drops.csv")
+@admin_required
+def report_daily_drops_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _daily_drops_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Date", "Drop Count", "Total Dropped"])
+    for r in rows:
+        w.writerow([r["date"].isoformat(), r["count"],
+                    f"{r['amount']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}"])
+    return _csv_response(buf,
+        f"daily-drops_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Check Deposits ───────────────────────────────────────────
+def _check_deposits_data(store_id, d_from, d_to):
+    """Sum CheckDeposit rows in the period, grouped by report_date."""
+    rows_q = (db.session.query(
+        CheckDeposit.report_date,
+        db.func.count(CheckDeposit.id),
+        db.func.coalesce(db.func.sum(CheckDeposit.amount), 0.0),
+    ).filter(
+        CheckDeposit.store_id == store_id,
+        CheckDeposit.report_date >= d_from,
+        CheckDeposit.report_date <= d_to,
+    ).group_by(CheckDeposit.report_date).all())
+    rows = [{
+        "date":   d,
+        "count":  int(count or 0),
+        "amount": float(amount or 0),
+    } for d, count, amount in rows_q]
+    rows.sort(key=lambda r: r["date"], reverse=True)
+    totals = {
+        "count":  sum(r["count"]  for r in rows),
+        "amount": sum(r["amount"] for r in rows),
+    }
+    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
+    return rows, totals
+
+
+@app.route("/reports/check-deposits")
+@admin_required
+def report_check_deposits():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _check_deposits_data(sid, d_from, d_to)
+    return render_template("report_check_deposits.html",
+        user=current_user(),
+        report_title="Check Deposits",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="day" if len(rows) == 1 else "days",
+        kpis=[
+            {"label": "Total Deposited", "value": f"${totals['amount']:,.2f}",      "tone": "primary"},
+            {"label": "Deposit Count",   "value": f"{totals['count']:,}",            "tone": "neon"},
+            {"label": "Active Days",     "value": f"{len(rows)}",                    "tone": "muted"},
+            {"label": "Avg / Day",       "value": f"${totals['avg_per_day']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_check_deposits_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/check-deposits.csv")
+@admin_required
+def report_check_deposits_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _check_deposits_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Date", "Deposit Count", "Total Deposited"])
+    for r in rows:
+        w.writerow([r["date"].isoformat(), r["count"],
+                    f"{r['amount']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}"])
+    return _csv_response(buf,
+        f"check-deposits_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # Superadmin Report Center — platform-level metrics and audit views.
