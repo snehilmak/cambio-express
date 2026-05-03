@@ -2558,7 +2558,44 @@ def sync_bank_transactions(store, since=None, until=None):
             app.logger.exception(f"FC txn sync crashed for {acct.stripe_account_id}")
     if total:
         db.session.commit()
+    # DB-side backfill: catch historical uncategorised rows that fall
+    # OUTSIDE Stripe's 7-day API window — those never came through
+    # the loop above so the per-row backfill never saw them. This pass
+    # is purely DB-side, no API call, and matches the same rule chain.
+    backfilled = _backfill_uncategorized_rows(store.id)
+    if backfilled:
+        db.session.commit()
     return new_rows, total, last_error
+
+
+def _backfill_uncategorized_rows(store_id):
+    """Run the rule chain against every uncategorised BankTransaction
+    in the store, regardless of age. Catches rows older than the
+    Stripe 7-day API window. Returns the count newly tagged. Caller
+    commits.
+
+    This is what makes "I added a new built-in rule, my old Nizari
+    transactions just got tagged on the next sync" work — without it,
+    historical rows would stay uncategorised forever because Stripe
+    won't re-yield them through Transaction.list.
+    """
+    from sqlalchemy import or_
+    rows = (BankTransaction.query
+            .filter(BankTransaction.store_id == store_id,
+                    or_(BankTransaction.category_slug.is_(None),
+                        BankTransaction.category_slug == ""))
+            .all())
+    if not rows:
+        return 0
+    accounts = {a.id: a for a in StripeBankAccount.query
+                .filter_by(store_id=store_id).all()}
+    tagged = 0
+    for row in rows:
+        acct = accounts.get(row.stripe_bank_account_id)
+        if _apply_rules_to_uncategorized_row(
+                row, acct, allow_auto_post=False):
+            tagged += 1
+    return tagged
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
