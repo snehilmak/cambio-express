@@ -2217,11 +2217,14 @@ BANK_CATEGORIES_NON_POSTING = {
     "mt_ach_intermex":    "MT ACH — Intermex",
     "mt_ach_maxi":        "MT ACH — Maxi",
     "mt_ach_barri":       "MT ACH — Barri",
-    # Bank charges flow into the MonthlyFinancial P&L's
-    # bank_charges_total field (single consolidated line). Historic
-    # 210/230-suffixed slugs are kept so already-tagged transactions
-    # still feed the P&L; new tagging uses the generic slug.
-    "bank_charge":        "Bank charge",
+    # Bank-charge slugs are dynamically per-account: bank_charge_<last4>.
+    # All bank-charge variants roll up to MonthlyFinancial.bank_charges_total
+    # via a prefix match in _bank_charges_for_month, so totals are
+    # unaffected — only per-row labelling reflects the account each
+    # charge hit. Static 210/230 entries below are kept ONLY so the
+    # operator dropdown for Nizari stores still surfaces them; future
+    # banks get their valid slugs added dynamically by
+    # _bank_category_groups via the store's connected accounts.
     "bank_charge_210":    "Bank charge — ••0210",
     "bank_charge_230":    "Bank charge — ••0230 (MSB)",
     "ignore":             "Ignore (don't reconcile)",
@@ -2237,46 +2240,32 @@ BANK_CATEGORIES_NON_POSTING = {
 # Each entry: (description_substring, account_last4_or_None, target_kind).
 # An empty `account_last4` matches any account.
 _BUILTIN_BANK_RULES = [
-    # Nizari Progressive Federal Credit Union
-    ("REMOTE DEPOSIT FEE", "0230", "bank_charge_230"),
-    # Below-average-balance fee can hit either Nizari account when a
-    # balance dips below their threshold; account-agnostic match.
-    ("BELOW AVG BAL FEE",  "",     "bank_charge"),
-    # Per-deposit fee on the MSB account when paper checks are
-    # deposited. Account-agnostic — Nizari has applied this to either
-    # account historically.
-    ("CHECK DEPOSIT FEE",  "",     "bank_charge"),
-    # Monthly MSB account maintenance fee. Hits the ••0230 MSB
-    # account; we still match account-agnostic in case Nizari ever
-    # bills it on a different account.
-    ("MSB MONTHLY FEE",    "",     "bank_charge"),
-    # Generic monthly account-service fee. Account-agnostic — distinct
-    # substring from "MSB MONTHLY FEE" so the two don't collide.
-    ("MONTHLY SERVICE FEE","",     "bank_charge"),
+    # Nizari Progressive Federal Credit Union.
+    # Most fees can hit any of the operator's accounts; one (RDC fee)
+    # is MSB-account-only. Targets use the sentinel
+    # `bank_charge_per_account`, which the matcher resolves to
+    # `bank_charge_<last4>` based on the actual account each charge
+    # lands on. This way:
+    #  - Nizari (2 accounts) splits per-account in the UI.
+    #  - A bank with 1 account just gets one bank_charge_<last4> slug,
+    #    no artificial split.
+    # All resulting slugs roll up to the consolidated bank_charges_total
+    # P&L line via the prefix-match in _bank_charges_for_month.
+    ("REMOTE DEPOSIT FEE", "0230", "bank_charge_per_account"),
+    ("BELOW AVG BAL FEE",  "",     "bank_charge_per_account"),
+    ("CHECK DEPOSIT FEE",  "",     "bank_charge_per_account"),
+    ("MSB MONTHLY FEE",    "",     "bank_charge_per_account"),
+    ("MONTHLY SERVICE FEE","",     "bank_charge_per_account"),
+    ("MSB W/D FEE",        "",     "bank_charge_per_account"),
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
-# Any category listed here flows automatically into the named P&L
-# column at month-end (the absolute monthly sum), and the field on
-# /monthly/<year>/<month> conditionally locks when auto > 0. Adding a
-# new automation = (1) add a rule to _BUILTIN_BANK_RULES OR let the
-# operator categorise manually, (2) add a row here so the auto-feed
-# picks it up. If the target column doesn't exist on MonthlyFinancial
-# yet, also add it to the model + _ADDED_COLUMNS.
-#
-# This is the single point of truth for "auto-tagged → P&L" — every
-# new category goes through here so future automations don't need
-# bespoke wiring in monthly_report().
-_BANK_CATEGORY_PL_FIELD = {
-    # Both Nizari-account slugs (kept for historic transaction tags)
-    # plus the generic slug all flow into the single consolidated
-    # bank_charges_total column. The auto-feed loop in monthly_report
-    # sums per-slug into the field, so multiple slugs sharing one
-    # column is supported by design.
-    "bank_charge_210": "bank_charges_total",
-    "bank_charge_230": "bank_charges_total",
-    "bank_charge":     "bank_charges_total",
-}
+# Reserved for future non-bank-charge auto-feeds (e.g. credit-card
+# fees, money-order rent). Currently empty: bank-charge slugs are
+# dynamic per-account (bank_charge_<last4>) and roll up to
+# bank_charges_total via the prefix-match in _bank_charges_for_month
+# — they don't need explicit registry entries.
+_BANK_CATEGORY_PL_FIELD = {}
 
 def _match_builtin_bank_rule(txn, account):
     """Return target_kind from _BUILTIN_BANK_RULES that matches the
@@ -2288,8 +2277,31 @@ def _match_builtin_bank_rule(txn, account):
             continue
         if want_last4 and last4 != want_last4:
             continue
+        # Sentinel: resolve to a per-account bank-charge slug so the
+        # operator sees which account each charge hit. Strips leading
+        # zeros from last4 to match the historic 210/230 convention
+        # (last4 "0210" → slug "bank_charge_210"). If somehow no last4
+        # is available, the built-in skips — the legacy generic
+        # `bank_charge` slug is retired, so we'd rather not fire than
+        # tag with a phantom slug.
+        if target == "bank_charge_per_account":
+            if not last4:
+                return None
+            stripped = last4.lstrip("0") or last4
+            return f"bank_charge_{stripped}"
         return target
     return None
+
+
+def _is_bank_charge_slug(slug):
+    """True for any bank-charge category slug — generic or per-account
+    (bank_charge_210, bank_charge_230, or any future bank_charge_<last4>).
+    Single point of truth for "is this a bank-charge slug" used by the
+    P&L feed and the breakdown helper."""
+    if not slug:
+        return False
+    return slug == "bank_charge" or slug.startswith("bank_charge_")
+
 
 def _bank_category_label(slug):
     """Operator-friendly label for a category slug."""
@@ -2297,21 +2309,64 @@ def _bank_category_label(slug):
         return "Uncategorized"
     if slug in BANK_CATEGORIES_NON_POSTING:
         return BANK_CATEGORIES_NON_POSTING[slug]
+    # Dynamic per-account bank-charge slug ("bank_charge_<last4>" for
+    # any last4 not in the static dict above) — render as
+    # "Bank charge — ••<last4>" so the UI doesn't show the raw slug.
+    if slug.startswith("bank_charge_"):
+        suffix = slug[len("bank_charge_"):]
+        if suffix:
+            return f"Bank charge — ••{suffix}"
     if slug in _LINE_ITEM_KINDS:
         return _LINE_ITEM_KINDS[slug][1].title()
     return slug
 
-def _bank_category_groups():
+def _is_valid_bank_category(slug, store_id):
+    """True if `slug` is an acceptable target for a manual bank-
+    transaction tag or a BankRule. Accepts every slug surfaced in
+    _bank_category_groups(store_id), including dynamic
+    bank_charge_<last4> for the store's connected accounts."""
+    if not slug:
+        return False
+    if slug in _LINE_ITEM_KINDS or slug in BANK_CATEGORIES_NON_POSTING:
+        return True
+    if slug.startswith("bank_charge_"):
+        last4 = slug[len("bank_charge_"):]
+        if not last4:
+            return False
+        for a in StripeBankAccount.query.filter_by(store_id=store_id).all():
+            if not a.last4:
+                continue
+            stripped = a.last4.lstrip("0") or a.last4
+            if last4 == stripped or last4 == a.last4:
+                return True
+    return False
+
+
+def _bank_category_groups(store_id=None):
     """Grouped (group_label, [(slug, label), ...]) tuples for dropdowns.
 
     The two groups stay separate in the UI so operators don't confuse
     auto-posting kinds with non-posting tags.
+
+    When `store_id` is given, the "Other" group is augmented with a
+    per-account `bank_charge_<last4>` entry for every connected
+    account that isn't already in the static dict — so single-account
+    or non-Nizari banks see a relevant bank-charge option.
     """
     daily = [(slug, meta[1].title()) for slug, meta in _LINE_ITEM_KINDS.items()]
-    other = list(BANK_CATEGORIES_NON_POSTING.items())
+    other = dict(BANK_CATEGORIES_NON_POSTING)  # copy so we can extend
+    if store_id is not None:
+        accounts = StripeBankAccount.query.filter_by(store_id=store_id).all()
+        for a in accounts:
+            if not a.last4:
+                continue
+            stripped = a.last4.lstrip("0") or a.last4
+            slug = f"bank_charge_{stripped}"
+            if slug not in other:
+                other[slug] = f"Bank charge — ••{a.last4}"
     return [
         ("Daily-book line items", daily),
-        ("Other (no daily-book impact)", other),
+        ("Other (no daily-book impact)", list(other.items())),
     ]
 
 def _is_daily_book_kind(slug):
@@ -2568,7 +2623,54 @@ def sync_bank_transactions(store, since=None, until=None):
     backfilled = _backfill_uncategorized_rows(store.id)
     if backfilled:
         db.session.commit()
+    # One-shot legacy migration: rows tagged generically as
+    # `bank_charge` by an older built-in rule get split into
+    # bank_charge_<last4> based on the account they hit. Idempotent;
+    # no-op once all legacy rows have been migrated.
+    migrated = _migrate_generic_bank_charge_per_account(store.id)
+    if migrated:
+        db.session.commit()
     return new_rows, total, last_error
+
+
+def _migrate_generic_bank_charge_per_account(store_id):
+    """Retag rows previously bulked into `bank_charge` by the older
+    account-agnostic built-ins (BELOW AVG BAL FEE, CHECK DEPOSIT FEE,
+    MSB MONTHLY FEE, MONTHLY SERVICE FEE) into bank_charge_<last4>
+    based on the account each charge hit. Returns the count migrated.
+    Caller commits.
+
+    Only retags when the description matches a current built-in
+    substring — that confirms the row was auto-tagged, not a deliberate
+    operator override that happened to use the generic slug.
+
+    Idempotent: rows already on a per-account slug are left alone.
+    Once every store has been migrated, the function is a permanent
+    no-op and can be dropped.
+    """
+    accounts = {a.id: a for a in StripeBankAccount.query
+                .filter_by(store_id=store_id).all()}
+    rows = (BankTransaction.query
+            .filter(BankTransaction.store_id == store_id,
+                    BankTransaction.category_slug == "bank_charge")
+            .all())
+    builtin_substrings = {sub for sub, _, _ in _BUILTIN_BANK_RULES}
+    migrated = 0
+    for row in rows:
+        acct = accounts.get(row.stripe_bank_account_id)
+        if not acct or not acct.last4:
+            continue
+        # Same stripped-last4 convention as the matcher.
+        stripped = acct.last4.lstrip("0") or acct.last4
+        desc = (row.description or "").upper()
+        if not any(sub in desc for sub in builtin_substrings):
+            # Description doesn't match any current built-in — treat
+            # the existing `bank_charge` tag as an operator override
+            # and don't touch it.
+            continue
+        row.category_slug = f"bank_charge_{stripped}"
+        migrated += 1
+    return migrated
 
 
 def _backfill_uncategorized_rows(store_id):
@@ -6384,14 +6486,13 @@ def monthly_report(year,month):
           # Stored as the signed P&L amount; the monthly_report
           # template renders it as a locked, editable-looking field.
           "return_check_gl":_return_check_monthly_pl(sid, year, month)}
-    # Auto-feed every category in _BANK_CATEGORY_PL_FIELD into its
-    # mapped P&L column. Multiple slugs may share one column (e.g.
-    # bank_charge / bank_charge_210 / bank_charge_230 all feed
-    # bank_charges_total) — sum per-slug into the field. Conditional
-    # LOCK below preserves manual entry when the auto value is 0.
-    for slug, field in _BANK_CATEGORY_PL_FIELD.items():
-        auto[field] = (auto.get(field, 0) or 0) + _bank_charges_for_month(
-            sid, year, month, slug)
+    # Bank-charge slugs feed the consolidated bank_charges_total
+    # column. Use a prefix match so any per-account slug
+    # (bank_charge_<last4>, plus the legacy bank_charge / 210 / 230)
+    # rolls up automatically without the operator having to register
+    # each new last4 they encounter.
+    auto["bank_charges_total"] = _bank_charges_for_month(
+        sid, year, month, prefix="bank_charge")
     # Two-level breakdown for the expandable bank-charge view: groups
     # transactions by description, each group expandable to its rows.
     auto["bank_charges_breakdown"] = _bank_charges_breakdown_for_month(
@@ -6416,12 +6517,11 @@ def monthly_report(year,month):
             # See _return_check_monthly_pl().
             "return_check_gl",
         }
-        # Bank-derived fields lock conditionally — only when there's
+        # Bank-charge column locks conditionally — only when there's
         # at least one tagged transaction in the month. Stores without
         # bank sync (or with no charges in this month) keep manual entry.
-        for field in _BANK_CATEGORY_PL_FIELD.values():
-            if auto.get(field, 0) > 0:
-                LOCKED_FIELDS.add(field)
+        if auto.get("bank_charges_total", 0) > 0:
+            LOCKED_FIELDS.add("bank_charges_total")
         for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
             "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
             "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
@@ -6606,11 +6706,12 @@ def _return_check_aging_buckets(store_ids, today=None):
     return buckets
 
 
-def _bank_charges_for_month(store_id, year, month, category_slug):
-    """Sum the absolute amount of BankTransactions tagged with the given
-    category_slug for the given month. Generic over any bank category
-    (despite the historical name) — used by every entry in
-    _BANK_CATEGORY_PL_FIELD to feed the monthly P&L.
+def _bank_charges_for_month(store_id, year, month, category_slug=None,
+                             *, prefix=None):
+    """Sum the absolute amount of BankTransactions tagged for the given
+    month. Pass either an exact `category_slug` or a `prefix` (used by
+    the bank-charges P&L feed to roll up every per-account slug like
+    bank_charge / bank_charge_210 / bank_charge_<last4> in one query).
 
     Stored amounts are signed (debits negative); P&L expense columns
     use positive numbers, so we abs().
@@ -6622,14 +6723,25 @@ def _bank_charges_for_month(store_id, year, month, category_slug):
     month_start = datetime(year, month, 1)
     month_end_d = monthrange(year, month)[1]
     month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    cents = (db.session.query(
+    q = db.session.query(
         db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0)
     ).filter(
         BankTransaction.store_id == store_id,
-        BankTransaction.category_slug == category_slug,
         BankTransaction.posted_at >= month_start,
         BankTransaction.posted_at <= month_end,
-    ).scalar())
+    )
+    if prefix is not None:
+        from sqlalchemy import or_
+        # SQL prefix match. Trailing % does the heavy lifting; we also
+        # accept the bare prefix itself (no underscore suffix) so the
+        # legacy `bank_charge` slug counts.
+        q = q.filter(or_(
+            BankTransaction.category_slug == prefix,
+            BankTransaction.category_slug.like(f"{prefix}_%"),
+        ))
+    else:
+        q = q.filter(BankTransaction.category_slug == category_slug)
+    cents = q.scalar()
     return abs(float(cents or 0)) / 100.0
 
 def _bank_charges_breakdown_for_month(store_id, year, month):
@@ -6651,21 +6763,21 @@ def _bank_charges_breakdown_for_month(store_id, year, month):
       ]
 
     Sorted by total descending so the biggest contributor reads first.
-    Pulls every slug listed in _BANK_CATEGORY_PL_FIELD that maps to
-    bank_charges_total — so any future built-in rule that targets a
-    bank-charge category automatically lands in the breakdown.
+    Uses a prefix match on `bank_charge%` so every per-account slug
+    (bank_charge_210, bank_charge_230, future bank_charge_<last4>)
+    rolls into the breakdown without explicit registry maintenance.
     """
+    from sqlalchemy import or_
     month_start = datetime(year, month, 1)
     month_end_d = monthrange(year, month)[1]
     month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    bank_charge_slugs = [slug for slug, field in _BANK_CATEGORY_PL_FIELD.items()
-                         if field == "bank_charges_total"]
-    if not bank_charge_slugs:
-        return []
     rows = (BankTransaction.query
             .filter(
                 BankTransaction.store_id == store_id,
-                BankTransaction.category_slug.in_(bank_charge_slugs),
+                or_(
+                    BankTransaction.category_slug == "bank_charge",
+                    BankTransaction.category_slug.like("bank_charge_%"),
+                ),
                 BankTransaction.posted_at >= month_start,
                 BankTransaction.posted_at <= month_end,
             )
@@ -7529,7 +7641,7 @@ def bank_transactions():
     ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
                accounts=accounts, q=q, account_id=account_id,
                date_from=date_from, date_to=date_to,
-               category_groups=_bank_category_groups(),
+               category_groups=_bank_category_groups(sid),
                category_label=_bank_category_label,
                line_by_id=line_by_id)
     if is_partial:
@@ -7550,7 +7662,7 @@ def bank_transaction_categorize(txn_id):
     if not target:
         flash("Pick a category before saving.", "error")
         return redirect(request.referrer or url_for("bank_transactions"))
-    if target not in _LINE_ITEM_KINDS and target not in BANK_CATEGORIES_NON_POSTING:
+    if not _is_valid_bank_category(target, sid):
         flash("Unknown category.", "error")
         return redirect(request.referrer or url_for("bank_transactions"))
     # Optional date override — supports the RDC case where the bank
@@ -7625,7 +7737,7 @@ def _parse_rule_form(form, sid):
     target_kind = (form.get("target_kind") or "").strip()
     if not target_kind:
         return None, "Pick a category to apply when this rule matches."
-    if target_kind not in _LINE_ITEM_KINDS and target_kind not in BANK_CATEGORIES_NON_POSTING:
+    if not _is_valid_bank_category(target_kind, sid):
         return None, "Unknown category."
     # Description match — both fields must be set together, or both empty.
     if desc_match_type and not desc_match_value:
@@ -7702,7 +7814,7 @@ def bank_rules():
                 .order_by(StripeBankAccount.connected_at.desc()).all())
     return render_template("bank_rules.html",
         user=current_user(), rules=rules, accounts=accounts,
-        category_groups=_bank_category_groups(),
+        category_groups=_bank_category_groups(sid),
         category_label=_bank_category_label)
 
 @app.route("/bank/rules/new", methods=["POST"])
