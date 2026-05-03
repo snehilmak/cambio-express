@@ -5523,20 +5523,20 @@ _REPORT_CATEGORIES = [
         "reports": [
             {"key": "top_senders",
              "label": "Top Senders",
-             "description": "Most-active senders by transaction count and volume.",
-             "endpoint": None},
+             "description": "Most-active senders by transaction count.",
+             "endpoint": "report_top_senders"},
             {"key": "top_recipients",
              "label": "Top Recipients",
              "description": "Most-paid recipients across all senders.",
-             "endpoint": None},
+             "endpoint": "report_top_recipients"},
             {"key": "by_country",
              "label": "By Destination Country",
              "description": "Volume + count grouped by recipient country.",
-             "endpoint": None},
+             "endpoint": "report_by_destination_country"},
             {"key": "new_vs_returning",
              "label": "New vs. Returning Senders",
-             "description": "First-time senders against repeat customers.",
-             "endpoint": None},
+             "description": "First-time senders against repeat customers in the period.",
+             "endpoint": "report_new_vs_returning"},
         ],
     },
     {
@@ -5725,11 +5725,13 @@ def _sales_by_employee_data(store_id, d_from, d_to):
     return rows, totals
 
 
-def _top_customers_data(store_id, d_from, d_to, *, limit=50):
+def _top_customers_data(store_id, d_from, d_to, *, sort_by="sent",
+                         limit=50):
     """Group active transfers by customer_id, resolve to Customer rows
     for display. Transfers without a customer link (legacy / walk-in)
     are bucketed as "(walk-in)" so the totals match the dashboard.
-    Top `limit` rows by total sent."""
+    Top `limit` rows by `sort_by` desc — "sent" for the volume view,
+    "count" for the most-active-sender view."""
     rows, totals = _aggregate_transfers(store_id, d_from, d_to,
                                          Transfer.customer_id)
     cust_ids = [r["key"] for r in rows if r["key"] is not None]
@@ -5750,8 +5752,99 @@ def _top_customers_data(store_id, d_from, d_to, *, limit=50):
             else:
                 r["customer"] = f"Customer #{cid}"
                 r["phone"] = ""
+    rows.sort(key=lambda r: r[sort_by], reverse=True)
+    return rows[:limit], totals
+
+
+def _top_recipients_data(store_id, d_from, d_to, *, limit=50):
+    """Group active transfers by recipient_name string. Recipients
+    aren't stored in their own table — `Transfer.recipient_name` is
+    the only signal — so we just group on the string. Empty names
+    bucketed as "(no name)". Top `limit` by sent."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.recipient_name)
+    for r in rows:
+        r["recipient"] = r.pop("key") or "(no name)"
     rows.sort(key=lambda r: r["sent"], reverse=True)
     return rows[:limit], totals
+
+
+def _by_destination_country_data(store_id, d_from, d_to):
+    """Group active transfers by destination country. Transfers
+    without a country bucketed as "(no country)"."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.country)
+    for r in rows:
+        r["country"] = r.pop("key") or "(no country)"
+    rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+def _new_vs_returning_data(store_id, d_from, d_to):
+    """Split senders active in the period into "new" vs "returning"
+    based on whether they had any prior transfer with this store
+    before `d_from`. Walk-in (customer_id IS NULL) transfers can't be
+    classified — same person can't be tracked across visits — so
+    they're aggregated separately as a third bucket. Returns
+    (rows, totals)."""
+    period_q = (db.session.query(
+        Transfer.customer_id,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+    ).filter(*_active_transfers_period_filters(store_id, d_from, d_to))
+     .group_by(Transfer.customer_id).all())
+
+    new_count = returning_count = walkin_count = 0
+    new_sent = returning_sent = walkin_sent = 0.0
+    new_txns = returning_txns = walkin_txns = 0
+
+    cust_ids = [c for c, _, _ in period_q if c is not None]
+    pre_ids = set()
+    if cust_ids:
+        pre_ids = {row[0] for row in (db.session.query(Transfer.customer_id)
+            .filter(
+                Transfer.store_id == store_id,
+                Transfer.send_date < d_from,
+                Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+                Transfer.customer_id.in_(cust_ids),
+            ).distinct().all())}
+
+    for cid, count, sent in period_q:
+        sent = float(sent or 0); count = int(count or 0)
+        if cid is None:
+            walkin_count += 1
+            walkin_sent  += sent
+            walkin_txns  += count
+        elif cid in pre_ids:
+            returning_count += 1
+            returning_sent  += sent
+            returning_txns  += count
+        else:
+            new_count += 1
+            new_sent  += sent
+            new_txns  += count
+
+    rows = [
+        {"bucket": "New senders",       "customers": new_count,
+         "txns":   new_txns,            "sent":      new_sent,
+         "tone":   "primary"},
+        {"bucket": "Returning senders", "customers": returning_count,
+         "txns":   returning_txns,      "sent":      returning_sent,
+         "tone":   "neon"},
+    ]
+    if walkin_count:
+        rows.append({"bucket": "Walk-in (unidentified)",
+                     "customers": walkin_count,
+                     "txns": walkin_txns, "sent": walkin_sent,
+                     "tone": "muted"})
+    totals = {
+        "customers": new_count + returning_count + walkin_count,
+        "txns":      new_txns + returning_txns + walkin_txns,
+        "sent":      new_sent + returning_sent + walkin_sent,
+        "new_count":       new_count,
+        "returning_count": returning_count,
+    }
+    return rows, totals
 
 
 @app.route("/reports/sales-by-company")
@@ -5958,6 +6051,196 @@ def report_top_customers_csv():
                     f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
     return _csv_response(buf,
         f"top-customers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Top Senders (by transaction count) ───────────────────────
+@app.route("/reports/top-senders")
+@admin_required
+def report_top_senders():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _top_customers_data(sid, d_from, d_to, sort_by="count")
+    return render_template("report_top_senders.html",
+        user=current_user(),
+        report_title="Top Senders",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="sender" if len(rows) == 1 else "senders",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Sender Count",   "value": f"{len(rows)}",             "tone": "neon"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_top_senders_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/top-senders.csv")
+@admin_required
+def report_top_senders_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _top_customers_data(sid, d_from, d_to, sort_by="count")
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Customer", "Phone", "Count", "Total Sent",
+                "Total Fees", "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["customer"], r["phone"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    return _csv_response(buf,
+        f"top-senders_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Top Recipients ───────────────────────────────────────────
+@app.route("/reports/top-recipients")
+@admin_required
+def report_top_recipients():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _top_recipients_data(sid, d_from, d_to)
+    return render_template("report_top_recipients.html",
+        user=current_user(),
+        report_title="Top Recipients",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="recipient" if len(rows) == 1 else "recipients",
+        kpis=[
+            {"label": "Total Sent",      "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Recipient Count", "value": f"{len(rows)}",             "tone": "neon"},
+            {"label": "Transfer Count",  "value": f"{totals['count']:,}",     "tone": "muted"},
+            {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_top_recipients_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/top-recipients.csv")
+@admin_required
+def report_top_recipients_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _top_recipients_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Recipient", "Count", "Total Sent",
+                "Total Fees", "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["recipient"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    return _csv_response(buf,
+        f"top-recipients_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── By Destination Country ───────────────────────────────────
+@app.route("/reports/by-destination-country")
+@admin_required
+def report_by_destination_country():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _by_destination_country_data(sid, d_from, d_to)
+    return render_template("report_by_destination_country.html",
+        user=current_user(),
+        report_title="By Destination Country",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="country" if len(rows) == 1 else "countries",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Country Count",  "value": f"{len(rows)}",             "tone": "neon"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_by_destination_country_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/by-destination-country.csv")
+@admin_required
+def report_by_destination_country_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _by_destination_country_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Country", "Count", "Total Sent",
+                "Total Fees", "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["country"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"],
+                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
+                f"{totals['tax']:.2f}", ""])
+    return _csv_response(buf,
+        f"by-destination-country_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── New vs. Returning Senders ────────────────────────────────
+@app.route("/reports/new-vs-returning")
+@admin_required
+def report_new_vs_returning():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _new_vs_returning_data(sid, d_from, d_to)
+    return render_template("report_new_vs_returning.html",
+        user=current_user(),
+        report_title="New vs. Returning Senders",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="bucket" if len(rows) == 1 else "buckets",
+        kpis=[
+            {"label": "Total Senders",  "value": f"{totals['customers']:,}", "tone": "primary"},
+            {"label": "New",            "value": f"{totals['new_count']:,}", "tone": "neon"},
+            {"label": "Returning",      "value": f"{totals['returning_count']:,}", "tone": "muted"},
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_new_vs_returning_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+        totals=totals,
+    )
+
+
+@app.route("/reports/new-vs-returning.csv")
+@admin_required
+def report_new_vs_returning_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _new_vs_returning_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Bucket", "Customers", "Transfers", "Total Sent"])
+    for r in rows:
+        w.writerow([r["bucket"], r["customers"], r["txns"],
+                    f"{r['sent']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["customers"], totals["txns"],
+                f"{totals['sent']:.2f}"])
+    return _csv_response(buf,
+        f"new-vs-returning_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # Superadmin Report Center — platform-level metrics and audit views.
