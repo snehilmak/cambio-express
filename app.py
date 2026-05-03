@@ -5546,20 +5546,20 @@ _REPORT_CATEGORIES = [
         "reports": [
             {"key": "high_value_transfers",
              "label": "High-Value Transfers",
-             "description": "Transfers above a configurable threshold.",
-             "endpoint": None},
+             "description": "Transfers above a configurable threshold (default $3,000).",
+             "endpoint": "report_high_value_transfers"},
             {"key": "employee_activity",
              "label": "Employee Activity",
-             "description": "Per-employee transaction count and total volume.",
-             "endpoint": None},
+             "description": "Per-employee transfers, totals, cancelled count, and last activity.",
+             "endpoint": "report_employee_activity"},
             {"key": "bank_rule_audit",
              "label": "Bank-Rule Audit Log",
              "description": "Which rule auto-categorised which transaction.",
-             "endpoint": None},
+             "endpoint": "report_bank_rule_audit"},
             {"key": "cancelled_transfers",
              "label": "Cancelled Transfers",
-             "description": "Transfers cancelled or refunded after creation.",
-             "endpoint": None},
+             "description": "Transfers cancelled or rejected within the period.",
+             "endpoint": "report_cancelled_transfers"},
         ],
     },
 ]
@@ -6562,6 +6562,384 @@ def report_check_deposits_csv():
     w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}"])
     return _csv_response(buf,
         f"check-deposits_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── High-Value Transfers ─────────────────────────────────────
+def _high_value_transfers_data(store_id, d_from, d_to, threshold):
+    """List active transfers in the period whose `send_amount` is at
+    or above `threshold`. Returns rows + totals (no grouping — each
+    row is a single Transfer)."""
+    rows_q = (Transfer.query
+              .filter(*_active_transfers_period_filters(store_id, d_from, d_to))
+              .filter(Transfer.send_amount >= threshold)
+              .order_by(Transfer.send_amount.desc(),
+                        Transfer.send_date.desc())
+              .all())
+    rows = [{
+        "send_date":     t.send_date,
+        "sender_name":   t.sender_name or "",
+        "recipient_name":t.recipient_name or "",
+        "country":       t.country or "",
+        "company":       t.company or "",
+        "amount":        float(t.send_amount or 0),
+        "fee":           float(t.fee or 0),
+        "tax":           float(t.federal_tax or 0),
+        "confirm":       t.confirm_number or "",
+    } for t in rows_q]
+    totals = {
+        "count":  len(rows),
+        "amount": sum(r["amount"] for r in rows),
+        "fees":   sum(r["fee"]    for r in rows),
+        "tax":    sum(r["tax"]    for r in rows),
+    }
+    return rows, totals
+
+
+def _parse_threshold(args, default=3000):
+    try:
+        v = float(args.get("threshold") or default)
+    except (ValueError, TypeError):
+        v = default
+    return max(0.0, v)
+
+
+@app.route("/reports/high-value-transfers")
+@admin_required
+def report_high_value_transfers():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    threshold = _parse_threshold(request.args)
+    rows, totals = _high_value_transfers_data(sid, d_from, d_to, threshold)
+    return render_template("report_high_value_transfers.html",
+        user=current_user(),
+        report_title="High-Value Transfers",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="transfer" if len(rows) == 1 else "transfers",
+        kpis=[
+            {"label": "Threshold",     "value": f"≥ ${threshold:,.0f}",       "tone": "primary"},
+            {"label": "Total Volume",  "value": f"${totals['amount']:,.2f}",  "tone": "neon"},
+            {"label": "Transfer Count","value": f"{totals['count']:,}",        "tone": "muted"},
+            {"label": "Total Fees",    "value": f"${totals['fees']:,.2f}",    "tone": "muted"},
+        ],
+        export_url=url_for("report_high_value_transfers_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat(),
+                              "threshold": threshold}),
+        rows=rows,
+        threshold=threshold,
+    )
+
+
+@app.route("/reports/high-value-transfers.csv")
+@admin_required
+def report_high_value_transfers_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    threshold = _parse_threshold(request.args)
+    rows, totals = _high_value_transfers_data(sid, d_from, d_to, threshold)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Date", "Sender", "Recipient", "Country", "Company",
+                "Send Amount", "Fee", "Federal Tax", "Confirm #"])
+    for r in rows:
+        w.writerow([r["send_date"].isoformat(),
+                    r["sender_name"], r["recipient_name"], r["country"],
+                    r["company"], f"{r['amount']:.2f}",
+                    f"{r['fee']:.2f}", f"{r['tax']:.2f}", r["confirm"]])
+    return _csv_response(buf,
+        f"high-value-transfers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Employee Activity ────────────────────────────────────────
+def _employee_activity_data(store_id, d_from, d_to):
+    """Per-employee activity: count + sent (active transfers) + cancel
+    count + last_activity timestamp. Different from Sales by Employee
+    in that it includes cancelled / rejected — this is an audit /
+    activity view, not a revenue view."""
+    # Active transfers per employee.
+    active_q = (db.session.query(
+        Transfer.created_by,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.max(Transfer.send_date),
+    ).filter(
+        Transfer.store_id == store_id,
+        Transfer.send_date >= d_from,
+        Transfer.send_date <= d_to,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.created_by).all())
+    # Cancelled / Rejected count per employee.
+    cancel_q = (db.session.query(
+        Transfer.created_by,
+        db.func.count(Transfer.id),
+    ).filter(
+        Transfer.store_id == store_id,
+        Transfer.send_date >= d_from,
+        Transfer.send_date <= d_to,
+        Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.created_by).all())
+    cancels_by_uid = {uid: int(c or 0) for uid, c in cancel_q}
+    # Resolve user names.
+    all_uids = ({uid for uid, *_ in active_q if uid is not None}
+                | {uid for uid, _ in cancel_q if uid is not None})
+    users = ({u.id: u for u in User.query.filter(User.id.in_(all_uids)).all()}
+             if all_uids else {})
+    rows_by_uid = {}
+    for uid, count, sent, last_date in active_q:
+        rows_by_uid[uid] = {
+            "uid":           uid,
+            "count":         int(count or 0),
+            "sent":          float(sent or 0),
+            "cancels":       cancels_by_uid.get(uid, 0),
+            "last_activity": last_date,
+        }
+    # Add employees who only have cancelled transfers (no active rows).
+    for uid, c in cancels_by_uid.items():
+        if uid not in rows_by_uid:
+            rows_by_uid[uid] = {
+                "uid":           uid,
+                "count":         0,
+                "sent":          0.0,
+                "cancels":       c,
+                "last_activity": None,
+            }
+    rows = []
+    for uid, r in rows_by_uid.items():
+        if uid is None:
+            r["employee"] = "(unattributed)"
+            r["username"] = ""
+        else:
+            u = users.get(uid)
+            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
+            r["username"] = u.username if u else ""
+        del r["uid"]
+        rows.append(r)
+    rows.sort(key=lambda r: (r["count"] + r["cancels"]), reverse=True)
+    totals = {
+        "count":   sum(r["count"]   for r in rows),
+        "sent":    sum(r["sent"]    for r in rows),
+        "cancels": sum(r["cancels"] for r in rows),
+    }
+    return rows, totals
+
+
+@app.route("/reports/employee-activity")
+@admin_required
+def report_employee_activity():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _employee_activity_data(sid, d_from, d_to)
+    return render_template("report_employee_activity.html",
+        user=current_user(),
+        report_title="Employee Activity",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="employee" if len(rows) == 1 else "employees",
+        kpis=[
+            {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "primary"},
+            {"label": "Active Transfers", "value": f"{totals['count']:,}",     "tone": "neon"},
+            {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
+            {"label": "Cancelled / Rejected", "value": f"{totals['cancels']:,}", "tone": "muted"},
+        ],
+        export_url=url_for("report_employee_activity_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/employee-activity.csv")
+@admin_required
+def report_employee_activity_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _employee_activity_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Employee", "Username", "Active Transfers", "Total Sent",
+                "Cancelled / Rejected", "Last Activity"])
+    for r in rows:
+        last = r["last_activity"].isoformat() if r["last_activity"] else ""
+        w.writerow([r["employee"], r["username"], r["count"],
+                    f"{r['sent']:.2f}", r["cancels"], last])
+    return _csv_response(buf,
+        f"employee-activity_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Bank-Rule Audit Log ──────────────────────────────────────
+def _bank_rule_audit_data(store_id, d_from, d_to):
+    """Group BankTransaction rows that were auto-categorised by an
+    operator BankRule (matched_rule_id IS NOT NULL) by rule. Each
+    rule: count of matched txns + total absolute amount. Manual
+    operator overrides (matched_rule_id IS NULL even if categorised)
+    are not counted — those weren't a rule firing."""
+    month_start = datetime(d_from.year, d_from.month, d_from.day)
+    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    rows_q = (db.session.query(
+        BankTransaction.matched_rule_id,
+        db.func.count(BankTransaction.id),
+        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
+    ).filter(
+        BankTransaction.store_id == store_id,
+        BankTransaction.matched_rule_id.isnot(None),
+        BankTransaction.posted_at >= month_start,
+        BankTransaction.posted_at <= month_end,
+    ).group_by(BankTransaction.matched_rule_id).all())
+    rule_ids = [rid for rid, *_ in rows_q]
+    rules = ({r.id: r for r in BankRule.query.filter(BankRule.id.in_(rule_ids)).all()}
+             if rule_ids else {})
+    rows = []
+    for rid, count, cents in rows_q:
+        rule = rules.get(rid)
+        if rule is None:
+            label = f"Rule #{rid} (deleted)"
+            target = ""
+            match = ""
+        else:
+            label = f"Rule #{rule.id}"
+            target = _bank_category_label(rule.target_kind or "")
+            match = (f'{rule.desc_match_type or "any"}: '
+                     f'"{rule.desc_match_value or ""}"').strip(": ")
+        rows.append({
+            "rule_id": rid,
+            "label":   label,
+            "target":  target,
+            "match":   match,
+            "count":   int(count or 0),
+            "amount":  abs(float(cents or 0)) / 100.0,
+        })
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {
+        "count":  sum(r["count"]  for r in rows),
+        "amount": sum(r["amount"] for r in rows),
+        "rules":  len(rows),
+    }
+    return rows, totals
+
+
+@app.route("/reports/bank-rule-audit")
+@admin_required
+def report_bank_rule_audit():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _bank_rule_audit_data(sid, d_from, d_to)
+    return render_template("report_bank_rule_audit.html",
+        user=current_user(),
+        report_title="Bank-Rule Audit Log",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="rule" if len(rows) == 1 else "rules",
+        kpis=[
+            {"label": "Active Rules",    "value": f"{totals['rules']}",        "tone": "primary"},
+            {"label": "Auto-tagged Txns","value": f"{totals['count']:,}",       "tone": "neon"},
+            {"label": "Total Amount",    "value": f"${totals['amount']:,.2f}",  "tone": "muted"},
+        ],
+        export_url=url_for("report_bank_rule_audit_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/bank-rule-audit.csv")
+@admin_required
+def report_bank_rule_audit_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _bank_rule_audit_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Rule", "Match", "Target", "Matched Count", "Total Amount"])
+    for r in rows:
+        w.writerow([r["label"], r["match"], r["target"],
+                    r["count"], f"{r['amount']:.2f}"])
+    return _csv_response(buf,
+        f"bank-rule-audit_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Cancelled Transfers ──────────────────────────────────────
+def _cancelled_transfers_data(store_id, d_from, d_to):
+    """List Cancelled / Rejected transfers in the period."""
+    rows_q = (Transfer.query
+              .filter(
+                Transfer.store_id == store_id,
+                Transfer.send_date >= d_from,
+                Transfer.send_date <= d_to,
+                Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
+              )
+              .order_by(Transfer.send_date.desc(), Transfer.id.desc())
+              .all())
+    rows = [{
+        "send_date":     t.send_date,
+        "sender_name":   t.sender_name or "",
+        "recipient_name":t.recipient_name or "",
+        "country":       t.country or "",
+        "company":       t.company or "",
+        "amount":        float(t.send_amount or 0),
+        "status":        t.status or "",
+        "status_notes":  t.status_notes or "",
+        "confirm":       t.confirm_number or "",
+    } for t in rows_q]
+    totals = {
+        "count":     len(rows),
+        "amount":    sum(r["amount"] for r in rows),
+        "canceled":  sum(1 for r in rows if r["status"] == "Canceled"),
+        "rejected":  sum(1 for r in rows if r["status"] == "Rejected"),
+    }
+    return rows, totals
+
+
+@app.route("/reports/cancelled-transfers")
+@admin_required
+def report_cancelled_transfers():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _cancelled_transfers_data(sid, d_from, d_to)
+    return render_template("report_cancelled_transfers.html",
+        user=current_user(),
+        report_title="Cancelled Transfers",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="transfer" if len(rows) == 1 else "transfers",
+        kpis=[
+            {"label": "Total",     "value": f"{totals['count']:,}",        "tone": "primary"},
+            {"label": "Canceled",  "value": f"{totals['canceled']:,}",     "tone": "muted"},
+            {"label": "Rejected",  "value": f"{totals['rejected']:,}",     "tone": "muted"},
+            {"label": "Total Amount","value": f"${totals['amount']:,.2f}", "tone": "muted"},
+        ],
+        export_url=url_for("report_cancelled_transfers_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/cancelled-transfers.csv")
+@admin_required
+def report_cancelled_transfers_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _cancelled_transfers_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Date", "Sender", "Recipient", "Country", "Company",
+                "Status", "Send Amount", "Notes", "Confirm #"])
+    for r in rows:
+        w.writerow([r["send_date"].isoformat(),
+                    r["sender_name"], r["recipient_name"], r["country"],
+                    r["company"], r["status"], f"{r['amount']:.2f}",
+                    r["status_notes"], r["confirm"]])
+    return _csv_response(buf,
+        f"cancelled-transfers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # Superadmin Report Center — platform-level metrics and audit views.
