@@ -190,6 +190,27 @@ def test_builtin_msb_monthly_fee_matches_either_account(client, test_store_id):
             assert _match_builtin_bank_rule(t, a) == "bank_charge"
 
 
+def test_builtin_monthly_service_fee_matches(client, test_store_id):
+    """"MONTHLY SERVICE FEE" is the generic monthly account-service
+    fee, account-agnostic. Distinct substring from "MSB MONTHLY FEE"
+    — both can co-exist on the same statement."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_msf_210")
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_msf_230")
+    t1 = _make_txn(app, test_store_id, a210, amount_cents=-1000,
+                   desc="MONTHLY SERVICE FEE", txn_id="msf_210")
+    t2 = _make_txn(app, test_store_id, a230, amount_cents=-1000,
+                   desc="Monthly Service Fee", txn_id="msf_230_ci")
+    with app.app_context():
+        for tid, aid in [(t1, a210), (t2, a230)]:
+            t = db.session.get(BankTransaction, tid)
+            a = db.session.get(StripeBankAccount, aid)
+            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+
+
 # ── _apply_rules_to_uncategorized_row ────────────────────────
 
 

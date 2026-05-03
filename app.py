@@ -2250,6 +2250,9 @@ _BUILTIN_BANK_RULES = [
     # account; we still match account-agnostic in case Nizari ever
     # bills it on a different account.
     ("MSB MONTHLY FEE",    "",     "bank_charge"),
+    # Generic monthly account-service fee. Account-agnostic — distinct
+    # substring from "MSB MONTHLY FEE" so the two don't collide.
+    ("MONTHLY SERVICE FEE","",     "bank_charge"),
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
