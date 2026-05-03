@@ -1,0 +1,32 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No returned checks bounced in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div class="report-card__name">{{ r.status }}</div>
+    <div class="report-card__count mono">{{ r.count }}<span class="report-card__count-suffix"> {{ 'check' if r.count == 1 else 'checks' }}</span></div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Total Amount</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.amount) }}</div>
+    </div>
+    {% if r.status_key == 'recovered' %}
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Recovered</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.recovered) }}</div>
+    </div>
+    {% endif %}
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Avg per Check</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format((r.amount / r.count) if r.count else 0) }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
