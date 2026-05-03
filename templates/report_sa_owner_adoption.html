@@ -1,0 +1,19 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No multi-store owners yet.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card report-card--compact">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">{{ r.owner }}</div>
+      {% if r.email %}<div class="report-card__sub mono">{{ r.email }}</div>{% endif %}
+    </div>
+    <div class="report-card__count mono">{{ r.stores }}<span class="report-card__count-suffix"> stores</span></div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">Retention queue is empty.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">{{ r.name }}</div>
+      <div class="report-card__sub mono">{{ r.slug }} · {{ r.plan }}</div>
+    </div>
+    <div class="report-card__count mono"
+         style="color: {% if r.ready_to_purge %}var(--db-negative){% elif r.days_left <= 14 %}var(--db-warning){% else %}var(--db-gray-9){% endif %};">
+      {{ r.days_left }}<span class="report-card__count-suffix"> days</span>
+    </div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Purge Date</div>
+      <div class="report-card__metric-value mono">{{ r.until.isoformat() if r.until else '—' }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Status</div>
+      <div class="report-card__metric-value mono">{% if r.ready_to_purge %}Ready{% else %}Pending{% endif %}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
