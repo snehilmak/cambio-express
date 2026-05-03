@@ -1,0 +1,15 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">{{ r.label }}</div>
+      <div class="report-card__sub">{{ r.note }}</div>
+    </div>
+    <div class="report-card__count mono">${{ '{:,.2f}'.format(r.amount) }}</div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

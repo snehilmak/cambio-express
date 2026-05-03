@@ -47,16 +47,15 @@ def test_wired_report_links_to_existing_route(client, test_store_id):
     assert ">View<" in body
 
 
-def test_unwired_reports_show_coming_soon(client, test_store_id):
-    """Reports without an endpoint render the Coming-soon pill."""
-    _admin_login(client, test_store_id)
-    resp = client.get("/reports")
+def test_unwired_reports_show_coming_soon(client):
+    """Reports without an endpoint render the Coming-soon pill. The
+    superadmin Report Center still has unwired entries — that's the
+    canonical place to assert this rendering. Admin / owner registries
+    have been fully wired across the report-batch PRs."""
+    _superadmin_login(client)
+    resp = client.get("/superadmin/reports")
     body = resp.get_data(as_text=True)
     assert "Coming soon" in body
-    # Top Senders is currently unwired — its label should appear
-    # alongside a coming-soon pill (we only assert label presence;
-    # the row-level pairing is exercised visually).
-    assert "Top Senders" in body
 
 
 def test_reports_route_requires_admin(client):
@@ -143,4 +142,3 @@ def test_owner_reports_page_renders(client):
     body = resp.get_data(as_text=True)
     assert "Report Center" in body
     assert "Sales" in body
-    assert "Coming soon" in body
