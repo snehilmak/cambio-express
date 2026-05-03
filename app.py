@@ -5455,15 +5455,15 @@ _REPORT_CATEGORIES = [
             {"key": "sales_by_service",
              "label": "Sales by Service Type",
              "description": "Money Transfer vs. Bill Payment vs. Top Up vs. Recharge — volume and count.",
-             "endpoint": None},
+             "endpoint": "report_sales_by_service_type"},
             {"key": "sales_by_employee",
              "label": "Sales by Employee",
              "description": "Per-employee transfer count and total volume.",
-             "endpoint": None},
+             "endpoint": "report_sales_by_employee"},
             {"key": "top_customers",
              "label": "Top Customers by Volume",
              "description": "Senders who moved the most in the period.",
-             "endpoint": None},
+             "endpoint": "report_top_customers"},
         ],
     },
     {
@@ -5633,41 +5633,125 @@ def _report_period(args):
     return d_from, d_to, label
 
 
-def _sales_by_company_data(store_id, d_from, d_to):
-    """Aggregate Transfer rows by company within a date range. Pure
-    function so the HTML view + CSV export share the same query.
-    Excludes Canceled / Rejected — same convention as the dashboard
-    + owner pages."""
-    rows_q = (db.session.query(
-        Transfer.company,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-    ).filter(
+def _active_transfers_period_filters(store_id, d_from, d_to):
+    """Standard filter set every Transfer-based report uses: scoped to
+    the store, posted in the period, and excluding Canceled / Rejected
+    (same convention as the dashboard + owner pages). Spread into a
+    .filter(...) call: `q.filter(*_active_transfers_period_filters(...))`."""
+    return (
         Transfer.store_id == store_id,
         Transfer.send_date >= d_from,
         Transfer.send_date <= d_to,
         Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.company).all())
+    )
+
+
+def _aggregate_transfers(store_id, d_from, d_to, group_col):
+    """Group active transfers in the period by `group_col`, returning
+    (rows, totals). Each row exposes the grouped key + count + sums of
+    send_amount / fee / federal_tax + per-row avg. Totals carries the
+    same sums across all rows. Rows are NOT sorted — callers decide.
+    """
+    rows_q = (db.session.query(
+        group_col,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
+    ).filter(*_active_transfers_period_filters(store_id, d_from, d_to))
+     .group_by(group_col).all())
     rows = []
     totals = {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
-    for company, count, sent, fees, tax in rows_q:
+    for key, count, sent, fees, tax in rows_q:
+        c = int(count or 0)
         sent = float(sent or 0); fees = float(fees or 0); tax = float(tax or 0)
         rows.append({
-            "company": company or "(no company)",
-            "count":   int(count or 0),
-            "sent":    sent,
-            "fees":    fees,
-            "tax":     tax,
-            "avg":     (sent / count) if count else 0.0,
+            "key":   key,
+            "count": c,
+            "sent":  sent,
+            "fees":  fees,
+            "tax":   tax,
+            "avg":   (sent / c) if c else 0.0,
         })
         totals["sent"]  += sent
         totals["fees"]  += fees
         totals["tax"]   += tax
-        totals["count"] += int(count or 0)
+        totals["count"] += c
+    return rows, totals
+
+
+def _sales_by_company_data(store_id, d_from, d_to):
+    """Group active transfers by company and rename the grouping key
+    to `company` for the per-row template."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.company)
+    for r in rows:
+        r["company"] = r.pop("key") or "(no company)"
     rows.sort(key=lambda r: r["sent"], reverse=True)
     return rows, totals
+
+
+def _sales_by_service_data(store_id, d_from, d_to):
+    """Group active transfers by service_type (Money Transfer / Bill
+    Payment / Top Up / Recharge)."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.service_type)
+    for r in rows:
+        r["service_type"] = r.pop("key") or "(no service)"
+    rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+def _sales_by_employee_data(store_id, d_from, d_to):
+    """Group active transfers by created_by, then resolve user IDs to
+    display names via a single in-clause lookup. Transfers with no
+    `created_by` are bucketed as "(unattributed)" so legacy rows
+    don't disappear from the totals."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.created_by)
+    user_ids = [r["key"] for r in rows if r["key"] is not None]
+    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
+    for r in rows:
+        uid = r.pop("key")
+        if uid is None:
+            r["employee"] = "(unattributed)"
+            r["username"] = ""
+        else:
+            u = users.get(uid)
+            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
+            r["username"] = u.username if u else ""
+    rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+def _top_customers_data(store_id, d_from, d_to, *, limit=50):
+    """Group active transfers by customer_id, resolve to Customer rows
+    for display. Transfers without a customer link (legacy / walk-in)
+    are bucketed as "(walk-in)" so the totals match the dashboard.
+    Top `limit` rows by total sent."""
+    rows, totals = _aggregate_transfers(store_id, d_from, d_to,
+                                         Transfer.customer_id)
+    cust_ids = [r["key"] for r in rows if r["key"] is not None]
+    customers = ({c.id: c for c in
+                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
+                 if cust_ids else {})
+    for r in rows:
+        cid = r.pop("key")
+        if cid is None:
+            r["customer"] = "(walk-in)"
+            r["phone"] = ""
+        else:
+            c = customers.get(cid)
+            if c:
+                r["customer"] = c.full_name or "(no name)"
+                r["phone"] = (f"{c.phone_country}{c.phone_number}"
+                              if c.phone_number else "")
+            else:
+                r["customer"] = f"Customer #{cid}"
+                r["phone"] = ""
+    rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows[:limit], totals
 
 
 @app.route("/reports/sales-by-company")
@@ -5720,6 +5804,160 @@ def report_sales_by_company_csv():
     fname = f"sales-by-company_{d_from.isoformat()}_{d_to.isoformat()}.csv"
     return Response(buf.getvalue(), mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+def _csv_response(buf, fname):
+    """Wrap a StringIO buffer as a downloadable text/csv response.
+    Pulled out so each report's CSV route stops repeating the
+    Content-Disposition incantation."""
+    return Response(buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+# ── Sales by Service Type ────────────────────────────────────
+@app.route("/reports/sales-by-service-type")
+@admin_required
+def report_sales_by_service_type():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _sales_by_service_data(sid, d_from, d_to)
+    return render_template("report_sales_by_service_type.html",
+        user=current_user(),
+        report_title="Sales by Service Type",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="service type" if len(rows) == 1 else "service types",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+            {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+        ],
+        export_url=url_for("report_sales_by_service_type_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/sales-by-service-type.csv")
+@admin_required
+def report_sales_by_service_type_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _sales_by_service_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Service Type", "Count", "Total Sent", "Total Fees",
+                "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["service_type"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"],
+                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
+                f"{totals['tax']:.2f}", ""])
+    return _csv_response(buf,
+        f"sales-by-service-type_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Sales by Employee ────────────────────────────────────────
+@app.route("/reports/sales-by-employee")
+@admin_required
+def report_sales_by_employee():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _sales_by_employee_data(sid, d_from, d_to)
+    return render_template("report_sales_by_employee.html",
+        user=current_user(),
+        report_title="Sales by Employee",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="employee" if len(rows) == 1 else "employees",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+            {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "muted"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+        ],
+        export_url=url_for("report_sales_by_employee_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/sales-by-employee.csv")
+@admin_required
+def report_sales_by_employee_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _sales_by_employee_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Employee", "Username", "Count", "Total Sent",
+                "Total Fees", "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["employee"], r["username"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", "", totals["count"],
+                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
+                f"{totals['tax']:.2f}", ""])
+    return _csv_response(buf,
+        f"sales-by-employee_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Top Customers by Volume ──────────────────────────────────
+@app.route("/reports/top-customers")
+@admin_required
+def report_top_customers():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _top_customers_data(sid, d_from, d_to)
+    return render_template("report_top_customers.html",
+        user=current_user(),
+        report_title="Top Customers by Volume",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="customer" if len(rows) == 1 else "customers",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+            {"label": "Customer Count", "value": f"{len(rows)}",             "tone": "muted"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+        ],
+        export_url=url_for("report_top_customers_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/top-customers.csv")
+@admin_required
+def report_top_customers_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _top_customers_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Customer", "Phone", "Count", "Total Sent",
+                "Total Fees", "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["customer"], r["phone"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    return _csv_response(buf,
+        f"top-customers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # Superadmin Report Center — platform-level metrics and audit views.
