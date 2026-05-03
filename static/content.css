@@ -1200,6 +1200,12 @@ details[open] > *:not(summary) {
   letter-spacing: -0.01em;
   text-transform: uppercase;
 }
+.report-card__sub {
+  font-size: 11.5px;
+  color: var(--db-gray-6);
+  margin-top: 2px;
+  text-transform: none;
+}
 .report-card__count {
   font-size: 18px;
   font-weight: 600;
