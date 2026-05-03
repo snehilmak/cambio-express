@@ -166,6 +166,13 @@
         Add Store
       </a>
 
+      <div class="nav-section">Reports</div>
+      <a href="{{ url_for('superadmin_reports') }}"
+         class="nav-link {% if request.endpoint and request.endpoint.startswith('superadmin_reports') or request.endpoint == 'superadmin_audit_log' %}active{% endif %}">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
+        Report Center
+      </a>
+
       <div class="nav-section">Configuration</div>
       <a href="{{ url_for('superadmin_controls', tab='discounts') }}"
          class="nav-link {% if sa_tab == 'discounts' %}active{% endif %}">
@@ -189,11 +196,7 @@
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
         System Status
       </a>
-      <a href="{{ url_for('superadmin_controls', tab='audit') }}"
-         class="nav-link {% if sa_tab == 'audit' %}active{% endif %}">
-        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></span>
-        Audit Log
-      </a>
+      {# Audit Log moved to the Report Center (Reports section above). #}
       {% endif %}
     </nav>
 

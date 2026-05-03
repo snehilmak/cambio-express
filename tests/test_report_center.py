@@ -66,6 +66,60 @@ def test_reports_route_requires_admin(client):
     assert "/login" in resp.headers.get("Location", "")
 
 
+def _superadmin_login(client):
+    from app import User
+    with client.application.app_context():
+        sa = User.query.filter_by(role="superadmin").first()
+        sa_id = sa.id
+    with client.session_transaction() as s:
+        s["user_id"] = sa_id
+        s["role"] = "superadmin"
+        s["store_id"] = None
+
+
+def test_superadmin_reports_page_renders(client):
+    _superadmin_login(client)
+    resp = client.get("/superadmin/reports")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Report Center" in body
+    for label in ("Platform Health", "Revenue", "Stripe",
+                  "Trial Funnel", "Feature Adoption", "Support / Audit"):
+        assert label in body
+    # Audit Log is wired today; should show a View button.
+    assert "Superadmin Audit Log" in body
+    assert ">View<" in body
+    # Most other reports are Coming soon.
+    assert "Coming soon" in body
+
+
+def test_superadmin_audit_log_page_renders(client):
+    _superadmin_login(client)
+    resp = client.get("/superadmin/reports/audit-log")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Superadmin Audit Log" in body
+    # Back-link to the Report Center index.
+    assert "Reports" in body
+
+
+def test_legacy_audit_tab_redirects_to_audit_log_route(client):
+    """?tab=audit on the controls hub should bounce to the new
+    dedicated audit-log route under the Report Center."""
+    _superadmin_login(client)
+    resp = client.get("/superadmin/controls?tab=audit",
+                      follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    assert "/superadmin/reports/audit-log" in resp.headers.get("Location", "")
+
+
+def test_superadmin_reports_requires_superadmin(client, test_store_id):
+    """Plain admin can't see /superadmin/reports."""
+    _admin_login(client, test_store_id)
+    resp = client.get("/superadmin/reports", follow_redirects=False)
+    assert resp.status_code in (302, 303, 403)
+
+
 def test_owner_reports_page_renders(client):
     """Owner gets the same scaffold under /owner/reports."""
     from app import User, Store, StoreOwnerLink, db

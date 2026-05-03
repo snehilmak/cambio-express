@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Audit Log — DineroBook{% endblock %}
+{% block content %}
+<div class="page-header" style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+  <a href="{{ url_for('superadmin_reports') }}" class="btn btn-outline btn-sm">← Reports</a>
+  <h1 style="margin:0;">Superadmin Audit Log</h1>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Recent superadmin activity (last 100)</span>
+    <a href="{{ url_for('superadmin_audit_export') }}" class="btn btn-outline btn-sm"
+       title="Download the full audit log as CSV">Export CSV</a>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th></tr>
+      </thead>
+      <tbody>
+        {% for row in audit %}
+        <tr>
+          <td class="mono">{{ row.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+          <td>{{ row.admin_name or '—' }}</td>
+          <td class="mono">{{ row.action }}</td>
+          <td class="mono">{{ row.target_type }} {{ row.target_id }}</td>
+          <td class="text-sm">{{ row.details }}</td>
+        </tr>
+        {% endfor %}
+        {% if not audit %}
+        <tr><td colspan="5" class="empty-state">No activity yet.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

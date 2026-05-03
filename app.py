@@ -5569,14 +5569,17 @@ _REPORT_CATEGORIES = [
 ]
 
 
-def _resolved_report_categories():
-    """Return _REPORT_CATEGORIES with each report enriched with a
-    rendered URL when its endpoint exists, plus a `status` flag the
-    template uses to swap between "View" button and "Coming soon"
-    pill. Computed at request time so url_for picks up the active
-    blueprint context."""
+def _resolved_report_categories(registry):
+    """Return `registry` with each report enriched with a rendered URL
+    when its endpoint exists, plus a `status` flag the template uses
+    to swap between "View" button and "Coming soon" pill. Computed at
+    request time so url_for picks up the active blueprint context.
+
+    Generic over registries so the same template works for the admin
+    /reports, owner /owner/reports, and superadmin /superadmin/reports
+    pages — each just passes its own registry."""
     out = []
-    for cat in _REPORT_CATEGORIES:
+    for cat in registry:
         reports = []
         for r in cat["reports"]:
             ep = r.get("endpoint")
@@ -5600,7 +5603,7 @@ def _resolved_report_categories():
 def reports():
     return render_template("reports.html",
         user=current_user(),
-        categories=_resolved_report_categories())
+        categories=_resolved_report_categories(_REPORT_CATEGORIES))
 
 
 @app.route("/owner/reports")
@@ -5608,7 +5611,162 @@ def reports():
 def owner_reports():
     return render_template("owner_reports.html",
         user=current_user(),
-        categories=_resolved_report_categories())
+        categories=_resolved_report_categories(_REPORT_CATEGORIES))
+
+
+# Superadmin Report Center — platform-level metrics and audit views.
+# Read-only by design; mutate-on-the-platform routes stay in
+# /superadmin/controls.
+_SUPERADMIN_REPORT_CATEGORIES = [
+    {
+        "key":   "platform_health",
+        "label": "Platform Health",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+        "reports": [
+            {"key": "dau_mau",
+             "label": "Daily / Monthly Actives",
+             "description": "DAU and MAU trend, plus stickiness ratio.",
+             "endpoint": None},
+            {"key": "active_stores_by_plan",
+             "label": "Active Stores by Plan",
+             "description": "Headcount across trial / basic / pro / inactive.",
+             "endpoint": None},
+            {"key": "signup_funnel",
+             "label": "Signup Funnel",
+             "description": "Visit → signup → activation rates over time.",
+             "endpoint": None},
+            {"key": "login_activity",
+             "label": "Login Activity",
+             "description": "Sign-ins per role with passkey / TOTP split.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "revenue",
+        "label": "Revenue",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+        "reports": [
+            {"key": "mrr_arr",
+             "label": "MRR / ARR",
+             "description": "Recurring revenue split by plan and billing cycle.",
+             "endpoint": None},
+            {"key": "churn",
+             "label": "Churn Cohort",
+             "description": "Customer + revenue churn by signup cohort.",
+             "endpoint": None},
+            {"key": "refunds",
+             "label": "Refunds",
+             "description": "Refunded charges by reason and period.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "stripe",
+        "label": "Stripe",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+        "reports": [
+            {"key": "webhook_health",
+             "label": "Webhook Health",
+             "description": "Recent webhook deliveries and failure rate.",
+             "endpoint": None},
+            {"key": "failed_payments",
+             "label": "Failed Payments",
+             "description": "Charge failures, dunning state, and recoveries.",
+             "endpoint": None},
+            {"key": "payouts",
+             "label": "Payouts",
+             "description": "Stripe payouts to the platform bank account.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "trial",
+        "label": "Trial Funnel",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        "reports": [
+            {"key": "conversion_rate",
+             "label": "Conversion Rate",
+             "description": "Trial → paid percentage by week / month.",
+             "endpoint": None},
+            {"key": "time_to_convert",
+             "label": "Time to Convert",
+             "description": "Days from trial start to first paid charge.",
+             "endpoint": None},
+            {"key": "trial_expiry_timing",
+             "label": "Trial Expiry Timing",
+             "description": "When in their trial customers convert vs. drop off.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "feature_adoption",
+        "label": "Feature Adoption",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+        "reports": [
+            {"key": "bank_sync_adoption",
+             "label": "Bank Sync Adoption",
+             "description": "Stores that have connected at least one account.",
+             "endpoint": None},
+            {"key": "tv_display_adoption",
+             "label": "TV Display Add-on",
+             "description": "Active TV-display installations by store.",
+             "endpoint": None},
+            {"key": "owner_adoption",
+             "label": "Multi-store Owners",
+             "description": "Owner accounts and their linked stores.",
+             "endpoint": None},
+            {"key": "passkey_adoption",
+             "label": "Passkey Adoption",
+             "description": "Users with at least one registered passkey.",
+             "endpoint": None},
+        ],
+    },
+    {
+        "key":   "support",
+        "label": "Support / Audit",
+        "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+        "reports": [
+            {"key": "audit_log",
+             "label": "Superadmin Audit Log",
+             "description": "Every superadmin mutation, with target and actor.",
+             "endpoint": "superadmin_audit_log"},
+            {"key": "password_resets",
+             "label": "Password Resets",
+             "description": "Reset requests and completions across all stores.",
+             "endpoint": None},
+            {"key": "suspended_stores",
+             "label": "Suspended / Inactive Stores",
+             "description": "Stores currently suspended or with cancelled subs.",
+             "endpoint": None},
+            {"key": "retention_queue",
+             "label": "Retention Queue",
+             "description": "Stores in the 180-day data-retention delete window.",
+             "endpoint": None},
+        ],
+    },
+]
+
+
+@app.route("/superadmin/reports")
+@superadmin_required
+def superadmin_reports():
+    return render_template("superadmin_reports.html",
+        user=current_user(),
+        categories=_resolved_report_categories(
+            _SUPERADMIN_REPORT_CATEGORIES))
+
+
+@app.route("/superadmin/reports/audit-log")
+@superadmin_required
+def superadmin_audit_log():
+    """Migrated out of /superadmin/controls?tab=audit. Pure read-only
+    view that fits the Report Center umbrella better than the
+    controls tab nav."""
+    audit = (SuperadminAuditLog.query
+             .order_by(SuperadminAuditLog.created_at.desc())
+             .limit(100).all())
+    return render_template("superadmin_audit_log.html",
+        user=current_user(), audit=audit)
 
 
 # ── Dashboard ────────────────────────────────────────────────
@@ -8469,9 +8627,13 @@ STORES_PER_PAGE = 20
 @app.route("/superadmin/controls")
 @superadmin_required
 def superadmin_controls():
-    """Tabbed superadmin hub: overview, stores, discounts, feature flags, audit, announcements."""
+    """Tabbed superadmin hub: overview, stores, discounts, feature flags, announcements."""
     user = current_user()
     active_tab = request.args.get("tab", "overview")
+    # The Audit Log moved to the Report Center; preserve any
+    # bookmark / linkback that still hits ?tab=audit.
+    if active_tab == "audit":
+        return redirect(url_for("superadmin_audit_log"))
 
     # Aggregate metrics — cheap, compute once for the overview + sidebar snapshot.
     # Split BASIC and PRO into monthly + yearly so the overview shows the full
@@ -8571,15 +8733,12 @@ def superadmin_controls():
     override_rows = (StoreFeatureOverride.query.filter(StoreFeatureOverride.store_id.in_(visible_ids)).all()
                      if visible_ids else [])
     overrides = {(o.store_id, o.flag_key): o.enabled for o in override_rows}
-    audit = (SuperadminAuditLog.query
-             .order_by(SuperadminAuditLog.created_at.desc())
-             .limit(100).all())
     announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
 
     return render_template("superadmin_controls.html",
         user=user, active_tab=active_tab,
         stores=stores, discounts=discounts, flags=flags,
-        overrides=overrides, audit=audit, announcements=announcements,
+        overrides=overrides, announcements=announcements,
         basic_count=basic_count, pro_count=pro_count,
         basic_monthly=basic_monthly, basic_yearly=basic_yearly,
         pro_monthly=pro_monthly, pro_yearly=pro_yearly,
