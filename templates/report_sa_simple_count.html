@@ -1,0 +1,16 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No data in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card report-card--compact">
+  <div class="report-card__head">
+    <div class="report-card__name">{{ r.plan or r.role or r.bucket or r.label or '?' }}</div>
+    <div class="report-card__count mono">{{ r.count }}</div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

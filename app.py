@@ -7080,15 +7080,15 @@ _SUPERADMIN_REPORT_CATEGORIES = [
             {"key": "active_stores_by_plan",
              "label": "Active Stores by Plan",
              "description": "Headcount across trial / basic / pro / inactive.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_active_stores_by_plan"},
             {"key": "signup_funnel",
              "label": "Signup Funnel",
-             "description": "Visit → signup → activation rates over time.",
-             "endpoint": None},
+             "description": "Stores created in the period bucketed by current plan.",
+             "endpoint": "superadmin_report_signup_funnel"},
             {"key": "login_activity",
              "label": "Login Activity",
-             "description": "Sign-ins per role with passkey / TOTP split.",
-             "endpoint": None},
+             "description": "Per-role sign-in counts in the period.",
+             "endpoint": "superadmin_report_login_activity"},
         ],
     },
     {
@@ -7099,11 +7099,11 @@ _SUPERADMIN_REPORT_CATEGORIES = [
             {"key": "mrr_arr",
              "label": "MRR / ARR",
              "description": "Recurring revenue split by plan and billing cycle.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_mrr_arr"},
             {"key": "churn",
              "label": "Churn Cohort",
-             "description": "Customer + revenue churn by signup cohort.",
-             "endpoint": None},
+             "description": "Customer churn by signup cohort.",
+             "endpoint": "superadmin_report_churn_cohort"},
             {"key": "refunds",
              "label": "Refunds",
              "description": "Refunded charges by reason and period.",
@@ -7136,16 +7136,16 @@ _SUPERADMIN_REPORT_CATEGORIES = [
         "reports": [
             {"key": "conversion_rate",
              "label": "Conversion Rate",
-             "description": "Trial → paid percentage by week / month.",
-             "endpoint": None},
+             "description": "Trial → paid percentage for cohorts that signed up in the period.",
+             "endpoint": "superadmin_report_conversion_rate"},
             {"key": "time_to_convert",
              "label": "Time to Convert",
-             "description": "Days from trial start to first paid charge.",
-             "endpoint": None},
+             "description": "Per-store days from signup to today (paid stores only).",
+             "endpoint": "superadmin_report_time_to_convert"},
             {"key": "trial_expiry_timing",
              "label": "Trial Expiry Timing",
-             "description": "When in their trial customers convert vs. drop off.",
-             "endpoint": None},
+             "description": "Where in their trial window each store sits at end of period.",
+             "endpoint": "superadmin_report_trial_expiry_timing"},
         ],
     },
     {
@@ -7155,20 +7155,20 @@ _SUPERADMIN_REPORT_CATEGORIES = [
         "reports": [
             {"key": "bank_sync_adoption",
              "label": "Bank Sync Adoption",
-             "description": "Stores that have connected at least one account.",
-             "endpoint": None},
+             "description": "Stores that have connected at least one account, by plan.",
+             "endpoint": "superadmin_report_bank_sync_adoption"},
             {"key": "tv_display_adoption",
              "label": "TV Display Add-on",
              "description": "Active TV-display installations by store.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_tv_display_adoption"},
             {"key": "owner_adoption",
              "label": "Multi-store Owners",
-             "description": "Owner accounts and their linked stores.",
-             "endpoint": None},
+             "description": "Owner accounts linked to more than one store.",
+             "endpoint": "superadmin_report_owner_adoption"},
             {"key": "passkey_adoption",
              "label": "Passkey Adoption",
-             "description": "Users with at least one registered passkey.",
-             "endpoint": None},
+             "description": "Users with at least one registered passkey, by role.",
+             "endpoint": "superadmin_report_passkey_adoption"},
         ],
     },
     {
@@ -7182,16 +7182,16 @@ _SUPERADMIN_REPORT_CATEGORIES = [
              "endpoint": "superadmin_audit_log"},
             {"key": "password_resets",
              "label": "Password Resets",
-             "description": "Reset requests and completions across all stores.",
-             "endpoint": None},
+             "description": "Reset-token activity in the period (used / expired / open).",
+             "endpoint": "superadmin_report_password_resets"},
             {"key": "suspended_stores",
              "label": "Suspended / Inactive Stores",
-             "description": "Stores currently suspended or with cancelled subs.",
-             "endpoint": None},
+             "description": "Stores currently suspended (is_active=False) or marked inactive.",
+             "endpoint": "superadmin_report_suspended_stores"},
             {"key": "retention_queue",
              "label": "Retention Queue",
              "description": "Stores in the 180-day data-retention delete window.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_retention_queue"},
         ],
     },
 ]
@@ -7217,6 +7217,758 @@ def superadmin_audit_log():
              .limit(100).all())
     return render_template("superadmin_audit_log.html",
         user=current_user(), audit=audit)
+
+
+# ── Superadmin reports: shared route helpers ─────────────────
+# Same shape as the admin/owner _make_report_routes helper but
+# scoped to /superadmin/reports/<slug>(.csv)? and gated with
+# @superadmin_required. Data functions don't take store_ids —
+# superadmin reports always query platform-wide.
+
+def _render_superadmin_report(template, data_fn, *,
+                               slug, title, result_unit, kpis_fn,
+                               extra_args=None,
+                               **template_kwargs):
+    extra_args = extra_args or {}
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = data_fn(d_from, d_to, **extra_args)
+    n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
+    return render_template(template,
+        user=current_user(),
+        report_title=title,
+        back_endpoint="superadmin_reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=n,
+        result_unit=result_unit[0] if n == 1 else result_unit[1],
+        kpis=kpis_fn(totals, rows, extra_args),
+        export_url=url_for(f"superadmin_report_{slug.replace('-', '_')}_csv",
+                           **{
+                               "from": d_from.isoformat(),
+                               "to":   d_to.isoformat(),
+                               **{k: v for k, v in extra_args.items()
+                                  if v is not None},
+                           }),
+        rows=rows,
+        totals=totals,
+        **extra_args,
+        **template_kwargs,
+    )
+
+
+def _export_superadmin_report_csv(data_fn, *, columns, row_fn,
+                                    totals_row_fn=None, fname_prefix,
+                                    extra_args=None):
+    import csv as _csv, io as _io
+    extra_args = extra_args or {}
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = data_fn(d_from, d_to, **extra_args)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    cols = columns(totals) if callable(columns) else columns
+    w.writerow(cols)
+    for r in rows:
+        w.writerow(row_fn(r))
+    if totals_row_fn is not None:
+        result = totals_row_fn(totals)
+        totals_rows = (result if result and isinstance(result[0], (list, tuple))
+                       else [result])
+        if totals_rows:
+            w.writerow([])
+            for trow in totals_rows:
+                w.writerow(trow)
+    return _csv_response(buf,
+        f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+def _make_superadmin_report_routes(slug, *, title, data_fn, template,
+                                     result_unit, kpis_fn,
+                                     csv_columns, csv_row_fn,
+                                     csv_totals_fn=None,
+                                     csv_fname_prefix=None,
+                                     extra_args_fn=None):
+    """Register `/superadmin/reports/<slug>(.csv)?` routes for a
+    superadmin report. Same idea as `_make_report_routes` but
+    superadmin-only — no owner mirror."""
+    fname_prefix = csv_fname_prefix or slug
+    extra_args_fn = extra_args_fn or (lambda: {})
+    underscored = slug.replace("-", "_")
+
+    def _view():
+        return _render_superadmin_report(template, data_fn,
+            slug=slug, title=title, result_unit=result_unit,
+            kpis_fn=kpis_fn, extra_args=extra_args_fn(),
+        )
+
+    def _csv():
+        return _export_superadmin_report_csv(data_fn,
+            columns=csv_columns, row_fn=csv_row_fn,
+            totals_row_fn=csv_totals_fn,
+            fname_prefix=fname_prefix,
+            extra_args=extra_args_fn(),
+        )
+
+    app.add_url_rule(f"/superadmin/reports/{slug}",
+                     endpoint=f"superadmin_report_{underscored}",
+                     view_func=superadmin_required(_view),
+                     methods=["GET"])
+    app.add_url_rule(f"/superadmin/reports/{slug}.csv",
+                     endpoint=f"superadmin_report_{underscored}_csv",
+                     view_func=superadmin_required(_csv),
+                     methods=["GET"])
+
+
+# ── Superadmin report data functions ─────────────────────────
+def _sa_active_stores_by_plan_data(d_from, d_to):
+    """Headcount of stores per plan (trial / basic / pro / inactive),
+    filtered to stores created on or before d_to (counts existing
+    stores at end of period, not just newcomers). Inactive includes
+    cancelled subs."""
+    q = (db.session.query(
+        Store.plan, db.func.count(Store.id),
+    ).filter(
+        Store.created_at <= datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59),
+    ).group_by(Store.plan).all())
+    rows = [{"plan": (plan or "(unknown)").title(),
+             "count": int(c or 0)} for plan, c in q]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {"count": sum(r["count"] for r in rows),
+              "plans": len(rows)}
+    return rows, totals
+
+
+def _sa_signup_funnel_data(d_from, d_to):
+    """Stores created in the period bucketed by current plan. Useful
+    for measuring signup → activation success."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    q = (db.session.query(
+        Store.plan, db.func.count(Store.id),
+    ).filter(
+        Store.created_at >= start,
+        Store.created_at <= end_of_to,
+    ).group_by(Store.plan).all())
+    rows = [{"plan": (plan or "(unknown)").title(),
+             "count": int(c or 0)} for plan, c in q]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {"count": sum(r["count"] for r in rows)}
+    return rows, totals
+
+
+def _sa_login_activity_data(d_from, d_to):
+    """Most-recent login per role, plus unique-login counts in the
+    period. Drives the platform-health DAU / MAU dashboards once we
+    have a per-day login log; for now it surfaces the per-role split
+    using User.last_login_at."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    q = (db.session.query(
+        User.role, db.func.count(User.id),
+    ).filter(
+        User.last_login_at >= start,
+        User.last_login_at <= end_of_to,
+    ).group_by(User.role).all())
+    rows = [{"role": (role or "(unknown)").title(),
+             "count": int(c or 0)} for role, c in q]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {"count": sum(r["count"] for r in rows)}
+    return rows, totals
+
+
+# Hard-coded plan price table. Used by MRR/ARR + churn cohort. When
+# Stripe pricing changes, update here. Yearly prices are normalised
+# to monthly equivalents for the MRR sum.
+_PLAN_MRR = {
+    ("basic", "monthly"): 49.0,
+    ("basic", "yearly"):  490.0 / 12.0,
+    ("pro",   "monthly"): 99.0,
+    ("pro",   "yearly"):  990.0 / 12.0,
+}
+
+
+def _sa_mrr_arr_data(d_from, d_to):
+    """MRR + ARR by plan/cycle. Counts active (non-trial, non-
+    inactive) stores at end of period."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    q = (db.session.query(
+        Store.plan, Store.billing_cycle, db.func.count(Store.id),
+    ).filter(
+        Store.created_at <= end_of_to,
+        Store.plan.in_(["basic", "pro"]),
+    ).group_by(Store.plan, Store.billing_cycle).all())
+    rows = []
+    totals = {"mrr": 0.0, "stores": 0}
+    for plan, cycle, count in q:
+        c = int(count or 0)
+        cycle = (cycle or "monthly")
+        per_store_mrr = _PLAN_MRR.get((plan, cycle), 0.0)
+        mrr = per_store_mrr * c
+        rows.append({
+            "plan":  plan.title(),
+            "cycle": cycle.title(),
+            "stores": c,
+            "mrr":   mrr,
+            "arr":   mrr * 12.0,
+        })
+        totals["mrr"]    += mrr
+        totals["stores"] += c
+    rows.sort(key=lambda r: r["mrr"], reverse=True)
+    totals["arr"] = totals["mrr"] * 12.0
+    return rows, totals
+
+
+def _sa_churn_cohort_data(d_from, d_to):
+    """Stores cancelled in the period bucketed by signup-month
+    cohort. Each row: cohort label + count cancelled + paid stores
+    that survived (still active from that cohort)."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    cancelled_q = (Store.query
+        .filter(
+            Store.canceled_at >= start,
+            Store.canceled_at <= end_of_to,
+        ).all())
+    by_cohort = {}
+    for s in cancelled_q:
+        if not s.created_at:
+            continue
+        cohort = s.created_at.strftime("%Y-%m")
+        by_cohort.setdefault(cohort, {"cancelled": 0, "active": 0})
+        by_cohort[cohort]["cancelled"] += 1
+    # Active stores from each cohort (still paid, not cancelled).
+    for cohort in list(by_cohort.keys()):
+        try:
+            y, m = map(int, cohort.split("-"))
+        except ValueError:
+            continue
+        co_start = datetime(y, m, 1)
+        # End of cohort month — first of next.
+        co_end = datetime(y + (1 if m == 12 else 0),
+                           1 if m == 12 else m + 1, 1)
+        active = (Store.query.filter(
+            Store.created_at >= co_start,
+            Store.created_at < co_end,
+            Store.canceled_at.is_(None),
+            Store.plan.in_(["basic", "pro"]),
+        ).count())
+        by_cohort[cohort]["active"] = active
+    rows = [{"cohort": cohort,
+             "cancelled": v["cancelled"],
+             "active":    v["active"],
+             "churn_pct": (v["cancelled"] / (v["cancelled"] + v["active"])
+                            * 100.0)
+                          if (v["cancelled"] + v["active"]) else 0.0,
+            } for cohort, v in by_cohort.items()]
+    rows.sort(key=lambda r: r["cohort"], reverse=True)
+    totals = {"cancelled": sum(r["cancelled"] for r in rows),
+              "active":    sum(r["active"]    for r in rows)}
+    return rows, totals
+
+
+def _sa_conversion_rate_data(d_from, d_to):
+    """For stores that signed up in the period: how many graduated
+    from trial to paid by today? Single summary row."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    cohort = Store.query.filter(
+        Store.created_at >= start,
+        Store.created_at <= end_of_to,
+    ).all()
+    total = len(cohort)
+    paid  = sum(1 for s in cohort if s.plan in ("basic", "pro"))
+    trial = sum(1 for s in cohort if s.plan == "trial")
+    inactive = total - paid - trial
+    rate = (paid / total * 100.0) if total else 0.0
+    rows = [
+        {"label": "Paid",     "count": paid,     "tone": "neon"},
+        {"label": "Trial",    "count": trial,    "tone": "muted"},
+        {"label": "Inactive", "count": inactive, "tone": "muted"},
+    ]
+    totals = {"total": total, "paid": paid, "rate": rate, "count": total}
+    return rows, totals
+
+
+def _sa_time_to_convert_data(d_from, d_to):
+    """For paid stores that signed up in the period, average days
+    from signup (created_at) to today as a proxy for "activation
+    delay" (we don't yet log the exact transition timestamp)."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    paid = Store.query.filter(
+        Store.created_at >= start,
+        Store.created_at <= end_of_to,
+        Store.plan.in_(["basic", "pro"]),
+    ).all()
+    today = datetime.utcnow()
+    rows = []
+    for s in paid:
+        if not s.created_at:
+            continue
+        days = (today - s.created_at).days
+        rows.append({"slug": s.slug, "name": s.name,
+                     "signed_up": s.created_at.date(),
+                     "plan": (s.plan or "").title(),
+                     "days": days})
+    rows.sort(key=lambda r: r["days"])
+    avg = (sum(r["days"] for r in rows) / len(rows)) if rows else 0.0
+    totals = {"count": len(rows),
+              "avg_days": avg}
+    return rows, totals
+
+
+def _sa_trial_expiry_timing_data(d_from, d_to):
+    """Bucket trial stores by where they are in their trial window
+    (counted at end-of-period). Helps see whether stores convert
+    early, late, or roll into expiry."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    trials = Store.query.filter(
+        Store.plan == "trial",
+        Store.created_at <= end_of_to,
+    ).all()
+    today = datetime.utcnow()
+    buckets = {"≤ 7 days into trial": 0, "8–14 days": 0,
+               "15–21 days": 0, "22+ days": 0,
+               "Trial expired (no upgrade)": 0}
+    for s in trials:
+        if not s.created_at:
+            continue
+        days = (today - s.created_at).days
+        if s.trial_ends_at and today > s.trial_ends_at:
+            buckets["Trial expired (no upgrade)"] += 1
+        elif days <= 7:
+            buckets["≤ 7 days into trial"] += 1
+        elif days <= 14:
+            buckets["8–14 days"] += 1
+        elif days <= 21:
+            buckets["15–21 days"] += 1
+        else:
+            buckets["22+ days"] += 1
+    rows = [{"bucket": k, "count": v} for k, v in buckets.items()
+            if v > 0]
+    totals = {"count": sum(b["count"] for b in rows),
+              "trials_total": len(trials)}
+    return rows, totals
+
+
+def _sa_bank_sync_adoption_data(d_from, d_to):
+    """Stores with at least one connected StripeBankAccount, by plan.
+    Period filter is ignored — adoption is point-in-time at end of
+    period. Day filter on adoption-date would need a history table
+    we don't have today."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    # Stores with bank accounts.
+    connected_ids = {sid for (sid,) in db.session.query(
+        StripeBankAccount.store_id
+    ).distinct().all()}
+    all_stores = Store.query.filter(
+        Store.created_at <= end_of_to,
+    ).all()
+    by_plan = {}
+    for s in all_stores:
+        plan = (s.plan or "(unknown)").title()
+        b = by_plan.setdefault(plan, {"connected": 0, "total": 0})
+        b["total"] += 1
+        if s.id in connected_ids:
+            b["connected"] += 1
+    rows = [{"plan": plan, "connected": v["connected"],
+             "total":     v["total"],
+             "rate_pct":  (v["connected"] / v["total"] * 100.0)
+                           if v["total"] else 0.0}
+            for plan, v in by_plan.items()]
+    rows.sort(key=lambda r: r["rate_pct"], reverse=True)
+    totals = {"connected": sum(r["connected"] for r in rows),
+              "total":     sum(r["total"]     for r in rows)}
+    totals["rate_pct"] = (totals["connected"] / totals["total"] * 100.0
+                           if totals["total"] else 0.0)
+    return rows, totals
+
+
+def _sa_tv_display_adoption_data(d_from, d_to):
+    """Stores with the TV-display add-on enabled (Store.addons
+    contains 'tv_display'). Point-in-time at end of period."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    stores = Store.query.filter(
+        Store.created_at <= end_of_to,
+    ).all()
+    enabled = [s for s in stores if "tv_display" in (s.addons or "")]
+    rows = [{"slug": s.slug, "name": s.name,
+             "plan": (s.plan or "").title()} for s in enabled]
+    rows.sort(key=lambda r: r["name"].lower())
+    totals = {"count": len(enabled),
+              "total_stores": len(stores)}
+    return rows, totals
+
+
+def _sa_owner_adoption_data(d_from, d_to):
+    """Owners with multiple linked stores (umbrella ownership).
+    Each row: owner email + linked store count."""
+    rows_q = (db.session.query(
+        StoreOwnerLink.owner_id, db.func.count(StoreOwnerLink.store_id),
+    ).group_by(StoreOwnerLink.owner_id).all())
+    multi = [(oid, c) for oid, c in rows_q if (c or 0) > 1]
+    if not multi:
+        return [], {"count": 0, "owners": 0}
+    user_ids = [oid for oid, _ in multi]
+    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+    rows = []
+    for oid, count in multi:
+        u = users.get(oid)
+        rows.append({
+            "owner": (u.full_name or u.username) if u else f"User #{oid}",
+            "email": (u.email or u.username) if u else "",
+            "stores": int(count or 0),
+        })
+    rows.sort(key=lambda r: r["stores"], reverse=True)
+    totals = {"count": len(rows),
+              "owners": len(rows),
+              "stores": sum(r["stores"] for r in rows)}
+    return rows, totals
+
+
+def _sa_passkey_adoption_data(d_from, d_to):
+    """Users with at least one passkey, grouped by role. Helps gauge
+    rollout of passwordless auth."""
+    user_ids = {uid for (uid,) in db.session.query(
+        Passkey.user_id).distinct().all()}
+    total_users = User.query.count()
+    rate_pct = (len(user_ids) / total_users * 100.0) if total_users else 0.0
+    if not user_ids:
+        return [], {"count": 0, "users_with_passkey": 0,
+                    "total_users": total_users,
+                    "rate_pct": rate_pct}
+    users = User.query.filter(User.id.in_(user_ids)).all()
+    by_role = {}
+    for u in users:
+        r = (u.role or "(unknown)").title()
+        by_role[r] = by_role.get(r, 0) + 1
+    rows = [{"role": role, "count": count}
+            for role, count in by_role.items()]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {"count": len(user_ids),
+              "users_with_passkey": len(user_ids),
+              "total_users":        total_users,
+              "rate_pct":           rate_pct}
+    return rows, totals
+
+
+def _sa_password_resets_data(d_from, d_to):
+    """Password-reset token activity in the period. Each row: a
+    sample of recent tokens with status (used vs. expired vs. open)."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    tokens = PasswordResetToken.query.filter(
+        PasswordResetToken.created_at >= start,
+        PasswordResetToken.created_at <= end_of_to,
+    ).order_by(PasswordResetToken.created_at.desc()).all()
+    now = datetime.utcnow()
+    rows = []
+    used = expired = open_count = 0
+    for t in tokens:
+        if t.used_at:
+            status = "Used"; used += 1
+        elif t.expires_at and now > t.expires_at:
+            status = "Expired"; expired += 1
+        else:
+            status = "Open"; open_count += 1
+        u = db.session.get(User, t.user_id) if t.user_id else None
+        rows.append({
+            "created_at": t.created_at,
+            "username":   u.username if u else "(deleted)",
+            "role":       u.role if u else "",
+            "status":     status,
+        })
+    totals = {"count":   len(tokens),
+              "used":    used,
+              "expired": expired,
+              "open":    open_count}
+    return rows, totals
+
+
+def _sa_suspended_stores_data(d_from, d_to):
+    """Stores currently suspended (is_active=False) or marked
+    inactive (plan='inactive'). Point-in-time at end of period."""
+    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    suspended = Store.query.filter(
+        Store.created_at <= end_of_to,
+        db.or_(Store.is_active == False,
+               Store.plan == "inactive"),
+    ).all()
+    rows = []
+    for s in suspended:
+        reason = []
+        if not s.is_active:
+            reason.append("suspended")
+        if s.plan == "inactive":
+            reason.append("plan inactive")
+        rows.append({
+            "slug": s.slug,
+            "name": s.name,
+            "plan": (s.plan or "").title(),
+            "reason": " · ".join(reason),
+            "canceled_at": s.canceled_at,
+        })
+    rows.sort(key=lambda r: r["name"].lower())
+    totals = {"count": len(rows)}
+    return rows, totals
+
+
+def _sa_retention_queue_data(d_from, d_to):
+    """Stores in the 180-day data-retention delete window (those
+    with `data_retention_until` set). Once the date passes,
+    purge_expired_stores wipes them. Point-in-time."""
+    stores = Store.query.filter(
+        Store.data_retention_until.isnot(None),
+    ).order_by(Store.data_retention_until.asc()).all()
+    today = date.today()
+    rows = []
+    for s in stores:
+        until = (s.data_retention_until.date()
+                 if hasattr(s.data_retention_until, "date")
+                 else s.data_retention_until)
+        days_left = (until - today).days
+        rows.append({
+            "slug": s.slug,
+            "name": s.name,
+            "plan": (s.plan or "").title(),
+            "until": until,
+            "days_left": days_left,
+            "ready_to_purge": days_left <= 0,
+        })
+    totals = {"count": len(rows),
+              "ready_to_purge": sum(1 for r in rows if r["ready_to_purge"])}
+    return rows, totals
+
+
+# ── Superadmin reports: registry of routes ───────────────────
+_make_superadmin_report_routes(
+    "active-stores-by-plan",
+    title="Active Stores by Plan",
+    data_fn=_sa_active_stores_by_plan_data,
+    template="report_sa_simple_count.html",
+    result_unit=("plan", "plans"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Stores", "value": f"{totals['count']:,}", "tone": "primary"},
+        {"label": "Plans Tracked","value": f"{totals['plans']}",   "tone": "neon"},
+    ],
+    csv_columns=["Plan", "Stores"],
+    csv_row_fn=lambda r: [r["plan"], r["count"]],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+    csv_fname_prefix="active-stores-by-plan",
+)
+
+_make_superadmin_report_routes(
+    "signup-funnel",
+    title="Signup Funnel",
+    data_fn=_sa_signup_funnel_data,
+    template="report_sa_simple_count.html",
+    result_unit=("plan", "plans"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Signups", "value": f"{totals['count']:,}", "tone": "primary"},
+    ],
+    csv_columns=["Plan", "Signups"],
+    csv_row_fn=lambda r: [r["plan"], r["count"]],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+)
+
+_make_superadmin_report_routes(
+    "login-activity",
+    title="Login Activity",
+    data_fn=_sa_login_activity_data,
+    template="report_sa_simple_count.html",
+    result_unit=("role", "roles"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Active Users", "value": f"{totals['count']:,}", "tone": "primary"},
+    ],
+    csv_columns=["Role", "Active Users"],
+    csv_row_fn=lambda r: [r["role"], r["count"]],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+)
+
+_make_superadmin_report_routes(
+    "mrr-arr",
+    title="MRR / ARR",
+    data_fn=_sa_mrr_arr_data,
+    template="report_sa_mrr_arr.html",
+    result_unit=("tier", "tiers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "MRR",          "value": f"${totals['mrr']:,.2f}", "tone": "neon"},
+        {"label": "ARR",          "value": f"${totals['arr']:,.2f}", "tone": "primary"},
+        {"label": "Paid Stores",  "value": f"{totals['stores']:,}",  "tone": "muted"},
+    ],
+    csv_columns=["Plan", "Cycle", "Stores", "MRR", "ARR"],
+    csv_row_fn=lambda r: [r["plan"], r["cycle"], r["stores"],
+                          f"{r['mrr']:.2f}", f"{r['arr']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", "", t["stores"],
+                             f"{t['mrr']:.2f}", f"{t['arr']:.2f}"],
+)
+
+_make_superadmin_report_routes(
+    "churn-cohort",
+    title="Churn Cohort",
+    data_fn=_sa_churn_cohort_data,
+    template="report_sa_churn_cohort.html",
+    result_unit=("cohort", "cohorts"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Cancelled in period", "value": f"{totals['cancelled']:,}", "tone": "muted"},
+        {"label": "Active from cohorts", "value": f"{totals['active']:,}",    "tone": "neon"},
+    ],
+    csv_columns=["Cohort", "Cancelled", "Still Active", "Churn %"],
+    csv_row_fn=lambda r: [r["cohort"], r["cancelled"], r["active"],
+                          f"{r['churn_pct']:.1f}%"],
+)
+
+_make_superadmin_report_routes(
+    "conversion-rate",
+    title="Trial → Paid Conversion",
+    data_fn=_sa_conversion_rate_data,
+    template="report_sa_conversion.html",
+    result_unit=("bucket", "buckets"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Conversion Rate", "value": f"{totals['rate']:.1f}%",   "tone": "primary"},
+        {"label": "Cohort Size",     "value": f"{totals['total']:,}",      "tone": "neon"},
+        {"label": "Paid",            "value": f"{totals['paid']:,}",       "tone": "muted"},
+    ],
+    csv_columns=["Status", "Stores"],
+    csv_row_fn=lambda r: [r["label"], r["count"]],
+    csv_totals_fn=lambda t: ["TOTAL", t["total"]],
+)
+
+_make_superadmin_report_routes(
+    "time-to-convert",
+    title="Time to Convert",
+    data_fn=_sa_time_to_convert_data,
+    template="report_sa_time_to_convert.html",
+    result_unit=("store", "stores"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Paid Stores",     "value": f"{totals['count']:,}",      "tone": "primary"},
+        {"label": "Avg Days Active", "value": f"{totals['avg_days']:.0f}", "tone": "neon"},
+    ],
+    csv_columns=["Slug", "Name", "Plan", "Signed Up", "Days Active"],
+    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
+                          r["signed_up"].isoformat(), r["days"]],
+)
+
+_make_superadmin_report_routes(
+    "trial-expiry-timing",
+    title="Trial Expiry Timing",
+    data_fn=_sa_trial_expiry_timing_data,
+    template="report_sa_simple_count.html",
+    result_unit=("bucket", "buckets"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Active Trials",   "value": f"{totals['trials_total']:,}", "tone": "primary"},
+        {"label": "Buckets Tracked", "value": f"{len(rows)}",                "tone": "muted"},
+    ],
+    csv_columns=["Bucket", "Stores"],
+    csv_row_fn=lambda r: [r["bucket"], r["count"]],
+)
+
+_make_superadmin_report_routes(
+    "bank-sync-adoption",
+    title="Bank Sync Adoption",
+    data_fn=_sa_bank_sync_adoption_data,
+    template="report_sa_adoption.html",
+    result_unit=("plan", "plans"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Adoption",      "value": f"{totals['rate_pct']:.1f}%",  "tone": "primary"},
+        {"label": "Connected",     "value": f"{totals['connected']:,}",     "tone": "neon"},
+        {"label": "Total Stores",  "value": f"{totals['total']:,}",         "tone": "muted"},
+    ],
+    csv_columns=["Plan", "Connected", "Total", "Adoption %"],
+    csv_row_fn=lambda r: [r["plan"], r["connected"], r["total"],
+                          f"{r['rate_pct']:.1f}%"],
+)
+
+_make_superadmin_report_routes(
+    "tv-display-adoption",
+    title="TV Display Add-on",
+    data_fn=_sa_tv_display_adoption_data,
+    template="report_sa_store_list.html",
+    result_unit=("store", "stores"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Active Installs", "value": f"{totals['count']:,}",         "tone": "primary"},
+        {"label": "Total Stores",    "value": f"{totals['total_stores']:,}",  "tone": "muted"},
+        {"label": "Adoption",        "value": (
+            f"{(totals['count'] / totals['total_stores'] * 100.0):.1f}%"
+            if totals['total_stores'] else "0.0%"),                            "tone": "neon"},
+    ],
+    csv_columns=["Slug", "Name", "Plan"],
+    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"]],
+)
+
+_make_superadmin_report_routes(
+    "owner-adoption",
+    title="Multi-store Owners",
+    data_fn=_sa_owner_adoption_data,
+    template="report_sa_owner_adoption.html",
+    result_unit=("owner", "owners"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Multi-store Owners", "value": f"{totals['owners']:,}",  "tone": "primary"},
+        {"label": "Linked Stores",      "value": f"{totals.get('stores', 0):,}", "tone": "neon"},
+    ],
+    csv_columns=["Owner", "Email", "Linked Stores"],
+    csv_row_fn=lambda r: [r["owner"], r["email"], r["stores"]],
+)
+
+_make_superadmin_report_routes(
+    "passkey-adoption",
+    title="Passkey Adoption",
+    data_fn=_sa_passkey_adoption_data,
+    template="report_sa_simple_count.html",
+    result_unit=("role", "roles"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Adoption",            "value": f"{totals['rate_pct']:.1f}%",         "tone": "primary"},
+        {"label": "Users w/ Passkey",    "value": f"{totals['users_with_passkey']:,}",  "tone": "neon"},
+        {"label": "Total Users",         "value": f"{totals['total_users']:,}",         "tone": "muted"},
+    ],
+    csv_columns=["Role", "Users with Passkey"],
+    csv_row_fn=lambda r: [r["role"], r["count"]],
+)
+
+_make_superadmin_report_routes(
+    "password-resets",
+    title="Password Resets",
+    data_fn=_sa_password_resets_data,
+    template="report_sa_password_resets.html",
+    result_unit=("token", "tokens"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Tokens", "value": f"{totals['count']:,}",   "tone": "primary"},
+        {"label": "Used",         "value": f"{totals['used']:,}",    "tone": "neon"},
+        {"label": "Expired",      "value": f"{totals['expired']:,}", "tone": "muted"},
+        {"label": "Open",         "value": f"{totals['open']:,}",    "tone": "muted"},
+    ],
+    csv_columns=["Created", "Username", "Role", "Status"],
+    csv_row_fn=lambda r: [r["created_at"].isoformat() if r["created_at"] else "",
+                          r["username"], r["role"], r["status"]],
+)
+
+_make_superadmin_report_routes(
+    "suspended-stores",
+    title="Suspended / Inactive Stores",
+    data_fn=_sa_suspended_stores_data,
+    template="report_sa_store_list.html",
+    result_unit=("store", "stores"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Stores", "value": f"{totals['count']:,}", "tone": "primary"},
+    ],
+    csv_columns=["Slug", "Name", "Plan", "Reason"],
+    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"], r["reason"]],
+)
+
+_make_superadmin_report_routes(
+    "retention-queue",
+    title="Retention Queue",
+    data_fn=_sa_retention_queue_data,
+    template="report_sa_retention.html",
+    result_unit=("store", "stores"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Pending Purge",    "value": f"{totals['count']:,}",         "tone": "primary"},
+        {"label": "Ready (≤ 0 days)", "value": f"{totals['ready_to_purge']:,}", "tone": "muted"},
+    ],
+    csv_columns=["Slug", "Name", "Plan", "Purge Date", "Days Left"],
+    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
+                          r["until"].isoformat() if r["until"] else "",
+                          r["days_left"]],
+)
 
 
 # ── Dashboard ────────────────────────────────────────────────

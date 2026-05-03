@@ -1,0 +1,29 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No churn in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div class="report-card__name">{{ r.cohort }}</div>
+    <div class="report-card__count mono"
+         style="color: {% if r.churn_pct >= 30 %}var(--db-negative){% elif r.churn_pct >= 10 %}var(--db-warning){% else %}var(--db-neon){% endif %};">
+      {{ '{:.1f}'.format(r.churn_pct) }}%
+    </div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Cancelled</div>
+      <div class="report-card__metric-value mono">{{ r.cancelled }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Still Active</div>
+      <div class="report-card__metric-value mono">{{ r.active }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
