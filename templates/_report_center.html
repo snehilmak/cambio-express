@@ -1,0 +1,106 @@
+{# Report Center inner content. Included by reports.html (admin) and
+   owner_reports.html (owner). Both extend their own base template;
+   this partial owns the search box + accordion. #}
+<div class="report-center">
+  <div class="report-center__head">
+    <div class="report-center__title">
+      <h1>Report Center</h1>
+      <p class="report-center__subtitle">
+        Browse every report by category. Use search to jump straight
+        to the report you need.
+      </p>
+    </div>
+    <div class="report-center__search">
+      <span class="report-center__search-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </span>
+      <input type="search" id="reportSearch" placeholder="Search reports…"
+             autocomplete="off" aria-label="Search reports">
+    </div>
+  </div>
+
+  <div class="report-center__list" id="reportList">
+    {% for cat in categories %}
+    <details class="report-cat" data-cat="{{ cat.key }}" open>
+      <summary class="report-cat__summary">
+        <span class="report-cat__caret" aria-hidden="true">
+          <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </span>
+        <span class="report-cat__icon" aria-hidden="true">{{ cat.icon|safe }}</span>
+        <span class="report-cat__label">{{ cat.label }}</span>
+        <span class="report-cat__count">{{ cat.reports|length }}</span>
+      </summary>
+      <div class="report-cat__body">
+        {% for r in cat.reports %}
+        <div class="report-row" data-name="{{ r.label|lower }}"
+             data-desc="{{ r.description|lower }}">
+          <div class="report-row__main">
+            <div class="report-row__name">{{ r.label }}</div>
+            <div class="report-row__desc">{{ r.description }}</div>
+          </div>
+          <div class="report-row__cta">
+            {% if r.status == 'ready' %}
+            <a href="{{ r.url }}" class="btn btn-primary btn-sm report-row__btn">View</a>
+            {% else %}
+            <span class="coming-pill">Coming soon</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+
+  <div class="report-center__empty" id="reportEmpty" hidden>
+    No reports match that search.
+  </div>
+</div>
+
+<script>
+(function() {
+  // Client-side search: filter reports by name + description, hide
+  // categories that have no visible reports left, show empty state
+  // when nothing matches at all. Live, no debounce — list is small
+  // enough that filtering on every keystroke is fine.
+  var input = document.getElementById('reportSearch');
+  var list = document.getElementById('reportList');
+  var empty = document.getElementById('reportEmpty');
+  if (!input || !list) return;
+  input.addEventListener('input', function() {
+    var q = input.value.trim().toLowerCase();
+    var anyVisible = false;
+    list.querySelectorAll('.report-cat').forEach(function(cat) {
+      var visibleInCat = 0;
+      cat.querySelectorAll('.report-row').forEach(function(row) {
+        var name = row.getAttribute('data-name') || '';
+        var desc = row.getAttribute('data-desc') || '';
+        var match = !q || name.indexOf(q) !== -1 || desc.indexOf(q) !== -1;
+        row.style.display = match ? '' : 'none';
+        if (match) visibleInCat++;
+      });
+      cat.style.display = visibleInCat ? '' : 'none';
+      // Force-open categories with hits when searching, restore the
+      // user's collapse state when search is cleared.
+      if (q) {
+        if (!cat.dataset._priorOpen) {
+          cat.dataset._priorOpen = cat.open ? '1' : '0';
+        }
+        if (visibleInCat) cat.open = true;
+      } else if (cat.dataset._priorOpen !== undefined) {
+        cat.open = cat.dataset._priorOpen === '1';
+        delete cat.dataset._priorOpen;
+      }
+      if (visibleInCat) anyVisible = true;
+    });
+    if (empty) empty.hidden = anyVisible;
+  });
+})();
+</script>
