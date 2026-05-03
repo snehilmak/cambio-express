@@ -115,10 +115,9 @@ def test_builtin_rule_case_insensitive(client, test_store_id):
         assert _match_builtin_bank_rule(t, a) == "bank_charge_230"
 
 
-def test_builtin_below_avg_bal_fee_matches_either_account(client, test_store_id):
-    """The "BELOW AVG BAL FEE" built-in is account-agnostic — Nizari can
-    hit either account when its balance dips below their threshold.
-    Tagged generically as bank_charge (no 210/230 split)."""
+def test_builtin_below_avg_bal_fee_per_account_split(client, test_store_id):
+    """BELOW AVG BAL FEE can hit either Nizari account; each row tags
+    to bank_charge_<last4> based on the account it landed on."""
     from app import (BankTransaction, StripeBankAccount, db,
                      _match_builtin_bank_rule)
     _admin_login(client, test_store_id)
@@ -130,10 +129,11 @@ def test_builtin_below_avg_bal_fee_matches_either_account(client, test_store_id)
     t2 = _make_txn(app, test_store_id, a230, amount_cents=-500,
                    desc="BELOW AVG BAL FEE", txn_id="bal_230")
     with app.app_context():
-        for tid, aid in [(t1, a210), (t2, a230)]:
+        for tid, aid, expected in [(t1, a210, "bank_charge_210"),
+                                    (t2, a230, "bank_charge_230")]:
             t = db.session.get(BankTransaction, tid)
             a = db.session.get(StripeBankAccount, aid)
-            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+            assert _match_builtin_bank_rule(t, a) == expected
 
 
 def test_builtin_below_avg_bal_fee_case_insensitive(client, test_store_id):
@@ -148,11 +148,11 @@ def test_builtin_below_avg_bal_fee_case_insensitive(client, test_store_id):
     with app.app_context():
         t = db.session.get(BankTransaction, tid)
         a = db.session.get(StripeBankAccount, aid)
-        assert _match_builtin_bank_rule(t, a) == "bank_charge"
+        assert _match_builtin_bank_rule(t, a) == "bank_charge_210"
 
 
-def test_builtin_check_deposit_fee_matches_either_account(client, test_store_id):
-    """"CHECK DEPOSIT FEE" is account-agnostic and tagged generically."""
+def test_builtin_check_deposit_fee_per_account_split(client, test_store_id):
+    """CHECK DEPOSIT FEE → bank_charge_210 / bank_charge_230 per account."""
     from app import (BankTransaction, StripeBankAccount, db,
                      _match_builtin_bank_rule)
     _admin_login(client, test_store_id)
@@ -164,15 +164,15 @@ def test_builtin_check_deposit_fee_matches_either_account(client, test_store_id)
     t2 = _make_txn(app, test_store_id, a230, amount_cents=-100,
                    desc="CHECK DEPOSIT FEE", txn_id="cdf_230")
     with app.app_context():
-        for tid, aid in [(t1, a210), (t2, a230)]:
+        for tid, aid, expected in [(t1, a210, "bank_charge_210"),
+                                    (t2, a230, "bank_charge_230")]:
             t = db.session.get(BankTransaction, tid)
             a = db.session.get(StripeBankAccount, aid)
-            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+            assert _match_builtin_bank_rule(t, a) == expected
 
 
-def test_builtin_msb_monthly_fee_matches_either_account(client, test_store_id):
-    """"MSB MONTHLY FEE" is the monthly MSB-account maintenance charge,
-    matched account-agnostic."""
+def test_builtin_msb_monthly_fee_per_account_split(client, test_store_id):
+    """MSB MONTHLY FEE → bank_charge_210 / bank_charge_230 per account."""
     from app import (BankTransaction, StripeBankAccount, db,
                      _match_builtin_bank_rule)
     _admin_login(client, test_store_id)
@@ -184,16 +184,16 @@ def test_builtin_msb_monthly_fee_matches_either_account(client, test_store_id):
     t2 = _make_txn(app, test_store_id, a210, amount_cents=-1500,
                    desc="msb monthly fee", txn_id="msb_210_ci")
     with app.app_context():
-        for tid, aid in [(t1, a230), (t2, a210)]:
+        for tid, aid, expected in [(t1, a230, "bank_charge_230"),
+                                    (t2, a210, "bank_charge_210")]:
             t = db.session.get(BankTransaction, tid)
             a = db.session.get(StripeBankAccount, aid)
-            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+            assert _match_builtin_bank_rule(t, a) == expected
 
 
-def test_builtin_monthly_service_fee_matches(client, test_store_id):
-    """"MONTHLY SERVICE FEE" is the generic monthly account-service
-    fee, account-agnostic. Distinct substring from "MSB MONTHLY FEE"
-    — both can co-exist on the same statement."""
+def test_builtin_monthly_service_fee_per_account_split(client, test_store_id):
+    """MONTHLY SERVICE FEE is distinct from MSB MONTHLY FEE and also
+    splits per account."""
     from app import (BankTransaction, StripeBankAccount, db,
                      _match_builtin_bank_rule)
     _admin_login(client, test_store_id)
@@ -205,10 +205,31 @@ def test_builtin_monthly_service_fee_matches(client, test_store_id):
     t2 = _make_txn(app, test_store_id, a230, amount_cents=-1000,
                    desc="Monthly Service Fee", txn_id="msf_230_ci")
     with app.app_context():
-        for tid, aid in [(t1, a210), (t2, a230)]:
+        for tid, aid, expected in [(t1, a210, "bank_charge_210"),
+                                    (t2, a230, "bank_charge_230")]:
             t = db.session.get(BankTransaction, tid)
             a = db.session.get(StripeBankAccount, aid)
-            assert _match_builtin_bank_rule(t, a) == "bank_charge"
+            assert _match_builtin_bank_rule(t, a) == expected
+
+
+def test_builtin_msb_wd_fee_per_account_split(client, test_store_id):
+    """MSB W/D FEE → bank_charge_210 / bank_charge_230 per account."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_wd_210")
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_wd_230")
+    t1 = _make_txn(app, test_store_id, a210, amount_cents=-100,
+                   desc="MSB W/D FEE", txn_id="wd_210")
+    t2 = _make_txn(app, test_store_id, a230, amount_cents=-100,
+                   desc="msb w/d fee", txn_id="wd_230_ci")
+    with app.app_context():
+        for tid, aid, expected in [(t1, a210, "bank_charge_210"),
+                                    (t2, a230, "bank_charge_230")]:
+            t = db.session.get(BankTransaction, tid)
+            a = db.session.get(StripeBankAccount, aid)
+            assert _match_builtin_bank_rule(t, a) == expected
 
 
 # ── _apply_rules_to_uncategorized_row ────────────────────────
@@ -361,7 +382,8 @@ def test_db_backfill_tags_historical_rows_outside_stripe_window(
         db.session.commit()  # mimic sync_bank_transactions outer commit
         assert n == 1
         t = db.session.get(BankTransaction, tid)
-        assert t.category_slug == "bank_charge"
+        # Account is 0210, so the dynamic slug strips the leading zero.
+        assert t.category_slug == "bank_charge_210"
 
 
 def test_db_backfill_skips_already_categorized(client, test_store_id):
