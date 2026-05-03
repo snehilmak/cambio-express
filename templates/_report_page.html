@@ -1,0 +1,85 @@
+{# Shared report-page skeleton. Concrete reports extend this and
+   override `report_rows`. Header, KPI cards, period filter chip,
+   and result count are populated from kwargs the route passes:
+     report_title    str
+     back_endpoint   str (Flask endpoint name)
+     date_from       str  (YYYY-MM-DD)
+     date_to         str  (YYYY-MM-DD)
+     period_label    str  human-readable
+     result_count    int
+     result_unit     str  ("companies", "rows", etc.)
+     kpis            list of {label, value, tone?}
+     export_url      str | None
+   #}
+{% extends "base.html" %}
+{% block title %}{{ report_title }} — DineroBook{% endblock %}
+{% block content %}
+<div class="report-page">
+  <div class="report-page__head">
+    <a href="{{ url_for(back_endpoint) }}" class="report-page__back">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           width="16" height="16">
+        <polyline points="15 18 9 12 15 6"/>
+      </svg>
+      Reports
+    </a>
+    <h1 class="report-page__title">{{ report_title }}</h1>
+    <div class="report-page__actions">
+      <form class="report-page__period" method="get" action="">
+        <label class="report-page__period-field">
+          <span>From</span>
+          <input type="date" name="from" value="{{ date_from }}">
+        </label>
+        <label class="report-page__period-field">
+          <span>To</span>
+          <input type="date" name="to" value="{{ date_to }}">
+        </label>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </form>
+      {% if export_url %}
+      <a href="{{ export_url }}" class="btn btn-outline btn-sm" download>
+        <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+             width="14" height="14" style="margin-right:6px;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        Export CSV
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="report-page__kpis">
+    {% for kpi in kpis %}
+    <div class="report-kpi report-kpi--{{ kpi.tone or 'muted' }}">
+      <div class="report-kpi__label">{{ kpi.label }}</div>
+      <div class="report-kpi__value mono">{{ kpi.value }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="report-page__filter">
+    <span class="report-page__filter-period">
+      <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+           width="14" height="14" style="vertical-align:-2px;margin-right:6px;">
+        <rect x="3" y="4" width="18" height="18" rx="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8"  y1="2" x2="8"  y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      {{ period_label }}
+    </span>
+    <span class="report-page__filter-count">
+      {{ result_count }} {{ result_unit or 'rows' }}
+    </span>
+  </div>
+
+  <div class="report-page__rows">
+    {% block report_rows %}{% endblock %}
+  </div>
+</div>
+{% endblock %}

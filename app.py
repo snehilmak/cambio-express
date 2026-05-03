@@ -5448,17 +5448,17 @@ _REPORT_CATEGORIES = [
         "label": "Sales",
         "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
         "reports": [
-            {"key": "transfers_list",
-             "label": "Transfers",
-             "description": "Browse, filter, and export every money transfer.",
-             "endpoint": "transfers"},
-            {"key": "transfers_by_company",
-             "label": "Transfers by Company",
-             "description": "Volume + count split between Intermex, Maxi, and Barri.",
+            {"key": "sales_by_company",
+             "label": "Sales by Company",
+             "description": "Volume, fees, and federal tax split between Intermex, Maxi, and Barri.",
+             "endpoint": "report_sales_by_company"},
+            {"key": "sales_by_service",
+             "label": "Sales by Service Type",
+             "description": "Money Transfer vs. Bill Payment vs. Top Up vs. Recharge — volume and count.",
              "endpoint": None},
-            {"key": "transfers_by_service",
-             "label": "Transfers by Service Type",
-             "description": "Cash pickup vs. bank deposit vs. mobile wallet.",
+            {"key": "sales_by_employee",
+             "label": "Sales by Employee",
+             "description": "Per-employee transfer count and total volume.",
              "endpoint": None},
             {"key": "top_customers",
              "label": "Top Customers by Volume",
@@ -5471,14 +5471,14 @@ _REPORT_CATEGORIES = [
         "label": "Financial",
         "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
         "reports": [
-            {"key": "monthly_pl",
-             "label": "Monthly P&L",
-             "description": "Income, expenses, and net for any month.",
-             "endpoint": "monthly_list"},
-            {"key": "ach_batches",
-             "label": "ACH Batches",
-             "description": "Daily ACH batches per remittance company.",
-             "endpoint": "batches"},
+            {"key": "period_pl",
+             "label": "Period P&L",
+             "description": "Income, expenses, and net income aggregated for any date range.",
+             "endpoint": None},
+            {"key": "ach_volume",
+             "label": "ACH Volume",
+             "description": "Daily ACH batches and totals per remittance company.",
+             "endpoint": None},
             {"key": "bank_charges",
              "label": "Bank Charges by Account",
              "description": "Per-account charges, grouped by description.",
@@ -5498,18 +5498,14 @@ _REPORT_CATEGORIES = [
         "label": "Operations",
         "icon":  '<svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
         "reports": [
-            {"key": "daily_book",
-             "label": "Daily Book",
-             "description": "Per-day cash ledger with drops and check deposits.",
-             "endpoint": "daily_list"},
-            {"key": "return_checks",
-             "label": "Return Checks",
-             "description": "Returned-check workflow: open, recovered, lost.",
-             "endpoint": "return_checks"},
-            {"key": "bank_transactions",
-             "label": "Bank Transactions",
-             "description": "Synced bank-feed rows with categorisation.",
-             "endpoint": "bank_transactions"},
+            {"key": "returned_checks_status",
+             "label": "Returned Check Status",
+             "description": "Open, recovered, and lost returned checks for a period.",
+             "endpoint": None},
+            {"key": "bank_txn_breakdown",
+             "label": "Bank Transactions Breakdown",
+             "description": "Synced bank-feed rows summarised by category.",
+             "endpoint": None},
             {"key": "daily_drops",
              "label": "Daily Drops",
              "description": "Cash drops by employee, day, or date range.",
@@ -5612,6 +5608,118 @@ def owner_reports():
     return render_template("owner_reports.html",
         user=current_user(),
         categories=_resolved_report_categories(_REPORT_CATEGORIES))
+
+
+# ── Reports: shared period helpers ───────────────────────────
+# Report pages use a consistent ?from=YYYY-MM-DD&to=YYYY-MM-DD
+# query convention with current-month default. Shared here so each
+# report doesn't reimplement parsing + defaults.
+def _report_period(args):
+    today = date.today()
+    default_from = date(today.year, today.month, 1)
+    raw_from = (args.get("from") or "").strip()
+    raw_to   = (args.get("to") or "").strip()
+    try:
+        d_from = datetime.strptime(raw_from, "%Y-%m-%d").date() if raw_from else default_from
+    except ValueError:
+        d_from = default_from
+    try:
+        d_to = datetime.strptime(raw_to, "%Y-%m-%d").date() if raw_to else today
+    except ValueError:
+        d_to = today
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    label = f"{d_from.strftime('%b %d, %Y')} – {d_to.strftime('%b %d, %Y')}"
+    return d_from, d_to, label
+
+
+def _sales_by_company_data(store_id, d_from, d_to):
+    """Aggregate Transfer rows by company within a date range. Pure
+    function so the HTML view + CSV export share the same query.
+    Excludes Canceled / Rejected — same convention as the dashboard
+    + owner pages."""
+    rows_q = (db.session.query(
+        Transfer.company,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
+    ).filter(
+        Transfer.store_id == store_id,
+        Transfer.send_date >= d_from,
+        Transfer.send_date <= d_to,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.company).all())
+    rows = []
+    totals = {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
+    for company, count, sent, fees, tax in rows_q:
+        sent = float(sent or 0); fees = float(fees or 0); tax = float(tax or 0)
+        rows.append({
+            "company": company or "(no company)",
+            "count":   int(count or 0),
+            "sent":    sent,
+            "fees":    fees,
+            "tax":     tax,
+            "avg":     (sent / count) if count else 0.0,
+        })
+        totals["sent"]  += sent
+        totals["fees"]  += fees
+        totals["tax"]   += tax
+        totals["count"] += int(count or 0)
+    rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+@app.route("/reports/sales-by-company")
+@admin_required
+def report_sales_by_company():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _sales_by_company_data(sid, d_from, d_to)
+    return render_template("report_sales_by_company.html",
+        user=current_user(),
+        report_title="Sales by Company",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="company" if len(rows) == 1 else "companies",
+        kpis=[
+            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+            {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+        ],
+        export_url=url_for("report_sales_by_company_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/sales-by-company.csv")
+@admin_required
+def report_sales_by_company_csv():
+    import csv as _csv
+    import io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _sales_by_company_data(sid, d_from, d_to)
+    buf = _io.StringIO()
+    w = _csv.writer(buf)
+    w.writerow(["Company", "Count", "Total Sent", "Total Fees",
+                "Federal Tax", "Avg Transfer"])
+    for r in rows:
+        w.writerow([r["company"], r["count"],
+                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"],
+                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
+                f"{totals['tax']:.2f}", ""])
+    fname = f"sales-by-company_{d_from.isoformat()}_{d_to.isoformat()}.csv"
+    return Response(buf.getvalue(), mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # Superadmin Report Center — platform-level metrics and audit views.
