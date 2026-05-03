@@ -47,15 +47,14 @@ def test_wired_report_links_to_existing_route(client, test_store_id):
     assert ">View<" in body
 
 
-def test_unwired_reports_show_coming_soon(client):
-    """Reports without an endpoint render the Coming-soon pill. The
-    superadmin Report Center still has unwired entries — that's the
-    canonical place to assert this rendering. Admin / owner registries
-    have been fully wired across the report-batch PRs."""
+def test_unwired_reports_render_coming_soon_when_present(client):
+    """Coming-soon rendering still works — but as of the latest
+    superadmin wiring there are no unwired reports left in any
+    registry. We assert the inverse: pages render and don't 500
+    even when every report is wired."""
     _superadmin_login(client)
     resp = client.get("/superadmin/reports")
-    body = resp.get_data(as_text=True)
-    assert "Coming soon" in body
+    assert resp.status_code == 200
 
 
 def test_reports_route_requires_admin(client):
@@ -85,11 +84,10 @@ def test_superadmin_reports_page_renders(client):
     for label in ("Platform Health", "Revenue", "Stripe",
                   "Trial Funnel", "Feature Adoption", "Support / Audit"):
         assert label in body
-    # Audit Log is wired today; should show a View button.
+    # Every superadmin report is wired now — every entry shows a
+    # View button.
     assert "Superadmin Audit Log" in body
     assert ">View<" in body
-    # Most other reports are Coming soon.
-    assert "Coming soon" in body
 
 
 def test_superadmin_audit_log_page_renders(client):

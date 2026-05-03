@@ -1083,6 +1083,41 @@ class SuperadminAuditLog(db.Model):
     details     = db.Column(db.Text, default="")             # free-form, usually short JSON/text
     created_at  = db.Column(db.DateTime, default=datetime.utcnow)
 
+
+class WebhookEvent(db.Model):
+    """Inbound Stripe webhook log. Every delivery to /webhooks/stripe
+    inserts one row — successful, no-op, or signature-failed —
+    so the Webhook Health report can show recent deliveries +
+    failure rate without round-tripping the Stripe API."""
+    __tablename__ = "webhook_event"
+    id           = db.Column(db.Integer, primary_key=True)
+    received_at  = db.Column(db.DateTime, default=datetime.utcnow,
+                              nullable=False, index=True)
+    source       = db.Column(db.String(20), default="stripe", nullable=False)
+    event_id     = db.Column(db.String(80), default="")          # stripe evt_...
+    event_type   = db.Column(db.String(80), default="", index=True)
+    status       = db.Column(db.String(20), default="ok",
+                              nullable=False, index=True)
+    # ok            — verified + handled (or accepted no-op)
+    # signature_err — bad signature, payload rejected
+    # processing_err — verified but raised inside handler
+    error        = db.Column(db.Text, default="")
+
+
+class LoginEvent(db.Model):
+    """One row per successful login. Backs the DAU/MAU report.
+    Historic periods before this model ships show no activity —
+    data collects forward from now."""
+    __tablename__ = "login_event"
+    id      = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"),
+                         nullable=False, index=True)
+    role    = db.Column(db.String(20), default="", index=True)
+    at      = db.Column(db.DateTime, default=datetime.utcnow,
+                         nullable=False, index=True)
+    method  = db.Column(db.String(20), default="")  # password / passkey / totp
+
+
 # ── TV display add-on ────────────────────────────────────────
 #
 # Per the screenshot we're targeting, the display is a stack of
@@ -3205,12 +3240,20 @@ PROFILE_TIMEZONES = [
     "UTC",
 ]
 
-def _record_login(user):
-    """Stamp last_login_at on a successful sign-in. Called by every
-    login path (password, store-scoped, owner, passkey). Caller must
+def _record_login(user, *, method=""):
+    """Stamp last_login_at on a successful sign-in AND append a
+    LoginEvent row for the DAU/MAU report. Called by every login
+    path (password, store-scoped, owner, passkey). Caller must
     commit; we don't, because some login paths batch other writes
-    (sign_count update on passkey login) into the same transaction."""
+    (sign_count update on passkey login) into the same transaction.
+
+    `method` is "password" / "passkey" / "totp" / "" (unspecified).
+    """
     user.last_login_at = datetime.utcnow()
+    db.session.add(LoginEvent(
+        user_id=user.id, role=user.role or "",
+        method=method, at=datetime.utcnow(),
+    ))
 
 def _require_pending_auth():
     """Shared guard for /login/2fa* routes: redirect back to /login if
@@ -7188,8 +7231,8 @@ _SUPERADMIN_REPORT_CATEGORIES = [
         "reports": [
             {"key": "dau_mau",
              "label": "Daily / Monthly Actives",
-             "description": "DAU and MAU trend, plus stickiness ratio.",
-             "endpoint": None},
+             "description": "DAU + MAU per day from the LoginEvent feed, plus stickiness.",
+             "endpoint": "superadmin_report_dau_mau"},
             {"key": "active_stores_by_plan",
              "label": "Active Stores by Plan",
              "description": "Headcount across trial / basic / pro / inactive.",
@@ -7230,8 +7273,8 @@ _SUPERADMIN_REPORT_CATEGORIES = [
         "reports": [
             {"key": "webhook_health",
              "label": "Webhook Health",
-             "description": "Recent webhook deliveries and failure rate.",
-             "endpoint": None},
+             "description": "Inbound Stripe webhook deliveries by status.",
+             "endpoint": "superadmin_report_webhook_health"},
             {"key": "failed_payments",
              "label": "Failed Payments",
              "description": "Recent failed charges grouped by reason.",
@@ -7992,6 +8035,82 @@ def _sa_payouts_data(d_from, d_to):
     return rows, totals
 
 
+def _sa_dau_mau_data(d_from, d_to):
+    """Distinct-user counts per day in the period from LoginEvent.
+    Each row = one day with the count of unique users who logged in
+    that day.
+
+    Forward-only: LoginEvent only collects rows from when the model
+    ships, so periods before that show zeroes. The empty-state
+    template surfaces this honestly.
+    """
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+
+    # Distinct user_id × day. Use SQLite-friendly date() expression.
+    day_col = db.func.date(LoginEvent.at)
+    per_day_q = (db.session.query(
+        day_col, db.func.count(db.func.distinct(LoginEvent.user_id))
+    ).filter(
+        LoginEvent.at >= start, LoginEvent.at <= end,
+    ).group_by(day_col).order_by(day_col.desc()).all())
+    rows = [{"day": d, "users": int(c or 0)} for d, c in per_day_q]
+
+    # MAU = distinct users in the period.
+    mau = (db.session.query(
+        db.func.count(db.func.distinct(LoginEvent.user_id))
+    ).filter(
+        LoginEvent.at >= start, LoginEvent.at <= end,
+    ).scalar()) or 0
+    # DAU (today, if today is within the period) = distinct users
+    # whose login today.
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    dau = (db.session.query(
+        db.func.count(db.func.distinct(LoginEvent.user_id))
+    ).filter(LoginEvent.at >= today_start).scalar()) or 0
+    stickiness = (dau / mau * 100.0) if mau else 0.0
+    avg_per_day = (sum(r["users"] for r in rows) / len(rows)
+                    if rows else 0.0)
+    totals = {
+        "dau":          dau,
+        "mau":          int(mau),
+        "stickiness":   stickiness,
+        "avg_per_day":  avg_per_day,
+        "active_days":  len(rows),
+    }
+    return rows, totals
+
+
+def _sa_webhook_health_data(d_from, d_to):
+    """Inbound Stripe webhook deliveries grouped by status. Sourced
+    from WebhookEvent which is populated by the /webhooks/stripe
+    handler on every delivery (including signature failures)."""
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    rows_q = (db.session.query(
+        WebhookEvent.status, db.func.count(WebhookEvent.id),
+    ).filter(
+        WebhookEvent.received_at >= start,
+        WebhookEvent.received_at <= end,
+    ).group_by(WebhookEvent.status).all())
+    rows = []
+    totals = {"count": 0, "ok": 0, "errors": 0}
+    for status, count in rows_q:
+        c = int(count or 0)
+        rows.append({"status": (status or "unknown").replace("_", " ").title(),
+                     "status_key": status or "",
+                     "count": c})
+        totals["count"] += c
+        if status == "ok":
+            totals["ok"] += c
+        else:
+            totals["errors"] += c
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals["failure_pct"] = (totals["errors"] / totals["count"] * 100.0
+                              if totals["count"] else 0.0)
+    return rows, totals
+
+
 # ── Superadmin reports: registry of routes ───────────────────
 _make_superadmin_report_routes(
     "active-stores-by-plan",
@@ -8270,6 +8389,42 @@ _make_superadmin_report_routes(
                           r["method"],
                           r["arrival"].isoformat() if r["arrival"] else ""],
     csv_totals_fn=lambda t: ["TOTAL", f"{t['amount']:.2f}", "", "", ""],
+)
+
+_make_superadmin_report_routes(
+    "dau-mau",
+    title="Daily / Monthly Actives",
+    data_fn=_sa_dau_mau_data,
+    template="report_sa_dau_mau.html",
+    result_unit=("day", "days"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "DAU (today)",    "value": f"{totals['dau']:,}",            "tone": "primary"},
+        {"label": "MAU (period)",   "value": f"{totals['mau']:,}",             "tone": "neon"},
+        {"label": "Stickiness",     "value": f"{totals['stickiness']:.1f}%",   "tone": "muted"},
+        {"label": "Avg / Active Day","value": f"{totals['avg_per_day']:.1f}",   "tone": "muted"},
+    ],
+    csv_columns=["Date", "Active Users"],
+    csv_row_fn=lambda r: [str(r["day"]), r["users"]],
+    csv_totals_fn=lambda t: ["TOTAL (MAU)", t["mau"]],
+)
+
+_make_superadmin_report_routes(
+    "webhook-health",
+    title="Stripe Webhook Health",
+    data_fn=_sa_webhook_health_data,
+    template="report_sa_webhook_health.html",
+    result_unit=("status", "statuses"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Deliveries", "value": f"{totals['count']:,}",           "tone": "primary"},
+        {"label": "OK",               "value": f"{totals['ok']:,}",               "tone": "neon"},
+        {"label": "Errors",           "value": f"{totals['errors']:,}",
+         "tone":  "muted" if totals["errors"] == 0 else "muted"},
+        {"label": "Failure %",        "value": f"{totals['failure_pct']:.1f}%",
+         "tone":  "neon" if totals["failure_pct"] < 1 else "muted"},
+    ],
+    csv_columns=["Status", "Count"],
+    csv_row_fn=lambda r: [r["status"], r["count"]],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
 )
 
 
@@ -12127,65 +12282,103 @@ def stripe_webhook():
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-    except (ValueError, stripe.error.SignatureVerificationError):
+    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        # Log the rejected delivery so Webhook Health surfaces it.
+        try:
+            db.session.add(WebhookEvent(
+                source="stripe", status="signature_err",
+                error=str(e)[:500]))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         return jsonify({"error": "Invalid signature"}), 400
 
-    if event["type"] == "checkout.session.completed":
-        obj = event["data"]["object"]
-        store_id = obj.get("metadata", {}).get("store_id")
-        if store_id:
-            store = db.session.get(Store, int(store_id))
+    # Log every verified delivery up-front so the Webhook Health
+    # report reflects volume + failure rate. We update `status` to
+    # "processing_err" if the handler below raises.
+    log_row = WebhookEvent(source="stripe",
+                           event_id=event.get("id", "") or "",
+                           event_type=event.get("type", "") or "",
+                           status="ok")
+    try:
+        db.session.add(log_row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        log_row = None
+
+    try:
+
+        if event["type"] == "checkout.session.completed":
+            obj = event["data"]["object"]
+            store_id = obj.get("metadata", {}).get("store_id")
+            if store_id:
+                store = db.session.get(Store, int(store_id))
+                if store:
+                    sub_id = obj.get("subscription", "")
+                    customer_id = obj.get("customer", "")
+                    try:
+                        sub = stripe.Subscription.retrieve(sub_id)
+                        price_id = sub["items"]["data"][0]["price"]["id"]
+                        # Map the Stripe price to the internal plan key.
+                        # basic + basic_yearly both grant the "basic" tier;
+                        # pro + pro_yearly both grant "pro". Anything unknown
+                        # falls back to "pro" (safer than locking the user out
+                        # of features they paid for).
+                        prices = _stripe_price_ids()
+                        basic_ids  = {prices["basic"], prices["basic_yearly"]} - {""}
+                        yearly_ids = {prices["basic_yearly"], prices["pro_yearly"]} - {""}
+                        store.plan = "basic" if price_id in basic_ids else "pro"
+                        store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
+                    except Exception as e:
+                        app.logger.error(f"Stripe sub retrieve error: {e}")
+                        store.plan = "pro"
+                        store.billing_cycle = "monthly"
+                    store.stripe_customer_id = customer_id
+                    store.stripe_subscription_id = sub_id
+                    # Returning customer: clear cancellation + retention timer.
+                    store.canceled_at = None
+                    store.data_retention_until = None
+                    # Reset the trial-reminder dedup flag too, so if this
+                    # subscription later lapses and a NEW trial ever begins,
+                    # the reminder cron sends fresh instead of no-oping.
+                    store.trial_reminder_sent_at = None
+                    # Referral flow: mint the referrer's own code so they get
+                    # the topbar crown immediately, and apply any pending
+                    # referee credit from the code they signed up with.
+                    try:
+                        ensure_referral_code(store)
+                        apply_pending_referral_credits(store)
+                    except Exception as e:
+                        app.logger.warning(f"referral hook error for store {store.id}: {e}")
+                    db.session.commit()
+
+        elif event["type"] == "customer.subscription.deleted":
+            sub_id = event["data"]["object"].get("id", "")
+            store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
             if store:
-                sub_id = obj.get("subscription", "")
-                customer_id = obj.get("customer", "")
-                try:
-                    sub = stripe.Subscription.retrieve(sub_id)
-                    price_id = sub["items"]["data"][0]["price"]["id"]
-                    # Map the Stripe price to the internal plan key.
-                    # basic + basic_yearly both grant the "basic" tier;
-                    # pro + pro_yearly both grant "pro". Anything unknown
-                    # falls back to "pro" (safer than locking the user out
-                    # of features they paid for).
-                    prices = _stripe_price_ids()
-                    basic_ids  = {prices["basic"], prices["basic_yearly"]} - {""}
-                    yearly_ids = {prices["basic_yearly"], prices["pro_yearly"]} - {""}
-                    store.plan = "basic" if price_id in basic_ids else "pro"
-                    store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
-                except Exception as e:
-                    app.logger.error(f"Stripe sub retrieve error: {e}")
-                    store.plan = "pro"
-                    store.billing_cycle = "monthly"
-                store.stripe_customer_id = customer_id
-                store.stripe_subscription_id = sub_id
-                # Returning customer: clear cancellation + retention timer.
-                store.canceled_at = None
-                store.data_retention_until = None
-                # Reset the trial-reminder dedup flag too, so if this
-                # subscription later lapses and a NEW trial ever begins,
-                # the reminder cron sends fresh instead of no-oping.
-                store.trial_reminder_sent_at = None
-                # Referral flow: mint the referrer's own code so they get
-                # the topbar crown immediately, and apply any pending
-                # referee credit from the code they signed up with.
-                try:
-                    ensure_referral_code(store)
-                    apply_pending_referral_credits(store)
-                except Exception as e:
-                    app.logger.warning(f"referral hook error for store {store.id}: {e}")
+                now = datetime.utcnow()
+                store.plan = "inactive"
+                store.billing_cycle = ""
+                store.stripe_subscription_id = ""
+                store.canceled_at = now
+                store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
                 db.session.commit()
 
-    elif event["type"] == "customer.subscription.deleted":
-        sub_id = event["data"]["object"].get("id", "")
-        store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
-        if store:
-            now = datetime.utcnow()
-            store.plan = "inactive"
-            store.billing_cycle = ""
-            store.stripe_subscription_id = ""
-            store.canceled_at = now
-            store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
-            db.session.commit()
-
+    except Exception as e:
+        # Don't let a handler bug 500 a Stripe delivery — log + ack.
+        # Stripe retries on non-2xx, so a 200 with logged error keeps
+        # the queue moving while the Webhook Health report shows
+        # failures for the operator to investigate.
+        if log_row is not None:
+            try:
+                log_row.status = "processing_err"
+                log_row.error = (str(e) or type(e).__name__)[:500]
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+        app.logger.exception(
+            f"Stripe webhook handler failed for {event.get('type')}")
     return jsonify({"received": True}), 200
 
 # ── Data retention purge ─────────────────────────────────────

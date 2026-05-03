@@ -178,13 +178,21 @@ def test_password_login_stamps_last_login_at(client, test_admin_id):
         assert (datetime.utcnow() - u.last_login_at) < timedelta(seconds=10)
 
 
-def test_record_login_helper_sets_timestamp():
-    """Pure-function helper — no commit, just mutation."""
-    class U:
-        last_login_at = None
-    u = U()
-    _record_login(u)
-    assert u.last_login_at is not None
+def test_record_login_helper_sets_timestamp(client):
+    """Helper bumps last_login_at AND appends a LoginEvent row.
+    Caller commits; the helper just stages the writes."""
+    from app import User, LoginEvent, db
+    with client.application.app_context():
+        u = User.query.filter_by(role="superadmin").first()
+        before = u.last_login_at
+        _record_login(u, method="password")
+        db.session.commit()
+        u_after = db.session.get(User, u.id)
+        assert u_after.last_login_at is not None
+        assert u_after.last_login_at != before
+        # LoginEvent row exists.
+        assert LoginEvent.query.filter_by(
+            user_id=u.id, method="password").count() >= 1
 
 
 def test_security_page_shows_last_sign_in_banner(client, test_admin_id):

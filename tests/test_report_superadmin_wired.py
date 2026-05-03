@@ -9,10 +9,13 @@ from datetime import date, datetime, timedelta
 
 # Reports wired to actual data after the superadmin batch.
 _WIRED = [
-    # Platform Health (3 of 4 — DAU/MAU still Coming-soon)
+    # Platform Health (4 of 4)
     "active-stores-by-plan",
     "signup-funnel",
     "login-activity",
+    "dau-mau",
+    # Stripe (1 of 3 — failed-payments + payouts still Coming-soon)
+    "webhook-health",
     # Revenue (2 of 3 — refunds Coming-soon)
     "mrr-arr",
     "churn-cohort",
@@ -166,13 +169,82 @@ def test_superadmin_reports_require_superadmin(client, test_store_id):
     assert resp.status_code in (302, 303, 403)
 
 
+def test_dau_mau_counts_from_login_events(client):
+    """Seed two LoginEvent rows for two distinct users today; the
+    DAU KPI should reflect 2 distinct users, MAU same (within
+    current-month default period)."""
+    from app import User, LoginEvent, db
+    from datetime import datetime
+    with client.application.app_context():
+        sa = User.query.filter_by(role="superadmin").first()
+        # Make sure there are at least two distinct users.
+        u2 = User.query.filter(User.id != sa.id).first()
+        if u2 is None:
+            u2 = User(username="dau_test", full_name="DAU Test",
+                       role="employee", store_id=1)
+            u2.set_password("p")
+            db.session.add(u2); db.session.commit()
+        now = datetime.utcnow()
+        db.session.add_all([
+            LoginEvent(user_id=sa.id, role="superadmin",
+                        method="password", at=now),
+            LoginEvent(user_id=u2.id, role="employee",
+                        method="password", at=now),
+        ])
+        db.session.commit()
+    _superadmin_login(client)
+    resp = client.get("/superadmin/reports/dau-mau")
+    body = resp.get_data(as_text=True)
+    # DAU + MAU KPIs both ≥ 2 distinct users.
+    assert "DAU (today)" in body
+    assert "MAU (period)" in body
+
+
+def test_webhook_health_counts_logged_events(client):
+    from app import WebhookEvent, db
+    from datetime import datetime
+    with client.application.app_context():
+        db.session.add_all([
+            WebhookEvent(source="stripe", event_type="checkout.session.completed",
+                          status="ok", received_at=datetime.utcnow()),
+            WebhookEvent(source="stripe", event_type="checkout.session.completed",
+                          status="ok", received_at=datetime.utcnow()),
+            WebhookEvent(source="stripe", event_type="bad",
+                          status="signature_err", received_at=datetime.utcnow()),
+        ])
+        db.session.commit()
+    _superadmin_login(client)
+    resp = client.get("/superadmin/reports/webhook-health")
+    body = resp.get_data(as_text=True)
+    # Total deliveries = 3, OK = 2, errors = 1, failure% = 33.3.
+    assert "Total Deliveries" in body
+    assert "33.3%" in body  # failure_pct KPI
+    assert "Ok" in body  # title-cased status row label
+
+
+def test_stripe_webhook_logs_signature_failures(client):
+    """Posting an invalid Stripe webhook payload should be rejected
+    (400) AND a WebhookEvent row with status=signature_err should be
+    inserted so the Webhook Health report sees it."""
+    from app import WebhookEvent, db
+    with client.application.app_context():
+        before = WebhookEvent.query.count()
+    resp = client.post("/webhooks/stripe", data=b"{}",
+                        headers={"Stripe-Signature": "bogus"})
+    assert resp.status_code == 400
+    with client.application.app_context():
+        after = WebhookEvent.query.count()
+        assert after == before + 1
+        last = (WebhookEvent.query
+                 .order_by(WebhookEvent.id.desc()).first())
+        assert last.status == "signature_err"
+
+
 def test_superadmin_report_center_shows_wired_count(client):
-    """The Report Center landing should now show 15 wired reports
-    (14 from this batch + audit-log wired earlier) instead of just 1."""
+    """The Report Center landing should now show ≥ 16 wired reports
+    (14 from earlier + DAU/MAU + Webhook Health from this batch +
+    Audit Log)."""
     _superadmin_login(client)
     resp = client.get("/superadmin/reports")
     body = resp.get_data(as_text=True)
-    # Spot-check several wired labels appear next to View buttons
-    # (via the existing accordion). The string ">View<" appears
-    # for every wired entry.
-    assert body.count(">View<") >= 14
+    assert body.count(">View<") >= 16
