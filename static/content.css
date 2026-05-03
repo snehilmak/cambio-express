@@ -267,15 +267,90 @@ select {
   padding-right: 36px;
   cursor: pointer;
 }
-/* The native popup is OS-rendered. We can only set its base
-   background + text in Chrome/Edge/Firefox; Safari + iOS ignore
-   these and use the OS picker. We deliberately do NOT override
-   :checked or :hover — the browser's selection highlight needs
-   to remain visible against our dark background. */
+/* Legacy popup model — Chrome/Edge/Firefox honor option backgrounds,
+   Safari + iOS ignore them. We deliberately do NOT override :checked
+   or :hover — the browser's selection highlight needs to remain
+   visible against our dark background. The block below adds the
+   modern restyleable popup on top, where the picker's native
+   highlight is replaced by our own. */
 select option,
 select optgroup {
   background-color: var(--db-bg-popover);
   color: var(--db-gray-9);
+}
+
+/* Progressive enhancement — Chrome 130+ supports the CSS-restyleable
+   <select> via `appearance: base-select`, exposing the popup as
+   `select::picker(select)` which we can fully style. Older browsers
+   ignore the unknown value + pseudo and fall back to the OS popup
+   above (no harm). When we ship the desktop custom-dropdown
+   component (Option B), this block becomes redundant and can go.
+   For now this gives Chromium users on desktop a popup that matches
+   the design system: rounded corners, our typography, hover/active
+   states, and a fade-up animation on open.
+
+   `@supports selector(::picker(select))` only matches browsers that
+   recognize the new pseudo, so the inner rules don't even parse on
+   browsers without support — clean isolation. */
+@supports selector(::picker(select)) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+  select::picker(select) {
+    background: var(--db-bg-popover);
+    border: 1px solid var(--db-gray-3);
+    border-radius: 12px;
+    box-shadow: var(--db-shadow-dropdown);
+    padding: 6px;
+    margin-top: 4px;
+    font-family: var(--db-font-body);
+    color: var(--db-gray-9);
+    max-height: 320px;
+    overflow-y: auto;
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+    transform-origin: top center;
+  }
+  select::picker(select):popover-open {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  select::picker(select)::backdrop { background: transparent; }
+  /* Re-style options as flex children inside the new picker. The
+     legacy `select option` rule still applies for the closed-state
+     fallback (older browsers); these rules add hover/active in the
+     new model. */
+  select option {
+    padding: 9px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--db-gray-9);
+    background: transparent;
+  }
+  select option:hover {
+    background: var(--db-gray-2);
+    color: var(--db-gray-9);
+  }
+  select option:checked {
+    background: var(--db-gray-2);
+    color: var(--db-neon);
+  }
+  select option:checked::before {
+    content: "✓";
+    margin-right: 6px;
+    color: var(--db-neon);
+  }
+  /* Reduced-motion users skip the slide animation. */
+  @media (prefers-reduced-motion: reduce) {
+    select::picker(select),
+    select::picker(select):popover-open {
+      transition: none;
+      transform: none;
+    }
+  }
 }
 
 /* Compact inline select for table-row actions (e.g. categorize a
