@@ -315,6 +315,79 @@ def test_fresh_insert_auto_posts_to_daily_book(client, test_store_id):
         assert line.amount == 50.00
 
 
+# ── _backfill_uncategorized_rows ─────────────────────────────
+
+
+def test_db_backfill_tags_historical_rows_outside_stripe_window(
+        client, test_store_id):
+    """The Stripe Transaction.list call uses a rolling 7-day filter,
+    so historical rows never re-yield through the sync loop. The
+    DB-side backfill catches them anyway by walking BankTransaction
+    directly. This is what makes "I added a rule, my old transactions
+    just got tagged" work for rows older than a week."""
+    from app import (BankTransaction, db, _backfill_uncategorized_rows)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    long_ago = datetime(2026, 2, 14, 9, 0)  # well outside any 7-day window
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-500,
+                    desc="BELOW AVG BAL FEE", txn_id="hist_bal",
+                    when=long_ago)
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        assert t.category_slug in (None, "")
+        n = _backfill_uncategorized_rows(test_store_id)
+        db.session.commit()  # mimic sync_bank_transactions outer commit
+        assert n == 1
+        t = db.session.get(BankTransaction, tid)
+        assert t.category_slug == "bank_charge"
+
+
+def test_db_backfill_skips_already_categorized(client, test_store_id):
+    """Backfill never re-touches rows that already have a slug — even
+    if a different rule would now match, we preserve operator intent."""
+    from app import (BankTransaction, db, _backfill_uncategorized_rows)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0230")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-360,
+                    desc="REMOTE DEPOSIT FEE", txn_id="hist_keep")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        t.category_slug = "ignore"
+        db.session.commit()
+        n = _backfill_uncategorized_rows(test_store_id)
+        assert n == 0
+        db.session.refresh(t)
+        assert t.category_slug == "ignore"
+
+
+def test_db_backfill_isolated_to_store(client, test_store_id):
+    """Cross-tenant safety — the helper only walks rows for the
+    given store_id."""
+    from app import (Store, BankTransaction, db,
+                     _backfill_uncategorized_rows)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    _make_txn(app, test_store_id, aid, amount_cents=-500,
+              desc="BELOW AVG BAL FEE", txn_id="other_store_tx")
+    # Create a second store + uncategorised row matching the same rule.
+    with app.app_context():
+        s2 = Store(name="Other", slug="other-store-bf", plan="trial")
+        db.session.add(s2); db.session.commit()
+        s2_id = s2.id
+    other_aid = _make_account(app, s2_id, last4="0210", slug="fca_bf_other")
+    other_tid = _make_txn(app, s2_id, other_aid, amount_cents=-500,
+                          desc="BELOW AVG BAL FEE", txn_id="bf_other_tx")
+    with app.app_context():
+        n = _backfill_uncategorized_rows(test_store_id)
+        assert n == 1
+        # Other store's row stayed untouched.
+        other = db.session.get(BankTransaction, other_tid)
+        assert other.category_slug in (None, "")
+
+
 # ── _bank_charges_for_month ──────────────────────────────────
 
 
