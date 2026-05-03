@@ -78,8 +78,6 @@
      class="tab-link {% if active_tab == 'discounts' %}active{% endif %}">Discount Codes</a>
   <a href="{{ url_for('superadmin_controls', tab='features')  }}"
      class="tab-link {% if active_tab == 'features'  %}active{% endif %}">Feature Flags</a>
-  <a href="{{ url_for('superadmin_controls', tab='audit')     }}"
-     class="tab-link {% if active_tab == 'audit'     %}active{% endif %}">Audit Log</a>
   <a href="{{ url_for('superadmin_controls', tab='announcements') }}"
      class="tab-link {% if active_tab == 'announcements' %}active{% endif %}">Announcements</a>
   <a href="{{ url_for('superadmin_controls', tab='tv-catalog') }}"
@@ -392,7 +390,7 @@
           <div class="quick-link-desc">Flip functionality globally or per store.</div>
         </div>
       </a>
-      <a href="{{ url_for('superadmin_controls', tab='audit') }}" class="quick-link-card">
+      <a href="{{ url_for('superadmin_audit_log') }}" class="quick-link-card">
         <div class="quick-link-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
         <div class="quick-link-text">
           <div class="quick-link-title">Audit Log</div>
@@ -817,36 +815,9 @@
   </div>
 </div>
 
-{# ─────────── AUDIT LOG ─────────── #}
-{% elif active_tab == 'audit' %}
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">Recent superadmin activity (last 100)</span>
-    <a href="{{ url_for('superadmin_audit_export') }}" class="btn btn-outline btn-sm"
-       title="Download the full audit log as CSV">Export CSV</a>
-  </div>
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>When</th><th>Who</th><th>Action</th><th>Target</th><th>Details</th></tr>
-      </thead>
-      <tbody>
-        {% for row in audit %}
-        <tr>
-          <td class="mono">{{ row.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
-          <td>{{ row.admin_name or '—' }}</td>
-          <td class="mono">{{ row.action }}</td>
-          <td class="mono">{{ row.target_type }} {{ row.target_id }}</td>
-          <td class="text-sm">{{ row.details }}</td>
-        </tr>
-        {% endfor %}
-        {% if not audit %}
-        <tr><td colspan="5" class="empty-state">No activity yet.</td></tr>
-        {% endif %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{# Audit Log moved to /superadmin/reports/audit-log under the
+   Report Center umbrella. Quick Link on the Overview tab now points
+   there directly. #}
 
 {# ─────────── ANNOUNCEMENTS ─────────── #}
 {% elif active_tab == 'announcements' %}
