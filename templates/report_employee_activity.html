@@ -1,0 +1,35 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No employee activity in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">{{ r.employee }}</div>
+      {% if r.username %}
+      <div class="report-card__sub mono">@{{ r.username }}</div>
+      {% endif %}
+    </div>
+    <div class="report-card__count mono">{{ r.count }}<span class="report-card__count-suffix"> {{ 'transfer' if r.count == 1 else 'transfers' }}</span></div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Total Sent</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.sent) }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Cancelled</div>
+      <div class="report-card__metric-value mono">{{ r.cancels }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Last Activity</div>
+      <div class="report-card__metric-value mono">{% if r.last_activity %}{{ r.last_activity.strftime('%b %d') }}{% else %}—{% endif %}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

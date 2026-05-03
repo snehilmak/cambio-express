@@ -1,0 +1,37 @@
+{% extends "_report_page.html" %}
+
+{% block report_extra_filters %}
+<label class="report-page__period-field">
+  <span>Min $</span>
+  <input type="number" name="threshold" value="{{ threshold|int }}"
+         step="100" min="0" style="width: 100px;">
+</label>
+{% endblock %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No transfers at or above this threshold in the period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">{{ r.sender_name }} → {{ r.recipient_name }}</div>
+      <div class="report-card__sub mono">{{ r.send_date.strftime('%b %d, %Y') }} · {{ r.country }} · {{ r.company }}{% if r.confirm %} · #{{ r.confirm }}{% endif %}</div>
+    </div>
+    <div class="report-card__count mono">${{ '{:,.2f}'.format(r.amount) }}</div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Fee</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.fee) }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Fed Tax</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.tax) }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
