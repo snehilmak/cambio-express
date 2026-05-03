@@ -5680,7 +5680,13 @@ def _render_report(template, data_fn, *,
     """Run a report's data function, build KPIs from the result, and
     render the report-page template. Wraps the boilerplate every
     admin / owner report route used to repeat. `slug` drives both
-    the back-link target and the CSV-export endpoint name."""
+    the back-link target and the CSV-export endpoint name.
+
+    `kpis_fn` is invoked as `kpis_fn(totals, rows, extra_args)`. Any
+    items in `extra_args` are also passed through as template kwargs
+    so report-specific Jinja blocks (e.g. high-value-transfers'
+    `Min $` filter input) can read them directly.
+    """
     extra_args = extra_args or {}
     d_from, d_to, period_label = _report_period(request.args)
     rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
@@ -5696,7 +5702,7 @@ def _render_report(template, data_fn, *,
         period_label=period_label,
         result_count=n,
         result_unit=result_unit[0] if n == 1 else result_unit[1],
-        kpis=kpis_fn(totals, rows),
+        kpis=kpis_fn(totals, rows, extra_args),
         export_url=url_for(
             _slug_to_endpoint(slug, owner=is_owner, csv=True),
             **{
@@ -5706,6 +5712,7 @@ def _render_report(template, data_fn, *,
             }),
         rows=rows,
         totals=totals,
+        **extra_args,
         **template_kwargs,
     )
 
@@ -5714,21 +5721,33 @@ def _export_report_csv(data_fn, *, columns, row_fn,
                         totals_row_fn=None, fname_prefix,
                         extra_args=None):
     """Run a report's data function and stream a CSV. `columns` is the
-    header row; `row_fn(row)` produces each data row; optional
-    `totals_row_fn(totals)` writes a footer row preceded by a blank
-    line. Caller-provided `extra_args` are forwarded to data_fn."""
+    header row (list, or a callable `(totals) -> list` for headers
+    derived from the data — period-comparison uses the period labels
+    in the column names). `row_fn(row)` produces each data row;
+    optional `totals_row_fn(totals)` writes a footer row preceded by
+    a blank line. Caller-provided `extra_args` are forwarded to
+    data_fn."""
     import csv as _csv, io as _io
     extra_args = extra_args or {}
     d_from, d_to, _ = _report_period(request.args)
     rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
                             **extra_args)
     buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(columns)
+    cols = columns(totals) if callable(columns) else columns
+    w.writerow(cols)
     for r in rows:
         w.writerow(row_fn(r))
     if totals_row_fn is not None:
-        w.writerow([])
-        w.writerow(totals_row_fn(totals))
+        result = totals_row_fn(totals)
+        # Accept either a single row (list of cells) or multiple
+        # totals rows (list of lists). Detect by inspecting the
+        # first element.
+        totals_rows = (result if result and isinstance(result[0], (list, tuple))
+                       else [result])
+        if totals_rows:
+            w.writerow([])
+            for trow in totals_rows:
+                w.writerow(trow)
     return _csv_response(buf,
         f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
@@ -6003,408 +6022,12 @@ def _new_vs_returning_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/sales-by-company")
-@admin_required
-def report_sales_by_company():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _sales_by_company_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_sales_by_company.html",
-        user=current_user(),
-        report_title="Sales by Company",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="company" if len(rows) == 1 else "companies",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-            {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("sales-by-company", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/sales-by-company.csv")
-@admin_required
-def report_sales_by_company_csv():
-    import csv as _csv
-    import io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _sales_by_company_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO()
-    w = _csv.writer(buf)
-    w.writerow(["Company", "Count", "Total Sent", "Total Fees",
-                "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["company"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"],
-                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
-                f"{totals['tax']:.2f}", ""])
-    fname = f"sales-by-company_{d_from.isoformat()}_{d_to.isoformat()}.csv"
-    return Response(buf.getvalue(), mimetype="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
-
 def _csv_response(buf, fname):
     """Wrap a StringIO buffer as a downloadable text/csv response.
     Pulled out so each report's CSV route stops repeating the
     Content-Disposition incantation."""
     return Response(buf.getvalue(), mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
-
-# ── Sales by Service Type ────────────────────────────────────
-@app.route("/reports/sales-by-service-type")
-@admin_required
-def report_sales_by_service_type():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _sales_by_service_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_sales_by_service_type.html",
-        user=current_user(),
-        report_title="Sales by Service Type",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="service type" if len(rows) == 1 else "service types",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-            {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("sales-by-service-type", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/sales-by-service-type.csv")
-@admin_required
-def report_sales_by_service_type_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _sales_by_service_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Service Type", "Count", "Total Sent", "Total Fees",
-                "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["service_type"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"],
-                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
-                f"{totals['tax']:.2f}", ""])
-    return _csv_response(buf,
-        f"sales-by-service-type_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── Sales by Employee ────────────────────────────────────────
-@app.route("/reports/sales-by-employee")
-@admin_required
-def report_sales_by_employee():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _sales_by_employee_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_sales_by_employee.html",
-        user=current_user(),
-        report_title="Sales by Employee",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="employee" if len(rows) == 1 else "employees",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-            {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "muted"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("sales-by-employee", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/sales-by-employee.csv")
-@admin_required
-def report_sales_by_employee_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _sales_by_employee_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Employee", "Username", "Count", "Total Sent",
-                "Total Fees", "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["employee"], r["username"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", "", totals["count"],
-                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
-                f"{totals['tax']:.2f}", ""])
-    return _csv_response(buf,
-        f"sales-by-employee_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── Top Customers by Volume ──────────────────────────────────
-@app.route("/reports/top-customers")
-@admin_required
-def report_top_customers():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _top_customers_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_top_customers.html",
-        user=current_user(),
-        report_title="Top Customers by Volume",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="customer" if len(rows) == 1 else "customers",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-            {"label": "Customer Count", "value": f"{len(rows)}",             "tone": "muted"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("top-customers", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/top-customers.csv")
-@admin_required
-def report_top_customers_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _top_customers_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Customer", "Phone", "Count", "Total Sent",
-                "Total Fees", "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["customer"], r["phone"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    return _csv_response(buf,
-        f"top-customers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── Top Senders (by transaction count) ───────────────────────
-@app.route("/reports/top-senders")
-@admin_required
-def report_top_senders():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _top_customers_data(_report_scope_ids(), d_from, d_to, sort_by="count")
-    return render_template("report_top_senders.html",
-        user=current_user(),
-        report_title="Top Senders",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="sender" if len(rows) == 1 else "senders",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Sender Count",   "value": f"{len(rows)}",             "tone": "neon"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("top-senders", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/top-senders.csv")
-@admin_required
-def report_top_senders_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _top_customers_data(_report_scope_ids(), d_from, d_to, sort_by="count")
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Customer", "Phone", "Count", "Total Sent",
-                "Total Fees", "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["customer"], r["phone"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    return _csv_response(buf,
-        f"top-senders_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── Top Recipients ───────────────────────────────────────────
-@app.route("/reports/top-recipients")
-@admin_required
-def report_top_recipients():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _top_recipients_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_top_recipients.html",
-        user=current_user(),
-        report_title="Top Recipients",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="recipient" if len(rows) == 1 else "recipients",
-        kpis=[
-            {"label": "Total Sent",      "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Recipient Count", "value": f"{len(rows)}",             "tone": "neon"},
-            {"label": "Transfer Count",  "value": f"{totals['count']:,}",     "tone": "muted"},
-            {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("top-recipients", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/top-recipients.csv")
-@admin_required
-def report_top_recipients_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _top_recipients_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Recipient", "Count", "Total Sent",
-                "Total Fees", "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["recipient"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    return _csv_response(buf,
-        f"top-recipients_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── By Destination Country ───────────────────────────────────
-@app.route("/reports/by-destination-country")
-@admin_required
-def report_by_destination_country():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _by_destination_country_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_by_destination_country.html",
-        user=current_user(),
-        report_title="By Destination Country",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="country" if len(rows) == 1 else "countries",
-        kpis=[
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-            {"label": "Country Count",  "value": f"{len(rows)}",             "tone": "neon"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("by-destination-country", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/by-destination-country.csv")
-@admin_required
-def report_by_destination_country_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _by_destination_country_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Country", "Count", "Total Sent",
-                "Total Fees", "Federal Tax", "Avg Transfer"])
-    for r in rows:
-        w.writerow([r["country"], r["count"],
-                    f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                    f"{r['tax']:.2f}", f"{r['avg']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"],
-                f"{totals['sent']:.2f}", f"{totals['fees']:.2f}",
-                f"{totals['tax']:.2f}", ""])
-    return _csv_response(buf,
-        f"by-destination-country_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-# ── New vs. Returning Senders ────────────────────────────────
-@app.route("/reports/new-vs-returning")
-@admin_required
-def report_new_vs_returning():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _new_vs_returning_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_new_vs_returning.html",
-        user=current_user(),
-        report_title="New vs. Returning Senders",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="bucket" if len(rows) == 1 else "buckets",
-        kpis=[
-            {"label": "Total Senders",  "value": f"{totals['customers']:,}", "tone": "primary"},
-            {"label": "New",            "value": f"{totals['new_count']:,}", "tone": "neon"},
-            {"label": "Returning",      "value": f"{totals['returning_count']:,}", "tone": "muted"},
-            {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("new-vs-returning", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-        totals=totals,
-    )
-
-
-@app.route("/reports/new-vs-returning.csv")
-@admin_required
-def report_new_vs_returning_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _new_vs_returning_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Bucket", "Customers", "Transfers", "Total Sent"])
-    for r in rows:
-        w.writerow([r["bucket"], r["customers"], r["txns"],
-                    f"{r['sent']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["customers"], totals["txns"],
-                f"{totals['sent']:.2f}"])
-    return _csv_response(buf,
-        f"new-vs-returning_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── Returned Check Status ────────────────────────────────────
@@ -6455,56 +6078,6 @@ def _returned_check_status_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/returned-check-status")
-@admin_required
-def report_returned_check_status():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _returned_check_status_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_returned_check_status.html",
-        user=current_user(),
-        report_title="Returned Check Status",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="status" if len(rows) == 1 else "statuses",
-        kpis=[
-            {"label": "Total Checks",  "value": f"{totals['count']:,}",         "tone": "primary"},
-            {"label": "Total Amount",  "value": f"${totals['amount']:,.2f}",    "tone": "muted"},
-            {"label": "Recovered",     "value": f"${totals['recovered']:,.2f}", "tone": "neon"},
-            {"label": "Net G/L",       "value": f"${totals['net_gl']:,.2f}",
-             "tone": "neon" if totals["net_gl"] >= 0 else "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("returned-check-status", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/returned-check-status.csv")
-@admin_required
-def report_returned_check_status_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _returned_check_status_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Status", "Count", "Amount", "Recovered"])
-    for r in rows:
-        w.writerow([r["status"], r["count"],
-                    f"{r['amount']:.2f}", f"{r['recovered']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"],
-                f"{totals['amount']:.2f}",
-                f"{totals['recovered']:.2f}"])
-    w.writerow(["NET G/L", "", "", f"{totals['net_gl']:.2f}"])
-    return _csv_response(buf,
-        f"returned-checks_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Bank Transactions Breakdown ──────────────────────────────
 def _bank_txn_breakdown_data(store_ids, d_from, d_to):
     """Group BankTransaction rows posted in the period by category_slug,
@@ -6543,50 +6116,6 @@ def _bank_txn_breakdown_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/bank-transactions-breakdown")
-@admin_required
-def report_bank_txn_breakdown():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _bank_txn_breakdown_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_bank_txn_breakdown.html",
-        user=current_user(),
-        report_title="Bank Transactions Breakdown",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="category" if len(rows) == 1 else "categories",
-        kpis=[
-            {"label": "Inflows",     "value": f"${totals['inflow']:,.2f}",  "tone": "neon"},
-            {"label": "Outflows",    "value": f"${abs(totals['outflow']):,.2f}", "tone": "muted"},
-            {"label": "Net Flow",    "value": f"${(totals['inflow'] + totals['outflow']):,.2f}", "tone": "primary"},
-            {"label": "Transaction Count", "value": f"{totals['count']:,}", "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("bank-txn-breakdown", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/bank-transactions-breakdown.csv")
-@admin_required
-def report_bank_txn_breakdown_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _bank_txn_breakdown_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Category", "Count", "Signed Amount", "Absolute Amount"])
-    for r in rows:
-        w.writerow([r["label"], r["count"],
-                    f"{r['signed']:.2f}", f"{r['amount']:.2f}"])
-    return _csv_response(buf,
-        f"bank-txn-breakdown_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Daily Drops ──────────────────────────────────────────────
 def _daily_drops_data(store_ids, d_from, d_to):
     """Sum DailyDrop rows in the period, grouped by report_date.
@@ -6614,52 +6143,6 @@ def _daily_drops_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/daily-drops")
-@admin_required
-def report_daily_drops():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _daily_drops_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_daily_drops.html",
-        user=current_user(),
-        report_title="Daily Drops",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="day" if len(rows) == 1 else "days",
-        kpis=[
-            {"label": "Total Dropped", "value": f"${totals['amount']:,.2f}",      "tone": "primary"},
-            {"label": "Drop Count",    "value": f"{totals['count']:,}",            "tone": "neon"},
-            {"label": "Active Days",   "value": f"{len(rows)}",                    "tone": "muted"},
-            {"label": "Avg / Day",     "value": f"${totals['avg_per_day']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("daily-drops", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/daily-drops.csv")
-@admin_required
-def report_daily_drops_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _daily_drops_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Date", "Drop Count", "Total Dropped"])
-    for r in rows:
-        w.writerow([r["date"].isoformat(), r["count"],
-                    f"{r['amount']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}"])
-    return _csv_response(buf,
-        f"daily-drops_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Check Deposits ───────────────────────────────────────────
 def _check_deposits_data(store_ids, d_from, d_to):
     """Sum CheckDeposit rows in the period, grouped by report_date."""
@@ -6684,52 +6167,6 @@ def _check_deposits_data(store_ids, d_from, d_to):
     }
     totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
     return rows, totals
-
-
-@app.route("/reports/check-deposits")
-@admin_required
-def report_check_deposits():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _check_deposits_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_check_deposits.html",
-        user=current_user(),
-        report_title="Check Deposits",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="day" if len(rows) == 1 else "days",
-        kpis=[
-            {"label": "Total Deposited", "value": f"${totals['amount']:,.2f}",      "tone": "primary"},
-            {"label": "Deposit Count",   "value": f"{totals['count']:,}",            "tone": "neon"},
-            {"label": "Active Days",     "value": f"{len(rows)}",                    "tone": "muted"},
-            {"label": "Avg / Day",       "value": f"${totals['avg_per_day']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("check-deposits", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/check-deposits.csv")
-@admin_required
-def report_check_deposits_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _check_deposits_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Date", "Deposit Count", "Total Deposited"])
-    for r in rows:
-        w.writerow([r["date"].isoformat(), r["count"],
-                    f"{r['amount']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}"])
-    return _csv_response(buf,
-        f"check-deposits_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── High-Value Transfers ─────────────────────────────────────
@@ -6769,57 +6206,6 @@ def _parse_threshold(args, default=3000):
     except (ValueError, TypeError):
         v = default
     return max(0.0, v)
-
-
-@app.route("/reports/high-value-transfers")
-@admin_required
-def report_high_value_transfers():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    threshold = _parse_threshold(request.args)
-    rows, totals = _high_value_transfers_data(_report_scope_ids(), d_from, d_to, threshold)
-    return render_template("report_high_value_transfers.html",
-        user=current_user(),
-        report_title="High-Value Transfers",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="transfer" if len(rows) == 1 else "transfers",
-        kpis=[
-            {"label": "Threshold",     "value": f"≥ ${threshold:,.0f}",       "tone": "primary"},
-            {"label": "Total Volume",  "value": f"${totals['amount']:,.2f}",  "tone": "neon"},
-            {"label": "Transfer Count","value": f"{totals['count']:,}",        "tone": "muted"},
-            {"label": "Total Fees",    "value": f"${totals['fees']:,.2f}",    "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("high-value-transfers", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat(),
-                              "threshold": threshold}),
-        rows=rows,
-        threshold=threshold,
-    )
-
-
-@app.route("/reports/high-value-transfers.csv")
-@admin_required
-def report_high_value_transfers_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    threshold = _parse_threshold(request.args)
-    rows, totals = _high_value_transfers_data(_report_scope_ids(), d_from, d_to, threshold)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Date", "Sender", "Recipient", "Country", "Company",
-                "Send Amount", "Fee", "Federal Tax", "Confirm #"])
-    for r in rows:
-        w.writerow([r["send_date"].isoformat(),
-                    r["sender_name"], r["recipient_name"], r["country"],
-                    r["company"], f"{r['amount']:.2f}",
-                    f"{r['fee']:.2f}", f"{r['tax']:.2f}", r["confirm"]])
-    return _csv_response(buf,
-        f"high-value-transfers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── Employee Activity ────────────────────────────────────────
@@ -6895,52 +6281,6 @@ def _employee_activity_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/employee-activity")
-@admin_required
-def report_employee_activity():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _employee_activity_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_employee_activity.html",
-        user=current_user(),
-        report_title="Employee Activity",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="employee" if len(rows) == 1 else "employees",
-        kpis=[
-            {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "primary"},
-            {"label": "Active Transfers", "value": f"{totals['count']:,}",     "tone": "neon"},
-            {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
-            {"label": "Cancelled / Rejected", "value": f"{totals['cancels']:,}", "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("employee-activity", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/employee-activity.csv")
-@admin_required
-def report_employee_activity_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _employee_activity_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Employee", "Username", "Active Transfers", "Total Sent",
-                "Cancelled / Rejected", "Last Activity"])
-    for r in rows:
-        last = r["last_activity"].isoformat() if r["last_activity"] else ""
-        w.writerow([r["employee"], r["username"], r["count"],
-                    f"{r['sent']:.2f}", r["cancels"], last])
-    return _csv_response(buf,
-        f"employee-activity_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Bank-Rule Audit Log ──────────────────────────────────────
 def _bank_rule_audit_data(store_ids, d_from, d_to):
     """Group BankTransaction rows that were auto-categorised by an
@@ -6992,49 +6332,6 @@ def _bank_rule_audit_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/bank-rule-audit")
-@admin_required
-def report_bank_rule_audit():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _bank_rule_audit_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_bank_rule_audit.html",
-        user=current_user(),
-        report_title="Bank-Rule Audit Log",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="rule" if len(rows) == 1 else "rules",
-        kpis=[
-            {"label": "Active Rules",    "value": f"{totals['rules']}",        "tone": "primary"},
-            {"label": "Auto-tagged Txns","value": f"{totals['count']:,}",       "tone": "neon"},
-            {"label": "Total Amount",    "value": f"${totals['amount']:,.2f}",  "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("bank-rule-audit", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/bank-rule-audit.csv")
-@admin_required
-def report_bank_rule_audit_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _bank_rule_audit_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Rule", "Match", "Target", "Matched Count", "Total Amount"])
-    for r in rows:
-        w.writerow([r["label"], r["match"], r["target"],
-                    r["count"], f"{r['amount']:.2f}"])
-    return _csv_response(buf,
-        f"bank-rule-audit_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Cancelled Transfers ──────────────────────────────────────
 def _cancelled_transfers_data(store_ids, d_from, d_to):
     """List Cancelled / Rejected transfers in the period."""
@@ -7065,53 +6362,6 @@ def _cancelled_transfers_data(store_ids, d_from, d_to):
         "rejected":  sum(1 for r in rows if r["status"] == "Rejected"),
     }
     return rows, totals
-
-
-@app.route("/reports/cancelled-transfers")
-@admin_required
-def report_cancelled_transfers():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _cancelled_transfers_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_cancelled_transfers.html",
-        user=current_user(),
-        report_title="Cancelled Transfers",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="transfer" if len(rows) == 1 else "transfers",
-        kpis=[
-            {"label": "Total",     "value": f"{totals['count']:,}",        "tone": "primary"},
-            {"label": "Canceled",  "value": f"{totals['canceled']:,}",     "tone": "muted"},
-            {"label": "Rejected",  "value": f"{totals['rejected']:,}",     "tone": "muted"},
-            {"label": "Total Amount","value": f"${totals['amount']:,.2f}", "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("cancelled-transfers", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/cancelled-transfers.csv")
-@admin_required
-def report_cancelled_transfers_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _cancelled_transfers_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Date", "Sender", "Recipient", "Country", "Company",
-                "Status", "Send Amount", "Notes", "Confirm #"])
-    for r in rows:
-        w.writerow([r["send_date"].isoformat(),
-                    r["sender_name"], r["recipient_name"], r["country"],
-                    r["company"], r["status"], f"{r['amount']:.2f}",
-                    r["status_notes"], r["confirm"]])
-    return _csv_response(buf,
-        f"cancelled-transfers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── Period P&L ───────────────────────────────────────────────
@@ -7177,55 +6427,6 @@ def _period_pl_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/period-pl")
-@admin_required
-def report_period_pl():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _period_pl_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_period_pl.html",
-        user=current_user(),
-        report_title="Period P&L",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="line",
-        kpis=[
-            {"label": "Total Income",   "value": f"${totals['income']:,.2f}",   "tone": "neon"},
-            {"label": "Total Expenses", "value": f"${totals['expenses']:,.2f}", "tone": "muted"},
-            {"label": "Net Income",     "value": f"${totals['net']:,.2f}",
-             "tone": "primary" if totals["net"] >= 0 else "muted"},
-            {"label": "Active Days",    "value": f"{totals['days']}",            "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("period-pl", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-        totals=totals,
-    )
-
-
-@app.route("/reports/period-pl.csv")
-@admin_required
-def report_period_pl_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _period_pl_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Section", "Line", "Amount"])
-    for r in rows:
-        w.writerow([r["section"], r["label"], f"{r['amount']:.2f}"])
-    w.writerow([])
-    w.writerow(["", "Total Income",   f"{totals['income']:.2f}"])
-    w.writerow(["", "Total Expenses", f"{totals['expenses']:.2f}"])
-    w.writerow(["", "Net",            f"{totals['net']:.2f}"])
-    return _csv_response(buf,
-        f"period-pl_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── ACH Volume ───────────────────────────────────────────────
 def _ach_volume_data(store_ids, d_from, d_to):
     """Group ACHBatch rows in the period by company. Per-company:
@@ -7253,50 +6454,6 @@ def _ach_volume_data(store_ids, d_from, d_to):
         totals["amount"] += a
     rows.sort(key=lambda r: r["amount"], reverse=True)
     return rows, totals
-
-
-@app.route("/reports/ach-volume")
-@admin_required
-def report_ach_volume():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _ach_volume_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_ach_volume.html",
-        user=current_user(),
-        report_title="ACH Volume",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="company" if len(rows) == 1 else "companies",
-        kpis=[
-            {"label": "Total ACH",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
-            {"label": "Batch Count", "value": f"{totals['count']:,}",       "tone": "neon"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("ach-volume", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/ach-volume.csv")
-@admin_required
-def report_ach_volume_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _ach_volume_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Company", "Batch Count", "Total ACH", "Avg / Batch"])
-    for r in rows:
-        w.writerow([r["company"], r["count"],
-                    f"{r['amount']:.2f}", f"{r['avg']:.2f}"])
-    w.writerow([])
-    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}", ""])
-    return _csv_response(buf,
-        f"ach-volume_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── Bank Charges by Account ──────────────────────────────────
@@ -7339,50 +6496,6 @@ def _bank_charges_by_account_data(store_ids, d_from, d_to):
         totals["amount"] += amt
     rows.sort(key=lambda r: r["amount"], reverse=True)
     return rows, totals
-
-
-@app.route("/reports/bank-charges-by-account")
-@admin_required
-def report_bank_charges_by_account():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _bank_charges_by_account_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_bank_charges_by_account.html",
-        user=current_user(),
-        report_title="Bank Charges by Account",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="account" if len(rows) == 1 else "accounts",
-        kpis=[
-            {"label": "Total Charges",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
-            {"label": "Charge Count",    "value": f"{totals['count']:,}",       "tone": "neon"},
-            {"label": "Account Count",   "value": f"{len(rows)}",               "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("bank-charges-by-account", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
-
-
-@app.route("/reports/bank-charges-by-account.csv")
-@admin_required
-def report_bank_charges_by_account_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _bank_charges_by_account_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Account", "Last 4", "Charge Count", "Total Charges",
-                "Avg / Charge"])
-    for r in rows:
-        w.writerow([r["account"], r["last4"], r["count"],
-                    f"{r['amount']:.2f}", f"{r['avg']:.2f}"])
-    return _csv_response(buf,
-        f"bank-charges-by-account_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # ── Period Comparison ────────────────────────────────────────
@@ -7455,71 +6568,6 @@ def _period_comparison_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/period-comparison")
-@admin_required
-def report_period_comparison():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _period_comparison_data(_report_scope_ids(), d_from, d_to)
-    # KPIs surface the most useful trend lines.
-    def _row(label):
-        for r in rows:
-            if r["label"] == label:
-                return r
-        return None
-    income_row   = _row("Total Income")
-    net_row      = _row("Net Income")
-    transfers_row= _row("Transfers")
-    return render_template("report_period_comparison.html",
-        user=current_user(),
-        report_title="Period Comparison",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=f"{totals['current_label']} vs. {totals['prior_label']}",
-        result_count=len(rows),
-        result_unit="metric" if len(rows) == 1 else "metrics",
-        kpis=[
-            {"label": "Income Δ",
-             "value": f"{income_row['pct']:+.1f}%" if income_row else "—",
-             "tone":  "primary"},
-            {"label": "Net Δ",
-             "value": f"{net_row['pct']:+.1f}%" if net_row else "—",
-             "tone":  "neon" if (net_row and net_row['pct'] >= 0) else "muted"},
-            {"label": "Transfers Δ",
-             "value": f"{transfers_row['pct']:+.1f}%" if transfers_row else "—",
-             "tone":  "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("period-comparison", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-        totals=totals,
-    )
-
-
-@app.route("/reports/period-comparison.csv")
-@admin_required
-def report_period_comparison_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _period_comparison_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Metric", totals["current_label"], totals["prior_label"],
-                "Delta", "% Change"])
-    for r in rows:
-        if r["is_money"]:
-            cur = f"{r['current']:.2f}"; pri = f"{r['prior']:.2f}"
-            d   = f"{r['delta']:.2f}"
-        else:
-            cur = f"{int(r['current'])}"; pri = f"{int(r['prior'])}"
-            d   = f"{int(r['delta'])}"
-        w.writerow([r["label"], cur, pri, d, f"{r['pct']:+.1f}%"])
-    return _csv_response(buf,
-        f"period-comparison_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
 # ── Fees vs. Federal Tax ─────────────────────────────────────
 def _fees_vs_tax_data(store_ids, d_from, d_to):
     """Side-by-side: total fees (store revenue) vs. total federal tax
@@ -7549,49 +6597,440 @@ def _fees_vs_tax_data(store_ids, d_from, d_to):
     return rows, totals
 
 
-@app.route("/reports/fees-vs-tax")
-@admin_required
-def report_fees_vs_tax():
-    sid = session["store_id"]
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = _fees_vs_tax_data(_report_scope_ids(), d_from, d_to)
-    return render_template("report_fees_vs_tax.html",
-        user=current_user(),
-        report_title="Fees vs. Federal Tax",
-        back_endpoint=("owner_reports" if _is_owner_request() else "reports"),
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=len(rows),
-        result_unit="line",
-        kpis=[
-            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "neon"},
-            {"label": "Federal Tax",    "value": f"${totals['tax']:,.2f}",  "tone": "muted"},
-            {"label": "Tax / Fee Ratio","value": f"{totals['ratio']:.2f}",   "tone": "muted"},
-            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-        ],
-        export_url=url_for(
-            _slug_to_endpoint("fees-vs-tax", owner=_is_owner_request(), csv=True),
-            **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
-        rows=rows,
-    )
+# ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
+def _period_comparison_kpis(totals, rows, extra):
+    def _row(label):
+        return next((r for r in rows if r["label"] == label), None)
+    inc, net, txn = (_row("Total Income"), _row("Net Income"),
+                     _row("Transfers"))
+    return [
+        {"label": "Income Δ",
+         "value": f"{inc['pct']:+.1f}%" if inc else "—",
+         "tone":  "primary"},
+        {"label": "Net Δ",
+         "value": f"{net['pct']:+.1f}%" if net else "—",
+         "tone":  "neon" if (net and net["pct"] >= 0) else "muted"},
+        {"label": "Transfers Δ",
+         "value": f"{txn['pct']:+.1f}%" if txn else "—",
+         "tone":  "muted"},
+    ]
 
 
-@app.route("/reports/fees-vs-tax.csv")
-@admin_required
-def report_fees_vs_tax_csv():
-    import csv as _csv, io as _io
-    sid = session["store_id"]
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = _fees_vs_tax_data(_report_scope_ids(), d_from, d_to)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    w.writerow(["Line", "Amount"])
-    for r in rows:
-        w.writerow([r["label"], f"{r['amount']:.2f}"])
-    w.writerow([])
-    w.writerow(["Tax / Fee Ratio", f"{totals['ratio']:.2f}"])
-    return _csv_response(buf,
-        f"fees-vs-tax_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+# ── Report-route registry ───────────────────────────────────
+# Each call registers admin (`/reports/<slug>`) + owner
+# (`/owner/reports/<slug>`) HTML and CSV routes via
+# `_make_report_routes`. Per-report config is the kpis_fn closure +
+# CSV column / row / totals lambdas. New reports go here — no
+# per-route boilerplate, no per-route owner wiring (the auto-mirror
+# below covers it).
+_make_report_routes(
+    "sales-by-company",
+    title="Sales by Company",
+    data_fn=_sales_by_company_data,
+    template="report_sales_by_company.html",
+    result_unit=("company", "companies"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+        {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+    ],
+    csv_columns=["Company", "Count", "Total Sent", "Total Fees",
+                 "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["company"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+)
+
+_make_report_routes(
+    "sales-by-service-type",
+    title="Sales by Service Type",
+    data_fn=_sales_by_service_data,
+    template="report_sales_by_service_type.html",
+    result_unit=("service type", "service types"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
+        {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+    ],
+    csv_columns=["Service Type", "Count", "Total Sent", "Total Fees",
+                 "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["service_type"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+)
+
+_make_report_routes(
+    "sales-by-employee",
+    title="Sales by Employee",
+    data_fn=_sales_by_employee_data,
+    template="report_sales_by_employee.html",
+    result_unit=("employee", "employees"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}", "tone": "primary"},
+        {"label": "Total Fees",       "value": f"${totals['fees']:,.2f}", "tone": "neon"},
+        {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "muted"},
+        {"label": "Transfer Count",   "value": f"{totals['count']:,}",    "tone": "muted"},
+    ],
+    csv_columns=["Employee", "Username", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["employee"], r["username"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+)
+
+_make_report_routes(
+    "top-customers",
+    title="Top Customers by Volume",
+    data_fn=_top_customers_data,
+    template="report_top_customers.html",
+    result_unit=("customer", "customers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "neon"},
+        {"label": "Customer Count", "value": f"{len(rows)}",            "tone": "muted"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
+    ],
+    csv_columns=["Customer", "Phone", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["customer"], r["phone"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+)
+
+_make_report_routes(
+    "top-senders",
+    title="Top Senders",
+    data_fn=lambda store_ids, d_from, d_to: _top_customers_data(
+        store_ids, d_from, d_to, sort_by="count"),
+    template="report_top_senders.html",
+    result_unit=("sender", "senders"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
+        {"label": "Sender Count",   "value": f"{len(rows)}",            "tone": "neon"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "muted"},
+    ],
+    csv_columns=["Customer", "Phone", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["customer"], r["phone"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+)
+
+_make_report_routes(
+    "top-recipients",
+    title="Top Recipients",
+    data_fn=_top_recipients_data,
+    template="report_top_recipients.html",
+    result_unit=("recipient", "recipients"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",      "value": f"${totals['sent']:,.2f}", "tone": "primary"},
+        {"label": "Recipient Count", "value": f"{len(rows)}",            "tone": "neon"},
+        {"label": "Transfer Count",  "value": f"{totals['count']:,}",    "tone": "muted"},
+        {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}", "tone": "muted"},
+    ],
+    csv_columns=["Recipient", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["recipient"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+)
+
+_make_report_routes(
+    "by-destination-country",
+    title="By Destination Country",
+    data_fn=_by_destination_country_data,
+    template="report_by_destination_country.html",
+    result_unit=("country", "countries"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
+        {"label": "Country Count",  "value": f"{len(rows)}",            "tone": "neon"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "muted"},
+    ],
+    csv_columns=["Country", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["country"], r["count"],
+                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
+                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+)
+
+_make_report_routes(
+    "new-vs-returning",
+    title="New vs. Returning Senders",
+    data_fn=_new_vs_returning_data,
+    template="report_new_vs_returning.html",
+    result_unit=("bucket", "buckets"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Senders", "value": f"{totals['customers']:,}",       "tone": "primary"},
+        {"label": "New",           "value": f"{totals['new_count']:,}",       "tone": "neon"},
+        {"label": "Returning",     "value": f"{totals['returning_count']:,}", "tone": "muted"},
+        {"label": "Total Sent",    "value": f"${totals['sent']:,.2f}",        "tone": "muted"},
+    ],
+    csv_columns=["Bucket", "Customers", "Transfers", "Total Sent"],
+    csv_row_fn=lambda r: [r["bucket"], r["customers"], r["txns"],
+                          f"{r['sent']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["customers"], t["txns"],
+                             f"{t['sent']:.2f}"],
+)
+
+_make_report_routes(
+    "returned-check-status",
+    title="Returned Check Status",
+    data_fn=_returned_check_status_data,
+    template="report_returned_check_status.html",
+    result_unit=("status", "statuses"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Checks", "value": f"{totals['count']:,}",         "tone": "primary"},
+        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",    "tone": "muted"},
+        {"label": "Recovered",    "value": f"${totals['recovered']:,.2f}", "tone": "neon"},
+        {"label": "Net G/L",      "value": f"${totals['net_gl']:,.2f}",
+         "tone":  "neon" if totals["net_gl"] >= 0 else "muted"},
+    ],
+    csv_columns=["Status", "Count", "Amount", "Recovered"],
+    csv_row_fn=lambda r: [r["status"], r["count"],
+                          f"{r['amount']:.2f}", f"{r['recovered']:.2f}"],
+    csv_totals_fn=lambda t: [
+        ["TOTAL",   t["count"],
+         f"{t['amount']:.2f}", f"{t['recovered']:.2f}"],
+        ["NET G/L", "", "", f"{t['net_gl']:.2f}"],
+    ],
+    csv_fname_prefix="returned-checks",
+)
+
+_make_report_routes(
+    "bank-transactions-breakdown",
+    title="Bank Transactions Breakdown",
+    data_fn=_bank_txn_breakdown_data,
+    template="report_bank_txn_breakdown.html",
+    result_unit=("category", "categories"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Inflows",           "value": f"${totals['inflow']:,.2f}",        "tone": "neon"},
+        {"label": "Outflows",          "value": f"${abs(totals['outflow']):,.2f}",  "tone": "muted"},
+        {"label": "Net Flow",          "value": f"${(totals['inflow'] + totals['outflow']):,.2f}", "tone": "primary"},
+        {"label": "Transaction Count", "value": f"{totals['count']:,}",              "tone": "muted"},
+    ],
+    csv_columns=["Category", "Count", "Signed Amount", "Absolute Amount"],
+    csv_row_fn=lambda r: [r["label"], r["count"],
+                          f"{r['signed']:.2f}", f"{r['amount']:.2f}"],
+    csv_fname_prefix="bank-txn-breakdown",
+)
+
+_make_report_routes(
+    "daily-drops",
+    title="Daily Drops",
+    data_fn=_daily_drops_data,
+    template="report_daily_drops.html",
+    result_unit=("day", "days"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Dropped", "value": f"${totals['amount']:,.2f}",     "tone": "primary"},
+        {"label": "Drop Count",    "value": f"{totals['count']:,}",           "tone": "neon"},
+        {"label": "Active Days",   "value": f"{len(rows)}",                   "tone": "muted"},
+        {"label": "Avg / Day",     "value": f"${totals['avg_per_day']:,.2f}", "tone": "muted"},
+    ],
+    csv_columns=["Date", "Drop Count", "Total Dropped"],
+    csv_row_fn=lambda r: [r["date"].isoformat(), r["count"],
+                          f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_report_routes(
+    "check-deposits",
+    title="Check Deposits",
+    data_fn=_check_deposits_data,
+    template="report_check_deposits.html",
+    result_unit=("day", "days"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Deposited", "value": f"${totals['amount']:,.2f}",     "tone": "primary"},
+        {"label": "Deposit Count",   "value": f"{totals['count']:,}",           "tone": "neon"},
+        {"label": "Active Days",     "value": f"{len(rows)}",                   "tone": "muted"},
+        {"label": "Avg / Day",       "value": f"${totals['avg_per_day']:,.2f}", "tone": "muted"},
+    ],
+    csv_columns=["Date", "Deposit Count", "Total Deposited"],
+    csv_row_fn=lambda r: [r["date"].isoformat(), r["count"],
+                          f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_report_routes(
+    "high-value-transfers",
+    title="High-Value Transfers",
+    data_fn=_high_value_transfers_data,
+    template="report_high_value_transfers.html",
+    result_unit=("transfer", "transfers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Threshold",      "value": f"≥ ${extra.get('threshold', 0):,.0f}", "tone": "primary"},
+        {"label": "Total Volume",   "value": f"${totals['amount']:,.2f}",            "tone": "neon"},
+        {"label": "Transfer Count", "value": f"{totals['count']:,}",                  "tone": "muted"},
+        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",              "tone": "muted"},
+    ],
+    csv_columns=["Date", "Sender", "Recipient", "Country", "Company",
+                 "Send Amount", "Fee", "Federal Tax", "Confirm #"],
+    csv_row_fn=lambda r: [r["send_date"].isoformat(),
+                          r["sender_name"], r["recipient_name"], r["country"],
+                          r["company"], f"{r['amount']:.2f}",
+                          f"{r['fee']:.2f}", f"{r['tax']:.2f}", r["confirm"]],
+    extra_args_fn=lambda: {"threshold": _parse_threshold(request.args)},
+)
+
+_make_report_routes(
+    "employee-activity",
+    title="Employee Activity",
+    data_fn=_employee_activity_data,
+    template="report_employee_activity.html",
+    result_unit=("employee", "employees"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Active Employees",      "value": f"{len(rows)}",            "tone": "primary"},
+        {"label": "Active Transfers",      "value": f"{totals['count']:,}",     "tone": "neon"},
+        {"label": "Total Sent",            "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
+        {"label": "Cancelled / Rejected",  "value": f"{totals['cancels']:,}",   "tone": "muted"},
+    ],
+    csv_columns=["Employee", "Username", "Active Transfers", "Total Sent",
+                 "Cancelled / Rejected", "Last Activity"],
+    csv_row_fn=lambda r: [r["employee"], r["username"], r["count"],
+                          f"{r['sent']:.2f}", r["cancels"],
+                          (r["last_activity"].isoformat() if r["last_activity"] else "")],
+)
+
+_make_report_routes(
+    "bank-rule-audit",
+    title="Bank-Rule Audit Log",
+    data_fn=_bank_rule_audit_data,
+    template="report_bank_rule_audit.html",
+    result_unit=("rule", "rules"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Active Rules",     "value": f"{totals['rules']}",        "tone": "primary"},
+        {"label": "Auto-tagged Txns", "value": f"{totals['count']:,}",       "tone": "neon"},
+        {"label": "Total Amount",     "value": f"${totals['amount']:,.2f}",  "tone": "muted"},
+    ],
+    csv_columns=["Rule", "Match", "Target", "Matched Count", "Total Amount"],
+    csv_row_fn=lambda r: [r["label"], r["match"], r["target"],
+                          r["count"], f"{r['amount']:.2f}"],
+)
+
+_make_report_routes(
+    "cancelled-transfers",
+    title="Cancelled Transfers",
+    data_fn=_cancelled_transfers_data,
+    template="report_cancelled_transfers.html",
+    result_unit=("transfer", "transfers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total",        "value": f"{totals['count']:,}",        "tone": "primary"},
+        {"label": "Canceled",     "value": f"{totals['canceled']:,}",     "tone": "muted"},
+        {"label": "Rejected",     "value": f"{totals['rejected']:,}",     "tone": "muted"},
+        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",   "tone": "muted"},
+    ],
+    csv_columns=["Date", "Sender", "Recipient", "Country", "Company",
+                 "Status", "Send Amount", "Notes", "Confirm #"],
+    csv_row_fn=lambda r: [r["send_date"].isoformat(),
+                          r["sender_name"], r["recipient_name"], r["country"],
+                          r["company"], r["status"], f"{r['amount']:.2f}",
+                          r["status_notes"], r["confirm"]],
+)
+
+_make_report_routes(
+    "period-pl",
+    title="Period P&L",
+    data_fn=_period_pl_data,
+    template="report_period_pl.html",
+    result_unit=("line", "line"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Income",   "value": f"${totals['income']:,.2f}",   "tone": "neon"},
+        {"label": "Total Expenses", "value": f"${totals['expenses']:,.2f}", "tone": "muted"},
+        {"label": "Net Income",     "value": f"${totals['net']:,.2f}",
+         "tone":  "primary" if totals["net"] >= 0 else "muted"},
+        {"label": "Active Days",    "value": f"{totals['days']}",            "tone": "muted"},
+    ],
+    csv_columns=["Section", "Line", "Amount"],
+    csv_row_fn=lambda r: [r["section"], r["label"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: [
+        ["", "Total Income",   f"{t['income']:.2f}"],
+        ["", "Total Expenses", f"{t['expenses']:.2f}"],
+        ["", "Net",            f"{t['net']:.2f}"],
+    ],
+)
+
+_make_report_routes(
+    "ach-volume",
+    title="ACH Volume",
+    data_fn=_ach_volume_data,
+    template="report_ach_volume.html",
+    result_unit=("company", "companies"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total ACH",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
+        {"label": "Batch Count", "value": f"{totals['count']:,}",       "tone": "neon"},
+    ],
+    csv_columns=["Company", "Batch Count", "Total ACH", "Avg / Batch"],
+    csv_row_fn=lambda r: [r["company"], r["count"],
+                          f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}", ""],
+)
+
+_make_report_routes(
+    "bank-charges-by-account",
+    title="Bank Charges by Account",
+    data_fn=_bank_charges_by_account_data,
+    template="report_bank_charges_by_account.html",
+    result_unit=("account", "accounts"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Charges", "value": f"${totals['amount']:,.2f}", "tone": "primary"},
+        {"label": "Charge Count",  "value": f"{totals['count']:,}",       "tone": "neon"},
+        {"label": "Account Count", "value": f"{len(rows)}",               "tone": "muted"},
+    ],
+    csv_columns=["Account", "Last 4", "Charge Count", "Total Charges",
+                 "Avg / Charge"],
+    csv_row_fn=lambda r: [r["account"], r["last4"], r["count"],
+                          f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
+)
+
+_make_report_routes(
+    "period-comparison",
+    title="Period Comparison",
+    data_fn=_period_comparison_data,
+    template="report_period_comparison.html",
+    result_unit=("metric", "metrics"),
+    kpis_fn=_period_comparison_kpis,
+    csv_columns=lambda t: ["Metric", t["current_label"], t["prior_label"],
+                           "Delta", "% Change"],
+    csv_row_fn=lambda r: [
+        r["label"],
+        f"{r['current']:.2f}" if r["is_money"] else f"{int(r['current'])}",
+        f"{r['prior']:.2f}"   if r["is_money"] else f"{int(r['prior'])}",
+        f"{r['delta']:.2f}"   if r["is_money"] else f"{int(r['delta'])}",
+        f"{r['pct']:+.1f}%",
+    ],
+)
+
+_make_report_routes(
+    "fees-vs-tax",
+    title="Fees vs. Federal Tax",
+    data_fn=_fees_vs_tax_data,
+    template="report_fees_vs_tax.html",
+    result_unit=("line", "line"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}",   "tone": "neon"},
+        {"label": "Federal Tax",     "value": f"${totals['tax']:,.2f}",    "tone": "muted"},
+        {"label": "Tax / Fee Ratio", "value": f"{totals['ratio']:.2f}",     "tone": "muted"},
+        {"label": "Transfer Count",  "value": f"{totals['count']:,}",       "tone": "muted"},
+    ],
+    csv_columns=["Line", "Amount"],
+    csv_row_fn=lambda r: [r["label"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["Tax / Fee Ratio", f"{t['ratio']:.2f}"],
+)
 
 
 # Owner mirror routes — every /reports/<slug>(.csv)? admin route gets a
