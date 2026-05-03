@@ -431,6 +431,146 @@ def test_db_backfill_isolated_to_store(client, test_store_id):
         assert other.category_slug in (None, "")
 
 
+# ── _migrate_generic_bank_charge_per_account ─────────────────
+
+
+def test_migration_retags_legacy_bank_charge_per_account(client, test_store_id):
+    """One-shot: rows tagged with the retired generic `bank_charge`
+    slug get retagged to bank_charge_<last4> based on their account.
+    Description must match a current built-in (so we don't override
+    operator decisions)."""
+    from app import (BankTransaction, db,
+                     _migrate_generic_bank_charge_per_account)
+    _admin_login(client, test_store_id)
+    app = client.application
+    a210 = _make_account(app, test_store_id, last4="0210", slug="fca_mig_210")
+    a230 = _make_account(app, test_store_id, last4="0230", slug="fca_mig_230")
+    t1 = _make_txn(app, test_store_id, a210, amount_cents=-500,
+                   desc="BELOW AVG BAL FEE", txn_id="mig_210")
+    t2 = _make_txn(app, test_store_id, a230, amount_cents=-800,
+                   desc="MSB MONTHLY FEE", txn_id="mig_230")
+    with app.app_context():
+        for tid in (t1, t2):
+            row = db.session.get(BankTransaction, tid)
+            row.category_slug = "bank_charge"  # legacy state
+        db.session.commit()
+        migrated = _migrate_generic_bank_charge_per_account(test_store_id)
+        db.session.commit()
+        assert migrated == 2
+        assert db.session.get(
+            BankTransaction, t1).category_slug == "bank_charge_210"
+        assert db.session.get(
+            BankTransaction, t2).category_slug == "bank_charge_230"
+
+
+def test_migration_skips_unknown_descriptions(client, test_store_id):
+    """If a bank_charge-tagged row's description doesn't match any
+    current built-in, treat it as an operator override and leave it."""
+    from app import (BankTransaction, db,
+                     _migrate_generic_bank_charge_per_account)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-100,
+                    desc="MYSTERY MERCHANT FEE", txn_id="mig_skip")
+    with app.app_context():
+        row = db.session.get(BankTransaction, tid)
+        row.category_slug = "bank_charge"
+        db.session.commit()
+        migrated = _migrate_generic_bank_charge_per_account(test_store_id)
+        assert migrated == 0
+        row = db.session.get(BankTransaction, tid)
+        assert row.category_slug == "bank_charge"
+
+
+def test_migration_idempotent(client, test_store_id):
+    """Running the migration a second time does nothing."""
+    from app import (BankTransaction, db,
+                     _migrate_generic_bank_charge_per_account)
+    _admin_login(client, test_store_id)
+    app = client.application
+    aid = _make_account(app, test_store_id, last4="0210")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-500,
+                    desc="BELOW AVG BAL FEE", txn_id="mig_idem")
+    with app.app_context():
+        row = db.session.get(BankTransaction, tid)
+        row.category_slug = "bank_charge"
+        db.session.commit()
+        assert _migrate_generic_bank_charge_per_account(test_store_id) == 1
+        db.session.commit()
+        assert _migrate_generic_bank_charge_per_account(test_store_id) == 0
+
+
+# ── _bank_category_label ─────────────────────────────────────
+
+
+def test_label_formats_dynamic_per_account_slug(client, test_store_id):
+    """Slugs like bank_charge_1234 not in the static dict render as
+    'Bank charge — ••1234' rather than the raw slug. Lets us support
+    arbitrary account last4s without registry edits."""
+    from app import _bank_category_label
+    assert _bank_category_label("bank_charge_1234") == "Bank charge — ••1234"
+    # Static entries still take priority over the dynamic format.
+    assert _bank_category_label("bank_charge_210") == "Bank charge — ••0210"
+
+
+# ── _match_builtin_bank_rule no-last4 fallback ───────────────
+
+
+def test_match_returns_none_when_account_has_no_last4(client, test_store_id):
+    """The legacy generic `bank_charge` slug is retired — when the
+    account record has no last4 the matcher must NOT fire. The
+    operator categorises by hand in that edge case."""
+    from app import (BankTransaction, StripeBankAccount, db,
+                     _match_builtin_bank_rule)
+    _admin_login(client, test_store_id)
+    app = client.application
+    # Account with empty last4 — uncommon but legal in the schema.
+    aid = _make_account(app, test_store_id, last4="", slug="fca_no_last4")
+    tid = _make_txn(app, test_store_id, aid, amount_cents=-500,
+                    desc="BELOW AVG BAL FEE", txn_id="no_last4_tx")
+    with app.app_context():
+        t = db.session.get(BankTransaction, tid)
+        a = db.session.get(StripeBankAccount, aid)
+        assert _match_builtin_bank_rule(t, a) is None
+
+
+# ── _bank_category_groups + _is_valid_bank_category ──────────
+
+
+def test_groups_includes_dynamic_per_account_for_store(client, test_store_id):
+    """Dropdown groups for a store include bank_charge_<last4> for
+    every connected account, so the operator can manually tag
+    against single-account / non-Nizari banks too."""
+    from app import _bank_category_groups
+    _admin_login(client, test_store_id)
+    app = client.application
+    _make_account(app, test_store_id, last4="0210", slug="fca_grp_210")
+    _make_account(app, test_store_id, last4="9876", slug="fca_grp_other")
+    with app.app_context():
+        groups = _bank_category_groups(test_store_id)
+        other_slugs = [s for label, items in groups
+                       if label.startswith("Other")
+                       for s, _ in items]
+        assert "bank_charge_210" in other_slugs   # static dict, also a match
+        assert "bank_charge_9876" in other_slugs  # dynamic from store account
+
+
+def test_is_valid_bank_category_accepts_per_account_slug(client, test_store_id):
+    """Validation must accept dynamic per-account slugs that the
+    dropdown surfaces — otherwise the form posts back with 'Unknown
+    category'."""
+    from app import _is_valid_bank_category
+    _admin_login(client, test_store_id)
+    app = client.application
+    _make_account(app, test_store_id, last4="9876", slug="fca_val")
+    with app.app_context():
+        assert _is_valid_bank_category("bank_charge_9876", test_store_id) is True
+        # Same account, looked up by raw last4 (shouldn't match — the
+        # canonical form is stripped).
+        assert _is_valid_bank_category("bank_charge_0009", test_store_id) is False
+
+
 # ── _bank_charges_for_month ──────────────────────────────────
 
 

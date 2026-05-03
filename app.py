@@ -2217,11 +2217,14 @@ BANK_CATEGORIES_NON_POSTING = {
     "mt_ach_intermex":    "MT ACH — Intermex",
     "mt_ach_maxi":        "MT ACH — Maxi",
     "mt_ach_barri":       "MT ACH — Barri",
-    # Bank charges flow into the MonthlyFinancial P&L's
-    # bank_charges_total field (single consolidated line). Historic
-    # 210/230-suffixed slugs are kept so already-tagged transactions
-    # still feed the P&L; new tagging uses the generic slug.
-    "bank_charge":        "Bank charge",
+    # Bank-charge slugs are dynamically per-account: bank_charge_<last4>.
+    # All bank-charge variants roll up to MonthlyFinancial.bank_charges_total
+    # via a prefix match in _bank_charges_for_month, so totals are
+    # unaffected — only per-row labelling reflects the account each
+    # charge hit. Static 210/230 entries below are kept ONLY so the
+    # operator dropdown for Nizari stores still surfaces them; future
+    # banks get their valid slugs added dynamically by
+    # _bank_category_groups via the store's connected accounts.
     "bank_charge_210":    "Bank charge — ••0210",
     "bank_charge_230":    "Bank charge — ••0230 (MSB)",
     "ignore":             "Ignore (don't reconcile)",
@@ -2257,27 +2260,12 @@ _BUILTIN_BANK_RULES = [
 ]
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
-# Any category listed here flows automatically into the named P&L
-# column at month-end (the absolute monthly sum), and the field on
-# /monthly/<year>/<month> conditionally locks when auto > 0. Adding a
-# new automation = (1) add a rule to _BUILTIN_BANK_RULES OR let the
-# operator categorise manually, (2) add a row here so the auto-feed
-# picks it up. If the target column doesn't exist on MonthlyFinancial
-# yet, also add it to the model + _ADDED_COLUMNS.
-#
-# This is the single point of truth for "auto-tagged → P&L" — every
-# new category goes through here so future automations don't need
-# bespoke wiring in monthly_report().
-_BANK_CATEGORY_PL_FIELD = {
-    # Both Nizari-account slugs (kept for historic transaction tags)
-    # plus the generic slug all flow into the single consolidated
-    # bank_charges_total column. The auto-feed loop in monthly_report
-    # sums per-slug into the field, so multiple slugs sharing one
-    # column is supported by design.
-    "bank_charge_210": "bank_charges_total",
-    "bank_charge_230": "bank_charges_total",
-    "bank_charge":     "bank_charges_total",
-}
+# Reserved for future non-bank-charge auto-feeds (e.g. credit-card
+# fees, money-order rent). Currently empty: bank-charge slugs are
+# dynamic per-account (bank_charge_<last4>) and roll up to
+# bank_charges_total via the prefix-match in _bank_charges_for_month
+# — they don't need explicit registry entries.
+_BANK_CATEGORY_PL_FIELD = {}
 
 def _match_builtin_bank_rule(txn, account):
     """Return target_kind from _BUILTIN_BANK_RULES that matches the
@@ -2292,12 +2280,15 @@ def _match_builtin_bank_rule(txn, account):
         # Sentinel: resolve to a per-account bank-charge slug so the
         # operator sees which account each charge hit. Strips leading
         # zeros from last4 to match the historic 210/230 convention
-        # (last4 "0210" → slug "bank_charge_210").
+        # (last4 "0210" → slug "bank_charge_210"). If somehow no last4
+        # is available, the built-in skips — the legacy generic
+        # `bank_charge` slug is retired, so we'd rather not fire than
+        # tag with a phantom slug.
         if target == "bank_charge_per_account":
-            if last4:
-                stripped = last4.lstrip("0") or last4
-                return f"bank_charge_{stripped}"
-            return "bank_charge"
+            if not last4:
+                return None
+            stripped = last4.lstrip("0") or last4
+            return f"bank_charge_{stripped}"
         return target
     return None
 
@@ -2329,17 +2320,53 @@ def _bank_category_label(slug):
         return _LINE_ITEM_KINDS[slug][1].title()
     return slug
 
-def _bank_category_groups():
+def _is_valid_bank_category(slug, store_id):
+    """True if `slug` is an acceptable target for a manual bank-
+    transaction tag or a BankRule. Accepts every slug surfaced in
+    _bank_category_groups(store_id), including dynamic
+    bank_charge_<last4> for the store's connected accounts."""
+    if not slug:
+        return False
+    if slug in _LINE_ITEM_KINDS or slug in BANK_CATEGORIES_NON_POSTING:
+        return True
+    if slug.startswith("bank_charge_"):
+        last4 = slug[len("bank_charge_"):]
+        if not last4:
+            return False
+        for a in StripeBankAccount.query.filter_by(store_id=store_id).all():
+            if not a.last4:
+                continue
+            stripped = a.last4.lstrip("0") or a.last4
+            if last4 == stripped or last4 == a.last4:
+                return True
+    return False
+
+
+def _bank_category_groups(store_id=None):
     """Grouped (group_label, [(slug, label), ...]) tuples for dropdowns.
 
     The two groups stay separate in the UI so operators don't confuse
     auto-posting kinds with non-posting tags.
+
+    When `store_id` is given, the "Other" group is augmented with a
+    per-account `bank_charge_<last4>` entry for every connected
+    account that isn't already in the static dict — so single-account
+    or non-Nizari banks see a relevant bank-charge option.
     """
     daily = [(slug, meta[1].title()) for slug, meta in _LINE_ITEM_KINDS.items()]
-    other = list(BANK_CATEGORIES_NON_POSTING.items())
+    other = dict(BANK_CATEGORIES_NON_POSTING)  # copy so we can extend
+    if store_id is not None:
+        accounts = StripeBankAccount.query.filter_by(store_id=store_id).all()
+        for a in accounts:
+            if not a.last4:
+                continue
+            stripped = a.last4.lstrip("0") or a.last4
+            slug = f"bank_charge_{stripped}"
+            if slug not in other:
+                other[slug] = f"Bank charge — ••{a.last4}"
     return [
         ("Daily-book line items", daily),
-        ("Other (no daily-book impact)", other),
+        ("Other (no daily-book impact)", list(other.items())),
     ]
 
 def _is_daily_book_kind(slug):
@@ -2633,18 +2660,15 @@ def _migrate_generic_bank_charge_per_account(store_id):
         acct = accounts.get(row.stripe_bank_account_id)
         if not acct or not acct.last4:
             continue
-        target = f"bank_charge_{acct.last4}"
-        if target not in BANK_CATEGORIES_NON_POSTING:
-            # Account isn't 0210/0230 — leave the generic slug alone;
-            # the operator can categorise manually.
-            continue
+        # Same stripped-last4 convention as the matcher.
+        stripped = acct.last4.lstrip("0") or acct.last4
         desc = (row.description or "").upper()
         if not any(sub in desc for sub in builtin_substrings):
             # Description doesn't match any current built-in — treat
             # the existing `bank_charge` tag as an operator override
             # and don't touch it.
             continue
-        row.category_slug = target
+        row.category_slug = f"bank_charge_{stripped}"
         migrated += 1
     return migrated
 
@@ -6739,21 +6763,21 @@ def _bank_charges_breakdown_for_month(store_id, year, month):
       ]
 
     Sorted by total descending so the biggest contributor reads first.
-    Pulls every slug listed in _BANK_CATEGORY_PL_FIELD that maps to
-    bank_charges_total — so any future built-in rule that targets a
-    bank-charge category automatically lands in the breakdown.
+    Uses a prefix match on `bank_charge%` so every per-account slug
+    (bank_charge_210, bank_charge_230, future bank_charge_<last4>)
+    rolls into the breakdown without explicit registry maintenance.
     """
+    from sqlalchemy import or_
     month_start = datetime(year, month, 1)
     month_end_d = monthrange(year, month)[1]
     month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    bank_charge_slugs = [slug for slug, field in _BANK_CATEGORY_PL_FIELD.items()
-                         if field == "bank_charges_total"]
-    if not bank_charge_slugs:
-        return []
     rows = (BankTransaction.query
             .filter(
                 BankTransaction.store_id == store_id,
-                BankTransaction.category_slug.in_(bank_charge_slugs),
+                or_(
+                    BankTransaction.category_slug == "bank_charge",
+                    BankTransaction.category_slug.like("bank_charge_%"),
+                ),
                 BankTransaction.posted_at >= month_start,
                 BankTransaction.posted_at <= month_end,
             )
@@ -7617,7 +7641,7 @@ def bank_transactions():
     ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
                accounts=accounts, q=q, account_id=account_id,
                date_from=date_from, date_to=date_to,
-               category_groups=_bank_category_groups(),
+               category_groups=_bank_category_groups(sid),
                category_label=_bank_category_label,
                line_by_id=line_by_id)
     if is_partial:
@@ -7638,7 +7662,7 @@ def bank_transaction_categorize(txn_id):
     if not target:
         flash("Pick a category before saving.", "error")
         return redirect(request.referrer or url_for("bank_transactions"))
-    if target not in _LINE_ITEM_KINDS and target not in BANK_CATEGORIES_NON_POSTING:
+    if not _is_valid_bank_category(target, sid):
         flash("Unknown category.", "error")
         return redirect(request.referrer or url_for("bank_transactions"))
     # Optional date override — supports the RDC case where the bank
@@ -7713,7 +7737,7 @@ def _parse_rule_form(form, sid):
     target_kind = (form.get("target_kind") or "").strip()
     if not target_kind:
         return None, "Pick a category to apply when this rule matches."
-    if target_kind not in _LINE_ITEM_KINDS and target_kind not in BANK_CATEGORIES_NON_POSTING:
+    if not _is_valid_bank_category(target_kind, sid):
         return None, "Unknown category."
     # Description match — both fields must be set together, or both empty.
     if desc_match_type and not desc_match_value:
@@ -7790,7 +7814,7 @@ def bank_rules():
                 .order_by(StripeBankAccount.connected_at.desc()).all())
     return render_template("bank_rules.html",
         user=current_user(), rules=rules, accounts=accounts,
-        category_groups=_bank_category_groups(),
+        category_groups=_bank_category_groups(sid),
         category_label=_bank_category_label)
 
 @app.route("/bank/rules/new", methods=["POST"])
