@@ -5474,23 +5474,23 @@ _REPORT_CATEGORIES = [
             {"key": "period_pl",
              "label": "Period P&L",
              "description": "Income, expenses, and net income aggregated for any date range.",
-             "endpoint": None},
+             "endpoint": "report_period_pl"},
             {"key": "ach_volume",
              "label": "ACH Volume",
              "description": "Daily ACH batches and totals per remittance company.",
-             "endpoint": None},
+             "endpoint": "report_ach_volume"},
             {"key": "bank_charges",
              "label": "Bank Charges by Account",
-             "description": "Per-account charges, grouped by description.",
-             "endpoint": None},
+             "description": "Per-account charges aggregated for the period.",
+             "endpoint": "report_bank_charges_by_account"},
             {"key": "period_comparison",
              "label": "Period Comparison",
-             "description": "Side-by-side MoM or YoY revenue and expense lines.",
-             "endpoint": None},
+             "description": "Side-by-side metrics vs. the prior period of the same length.",
+             "endpoint": "report_period_comparison"},
             {"key": "fees_vs_tax",
              "label": "Fees vs. Federal Tax",
              "description": "Store revenue (fees) vs. ACH-bound federal tax.",
-             "endpoint": None},
+             "endpoint": "report_fees_vs_tax"},
         ],
     },
     {
@@ -6940,6 +6940,481 @@ def report_cancelled_transfers_csv():
                     r["status_notes"], r["confirm"]])
     return _csv_response(buf,
         f"cancelled-transfers_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Period P&L ───────────────────────────────────────────────
+# Daily-book lines that flow into the P&L. The (label, attr,
+# section) tuples drive the line-item rendering + CSV.
+_PL_INCOME_LINES = [
+    ("Taxable Sales",          "taxable_sales"),
+    ("Non-Taxable Sales",      "non_taxable"),
+    ("Bill Payment Charges",   "bill_payment_charge"),
+    ("Phone Recargas",         "phone_recargas"),
+    ("Boost Mobile",           "boost_mobile"),
+    ("Check Cashing Fees",     "check_cashing_fees"),
+    ("Return Check Hold Fees", "return_check_hold_fees"),
+    ("Rebates / Commissions",  "rebates_commissions"),
+]
+_PL_EXPENSE_LINES = [
+    ("Cash Purchases",  "cash_purchases"),
+    ("Check Purchases", "check_purchases"),
+    ("Cash Expenses",   "cash_expense"),
+    ("Check Expenses",  "check_expense"),
+    ("Cash Payroll",    "payroll_expense"),
+]
+
+
+def _period_pl_data(store_id, d_from, d_to):
+    """Aggregate DailyReport rows in the period into income / expense
+    lines. Money-transfer fees come from Transfer (not DailyReport).
+    The view is a daily-book P&L — it does NOT include MonthlyFinancial
+    manual fields like credit_card_fees / accounting_charges, since
+    those are per-month entries that don't decompose to a date range."""
+    daily = DailyReport.query.filter(
+        DailyReport.store_id == store_id,
+        DailyReport.report_date >= d_from,
+        DailyReport.report_date <= d_to,
+    ).all()
+    fee_total = (db.session.query(
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0))
+      .filter(*_active_transfers_period_filters(store_id, d_from, d_to))
+      .scalar()) or 0.0
+
+    rows = []
+    income_total = 0.0
+    for label, attr in _PL_INCOME_LINES:
+        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
+        rows.append({"label": label, "section": "Income", "amount": v})
+        income_total += v
+    rows.append({"label": "Money Transfer Fees", "section": "Income",
+                 "amount": float(fee_total)})
+    income_total += float(fee_total)
+
+    expense_total = 0.0
+    for label, attr in _PL_EXPENSE_LINES:
+        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
+        rows.append({"label": label, "section": "Expenses", "amount": v})
+        expense_total += v
+
+    totals = {
+        "income":   income_total,
+        "expenses": expense_total,
+        "net":      income_total - expense_total,
+        "days":     len(daily),
+    }
+    return rows, totals
+
+
+@app.route("/reports/period-pl")
+@admin_required
+def report_period_pl():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _period_pl_data(sid, d_from, d_to)
+    return render_template("report_period_pl.html",
+        user=current_user(),
+        report_title="Period P&L",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="line",
+        kpis=[
+            {"label": "Total Income",   "value": f"${totals['income']:,.2f}",   "tone": "neon"},
+            {"label": "Total Expenses", "value": f"${totals['expenses']:,.2f}", "tone": "muted"},
+            {"label": "Net Income",     "value": f"${totals['net']:,.2f}",
+             "tone": "primary" if totals["net"] >= 0 else "muted"},
+            {"label": "Active Days",    "value": f"{totals['days']}",            "tone": "muted"},
+        ],
+        export_url=url_for("report_period_pl_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+        totals=totals,
+    )
+
+
+@app.route("/reports/period-pl.csv")
+@admin_required
+def report_period_pl_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _period_pl_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Section", "Line", "Amount"])
+    for r in rows:
+        w.writerow([r["section"], r["label"], f"{r['amount']:.2f}"])
+    w.writerow([])
+    w.writerow(["", "Total Income",   f"{totals['income']:.2f}"])
+    w.writerow(["", "Total Expenses", f"{totals['expenses']:.2f}"])
+    w.writerow(["", "Net",            f"{totals['net']:.2f}"])
+    return _csv_response(buf,
+        f"period-pl_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── ACH Volume ───────────────────────────────────────────────
+def _ach_volume_data(store_id, d_from, d_to):
+    """Group ACHBatch rows in the period by company. Per-company:
+    batch count + ach_amount sum."""
+    rows_q = (db.session.query(
+        ACHBatch.company,
+        db.func.count(ACHBatch.id),
+        db.func.coalesce(db.func.sum(ACHBatch.ach_amount), 0.0),
+    ).filter(
+        ACHBatch.store_id == store_id,
+        ACHBatch.ach_date >= d_from,
+        ACHBatch.ach_date <= d_to,
+    ).group_by(ACHBatch.company).all())
+    rows = []
+    totals = {"count": 0, "amount": 0.0}
+    for company, count, amount in rows_q:
+        c = int(count or 0); a = float(amount or 0.0)
+        rows.append({
+            "company": company or "(no company)",
+            "count":   c,
+            "amount":  a,
+            "avg":     (a / c) if c else 0.0,
+        })
+        totals["count"]  += c
+        totals["amount"] += a
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+@app.route("/reports/ach-volume")
+@admin_required
+def report_ach_volume():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _ach_volume_data(sid, d_from, d_to)
+    return render_template("report_ach_volume.html",
+        user=current_user(),
+        report_title="ACH Volume",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="company" if len(rows) == 1 else "companies",
+        kpis=[
+            {"label": "Total ACH",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
+            {"label": "Batch Count", "value": f"{totals['count']:,}",       "tone": "neon"},
+        ],
+        export_url=url_for("report_ach_volume_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/ach-volume.csv")
+@admin_required
+def report_ach_volume_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _ach_volume_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Company", "Batch Count", "Total ACH", "Avg / Batch"])
+    for r in rows:
+        w.writerow([r["company"], r["count"],
+                    f"{r['amount']:.2f}", f"{r['avg']:.2f}"])
+    w.writerow([])
+    w.writerow(["TOTAL", totals["count"], f"{totals['amount']:.2f}", ""])
+    return _csv_response(buf,
+        f"ach-volume_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Bank Charges by Account ──────────────────────────────────
+def _bank_charges_by_account_data(store_id, d_from, d_to):
+    """Sum BankTransaction rows tagged as bank charges, grouped by
+    account. Uses prefix match on category_slug so any per-account
+    bank_charge_<last4> rolls up."""
+    from sqlalchemy import or_
+    month_start = datetime(d_from.year, d_from.month, d_from.day)
+    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    rows_q = (db.session.query(
+        BankTransaction.stripe_bank_account_id,
+        db.func.count(BankTransaction.id),
+        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
+    ).filter(
+        BankTransaction.store_id == store_id,
+        BankTransaction.posted_at >= month_start,
+        BankTransaction.posted_at <= month_end,
+        or_(BankTransaction.category_slug == "bank_charge",
+            BankTransaction.category_slug.like("bank_charge_%")),
+    ).group_by(BankTransaction.stripe_bank_account_id).all())
+    acct_ids = [aid for aid, *_ in rows_q if aid is not None]
+    accounts = ({a.id: a for a in StripeBankAccount.query
+                 .filter(StripeBankAccount.id.in_(acct_ids)).all()}
+                if acct_ids else {})
+    rows = []
+    totals = {"count": 0, "amount": 0.0}
+    for aid, count, cents in rows_q:
+        c = int(count or 0)
+        amt = abs(float(cents or 0)) / 100.0
+        a = accounts.get(aid)
+        rows.append({
+            "account": a.label if a else "(no account)",
+            "last4":   a.last4 if a else "",
+            "count":   c,
+            "amount":  amt,
+            "avg":     (amt / c) if c else 0.0,
+        })
+        totals["count"]  += c
+        totals["amount"] += amt
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+@app.route("/reports/bank-charges-by-account")
+@admin_required
+def report_bank_charges_by_account():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _bank_charges_by_account_data(sid, d_from, d_to)
+    return render_template("report_bank_charges_by_account.html",
+        user=current_user(),
+        report_title="Bank Charges by Account",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="account" if len(rows) == 1 else "accounts",
+        kpis=[
+            {"label": "Total Charges",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
+            {"label": "Charge Count",    "value": f"{totals['count']:,}",       "tone": "neon"},
+            {"label": "Account Count",   "value": f"{len(rows)}",               "tone": "muted"},
+        ],
+        export_url=url_for("report_bank_charges_by_account_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/bank-charges-by-account.csv")
+@admin_required
+def report_bank_charges_by_account_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _bank_charges_by_account_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Account", "Last 4", "Charge Count", "Total Charges",
+                "Avg / Charge"])
+    for r in rows:
+        w.writerow([r["account"], r["last4"], r["count"],
+                    f"{r['amount']:.2f}", f"{r['avg']:.2f}"])
+    return _csv_response(buf,
+        f"bank-charges-by-account_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Period Comparison ────────────────────────────────────────
+def _period_comparison_data(store_id, d_from, d_to):
+    """Compare the chosen period against the immediately-prior period
+    of the same length. Returns side-by-side metric rows + totals."""
+    span = (d_to - d_from).days + 1
+    prior_to   = d_from - timedelta(days=1)
+    prior_from = prior_to - timedelta(days=span - 1)
+
+    def _bundle(s, e):
+        # Active transfer aggregates.
+        sent, fee_sum, tax_sum, count = (db.session.query(
+            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+            db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+            db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
+            db.func.count(Transfer.id),
+        ).filter(*_active_transfers_period_filters(store_id, s, e)).one())
+        # Daily P&L aggregates.
+        daily = DailyReport.query.filter(
+            DailyReport.store_id == store_id,
+            DailyReport.report_date >= s,
+            DailyReport.report_date <= e,
+        ).all()
+        income = sum(float(getattr(r, a) or 0)
+                     for r in daily for _, a in _PL_INCOME_LINES) + float(fee_sum or 0)
+        expenses = sum(float(getattr(r, a) or 0)
+                       for r in daily for _, a in _PL_EXPENSE_LINES)
+        return {
+            "transfers":  int(count or 0),
+            "send_total": float(sent or 0),
+            "fees":       float(fee_sum or 0),
+            "tax":        float(tax_sum or 0),
+            "income":     income,
+            "expenses":   expenses,
+            "net":        income - expenses,
+        }
+
+    cur   = _bundle(d_from, d_to)
+    prior = _bundle(prior_from, prior_to)
+
+    metrics = [
+        ("Transfers",     "transfers",  False),
+        ("Total Sent",    "send_total", True),
+        ("Fees Earned",   "fees",       True),
+        ("Federal Tax",   "tax",        True),
+        ("Total Income",  "income",     True),
+        ("Total Expenses","expenses",   True),
+        ("Net Income",    "net",        True),
+    ]
+    rows = []
+    for label, key, is_money in metrics:
+        c = cur[key]; p = prior[key]
+        delta = c - p
+        pct = (delta / p * 100.0) if p else (100.0 if c else 0.0)
+        rows.append({
+            "label": label,
+            "current": c,
+            "prior":   p,
+            "delta":   delta,
+            "pct":     pct,
+            "is_money": is_money,
+        })
+    totals = {
+        "current_label": (
+            f"{d_from.strftime('%b %d')} – {d_to.strftime('%b %d, %Y')}"),
+        "prior_label":   (
+            f"{prior_from.strftime('%b %d')} – {prior_to.strftime('%b %d, %Y')}"),
+    }
+    return rows, totals
+
+
+@app.route("/reports/period-comparison")
+@admin_required
+def report_period_comparison():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _period_comparison_data(sid, d_from, d_to)
+    # KPIs surface the most useful trend lines.
+    def _row(label):
+        for r in rows:
+            if r["label"] == label:
+                return r
+        return None
+    income_row   = _row("Total Income")
+    net_row      = _row("Net Income")
+    transfers_row= _row("Transfers")
+    return render_template("report_period_comparison.html",
+        user=current_user(),
+        report_title="Period Comparison",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=f"{totals['current_label']} vs. {totals['prior_label']}",
+        result_count=len(rows),
+        result_unit="metric" if len(rows) == 1 else "metrics",
+        kpis=[
+            {"label": "Income Δ",
+             "value": f"{income_row['pct']:+.1f}%" if income_row else "—",
+             "tone":  "primary"},
+            {"label": "Net Δ",
+             "value": f"{net_row['pct']:+.1f}%" if net_row else "—",
+             "tone":  "neon" if (net_row and net_row['pct'] >= 0) else "muted"},
+            {"label": "Transfers Δ",
+             "value": f"{transfers_row['pct']:+.1f}%" if transfers_row else "—",
+             "tone":  "muted"},
+        ],
+        export_url=url_for("report_period_comparison_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+        totals=totals,
+    )
+
+
+@app.route("/reports/period-comparison.csv")
+@admin_required
+def report_period_comparison_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _period_comparison_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Metric", totals["current_label"], totals["prior_label"],
+                "Delta", "% Change"])
+    for r in rows:
+        if r["is_money"]:
+            cur = f"{r['current']:.2f}"; pri = f"{r['prior']:.2f}"
+            d   = f"{r['delta']:.2f}"
+        else:
+            cur = f"{int(r['current'])}"; pri = f"{int(r['prior'])}"
+            d   = f"{int(r['delta'])}"
+        w.writerow([r["label"], cur, pri, d, f"{r['pct']:+.1f}%"])
+    return _csv_response(buf,
+        f"period-comparison_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+# ── Fees vs. Federal Tax ─────────────────────────────────────
+def _fees_vs_tax_data(store_id, d_from, d_to):
+    """Side-by-side: total fees (store revenue) vs. total federal tax
+    (passes through with the ACH withdrawal). Useful for sanity-
+    checking that the federal-tax rate is being applied consistently."""
+    fee_total, tax_total, count = (db.session.query(
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
+        db.func.count(Transfer.id),
+    ).filter(*_active_transfers_period_filters(store_id, d_from, d_to)).one())
+    fee_total = float(fee_total or 0.0)
+    tax_total = float(tax_total or 0.0)
+    rows = [
+        {"label":  "Fees (store revenue)",
+         "amount": fee_total,
+         "note":   "Stays with the store as transaction fee revenue."},
+        {"label":  "Federal Tax (pass-through)",
+         "amount": tax_total,
+         "note":   "Leaves with the ACH withdrawal — not store revenue."},
+    ]
+    totals = {
+        "fees":   fee_total,
+        "tax":    tax_total,
+        "count":  int(count or 0),
+        "ratio":  (tax_total / fee_total) if fee_total else 0.0,
+    }
+    return rows, totals
+
+
+@app.route("/reports/fees-vs-tax")
+@admin_required
+def report_fees_vs_tax():
+    sid = session["store_id"]
+    d_from, d_to, period_label = _report_period(request.args)
+    rows, totals = _fees_vs_tax_data(sid, d_from, d_to)
+    return render_template("report_fees_vs_tax.html",
+        user=current_user(),
+        report_title="Fees vs. Federal Tax",
+        back_endpoint="reports",
+        date_from=d_from.isoformat(),
+        date_to=d_to.isoformat(),
+        period_label=period_label,
+        result_count=len(rows),
+        result_unit="line",
+        kpis=[
+            {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "neon"},
+            {"label": "Federal Tax",    "value": f"${totals['tax']:,.2f}",  "tone": "muted"},
+            {"label": "Tax / Fee Ratio","value": f"{totals['ratio']:.2f}",   "tone": "muted"},
+            {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
+        ],
+        export_url=url_for("report_fees_vs_tax_csv",
+                           **{"from": d_from.isoformat(), "to": d_to.isoformat()}),
+        rows=rows,
+    )
+
+
+@app.route("/reports/fees-vs-tax.csv")
+@admin_required
+def report_fees_vs_tax_csv():
+    import csv as _csv, io as _io
+    sid = session["store_id"]
+    d_from, d_to, _ = _report_period(request.args)
+    rows, totals = _fees_vs_tax_data(sid, d_from, d_to)
+    buf = _io.StringIO(); w = _csv.writer(buf)
+    w.writerow(["Line", "Amount"])
+    for r in rows:
+        w.writerow([r["label"], f"{r['amount']:.2f}"])
+    w.writerow([])
+    w.writerow(["Tax / Fee Ratio", f"{totals['ratio']:.2f}"])
+    return _csv_response(buf,
+        f"fees-vs-tax_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
 # Superadmin Report Center — platform-level metrics and audit views.

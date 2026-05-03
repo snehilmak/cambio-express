@@ -1,0 +1,41 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+<div class="report-comparison-legend mono">
+  <span class="report-comparison-legend__current">▲ {{ totals.current_label }}</span>
+  <span class="report-comparison-legend__prior">▼ {{ totals.prior_label }}</span>
+</div>
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div class="report-card__name">{{ r.label }}</div>
+    <div class="report-card__count mono"
+         style="color: {{ 'var(--db-neon)' if r.delta >= 0 else 'var(--db-negative)' }};">
+      {{ '%+.1f'|format(r.pct) }}%
+    </div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Current</div>
+      <div class="report-card__metric-value mono">{% if r.is_money %}${{ '{:,.2f}'.format(r.current) }}{% else %}{{ r.current|int }}{% endif %}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Prior</div>
+      <div class="report-card__metric-value mono">{% if r.is_money %}${{ '{:,.2f}'.format(r.prior) }}{% else %}{{ r.prior|int }}{% endif %}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Delta</div>
+      <div class="report-card__metric-value mono">
+        {%- if r.is_money -%}
+          {%- if r.delta >= 0 -%}+${{ '{:,.2f}'.format(r.delta) }}
+          {%- else -%}−${{ '{:,.2f}'.format(-r.delta) }}{%- endif -%}
+        {%- else -%}
+          {{ '%+d'|format(r.delta|int) }}
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
