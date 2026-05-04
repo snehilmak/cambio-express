@@ -6546,12 +6546,26 @@ def _bank_charges_by_account_data(store_ids, d_from, d_to):
 
 
 # ── Period Comparison ────────────────────────────────────────
-def _period_comparison_data(store_ids, d_from, d_to):
-    """Compare the chosen period against the immediately-prior period
-    of the same length. Returns side-by-side metric rows + totals."""
-    span = (d_to - d_from).days + 1
-    prior_to   = d_from - timedelta(days=1)
-    prior_from = prior_to - timedelta(days=span - 1)
+def _period_comparison_data(store_ids, d_from, d_to,
+                              *, compare_from=None, compare_to=None):
+    """Compare the chosen period against another period. Defaults to
+    the immediately-prior period of the same length when
+    `compare_from` / `compare_to` aren't provided. Pass arbitrary
+    dates to compare against any custom window — e.g. this month
+    vs. the same month last year.
+
+    If only one of compare_from / compare_to is provided we still
+    fall back to the auto-prior — both must be set for custom
+    comparison."""
+    if compare_from and compare_to:
+        prior_from, prior_to = compare_from, compare_to
+        # Normalise if user picked them backwards.
+        if prior_from > prior_to:
+            prior_from, prior_to = prior_to, prior_from
+    else:
+        span = (d_to - d_from).days + 1
+        prior_to   = d_from - timedelta(days=1)
+        prior_from = prior_to - timedelta(days=span - 1)
 
     def _bundle(s, e):
         # Active transfer aggregates.
@@ -7078,6 +7092,23 @@ _make_report_routes(
                           f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
 )
 
+def _parse_compare_dates(args):
+    """Pull the optional `compare_from` / `compare_to` query params
+    for the Period Comparison report. Returns a dict with both keys
+    set to either parsed dates or None — both must be present for
+    the data fn to honour the custom window."""
+    def _parse(name):
+        raw = (args.get(name) or "").strip()
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return {"compare_from": _parse("compare_from"),
+            "compare_to":   _parse("compare_to")}
+
+
 _make_report_routes(
     "period-comparison",
     title="Period Comparison",
@@ -7094,6 +7125,7 @@ _make_report_routes(
         f"{r['delta']:.2f}"   if r["is_money"] else f"{int(r['delta'])}",
         f"{r['pct']:+.1f}%",
     ],
+    extra_args_fn=lambda: _parse_compare_dates(request.args),
 )
 
 _make_report_routes(

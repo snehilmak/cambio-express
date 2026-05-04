@@ -1,5 +1,21 @@
 {% extends "_report_page.html" %}
 
+{# Optional compare-period inputs. Both must be set to use the
+   custom comparison; otherwise the report falls back to the
+   immediately-prior same-length window automatically. #}
+{% block report_extra_filters %}
+<label class="report-page__period-field">
+  <span>Compare from</span>
+  <input type="date" name="compare_from"
+         value="{{ compare_from.isoformat() if compare_from else '' }}">
+</label>
+<label class="report-page__period-field">
+  <span>Compare to</span>
+  <input type="date" name="compare_to"
+         value="{{ compare_to.isoformat() if compare_to else '' }}">
+</label>
+{% endblock %}
+
 {% block report_rows %}
 <div class="report-comparison-legend mono">
   <span class="report-comparison-legend__current">▲ {{ totals.current_label }}</span>
