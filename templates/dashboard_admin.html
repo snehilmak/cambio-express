@@ -103,7 +103,9 @@
             </td>
           </tr>
           {% else %}
-          <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:24px;">No transfers yet.</td></tr>
+          {% with colspan=5, icon='inbox', title='No transfers yet', body='Your most recent activity will appear here.', cta_href=url_for('new_transfer'), cta_text='+ New Transfer' %}
+            {% include "_empty_table_row.html" %}
+          {% endwith %}
           {% endfor %}
         </tbody>
       </table>
@@ -137,7 +139,9 @@
               </td>
             </tr>
             {% else %}
-            <tr><td colspan="5" class="text-muted text-sm" style="text-align:center;padding:20px;">No batches yet.</td></tr>
+            {% with colspan=5, icon='inbox', title='No batches yet', body='Group sent transfers into a batch when an ACH wire funds them.', cta_href=url_for('new_batch'), cta_text='+ New Batch' %}
+              {% include "_empty_table_row.html" %}
+            {% endwith %}
             {% endfor %}
           </tbody>
         </table>
