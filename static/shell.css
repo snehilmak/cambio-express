@@ -377,3 +377,21 @@ html { color-scheme: dark; }
   .user-dropdown .user-info .rl { font-size: 10.5px; letter-spacing: 1.1px; }
   .user-dropdown .dropdown-item { font-size: 14px; padding: 11px 16px; }
 }
+
+/* Topbar primary action button (`+ New Transfer`). Sits to the
+   left of the clock so the most common cashier action is one
+   click away from anywhere. On narrow viewports the label hides
+   and the icon stays — saves space without losing the action. */
+.topbar-new-action {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 720px) {
+  .topbar-new-action__label { display: none; }
+  .topbar-new-action {
+    padding: 6px 10px;
+    min-width: 32px;
+    justify-content: center;
+  }
+  .topbar-new-action svg { margin-right: 0 !important; }
+}
