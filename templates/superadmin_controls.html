@@ -365,6 +365,52 @@
 </div>
 {% endif %}
 
+{# Platform anomaly alerts — surfaces stores that have gone quiet
+   or had unusually large daily-book over/short variances. Empty
+   state hides the card entirely so a healthy platform shows nothing
+   here at all (silence = good). #}
+{% if anomalies %}
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">
+      Anomaly alerts
+      <span class="badge badge-{% if anomalies[0].severity == 'high' %}red{% else %}yellow{% endif %}"
+            style="margin-left:8px;">{{ anomalies|length }}</span>
+    </span>
+    <span class="text-sm text-muted">Last 7 days</span>
+  </div>
+  <div class="card-body">
+    <div style="display:flex;flex-direction:column;gap:0;">
+      {% for a in anomalies %}
+      <div style="display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);">
+        {# Severity dot — red for high (looking-now), yellow for medium. #}
+        <span style="display:inline-block;width:8px;height:8px;border-radius:999px;margin-top:6px;flex:0 0 auto;
+                     background:{% if a.severity == 'high' %}var(--db-negative){% else %}var(--db-warning){% endif %};
+                     {% if a.severity == 'high' %}box-shadow:0 0 6px var(--db-negative);{% endif %}"></span>
+        <div style="flex:1 1 auto;min-width:0;">
+          <div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;">
+            <strong>{{ a.store.name }}</strong>
+            <span class="text-sm text-muted">·</span>
+            <span class="text-sm text-muted">
+              {% if a.kind == 'big_over_short' %}Daily over/short{% else %}Quiet store{% endif %}
+            </span>
+          </div>
+          <div class="text-sm text-muted" style="margin-top:2px;">{{ a.description }}</div>
+        </div>
+        {% if a.href %}
+        <a href="{{ a.href }}" class="btn btn-outline btn-sm" style="flex:0 0 auto;">Open store</a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-sm text-muted" style="margin-top:12px;">
+      Quiet-store rule: ≥5 transfers in last 30 days but none in the last 3.
+      Big over/short rule: |over_short| ≥ ${{ '{:,.0f}'.format(100) }} on a daily book in the last 7 days.
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
   <div class="card-header"><span class="card-title">Quick links</span></div>
   <div class="card-body">
