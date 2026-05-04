@@ -306,6 +306,33 @@ class StoreEmployee(db.Model):
     is_active  = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class OperatorAuditLog(db.Model):
+    """Generic store-side audit log for operator actions on objects
+    that don't have their own dedicated audit table (daily reports,
+    ACH batches, transfer deletes). Transfers themselves use the
+    older `TransferAudit` table, which is FK-tied to Transfer rows
+    and gets cascade-cleared on transfer delete — so we log the
+    delete here too, where it survives the row it describes.
+
+    Append-only. Read by the admin /admin/audit-log page. Never
+    edited or deleted by the app code (purge-expired-stores is the
+    only reaper, via _STORE_OWNED_MODELS).
+    """
+    __tablename__ = "operator_audit_log"
+    id           = db.Column(db.Integer, primary_key=True)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    user_name    = db.Column(db.String(120), default="")
+    user_role    = db.Column(db.String(20),  default="")
+    target_type  = db.Column(db.String(30),  nullable=False)
+    target_id    = db.Column(db.String(60),  default="")
+    target_label = db.Column(db.String(160), default="")
+    action       = db.Column(db.String(30),  nullable=False)
+    summary      = db.Column(db.Text, default="")
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    user         = db.relationship("User", foreign_keys=[user_id])
+
+
 class TransferAudit(db.Model):
     """Append-only log of everything that happens to a Transfer.
 
@@ -1499,6 +1526,41 @@ def record_audit(action, target_type="", target_id="", details=""):
     )
     db.session.add(row)
     # Intentionally no commit — caller commits as part of its own transaction.
+
+
+def record_op_audit(action, target_type, target_id, *, label="", summary=""):
+    """Append a row to the per-store operator audit log. Captures
+    user identity + role from session so the audit row stays useful
+    even after the User row is deleted.
+
+    Targets:
+        'transfer' (delete-only — TransferAudit covers create/edit),
+        'daily_report', 'batch'
+
+    Actions:
+        'create', 'update', 'delete', 'lock', 'unlock'
+
+    No commit — caller wraps in the same transaction as the mutation
+    so the audit row rolls back if the mutation fails.
+    """
+    sid = session.get("store_id")
+    if not sid:
+        return
+    u = current_user()
+    if not u:
+        return
+    row = OperatorAuditLog(
+        store_id=sid,
+        user_id=u.id,
+        user_name=(u.full_name or u.username or "")[:120],
+        user_role=str(u.role or "")[:20],
+        target_type=str(target_type)[:30],
+        target_id=str(target_id)[:60],
+        target_label=str(label)[:160],
+        action=str(action)[:30],
+        summary=str(summary)[:2000],
+    )
+    db.session.add(row)
 
 def store_feature_enabled(store, flag_key):
     """Resolve a feature flag for a store: per-store override > global default > True."""
@@ -9005,6 +9067,14 @@ def delete_transfer(tid):
         flash("Select a store first.", "error")
         return redirect(url_for("dashboard"))
     t = Transfer.query.filter_by(id=tid, store_id=sid).first_or_404()
+    # Capture a recognizable label BEFORE deletion so the audit row
+    # makes sense without needing to look up the (gone) transfer id.
+    label = (f"{t.sender_name or '?'} → {t.recipient_name or '?'}"
+             f" — ${t.send_amount or 0:,.2f}")
+    record_op_audit("delete", "transfer", t.id, label=label,
+                    summary=f"confirm={t.confirm_number or ''} "
+                            f"company={t.company or ''} "
+                            f"status={t.status or ''}")
     TransferAudit.query.filter_by(store_id=sid, transfer_id=t.id).delete(
         synchronize_session=False)
     db.session.delete(t)
@@ -9426,6 +9496,8 @@ def daily_report_lock(ds):
         rpt.locked_at = datetime.utcnow()
         rpt.locked_by = current_user().id
         rpt.updated_at = datetime.utcnow()
+        record_op_audit("lock", "daily_report", rpt.id,
+                         label=f"Daily {report_date.isoformat()}")
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} locked.", "success")
     return redirect(url_for("daily_report", ds=ds))
@@ -9444,6 +9516,8 @@ def daily_report_unlock(ds):
         rpt.locked_at = None
         rpt.locked_by = None
         rpt.updated_at = datetime.utcnow()
+        record_op_audit("unlock", "daily_report", rpt.id,
+                         label=f"Daily {report_date.isoformat()}")
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} unlocked.", "success")
     return redirect(url_for("daily_report", ds=ds))
@@ -10317,7 +10391,13 @@ def new_batch():
             status=request.form.get("status","Pending"),
             reconciled=request.form.get("reconciled")=="on",
             notes=request.form.get("notes",""))
-        db.session.add(b); db.session.commit()
+        db.session.add(b); db.session.flush()
+        record_op_audit("create", "batch", b.id,
+                         label=f"{b.company} {b.batch_ref}",
+                         summary=f"ach_amount=${b.ach_amount:,.2f} "
+                                  f"date={b.ach_date.isoformat()} "
+                                  f"status={b.status}")
+        db.session.commit()
         flash("ACH batch logged.","success"); return redirect(url_for("batches"))
     return render_template("batch_form.html",user=user,batch=None,today=date.today().isoformat())
 
@@ -10327,6 +10407,13 @@ def edit_batch(bid):
     user=current_user(); sid=session["store_id"]
     b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
     if request.method=="POST":
+        # Snapshot the fields likely to change so the audit summary
+        # can show before→after values without dumping the whole row.
+        before = {
+            "ach_amount": float(b.ach_amount or 0),
+            "status":     b.status or "",
+            "reconciled": bool(b.reconciled),
+        }
         b.ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date()
         b.company=request.form["company"]; b.batch_ref=request.form["batch_ref"]
         b.ach_amount=float(request.form.get("ach_amount") or 0)
@@ -10334,6 +10421,16 @@ def edit_batch(bid):
         b.status=request.form.get("status","Pending")
         b.reconciled=request.form.get("reconciled")=="on"
         b.notes=request.form.get("notes","")
+        diffs = []
+        if before["ach_amount"] != float(b.ach_amount or 0):
+            diffs.append(f"amount {before['ach_amount']:,.2f}→{b.ach_amount:,.2f}")
+        if before["status"] != (b.status or ""):
+            diffs.append(f"status {before['status']}→{b.status}")
+        if before["reconciled"] != bool(b.reconciled):
+            diffs.append(f"reconciled {before['reconciled']}→{bool(b.reconciled)}")
+        record_op_audit("update", "batch", b.id,
+                         label=f"{b.company} {b.batch_ref}",
+                         summary="; ".join(diffs) if diffs else "no field changes")
         db.session.commit(); flash("Batch updated.","success"); return redirect(url_for("batches"))
     return render_template("batch_form.html",user=user,batch=b,today=date.today().isoformat())
 
@@ -10904,6 +11001,105 @@ def admin_users():
     user=current_user(); sid=session["store_id"]
     users=User.query.filter_by(store_id=sid).all()
     return render_template("admin_users.html",user=user,users=users)
+
+
+@app.route("/admin/audit-log")
+@admin_required
+def admin_audit_log():
+    """Unified operator audit log. Combines OperatorAuditLog rows
+    (transfer deletes, batch creates/updates, daily-report locks /
+    unlocks) with TransferAudit rows (transfer creates / edits /
+    status changes) into a single chronological feed.
+
+    Filters:
+        ?target=transfer | daily_report | batch
+        ?user=<id>
+        ?action=create | update | delete | lock | unlock | status_changed
+    """
+    user = current_user()
+    sid = session["store_id"]
+    target_filter = request.args.get("target", "").strip()
+    user_filter   = request.args.get("user",   "").strip()
+    action_filter = request.args.get("action", "").strip()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+    PER_PAGE = 50
+
+    # Pull both feeds, normalize to a common shape, merge, sort.
+    op_q = OperatorAuditLog.query.filter_by(store_id=sid)
+    tx_q = TransferAudit.query.filter_by(store_id=sid)
+    if target_filter:
+        op_q = op_q.filter_by(target_type=target_filter)
+        if target_filter != "transfer":
+            tx_q = tx_q.filter(db.text("1=0"))  # transfer-only feed; suppress when filtered out
+    if user_filter:
+        try:
+            uid = int(user_filter)
+            op_q = op_q.filter_by(user_id=uid)
+            tx_q = tx_q.filter_by(user_id=uid)
+        except ValueError:
+            pass
+    if action_filter:
+        op_q = op_q.filter_by(action=action_filter)
+        tx_q = tx_q.filter_by(action=action_filter)
+
+    op_rows = (op_q.order_by(OperatorAuditLog.created_at.desc())
+               .limit(500).all())
+    tx_rows = (tx_q.order_by(TransferAudit.created_at.desc())
+               .limit(500).all())
+
+    user_ids = ({r.user_id for r in op_rows if r.user_id}
+                | {r.user_id for r in tx_rows if r.user_id})
+    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
+
+    merged = []
+    for r in op_rows:
+        merged.append({
+            "ts":            r.created_at,
+            "user_name":     r.user_name or (users.get(r.user_id).username if r.user_id and users.get(r.user_id) else ""),
+            "user_role":     r.user_role,
+            "action":        r.action,
+            "target_type":   r.target_type,
+            "target_id":     r.target_id,
+            "target_label":  r.target_label,
+            "summary":       r.summary,
+            "source":        "operator",
+        })
+    for r in tx_rows:
+        u = users.get(r.user_id) if r.user_id else None
+        merged.append({
+            "ts":            r.created_at,
+            "user_name":     (u.full_name or u.username) if u else r.employee_name or "",
+            "user_role":     u.role if u else "",
+            "action":        r.action,
+            "target_type":   "transfer",
+            "target_id":     str(r.transfer_id),
+            "target_label":  r.summary[:80] if r.summary else f"Transfer #{r.transfer_id}",
+            "summary":       r.summary,
+            "source":        "transfer",
+        })
+    merged.sort(key=lambda x: x["ts"], reverse=True)
+
+    total = len(merged)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = min(page, total_pages)
+    start = (page - 1) * PER_PAGE
+    page_rows = merged[start:start + PER_PAGE]
+
+    # Roster of users on the store for the filter dropdown.
+    store_users = (User.query.filter_by(store_id=sid)
+                   .order_by(User.full_name, User.username).all())
+
+    return render_template("admin_audit_log.html",
+        user=user,
+        rows=page_rows,
+        total=total, page=page, total_pages=total_pages,
+        target_filter=target_filter, user_filter=user_filter,
+        action_filter=action_filter,
+        store_users=store_users)
 
 @app.route("/admin/users/new",methods=["GET","POST"])
 @admin_required
@@ -12388,7 +12584,8 @@ _STORE_OWNED_MODELS = [
     # and StoreEmployee before any row that FKs to it — we null/ignore employee
     # FKs on purge via the audit table's nullable column, but order still
     # matters for cascade sanity.
-    "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
+    "TransferAudit", "OperatorAuditLog",
+    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     # BankTransaction must purge before StripeBankAccount — it FKs to it.
     # BankRule + BankTransaction must purge before StripeBankAccount —
