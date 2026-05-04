@@ -1421,3 +1421,98 @@ details[open] > *:not(summary) {
   vertical-align: top;
 }
 .report-detail__table tbody tr:hover { background: var(--db-gray-2); }
+
+/* ── Report-page print stylesheet ────────────────────────────
+   The "Print / PDF" button on every report page hands off to the
+   browser's print dialog (where the user picks "Save as PDF" if
+   they want a file). These rules strip the chrome — sidebar,
+   topbar, action buttons, sub-tabs — so the printed page is a
+   clean header + KPIs + period chip + report rows. */
+@media print {
+  /* Hide app chrome. The selector list covers admin, owner, and
+     superadmin shells. */
+  .sidebar, .topbar, .topbar-spacer,
+  .nav-section, .sidebar-footer, .user-dropdown, .ref-dropdown,
+  .topbar__actions, .top-banner-zone {
+    display: none !important;
+  }
+  /* Stretch the content column to the full printable width. */
+  .main, .content { margin: 0 !important; padding: 0 !important; }
+  body, html { background: #fff !important; color: #000 !important; }
+  /* Strip page-shell noise on the report itself. */
+  .report-page__back,
+  .report-page__period,
+  .js-report-print,
+  .report-page__view-tabs {
+    display: none !important;
+  }
+  /* Keep the Export-CSV anchor visible? No — useless on paper. */
+  .report-page__actions { display: none !important; }
+  /* Title bigger, dark text. */
+  .report-page__head { display: block; margin-bottom: 12px; }
+  .report-page__title {
+    color: #000 !important;
+    font-size: 22pt;
+    margin: 0 0 8px 0;
+  }
+  /* KPI cards: tighter, no shadow, no gradient — printer ink. */
+  .report-page__kpis {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 6pt !important;
+    margin-bottom: 10pt !important;
+  }
+  .report-kpi {
+    background: #fff !important;
+    border: 1px solid #999 !important;
+    box-shadow: none !important;
+    padding: 8pt !important;
+    page-break-inside: avoid;
+  }
+  .report-kpi__label, .report-kpi__value {
+    color: #000 !important;
+  }
+  .report-kpi--primary, .report-kpi--neon {
+    background: #f3f3f3 !important;
+  }
+  /* Period chip → bare text line. */
+  .report-page__filter {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 4pt 0 !important;
+    color: #444 !important;
+    font-size: 10pt;
+  }
+  /* Row cards / tables: avoid awkward page breaks mid-row. */
+  .report-card, .report-graph__row, .report-detail__table tr {
+    page-break-inside: avoid;
+  }
+  .report-card {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+    border-left: 2px solid #444 !important;
+    box-shadow: none !important;
+  }
+  .report-card__name, .report-card__count,
+  .report-card__metric-value, .report-card__metric-label {
+    color: #000 !important;
+  }
+  /* Detail-view tables: light grid for print. */
+  .report-detail__table { border: 1px solid #ccc; }
+  .report-detail__table th {
+    background: #f5f5f5 !important;
+    color: #000 !important;
+    border-bottom: 1px solid #999 !important;
+  }
+  .report-detail__table td {
+    color: #000 !important;
+    border-bottom: 1px solid #eee !important;
+  }
+  /* Graph view: print bars with a flat fill so they don't waste ink. */
+  .report-graph__bar-track { background: #eee !important; }
+  .report-graph__bar { background: #444 !important; }
+  /* Page setup: portrait, 0.5in margins (default). Override via
+     the browser's print dialog if needed. */
+  @page { margin: 0.5in; }
+  /* Anything inside `.no-print` is always hidden when printing. */
+  .no-print { display: none !important; }
+}
