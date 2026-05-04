@@ -5673,9 +5673,19 @@ def _slug_to_endpoint(slug, *, owner=False, csv=False):
     return ("owner_" + base) if owner else base
 
 
+_VIEW_LABELS = {"summary": "Summary", "graph": "Graph", "detail": "Detail"}
+_GENERIC_VIEW_TEMPLATES = {
+    "graph":  "_report_graph_view.html",
+    "detail": "_report_detail_view.html",
+}
+
+
 def _render_report(template, data_fn, *,
                    slug, title, result_unit, kpis_fn,
                    extra_args=None,
+                   views=None,
+                   graph_label_field=None, graph_value_field=None,
+                   detail_columns=None,
                    **template_kwargs):
     """Run a report's data function, build KPIs from the result, and
     render the report-page template. Wraps the boilerplate every
@@ -5686,14 +5696,36 @@ def _render_report(template, data_fn, *,
     items in `extra_args` are also passed through as template kwargs
     so report-specific Jinja blocks (e.g. high-value-transfers'
     `Min $` filter input) can read them directly.
+
+    `views` is an ordered list of view keys — e.g.
+    `["summary", "graph", "detail"]`. The skeleton renders a bottom
+    tab bar when there's more than one. The active view comes from
+    `?view=` (defaults to the first). Generic templates back the
+    Graph + Detail variants; the report's own template still backs
+    Summary.
+
+    `graph_label_field` + `graph_value_field` configure the generic
+    bar chart in Graph view. `detail_columns` is an ordered list of
+    `(label, key)` tuples for the Detail-view table; if absent we
+    fall back to whatever keys appear on the first row.
     """
     extra_args = extra_args or {}
+    available_views = views or ["summary"]
+    requested_view = (request.args.get("view") or "").strip().lower()
+    if requested_view not in available_views:
+        requested_view = available_views[0]
+
     d_from, d_to, period_label = _report_period(request.args)
     rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
                            **extra_args)
     n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
     is_owner = _is_owner_request()
-    return render_template(template,
+
+    # Pick the right template based on the requested view. Summary
+    # uses the report's own template; Graph + Detail use generics.
+    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
+
+    return render_template(actual_template,
         user=current_user(),
         report_title=title,
         back_endpoint=("owner_reports" if is_owner else "reports"),
@@ -5712,6 +5744,14 @@ def _render_report(template, data_fn, *,
             }),
         rows=rows,
         totals=totals,
+        # View-tab bar
+        active_view=requested_view,
+        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
+                         for v in available_views],
+        # Generic-view configuration
+        graph_label_field=graph_label_field,
+        graph_value_field=graph_value_field,
+        detail_columns=detail_columns,
         **extra_args,
         **template_kwargs,
     )
@@ -5755,7 +5795,10 @@ def _export_report_csv(data_fn, *, columns, row_fn,
 def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                          kpis_fn, csv_columns, csv_row_fn,
                          csv_totals_fn=None, csv_fname_prefix=None,
-                         extra_args_fn=None):
+                         extra_args_fn=None,
+                         views=None,
+                         graph_label_field=None, graph_value_field=None,
+                         detail_columns=None):
     """Register admin (`/reports/<slug>`) + owner
     (`/owner/reports/<slug>`) HTML and CSV routes for a single report.
     Endpoints follow the convention `report_<slug_underscored>(_csv)?`
@@ -5777,6 +5820,10 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
         return _render_report(template, data_fn,
             slug=slug, title=title, result_unit=result_unit,
             kpis_fn=kpis_fn, extra_args=extra_args_fn(),
+            views=views,
+            graph_label_field=graph_label_field,
+            graph_value_field=graph_value_field,
+            detail_columns=detail_columns,
         )
 
     def _csv():
@@ -6499,12 +6546,26 @@ def _bank_charges_by_account_data(store_ids, d_from, d_to):
 
 
 # ── Period Comparison ────────────────────────────────────────
-def _period_comparison_data(store_ids, d_from, d_to):
-    """Compare the chosen period against the immediately-prior period
-    of the same length. Returns side-by-side metric rows + totals."""
-    span = (d_to - d_from).days + 1
-    prior_to   = d_from - timedelta(days=1)
-    prior_from = prior_to - timedelta(days=span - 1)
+def _period_comparison_data(store_ids, d_from, d_to,
+                              *, compare_from=None, compare_to=None):
+    """Compare the chosen period against another period. Defaults to
+    the immediately-prior period of the same length when
+    `compare_from` / `compare_to` aren't provided. Pass arbitrary
+    dates to compare against any custom window — e.g. this month
+    vs. the same month last year.
+
+    If only one of compare_from / compare_to is provided we still
+    fall back to the auto-prior — both must be set for custom
+    comparison."""
+    if compare_from and compare_to:
+        prior_from, prior_to = compare_from, compare_to
+        # Normalise if user picked them backwards.
+        if prior_from > prior_to:
+            prior_from, prior_to = prior_to, prior_from
+    else:
+        span = (d_to - d_from).days + 1
+        prior_to   = d_from - timedelta(days=1)
+        prior_from = prior_to - timedelta(days=span - 1)
 
     def _bundle(s, e):
         # Active transfer aggregates.
@@ -6643,6 +6704,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="company", graph_value_field="sent",
+    detail_columns=[
+        ("Company", "company"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6665,6 +6733,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="service_type", graph_value_field="sent",
+    detail_columns=[
+        ("Service Type", "service_type"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6687,6 +6762,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="employee", graph_value_field="sent",
+    detail_columns=[
+        ("Employee", "employee"), ("Username", "username"),
+        ("Count", "count"), ("Total Sent", "sent"),
+        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6767,6 +6849,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="country", graph_value_field="sent",
+    detail_columns=[
+        ("Country", "country"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6978,6 +7067,12 @@ _make_report_routes(
     csv_row_fn=lambda r: [r["company"], r["count"],
                           f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
     csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="company", graph_value_field="amount",
+    detail_columns=[
+        ("Company", "company"), ("Batch Count", "count"),
+        ("Total ACH", "amount"), ("Avg / Batch", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6997,6 +7092,23 @@ _make_report_routes(
                           f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
 )
 
+def _parse_compare_dates(args):
+    """Pull the optional `compare_from` / `compare_to` query params
+    for the Period Comparison report. Returns a dict with both keys
+    set to either parsed dates or None — both must be present for
+    the data fn to honour the custom window."""
+    def _parse(name):
+        raw = (args.get(name) or "").strip()
+        if not raw:
+            return None
+        try:
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    return {"compare_from": _parse("compare_from"),
+            "compare_to":   _parse("compare_to")}
+
+
 _make_report_routes(
     "period-comparison",
     title="Period Comparison",
@@ -7013,6 +7125,7 @@ _make_report_routes(
         f"{r['delta']:.2f}"   if r["is_money"] else f"{int(r['delta'])}",
         f"{r['pct']:+.1f}%",
     ],
+    extra_args_fn=lambda: _parse_compare_dates(request.args),
 )
 
 _make_report_routes(
@@ -7106,8 +7219,8 @@ _SUPERADMIN_REPORT_CATEGORIES = [
              "endpoint": "superadmin_report_churn_cohort"},
             {"key": "refunds",
              "label": "Refunds",
-             "description": "Refunded charges by reason and period.",
-             "endpoint": None},
+             "description": "Stripe refunds in the period grouped by reason.",
+             "endpoint": "superadmin_report_refunds"},
         ],
     },
     {
@@ -7121,12 +7234,12 @@ _SUPERADMIN_REPORT_CATEGORIES = [
              "endpoint": None},
             {"key": "failed_payments",
              "label": "Failed Payments",
-             "description": "Charge failures, dunning state, and recoveries.",
-             "endpoint": None},
+             "description": "Recent failed charges grouped by reason.",
+             "endpoint": "superadmin_report_failed_payments"},
             {"key": "payouts",
              "label": "Payouts",
              "description": "Stripe payouts to the platform bank account.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_payouts"},
         ],
     },
     {
@@ -7228,12 +7341,22 @@ def superadmin_audit_log():
 def _render_superadmin_report(template, data_fn, *,
                                slug, title, result_unit, kpis_fn,
                                extra_args=None,
+                               views=None,
+                               graph_label_field=None,
+                               graph_value_field=None,
+                               detail_columns=None,
                                **template_kwargs):
     extra_args = extra_args or {}
+    available_views = views or ["summary"]
+    requested_view = (request.args.get("view") or "").strip().lower()
+    if requested_view not in available_views:
+        requested_view = available_views[0]
+
     d_from, d_to, period_label = _report_period(request.args)
     rows, totals = data_fn(d_from, d_to, **extra_args)
     n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
-    return render_template(template,
+    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
+    return render_template(actual_template,
         user=current_user(),
         report_title=title,
         back_endpoint="superadmin_reports",
@@ -7252,6 +7375,12 @@ def _render_superadmin_report(template, data_fn, *,
                            }),
         rows=rows,
         totals=totals,
+        active_view=requested_view,
+        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
+                         for v in available_views],
+        graph_label_field=graph_label_field,
+        graph_value_field=graph_value_field,
+        detail_columns=detail_columns,
         **extra_args,
         **template_kwargs,
     )
@@ -7286,7 +7415,11 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
                                      csv_columns, csv_row_fn,
                                      csv_totals_fn=None,
                                      csv_fname_prefix=None,
-                                     extra_args_fn=None):
+                                     extra_args_fn=None,
+                                     views=None,
+                                     graph_label_field=None,
+                                     graph_value_field=None,
+                                     detail_columns=None):
     """Register `/superadmin/reports/<slug>(.csv)?` routes for a
     superadmin report. Same idea as `_make_report_routes` but
     superadmin-only — no owner mirror."""
@@ -7298,6 +7431,10 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
         return _render_superadmin_report(template, data_fn,
             slug=slug, title=title, result_unit=result_unit,
             kpis_fn=kpis_fn, extra_args=extra_args_fn(),
+            views=views,
+            graph_label_field=graph_label_field,
+            graph_value_field=graph_value_field,
+            detail_columns=detail_columns,
         )
 
     def _csv():
@@ -7739,6 +7876,122 @@ def _sa_retention_queue_data(d_from, d_to):
     return rows, totals
 
 
+def _stripe_period_unix(d_from, d_to):
+    """Return (gte, lte) Unix timestamps covering [d_from, d_to]
+    inclusive. Stripe list APIs filter on `created` with this shape."""
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    return int(start.timestamp()), int(end.timestamp())
+
+
+def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
+                 **kwargs):
+    """Page through a Stripe `list` API. Caps total rows at
+    `max_total` so a high-volume month doesn't tie up the page."""
+    if not stripe.api_key:
+        raise RuntimeError("Stripe API key not configured")
+    items = []
+    for obj in list_call(**kwargs, limit=limit_per_call).auto_paging_iter():
+        items.append(obj)
+        if len(items) >= max_total:
+            break
+    return items
+
+
+def _sa_refunds_data(d_from, d_to):
+    """Stripe refunds in the period grouped by reason."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(stripe.Refund.list,
+                             created={"gte": gte, "lte": lte})
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason = {}
+    for r in objs:
+        amt = float(r.get("amount", 0) or 0) / 100.0
+        reason = (r.get("reason") or "(no reason)").replace("_", " ").title()
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
+            for k, v in by_reason.items()]
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+def _sa_failed_payments_data(d_from, d_to):
+    """Recent failed Stripe charges in the period. Stripe doesn't
+    expose a server-side `failed` filter on Charge.list, so we pull
+    a capped page and filter client-side."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(stripe.Charge.list,
+                             created={"gte": gte, "lte": lte},
+                             max_total=500)
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason = {}
+    for c in objs:
+        if c.get("status") != "failed" and c.get("paid", True):
+            continue
+        amt = float(c.get("amount", 0) or 0) / 100.0
+        outcome = c.get("outcome") or {}
+        reason = (outcome.get("reason")
+                   or c.get("failure_message")
+                   or "(unknown)")[:80]
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
+            for k, v in by_reason.items()]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    return rows, totals
+
+
+def _sa_payouts_data(d_from, d_to):
+    """Stripe payouts to the platform bank account in the period."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": "",
+              "paid": 0, "pending": 0, "failed": 0}
+    try:
+        objs = _stripe_iter(stripe.Payout.list,
+                             created={"gte": gte, "lte": lte})
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    for p in objs:
+        amt = float(p.get("amount", 0) or 0) / 100.0
+        arrival_ts = p.get("arrival_date")
+        arrival = (datetime.utcfromtimestamp(arrival_ts).date()
+                    if arrival_ts else None)
+        status = p.get("status", "") or ""
+        rows.append({
+            "id":      p.get("id", ""),
+            "amount":  amt,
+            "status":  status.title(),
+            "method":  (p.get("method") or "").replace("_", " ").title(),
+            "arrival": arrival,
+        })
+        totals["count"]  += 1
+        totals["amount"] += amt
+        if status == "paid":    totals["paid"]    += 1
+        if status == "pending": totals["pending"] += 1
+        if status == "failed":  totals["failed"]  += 1
+    rows.sort(key=lambda r: r["arrival"] or date.min, reverse=True)
+    return rows, totals
+
+
 # ── Superadmin reports: registry of routes ───────────────────
 _make_superadmin_report_routes(
     "active-stores-by-plan",
@@ -7968,6 +8221,55 @@ _make_superadmin_report_routes(
     csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
                           r["until"].isoformat() if r["until"] else "",
                           r["days_left"]],
+)
+
+_make_superadmin_report_routes(
+    "refunds",
+    title="Refunds",
+    data_fn=_sa_refunds_data,
+    template="report_sa_stripe_amount.html",
+    result_unit=("reason", "reasons"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Refunds",  "value": f"{totals['count']:,}",            "tone": "primary"},
+        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "neon"},
+    ],
+    csv_columns=["Reason", "Count", "Amount"],
+    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_superadmin_report_routes(
+    "failed-payments",
+    title="Failed Payments",
+    data_fn=_sa_failed_payments_data,
+    template="report_sa_stripe_amount.html",
+    result_unit=("reason", "reasons"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Failed Charges", "value": f"{totals['count']:,}",            "tone": "primary"},
+        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "muted"},
+    ],
+    csv_columns=["Reason", "Count", "Amount"],
+    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_superadmin_report_routes(
+    "payouts",
+    title="Payouts",
+    data_fn=_sa_payouts_data,
+    template="report_sa_payouts.html",
+    result_unit=("payout", "payouts"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",   "tone": "primary"},
+        {"label": "Paid",         "value": f"{totals['paid']:,}",         "tone": "neon"},
+        {"label": "Pending",      "value": f"{totals['pending']:,}",      "tone": "muted"},
+        {"label": "Failed",       "value": f"{totals['failed']:,}",       "tone": "muted"},
+    ],
+    csv_columns=["Payout ID", "Amount", "Status", "Method", "Arrival"],
+    csv_row_fn=lambda r: [r["id"], f"{r['amount']:.2f}", r["status"],
+                          r["method"],
+                          r["arrival"].isoformat() if r["arrival"] else ""],
+    csv_totals_fn=lambda t: ["TOTAL", f"{t['amount']:.2f}", "", "", ""],
 )
 
 

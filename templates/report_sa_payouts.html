@@ -1,0 +1,33 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if totals.stripe_error %}
+<div class="report-empty">
+  Stripe API unavailable: {{ totals.stripe_error }}.
+  Configure <code>STRIPE_SECRET_KEY</code> to populate this report.
+</div>
+{% elif not rows %}
+<div class="report-empty">No payouts in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">${{ '{:,.2f}'.format(r.amount) }}</div>
+      <div class="report-card__sub mono">{{ r.id }}{% if r.method %} · {{ r.method }}{% endif %}</div>
+    </div>
+    <div class="report-card__count mono"
+         style="color: {% if r.status == 'Paid' %}var(--db-neon){% elif r.status == 'Failed' %}var(--db-negative){% else %}var(--db-warning){% endif %};">
+      {{ r.status }}
+    </div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Arrival</div>
+      <div class="report-card__metric-value mono">{{ r.arrival.isoformat() if r.arrival else '—' }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
