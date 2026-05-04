@@ -8612,6 +8612,19 @@ def api_customers_search():
     return jsonify([c.to_dict(current_store_id=sid, home_names=home_names) for c in rows])
 
 # ── Transfers ────────────────────────────────────────────────
+_TRANSFER_SORT_COLUMNS = {
+    "date":      Transfer.send_date,
+    "sender":    Transfer.sender_name,
+    "company":   Transfer.company,
+    "amount":    Transfer.send_amount,
+    "recipient": Transfer.recipient_name,
+    "country":   Transfer.country,
+    "confirm":   Transfer.confirm_number,
+    "batch":     Transfer.batch_id,
+    "status":    Transfer.status,
+}
+
+
 @app.route("/transfers")
 @login_required
 def transfers():
@@ -8660,7 +8673,23 @@ def transfers():
             Transfer.country.ilike(like),
             Transfer.batch_id.ilike(like),
         ))
-    q=q.order_by(Transfer.send_date.desc(),Transfer.created_at.desc())
+    # Sort: optional ?sort=<col>&dir=asc|desc. Falls back to the
+    # historical "newest first" ordering when the slug isn't in the
+    # whitelist — keeps the current default and prevents a malformed
+    # URL from picking an arbitrary column.
+    sort_slug = request.args.get("sort", "").strip()
+    sort_dir  = request.args.get("dir",  "desc").strip().lower()
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"
+    sort_col = _TRANSFER_SORT_COLUMNS.get(sort_slug)
+    if sort_col is not None:
+        order = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
+        # Tie-break on created_at so equal-key rows have a stable order.
+        q = q.order_by(order, Transfer.created_at.desc())
+    else:
+        q = q.order_by(Transfer.send_date.desc(), Transfer.created_at.desc())
+        sort_slug = ""
+        sort_dir  = "desc"
     PER_PAGE=50
     try: page=max(1,int(request.args.get("page",1)))
     except (TypeError, ValueError): page=1
@@ -8672,7 +8701,8 @@ def transfers():
         company=company, status=status, date_from=date_from, date_to=date_to,
         sender=sender, recipient=recipient, country=country, confirm=confirm,
         batch=batch, q=search, page=page, total=total, total_pages=total_pages,
-        per_page=PER_PAGE)
+        per_page=PER_PAGE,
+        sort=sort_slug, dir=sort_dir)
     # Live-search AJAX path — called from templates/transfers.html's JS.
     # Combined page total — send_amount + fee + federal_tax, matching the
     # single "Amount" column the user sees in the table (each row shows
@@ -10297,12 +10327,35 @@ def return_check_delete(rc_id):
 
 
 # ── ACH Batches ──────────────────────────────────────────────
+_BATCH_SORT_COLUMNS = {
+    "date":     ACHBatch.ach_date,
+    "company":  ACHBatch.company,
+    "ref":      ACHBatch.batch_ref,
+    "amount":   ACHBatch.ach_amount,
+    "status":   ACHBatch.status,
+}
+
+
 @app.route("/batches")
 @admin_required
 def batches():
     user=current_user(); sid=session["store_id"]
-    rows=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).all()
-    return render_template("batches.html",user=user,batches=rows)
+    sort_slug = request.args.get("sort", "").strip()
+    sort_dir  = request.args.get("dir",  "desc").strip().lower()
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"
+    sort_col = _BATCH_SORT_COLUMNS.get(sort_slug)
+    q = ACHBatch.query.filter_by(store_id=sid)
+    if sort_col is not None:
+        q = q.order_by(sort_col.asc() if sort_dir == "asc" else sort_col.desc(),
+                       ACHBatch.id.desc())
+    else:
+        q = q.order_by(ACHBatch.ach_date.desc(), ACHBatch.id.desc())
+        sort_slug = ""
+        sort_dir  = "desc"
+    rows = q.all()
+    return render_template("batches.html", user=user, batches=rows,
+                            sort=sort_slug, dir=sort_dir)
 
 @app.route("/batches/new",methods=["GET","POST"])
 @admin_required

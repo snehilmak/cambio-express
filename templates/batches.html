@@ -3,6 +3,20 @@
 {% block page_title %}ACH Batch Reconciliation{% endblock %}
 {% block content %}
 
+{# Same sortable-th macro as the transfers table — defined inline here
+   because each template gets a fresh macro scope; not worth a shared
+   import file for two callers. #}
+{% macro sort_th(slug, label, sort, dir) %}
+  {% set is_active = (sort == slug) %}
+  {% set next_dir = 'desc' if (is_active and dir == 'asc') else ('asc' if is_active else 'desc') %}
+  {% set arrow = ('▲' if dir == 'asc' else '▼') if is_active else '' %}
+  <th class="th-sortable{% if is_active %} th-sortable--active{% endif %}">
+    <a href="{{ url_for('batches', sort=slug, dir=next_dir) }}" class="th-sort-link">
+      {{ label }}{% if arrow %} <span class="th-sort-arrow">{{ arrow }}</span>{% endif %}
+    </a>
+  </th>
+{% endmacro %}
+
 <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
   <div class="text-sm text-muted">Log each ACH debit from your bank. Variance turns green when your transfer log matches exactly.</div>
   <a href="{{ url_for('new_batch') }}" class="btn btn-primary">＋ Log ACH Batch</a>
@@ -13,9 +27,17 @@
     <table>
       <thead>
         <tr>
-          <th>ACH Date</th><th>Company</th><th>Batch Ref</th>
-          <th>Bank Debit ($)</th><th>Transfers ($)</th><th>Variance</th>
-          <th># Transfers</th><th>Dates Covered</th><th>Status</th><th>Reconciled</th><th></th>
+          {{ sort_th('date',    'ACH Date',  sort, dir) }}
+          {{ sort_th('company', 'Company',   sort, dir) }}
+          {{ sort_th('ref',     'Batch Ref', sort, dir) }}
+          {{ sort_th('amount',  'Bank Debit ($)', sort, dir) }}
+          <th>Transfers ($)</th>
+          <th>Variance</th>
+          <th># Transfers</th>
+          <th>Dates Covered</th>
+          {{ sort_th('status',  'Status',    sort, dir) }}
+          <th>Reconciled</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>

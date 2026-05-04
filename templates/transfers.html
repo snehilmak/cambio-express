@@ -77,6 +77,12 @@
 
 <!-- Single form driving filters + search. Inputs use form="tfForm" so they can live in different regions of the page. -->
 <form method="GET" id="tfForm"></form>
+{# Sort + dir ride along inside the same form so the live-search
+   AJAX fetch picks them up automatically. Sort-header clicks (full
+   page nav) update these hidden inputs on render — they're kept in
+   sync with the URL by the route. #}
+<input type="hidden" name="sort" value="{{ sort or '' }}" form="tfForm">
+<input type="hidden" name="dir"  value="{{ dir  or 'desc' }}" form="tfForm">
 
 <!-- Filters -->
 <div class="card mb-3">
