@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange, month_name
-import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io
+import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile
 from email.message import EmailMessage
 import stripe
 import click
@@ -9542,6 +9542,284 @@ def monthly_report(year,month):
 @admin_required
 def monthly_new():
     today=date.today(); return redirect(url_for("monthly_report",year=today.year,month=today.month))
+
+
+# ── Tax export pack ─────────────────────────────────────────
+#
+# One-button "download my year-end packet" for tax prep. Rolls the
+# whole calendar year into a single ZIP containing:
+#   - transfers_<year>.csv     full ledger including canceled/rejected,
+#                               with Status column so the accountant
+#                               can filter
+#   - monthly_pl_<year>.csv    one row per month — every column from
+#                               MonthlyFinancial plus a derived
+#                               net_income (income − expenses)
+#   - daily_summary_<year>.csv one row per DailyReport with the key
+#                               totals (receipts, disbursements,
+#                               over/short)
+#   - customers_<year>.csv     per-customer totals (count, total
+#                               sent, total fees) — feeds 1099-MISC
+#                               for repeat senders if the operator
+#                               needs to issue any
+#   - README.txt               explains each file
+#
+# Period is a full calendar year. Default = previous year because
+# the typical use case is "do my taxes in February for last year."
+def _tax_pack_year_choices():
+    """Years offered in the year picker: every year that has at least
+    one transfer or one daily report on this store, plus this year and
+    last year (so a brand-new store still sees something to click)."""
+    user = current_user()
+    sid = session.get("store_id")
+    today = date.today()
+    years = {today.year, today.year - 1}
+    if sid:
+        for (y,) in (db.session.query(
+                db.func.extract("year", Transfer.send_date))
+                .filter(Transfer.store_id == sid).distinct().all()):
+            if y is not None:
+                years.add(int(y))
+        for (y,) in (db.session.query(
+                db.func.extract("year", DailyReport.report_date))
+                .filter(DailyReport.store_id == sid).distinct().all()):
+            if y is not None:
+                years.add(int(y))
+    return sorted(years, reverse=True)
+
+
+def _tax_pack_transfers_csv(store_id, year):
+    """Full transfer ledger for the year. Includes canceled / rejected
+    rows so the accountant has the audit trail; Status column lets them
+    filter in Excel."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Date", "Company", "Service Type", "Sender", "Sender Phone",
+        "Recipient", "Country", "Send Amount", "Fee", "Federal Tax",
+        "Total Collected", "Confirm #", "Batch", "Status",
+        "Cashier", "Created By", "Notes",
+    ])
+    rows = (Transfer.query.filter(
+                Transfer.store_id == store_id,
+                Transfer.send_date >= date(year, 1, 1),
+                Transfer.send_date <= date(year, 12, 31),
+            ).order_by(Transfer.send_date, Transfer.id).all())
+    user_ids = {t.created_by for t in rows if t.created_by}
+    users = ({u.id: u for u in
+              User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
+    for t in rows:
+        u = users.get(t.created_by) if t.created_by else None
+        creator = (u.full_name or u.username) if u else ""
+        phone = ((t.sender_phone_country or "") + (t.sender_phone or "")).strip()
+        total = (t.send_amount or 0) + (t.fee or 0) + (t.federal_tax or 0)
+        w.writerow([
+            t.send_date.isoformat() if t.send_date else "",
+            t.company or "",
+            t.service_type or "",
+            t.sender_name or "",
+            phone,
+            t.recipient_name or "",
+            t.country or "",
+            f"{t.send_amount:.2f}" if t.send_amount is not None else "",
+            f"{t.fee:.2f}" if t.fee is not None else "",
+            f"{t.federal_tax:.2f}" if t.federal_tax is not None else "",
+            f"{total:.2f}",
+            t.confirm_number or "",
+            t.batch_id or "",
+            t.status or "",
+            t.employee_name or "",
+            creator,
+            t.internal_notes or "",
+        ])
+    return buf.getvalue()
+
+
+def _tax_pack_monthly_pl_csv(store_id, year):
+    """Per-month roll-up of the MonthlyFinancial table. Every column
+    plus a derived net_income line so the accountant doesn't have to
+    sum manually."""
+    rows = {r.month: r for r in
+            MonthlyFinancial.query.filter_by(
+                store_id=store_id, year=year).all()}
+    # Pull a representative row to discover columns dynamically; falls
+    # back to a hardcoded subset if the table is empty for this year.
+    sample = next(iter(rows.values()), None)
+    if sample is None:
+        # Empty year — emit just the header so the file is valid.
+        money_cols = ["taxable_sales", "non_taxable", "over_short"]
+    else:
+        money_cols = [c.name for c in MonthlyFinancial.__table__.columns
+                      if c.name not in ("id", "store_id", "year", "month",
+                                          "notes", "updated_at")]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Month"] + [c.replace("_", " ").title() for c in money_cols] + ["Net Income"])
+    for m in range(1, 13):
+        r = rows.get(m)
+        if r:
+            values = [getattr(r, c, 0.0) or 0.0 for c in money_cols]
+            net = float(r.net_income or 0.0)
+        else:
+            values = [0.0] * len(money_cols)
+            net = 0.0
+        w.writerow([f"{year}-{m:02d}"]
+                   + [f"{v:.2f}" for v in values]
+                   + [f"{net:.2f}"])
+    return buf.getvalue()
+
+
+def _tax_pack_daily_summary_csv(store_id, year):
+    """One row per DailyReport in the year. Receipts + Disbursements +
+    over/short are the headline numbers an accountant cross-checks
+    against the bank statement."""
+    rows = (DailyReport.query.filter(
+                DailyReport.store_id == store_id,
+                DailyReport.report_date >= date(year, 1, 1),
+                DailyReport.report_date <= date(year, 12, 31),
+            ).order_by(DailyReport.report_date).all())
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Date", "Total Receipts", "Total Disbursements",
+                "Over/Short", "Locked"])
+    for r in rows:
+        receipts = float(getattr(r, "total_receipts", 0.0) or 0.0)
+        disbursed = float(getattr(r, "total_disbursements", 0.0) or 0.0)
+        os_ = float(getattr(r, "over_short", 0.0) or 0.0)
+        locked = "yes" if getattr(r, "locked_at", None) else "no"
+        w.writerow([r.report_date.isoformat(), f"{receipts:.2f}",
+                    f"{disbursed:.2f}", f"{os_:.2f}", locked])
+    return buf.getvalue()
+
+
+def _tax_pack_customers_csv(store_id, year):
+    """Per-customer totals for the year — count, total sent, total
+    fees. Useful as a starting point for 1099-MISC reporting (you'd
+    file one for any customer over the IRS threshold for the
+    relevant tax year). Walk-in transfers (no Customer link) are
+    bucketed as "(walk-in)"."""
+    rows = (db.session.query(
+        Transfer.customer_id,
+        Transfer.sender_name,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+    ).filter(*_active_transfers_period_filters(
+                [store_id], date(year, 1, 1), date(year, 12, 31)))
+     .group_by(Transfer.customer_id, Transfer.sender_name)
+     .order_by(db.desc(db.func.sum(Transfer.send_amount))).all())
+    cust_ids = {cid for cid, *_ in rows if cid is not None}
+    customers = ({c.id: c for c in
+                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
+                 if cust_ids else {})
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Customer", "Phone", "Address", "Count",
+                "Total Sent", "Total Fees"])
+    for cid, sender_name, count, sent, fees in rows:
+        if cid and cid in customers:
+            c = customers[cid]
+            name = c.full_name or sender_name or "(no name)"
+            phone = (f"{c.phone_country}{c.phone_number}"
+                     if c.phone_number else "")
+            address = c.address or ""
+        else:
+            name = sender_name or "(walk-in)"
+            phone = ""
+            address = ""
+        w.writerow([name, phone, address, int(count or 0),
+                    f"{float(sent or 0):.2f}", f"{float(fees or 0):.2f}"])
+    return buf.getvalue()
+
+
+def _tax_pack_readme(store, year):
+    """Plain-text README explaining each file. Hand-write the copy —
+    operators give this whole pack to their accountant, so the README
+    is the only context the accountant has."""
+    return (
+        f"DineroBook Tax Export Pack\n"
+        f"==========================\n"
+        f"Store:  {store.name}\n"
+        f"Year:   {year}\n"
+        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"\n"
+        f"Files in this archive:\n"
+        f"\n"
+        f"  transfers_{year}.csv\n"
+        f"      Full transfer ledger for the calendar year. Includes\n"
+        f"      Canceled / Rejected rows so you can verify nothing is\n"
+        f"      missing — filter the Status column in Excel/Sheets to\n"
+        f"      isolate revenue-bearing transfers.\n"
+        f"\n"
+        f"  monthly_pl_{year}.csv\n"
+        f"      Month-by-month profit & loss roll-up matching the\n"
+        f"      Monthly P&L page. Net Income column is income minus\n"
+        f"      expenses for the month.\n"
+        f"\n"
+        f"  daily_summary_{year}.csv\n"
+        f"      One row per closed daily book — receipts, disbursements,\n"
+        f"      over/short. Cross-check against bank deposits.\n"
+        f"\n"
+        f"  customers_{year}.csv\n"
+        f"      Per-customer totals (count, total sent, fees). Starting\n"
+        f"      point for 1099-MISC if any single customer crossed the\n"
+        f"      IRS reporting threshold for the year.\n"
+        f"\n"
+        f"All money values are USD. Send amounts are what the customer\n"
+        f"handed over; fees are what the store retained; federal tax is\n"
+        f"the portion that left with the ACH withdrawal (not store\n"
+        f"revenue).\n"
+        f"\n"
+        f"Questions: support@dinerobook.com\n"
+    )
+
+
+def _build_tax_pack_zip(store, year):
+    """Assemble every CSV + README into an in-memory ZIP and return
+    the bytes. Caller wraps in a Response with the right headers."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w",
+                          compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"transfers_{year}.csv",
+                    _tax_pack_transfers_csv(store.id, year))
+        zf.writestr(f"monthly_pl_{year}.csv",
+                    _tax_pack_monthly_pl_csv(store.id, year))
+        zf.writestr(f"daily_summary_{year}.csv",
+                    _tax_pack_daily_summary_csv(store.id, year))
+        zf.writestr(f"customers_{year}.csv",
+                    _tax_pack_customers_csv(store.id, year))
+        zf.writestr("README.txt", _tax_pack_readme(store, year))
+    return buf.getvalue()
+
+
+@app.route("/admin/tax-export")
+@admin_required
+def admin_tax_export():
+    user = current_user(); store = current_store()
+    today = date.today()
+    selected = request.args.get("year", "").strip()
+    try:
+        selected_year = int(selected) if selected else today.year - 1
+    except ValueError:
+        selected_year = today.year - 1
+    return render_template("admin_tax_export.html",
+        user=user, store=store,
+        year_choices=_tax_pack_year_choices(),
+        selected_year=selected_year)
+
+
+@app.route("/admin/tax-export.zip")
+@admin_required
+def admin_tax_export_zip():
+    store = current_store()
+    try:
+        year = int(request.args.get("year", date.today().year - 1))
+    except ValueError:
+        year = date.today().year - 1
+    payload = _build_tax_pack_zip(store, year)
+    fname = f"dinerobook_tax_pack_{store.slug}_{year}.zip"
+    return Response(payload, mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # ── Return Checks ────────────────────────────────────────────
