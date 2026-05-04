@@ -62,8 +62,50 @@ any cadence.
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
 - [ ] Mask phone numbers in list views per compliance.
 - [ ] CSV export on the customer directory.
+- [ ] **Email locked-day digest to owner** — when a daily book is locked
+      via the lock button, fire off a one-page HTML/PDF summary email
+      to the store owner. Use `Store.locked_at` as the trigger so it
+      fires for the right calendar day even when the book is locked
+      late (cashiers often close out the next morning). Pairs with
+      the notifications-toggle work in the personal-settings backlog.
 
-## SimpleFIN removal (after Stripe FC is proven)
+## Compliance (gated on check-cashing feature)
+- [ ] **OFAC SDN screening** — once we expand from remittance
+      bookkeeping into check cashing (or any role where DineroBook
+      acts as the regulated party rather than a pure ledger of what
+      Intermex/Maxi/Barri already screened), implement weekly SDN
+      list ingest + nightly customer-name match + flagged-customer
+      review queue. Today this isn't required because the money-
+      transfer companies do the screening upstream and DineroBook
+      is downstream bookkeeping; if/when check cashing lands, this
+      becomes a regulatory must-have and should ship in the same
+      release.
+
+## Stripe Issuing (research first, then build)
+- [ ] **Phase 1: Research.** Stripe Issuing lets us mint virtual or
+      physical cards tied to a funded Issuing balance. Open questions
+      before any code: (a) money-transmitter licensing implications
+      — does issuing a payment card to a store change DineroBook's
+      regulatory category in any state where the store operates?
+      (b) Cardholder vs. company card model — issue to the store
+      entity, or to individual employees with spending limits per
+      role? (c) Funding model — auto-sweep from the store's bank
+      account (Stripe FC), pre-funded balance, or credit line?
+      (d) Reconciliation flow — Issuing transactions land via
+      webhook; do they auto-post to the daily book as expenses, or
+      flow through bank-rule categorisation like FC transactions?
+      (e) Liability for fraud / disputes / chargebacks — who eats
+      the loss if a card is cloned? Until these are answered with
+      legal + Stripe-account-manager input, do not start
+      implementation.
+- [ ] **Phase 2: Wiring (after research clears).** New
+      `IssuedCard` + `IssuedCardTransaction` models, Stripe
+      Issuing webhook handler, per-store cardholder onboarding
+      flow on `/admin/settings`, transaction list + categorisation
+      UI mirroring the bank-transactions page, monthly P&L
+      auto-feed for Issuing-tagged categories. Ship behind
+      `addon_issued_cards` feature flag (default False; turn on
+      per-store as part of beta program).
 - [x] Helpers (`simplefin_fetch`, `simplefin_claim_token`, `get_sfin_cfg`),
       routes (`/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`),
       legacy `<details>` section on `/bank`, `bank_data`/`bank_error`/`cfg`
