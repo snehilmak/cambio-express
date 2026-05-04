@@ -1422,6 +1422,42 @@ details[open] > *:not(summary) {
 }
 .report-detail__table tbody tr:hover { background: var(--db-gray-2); }
 
+/* ── Draft-restore banner ────────────────────────────────────
+   Appears above a form when localStorage holds a draft from the
+   last 24h. Sits in the normal flow (above the form), animates in
+   on mount via shared keyframe, and disappears entirely on
+   Restore / Discard. Uses semantic tokens so dark mode just works. */
+.draft-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 12px 16px; margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--db-info, var(--blue));
+  border-radius: 8px;
+  font-size: 13.5px;
+  color: var(--text);
+  animation: draft-banner-in 180ms ease-out;
+}
+.draft-banner__icon {
+  width: 18px; height: 18px;
+  color: var(--db-info, var(--blue));
+  flex: 0 0 auto;
+}
+.draft-banner__text {
+  flex: 1 1 auto; min-width: 200px;
+  color: var(--text);
+}
+.draft-banner__when { color: var(--text); font-weight: 600; }
+.draft-banner .btn { margin-left: auto; }
+.draft-banner .btn + .btn { margin-left: 8px; }
+@keyframes draft-banner-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .draft-banner { animation: none; }
+}
+
 /* ── Report-page print stylesheet ────────────────────────────
    The "Print / PDF" button on every report page hands off to the
    browser's print dialog (where the user picks "Save as PDF" if

@@ -42,7 +42,12 @@
     <a href="{{ url_for('transfers') }}" class="btn btn-outline btn-sm">← Back</a>
   </div>
   <div class="card-body">
-    <form method="POST">
+    {# Autosave drafts only when CREATING — editing existing transfers
+       skips the data-draft-key attribute so we never accidentally
+       overwrite real edits with a stale local draft. The key is scoped
+       to the route name so other forms (daily report, batch) can opt
+       in independently without colliding. #}
+    <form method="POST"{% if not transfer %} data-draft-key="new-transfer"{% endif %}>
 
       <div class="section-title">Transfer Info</div>
       <div class="form-grid">
@@ -461,4 +466,10 @@
   recompute();
 })();
 </script>
+
+{% if not transfer %}
+{# Form-draft autosave. Only loaded on the New Transfer route since
+   editing existing rows shouldn't ever round-trip through localStorage. #}
+<script src="{{ url_for('static', filename='draft-autosave.js', v=STATIC_VERSION) }}" defer></script>
+{% endif %}
 {% endblock %}
