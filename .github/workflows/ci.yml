@@ -68,20 +68,14 @@ jobs:
       # have signature issues. If headless ever fails for missing
       # libs, reintroduce it then.
       - name: Install Playwright browser
+        # No --with-deps: ubuntu-latest already has the GUI/font libs
+        # Chromium needs in headless mode, and `--with-deps` shells out
+        # to apt which is brittle when third-party PPAs (deadsnakes etc.)
+        # have signature issues.
         run: |
           pip install -r requirements-smoke.txt
           playwright --version
           playwright install chromium
-          # Sanity check: the browser binary actually launches.
-          python - <<'PY'
-          from playwright.sync_api import sync_playwright
-          with sync_playwright() as p:
-              b = p.chromium.launch(headless=True, args=["--no-sandbox"])
-              page = b.new_page()
-              page.goto("about:blank")
-              print("playwright OK:", page.url)
-              b.close()
-          PY
 
       - name: Run browser smoke tests
         env:
