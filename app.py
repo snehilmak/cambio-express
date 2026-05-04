@@ -5673,9 +5673,19 @@ def _slug_to_endpoint(slug, *, owner=False, csv=False):
     return ("owner_" + base) if owner else base
 
 
+_VIEW_LABELS = {"summary": "Summary", "graph": "Graph", "detail": "Detail"}
+_GENERIC_VIEW_TEMPLATES = {
+    "graph":  "_report_graph_view.html",
+    "detail": "_report_detail_view.html",
+}
+
+
 def _render_report(template, data_fn, *,
                    slug, title, result_unit, kpis_fn,
                    extra_args=None,
+                   views=None,
+                   graph_label_field=None, graph_value_field=None,
+                   detail_columns=None,
                    **template_kwargs):
     """Run a report's data function, build KPIs from the result, and
     render the report-page template. Wraps the boilerplate every
@@ -5686,14 +5696,36 @@ def _render_report(template, data_fn, *,
     items in `extra_args` are also passed through as template kwargs
     so report-specific Jinja blocks (e.g. high-value-transfers'
     `Min $` filter input) can read them directly.
+
+    `views` is an ordered list of view keys — e.g.
+    `["summary", "graph", "detail"]`. The skeleton renders a bottom
+    tab bar when there's more than one. The active view comes from
+    `?view=` (defaults to the first). Generic templates back the
+    Graph + Detail variants; the report's own template still backs
+    Summary.
+
+    `graph_label_field` + `graph_value_field` configure the generic
+    bar chart in Graph view. `detail_columns` is an ordered list of
+    `(label, key)` tuples for the Detail-view table; if absent we
+    fall back to whatever keys appear on the first row.
     """
     extra_args = extra_args or {}
+    available_views = views or ["summary"]
+    requested_view = (request.args.get("view") or "").strip().lower()
+    if requested_view not in available_views:
+        requested_view = available_views[0]
+
     d_from, d_to, period_label = _report_period(request.args)
     rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
                            **extra_args)
     n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
     is_owner = _is_owner_request()
-    return render_template(template,
+
+    # Pick the right template based on the requested view. Summary
+    # uses the report's own template; Graph + Detail use generics.
+    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
+
+    return render_template(actual_template,
         user=current_user(),
         report_title=title,
         back_endpoint=("owner_reports" if is_owner else "reports"),
@@ -5712,6 +5744,14 @@ def _render_report(template, data_fn, *,
             }),
         rows=rows,
         totals=totals,
+        # View-tab bar
+        active_view=requested_view,
+        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
+                         for v in available_views],
+        # Generic-view configuration
+        graph_label_field=graph_label_field,
+        graph_value_field=graph_value_field,
+        detail_columns=detail_columns,
         **extra_args,
         **template_kwargs,
     )
@@ -5755,7 +5795,10 @@ def _export_report_csv(data_fn, *, columns, row_fn,
 def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                          kpis_fn, csv_columns, csv_row_fn,
                          csv_totals_fn=None, csv_fname_prefix=None,
-                         extra_args_fn=None):
+                         extra_args_fn=None,
+                         views=None,
+                         graph_label_field=None, graph_value_field=None,
+                         detail_columns=None):
     """Register admin (`/reports/<slug>`) + owner
     (`/owner/reports/<slug>`) HTML and CSV routes for a single report.
     Endpoints follow the convention `report_<slug_underscored>(_csv)?`
@@ -5777,6 +5820,10 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
         return _render_report(template, data_fn,
             slug=slug, title=title, result_unit=result_unit,
             kpis_fn=kpis_fn, extra_args=extra_args_fn(),
+            views=views,
+            graph_label_field=graph_label_field,
+            graph_value_field=graph_value_field,
+            detail_columns=detail_columns,
         )
 
     def _csv():
@@ -6643,6 +6690,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="company", graph_value_field="sent",
+    detail_columns=[
+        ("Company", "company"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6665,6 +6719,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="service_type", graph_value_field="sent",
+    detail_columns=[
+        ("Service Type", "service_type"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6687,6 +6748,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="employee", graph_value_field="sent",
+    detail_columns=[
+        ("Employee", "employee"), ("Username", "username"),
+        ("Count", "count"), ("Total Sent", "sent"),
+        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6767,6 +6835,13 @@ _make_report_routes(
     csv_totals_fn=lambda t: ["TOTAL", t["count"],
                              f"{t['sent']:.2f}", f"{t['fees']:.2f}",
                              f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="country", graph_value_field="sent",
+    detail_columns=[
+        ("Country", "country"), ("Count", "count"),
+        ("Total Sent", "sent"), ("Fees", "fees"),
+        ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -6978,6 +7053,12 @@ _make_report_routes(
     csv_row_fn=lambda r: [r["company"], r["count"],
                           f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
     csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="company", graph_value_field="amount",
+    detail_columns=[
+        ("Company", "company"), ("Batch Count", "count"),
+        ("Total ACH", "amount"), ("Avg / Batch", "avg"),
+    ],
 )
 
 _make_report_routes(
@@ -7228,12 +7309,22 @@ def superadmin_audit_log():
 def _render_superadmin_report(template, data_fn, *,
                                slug, title, result_unit, kpis_fn,
                                extra_args=None,
+                               views=None,
+                               graph_label_field=None,
+                               graph_value_field=None,
+                               detail_columns=None,
                                **template_kwargs):
     extra_args = extra_args or {}
+    available_views = views or ["summary"]
+    requested_view = (request.args.get("view") or "").strip().lower()
+    if requested_view not in available_views:
+        requested_view = available_views[0]
+
     d_from, d_to, period_label = _report_period(request.args)
     rows, totals = data_fn(d_from, d_to, **extra_args)
     n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
-    return render_template(template,
+    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
+    return render_template(actual_template,
         user=current_user(),
         report_title=title,
         back_endpoint="superadmin_reports",
@@ -7252,6 +7343,12 @@ def _render_superadmin_report(template, data_fn, *,
                            }),
         rows=rows,
         totals=totals,
+        active_view=requested_view,
+        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
+                         for v in available_views],
+        graph_label_field=graph_label_field,
+        graph_value_field=graph_value_field,
+        detail_columns=detail_columns,
         **extra_args,
         **template_kwargs,
     )
@@ -7286,7 +7383,11 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
                                      csv_columns, csv_row_fn,
                                      csv_totals_fn=None,
                                      csv_fname_prefix=None,
-                                     extra_args_fn=None):
+                                     extra_args_fn=None,
+                                     views=None,
+                                     graph_label_field=None,
+                                     graph_value_field=None,
+                                     detail_columns=None):
     """Register `/superadmin/reports/<slug>(.csv)?` routes for a
     superadmin report. Same idea as `_make_report_routes` but
     superadmin-only — no owner mirror."""
@@ -7298,6 +7399,10 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
         return _render_superadmin_report(template, data_fn,
             slug=slug, title=title, result_unit=result_unit,
             kpis_fn=kpis_fn, extra_args=extra_args_fn(),
+            views=views,
+            graph_label_field=graph_label_field,
+            graph_value_field=graph_value_field,
+            detail_columns=detail_columns,
         )
 
     def _csv():

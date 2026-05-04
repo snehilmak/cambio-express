@@ -1297,3 +1297,127 @@ details[open] > *:not(summary) {
 }
 .report-comparison-legend__current { color: var(--db-neon); }
 .report-comparison-legend__prior   { color: var(--db-gray-7); }
+
+/* ── Report-page bottom tab bar ──────────────────────────────
+   Sub-tabs at the bottom of a report page that switch between
+   Summary / Graph / Detail views of the same query. Hidden when
+   the report only has one view registered. */
+.report-page__view-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 24px;
+  padding: 6px;
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 14px;
+  overflow-x: auto;
+}
+.report-page__view-tab {
+  flex: 1;
+  min-width: 110px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-family: var(--db-font-body);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  color: var(--db-gray-7);
+  transition: background 0.12s, color 0.12s;
+}
+.report-page__view-tab:hover {
+  background: var(--db-gray-2);
+  color: var(--db-gray-9);
+}
+.report-page__view-tab.is-active {
+  background: var(--db-bg-popover);
+  color: var(--db-neon);
+  box-shadow: 0 0 0 1px var(--db-gray-3) inset;
+}
+
+/* ── Generic Graph view (bar chart) ──────────────────────────
+   Renders rows as horizontal bars sized proportionally to the
+   per-row `graph_value_field` value. Pure CSS — no chart lib. */
+.report-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+.report-graph__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 3fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--db-bg-elevated);
+  border: 1px solid var(--db-gray-3);
+  border-radius: 10px;
+}
+.report-graph__label {
+  font-size: 13px;
+  color: var(--db-gray-9);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.report-graph__bar-track {
+  background: var(--db-gray-2);
+  border-radius: 999px;
+  height: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.report-graph__bar {
+  background: linear-gradient(90deg, var(--db-neon-glow-25), var(--db-neon));
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease-out;
+}
+.report-graph__value {
+  font-size: 13.5px;
+  color: var(--db-gray-9);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 90px;
+}
+
+@media (max-width: 720px) {
+  .report-graph__row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .report-graph__value { text-align: left; }
+}
+
+/* ── Generic Detail view (table) ─────────────────────────────
+   Auto-rendered table of every row's keys/values when a report
+   opts into the "detail" view. Reuses the existing global
+   table styling but tightens row padding for dense data. */
+.report-detail__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.report-detail__table th {
+  text-align: left;
+  font-family: var(--db-font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--db-gray-6);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--db-gray-3);
+  background: var(--db-bg-input);
+}
+.report-detail__table td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--db-gray-2);
+  font-size: 12.5px;
+  color: var(--db-gray-9);
+  vertical-align: top;
+}
+.report-detail__table tbody tr:hover { background: var(--db-gray-2); }

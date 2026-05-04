@@ -82,5 +82,17 @@
   <div class="report-page__rows">
     {% block report_rows %}{% endblock %}
   </div>
+
+  {% if available_views and available_views|length > 1 %}
+  <div class="report-page__view-tabs">
+    {% for view_key, view_label in available_views %}
+    {% set tab_qs = {'from': date_from, 'to': date_to, 'view': view_key} %}
+    <a href="?{% for k, v in tab_qs.items() %}{{ k }}={{ v }}{% if not loop.last %}&amp;{% endif %}{% endfor %}"
+       class="report-page__view-tab {% if view_key == active_view %}is-active{% endif %}">
+      {{ view_label }}
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
