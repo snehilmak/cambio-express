@@ -8581,18 +8581,27 @@ def api_customers_search():
     store. Standalone stores (no owner links) see only their own customers.
     Unrelated stores can never see each other's customers.
 
-    Searches phone number OR name (not address — too noisy). 2-char minimum
-    on the query so the dropdown doesn't blast the whole directory. Address
-    rides along in each payload so the UI can auto-fill it on pick.
+    Returns a JSON envelope:
+        { "matches":     [ ...exact substring matches... ],
+          "suggestions": [ ...fuzzy near-misses, when query is long enough... ] }
+
+    The suggestions list is the dedup-prevention hook: when a cashier types
+    "Maria Gonzales" but the record is "Maria Gonzalez", a substring search
+    returns nothing — the suggestion list catches it via difflib's
+    SequenceMatcher and lets the cashier pick the existing row instead of
+    creating a duplicate. Suggestions are populated only when the query is
+    >= 4 chars and there's room (matches < 5) so the regular case stays fast.
     """
     sid = session.get("store_id")
     if not sid:
-        return jsonify([])
+        return jsonify({"matches": [], "suggestions": []})
     q_text = request.args.get("q", "").strip()
     if len(q_text) < 2:
-        return jsonify([])
-    like = f"%{q_text}%"
+        return jsonify({"matches": [], "suggestions": []})
     scope_ids = sibling_store_ids(sid)
+
+    # ── Exact-substring matches (the existing fast path) ─────
+    like = f"%{q_text}%"
     rows = (Customer.query
             .filter(Customer.store_id.in_(scope_ids))
             .filter(db.or_(
@@ -8602,14 +8611,90 @@ def api_customers_search():
             .order_by(Customer.updated_at.desc())
             .limit(10)
             .all())
+    matched_ids = {c.id for c in rows}
+
+    # ── Fuzzy near-miss suggestions ──────────────────────────
+    # Pulled from the most-recently-updated 200 customers so we don't
+    # scan the whole directory on every keystroke. SequenceMatcher.ratio
+    # on 200 short strings is ~0.5ms — well under the autocomplete
+    # debounce window. Threshold 0.72 catches "Gonzales/Gonzalez" but
+    # not "Maria/Madison" (different name entirely).
+    suggestions = []
+    if len(q_text) >= 4 and len(rows) < 5:
+        from difflib import SequenceMatcher
+        q_lower = q_text.lower()
+        candidates = (Customer.query
+                      .filter(Customer.store_id.in_(scope_ids))
+                      .order_by(Customer.updated_at.desc())
+                      .limit(200).all())
+        scored = []
+        for c in candidates:
+            if c.id in matched_ids:
+                continue
+            name = (c.full_name or "").lower()
+            if not name:
+                continue
+            ratio = SequenceMatcher(None, q_lower, name).ratio()
+            if ratio >= 0.72:
+                scored.append((ratio, c))
+        scored.sort(key=lambda t: t[0], reverse=True)
+        suggestions = [c for _, c in scored[:3]]
+
     # Precompute the home-store name for rows not owned by the current
     # store so the UI can label "from Store A" on cross-store matches.
-    other_store_ids = {c.store_id for c in rows if c.store_id != sid}
+    all_rows = list(rows) + list(suggestions)
+    other_store_ids = {c.store_id for c in all_rows if c.store_id != sid}
     home_names = {}
     if other_store_ids:
         home_names = {s.id: s.name for s in
                       Store.query.filter(Store.id.in_(other_store_ids)).all()}
-    return jsonify([c.to_dict(current_store_id=sid, home_names=home_names) for c in rows])
+    return jsonify({
+        "matches":     [c.to_dict(current_store_id=sid, home_names=home_names)
+                        for c in rows],
+        "suggestions": [c.to_dict(current_store_id=sid, home_names=home_names)
+                        for c in suggestions],
+    })
+
+
+@app.route("/api/customers/<int:cid>/recent-recipients")
+@login_required
+def api_customer_recent_recipients(cid):
+    """Last N distinct recipients this customer has sent to. Powers the
+    "recent recipients" chip row above the recipient_name input on the
+    transfer form — most senders send to the same 1-2 people, so a
+    one-tap chip cuts a lot of typing.
+
+    Scope is the umbrella so a returning sender at Store B sees the same
+    chips they'd see at Store A. Excludes Canceled / Rejected — recipients
+    of failed transfers aren't ones the sender will reuse."""
+    sid = session.get("store_id")
+    if not sid:
+        return jsonify([])
+    scope_ids = sibling_store_ids(sid)
+    cust = Customer.query.filter(
+        Customer.id == cid,
+        Customer.store_id.in_(scope_ids),
+    ).first()
+    if not cust:
+        return jsonify([])
+    rows = (db.session.query(
+        Transfer.recipient_name,
+        Transfer.country,
+        Transfer.recipient_phone,
+        db.func.max(Transfer.send_date),
+    ).filter(
+        Transfer.customer_id == cid,
+        Transfer.store_id.in_(scope_ids),
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+        Transfer.recipient_name != "",
+    ).group_by(Transfer.recipient_name, Transfer.country,
+               Transfer.recipient_phone)
+     .order_by(db.desc(db.func.max(Transfer.send_date)))
+     .limit(5).all())
+    return jsonify([
+        {"name": name, "country": country, "phone": phone}
+        for name, country, phone, _last in rows
+    ])
 
 # ── Transfers ────────────────────────────────────────────────
 @app.route("/transfers")
