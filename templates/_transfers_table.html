@@ -2,19 +2,39 @@
    for the initial server render, and returned via /transfers?partial=1 as
    HTML inside a JSON envelope for live-search AJAX swaps. Keep this file
    HTML-only — all variables come from the transfers() route. #}
+{# Macro: a sortable <th>. Click toggles asc/desc; clicking a different
+   column starts at asc. The arrow indicator (▲/▼) renders only on the
+   active column — non-active headers stay clean. The link is a full
+   page navigation; on arrival, the hidden sort/dir inputs in the form
+   carry the new values into the next live-search fetch. #}
+{% macro sort_th(slug, label, sort, dir, base_args, klass='') %}
+  {% set is_active = (sort == slug) %}
+  {% set next_dir = 'desc' if (is_active and dir == 'asc') else ('asc' if is_active else 'desc') %}
+  {% set arrow = ('▲' if dir == 'asc' else '▼') if is_active else '' %}
+  <th class="th-sortable{% if is_active %} th-sortable--active{% endif %} {{ klass }}">
+    <a href="{{ url_for('transfers', sort=slug, dir=next_dir, **base_args) }}" class="th-sort-link">
+      {{ label }}{% if arrow %} <span class="th-sort-arrow">{{ arrow }}</span>{% endif %}
+    </a>
+  </th>
+{% endmacro %}
+{% set _sort_args = {
+  'company': company, 'status': status, 'date_from': date_from,
+  'date_to': date_to, 'sender': sender, 'recipient': recipient,
+  'country': country, 'confirm': confirm, 'batch': batch, 'q': q
+} %}
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
-        <th>Date</th>
-        <th>Sender</th>
-        <th>Company</th>
-        <th>Amount</th>
-        <th>Recipient</th>
-        <th>Country</th>
-        <th>Confirm #</th>
-        <th>Batch</th>
-        <th>Status</th>
+        {{ sort_th('date',      'Date',      sort, dir, _sort_args) }}
+        {{ sort_th('sender',    'Sender',    sort, dir, _sort_args) }}
+        {{ sort_th('company',   'Company',   sort, dir, _sort_args) }}
+        {{ sort_th('amount',    'Amount',    sort, dir, _sort_args) }}
+        {{ sort_th('recipient', 'Recipient', sort, dir, _sort_args) }}
+        {{ sort_th('country',   'Country',   sort, dir, _sort_args) }}
+        {{ sort_th('confirm',   'Confirm #', sort, dir, _sort_args) }}
+        {{ sort_th('batch',     'Batch',     sort, dir, _sort_args) }}
+        {{ sort_th('status',    'Status',    sort, dir, _sort_args) }}
         <th></th>
       </tr>
       <tr class="col-search-row">
@@ -99,7 +119,7 @@
 <div class="tf-pager">
   <div class="pg-info">Showing {{ start }}–{{ end }} of {{ total }}</div>
   <div class="pg-nav">
-    {% set base_args = {'company': company, 'status': status, 'date_from': date_from, 'date_to': date_to, 'sender': sender, 'recipient': recipient, 'country': country, 'confirm': confirm, 'batch': batch, 'q': q} %}
+    {% set base_args = {'company': company, 'status': status, 'date_from': date_from, 'date_to': date_to, 'sender': sender, 'recipient': recipient, 'country': country, 'confirm': confirm, 'batch': batch, 'q': q, 'sort': sort, 'dir': dir} %}
     {% if page > 1 %}
       <a href="{{ url_for('transfers', page=page-1, **base_args) }}">← Prev</a>
     {% else %}

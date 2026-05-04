@@ -1422,6 +1422,32 @@ details[open] > *:not(summary) {
 }
 .report-detail__table tbody tr:hover { background: var(--db-gray-2); }
 
+/* ── Sortable table headers ─────────────────────────────────
+   Used by /transfers, /batches, and any table whose route accepts
+   ?sort=<col>&dir=asc|desc query params. The header link inherits
+   the table's `thead th` styling for color/typography; the active
+   column gets a subtle hover effect and an arrow indicator. */
+.th-sortable .th-sort-link {
+  color: inherit;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.th-sortable .th-sort-link:hover {
+  color: var(--db-neon, var(--blue));
+}
+.th-sortable--active .th-sort-link {
+  color: var(--db-neon, var(--blue));
+}
+.th-sort-arrow {
+  font-size: 9px;
+  opacity: 0.85;
+  line-height: 1;
+}
+
 /* ── Loading skeletons (live-search tables) ─────────────────
    Applied to <tbody> while a `?partial=1` fetch is in flight.
    The JS clones N skeleton rows matching the table's column
@@ -1523,8 +1549,8 @@ details[open] > *:not(summary) {
 }
 
 /* Reduced-motion: stop the skeleton shimmer + draft-banner mount
-   animation (purely decorative). The empty-row layout has no motion
-   to strip. */
+   animation (both purely decorative). Sortable-header links and
+   empty-row layouts have no motion of their own to strip. */
 @media (prefers-reduced-motion: reduce) {
   .tbl-skel { animation: none; }
   .draft-banner { animation: none; }
