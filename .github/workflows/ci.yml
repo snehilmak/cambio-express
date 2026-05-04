@@ -42,6 +42,8 @@ jobs:
         # --fail-under is our regression guard against coverage drops. Current
         # floor is 60 (we sit around 62); raise it each time we clear
         # a ~5pt margin so new code is incentivized to carry its own tests.
+        # tests/smoke/ excluded here — that layer needs Playwright + a
+        # real browser and runs in the dedicated step below.
         env:
           DATABASE_URL: "sqlite:///:memory:"
           SECRET_KEY: "ci-secret"
@@ -50,5 +52,25 @@ jobs:
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: |
-          coverage run --source=app -m pytest -q
+          coverage run --source=app -m pytest -q --ignore=tests/smoke
           coverage report --fail-under=60
+
+      # ── Browser smoke layer ───────────────────────────────────
+      # Catches silent JS errors in the page chrome — the gap that
+      # let PR #197 (owner avatar dropdown) and PR #198 (return-check
+      # +Payment button) ship. Runs after the unit suite; if the unit
+      # suite fails first we don't pay the Chromium-download cost.
+      - name: Install Playwright browser
+        run: |
+          pip install -r requirements-smoke.txt
+          playwright install --with-deps chromium
+
+      - name: Run browser smoke tests
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+          SECRET_KEY: "ci-secret"
+          STRIPE_SECRET_KEY: "sk_test_ci"
+          STRIPE_BASIC_PRICE_ID: "price_basic_ci"
+          STRIPE_PRO_PRICE_ID: "price_pro_ci"
+          STRIPE_WEBHOOK_SECRET: "whsec_ci"
+        run: pytest tests/smoke/ -v

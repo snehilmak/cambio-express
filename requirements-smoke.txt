@@ -1,0 +1,12 @@
+# Browser-based smoke tests (tests/smoke/). Kept separate from
+# requirements.txt so the production / dev install stays small —
+# Playwright pulls ~150 MB of Chromium binaries on first run.
+#
+# Install path:
+#   pip install -r requirements-smoke.txt
+#   playwright install chromium
+#
+# Run:
+#   pytest tests/smoke/
+playwright==1.56.1
+pytest-playwright==0.7.2
