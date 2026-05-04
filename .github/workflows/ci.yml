@@ -60,10 +60,28 @@ jobs:
       # let PR #197 (owner avatar dropdown) and PR #198 (return-check
       # +Payment button) ship. Runs after the unit suite; if the unit
       # suite fails first we don't pay the Chromium-download cost.
+      #
+      # Note: omit `--with-deps` from `playwright install` because
+      # ubuntu-latest already has the GUI/font libraries Chromium
+      # needs in headless mode, and `--with-deps` shells out to
+      # apt which is brittle when third-party PPAs (e.g. deadsnakes)
+      # have signature issues. If headless ever fails for missing
+      # libs, reintroduce it then.
       - name: Install Playwright browser
         run: |
           pip install -r requirements-smoke.txt
-          playwright install --with-deps chromium
+          playwright --version
+          playwright install chromium
+          # Sanity check: the browser binary actually launches.
+          python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as p:
+              b = p.chromium.launch(headless=True, args=["--no-sandbox"])
+              page = b.new_page()
+              page.goto("about:blank")
+              print("playwright OK:", page.url)
+              b.close()
+          PY
 
       - name: Run browser smoke tests
         env:
@@ -73,4 +91,7 @@ jobs:
           STRIPE_BASIC_PRICE_ID: "price_basic_ci"
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
-        run: pytest tests/smoke/ -v
+        # `-v --tb=short` makes any failure self-diagnosing; `-rA`
+        # shows skip/xfail summaries so an unintended import-skip
+        # doesn't quietly mask a regression.
+        run: pytest tests/smoke/ -v --tb=short -rA
