@@ -3,8 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
-from calendar import monthrange
-import requests, base64, os, calendar, logging, re, secrets, string, hashlib, hmac, smtplib, json
+from calendar import monthrange, month_name
+import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io
 from email.message import EmailMessage
 import stripe
 import click
@@ -5723,34 +5723,32 @@ _GENERIC_VIEW_TEMPLATES = {
 }
 
 
-def _render_report(template, data_fn, *,
-                   slug, title, result_unit, kpis_fn,
-                   extra_args=None,
-                   views=None,
-                   graph_label_field=None, graph_value_field=None,
-                   detail_columns=None,
-                   **template_kwargs):
-    """Run a report's data function, build KPIs from the result, and
-    render the report-page template. Wraps the boilerplate every
-    admin / owner report route used to repeat. `slug` drives both
-    the back-link target and the CSV-export endpoint name.
+def _day_start(d):
+    """00:00:00 of date `d` as a naive datetime — used by every SA
+    report data fn that converts a calendar date into the start of
+    the period for SQL timestamp comparisons."""
+    return datetime(d.year, d.month, d.day)
 
-    `kpis_fn` is invoked as `kpis_fn(totals, rows, extra_args)`. Any
-    items in `extra_args` are also passed through as template kwargs
-    so report-specific Jinja blocks (e.g. high-value-transfers'
-    `Min $` filter input) can read them directly.
 
-    `views` is an ordered list of view keys — e.g.
-    `["summary", "graph", "detail"]`. The skeleton renders a bottom
-    tab bar when there's more than one. The active view comes from
-    `?view=` (defaults to the first). Generic templates back the
-    Graph + Detail variants; the report's own template still backs
-    Summary.
+def _day_end(d):
+    """23:59:59 of date `d` as a naive datetime — end-of-period
+    counterpart to `_day_start`."""
+    return datetime(d.year, d.month, d.day, 23, 59, 59)
 
-    `graph_label_field` + `graph_value_field` configure the generic
-    bar chart in Graph view. `detail_columns` is an ordered list of
-    `(label, key)` tuples for the Detail-view table; if absent we
-    fall back to whatever keys appear on the first row.
+
+def _render_report_generic(template, data_fn, *,
+                            slug, title, result_unit, kpis_fn,
+                            scope,           # "store" | "platform"
+                            extra_args=None,
+                            views=None,
+                            graph_label_field=None,
+                            graph_value_field=None,
+                            detail_columns=None,
+                            **template_kwargs):
+    """Shared core for `_render_report` (admin/owner) and
+    `_render_superadmin_report` (platform-wide). `scope` flips the
+    data-fn signature, the `back_endpoint`, and the CSV-export
+    endpoint name; everything else is identical.
     """
     extra_args = extra_args or {}
     available_views = views or ["summary"]
@@ -5759,39 +5757,40 @@ def _render_report(template, data_fn, *,
         requested_view = available_views[0]
 
     d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
-                           **extra_args)
-    n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
-    is_owner = _is_owner_request()
+    if scope == "platform":
+        rows, totals = data_fn(d_from, d_to, **extra_args)
+        back_endpoint = "superadmin_reports"
+        csv_endpoint = f"superadmin_report_{slug.replace('-', '_')}_csv"
+    else:
+        rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
+                               **extra_args)
+        is_owner = _is_owner_request()
+        back_endpoint = "owner_reports" if is_owner else "reports"
+        csv_endpoint = _slug_to_endpoint(slug, owner=is_owner, csv=True)
 
-    # Pick the right template based on the requested view. Summary
-    # uses the report's own template; Graph + Detail use generics.
+    n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
     actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
 
     return render_template(actual_template,
         user=current_user(),
         report_title=title,
-        back_endpoint=("owner_reports" if is_owner else "reports"),
+        back_endpoint=back_endpoint,
         date_from=d_from.isoformat(),
         date_to=d_to.isoformat(),
         period_label=period_label,
         result_count=n,
         result_unit=result_unit[0] if n == 1 else result_unit[1],
         kpis=kpis_fn(totals, rows, extra_args),
-        export_url=url_for(
-            _slug_to_endpoint(slug, owner=is_owner, csv=True),
-            **{
-                "from": d_from.isoformat(),
-                "to":   d_to.isoformat(),
-                **{k: v for k, v in extra_args.items() if v is not None},
-            }),
+        export_url=url_for(csv_endpoint, **{
+            "from": d_from.isoformat(),
+            "to":   d_to.isoformat(),
+            **{k: v for k, v in extra_args.items() if v is not None},
+        }),
         rows=rows,
         totals=totals,
-        # View-tab bar
         active_view=requested_view,
         available_views=[(v, _VIEW_LABELS.get(v, v.title()))
                          for v in available_views],
-        # Generic-view configuration
         graph_label_field=graph_label_field,
         graph_value_field=graph_value_field,
         detail_columns=detail_columns,
@@ -5800,22 +5799,39 @@ def _render_report(template, data_fn, *,
     )
 
 
-def _export_report_csv(data_fn, *, columns, row_fn,
-                        totals_row_fn=None, fname_prefix,
-                        extra_args=None):
-    """Run a report's data function and stream a CSV. `columns` is the
-    header row (list, or a callable `(totals) -> list` for headers
-    derived from the data — period-comparison uses the period labels
-    in the column names). `row_fn(row)` produces each data row;
-    optional `totals_row_fn(totals)` writes a footer row preceded by
-    a blank line. Caller-provided `extra_args` are forwarded to
-    data_fn."""
-    import csv as _csv, io as _io
+def _render_report(template, data_fn, *,
+                   slug, title, result_unit, kpis_fn,
+                   extra_args=None,
+                   views=None,
+                   graph_label_field=None, graph_value_field=None,
+                   detail_columns=None,
+                   **template_kwargs):
+    """Admin / owner report — store-scoped data fn. Thin wrapper
+    around `_render_report_generic`."""
+    return _render_report_generic(template, data_fn,
+        slug=slug, title=title, result_unit=result_unit,
+        kpis_fn=kpis_fn, scope="store",
+        extra_args=extra_args, views=views,
+        graph_label_field=graph_label_field,
+        graph_value_field=graph_value_field,
+        detail_columns=detail_columns,
+        **template_kwargs)
+
+
+def _run_report_csv(data_fn, *, scope, columns, row_fn,
+                     totals_row_fn=None, fname_prefix,
+                     extra_args=None):
+    """Shared core for `_export_report_csv` (admin/owner) and
+    `_export_superadmin_report_csv` (platform-wide). `scope` flips
+    the data-fn signature only — everything else is identical."""
     extra_args = extra_args or {}
     d_from, d_to, _ = _report_period(request.args)
-    rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
-                            **extra_args)
-    buf = _io.StringIO(); w = _csv.writer(buf)
+    if scope == "platform":
+        rows, totals = data_fn(d_from, d_to, **extra_args)
+    else:
+        rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
+                                **extra_args)
+    buf = io.StringIO(); w = csv.writer(buf)
     cols = columns(totals) if callable(columns) else columns
     w.writerow(cols)
     for r in rows:
@@ -5833,6 +5849,16 @@ def _export_report_csv(data_fn, *, columns, row_fn,
                 w.writerow(trow)
     return _csv_response(buf,
         f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+
+
+def _export_report_csv(data_fn, *, columns, row_fn,
+                        totals_row_fn=None, fname_prefix,
+                        extra_args=None):
+    """Admin / owner CSV — store-scoped data fn. Thin wrapper around
+    `_run_report_csv`."""
+    return _run_report_csv(data_fn, scope="store",
+        columns=columns, row_fn=row_fn, totals_row_fn=totals_row_fn,
+        fname_prefix=fname_prefix, extra_args=extra_args)
 
 
 def _make_report_routes(slug, *, title, data_fn, template, result_unit,
@@ -6173,8 +6199,8 @@ def _bank_txn_breakdown_data(store_ids, d_from, d_to):
     """Group BankTransaction rows posted in the period by category_slug,
     summing absolute amount + count. Uncategorised rows bucketed under
     "(uncategorised)". Sorted by absolute amount desc."""
-    month_start = datetime(d_from.year, d_from.month, d_from.day)
-    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    month_start = _day_start(d_from)
+    month_end   = _day_end(d_to)
     rows_q = (db.session.query(
         BankTransaction.category_slug,
         db.func.count(BankTransaction.id),
@@ -6378,8 +6404,8 @@ def _bank_rule_audit_data(store_ids, d_from, d_to):
     rule: count of matched txns + total absolute amount. Manual
     operator overrides (matched_rule_id IS NULL even if categorised)
     are not counted — those weren't a rule firing."""
-    month_start = datetime(d_from.year, d_from.month, d_from.day)
-    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    month_start = _day_start(d_from)
+    month_end   = _day_end(d_to)
     rows_q = (db.session.query(
         BankTransaction.matched_rule_id,
         db.func.count(BankTransaction.id),
@@ -6552,8 +6578,8 @@ def _bank_charges_by_account_data(store_ids, d_from, d_to):
     account. Uses prefix match on category_slug so any per-account
     bank_charge_<last4> rolls up."""
     from sqlalchemy import or_
-    month_start = datetime(d_from.year, d_from.month, d_from.day)
-    month_end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    month_start = _day_start(d_from)
+    month_end   = _day_end(d_to)
     rows_q = (db.session.query(
         BankTransaction.stripe_bank_account_id,
         db.func.count(BankTransaction.id),
@@ -6838,7 +6864,7 @@ _make_report_routes(
     title="Top Senders",
     data_fn=lambda store_ids, d_from, d_to: _top_customers_data(
         store_ids, d_from, d_to, sort_by="count"),
-    template="report_top_senders.html",
+    template="report_top_customers.html",  # identical layout
     result_unit=("sender", "senders"),
     kpis_fn=lambda totals, rows, extra: [
         {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
@@ -7389,68 +7415,25 @@ def _render_superadmin_report(template, data_fn, *,
                                graph_value_field=None,
                                detail_columns=None,
                                **template_kwargs):
-    extra_args = extra_args or {}
-    available_views = views or ["summary"]
-    requested_view = (request.args.get("view") or "").strip().lower()
-    if requested_view not in available_views:
-        requested_view = available_views[0]
-
-    d_from, d_to, period_label = _report_period(request.args)
-    rows, totals = data_fn(d_from, d_to, **extra_args)
-    n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
-    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
-    return render_template(actual_template,
-        user=current_user(),
-        report_title=title,
-        back_endpoint="superadmin_reports",
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=n,
-        result_unit=result_unit[0] if n == 1 else result_unit[1],
-        kpis=kpis_fn(totals, rows, extra_args),
-        export_url=url_for(f"superadmin_report_{slug.replace('-', '_')}_csv",
-                           **{
-                               "from": d_from.isoformat(),
-                               "to":   d_to.isoformat(),
-                               **{k: v for k, v in extra_args.items()
-                                  if v is not None},
-                           }),
-        rows=rows,
-        totals=totals,
-        active_view=requested_view,
-        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
-                         for v in available_views],
+    """Superadmin report — platform-wide data fn. Thin wrapper around
+    `_render_report_generic`."""
+    return _render_report_generic(template, data_fn,
+        slug=slug, title=title, result_unit=result_unit,
+        kpis_fn=kpis_fn, scope="platform",
+        extra_args=extra_args, views=views,
         graph_label_field=graph_label_field,
         graph_value_field=graph_value_field,
         detail_columns=detail_columns,
-        **extra_args,
-        **template_kwargs,
-    )
+        **template_kwargs)
 
 
 def _export_superadmin_report_csv(data_fn, *, columns, row_fn,
                                     totals_row_fn=None, fname_prefix,
                                     extra_args=None):
-    import csv as _csv, io as _io
-    extra_args = extra_args or {}
-    d_from, d_to, _ = _report_period(request.args)
-    rows, totals = data_fn(d_from, d_to, **extra_args)
-    buf = _io.StringIO(); w = _csv.writer(buf)
-    cols = columns(totals) if callable(columns) else columns
-    w.writerow(cols)
-    for r in rows:
-        w.writerow(row_fn(r))
-    if totals_row_fn is not None:
-        result = totals_row_fn(totals)
-        totals_rows = (result if result and isinstance(result[0], (list, tuple))
-                       else [result])
-        if totals_rows:
-            w.writerow([])
-            for trow in totals_rows:
-                w.writerow(trow)
-    return _csv_response(buf,
-        f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
+    """Superadmin CSV — thin wrapper around `_run_report_csv`."""
+    return _run_report_csv(data_fn, scope="platform",
+        columns=columns, row_fn=row_fn, totals_row_fn=totals_row_fn,
+        fname_prefix=fname_prefix, extra_args=extra_args)
 
 
 def _make_superadmin_report_routes(slug, *, title, data_fn, template,
@@ -7507,7 +7490,7 @@ def _sa_active_stores_by_plan_data(d_from, d_to):
     q = (db.session.query(
         Store.plan, db.func.count(Store.id),
     ).filter(
-        Store.created_at <= datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59),
+        Store.created_at <= _day_end(d_to),
     ).group_by(Store.plan).all())
     rows = [{"plan": (plan or "(unknown)").title(),
              "count": int(c or 0)} for plan, c in q]
@@ -7520,8 +7503,8 @@ def _sa_active_stores_by_plan_data(d_from, d_to):
 def _sa_signup_funnel_data(d_from, d_to):
     """Stores created in the period bucketed by current plan. Useful
     for measuring signup → activation success."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
+    end_of_to = _day_end(d_to)
+    start = _day_start(d_from)
     q = (db.session.query(
         Store.plan, db.func.count(Store.id),
     ).filter(
@@ -7540,8 +7523,8 @@ def _sa_login_activity_data(d_from, d_to):
     period. Drives the platform-health DAU / MAU dashboards once we
     have a per-day login log; for now it surfaces the per-role split
     using User.last_login_at."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
+    end_of_to = _day_end(d_to)
+    start = _day_start(d_from)
     q = (db.session.query(
         User.role, db.func.count(User.id),
     ).filter(
@@ -7569,7 +7552,7 @@ _PLAN_MRR = {
 def _sa_mrr_arr_data(d_from, d_to):
     """MRR + ARR by plan/cycle. Counts active (non-trial, non-
     inactive) stores at end of period."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    end_of_to = _day_end(d_to)
     q = (db.session.query(
         Store.plan, Store.billing_cycle, db.func.count(Store.id),
     ).filter(
@@ -7600,13 +7583,14 @@ def _sa_mrr_arr_data(d_from, d_to):
 def _sa_churn_cohort_data(d_from, d_to):
     """Stores cancelled in the period bucketed by signup-month
     cohort. Each row: cohort label + count cancelled + paid stores
-    that survived (still active from that cohort)."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
+    that survived (still active from that cohort).
+
+    Active counts are pulled in a single GROUP BY query (was N+1 —
+    one COUNT per cohort month)."""
     cancelled_q = (Store.query
         .filter(
-            Store.canceled_at >= start,
-            Store.canceled_at <= end_of_to,
+            Store.canceled_at >= _day_start(d_from),
+            Store.canceled_at <= _day_end(d_to),
         ).all())
     by_cohort = {}
     for s in cancelled_q:
@@ -7615,23 +7599,20 @@ def _sa_churn_cohort_data(d_from, d_to):
         cohort = s.created_at.strftime("%Y-%m")
         by_cohort.setdefault(cohort, {"cancelled": 0, "active": 0})
         by_cohort[cohort]["cancelled"] += 1
-    # Active stores from each cohort (still paid, not cancelled).
-    for cohort in list(by_cohort.keys()):
-        try:
-            y, m = map(int, cohort.split("-"))
-        except ValueError:
-            continue
-        co_start = datetime(y, m, 1)
-        # End of cohort month — first of next.
-        co_end = datetime(y + (1 if m == 12 else 0),
-                           1 if m == 12 else m + 1, 1)
-        active = (Store.query.filter(
-            Store.created_at >= co_start,
-            Store.created_at < co_end,
+    if by_cohort:
+        # Single GROUP BY on the strftime expression — one round-trip
+        # for every cohort's active count.
+        cohort_expr = db.func.strftime("%Y-%m", Store.created_at)
+        active_q = (db.session.query(
+            cohort_expr, db.func.count(Store.id),
+        ).filter(
             Store.canceled_at.is_(None),
             Store.plan.in_(["basic", "pro"]),
-        ).count())
-        by_cohort[cohort]["active"] = active
+            cohort_expr.in_(list(by_cohort.keys())),
+        ).group_by(cohort_expr).all())
+        for cohort, count in active_q:
+            if cohort in by_cohort:
+                by_cohort[cohort]["active"] = int(count or 0)
     rows = [{"cohort": cohort,
              "cancelled": v["cancelled"],
              "active":    v["active"],
@@ -7648,8 +7629,8 @@ def _sa_churn_cohort_data(d_from, d_to):
 def _sa_conversion_rate_data(d_from, d_to):
     """For stores that signed up in the period: how many graduated
     from trial to paid by today? Single summary row."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
+    end_of_to = _day_end(d_to)
+    start = _day_start(d_from)
     cohort = Store.query.filter(
         Store.created_at >= start,
         Store.created_at <= end_of_to,
@@ -7672,8 +7653,8 @@ def _sa_time_to_convert_data(d_from, d_to):
     """For paid stores that signed up in the period, average days
     from signup (created_at) to today as a proxy for "activation
     delay" (we don't yet log the exact transition timestamp)."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
+    end_of_to = _day_end(d_to)
+    start = _day_start(d_from)
     paid = Store.query.filter(
         Store.created_at >= start,
         Store.created_at <= end_of_to,
@@ -7700,7 +7681,7 @@ def _sa_trial_expiry_timing_data(d_from, d_to):
     """Bucket trial stores by where they are in their trial window
     (counted at end-of-period). Helps see whether stores convert
     early, late, or roll into expiry."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    end_of_to = _day_end(d_to)
     trials = Store.query.filter(
         Store.plan == "trial",
         Store.created_at <= end_of_to,
@@ -7735,7 +7716,7 @@ def _sa_bank_sync_adoption_data(d_from, d_to):
     Period filter is ignored — adoption is point-in-time at end of
     period. Day filter on adoption-date would need a history table
     we don't have today."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    end_of_to = _day_end(d_to)
     # Stores with bank accounts.
     connected_ids = {sid for (sid,) in db.session.query(
         StripeBankAccount.store_id
@@ -7766,7 +7747,7 @@ def _sa_bank_sync_adoption_data(d_from, d_to):
 def _sa_tv_display_adoption_data(d_from, d_to):
     """Stores with the TV-display add-on enabled (Store.addons
     contains 'tv_display'). Point-in-time at end of period."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    end_of_to = _day_end(d_to)
     stores = Store.query.filter(
         Store.created_at <= end_of_to,
     ).all()
@@ -7834,12 +7815,16 @@ def _sa_passkey_adoption_data(d_from, d_to):
 def _sa_password_resets_data(d_from, d_to):
     """Password-reset token activity in the period. Each row: a
     sample of recent tokens with status (used vs. expired vs. open)."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
-    start = datetime(d_from.year, d_from.month, d_from.day)
     tokens = PasswordResetToken.query.filter(
-        PasswordResetToken.created_at >= start,
-        PasswordResetToken.created_at <= end_of_to,
+        PasswordResetToken.created_at >= _day_start(d_from),
+        PasswordResetToken.created_at <= _day_end(d_to),
     ).order_by(PasswordResetToken.created_at.desc()).all()
+    # Pre-fetch the User rows in a single IN-query — was N+1 with
+    # db.session.get() per token.
+    user_ids = {t.user_id for t in tokens if t.user_id}
+    users = ({u.id: u for u in
+              User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
     now = datetime.utcnow()
     rows = []
     used = expired = open_count = 0
@@ -7850,7 +7835,7 @@ def _sa_password_resets_data(d_from, d_to):
             status = "Expired"; expired += 1
         else:
             status = "Open"; open_count += 1
-        u = db.session.get(User, t.user_id) if t.user_id else None
+        u = users.get(t.user_id) if t.user_id else None
         rows.append({
             "created_at": t.created_at,
             "username":   u.username if u else "(deleted)",
@@ -7867,7 +7852,7 @@ def _sa_password_resets_data(d_from, d_to):
 def _sa_suspended_stores_data(d_from, d_to):
     """Stores currently suspended (is_active=False) or marked
     inactive (plan='inactive'). Point-in-time at end of period."""
-    end_of_to = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    end_of_to = _day_end(d_to)
     suspended = Store.query.filter(
         Store.created_at <= end_of_to,
         db.or_(Store.is_active == False,
@@ -7922,8 +7907,8 @@ def _sa_retention_queue_data(d_from, d_to):
 def _stripe_period_unix(d_from, d_to):
     """Return (gte, lte) Unix timestamps covering [d_from, d_to]
     inclusive. Stripe list APIs filter on `created` with this shape."""
-    start = datetime(d_from.year, d_from.month, d_from.day)
-    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = _day_start(d_from)
+    end   = _day_end(d_to)
     return int(start.timestamp()), int(end.timestamp())
 
 
@@ -8044,8 +8029,8 @@ def _sa_dau_mau_data(d_from, d_to):
     ships, so periods before that show zeroes. The empty-state
     template surfaces this honestly.
     """
-    start = datetime(d_from.year, d_from.month, d_from.day)
-    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = _day_start(d_from)
+    end   = _day_end(d_to)
 
     # Distinct user_id × day. Use SQLite-friendly date() expression.
     day_col = db.func.date(LoginEvent.at)
@@ -8085,8 +8070,8 @@ def _sa_webhook_health_data(d_from, d_to):
     """Inbound Stripe webhook deliveries grouped by status. Sourced
     from WebhookEvent which is populated by the /webhooks/stripe
     handler on every delivery (including signature failures)."""
-    start = datetime(d_from.year, d_from.month, d_from.day)
-    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    start = _day_start(d_from)
+    end   = _day_end(d_to)
     rows_q = (db.session.query(
         WebhookEvent.status, db.func.count(WebhookEvent.id),
     ).filter(
@@ -8455,11 +8440,26 @@ def dashboard():
         pending_ach=ACHBatch.query.filter_by(store_id=sid,reconciled=False).count()
         recent_transfers=Transfer.query.filter_by(store_id=sid).order_by(Transfer.created_at.desc()).limit(8).all()
         recent_batches=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).limit(5).all()
-        company_stats={}
+        # One GROUP BY query for every active company instead of one
+        # full SELECT per company (was a 3× round-trip on every admin
+        # dashboard load).
+        co_q = (db.session.query(
+            Transfer.company,
+            db.func.count(Transfer.id),
+            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+            db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+        ).filter(
+            Transfer.store_id == sid,
+            Transfer.send_date >= month_start,
+            Transfer.status.notin_(["Canceled", "Rejected"]),
+        ).group_by(Transfer.company).all())
+        co_by_name = {co: (int(c or 0), float(t or 0), float(f or 0))
+                      for co, c, t, f in co_q}
+        company_stats = {}
         for co in store_mt_companies(store):
-            rows=Transfer.query.filter(Transfer.store_id==sid,Transfer.company==co,
-                Transfer.send_date>=month_start,Transfer.status.notin_(["Canceled","Rejected"])).all()
-            company_stats[co]={"count":len(rows),"total":sum(r.send_amount for r in rows),"fees":sum(r.fee for r in rows)}
+            count, total, fees = co_by_name.get(co, (0, 0.0, 0.0))
+            company_stats[co] = {"count": count, "total": total,
+                                 "fees": fees}
         today_report=DailyReport.query.filter_by(store_id=sid,report_date=today).first()
         month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=today.year,month=today.month).first()
         stripe_accounts = (StripeBankAccount.query
@@ -9050,7 +9050,7 @@ def daily_list():
     next_month=month+1 if month<12 else 1; next_year=year if month<12 else year+1
     return render_template("daily_list.html",user=user,year=year,month=month,
         days=days_in_month,reports=reports,month_report=month_report,today=today,
-        month_name=calendar.month_name[month],
+        month_name=month_name[month],
         prev_month=prev_month,prev_year=prev_year,next_month=next_month,next_year=next_year)
 
 def _ensure_daily_report(store_id, report_date):
@@ -9533,10 +9533,10 @@ def monthly_report(year,month):
             else:
                 setattr(report, f, fv(f))
         report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
-        db.session.commit(); flash(f"P&L for {calendar.month_name[month]} {year} saved.","success")
+        db.session.commit(); flash(f"P&L for {month_name[month]} {year} saved.","success")
         return redirect(url_for("monthly_list"))
     return render_template("monthly_report.html",user=user,year=year,month=month,
-        month_name=calendar.month_name[month],report=report,auto=auto)
+        month_name=month_name[month],report=report,auto=auto)
 
 @app.route("/monthly/new")
 @admin_required

@@ -1,6 +1,8 @@
-{% extends "_report_page.html" %}
-
-{% block report_rows %}
+{# Reusable Summary card layout used by every "Group X by Y, sum
+   send_amount / fee / federal_tax" admin report (Sales by Company,
+   Sales by Service Type, Top Recipients, By Destination Country).
+   The owning template only sets `row_label_field` to point at the
+   per-row key for the heading. #}
 {% if not rows %}
 <div class="report-empty">No transfers in this period.</div>
 {% endif %}
@@ -8,12 +10,7 @@
 {% for r in rows %}
 <div class="report-card">
   <div class="report-card__head">
-    <div>
-      <div class="report-card__name">{{ r.customer }}</div>
-      {% if r.phone %}
-      <div class="report-card__sub mono">{{ r.phone }}</div>
-      {% endif %}
-    </div>
+    <div class="report-card__name">{{ r[row_label_field] }}</div>
     <div class="report-card__count mono">{{ r.count }}<span class="report-card__count-suffix"> {{ 'transfer' if r.count == 1 else 'transfers' }}</span></div>
   </div>
   <div class="report-card__metrics">
@@ -36,4 +33,3 @@
   </div>
 </div>
 {% endfor %}
-{% endblock %}
