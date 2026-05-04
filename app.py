@@ -5503,6 +5503,10 @@ _REPORT_CATEGORIES = [
              "label": "Sales by Employee",
              "description": "Per-employee transfer count and total volume.",
              "endpoint": "report_sales_by_employee"},
+            {"key": "cashier_productivity",
+             "label": "Cashier Productivity",
+             "description": "Volume + count per cashier on duty (the 'Processed by' selection on each transfer).",
+             "endpoint": "report_cashier_productivity"},
             {"key": "top_customers",
              "label": "Top Customers by Volume",
              "description": "Senders who moved the most in the period.",
@@ -6013,6 +6017,38 @@ def _sales_by_employee_data(store_ids, d_from, d_to):
             r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
             r["username"] = u.username if u else ""
     rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+def _cashier_productivity_data(store_ids, d_from, d_to):
+    """Group active transfers by `Transfer.employee_id` (the cashier
+    on duty who processed the customer) and resolve to StoreEmployee
+    display names. Distinct from `_sales_by_employee_data`, which
+    groups by `created_by` (the login User who saved the row) — this
+    one answers "which cashier handled the most customers?" rather
+    than "which login authored the most rows?". Sorted by transfer
+    count desc so the busiest cashier floats to the top."""
+    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
+                                         Transfer.employee_id)
+    employee_ids = [r["key"] for r in rows if r["key"] is not None]
+    employees = ({e.id: e for e in
+                  StoreEmployee.query.filter(
+                      StoreEmployee.id.in_(employee_ids)).all()}
+                 if employee_ids else {})
+    for r in rows:
+        eid = r.pop("key")
+        if eid is None:
+            r["cashier"] = "(unattributed)"
+            r["is_active"] = False
+        else:
+            e = employees.get(eid)
+            if e:
+                r["cashier"] = e.name
+                r["is_active"] = bool(e.is_active)
+            else:
+                r["cashier"] = f"Cashier #{eid}"
+                r["is_active"] = False
+    rows.sort(key=lambda r: r["count"], reverse=True)
     return rows, totals
 
 
@@ -6835,6 +6871,36 @@ _make_report_routes(
     graph_label_field="employee", graph_value_field="sent",
     detail_columns=[
         ("Employee", "employee"), ("Username", "username"),
+        ("Count", "count"), ("Total Sent", "sent"),
+        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
+)
+
+_make_report_routes(
+    "cashier-productivity",
+    title="Cashier Productivity",
+    data_fn=_cashier_productivity_data,
+    template="report_cashier_productivity.html",
+    result_unit=("cashier", "cashiers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Transfer Count",   "value": f"{totals['count']:,}",    "tone": "primary"},
+        {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}", "tone": "neon"},
+        {"label": "Total Fees",       "value": f"${totals['fees']:,.2f}", "tone": "muted"},
+        {"label": "Cashiers",          "value": f"{len(rows)}",            "tone": "muted"},
+    ],
+    csv_columns=["Cashier", "Active", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["cashier"], "yes" if r["is_active"] else "no",
+                          r["count"], f"{r['sent']:.2f}",
+                          f"{r['fees']:.2f}", f"{r['tax']:.2f}",
+                          f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="cashier", graph_value_field="count",
+    detail_columns=[
+        ("Cashier", "cashier"), ("Active", "is_active"),
         ("Count", "count"), ("Total Sent", "sent"),
         ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
     ],
