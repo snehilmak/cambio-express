@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Tax Export — DineroBook{% endblock %}
+{% block page_title %}Tax Export Pack{% endblock %}
+{% block content %}
+
+<div style="max-width:780px;">
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Year-end packet</span>
+  </div>
+  <div class="card-body">
+    <p class="text-sm text-muted" style="margin-top:0;">
+      Download every transfer, every monthly P&L, and every closed
+      daily book for a calendar year as a single ZIP. Hand the ZIP
+      to your accountant — the README inside explains each file.
+    </p>
+
+    <div style="margin-top:18px;display:flex;gap:12px;align-items:end;flex-wrap:wrap;">
+      <form method="GET" action="{{ url_for('admin_tax_export') }}"
+            style="margin:0;display:flex;gap:12px;align-items:end;flex-wrap:wrap;">
+        <div class="field" style="margin:0;min-width:160px;">
+          <label>Year</label>
+          <select name="year" onchange="this.form.submit()">
+            {% for y in year_choices %}
+            <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </form>
+      <a href="{{ url_for('admin_tax_export_zip', year=selected_year) }}"
+         class="btn btn-primary"
+         style="margin:0;">
+        Download {{ selected_year }} pack (.zip)
+      </a>
+    </div>
+
+    <div class="info-box" style="margin-top:24px;">
+      <div style="font-weight:600;margin-bottom:6px;">What's inside</div>
+      <ul style="margin:0;padding-left:20px;color:var(--text-muted);font-size:13.5px;line-height:1.7;">
+        <li><strong>transfers_{{ selected_year }}.csv</strong> — full transfer ledger including Canceled / Rejected rows. Use the Status column to filter to revenue-bearing transfers.</li>
+        <li><strong>monthly_pl_{{ selected_year }}.csv</strong> — month-by-month P&L roll-up matching the Monthly P&L page. Net Income is income − expenses for the month.</li>
+        <li><strong>daily_summary_{{ selected_year }}.csv</strong> — one row per closed daily book. Cross-check against bank deposits.</li>
+        <li><strong>customers_{{ selected_year }}.csv</strong> — per-customer totals (count, total sent, fees). Starting point for 1099-MISC if any single customer crossed the IRS reporting threshold.</li>
+        <li><strong>README.txt</strong> — plain-text key explaining each file.</li>
+      </ul>
+    </div>
+
+    <div class="text-sm text-muted" style="margin-top:16px;">
+      All money values are USD. Send amounts are what the customer
+      handed over; fees are what the store retained; federal tax is
+      the portion that left with the ACH withdrawal (not store
+      revenue).
+    </div>
+  </div>
+</div>
+</div>
+
+{% endblock %}
