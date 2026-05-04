@@ -92,13 +92,15 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="7" class="text-muted text-sm" style="text-align:center;padding:24px;">
-        {% if q or account_id or date_from or date_to %}
-        No transactions match these filters.
-        {% else %}
-        No transactions yet. Click Sync transactions on the Bank page to fetch.
-        {% endif %}
-      </td></tr>
+      {% if q or account_id or date_from or date_to %}
+        {% with colspan=7, icon='search', title='No transactions match these filters', body='Clear a filter or widen the date range to see more.' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
+      {% else %}
+        {% with colspan=7, icon='bank', title='No transactions yet', body='Connect a bank on the Bank page, then click Sync transactions to pull recent activity.', cta_href=url_for('bank'), cta_text='Go to Bank' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>

@@ -4,7 +4,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange, month_name
-import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io
+import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile
 from email.message import EmailMessage
 import stripe
 import click
@@ -305,6 +305,33 @@ class StoreEmployee(db.Model):
     name       = db.Column(db.String(120), nullable=False)
     is_active  = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class OperatorAuditLog(db.Model):
+    """Generic store-side audit log for operator actions on objects
+    that don't have their own dedicated audit table (daily reports,
+    ACH batches, transfer deletes). Transfers themselves use the
+    older `TransferAudit` table, which is FK-tied to Transfer rows
+    and gets cascade-cleared on transfer delete — so we log the
+    delete here too, where it survives the row it describes.
+
+    Append-only. Read by the admin /admin/audit-log page. Never
+    edited or deleted by the app code (purge-expired-stores is the
+    only reaper, via _STORE_OWNED_MODELS).
+    """
+    __tablename__ = "operator_audit_log"
+    id           = db.Column(db.Integer, primary_key=True)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    user_name    = db.Column(db.String(120), default="")
+    user_role    = db.Column(db.String(20),  default="")
+    target_type  = db.Column(db.String(30),  nullable=False)
+    target_id    = db.Column(db.String(60),  default="")
+    target_label = db.Column(db.String(160), default="")
+    action       = db.Column(db.String(30),  nullable=False)
+    summary      = db.Column(db.Text, default="")
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    user         = db.relationship("User", foreign_keys=[user_id])
+
 
 class TransferAudit(db.Model):
     """Append-only log of everything that happens to a Transfer.
@@ -1500,6 +1527,41 @@ def record_audit(action, target_type="", target_id="", details=""):
     db.session.add(row)
     # Intentionally no commit — caller commits as part of its own transaction.
 
+
+def record_op_audit(action, target_type, target_id, *, label="", summary=""):
+    """Append a row to the per-store operator audit log. Captures
+    user identity + role from session so the audit row stays useful
+    even after the User row is deleted.
+
+    Targets:
+        'transfer' (delete-only — TransferAudit covers create/edit),
+        'daily_report', 'batch'
+
+    Actions:
+        'create', 'update', 'delete', 'lock', 'unlock'
+
+    No commit — caller wraps in the same transaction as the mutation
+    so the audit row rolls back if the mutation fails.
+    """
+    sid = session.get("store_id")
+    if not sid:
+        return
+    u = current_user()
+    if not u:
+        return
+    row = OperatorAuditLog(
+        store_id=sid,
+        user_id=u.id,
+        user_name=(u.full_name or u.username or "")[:120],
+        user_role=str(u.role or "")[:20],
+        target_type=str(target_type)[:30],
+        target_id=str(target_id)[:60],
+        target_label=str(label)[:160],
+        action=str(action)[:30],
+        summary=str(summary)[:2000],
+    )
+    db.session.add(row)
+
 def store_feature_enabled(store, flag_key):
     """Resolve a feature flag for a store: per-store override > global default > True."""
     if store is not None:
@@ -1617,6 +1679,124 @@ def active_announcements():
             continue
         out.append(a)
     return out
+
+
+# ── Platform anomaly detector ──────────────────────────────────
+# Surfaced on the superadmin overview tab. Returns a list of
+# {kind, severity, store, description, href} dicts ranked by severity
+# so the most-urgent items float to the top. Each rule is independent
+# and side-effect free; `_compute_platform_anomalies()` is safe to
+# call on every page render — the underlying queries are GROUP BYs
+# over `transfer` / `daily_report`, both indexed on `store_id`.
+#
+# Severity scale:
+#   "high"   — money is moving in unusual ways; admin should look now
+#   "medium" — something has changed; worth asking the operator about
+#   "low"    — informational; user-facing copy: "FYI"
+#
+# The detector is intentionally narrow today — quiet stores and
+# big over/short variances. New rules go here as `_anomaly_*` helpers
+# called from `_compute_platform_anomalies` in priority order.
+_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS = 30   # store was "active" if it had transfers in this window
+_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS  = 3    # ...but none in the most recent N days
+_ANOMALY_QUIET_MIN_PRIOR_TRANSFERS  = 5    # ignore tiny stores so we don't yell about idle trials
+_ANOMALY_OVERSHORT_LOOKBACK_DAYS = 7
+_ANOMALY_OVERSHORT_MEDIUM_THRESHOLD = 100.0   # |over_short| >= this = medium
+_ANOMALY_OVERSHORT_HIGH_THRESHOLD   = 200.0   # |over_short| >= this = high
+
+
+def _anomaly_quiet_stores(today):
+    """Stores that USED to be active but have gone silent. Returns
+    a list of anomaly dicts. Only flags stores on a paid plan or
+    active trial — inactive / cancelled stores aren't anomalies."""
+    cutoff_active = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS)
+    cutoff_quiet  = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS)
+    # Prior count + most-recent transfer date per store, in one query.
+    rows = (db.session.query(
+        Transfer.store_id,
+        db.func.count(Transfer.id),
+        db.func.max(Transfer.send_date),
+    ).filter(Transfer.send_date >= cutoff_active)
+     .group_by(Transfer.store_id).all())
+    out = []
+    if not rows:
+        return out
+    store_ids = [r[0] for r in rows]
+    stores = {s.id: s for s in
+              Store.query.filter(Store.id.in_(store_ids)).all()}
+    for sid, count, last_date in rows:
+        if int(count or 0) < _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS:
+            continue
+        if not last_date or last_date >= cutoff_quiet:
+            continue
+        store = stores.get(sid)
+        if not store or not store.is_active:
+            continue
+        if store.plan in ("inactive",):
+            continue
+        days_silent = (today - last_date).days
+        out.append({
+            "kind":        "quiet_store",
+            "severity":    "medium",
+            "store":       store,
+            "description": (f"{count} transfers in the last 30 days but "
+                            f"none in {days_silent} days — last on "
+                            f"{last_date.strftime('%b %d')}."),
+            "href":        url_for("superadmin_impersonate", store_id=store.id)
+                            if store else "",
+        })
+    return out
+
+
+def _anomaly_big_over_short(today):
+    """Daily reports in the last week with |over_short| over the
+    threshold. Big variance = either a counting mistake or something
+    worse; either way superadmin should know."""
+    cutoff = today - timedelta(days=_ANOMALY_OVERSHORT_LOOKBACK_DAYS)
+    rows = (DailyReport.query
+            .filter(DailyReport.report_date >= cutoff)
+            .filter(db.func.abs(DailyReport.over_short)
+                    >= _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD)
+            .order_by(db.func.abs(DailyReport.over_short).desc())
+            .limit(20).all())
+    if not rows:
+        return []
+    store_ids = list({r.store_id for r in rows})
+    stores = {s.id: s for s in
+              Store.query.filter(Store.id.in_(store_ids)).all()}
+    out = []
+    for r in rows:
+        store = stores.get(r.store_id)
+        if not store or not store.is_active:
+            continue
+        magnitude = abs(r.over_short)
+        severity = ("high" if magnitude >= _ANOMALY_OVERSHORT_HIGH_THRESHOLD
+                    else "medium")
+        direction = "over" if r.over_short > 0 else "short"
+        out.append({
+            "kind":        "big_over_short",
+            "severity":    severity,
+            "store":       store,
+            "description": (f"Daily book on {r.report_date.strftime('%b %d')}"
+                            f" closed ${magnitude:,.2f} {direction}."),
+            "href":        url_for("superadmin_impersonate", store_id=store.id)
+                            if store else "",
+        })
+    return out
+
+
+def _compute_platform_anomalies():
+    """Aggregate every anomaly rule into a single ranked list. Highest
+    severity first; within a severity tier, most-recent first. Capped
+    at 25 to keep the overview card scannable — if the queue runs
+    over, the truncation is a signal in itself."""
+    today = date.today()
+    anomalies = []
+    anomalies.extend(_anomaly_big_over_short(today))
+    anomalies.extend(_anomaly_quiet_stores(today))
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    anomalies.sort(key=lambda a: severity_rank.get(a["severity"], 99))
+    return anomalies[:25]
 
 
 def _superadmin_dashboard_context():
@@ -4356,6 +4536,102 @@ def owner_dashboard():
                            **_owner_dashboard_context(u, period))
 
 
+@app.route("/owner/pl-rollup")
+@owner_required
+def owner_pl_rollup():
+    """Side-by-side monthly P&L for every store in the owner umbrella.
+
+    The auto-mirrored owner reports (Period P&L, Sales by Company, etc.)
+    SUM across the umbrella into a single bar — useful for "what's the
+    whole portfolio doing?". This page asks the dual question: how does
+    each store stack up against the others for a given month?
+
+    Returns one row per store with revenue / expenses / over-short /
+    net-income, plus a totals footer. Rows sort by net income desc so
+    the strongest performers float to the top.
+    """
+    user = current_user()
+    today = date.today()
+    try:
+        year = int(request.args.get("year", today.year))
+    except ValueError:
+        year = today.year
+    try:
+        month = int(request.args.get("month", today.month))
+    except ValueError:
+        month = today.month
+    if not (1 <= month <= 12):
+        month = today.month
+
+    store_ids = _owner_store_ids(user)
+    stores = (Store.query.filter(Store.id.in_(store_ids))
+              .order_by(Store.name).all() if store_ids else [])
+    pl_rows = (MonthlyFinancial.query.filter(
+                MonthlyFinancial.store_id.in_(store_ids),
+                MonthlyFinancial.year == year,
+                MonthlyFinancial.month == month,
+            ).all() if store_ids else [])
+    pl_by_store = {r.store_id: r for r in pl_rows}
+
+    rows = []
+    totals = {"revenue": 0.0, "purchases": 0.0, "expenses": 0.0,
+              "over_short": 0.0, "net": 0.0}
+    for s in stores:
+        pl = pl_by_store.get(s.id)
+        if pl:
+            rev = float(pl.total_revenue or 0.0)
+            pur = float(pl.total_purchases or 0.0)
+            exp = float(pl.total_expenses or 0.0)
+            os_ = float(pl.over_short or 0.0)
+            net = float(pl.net_income or 0.0)
+            has_pl = True
+        else:
+            rev = pur = exp = os_ = net = 0.0
+            has_pl = False
+        rows.append({
+            "store":     s,
+            "revenue":   rev,
+            "purchases": pur,
+            "expenses":  exp,
+            "over_short": os_,
+            "net":       net,
+            "has_pl":    has_pl,
+        })
+        totals["revenue"]    += rev
+        totals["purchases"]  += pur
+        totals["expenses"]   += exp
+        totals["over_short"] += os_
+        totals["net"]        += net
+
+    # Sort by net income desc — strongest performers first. Stores
+    # without a P&L for the month sink to the bottom (net=0 sorts low
+    # if other stores have positive net; ties broken by name).
+    rows.sort(key=lambda r: (r["net"], -r["store"].id), reverse=True)
+
+    # Year choices: any year that has at least one MonthlyFinancial
+    # row across the umbrella, plus this year.
+    year_choices = {today.year}
+    if store_ids:
+        for (y,) in (db.session.query(MonthlyFinancial.year)
+                      .filter(MonthlyFinancial.store_id.in_(store_ids))
+                      .distinct().all()):
+            if y is not None:
+                year_choices.add(int(y))
+
+    # Prev/next month for the pager.
+    prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
+    next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
+
+    return render_template("owner_pl_rollup.html",
+        user=user, rows=rows, totals=totals,
+        year=year, month=month,
+        month_name=month_name[month],
+        year_choices=sorted(year_choices, reverse=True),
+        prev_y=prev_y, prev_m=prev_m,
+        next_y=next_y, next_m=next_m,
+    )
+
+
 @app.route("/owner/locations")
 @owner_required
 def owner_locations():
@@ -5503,6 +5779,10 @@ _REPORT_CATEGORIES = [
              "label": "Sales by Employee",
              "description": "Per-employee transfer count and total volume.",
              "endpoint": "report_sales_by_employee"},
+            {"key": "cashier_productivity",
+             "label": "Cashier Productivity",
+             "description": "Volume + count per cashier on duty (the 'Processed by' selection on each transfer).",
+             "endpoint": "report_cashier_productivity"},
             {"key": "top_customers",
              "label": "Top Customers by Volume",
              "description": "Senders who moved the most in the period.",
@@ -6013,6 +6293,38 @@ def _sales_by_employee_data(store_ids, d_from, d_to):
             r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
             r["username"] = u.username if u else ""
     rows.sort(key=lambda r: r["sent"], reverse=True)
+    return rows, totals
+
+
+def _cashier_productivity_data(store_ids, d_from, d_to):
+    """Group active transfers by `Transfer.employee_id` (the cashier
+    on duty who processed the customer) and resolve to StoreEmployee
+    display names. Distinct from `_sales_by_employee_data`, which
+    groups by `created_by` (the login User who saved the row) — this
+    one answers "which cashier handled the most customers?" rather
+    than "which login authored the most rows?". Sorted by transfer
+    count desc so the busiest cashier floats to the top."""
+    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
+                                         Transfer.employee_id)
+    employee_ids = [r["key"] for r in rows if r["key"] is not None]
+    employees = ({e.id: e for e in
+                  StoreEmployee.query.filter(
+                      StoreEmployee.id.in_(employee_ids)).all()}
+                 if employee_ids else {})
+    for r in rows:
+        eid = r.pop("key")
+        if eid is None:
+            r["cashier"] = "(unattributed)"
+            r["is_active"] = False
+        else:
+            e = employees.get(eid)
+            if e:
+                r["cashier"] = e.name
+                r["is_active"] = bool(e.is_active)
+            else:
+                r["cashier"] = f"Cashier #{eid}"
+                r["is_active"] = False
+    rows.sort(key=lambda r: r["count"], reverse=True)
     return rows, totals
 
 
@@ -6835,6 +7147,36 @@ _make_report_routes(
     graph_label_field="employee", graph_value_field="sent",
     detail_columns=[
         ("Employee", "employee"), ("Username", "username"),
+        ("Count", "count"), ("Total Sent", "sent"),
+        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
+    ],
+)
+
+_make_report_routes(
+    "cashier-productivity",
+    title="Cashier Productivity",
+    data_fn=_cashier_productivity_data,
+    template="report_cashier_productivity.html",
+    result_unit=("cashier", "cashiers"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Transfer Count",   "value": f"{totals['count']:,}",    "tone": "primary"},
+        {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}", "tone": "neon"},
+        {"label": "Total Fees",       "value": f"${totals['fees']:,.2f}", "tone": "muted"},
+        {"label": "Cashiers",          "value": f"{len(rows)}",            "tone": "muted"},
+    ],
+    csv_columns=["Cashier", "Active", "Count", "Total Sent",
+                 "Total Fees", "Federal Tax", "Avg Transfer"],
+    csv_row_fn=lambda r: [r["cashier"], "yes" if r["is_active"] else "no",
+                          r["count"], f"{r['sent']:.2f}",
+                          f"{r['fees']:.2f}", f"{r['tax']:.2f}",
+                          f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
+                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
+                             f"{t['tax']:.2f}", ""],
+    views=["summary", "graph", "detail"],
+    graph_label_field="cashier", graph_value_field="count",
+    detail_columns=[
+        ("Cashier", "cashier"), ("Active", "is_active"),
         ("Count", "count"), ("Total Sent", "sent"),
         ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
     ],
@@ -8581,18 +8923,27 @@ def api_customers_search():
     store. Standalone stores (no owner links) see only their own customers.
     Unrelated stores can never see each other's customers.
 
-    Searches phone number OR name (not address — too noisy). 2-char minimum
-    on the query so the dropdown doesn't blast the whole directory. Address
-    rides along in each payload so the UI can auto-fill it on pick.
+    Returns a JSON envelope:
+        { "matches":     [ ...exact substring matches... ],
+          "suggestions": [ ...fuzzy near-misses, when query is long enough... ] }
+
+    The suggestions list is the dedup-prevention hook: when a cashier types
+    "Maria Gonzales" but the record is "Maria Gonzalez", a substring search
+    returns nothing — the suggestion list catches it via difflib's
+    SequenceMatcher and lets the cashier pick the existing row instead of
+    creating a duplicate. Suggestions are populated only when the query is
+    >= 4 chars and there's room (matches < 5) so the regular case stays fast.
     """
     sid = session.get("store_id")
     if not sid:
-        return jsonify([])
+        return jsonify({"matches": [], "suggestions": []})
     q_text = request.args.get("q", "").strip()
     if len(q_text) < 2:
-        return jsonify([])
-    like = f"%{q_text}%"
+        return jsonify({"matches": [], "suggestions": []})
     scope_ids = sibling_store_ids(sid)
+
+    # ── Exact-substring matches (the existing fast path) ─────
+    like = f"%{q_text}%"
     rows = (Customer.query
             .filter(Customer.store_id.in_(scope_ids))
             .filter(db.or_(
@@ -8602,14 +8953,90 @@ def api_customers_search():
             .order_by(Customer.updated_at.desc())
             .limit(10)
             .all())
+    matched_ids = {c.id for c in rows}
+
+    # ── Fuzzy near-miss suggestions ──────────────────────────
+    # Pulled from the most-recently-updated 200 customers so we don't
+    # scan the whole directory on every keystroke. SequenceMatcher.ratio
+    # on 200 short strings is ~0.5ms — well under the autocomplete
+    # debounce window. Threshold 0.72 catches "Gonzales/Gonzalez" but
+    # not "Maria/Madison" (different name entirely).
+    suggestions = []
+    if len(q_text) >= 4 and len(rows) < 5:
+        from difflib import SequenceMatcher
+        q_lower = q_text.lower()
+        candidates = (Customer.query
+                      .filter(Customer.store_id.in_(scope_ids))
+                      .order_by(Customer.updated_at.desc())
+                      .limit(200).all())
+        scored = []
+        for c in candidates:
+            if c.id in matched_ids:
+                continue
+            name = (c.full_name or "").lower()
+            if not name:
+                continue
+            ratio = SequenceMatcher(None, q_lower, name).ratio()
+            if ratio >= 0.72:
+                scored.append((ratio, c))
+        scored.sort(key=lambda t: t[0], reverse=True)
+        suggestions = [c for _, c in scored[:3]]
+
     # Precompute the home-store name for rows not owned by the current
     # store so the UI can label "from Store A" on cross-store matches.
-    other_store_ids = {c.store_id for c in rows if c.store_id != sid}
+    all_rows = list(rows) + list(suggestions)
+    other_store_ids = {c.store_id for c in all_rows if c.store_id != sid}
     home_names = {}
     if other_store_ids:
         home_names = {s.id: s.name for s in
                       Store.query.filter(Store.id.in_(other_store_ids)).all()}
-    return jsonify([c.to_dict(current_store_id=sid, home_names=home_names) for c in rows])
+    return jsonify({
+        "matches":     [c.to_dict(current_store_id=sid, home_names=home_names)
+                        for c in rows],
+        "suggestions": [c.to_dict(current_store_id=sid, home_names=home_names)
+                        for c in suggestions],
+    })
+
+
+@app.route("/api/customers/<int:cid>/recent-recipients")
+@login_required
+def api_customer_recent_recipients(cid):
+    """Last N distinct recipients this customer has sent to. Powers the
+    "recent recipients" chip row above the recipient_name input on the
+    transfer form — most senders send to the same 1-2 people, so a
+    one-tap chip cuts a lot of typing.
+
+    Scope is the umbrella so a returning sender at Store B sees the same
+    chips they'd see at Store A. Excludes Canceled / Rejected — recipients
+    of failed transfers aren't ones the sender will reuse."""
+    sid = session.get("store_id")
+    if not sid:
+        return jsonify([])
+    scope_ids = sibling_store_ids(sid)
+    cust = Customer.query.filter(
+        Customer.id == cid,
+        Customer.store_id.in_(scope_ids),
+    ).first()
+    if not cust:
+        return jsonify([])
+    rows = (db.session.query(
+        Transfer.recipient_name,
+        Transfer.country,
+        Transfer.recipient_phone,
+        db.func.max(Transfer.send_date),
+    ).filter(
+        Transfer.customer_id == cid,
+        Transfer.store_id.in_(scope_ids),
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+        Transfer.recipient_name != "",
+    ).group_by(Transfer.recipient_name, Transfer.country,
+               Transfer.recipient_phone)
+     .order_by(db.desc(db.func.max(Transfer.send_date)))
+     .limit(5).all())
+    return jsonify([
+        {"name": name, "country": country, "phone": phone}
+        for name, country, phone, _last in rows
+    ])
 
 # ── Transfers ────────────────────────────────────────────────
 @app.route("/transfers")
@@ -9005,6 +9432,14 @@ def delete_transfer(tid):
         flash("Select a store first.", "error")
         return redirect(url_for("dashboard"))
     t = Transfer.query.filter_by(id=tid, store_id=sid).first_or_404()
+    # Capture a recognizable label BEFORE deletion so the audit row
+    # makes sense without needing to look up the (gone) transfer id.
+    label = (f"{t.sender_name or '?'} → {t.recipient_name or '?'}"
+             f" — ${t.send_amount or 0:,.2f}")
+    record_op_audit("delete", "transfer", t.id, label=label,
+                    summary=f"confirm={t.confirm_number or ''} "
+                            f"company={t.company or ''} "
+                            f"status={t.status or ''}")
     TransferAudit.query.filter_by(store_id=sid, transfer_id=t.id).delete(
         synchronize_session=False)
     db.session.delete(t)
@@ -9426,6 +9861,8 @@ def daily_report_lock(ds):
         rpt.locked_at = datetime.utcnow()
         rpt.locked_by = current_user().id
         rpt.updated_at = datetime.utcnow()
+        record_op_audit("lock", "daily_report", rpt.id,
+                         label=f"Daily {report_date.isoformat()}")
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} locked.", "success")
     return redirect(url_for("daily_report", ds=ds))
@@ -9444,6 +9881,8 @@ def daily_report_unlock(ds):
         rpt.locked_at = None
         rpt.locked_by = None
         rpt.updated_at = datetime.utcnow()
+        record_op_audit("unlock", "daily_report", rpt.id,
+                         label=f"Daily {report_date.isoformat()}")
         db.session.commit()
         flash(f"Daily report for {report_date.strftime('%B %d, %Y')} unlocked.", "success")
     return redirect(url_for("daily_report", ds=ds))
@@ -9542,6 +9981,284 @@ def monthly_report(year,month):
 @admin_required
 def monthly_new():
     today=date.today(); return redirect(url_for("monthly_report",year=today.year,month=today.month))
+
+
+# ── Tax export pack ─────────────────────────────────────────
+#
+# One-button "download my year-end packet" for tax prep. Rolls the
+# whole calendar year into a single ZIP containing:
+#   - transfers_<year>.csv     full ledger including canceled/rejected,
+#                               with Status column so the accountant
+#                               can filter
+#   - monthly_pl_<year>.csv    one row per month — every column from
+#                               MonthlyFinancial plus a derived
+#                               net_income (income − expenses)
+#   - daily_summary_<year>.csv one row per DailyReport with the key
+#                               totals (receipts, disbursements,
+#                               over/short)
+#   - customers_<year>.csv     per-customer totals (count, total
+#                               sent, total fees) — feeds 1099-MISC
+#                               for repeat senders if the operator
+#                               needs to issue any
+#   - README.txt               explains each file
+#
+# Period is a full calendar year. Default = previous year because
+# the typical use case is "do my taxes in February for last year."
+def _tax_pack_year_choices():
+    """Years offered in the year picker: every year that has at least
+    one transfer or one daily report on this store, plus this year and
+    last year (so a brand-new store still sees something to click)."""
+    user = current_user()
+    sid = session.get("store_id")
+    today = date.today()
+    years = {today.year, today.year - 1}
+    if sid:
+        for (y,) in (db.session.query(
+                db.func.extract("year", Transfer.send_date))
+                .filter(Transfer.store_id == sid).distinct().all()):
+            if y is not None:
+                years.add(int(y))
+        for (y,) in (db.session.query(
+                db.func.extract("year", DailyReport.report_date))
+                .filter(DailyReport.store_id == sid).distinct().all()):
+            if y is not None:
+                years.add(int(y))
+    return sorted(years, reverse=True)
+
+
+def _tax_pack_transfers_csv(store_id, year):
+    """Full transfer ledger for the year. Includes canceled / rejected
+    rows so the accountant has the audit trail; Status column lets them
+    filter in Excel."""
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Date", "Company", "Service Type", "Sender", "Sender Phone",
+        "Recipient", "Country", "Send Amount", "Fee", "Federal Tax",
+        "Total Collected", "Confirm #", "Batch", "Status",
+        "Cashier", "Created By", "Notes",
+    ])
+    rows = (Transfer.query.filter(
+                Transfer.store_id == store_id,
+                Transfer.send_date >= date(year, 1, 1),
+                Transfer.send_date <= date(year, 12, 31),
+            ).order_by(Transfer.send_date, Transfer.id).all())
+    user_ids = {t.created_by for t in rows if t.created_by}
+    users = ({u.id: u for u in
+              User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
+    for t in rows:
+        u = users.get(t.created_by) if t.created_by else None
+        creator = (u.full_name or u.username) if u else ""
+        phone = ((t.sender_phone_country or "") + (t.sender_phone or "")).strip()
+        total = (t.send_amount or 0) + (t.fee or 0) + (t.federal_tax or 0)
+        w.writerow([
+            t.send_date.isoformat() if t.send_date else "",
+            t.company or "",
+            t.service_type or "",
+            t.sender_name or "",
+            phone,
+            t.recipient_name or "",
+            t.country or "",
+            f"{t.send_amount:.2f}" if t.send_amount is not None else "",
+            f"{t.fee:.2f}" if t.fee is not None else "",
+            f"{t.federal_tax:.2f}" if t.federal_tax is not None else "",
+            f"{total:.2f}",
+            t.confirm_number or "",
+            t.batch_id or "",
+            t.status or "",
+            t.employee_name or "",
+            creator,
+            t.internal_notes or "",
+        ])
+    return buf.getvalue()
+
+
+def _tax_pack_monthly_pl_csv(store_id, year):
+    """Per-month roll-up of the MonthlyFinancial table. Every column
+    plus a derived net_income line so the accountant doesn't have to
+    sum manually."""
+    rows = {r.month: r for r in
+            MonthlyFinancial.query.filter_by(
+                store_id=store_id, year=year).all()}
+    # Pull a representative row to discover columns dynamically; falls
+    # back to a hardcoded subset if the table is empty for this year.
+    sample = next(iter(rows.values()), None)
+    if sample is None:
+        # Empty year — emit just the header so the file is valid.
+        money_cols = ["taxable_sales", "non_taxable", "over_short"]
+    else:
+        money_cols = [c.name for c in MonthlyFinancial.__table__.columns
+                      if c.name not in ("id", "store_id", "year", "month",
+                                          "notes", "updated_at")]
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Month"] + [c.replace("_", " ").title() for c in money_cols] + ["Net Income"])
+    for m in range(1, 13):
+        r = rows.get(m)
+        if r:
+            values = [getattr(r, c, 0.0) or 0.0 for c in money_cols]
+            net = float(r.net_income or 0.0)
+        else:
+            values = [0.0] * len(money_cols)
+            net = 0.0
+        w.writerow([f"{year}-{m:02d}"]
+                   + [f"{v:.2f}" for v in values]
+                   + [f"{net:.2f}"])
+    return buf.getvalue()
+
+
+def _tax_pack_daily_summary_csv(store_id, year):
+    """One row per DailyReport in the year. Receipts + Disbursements +
+    over/short are the headline numbers an accountant cross-checks
+    against the bank statement."""
+    rows = (DailyReport.query.filter(
+                DailyReport.store_id == store_id,
+                DailyReport.report_date >= date(year, 1, 1),
+                DailyReport.report_date <= date(year, 12, 31),
+            ).order_by(DailyReport.report_date).all())
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Date", "Total Receipts", "Total Disbursements",
+                "Over/Short", "Locked"])
+    for r in rows:
+        receipts = float(getattr(r, "total_receipts", 0.0) or 0.0)
+        disbursed = float(getattr(r, "total_disbursements", 0.0) or 0.0)
+        os_ = float(getattr(r, "over_short", 0.0) or 0.0)
+        locked = "yes" if getattr(r, "locked_at", None) else "no"
+        w.writerow([r.report_date.isoformat(), f"{receipts:.2f}",
+                    f"{disbursed:.2f}", f"{os_:.2f}", locked])
+    return buf.getvalue()
+
+
+def _tax_pack_customers_csv(store_id, year):
+    """Per-customer totals for the year — count, total sent, total
+    fees. Useful as a starting point for 1099-MISC reporting (you'd
+    file one for any customer over the IRS threshold for the
+    relevant tax year). Walk-in transfers (no Customer link) are
+    bucketed as "(walk-in)"."""
+    rows = (db.session.query(
+        Transfer.customer_id,
+        Transfer.sender_name,
+        db.func.count(Transfer.id),
+        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
+        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
+    ).filter(*_active_transfers_period_filters(
+                [store_id], date(year, 1, 1), date(year, 12, 31)))
+     .group_by(Transfer.customer_id, Transfer.sender_name)
+     .order_by(db.desc(db.func.sum(Transfer.send_amount))).all())
+    cust_ids = {cid for cid, *_ in rows if cid is not None}
+    customers = ({c.id: c for c in
+                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
+                 if cust_ids else {})
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Customer", "Phone", "Address", "Count",
+                "Total Sent", "Total Fees"])
+    for cid, sender_name, count, sent, fees in rows:
+        if cid and cid in customers:
+            c = customers[cid]
+            name = c.full_name or sender_name or "(no name)"
+            phone = (f"{c.phone_country}{c.phone_number}"
+                     if c.phone_number else "")
+            address = c.address or ""
+        else:
+            name = sender_name or "(walk-in)"
+            phone = ""
+            address = ""
+        w.writerow([name, phone, address, int(count or 0),
+                    f"{float(sent or 0):.2f}", f"{float(fees or 0):.2f}"])
+    return buf.getvalue()
+
+
+def _tax_pack_readme(store, year):
+    """Plain-text README explaining each file. Hand-write the copy —
+    operators give this whole pack to their accountant, so the README
+    is the only context the accountant has."""
+    return (
+        f"DineroBook Tax Export Pack\n"
+        f"==========================\n"
+        f"Store:  {store.name}\n"
+        f"Year:   {year}\n"
+        f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}\n"
+        f"\n"
+        f"Files in this archive:\n"
+        f"\n"
+        f"  transfers_{year}.csv\n"
+        f"      Full transfer ledger for the calendar year. Includes\n"
+        f"      Canceled / Rejected rows so you can verify nothing is\n"
+        f"      missing — filter the Status column in Excel/Sheets to\n"
+        f"      isolate revenue-bearing transfers.\n"
+        f"\n"
+        f"  monthly_pl_{year}.csv\n"
+        f"      Month-by-month profit & loss roll-up matching the\n"
+        f"      Monthly P&L page. Net Income column is income minus\n"
+        f"      expenses for the month.\n"
+        f"\n"
+        f"  daily_summary_{year}.csv\n"
+        f"      One row per closed daily book — receipts, disbursements,\n"
+        f"      over/short. Cross-check against bank deposits.\n"
+        f"\n"
+        f"  customers_{year}.csv\n"
+        f"      Per-customer totals (count, total sent, fees). Starting\n"
+        f"      point for 1099-MISC if any single customer crossed the\n"
+        f"      IRS reporting threshold for the year.\n"
+        f"\n"
+        f"All money values are USD. Send amounts are what the customer\n"
+        f"handed over; fees are what the store retained; federal tax is\n"
+        f"the portion that left with the ACH withdrawal (not store\n"
+        f"revenue).\n"
+        f"\n"
+        f"Questions: support@dinerobook.com\n"
+    )
+
+
+def _build_tax_pack_zip(store, year):
+    """Assemble every CSV + README into an in-memory ZIP and return
+    the bytes. Caller wraps in a Response with the right headers."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w",
+                          compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"transfers_{year}.csv",
+                    _tax_pack_transfers_csv(store.id, year))
+        zf.writestr(f"monthly_pl_{year}.csv",
+                    _tax_pack_monthly_pl_csv(store.id, year))
+        zf.writestr(f"daily_summary_{year}.csv",
+                    _tax_pack_daily_summary_csv(store.id, year))
+        zf.writestr(f"customers_{year}.csv",
+                    _tax_pack_customers_csv(store.id, year))
+        zf.writestr("README.txt", _tax_pack_readme(store, year))
+    return buf.getvalue()
+
+
+@app.route("/admin/tax-export")
+@admin_required
+def admin_tax_export():
+    user = current_user(); store = current_store()
+    today = date.today()
+    selected = request.args.get("year", "").strip()
+    try:
+        selected_year = int(selected) if selected else today.year - 1
+    except ValueError:
+        selected_year = today.year - 1
+    return render_template("admin_tax_export.html",
+        user=user, store=store,
+        year_choices=_tax_pack_year_choices(),
+        selected_year=selected_year)
+
+
+@app.route("/admin/tax-export.zip")
+@admin_required
+def admin_tax_export_zip():
+    store = current_store()
+    try:
+        year = int(request.args.get("year", date.today().year - 1))
+    except ValueError:
+        year = date.today().year - 1
+    payload = _build_tax_pack_zip(store, year)
+    fname = f"dinerobook_tax_pack_{store.slug}_{year}.zip"
+    return Response(payload, mimetype="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 # ── Return Checks ────────────────────────────────────────────
@@ -10317,7 +11034,13 @@ def new_batch():
             status=request.form.get("status","Pending"),
             reconciled=request.form.get("reconciled")=="on",
             notes=request.form.get("notes",""))
-        db.session.add(b); db.session.commit()
+        db.session.add(b); db.session.flush()
+        record_op_audit("create", "batch", b.id,
+                         label=f"{b.company} {b.batch_ref}",
+                         summary=f"ach_amount=${b.ach_amount:,.2f} "
+                                  f"date={b.ach_date.isoformat()} "
+                                  f"status={b.status}")
+        db.session.commit()
         flash("ACH batch logged.","success"); return redirect(url_for("batches"))
     return render_template("batch_form.html",user=user,batch=None,today=date.today().isoformat())
 
@@ -10327,6 +11050,13 @@ def edit_batch(bid):
     user=current_user(); sid=session["store_id"]
     b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
     if request.method=="POST":
+        # Snapshot the fields likely to change so the audit summary
+        # can show before→after values without dumping the whole row.
+        before = {
+            "ach_amount": float(b.ach_amount or 0),
+            "status":     b.status or "",
+            "reconciled": bool(b.reconciled),
+        }
         b.ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date()
         b.company=request.form["company"]; b.batch_ref=request.form["batch_ref"]
         b.ach_amount=float(request.form.get("ach_amount") or 0)
@@ -10334,6 +11064,16 @@ def edit_batch(bid):
         b.status=request.form.get("status","Pending")
         b.reconciled=request.form.get("reconciled")=="on"
         b.notes=request.form.get("notes","")
+        diffs = []
+        if before["ach_amount"] != float(b.ach_amount or 0):
+            diffs.append(f"amount {before['ach_amount']:,.2f}→{b.ach_amount:,.2f}")
+        if before["status"] != (b.status or ""):
+            diffs.append(f"status {before['status']}→{b.status}")
+        if before["reconciled"] != bool(b.reconciled):
+            diffs.append(f"reconciled {before['reconciled']}→{bool(b.reconciled)}")
+        record_op_audit("update", "batch", b.id,
+                         label=f"{b.company} {b.batch_ref}",
+                         summary="; ".join(diffs) if diffs else "no field changes")
         db.session.commit(); flash("Batch updated.","success"); return redirect(url_for("batches"))
     return render_template("batch_form.html",user=user,batch=b,today=date.today().isoformat())
 
@@ -10905,6 +11645,105 @@ def admin_users():
     users=User.query.filter_by(store_id=sid).all()
     return render_template("admin_users.html",user=user,users=users)
 
+
+@app.route("/admin/audit-log")
+@admin_required
+def admin_audit_log():
+    """Unified operator audit log. Combines OperatorAuditLog rows
+    (transfer deletes, batch creates/updates, daily-report locks /
+    unlocks) with TransferAudit rows (transfer creates / edits /
+    status changes) into a single chronological feed.
+
+    Filters:
+        ?target=transfer | daily_report | batch
+        ?user=<id>
+        ?action=create | update | delete | lock | unlock | status_changed
+    """
+    user = current_user()
+    sid = session["store_id"]
+    target_filter = request.args.get("target", "").strip()
+    user_filter   = request.args.get("user",   "").strip()
+    action_filter = request.args.get("action", "").strip()
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except ValueError:
+        page = 1
+    PER_PAGE = 50
+
+    # Pull both feeds, normalize to a common shape, merge, sort.
+    op_q = OperatorAuditLog.query.filter_by(store_id=sid)
+    tx_q = TransferAudit.query.filter_by(store_id=sid)
+    if target_filter:
+        op_q = op_q.filter_by(target_type=target_filter)
+        if target_filter != "transfer":
+            tx_q = tx_q.filter(db.text("1=0"))  # transfer-only feed; suppress when filtered out
+    if user_filter:
+        try:
+            uid = int(user_filter)
+            op_q = op_q.filter_by(user_id=uid)
+            tx_q = tx_q.filter_by(user_id=uid)
+        except ValueError:
+            pass
+    if action_filter:
+        op_q = op_q.filter_by(action=action_filter)
+        tx_q = tx_q.filter_by(action=action_filter)
+
+    op_rows = (op_q.order_by(OperatorAuditLog.created_at.desc())
+               .limit(500).all())
+    tx_rows = (tx_q.order_by(TransferAudit.created_at.desc())
+               .limit(500).all())
+
+    user_ids = ({r.user_id for r in op_rows if r.user_id}
+                | {r.user_id for r in tx_rows if r.user_id})
+    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
+             if user_ids else {})
+
+    merged = []
+    for r in op_rows:
+        merged.append({
+            "ts":            r.created_at,
+            "user_name":     r.user_name or (users.get(r.user_id).username if r.user_id and users.get(r.user_id) else ""),
+            "user_role":     r.user_role,
+            "action":        r.action,
+            "target_type":   r.target_type,
+            "target_id":     r.target_id,
+            "target_label":  r.target_label,
+            "summary":       r.summary,
+            "source":        "operator",
+        })
+    for r in tx_rows:
+        u = users.get(r.user_id) if r.user_id else None
+        merged.append({
+            "ts":            r.created_at,
+            "user_name":     (u.full_name or u.username) if u else r.employee_name or "",
+            "user_role":     u.role if u else "",
+            "action":        r.action,
+            "target_type":   "transfer",
+            "target_id":     str(r.transfer_id),
+            "target_label":  r.summary[:80] if r.summary else f"Transfer #{r.transfer_id}",
+            "summary":       r.summary,
+            "source":        "transfer",
+        })
+    merged.sort(key=lambda x: x["ts"], reverse=True)
+
+    total = len(merged)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    page = min(page, total_pages)
+    start = (page - 1) * PER_PAGE
+    page_rows = merged[start:start + PER_PAGE]
+
+    # Roster of users on the store for the filter dropdown.
+    store_users = (User.query.filter_by(store_id=sid)
+                   .order_by(User.full_name, User.username).all())
+
+    return render_template("admin_audit_log.html",
+        user=user,
+        rows=page_rows,
+        total=total, page=page, total_pages=total_pages,
+        target_filter=target_filter, user_filter=user_filter,
+        action_filter=action_filter,
+        store_users=store_users)
+
 @app.route("/admin/users/new",methods=["GET","POST"])
 @admin_required
 def admin_new_user():
@@ -11334,6 +12173,9 @@ def superadmin_controls():
     stripe_health = stripe_health_check() if active_tab == "overview" else None
     # SMTP health is free (reads _last_smtp_attempt in-process, no network).
     smtp_health = smtp_health_check() if active_tab == "overview" else None
+    # Anomaly detector runs two GROUP BYs over indexed columns — cheap,
+    # but skip on non-overview tabs to keep the Stores tab snappy.
+    anomalies = _compute_platform_anomalies() if active_tab == "overview" else []
 
     # ── Stores tab: search, filters, pagination ──
     q_text        = request.args.get("q", "").strip()
@@ -11408,6 +12250,7 @@ def superadmin_controls():
         total_stores=total_stores,
         stripe_health=stripe_health,
         smtp_health=smtp_health,
+        anomalies=anomalies,
         # Add-on catalog so the per-store override row can iterate
         # every add-on the platform supports (not just the ones a
         # given store currently has).
@@ -12388,7 +13231,8 @@ _STORE_OWNED_MODELS = [
     # and StoreEmployee before any row that FKs to it — we null/ignore employee
     # FKs on purge via the audit table's nullable column, but order still
     # matters for cascade sanity.
-    "TransferAudit", "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
+    "TransferAudit", "OperatorAuditLog",
+    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     # BankTransaction must purge before StripeBankAccount — it FKs to it.
     # BankRule + BankTransaction must purge before StripeBankAccount —

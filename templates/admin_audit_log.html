@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Activity Log — DineroBook{% endblock %}
+{% block page_title %}Activity Log{% endblock %}
+{% block content %}
+
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">
+      Filters
+      <span class="text-sm text-muted" style="font-weight:400;margin-left:8px;">{{ total }} {{ 'event' if total == 1 else 'events' }}</span>
+    </span>
+  </div>
+  <div class="card-body">
+    <form method="GET" action="{{ url_for('admin_audit_log') }}"
+          style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;margin:0;">
+      <div class="field" style="margin:0;min-width:160px;">
+        <label>Target</label>
+        <select name="target">
+          <option value="">All</option>
+          <option value="transfer"     {% if target_filter == 'transfer' %}selected{% endif %}>Transfer</option>
+          <option value="daily_report" {% if target_filter == 'daily_report' %}selected{% endif %}>Daily Report</option>
+          <option value="batch"        {% if target_filter == 'batch' %}selected{% endif %}>ACH Batch</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;min-width:160px;">
+        <label>Action</label>
+        <select name="action">
+          <option value="">All</option>
+          <option value="create"          {% if action_filter == 'create' %}selected{% endif %}>Create</option>
+          <option value="update"          {% if action_filter == 'update' %}selected{% endif %}>Update</option>
+          <option value="delete"          {% if action_filter == 'delete' %}selected{% endif %}>Delete</option>
+          <option value="lock"            {% if action_filter == 'lock' %}selected{% endif %}>Lock</option>
+          <option value="unlock"          {% if action_filter == 'unlock' %}selected{% endif %}>Unlock</option>
+          <option value="status_changed" {% if action_filter == 'status_changed' %}selected{% endif %}>Status changed</option>
+        </select>
+      </div>
+      <div class="field" style="margin:0;min-width:200px;">
+        <label>User</label>
+        <select name="user">
+          <option value="">Any</option>
+          {% for u in store_users %}
+          <option value="{{ u.id }}" {% if user_filter == u.id|string %}selected{% endif %}>
+            {{ u.full_name or u.username }}{% if u.role != 'admin' %} ({{ u.role }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div style="margin:0;">
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+        {% if target_filter or user_filter or action_filter %}
+        <a href="{{ url_for('admin_audit_log') }}" class="btn btn-outline btn-sm" style="margin-left:6px;">Clear</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Recent activity</span>
+    <span class="text-sm text-muted">Page {{ page }} of {{ total_pages }}</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Who</th>
+          <th>Action</th>
+          <th>Target</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="mono text-sm" style="white-space:nowrap;">
+            {{ r.ts.strftime('%b %d, %Y %H:%M UTC') }}
+          </td>
+          <td>
+            <strong>{{ r.user_name or '—' }}</strong>
+            {% if r.user_role %}
+            <span class="text-sm text-muted">({{ r.user_role }})</span>
+            {% endif %}
+          </td>
+          <td>
+            {% set badge_color = {
+              'create': 'green',
+              'created': 'green',
+              'update': 'blue',
+              'updated': 'blue',
+              'delete': 'red',
+              'deleted': 'red',
+              'lock': 'orange',
+              'unlock': 'orange',
+              'status_changed': 'yellow',
+            } %}
+            <span class="badge badge-{{ badge_color.get(r.action, 'gray') }}">{{ r.action }}</span>
+          </td>
+          <td>
+            <span class="text-sm text-muted">{{ r.target_type }}</span>
+            {% if r.target_label %}
+            <div>{{ r.target_label }}</div>
+            {% endif %}
+          </td>
+          <td class="text-sm" style="max-width:480px;">
+            {{ r.summary or '—' }}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="text-align:center;padding:40px;color:var(--text-muted);">
+          No activity matches these filters.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 22px;border-top:1px solid var(--border);font-size:13px;">
+    {% set base_args = {'target': target_filter, 'action': action_filter, 'user': user_filter} %}
+    {% if page > 1 %}
+      <a href="{{ url_for('admin_audit_log', page=page-1, **base_args) }}">← Prev</a>
+    {% else %}<span class="text-muted">← Prev</span>{% endif %}
+    <span class="text-muted">Page {{ page }} of {{ total_pages }}</span>
+    {% if page < total_pages %}
+      <a href="{{ url_for('admin_audit_log', page=page+1, **base_args) }}">Next →</a>
+    {% else %}<span class="text-muted">Next →</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<div class="text-sm text-muted" style="margin-top:14px;">
+  Audit covers transfer creates / edits / status changes / deletes,
+  daily-report locks / unlocks, and ACH batch creates / updates.
+  Saving daily-report fields generates many auto-saves and isn't
+  logged here — the lock event captures who closed the day.
+</div>
+
+{% endblock %}

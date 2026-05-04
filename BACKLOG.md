@@ -62,8 +62,50 @@ any cadence.
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
 - [ ] Mask phone numbers in list views per compliance.
 - [ ] CSV export on the customer directory.
+- [ ] **Email locked-day digest to owner** — when a daily book is locked
+      via the lock button, fire off a one-page HTML/PDF summary email
+      to the store owner. Use `Store.locked_at` as the trigger so it
+      fires for the right calendar day even when the book is locked
+      late (cashiers often close out the next morning). Pairs with
+      the notifications-toggle work in the personal-settings backlog.
 
-## SimpleFIN removal (after Stripe FC is proven)
+## Compliance (gated on check-cashing feature)
+- [ ] **OFAC SDN screening** — once we expand from remittance
+      bookkeeping into check cashing (or any role where DineroBook
+      acts as the regulated party rather than a pure ledger of what
+      Intermex/Maxi/Barri already screened), implement weekly SDN
+      list ingest + nightly customer-name match + flagged-customer
+      review queue. Today this isn't required because the money-
+      transfer companies do the screening upstream and DineroBook
+      is downstream bookkeeping; if/when check cashing lands, this
+      becomes a regulatory must-have and should ship in the same
+      release.
+
+## Stripe Issuing (research first, then build)
+- [ ] **Phase 1: Research.** Stripe Issuing lets us mint virtual or
+      physical cards tied to a funded Issuing balance. Open questions
+      before any code: (a) money-transmitter licensing implications
+      — does issuing a payment card to a store change DineroBook's
+      regulatory category in any state where the store operates?
+      (b) Cardholder vs. company card model — issue to the store
+      entity, or to individual employees with spending limits per
+      role? (c) Funding model — auto-sweep from the store's bank
+      account (Stripe FC), pre-funded balance, or credit line?
+      (d) Reconciliation flow — Issuing transactions land via
+      webhook; do they auto-post to the daily book as expenses, or
+      flow through bank-rule categorisation like FC transactions?
+      (e) Liability for fraud / disputes / chargebacks — who eats
+      the loss if a card is cloned? Until these are answered with
+      legal + Stripe-account-manager input, do not start
+      implementation.
+- [ ] **Phase 2: Wiring (after research clears).** New
+      `IssuedCard` + `IssuedCardTransaction` models, Stripe
+      Issuing webhook handler, per-store cardholder onboarding
+      flow on `/admin/settings`, transaction list + categorisation
+      UI mirroring the bank-transactions page, monthly P&L
+      auto-feed for Issuing-tagged categories. Ship behind
+      `addon_issued_cards` feature flag (default False; turn on
+      per-store as part of beta program).
 - [x] Helpers (`simplefin_fetch`, `simplefin_claim_token`, `get_sfin_cfg`),
       routes (`/bank/setup`, `/bank/disconnect`, `/api/bank/refresh`),
       legacy `<details>` section on `/bank`, `bank_data`/`bank_error`/`cfg`
@@ -78,11 +120,62 @@ any cadence.
       `tests/`. Current gap: subscription, superadmin controls, customer
       directory, forgot-password flow.
 - [ ] `pytest-cov` report + target ≥ 80% line coverage.
-- [ ] Split `app.py` (~2500 lines) into Flask blueprints once feature
+- [ ] Split `app.py` (~13k lines) into Flask blueprints once feature
       cadence slows down. Likely slices: `auth`, `billing`,
-      `superadmin`, `transfers`, `reports`.
+      `superadmin`, `transfers`, `reports`. **Priority slice:** extract
+      the reports block (~3000 lines, roughly app.py:5500–8500 — every
+      `_sa_*_data`, `_render_report_generic`, `_run_report_csv`, and the
+      `_make_report_routes` / `_make_superadmin_report_routes`
+      registrars) into a new `reports.py`. This is the single biggest
+      coherent chunk and would make the rest of `app.py` materially
+      easier to read.
 - [ ] Replace the PR description smoke-test lists with committed tests
       so the "Test plan" checklist can stay short.
+- [ ] **Data-fn unit tests for 5 superadmin reports** still missing
+      coverage: `_sa_churn_cohort_data`, `_sa_trial_expiry_timing_data`,
+      `_sa_bank_sync_adoption_data`, `_sa_tv_display_adoption_data`,
+      `_sa_login_activity_data`. Pattern lives in
+      `tests/test_superadmin_reports.py` — each test seeds 2-3 stores /
+      events, calls the data fn directly, asserts on the returned rows
+      + totals shape.
+- [ ] **SQLAlchemy 2.0 migration** — ~50 sites still use legacy
+      `Model.query.filter_by(...).first()` / `.all()` instead of
+      `db.session.execute(select(...)).scalar_one_or_none()`. The
+      `db.session.get(Model, id)` invariant is already enforced; the
+      `.query.*` API works but emits deprecation warnings and will
+      break on a future SQLAlchemy major. `grep -nE '\.query\.(filter|all|first|count|order_by)' app.py` to find them.
+- [ ] **Hex sweep on `daily_list.html`** — the calendar still inlines
+      `#2d2410`, `#0f1d3f`, `#0f2e1f`, `#86efac`, `#2d1215`, `#fca5a5`
+      for dark-mode shades. Add the missing semantic tokens to
+      `design-tokens.css` (e.g. `--db-cal-today-bg-dark`,
+      `--db-cal-hover-bg-dark`, `--db-pill-over-bg-dark`,
+      `--db-pill-over-fg-dark`, `--db-pill-short-bg-dark`,
+      `--db-pill-short-fg-dark`) and replace the inline hex.
+
+## AI helper bot ("Dino")
+- [ ] **v1 — searchable help center (no LLM, $0 forever).** Floating
+      bubble bottom-right on every authenticated page that opens a
+      modal panel. Hard-coded Q&A pairs in a JSON/Python registry
+      keyed by intent ("how do I add a transfer", "what does
+      over/short mean", "how do I lock a daily book", etc.). Fuzzy
+      client-side search (Fuse.js or a 30-line Levenshtein), render
+      the answer with deep-links into the right page. Covers ~80% of
+      "how do I X" questions and feels instant. This is the right
+      first step — we get the UI surface, the muscle memory, and a
+      structured answer registry that the LLM-backed v2 can also use
+      as ground-truth context.
+- [ ] **v2 — Claude Haiku 4.5 fallback** when the FAQ search has no
+      good match. Single-turn Q&A; system prompt embeds the same
+      answer registry plus DineroBook product facts (sidebar map,
+      plan matrix, report catalogue). Use prompt caching on the
+      system prompt so repeat questions are ~$0.0005 each. Rate-limit
+      20 msgs/user/hour. Feature-flag `addon_ai_helper` (default
+      True; gate behind Pro plan if cost grows). Tests mock
+      `anthropic.Anthropic.messages.create`.
+- [ ] **v3 — context-aware** — pass the current route + user role to
+      Dino so "how do I do this?" on `/daily/2026-05-04` knows it's
+      being asked about the daily book. Pure prompt-engineering on
+      top of v2.
 
 ## Settings surface — roadmap
 
