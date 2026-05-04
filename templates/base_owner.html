@@ -134,74 +134,10 @@
   </div>
 </div>
 
-<script>
-  function updateClock() {
-    const now = new Date();
-    const clockEl = document.getElementById('clock');
-    if (!clockEl) return;
-    clockEl.textContent =
-      now.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'}) +
-      ' · ' + now.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
-  }
-  updateClock(); setInterval(updateClock, 30000);
-
-  (function() {
-    var sidebar = document.getElementById('sidebar');
-    var backdrop = document.getElementById('sidebarBackdrop');
-    var toggle = document.getElementById('menuToggle');
-    var close = document.getElementById('sidebarClose');
-    function open() { sidebar.classList.add('open'); document.body.classList.add('nav-open'); }
-    function shut() { sidebar.classList.remove('open'); document.body.classList.remove('nav-open'); }
-    if (toggle) toggle.addEventListener('click', open);
-    if (close) close.addEventListener('click', shut);
-    if (backdrop) backdrop.addEventListener('click', shut);
-    if (sidebar) sidebar.addEventListener('click', function(e) {
-      var a = e.target.closest('a');
-      if (a && window.innerWidth <= 900) shut();
-    });
-    window.addEventListener('resize', function() { if (window.innerWidth > 900) shut(); });
-
-    var avatar = document.getElementById('userAvatar');
-    var dropdown = document.getElementById('userDropdown');
-    if (avatar && dropdown) {
-      // Open/close uses a class toggle so CSS can transition the
-      // dropdown in/out. The `hidden` attribute is the underlying
-      // gate — set after the close transition finishes so a stale
-      // `.is-open` doesn't stick around if the close ever races.
-      // Mirrors the admin shell (base.html) — removing `hidden`
-      // alone leaves opacity:0 + pointer-events:none active, so the
-      // dropdown looks broken / never opens.
-      var dropdownCloseTimer = null;
-      function closeMenu() {
-        dropdown.classList.remove('is-open');
-        avatar.setAttribute('aria-expanded', 'false');
-        clearTimeout(dropdownCloseTimer);
-        dropdownCloseTimer = setTimeout(function() {
-          if (!dropdown.classList.contains('is-open')) {
-            dropdown.setAttribute('hidden', '');
-          }
-        }, 200);
-      }
-      function openMenu() {
-        clearTimeout(dropdownCloseTimer);
-        dropdown.removeAttribute('hidden');
-        // Force a paint so the from-state (opacity:0 + scale:0.97)
-        // commits before .is-open transitions to the visible state.
-        void dropdown.offsetHeight;
-        dropdown.classList.add('is-open');
-        avatar.setAttribute('aria-expanded', 'true');
-      }
-      avatar.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (dropdown.classList.contains('is-open')) closeMenu(); else openMenu();
-      });
-      document.addEventListener('click', function(e) {
-        if (!dropdown.contains(e.target) && e.target !== avatar) closeMenu();
-      });
-      document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeMenu(); });
-    }
-  })();
-</script>
+{# Shared chrome (clock, sidebar drawer, avatar dropdown) lives in
+   static/shell.js so it can't drift between the admin shell and this
+   one. See base.html for the same load. #}
+<script src="{{ url_for('static', filename='shell.js', v=STATIC_VERSION) }}" defer></script>
 {# search.js MUST load synchronously — see comment in base.html. #}
 <script src="{{ url_for('static', filename='search.js', v=STATIC_VERSION) }}"></script>
 {% block scripts %}{% endblock %}
