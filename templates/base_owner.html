@@ -49,6 +49,10 @@
         <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><path d="M3 9l2-6h14l2 6"/><path d="M3 9h18v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21V12h6v9"/></svg></span>
         Locations
       </a>
+      <a href="{{ url_for('owner_pl_rollup') }}" class="nav-link {% if request.endpoint == 'owner_pl_rollup' %}active{% endif %}">
+        <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        P&amp;L Rollup
+      </a>
 
       <div class="nav-section">Reports</div>
       <a href="{{ url_for('owner_reports') }}" class="nav-link {% if request.endpoint == 'owner_reports' %}active{% endif %}">
