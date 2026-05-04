@@ -1,0 +1,44 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if not rows %}
+<div class="report-empty">No cashier activity in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div>
+      <div class="report-card__name">
+        {{ r.cashier }}
+        {# Inactive cashiers (or rows whose StoreEmployee was deleted)
+           still appear so historical productivity is preserved, but
+           we tag them so the admin can spot them at a glance. #}
+        {% if not r.is_active and r.cashier != '(unattributed)' %}
+        <span class="badge badge-gray" style="margin-left:8px;">inactive</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="report-card__count mono">{{ r.count }}<span class="report-card__count-suffix"> {{ 'transfer' if r.count == 1 else 'transfers' }}</span></div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Sent</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.sent) }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Fees</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.fees) }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Fed Tax</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.tax) }}</div>
+    </div>
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Avg</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.avg) }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

@@ -1448,6 +1448,13 @@ details[open] > *:not(summary) {
   line-height: 1;
 }
 
+/* Reduced-motion: stop the skeleton shimmer (introduced in the
+   loading-skeletons PR) — sortable headers have no motion of their
+   own to strip. */
+@media (prefers-reduced-motion: reduce) {
+  .tbl-skel { animation: none; }
+}
+
 /* ── Report-page print stylesheet ────────────────────────────
    The "Print / PDF" button on every report page hands off to the
    browser's print dialog (where the user picks "Save as PDF" if

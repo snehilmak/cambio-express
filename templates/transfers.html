@@ -219,6 +219,28 @@
 
   function fmt(v){return '$'+v.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 
+  // Render N skeleton rows into the existing table while a fetch is
+  // in flight. We grab the live `<tbody>` and column count from the
+  // already-rendered partial so the placeholder matches the real
+  // table dimensions exactly — no layout reflow when real data lands.
+  function showSkeleton(rowCount) {
+    const tbody = result.querySelector('tbody');
+    if (!tbody) return;
+    const headRow = result.querySelector('thead tr');
+    const colCount = headRow ? headRow.children.length : 10;
+    const widths = ['--narrow', '--wide', '--wide', '--narrow', '--wide', '--narrow', '--narrow', '--narrow', '--narrow', '--narrow'];
+    let html = '';
+    for (let i = 0; i < rowCount; i++) {
+      let cells = '';
+      for (let c = 0; c < colCount; c++) {
+        const w = widths[c % widths.length] || '--wide';
+        cells += '<td><span class="tbl-skel tbl-skel' + w + '"></span></td>';
+      }
+      html += '<tr class="tbl-skel-row" aria-hidden="true">' + cells + '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
   // Collect every named form element (inputs + selects) that carries a
   // value into the /transfers query string. The <form id="tfForm"> is
   // an empty container; inputs claim it via the `form="tfForm"` attr.
@@ -246,6 +268,7 @@
       return;
     }
     status.textContent = 'Searching…';
+    showSkeleton(6);
     params.set('partial', '1');
 
     try {

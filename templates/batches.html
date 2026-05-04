@@ -71,7 +71,9 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="11" style="text-align:center;padding:40px;color:var(--gray4);">No ACH batches logged yet.</td></tr>
+        {% with colspan=11, icon='inbox', title='No ACH batches yet', body='Group sent transfers into a batch when the money-transfer company funds the ACH withdrawal — the variance row tells you whether the wire matched.', cta_href=url_for('new_batch'), cta_text='+ New Batch' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
         {% endfor %}
       </tbody>
     </table>

@@ -31,6 +31,60 @@
     font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
     color: var(--gray4); margin-top: 2px;
   }
+
+  /* Suggestions section inside the dropdown — separated by a thin
+     divider with the "Possible matches" label so the cashier can
+     tell at a glance these are fuzzy near-misses, not exact hits. */
+  .customer-suggest .suggest-divider {
+    padding: 6px 12px; font-size: 10.5px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--text-muted); background: var(--surface-2);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .customer-suggest .suggest-tag {
+    display: inline-block; margin-left: 6px;
+    padding: 1px 6px; border-radius: 4px;
+    background: var(--db-warning, var(--gold));
+    color: var(--db-neon-ink, #000);
+    font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.6px;
+  }
+  .customer-suggest .row.suggestion .name { font-weight: 500; }
+
+  /* Recent-recipients chip strip above the recipient name input. The
+     label sits inline so the chip cluster reads as one informational
+     line, not a separate section. */
+  .recent-chips {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin: 0 0 14px;
+  }
+  .recent-chips__label {
+    font-family: var(--db-font-mono, 'JetBrains Mono', monospace);
+    font-size: 10.5px; font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 1.2px;
+    margin-right: 4px;
+  }
+  .recent-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--db-font-body, inherit);
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: border-color 0.12s, color 0.12s, background 0.12s;
+  }
+  .recent-chip:hover {
+    border-color: var(--db-neon, var(--blue));
+    color: var(--db-neon, var(--blue));
+  }
+  .recent-chip:focus-visible {
+    outline: 2px solid var(--db-neon, var(--blue));
+    outline-offset: 2px;
+  }
 </style>
 {% endblock %}
 {% block content %}
@@ -164,11 +218,17 @@
       </div>
 
       <div class="section-title">Recipient Info</div>
+      {# Recent-recipients chip strip — populated by JS after a customer
+         is picked from the sender autocomplete. Hidden until a customer
+         is linked; rendered above the form-grid so it doesn't interrupt
+         the field-tab order. #}
+      <div id="recent-recipients" class="recent-chips" hidden></div>
       <div class="form-grid cols-3">
         <div class="field">
           <label>Recipient Name</label>
-          <input type="text" name="recipient_name" value="{{ transfer.recipient_name if transfer else '' }}"
-            placeholder="Full name">
+          <input type="text" name="recipient_name" id="recipient_name"
+                 value="{{ transfer.recipient_name if transfer else '' }}"
+                 placeholder="Full name">
         </div>
         <div class="field">
           <label>Country</label>
@@ -187,8 +247,9 @@
         </div>
         <div class="field">
           <label>Recipient Phone</label>
-          <input type="text" name="recipient_phone" value="{{ transfer.recipient_phone if transfer else '' }}"
-            placeholder="Phone number">
+          <input type="text" name="recipient_phone" id="recipient_phone"
+                 value="{{ transfer.recipient_phone if transfer else '' }}"
+                 placeholder="Phone number">
         </div>
       </div>
 
@@ -359,29 +420,42 @@
     hideAll();
   }
 
-  function render(box, results) {
+  function rowMarkup(c, opts) {
+    opts = opts || {};
+    var phone = (c.phone_country ? c.phone_country + ' ' : '') + (c.phone_number || '');
+    var home = c.home_store_name
+      ? ' <span class="home">from ' + c.home_store_name + '</span>'
+      : '';
+    var label = opts.suggestion
+      ? ' <span class="suggest-tag">Did you mean?</span>'
+      : '';
+    return (
+      '<div class="row' + (opts.suggestion ? ' suggestion' : '') + '" data-id="' + c.id + '">' +
+        '<div class="name">' + (c.full_name || '—') + home + label + '</div>' +
+        '<div class="meta">' + phone + ' · ' + (c.address || 'no address') + '</div>' +
+      '</div>'
+    );
+  }
+
+  function render(box, payload) {
     if (!box) return;
-    if (!results.length) { box.hidden = true; return; }
-    box.innerHTML = results.map(function(c) {
-      var phone = (c.phone_country ? c.phone_country + ' ' : '') + (c.phone_number || '');
-      // "from Store X" hint appears only for customers whose home store is
-      // different from the current session's store — i.e. sibling stores
-      // under the same owner umbrella.
-      var home = c.home_store_name
-        ? ' <span class="home">from ' + c.home_store_name + '</span>'
-        : '';
-      return (
-        '<div class="row" data-id="' + c.id + '">' +
-          '<div class="name">' + (c.full_name || '—') + home + '</div>' +
-          '<div class="meta">' + phone + ' · ' + (c.address || 'no address') + '</div>' +
-        '</div>'
-      );
-    }).join('');
+    var matches     = (payload && payload.matches)     || [];
+    var suggestions = (payload && payload.suggestions) || [];
+    if (!matches.length && !suggestions.length) { box.hidden = true; return; }
+    var html = matches.map(function(c) { return rowMarkup(c); }).join('');
+    if (suggestions.length) {
+      html += '<div class="suggest-divider">Possible matches</div>';
+      html += suggestions.map(function(c) {
+        return rowMarkup(c, { suggestion: true });
+      }).join('');
+    }
+    box.innerHTML = html;
+    var allRows = matches.concat(suggestions);
     box.querySelectorAll('.row').forEach(function(el) {
       el.addEventListener('mousedown', function(e) {
         e.preventDefault();  // keep focus in the input
         var id = el.getAttribute('data-id');
-        var picked = results.filter(function(c) { return String(c.id) === String(id); })[0];
+        var picked = allRows.filter(function(c) { return String(c.id) === String(id); })[0];
         if (picked) applyCustomer(picked);
       });
     });
@@ -395,19 +469,90 @@
       // A fresh keystroke means the user is typing a NEW value — drop the
       // previously-picked customer link so we don't silently keep it.
       if (customerIdField) customerIdField.value = '';
+      // Also clear the recent-recipients chips — they belonged to the
+      // PREVIOUSLY picked customer, not the one currently being typed.
+      hideRecentRecipients();
       clearTimeout(timer);
       var q = input.value.trim();
       if (q.length < 2) { box.hidden = true; return; }
       timer = setTimeout(function() {
         fetch(SEARCH_URL + '?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
           .then(function(r) { return r.json(); })
-          .then(function(rows) { render(box, rows || []); })
+          .then(function(payload) { render(box, payload || {}); })
           .catch(function() { box.hidden = true; });
       }, DEBOUNCE_MS);
     });
     input.addEventListener('focus', function() { if (box.children.length) box.hidden = false; });
   }
   inputs.forEach(function(p) { attach(p.input, p.box); });
+
+  // ── Recent recipients chip strip ─────────────────────────
+  // When a returning sender is picked, fetch their last 5 distinct
+  // recipients and render them as one-tap chips above the recipient
+  // input. Most senders send to the same 1-2 people, so this cuts a
+  // big chunk of typing for repeat business.
+  var recipientNameField    = document.getElementById('recipient_name');
+  var recipientCountryField = document.getElementById('recipient_country');
+  var recipientPhoneField   = document.getElementById('recipient_phone');
+  var recentChipsBox        = document.getElementById('recent-recipients');
+
+  function hideRecentRecipients() {
+    if (!recentChipsBox) return;
+    recentChipsBox.hidden = true;
+    recentChipsBox.innerHTML = '';
+  }
+
+  function loadRecentRecipients(customerId) {
+    if (!customerId || !recentChipsBox) return;
+    fetch('/api/customers/' + encodeURIComponent(customerId) + '/recent-recipients',
+          { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(rows) {
+        if (!rows || !rows.length) { hideRecentRecipients(); return; }
+        recentChipsBox.innerHTML =
+          '<span class="recent-chips__label">Recent recipients</span>' +
+          rows.map(function(r) {
+            var label = r.name + (r.country ? ' · ' + r.country : '');
+            return '<button type="button" class="recent-chip"' +
+                   ' data-name="' + (r.name || '').replace(/"/g, '&quot;') + '"' +
+                   ' data-country="' + (r.country || '').replace(/"/g, '&quot;') + '"' +
+                   ' data-phone="' + (r.phone || '').replace(/"/g, '&quot;') + '">' +
+                   label + '</button>';
+          }).join('');
+        recentChipsBox.querySelectorAll('.recent-chip').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (recipientNameField)  recipientNameField.value  = btn.getAttribute('data-name')    || '';
+            if (recipientPhoneField) recipientPhoneField.value = btn.getAttribute('data-phone')   || '';
+            if (recipientCountryField) {
+              var c = btn.getAttribute('data-country') || '';
+              for (var i = 0; i < recipientCountryField.options.length; i++) {
+                if (recipientCountryField.options[i].value === c) {
+                  recipientCountryField.selectedIndex = i;
+                  // Notify any country-change listeners (federal-tax exemption).
+                  recipientCountryField.dispatchEvent(new Event('change', { bubbles: true }));
+                  break;
+                }
+              }
+            }
+          });
+        });
+        recentChipsBox.hidden = false;
+      })
+      .catch(function() { hideRecentRecipients(); });
+  }
+
+  // Hook into applyCustomer — load chips after the form is filled.
+  var _origApplyCustomer = applyCustomer;
+  applyCustomer = function(c) {
+    _origApplyCustomer(c);
+    if (c && c.id) loadRecentRecipients(c.id);
+  };
+
+  // On initial load (edit mode), if the form already has a customer_id,
+  // hydrate the recent-recipients strip so it's there immediately.
+  if (customerIdField && customerIdField.value) {
+    loadRecentRecipients(customerIdField.value);
+  }
 })();
 </script>
 <script>
