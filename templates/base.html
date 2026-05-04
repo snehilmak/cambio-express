@@ -558,7 +558,14 @@
     });
   })();
 </script>
-<script src="{{ url_for('static', filename='search.js', v=STATIC_VERSION) }}" defer></script>
+{# search.js MUST load synchronously (no `defer`) because page-level
+   inline scripts in {% block scripts %} below call attachSearchDebounce(...)
+   directly during parse — a deferred external script wouldn't have
+   executed yet, so the global would be undefined and the inline IIFE
+   would throw silently, leaving subsequent setup (modal bindings,
+   row-action click handlers) un-wired. Keeping the file small (<2 KB)
+   so the synchronous load cost is negligible. #}
+<script src="{{ url_for('static', filename='search.js', v=STATIC_VERSION) }}"></script>
 {% block scripts %}{% endblock %}
 <script>
 if ('serviceWorker' in navigator) {
