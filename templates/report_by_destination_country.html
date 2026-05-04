@@ -1,34 +1,3 @@
 {% extends "_report_page.html" %}
-
-{% block report_rows %}
-{% if not rows %}
-<div class="report-empty">No transfers in this period.</div>
-{% endif %}
-
-{% for r in rows %}
-<div class="report-card">
-  <div class="report-card__head">
-    <div class="report-card__name">{{ r.country }}</div>
-    <div class="report-card__count mono">{{ r.count }}<span class="report-card__count-suffix"> {{ 'transfer' if r.count == 1 else 'transfers' }}</span></div>
-  </div>
-  <div class="report-card__metrics">
-    <div class="report-card__metric">
-      <div class="report-card__metric-label">Sent</div>
-      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.sent) }}</div>
-    </div>
-    <div class="report-card__metric">
-      <div class="report-card__metric-label">Fees</div>
-      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.fees) }}</div>
-    </div>
-    <div class="report-card__metric">
-      <div class="report-card__metric-label">Fed Tax</div>
-      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.tax) }}</div>
-    </div>
-    <div class="report-card__metric">
-      <div class="report-card__metric-label">Avg</div>
-      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.avg) }}</div>
-    </div>
-  </div>
-</div>
-{% endfor %}
-{% endblock %}
+{% set row_label_field = 'country' %}
+{% block report_rows %}{% include "_report_card_sent_fees_tax.html" %}{% endblock %}
