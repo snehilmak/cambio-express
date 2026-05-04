@@ -55,11 +55,9 @@
           </td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="10" style="text-align:center;padding:40px;color:var(--gray4);">
-            No transfers logged today. <a href="{{ url_for('new_transfer') }}">Log the first one →</a>
-          </td>
-        </tr>
+        {% with colspan=10, icon='inbox', title='Nothing logged today', body='Cashiers, this is where today’s transfers will show up — log the first one to get started.', cta_href=url_for('new_transfer'), cta_text='+ New Transfer' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
         {% endfor %}
       </tbody>
     </table>

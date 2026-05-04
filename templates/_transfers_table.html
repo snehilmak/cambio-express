@@ -75,7 +75,19 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--gray4);">No transfers found.</td></tr>
+      {# Tailor the empty state to whether the user is filtering or
+         genuinely has no data yet — different audiences, different
+         fixes (clear filters vs. start logging). #}
+      {% set _has_filter = q or sender or recipient or country or confirm or batch or date_from or date_to or (status and status != 'All') or (company and company != 'All') %}
+      {% if _has_filter %}
+        {% with colspan=10, icon='search', title='No transfers match these filters', body='Try clearing a search box or widening the date range.' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
+      {% else %}
+        {% with colspan=10, icon='inbox', title='No transfers yet', body='Log your first remittance — the rest of this dashboard fills in as you go.', cta_href=url_for('new_transfer'), cta_text='+ New Transfer' %}
+          {% include "_empty_table_row.html" %}
+        {% endwith %}
+      {% endif %}
       {% endfor %}
     </tbody>
   </table>

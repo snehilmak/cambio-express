@@ -1,0 +1,58 @@
+{# Reusable empty-state row for tables.
+   Renders a centered icon + title + body + optional CTA inside a
+   single <tr><td colspan="..."> so the table layout stays intact.
+
+   Args (set via Jinja `with`):
+     colspan   — number of <th> columns in the table (REQUIRED)
+     title     — short headline (e.g. "No transfers found")
+     body      — one-line explainer (optional)
+     icon      — slug picking which inline SVG to render. Options:
+                 'inbox' (default), 'search', 'check', 'bank', 'doc'
+     cta_href  — link target for the CTA button (optional)
+     cta_text  — button label (optional; only renders if href set)
+
+   Usage:
+     {% include "_empty_table_row.html" with context %}
+   …after setting the locals via {% with %} or {% set %}. The
+   defaults below keep the partial usable even if a caller forgets
+   to pass icon/body. #}
+<tr class="empty-row">
+  <td colspan="{{ colspan }}">
+    <div class="empty-row__inner">
+      <svg class="empty-row__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        {% set _icon = icon|default('inbox') %}
+        {% if _icon == 'search' %}
+          <circle cx="11" cy="11" r="7"/>
+          <path d="m21 21-4.3-4.3"/>
+        {% elif _icon == 'check' %}
+          <circle cx="12" cy="12" r="9"/>
+          <path d="m9 12 2 2 4-4"/>
+        {% elif _icon == 'bank' %}
+          <path d="M3 21h18"/>
+          <path d="M3 10h18"/>
+          <path d="M5 6l7-3 7 3"/>
+          <path d="M4 10v11"/>
+          <path d="M20 10v11"/>
+          <path d="M8 14v3"/>
+          <path d="M12 14v3"/>
+          <path d="M16 14v3"/>
+        {% elif _icon == 'doc' %}
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <path d="M14 2v6h6"/>
+          <path d="M9 13h6"/>
+          <path d="M9 17h6"/>
+        {% else %}
+          {# inbox #}
+          <path d="M22 12h-6l-2 3h-4l-2-3H2"/>
+          <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z"/>
+        {% endif %}
+      </svg>
+      <div class="empty-row__title">{{ title }}</div>
+      {% if body %}<div class="empty-row__body">{{ body }}</div>{% endif %}
+      {% if cta_href and cta_text %}
+        <a href="{{ cta_href }}" class="btn btn-outline btn-sm empty-row__cta">{{ cta_text }}</a>
+      {% endif %}
+    </div>
+  </td>
+</tr>

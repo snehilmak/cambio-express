@@ -1422,6 +1422,79 @@ details[open] > *:not(summary) {
 }
 .report-detail__table tbody tr:hover { background: var(--db-gray-2); }
 
+/* ── Loading skeletons (live-search tables) ─────────────────
+   Applied to <tbody> while a `?partial=1` fetch is in flight.
+   The JS clones N skeleton rows matching the table's column
+   count so the page doesn't reflow when real data lands. The
+   shimmer is a CSS-animated linear gradient — no JS timers,
+   honors prefers-reduced-motion via the global rule below. */
+.tbl-skel-row td {
+  padding: 18px 12px !important;
+}
+.tbl-skel {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--border) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: tbl-skel-shimmer 1.2s ease-in-out infinite;
+}
+.tbl-skel--narrow { width: 50%; }
+.tbl-skel--wide   { width: 80%; }
+@keyframes tbl-skel-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Empty-table row ─────────────────────────────────────────
+   Replaces the plain "<td>No transfers found.</td>" pattern
+   that several tables ship with. Centered icon + title +
+   one-line body + optional CTA link. Designed to live inside
+   <tr><td colspan="N"> so the table layout doesn't break.
+   Use the `.empty-row__icon` class on an inline stroke SVG
+   matching the sidebar icon set (currentColor, stroke-width:2). */
+.empty-row td {
+  text-align: center;
+  padding: 48px 24px !important;
+  color: var(--text-muted);
+}
+.empty-row__inner {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; max-width: 420px; margin: 0 auto;
+}
+.empty-row__icon {
+  width: 36px; height: 36px;
+  color: var(--text-muted);
+  opacity: 0.55;
+  margin-bottom: 4px;
+}
+.empty-row__title {
+  font-family: var(--db-font-display, 'Space Grotesk', sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+.empty-row__body {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.empty-row__cta {
+  margin-top: 8px;
+}
+
+/* Reduced-motion: stop the skeleton shimmer (it's purely
+   decorative). The empty-row layout has no motion to strip. */
+@media (prefers-reduced-motion: reduce) {
+  .tbl-skel { animation: none; }
+}
+
 /* ── Report-page print stylesheet ────────────────────────────
    The "Print / PDF" button on every report page hands off to the
    browser's print dialog (where the user picks "Save as PDF" if

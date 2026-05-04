@@ -74,12 +74,31 @@
     return p;
   }
 
+  function showSkeleton(rowCount) {
+    var tbody = resultBox.querySelector('tbody');
+    if (!tbody) return;
+    var headRow = resultBox.querySelector('thead tr');
+    var colCount = headRow ? headRow.children.length : 7;
+    var widths = ['--narrow', '--wide', '--wide', '--narrow', '--narrow', '--narrow', '--narrow'];
+    var html = '';
+    for (var i = 0; i < rowCount; i++) {
+      var cells = '';
+      for (var c = 0; c < colCount; c++) {
+        var w = widths[c % widths.length] || '--wide';
+        cells += '<td><span class="tbl-skel tbl-skel' + w + '"></span></td>';
+      }
+      html += '<tr class="tbl-skel-row" aria-hidden="true">' + cells + '</tr>';
+    }
+    tbody.innerHTML = html;
+  }
+
   function fetchAndSwap(extra) {
     if (ctrl) ctrl.abort();
     ctrl = new AbortController();
     var p = buildParams(extra);
     var partialP = new URLSearchParams(p);
     partialP.set('partial', '1');
+    showSkeleton(5);
     fetch('{{ url_for("bank_transactions") }}?' + partialP.toString(),
           {signal: ctrl.signal, credentials: 'same-origin'})
       .then(function (r) { return r.json(); })
