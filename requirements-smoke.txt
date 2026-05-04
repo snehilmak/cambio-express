@@ -2,11 +2,15 @@
 # requirements.txt so the production / dev install stays small —
 # Playwright pulls ~150 MB of Chromium binaries on first run.
 #
+# Versions intentionally unpinned so CI always picks a mutually
+# compatible playwright + pytest-playwright pair. If we ever need
+# to lock the matrix, do it then with explicit pins.
+#
 # Install path:
 #   pip install -r requirements-smoke.txt
 #   playwright install chromium
 #
 # Run:
 #   pytest tests/smoke/
-playwright==1.56.1
-pytest-playwright==0.7.2
+playwright
+pytest-playwright
