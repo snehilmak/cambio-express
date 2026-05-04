@@ -21,11 +21,10 @@ def test_admin_sidebar_has_no_workspace_section_header(client, test_store_id):
     assert "Transfers" in body
 
 
-def test_new_transfer_is_topbar_button_not_sidebar_link(client,
-                                                         test_store_id):
-    """`+ New Transfer` is now a primary topbar action, not a
-    sidebar nav-link. Check the button class is present and the
-    sidebar nav-link variant is gone."""
+def test_new_transfer_lives_in_sidebar_top_group(client, test_store_id):
+    """`New Transfer` is back in the sidebar (under Transfers) and
+    the topbar `+ New Transfer` button is gone. Per request — the
+    primary-action-in-topbar pattern didn't fit the workflow."""
     from app import User
     with client.application.app_context():
         u = User.query.filter_by(store_id=test_store_id, role="admin").first()
@@ -34,12 +33,12 @@ def test_new_transfer_is_topbar_button_not_sidebar_link(client,
         s["user_id"] = uid; s["role"] = "admin"
         s["store_id"] = test_store_id
     body = client.get("/dashboard").get_data(as_text=True)
-    assert "topbar-new-action" in body
-    # The nav-link variant for new_transfer was sidebar-class — no
-    # longer rendered. Search for the unique combo.
-    assert 'class="nav-link"' not in body or "New Transfer" in body
-    # The topbar btn is wired to the route.
+    # No topbar primary-action button.
+    assert "topbar-new-action" not in body
+    # Sidebar nav-link to /transfers/new exists.
     assert 'href="/transfers/new"' in body
+    # And it's labelled.
+    assert "New Transfer" in body
 
 
 def test_admin_sidebar_books_section_consolidates(client, test_store_id):
