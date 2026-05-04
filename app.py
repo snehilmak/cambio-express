@@ -7106,8 +7106,8 @@ _SUPERADMIN_REPORT_CATEGORIES = [
              "endpoint": "superadmin_report_churn_cohort"},
             {"key": "refunds",
              "label": "Refunds",
-             "description": "Refunded charges by reason and period.",
-             "endpoint": None},
+             "description": "Stripe refunds in the period grouped by reason.",
+             "endpoint": "superadmin_report_refunds"},
         ],
     },
     {
@@ -7121,12 +7121,12 @@ _SUPERADMIN_REPORT_CATEGORIES = [
              "endpoint": None},
             {"key": "failed_payments",
              "label": "Failed Payments",
-             "description": "Charge failures, dunning state, and recoveries.",
-             "endpoint": None},
+             "description": "Recent failed charges grouped by reason.",
+             "endpoint": "superadmin_report_failed_payments"},
             {"key": "payouts",
              "label": "Payouts",
              "description": "Stripe payouts to the platform bank account.",
-             "endpoint": None},
+             "endpoint": "superadmin_report_payouts"},
         ],
     },
     {
@@ -7739,6 +7739,122 @@ def _sa_retention_queue_data(d_from, d_to):
     return rows, totals
 
 
+def _stripe_period_unix(d_from, d_to):
+    """Return (gte, lte) Unix timestamps covering [d_from, d_to]
+    inclusive. Stripe list APIs filter on `created` with this shape."""
+    start = datetime(d_from.year, d_from.month, d_from.day)
+    end   = datetime(d_to.year, d_to.month, d_to.day, 23, 59, 59)
+    return int(start.timestamp()), int(end.timestamp())
+
+
+def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
+                 **kwargs):
+    """Page through a Stripe `list` API. Caps total rows at
+    `max_total` so a high-volume month doesn't tie up the page."""
+    if not stripe.api_key:
+        raise RuntimeError("Stripe API key not configured")
+    items = []
+    for obj in list_call(**kwargs, limit=limit_per_call).auto_paging_iter():
+        items.append(obj)
+        if len(items) >= max_total:
+            break
+    return items
+
+
+def _sa_refunds_data(d_from, d_to):
+    """Stripe refunds in the period grouped by reason."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(stripe.Refund.list,
+                             created={"gte": gte, "lte": lte})
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason = {}
+    for r in objs:
+        amt = float(r.get("amount", 0) or 0) / 100.0
+        reason = (r.get("reason") or "(no reason)").replace("_", " ").title()
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
+            for k, v in by_reason.items()]
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+def _sa_failed_payments_data(d_from, d_to):
+    """Recent failed Stripe charges in the period. Stripe doesn't
+    expose a server-side `failed` filter on Charge.list, so we pull
+    a capped page and filter client-side."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(stripe.Charge.list,
+                             created={"gte": gte, "lte": lte},
+                             max_total=500)
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason = {}
+    for c in objs:
+        if c.get("status") != "failed" and c.get("paid", True):
+            continue
+        amt = float(c.get("amount", 0) or 0) / 100.0
+        outcome = c.get("outcome") or {}
+        reason = (outcome.get("reason")
+                   or c.get("failure_message")
+                   or "(unknown)")[:80]
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
+            for k, v in by_reason.items()]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    return rows, totals
+
+
+def _sa_payouts_data(d_from, d_to):
+    """Stripe payouts to the platform bank account in the period."""
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": "",
+              "paid": 0, "pending": 0, "failed": 0}
+    try:
+        objs = _stripe_iter(stripe.Payout.list,
+                             created={"gte": gte, "lte": lte})
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    for p in objs:
+        amt = float(p.get("amount", 0) or 0) / 100.0
+        arrival_ts = p.get("arrival_date")
+        arrival = (datetime.utcfromtimestamp(arrival_ts).date()
+                    if arrival_ts else None)
+        status = p.get("status", "") or ""
+        rows.append({
+            "id":      p.get("id", ""),
+            "amount":  amt,
+            "status":  status.title(),
+            "method":  (p.get("method") or "").replace("_", " ").title(),
+            "arrival": arrival,
+        })
+        totals["count"]  += 1
+        totals["amount"] += amt
+        if status == "paid":    totals["paid"]    += 1
+        if status == "pending": totals["pending"] += 1
+        if status == "failed":  totals["failed"]  += 1
+    rows.sort(key=lambda r: r["arrival"] or date.min, reverse=True)
+    return rows, totals
+
+
 # ── Superadmin reports: registry of routes ───────────────────
 _make_superadmin_report_routes(
     "active-stores-by-plan",
@@ -7968,6 +8084,55 @@ _make_superadmin_report_routes(
     csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
                           r["until"].isoformat() if r["until"] else "",
                           r["days_left"]],
+)
+
+_make_superadmin_report_routes(
+    "refunds",
+    title="Refunds",
+    data_fn=_sa_refunds_data,
+    template="report_sa_stripe_amount.html",
+    result_unit=("reason", "reasons"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Refunds",  "value": f"{totals['count']:,}",            "tone": "primary"},
+        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "neon"},
+    ],
+    csv_columns=["Reason", "Count", "Amount"],
+    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_superadmin_report_routes(
+    "failed-payments",
+    title="Failed Payments",
+    data_fn=_sa_failed_payments_data,
+    template="report_sa_stripe_amount.html",
+    result_unit=("reason", "reasons"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Failed Charges", "value": f"{totals['count']:,}",            "tone": "primary"},
+        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "muted"},
+    ],
+    csv_columns=["Reason", "Count", "Amount"],
+    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+)
+
+_make_superadmin_report_routes(
+    "payouts",
+    title="Payouts",
+    data_fn=_sa_payouts_data,
+    template="report_sa_payouts.html",
+    result_unit=("payout", "payouts"),
+    kpis_fn=lambda totals, rows, extra: [
+        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",   "tone": "primary"},
+        {"label": "Paid",         "value": f"{totals['paid']:,}",         "tone": "neon"},
+        {"label": "Pending",      "value": f"{totals['pending']:,}",      "tone": "muted"},
+        {"label": "Failed",       "value": f"{totals['failed']:,}",       "tone": "muted"},
+    ],
+    csv_columns=["Payout ID", "Amount", "Status", "Method", "Arrival"],
+    csv_row_fn=lambda r: [r["id"], f"{r['amount']:.2f}", r["status"],
+                          r["method"],
+                          r["arrival"].isoformat() if r["arrival"] else ""],
+    csv_totals_fn=lambda t: ["TOTAL", f"{t['amount']:.2f}", "", "", ""],
 )
 
 

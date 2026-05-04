@@ -1,0 +1,27 @@
+{% extends "_report_page.html" %}
+
+{% block report_rows %}
+{% if totals.stripe_error %}
+<div class="report-empty">
+  Stripe API unavailable: {{ totals.stripe_error }}.
+  Configure <code>STRIPE_SECRET_KEY</code> to populate this report.
+</div>
+{% elif not rows %}
+<div class="report-empty">No data in this period.</div>
+{% endif %}
+
+{% for r in rows %}
+<div class="report-card">
+  <div class="report-card__head">
+    <div class="report-card__name">{{ r.reason }}</div>
+    <div class="report-card__count mono">{{ r.count }}</div>
+  </div>
+  <div class="report-card__metrics">
+    <div class="report-card__metric">
+      <div class="report-card__metric-label">Amount</div>
+      <div class="report-card__metric-value mono">${{ '{:,.2f}'.format(r.amount) }}</div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
