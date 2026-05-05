@@ -894,6 +894,19 @@ class StoreOwnerLink(db.Model):
     __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
 
 class OwnerInviteCode(db.Model):
+    """LEGACY — replaced by `OwnerConnectCode` in May 2026.
+
+    The original flow was: store admin generates a code, owner redeems
+    it. That model accidentally let store admins remove their own owner
+    by deleting the StoreOwnerLink. The new flow inverts the direction:
+    owner generates the code, store admin redeems it, only the owner
+    can disconnect.
+
+    This class stays in the codebase only so legacy DBs that still have
+    the table can boot — `_drop_legacy_tables()` drops the underlying
+    table on next start. Once the table is gone everywhere this class
+    can be deleted too.
+    """
     __tablename__ = "owner_invite_code"
     id               = db.Column(db.Integer, primary_key=True)
     store_id         = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
@@ -903,6 +916,33 @@ class OwnerInviteCode(db.Model):
     expires_at       = db.Column(db.DateTime, nullable=False)
     used_at          = db.Column(db.DateTime, nullable=True)
     used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+
+
+class OwnerConnectCode(db.Model):
+    """Owner-generated invite code that a store admin redeems to link
+    their store to the owner's umbrella.
+
+    Flow:
+        1. Owner signs up (free; can have zero linked stores).
+        2. Owner mints a code from /owner/connect — 8 chars, 7-day TTL.
+        3. Owner gives the code to a store admin out of band (phone, email).
+        4. Store admin enters the code on /admin/settings → Owner tab.
+        5. Server creates a StoreOwnerLink, marks the code used.
+
+    Disconnect is owner-side only: /owner/unlink/<store_id>. The store
+    admin sees a read-only "Connected to <Owner Name>" message and a
+    note to contact the owner if they need to disconnect.
+    """
+    __tablename__ = "owner_connect_code"
+    id               = db.Column(db.Integer, primary_key=True)
+    owner_id         = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    code             = db.Column(db.String(8), unique=True, nullable=False)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at       = db.Column(db.DateTime, nullable=False)
+    used_at          = db.Column(db.DateTime, nullable=True)
+    used_by_user_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    used_by_store_id = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=True)
+    revoked_at       = db.Column(db.DateTime, nullable=True)
 
 class PasswordResetToken(db.Model):
     """Short-lived, one-time-use token for the self-service password reset flow.
@@ -1448,7 +1488,8 @@ def current_store(): return db.session.get(Store, session["store_id"]) if sessio
 
 _TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
                  "owner_dashboard", "owner_locations", "owner_store_detail",
-                 "owner_link_store", "owner_unlink_store",
+                 "owner_connect", "owner_connect_generate", "owner_connect_revoke",
+                 "owner_unlink_store",
                  "admin_subscription", "admin_subscription_billing_portal",
                  "admin_subscription_toggle_addon", "admin_subscription_cancel",
                  "account_theme"}
@@ -4743,46 +4784,103 @@ def owner_store_detail(store_id):
         recent_transfers=recent_transfers,
     )
 
-@app.route("/owner/link", methods=["POST"])
+@app.route("/owner/connect", methods=["GET"])
 @owner_required
-def owner_link_store():
-    """Redeem an 8-char invite code to link the current owner to a store."""
+def owner_connect():
+    """Page where the owner mints invite codes to give to store admins.
+
+    Shows: a generate button, the active (unused, unexpired) code if
+    any, and a small history of recently-redeemed codes so the owner
+    can audit who claimed which one. The code is given out of band
+    (phone, email) — DineroBook doesn't deliver it because we don't
+    know which store yet.
+    """
     u = current_user()
-    code = request.form.get("code", "").strip().upper()
     now = datetime.utcnow()
-    # NOTE: TOCTOU window between lookup and commit — safe under SQLite (serialised
-    # writes) but a Postgres migration should add SELECT FOR UPDATE here.
-    invite = OwnerInviteCode.query.filter(
-        OwnerInviteCode.code == code,
-        OwnerInviteCode.used_at.is_(None),
-        OwnerInviteCode.expires_at > now
-    ).first()
-    if not invite:
-        flash("Invalid or expired code.", "error")
-        return redirect(url_for("owner_dashboard"))
-    already = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=invite.store_id).first()
-    if already:
-        flash("You're already connected to this store.", "info")
-        return redirect(url_for("owner_dashboard"))
-    link = StoreOwnerLink(owner_id=u.id, store_id=invite.store_id)
-    invite.used_at = now
-    invite.used_by_owner_id = u.id
-    db.session.add(link)
+    active = (OwnerConnectCode.query
+              .filter(OwnerConnectCode.owner_id == u.id,
+                      OwnerConnectCode.used_at.is_(None),
+                      OwnerConnectCode.revoked_at.is_(None),
+                      OwnerConnectCode.expires_at > now)
+              .order_by(OwnerConnectCode.created_at.desc())
+              .first())
+    redeemed = (OwnerConnectCode.query
+                .filter(OwnerConnectCode.owner_id == u.id,
+                        OwnerConnectCode.used_at.isnot(None))
+                .order_by(OwnerConnectCode.used_at.desc())
+                .limit(10).all())
+    redeemed_with_stores = []
+    for c in redeemed:
+        st = (db.session.get(Store, c.used_by_store_id)
+              if c.used_by_store_id else None)
+        redeemed_with_stores.append((c, st))
+    return render_template("owner_connect.html",
+        user=u, active=active, redeemed=redeemed_with_stores)
+
+
+@app.route("/owner/connect/generate", methods=["POST"])
+@owner_required
+def owner_connect_generate():
+    """Mint a fresh 7-day invite code for this owner. If there's
+    already an active code we revoke it (only one active code at a
+    time keeps the UI simple — owner shares the latest one)."""
+    u = current_user()
+    now = datetime.utcnow()
+    OwnerConnectCode.query.filter(
+        OwnerConnectCode.owner_id == u.id,
+        OwnerConnectCode.used_at.is_(None),
+        OwnerConnectCode.revoked_at.is_(None),
+        OwnerConnectCode.expires_at > now,
+    ).update({"revoked_at": now})
+    db.session.flush()
+    alphabet = string.ascii_uppercase + string.digits
+    code = None
+    for _ in range(10):
+        candidate = "".join(secrets.choice(alphabet) for _ in range(8))
+        if not OwnerConnectCode.query.filter_by(code=candidate).first():
+            code = candidate
+            break
+    if code is None:
+        flash("Could not generate a unique code. Please try again.", "error")
+        return redirect(url_for("owner_connect"))
+    db.session.add(OwnerConnectCode(
+        owner_id=u.id, code=code,
+        expires_at=now + timedelta(days=7),
+    ))
     db.session.commit()
-    store = db.session.get(Store, invite.store_id)
-    flash(f"{store.name} connected successfully.", "success")
-    return redirect(url_for("owner_dashboard"))
+    flash("Invite code generated. Share it with the store admin.", "success")
+    return redirect(url_for("owner_connect"))
+
+
+@app.route("/owner/connect/<int:code_id>/revoke", methods=["POST"])
+@owner_required
+def owner_connect_revoke(code_id):
+    """Revoke an active code before it's redeemed (e.g. the owner
+    sent it to the wrong person)."""
+    u = current_user()
+    c = OwnerConnectCode.query.filter_by(id=code_id, owner_id=u.id).first_or_404()
+    if c.used_at is not None:
+        flash("Code has already been redeemed and can't be revoked.", "error")
+    elif c.revoked_at is not None:
+        flash("Code is already revoked.", "info")
+    else:
+        c.revoked_at = datetime.utcnow()
+        db.session.commit()
+        flash("Code revoked.", "success")
+    return redirect(url_for("owner_connect"))
 
 
 @app.route("/owner/unlink/<int:store_id>", methods=["POST"])
 @owner_required
 def owner_unlink_store(store_id):
-    """Remove an owner→store relationship. Does not affect store data itself."""
+    """Disconnect an owner→store relationship. Owner-side only — the
+    store admin sees a read-only "contact your owner" message in
+    their settings. Does not affect store data itself."""
     u = current_user()
     link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first_or_404()
     db.session.delete(link)
     db.session.commit()
-    flash("Store removed from your account.", "success")
+    flash("Store disconnected from your account.", "success")
     return redirect(url_for("owner_dashboard"))
 
 @app.route("/subscribe")
@@ -11923,13 +12021,9 @@ def admin_settings():
         User.id != user.id
     ).order_by(User.full_name).all()
 
-    now = datetime.utcnow()
-    owner_invite = OwnerInviteCode.query.filter(
-        OwnerInviteCode.store_id == store.id,
-        OwnerInviteCode.used_at.is_(None),
-        OwnerInviteCode.expires_at > now
-    ).order_by(OwnerInviteCode.created_at.desc()).first()
-
+    # Owner connection state: post-flow-reversal, the store admin no
+    # longer mints the code (the owner does, on /owner/connect). All
+    # this tab needs is whether a link exists and who the owner is.
     owner_link = StoreOwnerLink.query.filter_by(store_id=store.id).first()
     owner_user = db.session.get(User, owner_link.owner_id) if owner_link else None
 
@@ -11949,7 +12043,6 @@ def admin_settings():
         user=user, store=store,
         active_tab=active_tab, errors=errors,
         employees=employees,
-        owner_invite=owner_invite,
         owner_link=owner_link,
         owner_user=owner_user,
         known_companies=KNOWN_MT_COMPANIES,
@@ -12035,51 +12128,53 @@ def admin_reset_employee_password(uid):
     return redirect(url_for("admin_settings", tab="team"))
 
 
-@app.route("/admin/settings/owner/generate-code", methods=["POST"])
+@app.route("/admin/settings/owner/redeem", methods=["POST"])
 @admin_required
-def admin_generate_owner_code():
-    """Mint a fresh 7-day invite code; expires any previous unused codes first."""
+def admin_redeem_owner_code():
+    """Store admin enters an owner-supplied code to link this store
+    to that owner's umbrella. Replaces the old store-admin-generates /
+    owner-redeems flow — see OwnerConnectCode model docstring for why.
+
+    Validation chain: code exists, not used, not revoked, not expired,
+    no existing link to that owner. Disconnect after this point is
+    owner-side only (/owner/unlink) — the store admin sees a
+    read-only "contact your owner" message.
+    """
     store = current_store()
+    code_str = request.form.get("code", "").strip().upper()
+    if not code_str:
+        flash("Enter the code your owner gave you.", "error")
+        return redirect(url_for("admin_settings", tab="owner"))
     now = datetime.utcnow()
-    OwnerInviteCode.query.filter(
-        OwnerInviteCode.store_id == store.id,
-        OwnerInviteCode.used_at.is_(None),
-        OwnerInviteCode.expires_at > now
-    ).update({"expires_at": now})
-    db.session.flush()
-    alphabet = string.ascii_uppercase + string.digits
-    code = None
-    for _ in range(10):
-        candidate = "".join(secrets.choice(alphabet) for _ in range(8))
-        if not OwnerInviteCode.query.filter_by(code=candidate).first():
-            code = candidate
-            break
-    if code is None:
-        flash("Could not generate a unique code. Please try again.", "error")
+    # NOTE: TOCTOU window between lookup and commit — safe under SQLite
+    # (serialised writes); a Postgres migration should add SELECT FOR
+    # UPDATE here.
+    code = OwnerConnectCode.query.filter(
+        OwnerConnectCode.code == code_str,
+        OwnerConnectCode.used_at.is_(None),
+        OwnerConnectCode.revoked_at.is_(None),
+        OwnerConnectCode.expires_at > now,
+    ).first()
+    if not code:
+        flash("Invalid, expired, or already-used code.", "error")
         return redirect(url_for("admin_settings", tab="owner"))
-    invite = OwnerInviteCode(
-        store_id=store.id,
-        code=code,
-        created_by=current_user().id,
-        expires_at=now + timedelta(days=7),
-    )
-    db.session.add(invite)
-    db.session.commit()
-    flash("Invite code generated.", "success")
-    return redirect(url_for("admin_settings", tab="owner"))
-
-
-@app.route("/admin/settings/owner/remove-access", methods=["POST"])
-@admin_required
-def admin_remove_owner_access():
-    store = current_store()
-    owner_id = request.form.get("owner_id", type=int)
-    if not owner_id:
-        flash("Invalid request.", "error")
+    owner = db.session.get(User, code.owner_id)
+    if not owner or owner.role != "owner":
+        flash("That code's owner account is no longer valid.", "error")
         return redirect(url_for("admin_settings", tab="owner"))
-    StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=owner_id).delete()
+    already = StoreOwnerLink.query.filter_by(
+        owner_id=owner.id, store_id=store.id).first()
+    if already:
+        flash("This store is already connected to that owner.", "info")
+        return redirect(url_for("admin_settings", tab="owner"))
+    link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
+    code.used_at = now
+    code.used_by_user_id = current_user().id
+    code.used_by_store_id = store.id
+    db.session.add(link)
     db.session.commit()
-    flash("Owner access removed.", "success")
+    flash(f"Store connected to {owner.full_name or owner.username}.",
+          "success")
     return redirect(url_for("admin_settings", tab="owner"))
 
 
@@ -13291,7 +13386,7 @@ _STORE_OWNED_MODELS = [
     # BankRule + BankTransaction must purge before StripeBankAccount —
     # both FK to it.
     "MonthlyFinancial", "BankRule", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
-    "StoreEmployee", "OwnerInviteCode", "Customer",
+    "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
     # TVDisplay (store-keyed) — children handled by the explicit chain
     # above this loop. Listing it here covers the parent row itself.
@@ -14002,7 +14097,7 @@ def _ensure_added_columns():
 # Legacy tables that have been removed from the model registry but may
 # still exist in production databases. DROP TABLE IF EXISTS is idempotent
 # on every restart — safe to leave forever.
-_DROPPED_TABLES = ["simplefin_config"]
+_DROPPED_TABLES = ["simplefin_config", "owner_invite_code"]
 
 def _drop_legacy_tables():
     try:

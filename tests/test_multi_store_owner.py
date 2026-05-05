@@ -10,15 +10,20 @@ def test_store_owner_link_model_exists():
         assert hasattr(StoreOwnerLink, "linked_at")
 
 
-def test_owner_invite_code_model_exists():
+def test_owner_connect_code_model_exists():
+    """OwnerConnectCode replaced the legacy OwnerInviteCode in May 2026
+    when the connect flow was inverted (owner generates code, admin
+    redeems). New shape: owner-keyed, redeemable by an admin in their
+    store. See OwnerConnectCode docstring for the full rationale."""
     with flask_app.app_context():
-        from app import OwnerInviteCode
-        assert hasattr(OwnerInviteCode, "store_id")
-        assert hasattr(OwnerInviteCode, "code")
-        assert hasattr(OwnerInviteCode, "created_by")
-        assert hasattr(OwnerInviteCode, "expires_at")
-        assert hasattr(OwnerInviteCode, "used_at")
-        assert hasattr(OwnerInviteCode, "used_by_owner_id")
+        from app import OwnerConnectCode
+        assert hasattr(OwnerConnectCode, "owner_id")
+        assert hasattr(OwnerConnectCode, "code")
+        assert hasattr(OwnerConnectCode, "expires_at")
+        assert hasattr(OwnerConnectCode, "used_at")
+        assert hasattr(OwnerConnectCode, "used_by_user_id")
+        assert hasattr(OwnerConnectCode, "used_by_store_id")
+        assert hasattr(OwnerConnectCode, "revoked_at")
 
 
 def test_store_owner_link_unique_constraint():
@@ -273,110 +278,259 @@ def owner_with_store_client():
     return c, oid, sid
 
 
-def _make_valid_invite(store_id, admin_id):
-    from app import OwnerInviteCode
+# ── Owner-initiated connect flow (May 2026 reversal) ────────────
+#
+# The previous flow had the store admin generate a code that the owner
+# redeemed. That accidentally let the admin remove the owner by
+# revoking the link. The new flow inverts the direction:
+#   1. Owner creates an OwnerConnectCode (owner-side route).
+#   2. Owner shares the code with the store admin out of band.
+#   3. Store admin redeems the code on /admin/settings/owner/redeem.
+#   4. Disconnect is owner-side only; admin sees a read-only message.
+
+def _make_owner_connect_code(owner_id, *, code="OWNCD001", days=7,
+                              used_at=None, revoked_at=None):
+    from app import OwnerConnectCode
     from datetime import datetime, timedelta
-    invite = OwnerInviteCode(
-        store_id=store_id,
-        code="TESTCD01",
-        created_by=admin_id,
-        expires_at=datetime.utcnow() + timedelta(days=7),
+    c = OwnerConnectCode(
+        owner_id=owner_id, code=code,
+        expires_at=datetime.utcnow() + timedelta(days=days),
+        used_at=used_at, revoked_at=revoked_at,
     )
-    db.session.add(invite)
-    db.session.commit()
-    return invite
+    db.session.add(c); db.session.commit()
+    return c
 
 
-def test_valid_code_links_owner_to_store(owner_client):
+def test_admin_redeem_links_store_to_owner(logged_in_client):
+    """Admin enters the owner-supplied code; a StoreOwnerLink is created
+    and the code is marked used. This is the happy path for the new flow."""
     with flask_app.app_context():
-        from app import User, Store
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        _make_valid_invite(store.id, admin.id)
-    rv = owner_client.post("/owner/link", data={"code": "TESTCD01"})
+        from app import User
+        owner = User(username="ownerA@x.com", role="owner",
+                     full_name="Owner A", store_id=None)
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
+        _make_owner_connect_code(owner.id, code="REDEEMA1")
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "REDEEMA1"})
     assert rv.status_code == 302
-    assert "owner/dashboard" in rv.headers["Location"]
     with flask_app.app_context():
-        from app import User, StoreOwnerLink, Store
-        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        from app import User, Store, StoreOwnerLink, OwnerConnectCode
+        owner = User.query.filter_by(username="ownerA@x.com").first()
         store = Store.query.filter_by(slug="test-store").first()
-        link = StoreOwnerLink.query.filter_by(owner_id=owner.id, store_id=store.id).first()
+        link = StoreOwnerLink.query.filter_by(
+            owner_id=owner.id, store_id=store.id).first()
         assert link is not None
+        code = OwnerConnectCode.query.filter_by(code="REDEEMA1").first()
+        assert code.used_at is not None
+        assert code.used_by_store_id == store.id
 
 
-def test_valid_code_marks_invite_used(owner_client):
+def test_admin_redeem_rejects_expired_code(logged_in_client):
     with flask_app.app_context():
-        from app import User, Store
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        _make_valid_invite(store.id, admin.id)
-    owner_client.post("/owner/link", data={"code": "TESTCD01"})
+        from app import User
+        owner = User(username="ownerB@x.com", role="owner", store_id=None)
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
+        _make_owner_connect_code(owner.id, code="EXPIRED1", days=-1)
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "EXPIRED1"},
+                                 follow_redirects=True)
+    body = rv.data.lower()
+    assert b"invalid" in body or b"expired" in body
+
+
+def test_admin_redeem_rejects_used_code(logged_in_client):
+    from datetime import datetime
     with flask_app.app_context():
-        from app import OwnerInviteCode
-        invite = OwnerInviteCode.query.filter_by(code="TESTCD01").first()
-        assert invite.used_at is not None
+        from app import User
+        owner = User(username="ownerC@x.com", role="owner", store_id=None)
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
+        _make_owner_connect_code(owner.id, code="USEDC001",
+                                   used_at=datetime.utcnow())
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "USEDC001"},
+                                 follow_redirects=True)
+    body = rv.data.lower()
+    assert b"invalid" in body or b"expired" in body or b"used" in body
 
 
-def test_expired_code_rejected(owner_client):
+def test_admin_redeem_rejects_revoked_code(logged_in_client):
+    from datetime import datetime
     with flask_app.app_context():
-        from app import User, Store, OwnerInviteCode
-        from datetime import datetime, timedelta
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        invite = OwnerInviteCode(
-            store_id=store.id, code="EXPIRED1", created_by=admin.id,
-            expires_at=datetime.utcnow() - timedelta(days=1),
-        )
-        db.session.add(invite)
-        db.session.commit()
-    rv = owner_client.post("/owner/link", data={"code": "EXPIRED1"}, follow_redirects=True)
-    assert b"expired" in rv.data.lower() or b"invalid" in rv.data.lower()
+        from app import User
+        owner = User(username="ownerD@x.com", role="owner", store_id=None)
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
+        _make_owner_connect_code(owner.id, code="REVOKED1",
+                                   revoked_at=datetime.utcnow())
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "REVOKED1"},
+                                 follow_redirects=True)
+    body = rv.data.lower()
+    assert b"invalid" in body or b"expired" in body
 
 
-def test_used_code_rejected(owner_client):
-    with flask_app.app_context():
-        from app import User, Store, OwnerInviteCode
-        from datetime import datetime, timedelta
-        store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        invite = OwnerInviteCode(
-            store_id=store.id, code="USED0001", created_by=admin.id,
-            expires_at=datetime.utcnow() + timedelta(days=7),
-            used_at=datetime.utcnow(),
-        )
-        db.session.add(invite)
-        db.session.commit()
-    rv = owner_client.post("/owner/link", data={"code": "USED0001"}, follow_redirects=True)
-    assert b"expired" in rv.data.lower() or b"invalid" in rv.data.lower()
-
-
-def test_invalid_code_rejected(owner_client):
-    rv = owner_client.post("/owner/link", data={"code": "BADCODE1"}, follow_redirects=True)
+def test_admin_redeem_rejects_unknown_code(logged_in_client):
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "BOGUSCD1"},
+                                 follow_redirects=True)
     assert b"invalid" in rv.data.lower() or b"expired" in rv.data.lower()
 
 
-def test_already_linked_handled_gracefully(owner_client):
+def test_admin_redeem_rejects_already_linked(logged_in_client):
+    """Trying to connect a store that's already linked to the same owner
+    returns an info flash and does NOT consume the code."""
     with flask_app.app_context():
-        from app import User, Store, StoreOwnerLink, OwnerInviteCode
-        from datetime import datetime, timedelta
+        from app import User, Store, StoreOwnerLink
+        owner = User(username="ownerE@x.com", role="owner", store_id=None)
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
         store = Store.query.filter_by(slug="test-store").first()
-        admin = User.query.filter_by(username="admin@test.com").first()
-        owner = User.query.filter_by(username="owner@dashboard.com").first()
-        existing = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
-        db.session.add(existing)
-        invite = OwnerInviteCode(
-            store_id=store.id, code="LINKDUP1", created_by=admin.id,
-            expires_at=datetime.utcnow() + timedelta(days=7),
-        )
-        db.session.add(invite)
+        db.session.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
         db.session.commit()
-    rv = owner_client.post("/owner/link", data={"code": "LINKDUP1"}, follow_redirects=True)
-    assert rv.status_code == 200
+        _make_owner_connect_code(owner.id, code="DUPLINKA")
+    rv = logged_in_client.post("/admin/settings/owner/redeem",
+                                 data={"code": "DUPLINKA"},
+                                 follow_redirects=True)
     assert b"already connected" in rv.data.lower()
     with flask_app.app_context():
-        from app import OwnerInviteCode
-        invite = OwnerInviteCode.query.filter_by(code="LINKDUP1").first()
-        assert invite.used_at is None, "invite should not be consumed when owner is already linked"
+        from app import OwnerConnectCode
+        code = OwnerConnectCode.query.filter_by(code="DUPLINKA").first()
+        assert code.used_at is None, \
+            "code should not be consumed when the link already existed"
+
+
+def test_admin_remove_owner_route_is_gone(logged_in_client):
+    """The old /admin/settings/owner/remove-access route was removed
+    in May 2026 — only the owner can disconnect. POSTing it now should
+    404 (or any non-2xx) instead of severing the link."""
+    rv = logged_in_client.post("/admin/settings/owner/remove-access",
+                                 data={"owner_id": 1},
+                                 follow_redirects=False)
+    assert rv.status_code == 404
+
+
+def test_admin_generate_code_route_is_gone(logged_in_client):
+    """Same as above — the old /admin/settings/owner/generate-code
+    route was removed; admins don't mint codes anymore."""
+    rv = logged_in_client.post("/admin/settings/owner/generate-code",
+                                 follow_redirects=False)
+    assert rv.status_code == 404
+
+
+def test_owner_link_route_is_gone(owner_client):
+    """The old /owner/link route (owner redeems a store-generated code)
+    was removed. Owners now MINT codes, not redeem them."""
+    rv = owner_client.post("/owner/link", data={"code": "ANY"},
+                             follow_redirects=False)
+    assert rv.status_code == 404
+
+
+# ── Owner-side code generation + revoke ─────────────────────────
+
+
+def test_owner_connect_page_renders(owner_client):
+    rv = owner_client.get("/owner/connect")
+    assert rv.status_code == 200
+    body = rv.data.lower()
+    assert b"invite code" in body or b"generate" in body
+
+
+def test_owner_generate_creates_active_code(owner_client):
+    rv = owner_client.post("/owner/connect/generate")
+    assert rv.status_code == 302
+    with flask_app.app_context():
+        from app import User, OwnerConnectCode
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        codes = OwnerConnectCode.query.filter_by(owner_id=owner.id).all()
+        assert len(codes) == 1
+        assert codes[0].used_at is None
+        assert codes[0].revoked_at is None
+        assert len(codes[0].code) == 8
+
+
+def test_owner_generate_revokes_previous_active(owner_client):
+    """One active code per owner. Generating again revokes the prior one."""
+    owner_client.post("/owner/connect/generate")
+    owner_client.post("/owner/connect/generate")
+    with flask_app.app_context():
+        from app import User, OwnerConnectCode
+        from datetime import datetime
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        active = OwnerConnectCode.query.filter(
+            OwnerConnectCode.owner_id == owner.id,
+            OwnerConnectCode.used_at.is_(None),
+            OwnerConnectCode.revoked_at.is_(None),
+            OwnerConnectCode.expires_at > datetime.utcnow(),
+        ).all()
+        assert len(active) == 1
+
+
+def test_owner_can_revoke_unused_code(owner_client):
+    owner_client.post("/owner/connect/generate")
+    with flask_app.app_context():
+        from app import User, OwnerConnectCode
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        code = OwnerConnectCode.query.filter_by(owner_id=owner.id).first()
+        cid = code.id
+    rv = owner_client.post(f"/owner/connect/{cid}/revoke")
+    assert rv.status_code == 302
+    with flask_app.app_context():
+        from app import OwnerConnectCode
+        code = OwnerConnectCode.query.filter_by(id=cid).first()
+        assert code.revoked_at is not None
+
+
+def test_owner_revoke_other_owners_code_is_404(owner_client):
+    """Owner A can't revoke owner B's code (route filters by owner_id)."""
+    with flask_app.app_context():
+        from app import User
+        b = User(username="ownerOther@x.com", role="owner", store_id=None)
+        b.set_password("p"); db.session.add(b); db.session.commit()
+        c = _make_owner_connect_code(b.id, code="OTHERS01")
+        cid = c.id
+    rv = owner_client.post(f"/owner/connect/{cid}/revoke",
+                             follow_redirects=False)
+    assert rv.status_code == 404
+
+
+def test_owner_connect_page_blocks_non_owner(logged_in_client):
+    rv = logged_in_client.get("/owner/connect")
+    assert rv.status_code == 403
+
+
+# ── Admin owner-tab UI (post-flow-reversal) ────────────────────
+
+
+def test_admin_owner_tab_shows_redeem_form_when_no_owner(logged_in_client):
+    rv = logged_in_client.get("/admin/settings?tab=owner")
+    assert rv.status_code == 200
+    body = rv.data.lower()
+    assert b"connect" in body
+    # Form posts to the new redeem route.
+    assert b"/admin/settings/owner/redeem" in rv.data
+    # Old generate-code route must NOT appear.
+    assert b"/admin/settings/owner/generate-code" not in rv.data
+
+
+def test_admin_owner_tab_hides_remove_button_when_linked(logged_in_client):
+    """When an owner is linked, the admin sees the read-only "contact
+    your owner" message — no Remove Access button (only owners can
+    disconnect)."""
+    with flask_app.app_context():
+        from app import User, Store, StoreOwnerLink
+        owner = User(username="ownerLinked@x.com", role="owner",
+                     store_id=None, full_name="Linked Owner")
+        owner.set_password("p"); db.session.add(owner); db.session.commit()
+        store = Store.query.filter_by(slug="test-store").first()
+        db.session.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
+        db.session.commit()
+    rv = logged_in_client.get("/admin/settings?tab=owner")
+    assert rv.status_code == 200
+    body = rv.data
+    assert b"Linked Owner" in body
+    assert b"contact your owner" in body.lower()
+    # Old remove-access form must NOT appear.
+    assert b"/admin/settings/owner/remove-access" not in body
+    # No Remove Access button text.
+    assert b"Remove Access" not in body
 
 
 def test_owner_can_unlink_store(owner_with_store_client):
@@ -394,78 +548,16 @@ def test_unlink_nonexistent_returns_404(owner_client):
     assert rv.status_code == 404
 
 
-def test_admin_generate_owner_code(logged_in_client):
-    rv = logged_in_client.post("/admin/settings/owner/generate-code")
-    assert rv.status_code == 302
+def test_owner_connect_code_has_7_day_expiry(owner_client):
+    """Owner-generated codes should expire ~7 days out."""
+    owner_client.post("/owner/connect/generate")
     with flask_app.app_context():
-        from app import Store, OwnerInviteCode
-        store = Store.query.filter_by(slug="test-store").first()
-        code = OwnerInviteCode.query.filter_by(store_id=store.id).first()
-        assert code is not None
-        assert len(code.code) == 8
-        assert code.code == code.code.upper()
-        assert code.used_at is None
-
-
-def test_generate_code_invalidates_previous(logged_in_client):
-    logged_in_client.post("/admin/settings/owner/generate-code")
-    logged_in_client.post("/admin/settings/owner/generate-code")
-    with flask_app.app_context():
-        from app import Store, OwnerInviteCode
-        from datetime import datetime
-        store = Store.query.filter_by(slug="test-store").first()
-        active = OwnerInviteCode.query.filter(
-            OwnerInviteCode.store_id == store.id,
-            OwnerInviteCode.used_at.is_(None),
-            OwnerInviteCode.expires_at > datetime.utcnow()
-        ).all()
-        assert len(active) == 1
-
-
-def test_code_has_7_day_expiry(logged_in_client):
-    from datetime import datetime, timedelta
-    logged_in_client.post("/admin/settings/owner/generate-code")
-    with flask_app.app_context():
-        from app import Store, OwnerInviteCode
-        store = Store.query.filter_by(slug="test-store").first()
-        code = OwnerInviteCode.query.filter_by(store_id=store.id).order_by(OwnerInviteCode.created_at.desc()).first()
+        from app import User, OwnerConnectCode
+        owner = User.query.filter_by(username="owner@dashboard.com").first()
+        code = (OwnerConnectCode.query.filter_by(owner_id=owner.id)
+                .order_by(OwnerConnectCode.created_at.desc()).first())
         delta = code.expires_at - code.created_at
         assert 6 <= delta.days <= 7
-
-
-def test_admin_owner_access_tab_shows_no_code_state(logged_in_client):
-    rv = logged_in_client.get("/admin/settings?tab=owner")
-    assert rv.status_code == 200
-    assert b"Generate" in rv.data or b"generate" in rv.data
-
-
-def test_admin_owner_access_tab_shows_active_code(logged_in_client):
-    logged_in_client.post("/admin/settings/owner/generate-code")
-    rv = logged_in_client.get("/admin/settings?tab=owner")
-    assert rv.status_code == 200
-    assert b'id="owner-code"' in rv.data
-    assert b"Copy" in rv.data
-
-
-def test_admin_remove_owner_access(logged_in_client):
-    with flask_app.app_context():
-        from app import User, Store, StoreOwnerLink
-        store = Store.query.filter_by(slug="test-store").first()
-        o = User(username="owner3@test.com", full_name="Owner3", role="owner", store_id=None)
-        o.set_password("ownerpass123")
-        db.session.add(o)
-        db.session.flush()
-        link = StoreOwnerLink(owner_id=o.id, store_id=store.id)
-        db.session.add(link)
-        db.session.commit()
-        oid = o.id
-    rv = logged_in_client.post("/admin/settings/owner/remove-access", data={"owner_id": oid})
-    assert rv.status_code == 302
-    with flask_app.app_context():
-        from app import Store, StoreOwnerLink
-        store = Store.query.filter_by(slug="test-store").first()
-        link = StoreOwnerLink.query.filter_by(store_id=store.id, owner_id=oid).first()
-        assert link is None
 
 
 # ── /owner/locations: searchable list of linked stores ──────────
