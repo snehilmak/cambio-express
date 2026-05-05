@@ -116,6 +116,25 @@ any cadence.
       next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
+- [ ] **Browser smoke layer — make CI green**. PR #200 added a
+      Playwright-based smoke layer (`tests/smoke/`) that catches
+      silent JS errors in chrome wiring. It runs locally (14 tests
+      passing), but the "Install Playwright browser" step fails on
+      ubuntu-latest with exit code 1 — root cause not yet visible
+      from the public log reader. Steps are marked
+      `continue-on-error: true` in `.github/workflows/ci.yml` so
+      failures don't block PRs while we iterate. Most-likely
+      culprits to investigate: (a) `playwright install chromium`
+      download / network on the runner, (b) Python 3.12 wheel
+      availability for the playwright version pip resolves, (c)
+      missing OS deps that `--with-deps` would have provided
+      (we removed it because the apt path was brittle locally).
+      The current `set -ex` in the install step echoes each
+      command, so the next failed run's log will pinpoint the
+      exact failing line. Drop `continue-on-error` once smoke
+      runs reliably for a week. Doesn't block the software —
+      smoke layer adds value either way (devs can run it locally
+      with `pytest tests/smoke/`).
 - [ ] Graduate inline chat smoke tests to committed regression tests in
       `tests/`. Current gap: subscription, superadmin controls, customer
       directory, forgot-password flow.
