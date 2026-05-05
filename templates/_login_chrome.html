@@ -57,12 +57,13 @@ body { display: flex; }
 }
 .brand-block { text-align: center; position: relative; z-index: 1; }
 .brand-mark {
+  /* Image-based — pulled from static/brand-mark.svg. Sizing only;
+     no CSS background/font/color so the brand identity stays static
+     across themes by definition. */
   width: 52px; height: 52px; border-radius: 12px;
-  background: var(--db-neon); color: var(--db-neon-ink);
-  display: inline-flex; align-items: center; justify-content: center;
-  font-family: var(--db-font-display); font-weight: 700; font-size: 28px;
-  box-shadow: 0 0 24px var(--db-neon-glow-40);
+  box-shadow: 0 0 24px rgba(63,255,0,0.40);
   margin-bottom: 18px;
+  display: block;
 }
 .brand-name {
   font-family: var(--db-font-display);
@@ -200,7 +201,7 @@ input:focus, textarea:focus {
     border-bottom: 1px solid var(--db-gray-2);
   }
   .login-left .bg-grid, .login-left .bg-glow { display: none; }
-  .brand-mark { width: 40px; height: 40px; font-size: 22px; margin-bottom: 10px; }
+  .brand-mark { width: 40px; height: 40px; margin-bottom: 10px; }
   .brand-name { font-size: 22px; }
   .brand-tagline { font-size: 10px; }
   .login-right {
@@ -219,7 +220,7 @@ input:focus, textarea:focus {
   .login-left { padding: 20px 20px 16px; padding-top: max(20px, env(safe-area-inset-top)); }
   .login-right { padding: 20px 20px 24px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
   .brand-name { font-size: 20px; }
-  .brand-mark { width: 36px; height: 36px; font-size: 20px; }
+  .brand-mark { width: 36px; height: 36px; }
 }
 </style>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -230,7 +231,7 @@ input:focus, textarea:focus {
   <div class="bg-grid" aria-hidden="true"></div>
   <div class="bg-glow" aria-hidden="true"></div>
   <div class="brand-block">
-    <div class="brand-mark">$</div>
+    <img class="brand-mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
     <div class="brand-name">DineroBook</div>
     <div class="brand-tagline">Two-factor authentication</div>
   </div>

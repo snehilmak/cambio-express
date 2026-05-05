@@ -24,7 +24,8 @@ a{color:inherit}
 /* ── NAV ── */
 nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 48px;height:64px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--db-gray-2)}
 .nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
-.nav-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:16px;box-shadow:0 0 12px var(--db-neon-glow-40)}
+/* Image-based brand mark — see static/brand-mark.svg. Sizing only. */
+.nav-brand .mark{width:28px;height:28px;border-radius:8px;box-shadow:0 0 12px rgba(63,255,0,0.40);display:block}
 .nav-brand .name{font-family:var(--db-font-display);color:var(--db-gray-9);font-size:17px;font-weight:600;letter-spacing:-.02em}
 .nav-links{margin-left:auto;display:flex;align-items:center;gap:26px}
 .nav-links a{color:var(--db-gray-7);text-decoration:none;font-size:13px;font-weight:500;transition:color .12s}
@@ -213,7 +214,7 @@ footer.site{background:var(--db-bg);padding:40px 48px;border-top:1px solid var(-
 <!-- NAV -->
 <nav class="site">
   <a href="/" class="nav-brand">
-    <span class="mark" aria-hidden="true">$</span>
+    <img class="mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
     <span class="name">DineroBook</span>
   </a>
   <button type="button" class="nav-toggle" id="navToggle" aria-label="Toggle menu">
@@ -626,7 +627,7 @@ footer.site{background:var(--db-bg);padding:40px 48px;border-top:1px solid var(-
 <footer class="site">
   <div class="foot-inner">
     <a href="/" class="nav-brand">
-      <span class="mark" aria-hidden="true">$</span>
+      <img class="mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
       <span class="name">DineroBook</span>
     </a>
     <div class="foot-copy">© 2026 · MSB Terminal · Made for shops that move fast.</div>

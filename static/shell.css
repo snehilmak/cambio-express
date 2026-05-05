@@ -29,19 +29,16 @@
   flex-shrink: 0;
 }
 .sidebar-logo .brand-mark {
+  /* Image-based brand mark — see static/brand-mark.svg.
+     Pulling the logo from a file means it's truly static across
+     light + dark mode, no CSS variables to override. The wrapper
+     just controls sizing + the soft brand glow. */
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--db-neon);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--db-neon-ink);
-  font-family: var(--db-font-display);
-  font-weight: 700;
-  font-size: 16px;
-  box-shadow: 0 0 16px var(--db-neon-glow-25);
   flex-shrink: 0;
+  display: block;
+  box-shadow: 0 0 16px rgba(63,255,0,0.25);
 }
 .sidebar-logo .brand {
   font-family: var(--db-font-display);
