@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DineroBook">
+  <!-- DineroBook brand mark.
+       Neon-green rounded-square tile with a "$" glyph in near-black.
+       Static across light + dark modes — chrome around it flips for
+       readability, but the brand identity stays the same. Pulled in
+       via <img class="brand-mark" src="/static/brand-mark.svg"> from
+       base.html, base_owner.html, and the login chrome.
+
+       Identical content as favicon.svg today — kept as a separate
+       file so the in-page logo and the browser-tab icon can diverge
+       later without breaking either contract. -->
+  <rect x="0" y="0" width="64" height="64" rx="14" ry="14" fill="#3fff00"/>
+  <text x="32" y="47" text-anchor="middle" fill="#001a0f"
+        font-family="'Space Grotesk', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="44">$</text>
+</svg>

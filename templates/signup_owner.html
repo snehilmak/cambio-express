@@ -22,7 +22,8 @@ html,body{background:var(--db-bg);color:var(--db-gray-9);font-family:var(--db-fo
 
 nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--db-gray-2)}
 .nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
-.nav-brand .mark{width:28px;height:28px;border-radius:8px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:16px;box-shadow:0 0 12px var(--db-neon-glow-40)}
+/* Image-based brand mark — see static/brand-mark.svg. Sizing only. */
+.nav-brand .mark{width:28px;height:28px;border-radius:8px;box-shadow:0 0 12px rgba(63,255,0,0.40);display:block}
 .nav-brand .name{font-family:var(--db-font-display);color:var(--db-gray-9);font-size:17px;font-weight:600;letter-spacing:-.02em}
 .nav-login{color:var(--db-gray-7);font-size:13px;text-decoration:none;font-weight:500}
 .nav-login:hover{color:var(--db-gray-9)}
@@ -69,7 +70,7 @@ input.has-error{border-color:var(--db-negative)}
 
 <nav class="site">
   <a href="/" class="nav-brand">
-    <span class="mark" aria-hidden="true">$</span>
+    <img class="mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
     <span class="name">DineroBook</span>
   </a>
   <a href="{{ url_for('login') }}" class="nav-login">Already have an account? Sign in</a>

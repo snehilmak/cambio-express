@@ -47,7 +47,7 @@
     {# Sidebar logo: neon "$" brand mark + DineroBook wordmark.
        Replaces the old navy-gold serif lockup. #}
     <div class="sidebar-logo">
-      <span class="brand-mark" aria-hidden="true">$</span>
+      <img class="brand-mark" src="{{ url_for('static', filename='brand-mark.svg', v=STATIC_VERSION) }}" alt="">
       <span class="brand">DineroBook</span>
     </div>
 

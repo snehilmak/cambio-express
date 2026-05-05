@@ -28,6 +28,7 @@
   --db-neon-dim:    #2ecc00;
   --db-neon-ink:    #001a0f;       /* text on neon fills */
   --db-neon-glow-8:  rgba(63,255,0,0.08);
+
   --db-neon-glow-15: rgba(63,255,0,0.15);
   --db-neon-glow-25: rgba(63,255,0,0.25);
   --db-neon-glow-40: rgba(63,255,0,0.40);
