@@ -1,0 +1,111 @@
+{% extends "base_owner.html" %}
+{% block title %}Connect a Store — DineroBook{% endblock %}
+{% block page_title %}Connect a Store{% endblock %}
+{% block content %}
+
+<div style="max-width:640px;">
+<div class="card mb-3">
+  <div class="card-header">
+    <span class="card-title">Active invite code</span>
+  </div>
+  <div class="card-body">
+    {% if active %}
+    <p style="font-size:13.5px;color:var(--text-muted);margin:0 0 16px;">
+      Share this code with the store admin you want to connect. They
+      enter it on their store's Settings → Owner Access page. Code
+      expires on <strong>{{ active.expires_at.strftime('%b %d, %Y') }}</strong>.
+    </p>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;">
+      <input type="text" id="connect-code" value="{{ active.code }}" readonly
+             style="flex:1;font-family:'JetBrains Mono',monospace;font-size:22px;letter-spacing:4px;font-weight:600;text-align:center;">
+      <button type="button" class="btn btn-outline btn-sm" onclick="copyConnectCode()">Copy</button>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <form method="POST" action="{{ url_for('owner_connect_revoke', code_id=active.id) }}"
+            onsubmit="return confirm('Revoke this code? The store admin won\'t be able to redeem it. You can generate a new one right after.');"
+            style="margin:0;">
+        <button type="submit" class="btn btn-outline btn-sm">Revoke</button>
+      </form>
+      <form method="POST" action="{{ url_for('owner_connect_generate') }}"
+            onsubmit="return confirm('Generate a new code? This will revoke the current one.');"
+            style="margin:0;">
+        <button type="submit" class="btn btn-outline btn-sm">Generate New Code</button>
+      </form>
+    </div>
+    {% else %}
+    <p style="font-size:13.5px;color:var(--text-muted);margin:0 0 18px;">
+      No active code. Generate one to give to a store admin — they'll
+      enter it on their store's Settings → Owner Access page to link
+      their store to your umbrella. Codes are valid for 7 days.
+    </p>
+    <form method="POST" action="{{ url_for('owner_connect_generate') }}" style="margin:0;">
+      <button type="submit" class="btn btn-primary">Generate Invite Code</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <span class="card-title">Recently redeemed</span>
+    <span class="text-sm text-muted">Last 10</span>
+  </div>
+  <div class="card-body" style="padding:0;">
+    {% if redeemed %}
+    <table style="width:100%;font-size:13px;">
+      <thead>
+        <tr>
+          <th style="text-align:left;padding:10px 16px;">Code</th>
+          <th style="text-align:left;padding:10px 16px;">Store</th>
+          <th style="text-align:left;padding:10px 16px;">Redeemed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for code, store in redeemed %}
+        <tr>
+          <td class="mono" style="padding:10px 16px;">{{ code.code }}</td>
+          <td style="padding:10px 16px;">
+            {% if store %}{{ store.name }}{% else %}—{% endif %}
+          </td>
+          <td class="text-muted" style="padding:10px 16px;">
+            {{ code.used_at.strftime('%b %d, %Y') }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div style="padding:20px 22px;color:var(--text-muted);font-size:13.5px;">
+      No codes redeemed yet. Stores you've connected will show up here.
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<p style="margin:16px 0 0;font-size:12.5px;color:var(--text-muted);max-width:560px;">
+  To disconnect a store, head to your <a href="{{ url_for('owner_dashboard') }}">Dashboard</a>
+  or <a href="{{ url_for('owner_locations') }}">Locations</a> page — only the
+  owner can break the link, store admins can't.
+</p>
+</div>
+
+<script>
+function copyConnectCode() {
+  var input = document.getElementById('connect-code');
+  if (!input) return;
+  var val = input.value;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val);
+  } else {
+    input.select();
+    document.execCommand('copy');
+  }
+  // Quick visual confirmation — no alert popup.
+  var btn = event.target;
+  var orig = btn.textContent;
+  btn.textContent = 'Copied';
+  setTimeout(function () { btn.textContent = orig; }, 1200);
+}
+</script>
+
+{% endblock %}

@@ -166,11 +166,16 @@ def test_purge_transfer_audit_before_transfer_order(client):
 
 def test_purge_customer_and_user_listed(client):
     """CLAUDE.md says new per-store models must be added to _STORE_OWNED_MODELS.
-    Regression guard for the critical ones."""
+    Regression guard for the critical ones.
+
+    Note: the legacy OwnerInviteCode (store-keyed) was retired in May 2026
+    when we inverted the owner-store connect flow. Its replacement
+    OwnerConnectCode is owner-keyed (cleaned up via the User cascade,
+    not the store-purge loop), so it's intentionally NOT in the list."""
     from app import _STORE_OWNED_MODELS
     for required in ["User", "Customer", "Transfer", "TransferAudit",
                      "ACHBatch", "DailyReport", "StoreEmployee",
-                     "StoreOwnerLink", "OwnerInviteCode"]:
+                     "StoreOwnerLink"]:
         assert required in _STORE_OWNED_MODELS, \
             f"{required} missing from _STORE_OWNED_MODELS — store purge " \
             f"would leave orphaned rows"

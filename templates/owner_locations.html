@@ -162,17 +162,13 @@
   <div class="card-header"><span class="card-title">Connect a store</span></div>
   <div class="card-body">
     <p class="text-sm text-muted mb-2">
-      Enter the 8-character invite code from your store manager.
+      As of May 2026, you generate the invite code and share it with the
+      store admin — they enter it on their Settings page to connect.
+      This way only you can disconnect a store from your umbrella.
     </p>
-    <form method="POST" action="{{ url_for('owner_link_store') }}"
-          style="display:flex;gap:10px;align-items:flex-end;">
-      <div class="field" style="flex:1;margin-bottom:0;">
-        <label>Invite code</label>
-        <input type="text" name="code" class="code-input"
-               placeholder="e.g. AB12CD34" maxlength="8" required>
-      </div>
-      <button type="submit" class="btn btn-primary">Connect</button>
-    </form>
+    <a href="{{ url_for('owner_connect') }}" class="btn btn-primary">
+      Generate invite code
+    </a>
   </div>
 </div>
 

@@ -282,39 +282,43 @@
   <div class="card-body">
 
     {% if owner_link and owner_user %}
-    <!-- State: owner linked -->
-    <div style="margin-bottom:20px;padding:16px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);">
-      <div style="font-size:13px;font-weight:600;color:var(--text);">{{ owner_user.full_name or owner_user.username }}</div>
-      <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">{{ owner_user.username }} has access to this store.</div>
+    {# State: store is connected to an owner. Read-only — disconnect
+       is owner-side only now (the owner is "above" the store, so
+       only they can break the link). #}
+    <div style="margin-bottom:16px;padding:16px;background:var(--surface-2);border-radius:8px;border:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:600;color:var(--text);">
+        Connected to {{ owner_user.full_name or owner_user.username }}
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">
+        {{ owner_user.username }}
+      </div>
     </div>
-    <form method="POST" action="{{ url_for('admin_remove_owner_access') }}"
-          onsubmit="return confirm('Remove owner access for {{ owner_user.full_name or owner_user.username }}?')">
-      <input type="hidden" name="owner_id" value="{{ owner_user.id }}">
-      <button type="submit" class="btn btn-danger btn-sm">Remove Access</button>
-    </form>
-
-    {% elif owner_invite %}
-    <!-- State: active unused code -->
-    <p style="font-size:13px;color:var(--gray4);margin-bottom:16px;">
-      Share this code with your store owner. It expires on {{ owner_invite.expires_at.strftime('%b %d, %Y') }}.
+    <p style="font-size:13px;color:var(--text-muted);margin:0;">
+      To disconnect, please contact your owner. Store admins can no
+      longer remove their own owner — that protects against an admin
+      accidentally severing the relationship the business depends on.
     </p>
-    <div style="display:flex;gap:10px;align-items:center;margin-bottom:20px;">
-      <input type="text" id="owner-code" value="{{ owner_invite.code }}" readonly
-             style="flex:1;font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;font-weight:600;text-align:center;">
-      <button type="button" class="btn btn-outline btn-sm" onclick="copyOwnerCode()">Copy</button>
-    </div>
-    <form method="POST" action="{{ url_for('admin_generate_owner_code') }}">
-      <button type="submit" class="btn btn-outline btn-sm">Generate New Code</button>
-    </form>
 
     {% else %}
-    <!-- State: no code, no owner -->
-    <p style="font-size:13px;color:var(--gray4);margin-bottom:20px;">
-      Generate an invite code to share with your store owner. The code is valid for 7 days.
+    {# State: no owner connected. Admin enters a code that the owner
+       generated on their /owner/connect page. #}
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">
+      Got a code from your owner? Enter it here to connect this store
+      to their umbrella. Codes are 8 characters and valid for 7 days.
     </p>
-    <form method="POST" action="{{ url_for('admin_generate_owner_code') }}">
-      <button type="submit" class="btn btn-primary">Generate Invite Code</button>
+    <form method="POST" action="{{ url_for('admin_redeem_owner_code') }}"
+          style="display:flex;gap:10px;align-items:center;">
+      <input type="text" name="code" autocomplete="off" required
+             pattern="[A-Z0-9]{8}" maxlength="8"
+             placeholder="XXXXXXXX"
+             style="flex:1;font-family:'JetBrains Mono',monospace;font-size:18px;letter-spacing:3px;font-weight:600;text-align:center;text-transform:uppercase;"
+             oninput="this.value = this.value.toUpperCase()">
+      <button type="submit" class="btn btn-primary">Connect</button>
     </form>
+    <p style="font-size:12px;color:var(--text-muted);margin:14px 0 0;">
+      Don't have a code? Ask your owner to sign in and visit their
+      Connect page to generate one.
+    </p>
     {% endif %}
 
   </div>
@@ -347,17 +351,6 @@ function showReset(uid, name) {
 }
 function closeReset() {
   document.getElementById('reset-modal').classList.remove('open');
-}
-function copyOwnerCode() {
-  var val = document.getElementById('owner-code').value;
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(val).then(function() { alert('Invite code copied!'); });
-  } else {
-    var el = document.getElementById('owner-code');
-    el.select();
-    document.execCommand('copy');
-    alert('Invite code copied!');
-  }
 }
 </script>
 {% endblock %}
