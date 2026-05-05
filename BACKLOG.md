@@ -116,6 +116,22 @@ any cadence.
       next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
+- [ ] **Inline-CSS audit (rest of the codebase).** May 2026 PR
+      cleaned up `subscribe.html` (34 inline `style="…"` attrs →
+      page-scoped class set). 67 templates still carry inline styles;
+      worst offenders by count: `superadmin_controls.html` (75),
+      `daily_report.html` (47), `admin_settings.html` (43),
+      `landing.html` (37), `monthly_report.html` (31). Pattern to
+      follow: page-specific layout chrome goes in a
+      `{% block head %}<style>...</style>{% endblock %}` block with
+      a per-page namespace (e.g. `.subscribe-*`, `.daily-*`); colors
+      come from `--db-*` design tokens, never hex; truly-shared
+      components (cards, forms, banners, buttons) must use the
+      classes already in `static/content.css`. Plan: tackle one
+      template per PR, top-down by inline-style count, so each diff
+      stays reviewable. Not a launch blocker — pages render fine —
+      but every new feature on a noisy template duplicates more
+      style strings until it gets cleaned up.
 - [ ] **Browser smoke layer — make CI green**. PR #200 added a
       Playwright-based smoke layer (`tests/smoke/`) that catches
       silent JS errors in chrome wiring. It runs locally (14 tests

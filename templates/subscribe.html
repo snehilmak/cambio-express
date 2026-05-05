@@ -1,74 +1,210 @@
 {% extends "base.html" %}
 {% block title %}Choose Your Plan — DineroBook{% endblock %}
 {% block page_title %}Choose Your Plan{% endblock %}
+
 {% block head %}
+{# Page-scoped pricing component. Isolated to this page since it's
+   not reused — putting the rules in content.css would bloat the
+   global stylesheet for one-off pricing chrome. All colors come from
+   the design-tokens.css `--db-*` palette so the cards flip cleanly
+   between dark + light mode. #}
 <style>
-@media (max-width: 720px) {
-  .subscribe-grid { grid-template-columns: 1fr !important; }
-}
+  .pricing-hero { max-width: 800px; margin: 0 auto 40px; text-align: center; }
+  .pricing-hero__title {
+    font-family: var(--db-font-display, 'Space Grotesk', 'Inter', sans-serif);
+    font-weight: 700;
+    font-size: 28px;
+    color: var(--text);
+    margin-bottom: 10px;
+  }
+  .pricing-hero__sub {
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.1fr;
+    gap: 24px;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  @media (max-width: 720px) {
+    .pricing-grid { grid-template-columns: 1fr; }
+  }
+
+  .pricing-card {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    position: relative;
+  }
+  /* "Most popular" tier — neon accent + corner ribbon. */
+  .pricing-card--accent {
+    border: 2px solid var(--db-neon);
+    box-shadow: 0 0 0 1px var(--db-neon-glow-25);
+  }
+  .pricing-card__tag {
+    position: absolute;
+    top: -13px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--db-neon);
+    color: var(--db-neon-ink);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 3px 14px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pricing-card__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+  .pricing-card--accent .pricing-card__label { color: var(--db-neon); }
+  .pricing-card__price {
+    font-family: var(--db-font-mono, 'JetBrains Mono', Consolas, monospace);
+    font-weight: 700;
+    font-size: 40px;
+    color: var(--text);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .pricing-card__price-period {
+    font-size: 18px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .pricing-card__price-meta {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+    margin-top: 4px;
+  }
+  .pricing-card__price-savings {
+    font-size: 11px;
+    color: var(--db-neon);
+    font-weight: 600;
+    letter-spacing: 0.4px;
+    margin-bottom: 20px;
+  }
+  /* When yearly isn't enabled, we drop directly into the bullet list
+     so the "/mo" caption sits closer to the price block. */
+  .pricing-card__price-meta--solo { margin-bottom: 20px; }
+
+  .pricing-features {
+    list-style: none;
+    margin: 0 0 28px;
+    padding: 0;
+  }
+  .pricing-feature {
+    font-size: 13.5px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .pricing-feature:last-child { border-bottom: none; }
+  .pricing-feature--strike {
+    color: var(--text-muted);
+    text-decoration: none;  /* the ✗ glyph carries the meaning */
+  }
+
+  .pricing-card__cta {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: var(--db-font-body, 'Inter', sans-serif);
+    border: none;
+  }
+  .pricing-card__cta--primary {
+    background: var(--db-neon);
+    color: var(--db-neon-ink);
+  }
+  .pricing-card__cta--primary:hover { background: var(--db-neon-bright); }
+  .pricing-card__cta--secondary {
+    background: transparent;
+    color: var(--db-neon);
+    border: 1.5px solid var(--db-neon);
+    padding: 11px;
+  }
+  .pricing-card__cta--secondary:hover {
+    background: var(--db-neon-glow-15);
+  }
+  .pricing-card__cta-form { margin: 0 0 10px; }
+  .pricing-card__cta-form:last-child { margin-bottom: 0; }
 </style>
 {% endblock %}
+
 {% block content %}
 
-<div style="max-width:800px;margin:0 auto;text-align:center;margin-bottom:40px;">
-  <div style="font-family:'Space Grotesk','Inter',sans-serif;font-weight:700;font-size:28px;color:var(--text);margin-bottom:10px;">Upgrade to keep your access</div>
-  <div style="color:var(--gray4);font-size:14px;">No contracts. Cancel anytime.</div>
+<div class="pricing-hero">
+  <div class="pricing-hero__title">Upgrade to keep your access</div>
+  <div class="pricing-hero__sub">No contracts. Cancel anytime.</div>
 </div>
 
-<div class="subscribe-grid" style="display:grid;grid-template-columns:1fr 1.1fr;gap:24px;max-width:700px;margin:0 auto;">
+<div class="pricing-grid">
 
-  <div style="background:var(--surface);border:1.5px solid var(--border);border-radius:14px;padding:32px 28px;">
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gray4);margin-bottom:8px;">Basic</div>
-    <div style="font-family:'JetBrains Mono',Consolas,monospace;font-weight:700;font-size:40px;color:var(--text);line-height:1;font-variant-numeric:tabular-nums;">$35<span style="font-size:18px;color:var(--gray4);font-weight:500;"> /mo</span></div>
+  <div class="pricing-card">
+    <div class="pricing-card__label">Basic</div>
+    <div class="pricing-card__price">$35<span class="pricing-card__price-period"> /mo</span></div>
     {% if basic_yearly_enabled %}
-    <div style="font-size:13px;color:var(--gray4);margin-bottom:4px;">or $350 / year — save $70</div>
-    <div style="font-size:11px;color:var(--blue);font-weight:600;letter-spacing:0.4px;margin-bottom:20px;">2 MONTHS FREE WITH ANNUAL</div>
+    <div class="pricing-card__price-meta">or $350 / year — save $70</div>
+    <div class="pricing-card__price-savings">2 MONTHS FREE WITH ANNUAL</div>
     {% else %}
-    <div style="font-size:13px;color:var(--gray4);margin-bottom:20px;">per store / month</div>
+    <div class="pricing-card__price-meta pricing-card__price-meta--solo">per store / month</div>
     {% endif %}
-    <ul style="list-style:none;margin-bottom:28px;">
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Daily books &amp; cash tracking</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Money transfer logging</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ ACH batch reconciliation</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--gray2);">✓ Monthly P&amp;L reports</li>
-      <li style="font-size:13.5px;padding:7px 0;color:var(--gray3);">✗ Bank sync</li>
+    <ul class="pricing-features">
+      <li class="pricing-feature">✓ Daily books &amp; cash tracking</li>
+      <li class="pricing-feature">✓ Money transfer logging</li>
+      <li class="pricing-feature">✓ ACH batch reconciliation</li>
+      <li class="pricing-feature">✓ Monthly P&amp;L reports</li>
+      <li class="pricing-feature pricing-feature--strike">✗ Bank sync</li>
     </ul>
-    <form method="POST" action="/subscribe/checkout" style="margin-bottom:10px;">
+    <form method="POST" action="/subscribe/checkout" class="pricing-card__cta-form">
       <input type="hidden" name="plan" value="basic">
-      <button type="submit" style="width:100%;background:var(--blue);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Monthly · $35 / mo</button>
+      <button type="submit" class="pricing-card__cta pricing-card__cta--primary">Monthly · $35 / mo</button>
     </form>
     {% if basic_yearly_enabled %}
-    <form method="POST" action="/subscribe/checkout">
+    <form method="POST" action="/subscribe/checkout" class="pricing-card__cta-form">
       <input type="hidden" name="plan" value="basic_yearly">
-      <button type="submit" style="width:100%;background:transparent;color:var(--blue);border:1.5px solid var(--blue);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Yearly · $350 / yr</button>
+      <button type="submit" class="pricing-card__cta pricing-card__cta--secondary">Yearly · $350 / yr</button>
     </form>
     {% endif %}
   </div>
 
-  <div style="background:var(--navy);border:2px solid var(--gold);border-radius:14px;padding:32px 28px;position:relative;">
-    <div style="position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--gold);color:white;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 14px;border-radius:999px;white-space:nowrap;">MOST POPULAR</div>
-    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--gold2);margin-bottom:8px;">Pro</div>
-    <div style="font-family:'JetBrains Mono',Consolas,monospace;font-weight:700;font-size:40px;color:white;line-height:1;font-variant-numeric:tabular-nums;">$45<span style="font-size:18px;color:rgba(255,255,255,0.55);font-weight:500;"> /mo</span></div>
+  <div class="pricing-card pricing-card--accent">
+    <div class="pricing-card__tag">MOST POPULAR</div>
+    <div class="pricing-card__label">Pro</div>
+    <div class="pricing-card__price">$45<span class="pricing-card__price-period"> /mo</span></div>
     {% if pro_yearly_enabled %}
-    <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:4px;">or $420 / year — save $120</div>
-    <div style="font-size:11px;color:var(--gold2);font-weight:600;letter-spacing:0.4px;margin-bottom:20px;">2 MONTHS FREE WITH ANNUAL</div>
+    <div class="pricing-card__price-meta">or $420 / year — save $120</div>
+    <div class="pricing-card__price-savings">2 MONTHS FREE WITH ANNUAL</div>
     {% else %}
-    <div style="font-size:13px;color:rgba(255,255,255,0.55);margin-bottom:20px;">per store / month</div>
+    <div class="pricing-card__price-meta pricing-card__price-meta--solo">per store / month</div>
     {% endif %}
-    <ul style="list-style:none;margin-bottom:28px;">
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Everything in Basic</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Stripe bank sync</li>
-      <li style="font-size:13.5px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.85);">✓ Live balance visibility</li>
-      <li style="font-size:13.5px;padding:7px 0;color:rgba(255,255,255,0.85);">✓ Multi-store (coming soon)</li>
+    <ul class="pricing-features">
+      <li class="pricing-feature">✓ Everything in Basic</li>
+      <li class="pricing-feature">✓ Stripe bank sync</li>
+      <li class="pricing-feature">✓ Live balance visibility</li>
+      <li class="pricing-feature">✓ Multi-store (coming soon)</li>
     </ul>
-    <form method="POST" action="/subscribe/checkout" style="margin-bottom:10px;">
+    <form method="POST" action="/subscribe/checkout" class="pricing-card__cta-form">
       <input type="hidden" name="plan" value="pro">
-      <button type="submit" style="width:100%;background:var(--gold);color:white;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Monthly · $45 / mo</button>
+      <button type="submit" class="pricing-card__cta pricing-card__cta--primary">Monthly · $45 / mo</button>
     </form>
     {% if pro_yearly_enabled %}
-    <form method="POST" action="/subscribe/checkout">
+    <form method="POST" action="/subscribe/checkout" class="pricing-card__cta-form">
       <input type="hidden" name="plan" value="pro_yearly">
-      <button type="submit" style="width:100%;background:transparent;color:var(--gold2);border:1.5px solid var(--gold2);padding:11px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif;">Yearly · $420 / yr</button>
+      <button type="submit" class="pricing-card__cta pricing-card__cta--secondary">Yearly · $420 / yr</button>
     </form>
     {% endif %}
   </div>
