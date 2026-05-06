@@ -9673,7 +9673,16 @@ def daily_line_item_new(ds, kind):
     """Append a single line item of the given kind for this report date.
 
     Kind must be one of _LINE_ITEM_KINDS; unknown kinds 404 so a
-    malformed URL can't silently create an orphan row."""
+    malformed URL can't silently create an orphan row.
+
+    Validation + INSERT delegate to api.Modules.DailyBook.Services
+    (PR 32). The Flask route handles request parsing, locked-day
+    rejection, the return-payback UX gate, and the post-insert
+    DailyReport total recompute."""
+    from api.Modules.DailyBook.Services import (
+        LineItemValidationError, add_line_item,
+        parse_amount, parse_at_time,
+    )
     _, label, _ = _line_item_kind_or_404(kind)
     sid = session["store_id"]
     # Return-check paybacks come exclusively from the Return Checks
@@ -9693,30 +9702,20 @@ def daily_line_item_new(ds, kind):
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
     blocked = _reject_if_locked(sid, report_date, ds)
     if blocked is not None: return blocked
-    raw_time = request.form.get("at_time", "").strip()
-    raw_amt  = request.form.get("amount", "").strip()
-    err = None
-    at_time = amount = None
     try:
-        at_time = datetime.strptime(raw_time, "%H:%M").time()
-    except ValueError:
-        err = "Enter a valid time (HH:MM)."
-    if err is None:
-        try:
-            amount = float(raw_amt)
-            if amount <= 0: raise ValueError
-        except ValueError:
-            err = "Amount must be greater than zero."
-    if err:
-        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
-        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
-    db.session.add(DailyLineItem(
+        at_time = parse_at_time(request.form.get("at_time", "").strip())
+        amount = parse_amount(request.form.get("amount", "").strip())
+    except LineItemValidationError as e:
+        msg = str(e)
+        if _wants_json(): return jsonify({"ok": False, "error": msg}), 400
+        flash(msg, "error"); return redirect(url_for("daily_report", ds=ds))
+    add_line_item(
+        db.session,
         store_id=sid, report_date=report_date, kind=kind,
         at_time=at_time, amount=amount,
-        note=request.form.get("note", "").strip()[:120],
+        note=request.form.get("note", ""),
         created_by=current_user().id,
-    ))
-    db.session.flush()
+    )
     _recompute_line_items_total(kind, sid, report_date)
     db.session.commit()
     if _wants_json():
@@ -9727,7 +9726,14 @@ def daily_line_item_new(ds, kind):
 @app.route("/daily/<string:ds>/line-items/<string:kind>/<int:item_id>/delete", methods=["POST"])
 @admin_required
 def daily_line_item_delete(ds, kind, item_id):
-    """Delete a single line item and refresh the rolled-up total."""
+    """Delete a single line item and refresh the rolled-up total.
+
+    Validation + DELETE delegate to api.Modules.DailyBook.Services
+    (PR 32). The return-check linkage check lives in the Service so
+    the cashier-side and Return-Checks-side delete paths can't drift."""
+    from api.Modules.DailyBook.Services import (
+        LineItemValidationError, delete_line_item,
+    )
     _, label, _ = _line_item_kind_or_404(kind)
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
@@ -9740,20 +9746,14 @@ def daily_line_item_delete(ds, kind, item_id):
            .filter_by(id=item_id, store_id=sid,
                       report_date=report_date, kind=kind)
            .first_or_404())
-    # Return-check-linked paybacks are owned by the Return Checks page
-    # — letting the cashier delete them here would diverge the daily
-    # book from the source of truth. Front-end hides the Remove button
-    # for these rows; this is the server-side guard against a hand-
-    # crafted POST.
-    if row.return_check_id is not None:
-        msg = ("This payback is linked to a return check. Remove it "
-               "from Books → Return Checks (delete the payment).")
+    try:
+        delete_line_item(db.session, row)
+    except LineItemValidationError as e:
+        msg = str(e)
         if _wants_json():
             return jsonify({"ok": False, "error": msg}), 403
         flash(msg, "error")
         return redirect(url_for("daily_report", ds=ds))
-    db.session.delete(row)
-    db.session.flush()
     _recompute_line_items_total(kind, sid, report_date)
     db.session.commit()
     if _wants_json():
