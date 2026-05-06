@@ -3,6 +3,10 @@ from api.Modules.BankSync.Services.categorize import (
     categorize_transaction,
     uncategorize_transaction,
 )
+from api.Modules.BankSync.Services.charges import (
+    bank_charges_breakdown_for_month,
+    bank_charges_for_month,
+)
 from api.Modules.BankSync.Services.rules import (
     RuleFields,
     RuleNotFoundError,
@@ -23,6 +27,8 @@ __all__ = [
     "RuleNotFoundError",
     "RuleValidationError",
     "TransactionListPage",
+    "bank_charges_breakdown_for_month",
+    "bank_charges_for_month",
     "categorize_transaction",
     "create_rule",
     "delete_rule",
