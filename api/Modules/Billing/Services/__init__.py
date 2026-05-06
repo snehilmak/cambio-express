@@ -50,6 +50,7 @@ from api.Modules.Billing.Services.trial import (
 from api.Modules.Billing.Services.webhook import (
     InvalidWebhookSignatureError,
     derive_plan_from_price,
+    handle_stripe_event,
     verify_webhook_signature,
 )
 
@@ -75,6 +76,7 @@ __all__ = [
     "ensure_stripe_customer",
     "find_store_by_subscription_id",
     "get_trial_status",
+    "handle_stripe_event",
     "lookup_referral_code",
     "new_referral_code",
     "resolve_price_ids",

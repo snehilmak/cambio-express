@@ -12626,15 +12626,20 @@ def resend_webhook():
 def stripe_webhook():
     """Stripe webhook receiver.
 
-    Handled events:
-      checkout.session.completed   — flip the store onto the new plan, store
-                                     Stripe IDs, clear any retention timer.
-      customer.subscription.deleted — mark the store inactive and start the
-                                     6-month data retention countdown.
-    Other event types are accepted (200 OK) but ignored.
+    HTTP-facing wrapper. The verified-event dispatch + per-event
+    business logic lives in
+    `api.Modules.Billing.Services.handle_stripe_event` (PR 59).
+    The route owns:
+      - the request body / Stripe-Signature header pull
+      - the WebhookEvent log-row write (signature_err / ok /
+        processing_err) so the Webhook Health report has data
+      - the HTTP response shape (400 on bad sig, 200 on accepted
+        delivery so Stripe doesn't retry handler bugs forever)
     """
     from api.Modules.Billing.Services import (
-        InvalidWebhookSignatureError, verify_webhook_signature,
+        InvalidWebhookSignatureError,
+        handle_stripe_event,
+        verify_webhook_signature,
     )
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
@@ -12667,57 +12672,9 @@ def stripe_webhook():
         log_row = None
 
     try:
-
-        if event["type"] == "checkout.session.completed":
-            obj = event["data"]["object"]
-            store_id = obj.get("metadata", {}).get("store_id")
-            if store_id:
-                store = db.session.get(Store, int(store_id))
-                if store:
-                    sub_id = obj.get("subscription", "")
-                    customer_id = obj.get("customer", "")
-                    try:
-                        from api.Modules.Billing.Services import (
-                            derive_plan_from_price,
-                        )
-                        sub = stripe.Subscription.retrieve(sub_id)
-                        price_id = sub["items"]["data"][0]["price"]["id"]
-                        store.plan, store.billing_cycle = derive_plan_from_price(price_id)
-                    except Exception as e:
-                        app.logger.error(f"Stripe sub retrieve error: {e}")
-                        store.plan = "pro"
-                        store.billing_cycle = "monthly"
-                    store.stripe_customer_id = customer_id
-                    store.stripe_subscription_id = sub_id
-                    # Returning customer: clear cancellation + retention
-                    # timer + trial-reminder dedup flag (delegated).
-                    from api.Modules.Billing.Services import (
-                        clear_cancellation_state,
-                    )
-                    clear_cancellation_state(store)
-                    # Referral flow: mint the referrer's own code so they get
-                    # the topbar crown immediately, and apply any pending
-                    # referee credit from the code they signed up with.
-                    try:
-                        ensure_referral_code(store)
-                        apply_pending_referral_credits(store)
-                    except Exception as e:
-                        app.logger.warning(f"referral hook error for store {store.id}: {e}")
-                    db.session.commit()
-
-        elif event["type"] == "customer.subscription.deleted":
-            from api.Modules.Billing.Services import (
-                apply_subscription_cancelled,
-                find_store_by_subscription_id,
-            )
-            sub_id = event["data"]["object"].get("id", "")
-            store = find_store_by_subscription_id(db.session, sub_id)
-            if store:
-                apply_subscription_cancelled(
-                    store, retention_days=DATA_RETENTION_DAYS,
-                )
-                db.session.commit()
-
+        handle_stripe_event(
+            db.session, event, retention_days=DATA_RETENTION_DAYS,
+        )
     except Exception as e:
         # Don't let a handler bug 500 a Stripe delivery — log + ack.
         # Stripe retries on non-2xx, so a 200 with logged error keeps
