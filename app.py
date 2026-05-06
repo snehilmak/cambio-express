@@ -9357,20 +9357,34 @@ def store_mt_companies(store):
 @app.route("/daily")
 @admin_required
 def daily_list():
-    user=current_user(); sid=session["store_id"]; today=date.today()
-    month=int(request.args.get("month",today.month)); year=int(request.args.get("year",today.year))
-    days_in_month=monthrange(year,month)[1]
-    reports={r.report_date.day:r for r in DailyReport.query.filter(
-        DailyReport.store_id==sid,
-        db.extract("year",DailyReport.report_date)==year,
-        db.extract("month",DailyReport.report_date)==month).all()}
-    month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=year,month=month).first()
-    prev_month=month-1 if month>1 else 12; prev_year=year if month>1 else year-1
-    next_month=month+1 if month<12 else 1; next_year=year if month<12 else year+1
-    return render_template("daily_list.html",user=user,year=year,month=month,
-        days=days_in_month,reports=reports,month_report=month_report,today=today,
-        month_name=month_name[month],
-        prev_month=prev_month,prev_year=prev_year,next_month=next_month,next_year=next_year)
+    """Calendar view of one month's DailyReport rows. Read-side
+    delegates to api.Modules.DailyBook.Repositories so the same
+    "give me reports in [d_from, d_to]" query lives in one place."""
+    from api.Modules.DailyBook.Repositories import list_reports_in_period
+    user = current_user(); sid = session["store_id"]; today = date.today()
+    month = int(request.args.get("month", today.month))
+    year = int(request.args.get("year", today.year))
+    days_in_month = monthrange(year, month)[1]
+    d_from = date(year, month, 1)
+    d_to = date(year, month, days_in_month)
+    reports = {
+        r.report_date.day: r
+        for r in list_reports_in_period(db.session, [sid], d_from, d_to)
+    }
+    month_report = MonthlyFinancial.query.filter_by(
+        store_id=sid, year=year, month=month,
+    ).first()
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    next_month = month + 1 if month < 12 else 1
+    next_year = year if month < 12 else year + 1
+    return render_template(
+        "daily_list.html", user=user, year=year, month=month,
+        days=days_in_month, reports=reports, month_report=month_report,
+        today=today, month_name=month_name[month],
+        prev_month=prev_month, prev_year=prev_year,
+        next_month=next_month, next_year=next_year,
+    )
 
 def _ensure_daily_report(store_id, report_date):
     """Return the DailyReport for (store, date), creating an empty one if needed."""
