@@ -20,6 +20,7 @@ from api.Modules.Billing.Services.config import (
     stripe_mode,
     stripe_publishable_key,
 )
+from api.Modules.Billing.Services.customer import ensure_stripe_customer
 from api.Modules.Billing.Services.feature_flags import (
     store_feature_enabled,
     store_has_addon,
@@ -71,6 +72,7 @@ __all__ = [
     "data_retention_days_left",
     "derive_plan_from_price",
     "ensure_referral_code",
+    "ensure_stripe_customer",
     "find_store_by_subscription_id",
     "get_trial_status",
     "lookup_referral_code",

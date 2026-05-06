@@ -2167,42 +2167,13 @@ def _stripe_price_ids():
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
 
-    Stripe FC requires an `account_holder={"type":"customer", ...}` on
-    every Financial Connections session — so even trial / inactive stores
-    that haven't paid yet need a customer record to link a bank account.
-    We reuse the existing billing customer when present.
-
-    Self-heals when the cached id was created in a different Stripe mode
-    (e.g. test → live migration). On "No such customer" the cached id is
-    cleared and a fresh customer is minted in the current mode. Customer
-    retrieves are not metered, so the verify-then-use cost is effectively
-    zero per connect attempt.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.ensure_stripe_customer` (PR 56).
+    Self-heals when the cached id was created in a different
+    Stripe mode (e.g. test → live migration).
     """
-    if store.stripe_customer_id:
-        try:
-            stripe.Customer.retrieve(store.stripe_customer_id)
-            return store.stripe_customer_id
-        except stripe.error.InvalidRequestError as e:
-            msg = str(e)
-            if "No such customer" in msg or "resource_missing" in msg:
-                app.logger.warning(
-                    f"Stripe customer {store.stripe_customer_id} not found "
-                    f"in current mode for store {store.id}; minting fresh.")
-                store.stripe_customer_id = ""
-            else:
-                raise
-    try:
-        cust = stripe.Customer.create(
-            email=(store.email or None),
-            name=store.name,
-            metadata={"store_id": str(store.id)},
-        )
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe customer create failed for store {store.id}: {e}")
-        raise
-    store.stripe_customer_id = cust.id
-    db.session.commit()
-    return cust.id
+    from api.Modules.Billing.Services import ensure_stripe_customer as _svc
+    return _svc(db.session, store)
 
 def _upsert_fc_account(store_id, api_obj):
     """Persist (or refresh) a FinancialConnectionsAccount into our cache."""
