@@ -9856,153 +9856,34 @@ def admin_tax_export_zip():
 # admin list page + owner dashboard share queries.
 
 def _return_check_writeoff_total(store_ids, start, end, status_value):
-    """Sum the still-owed balance of return checks marked `status_value`
-    (typically 'loss' or 'fraud') whose status_changed_on falls in
-    [start, end]. Subtracts payments already received against each
-    parent — partial recoveries before the close were already booked
-    as recoveries in their own months.
+    """Sum the still-owed balance of return checks marked `status_value`.
+    Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_writeoff_total` (PR 62).
     """
-    rows = (db.session.query(ReturnCheck.id, ReturnCheck.amount)
-            .filter(
-                ReturnCheck.store_id.in_(store_ids),
-                ReturnCheck.status == status_value,
-                ReturnCheck.status_changed_on >= start,
-                ReturnCheck.status_changed_on <= end,
-            ).all())
-    if not rows:
-        return 0.0
-    rc_ids = [rid for rid, _ in rows]
-    # Sum payments per parent, all in one query so we don't N+1
-    # for stores with lots of write-offs.
-    paid_rows = (db.session.query(
-        ReturnCheckPayment.return_check_id,
-        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0),
-    ).filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
-     .group_by(ReturnCheckPayment.return_check_id).all())
-    paid_by = {rid: float(s or 0.0) for rid, s in paid_rows}
-    total = 0.0
-    for rid, amt in rows:
-        total += max(0.0, float(amt or 0.0) - paid_by.get(rid, 0.0))
-    return total
+    from api.Modules.Owners.Services import return_check_writeoff_total
+    return return_check_writeoff_total(
+        db.session, store_ids, start, end, status_value,
+    )
+
 
 def _return_check_period_aggregates(store_ids, start, end):
-    """Sum recoveries (by payment date) and losses+fraud (by parent
-    status-change date), plus the still-pending balance.
-
-    Recoveries are measured at the PAYMENT level — a $300 installment
-    in April and $400 in May contribute to those months separately,
-    even though the parent ReturnCheck is the same row. This matches
-    the user's mental model: money received this month = recovery
-    this month, regardless of when the original check bounced.
-
-    Losses + fraud are measured at the parent level — they're a
-    single closing event, not a stream. The amount is the REMAINING
-    balance at the time of the write-off (parent.amount minus
-    payments already received), so a partially-recovered check that
-    eventually goes bad only reports the unrecovered portion as the
-    loss.
-
-    Empty store list returns zeros — caller doesn't need to short-
-    circuit. Returns gain-positive `net_gl` (used by owner dashboard);
-    `_return_check_monthly_pl` flips the sign for the P&L expense
-    column.
+    """Sum recoveries / losses / fraud / pending balance for the
+    window. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_period_aggregates`
+    (PR 62). Returns gain-positive `net_gl`; `_return_check_monthly_pl`
+    flips the sign for the P&L expense column.
     """
-    if not store_ids:
-        return {"recoveries": 0.0, "losses": 0.0, "fraud": 0.0,
-                "net_gl": 0.0, "pending": 0.0, "pending_count": 0}
-
-    # Recoveries: Σ payments by paid_on, joined to parent for the
-    # store filter. Note the payment itself doesn't carry store_id —
-    # the parent does — so we join through.
-    rec = db.session.query(
-        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
-    ).join(
-        ReturnCheck, ReturnCheckPayment.return_check_id == ReturnCheck.id
-    ).filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheckPayment.paid_on >= start,
-        ReturnCheckPayment.paid_on <= end,
-    ).scalar() or 0.0
-
-    # Losses + fraud: closed ReturnChecks whose status_changed_on falls
-    # in the window. The contribution is the REMAINING balance, not
-    # the original amount — partial recoveries before the close were
-    # already booked as recoveries on their own months. The summing
-    # logic lives in the module-level _return_check_writeoff_total
-    # helper so it can be unit-tested without spinning up the parent.
-    loss  = _return_check_writeoff_total(store_ids, start, end, "loss")
-    fraud = _return_check_writeoff_total(store_ids, start, end, "fraud")
-
-    pending_q = db.session.query(
-        db.func.coalesce(db.func.sum(ReturnCheck.amount), 0.0),
-        db.func.count(ReturnCheck.id),
-    ).filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheck.status == "pending",
-        ReturnCheck.bounced_on <= end,
-    ).first()
-    pending_amount_total = float(pending_q[0] or 0.0)
-    pending_count = int(pending_q[1] or 0)
-    # Subtract installments already received against pending parents
-    # so the "Pending balance" KPI shows the OUTSTANDING owed, not
-    # the original face value.
-    if pending_count > 0:
-        pending_paid = (db.session.query(
-            db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
-        ).join(ReturnCheck,
-               ReturnCheckPayment.return_check_id == ReturnCheck.id)
-         .filter(
-             ReturnCheck.store_id.in_(store_ids),
-             ReturnCheck.status == "pending",
-             ReturnCheck.bounced_on <= end,
-         ).scalar() or 0.0)
-        pending = max(0.0, pending_amount_total - float(pending_paid))
-    else:
-        pending = 0.0
-
-    return {
-        "recoveries":   float(rec),
-        "losses":       float(loss),
-        "fraud":        float(fraud),
-        "net_gl":       float(rec) - float(loss) - float(fraud),
-        "pending":      pending,
-        "pending_count": pending_count,
-    }
+    from api.Modules.Owners.Services import return_check_period_aggregates
+    return return_check_period_aggregates(db.session, store_ids, start, end)
 
 
 def _return_check_aging_buckets(store_ids, today=None):
     """Pending balance sliced into 0–30 / 31–60 / 61–90 / 90+ day
-    buckets by `bounced_on`. Helps the owner spot stale receivables
-    that probably won't recover."""
-    if today is None:
-        today = date.today()
-    if not store_ids:
-        return [
-            {"label": "0–30 d",  "amount": 0.0, "count": 0},
-            {"label": "31–60 d", "amount": 0.0, "count": 0},
-            {"label": "61–90 d", "amount": 0.0, "count": 0},
-            {"label": "90+ d",   "amount": 0.0, "count": 0},
-        ]
-    rows = ReturnCheck.query.filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheck.status == "pending",
-    ).all()
-    buckets = [
-        {"label": "0–30 d",  "amount": 0.0, "count": 0, "max": 30},
-        {"label": "31–60 d", "amount": 0.0, "count": 0, "max": 60},
-        {"label": "61–90 d", "amount": 0.0, "count": 0, "max": 90},
-        {"label": "90+ d",   "amount": 0.0, "count": 0, "max": None},
-    ]
-    for r in rows:
-        age = (today - r.bounced_on).days if r.bounced_on else 0
-        for b in buckets:
-            if b["max"] is None or age <= b["max"]:
-                b["amount"] += float(r.amount or 0.0)
-                b["count"]  += 1
-                break
-    for b in buckets:
-        b.pop("max", None)
-    return buckets
+    buckets. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_aging_buckets` (PR 62).
+    """
+    from api.Modules.Owners.Services import return_check_aging_buckets
+    return return_check_aging_buckets(db.session, store_ids, today=today)
 
 
 def _bank_charges_for_month(store_id, year, month, category_slug=None,
@@ -10028,56 +9909,20 @@ def _bank_charges_breakdown_for_month(store_id, year, month):
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
-    using EXPENSE convention so it slots correctly into the
-    expense column on monthly_report (which subtracts from net income).
-
-      positive  → net loss for the month (losses + fraud > recoveries)
-      negative  → net gain for the month (recoveries > losses + fraud)
-
-    Note: _return_check_period_aggregates['net_gl'] uses the OPPOSITE
-    convention (positive = gain) because that's what the owner
-    dashboard shows. We deliberately negate here so each consumer
-    reads the right sign for its context.
+    using EXPENSE convention. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_monthly_pl` (PR 62).
     """
-    start = date(year, month, 1)
-    end   = date(year, month, monthrange(year, month)[1])
-    agg = _return_check_period_aggregates([store_id], start, end)
-    # Flip the sign: dashboard's "net_gl" is gain-positive, P&L line
-    # is loss-positive (expense convention).
-    return -agg["net_gl"]
+    from api.Modules.Owners.Services import return_check_monthly_pl
+    return return_check_monthly_pl(db.session, store_id, year, month)
 
 
 def _return_check_monthly_series(store_ids, today=None):
-    """12-month bars for the owner dashboard: per-month recoveries
-    (positive) and losses+fraud (negative). Labels are 'YYYY-MM' so
-    ApexCharts renders them as a date axis."""
-    if today is None:
-        today = date.today()
-    months = []
-    y, m = today.year, today.month
-    for _ in range(12):
-        months.append((y, m))
-        m -= 1
-        if m == 0:
-            m = 12
-            y -= 1
-    months.reverse()  # oldest → newest
-    labels, recoveries, losses = [], [], []
-    if not store_ids:
-        for (yy, mm) in months:
-            labels.append(f"{yy:04d}-{mm:02d}")
-            recoveries.append(0.0)
-            losses.append(0.0)
-        return labels, recoveries, losses
-    for (yy, mm) in months:
-        s = date(yy, mm, 1)
-        e = date(yy, mm, monthrange(yy, mm)[1])
-        agg = _return_check_period_aggregates(store_ids, s, e)
-        labels.append(f"{yy:04d}-{mm:02d}")
-        recoveries.append(round(agg["recoveries"], 2))
-        # Combine loss + fraud — both are write-offs from the P&L's POV.
-        losses.append(round(agg["losses"] + agg["fraud"], 2))
-    return labels, recoveries, losses
+    """12-month bars for the owner dashboard. Single source of truth
+    lives in `api.Modules.Owners.Services.return_check_monthly_series`
+    (PR 62).
+    """
+    from api.Modules.Owners.Services import return_check_monthly_series
+    return return_check_monthly_series(db.session, store_ids, today=today)
 
 
 def _return_check_list_payload(store_id, status, query, date_from, date_to):
