@@ -9,11 +9,17 @@ from api.Modules.Billing.Services.checkout import (
     create_checkout_session,
     resolve_price_ids,
 )
+from api.Modules.Billing.Services.portal import (
+    NoBillingCustomerError,
+    create_billing_portal_session,
+)
 
 __all__ = [
     "BillingError",
     "InvalidPlanError",
+    "NoBillingCustomerError",
     "StripeServiceError",
+    "create_billing_portal_session",
     "create_checkout_session",
     "resolve_price_ids",
 ]

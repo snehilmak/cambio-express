@@ -4915,26 +4915,26 @@ def admin_subscription():
     )
 
 def _open_billing_portal(store, error_msg, log_label="billing portal"):
-    """Open the Stripe Customer Portal for `store` and 303-redirect there.
+    """Flask-side adapter for the billing-portal Service. On success
+    303-redirects to Stripe; on Stripe error flashes `error_msg` and
+    redirects back to /admin/subscription.
 
-    On failure, flashes `error_msg` and redirects back to
-    /admin/subscription. Centralizes the Stripe boilerplate that the
-    portal-open and the cancel-via-portal routes used to duplicate
-    line for line — the only thing that varies is which error
-    message + log label to show when Stripe fails.
-
-    Returns a Flask response. Caller is responsible for the
-    pre-checks (does the store have a Stripe customer id, is the
-    plan paid, etc.) so this helper stays single-purpose.
+    Caller handles the pre-checks (paid plan, stripe_customer_id
+    present, etc.). Single source of truth lives in
+    `api.Modules.Billing.Services.create_billing_portal_session`
+    (PR 44).
     """
+    from api.Modules.Billing.Services import (
+        StripeServiceError, create_billing_portal_session,
+    )
     try:
-        portal = stripe.billing_portal.Session.create(
-            customer=store.stripe_customer_id,
+        url = create_billing_portal_session(
+            store,
             return_url=url_for("admin_subscription", _external=True),
         )
-        return redirect(portal.url, code=303)
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe {log_label} error: {e}")
+        return redirect(url, code=303)
+    except StripeServiceError as e:
+        app.logger.error(f"Stripe {log_label} error: {e.__cause__}")
         flash(error_msg, "error")
         return redirect(url_for("admin_subscription"))
 
