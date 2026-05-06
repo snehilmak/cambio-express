@@ -2970,39 +2970,36 @@ def _finalize_2fa_login(user):
 # through TOTP; passkey is the parallel path.
 
 def _webauthn_rp_id():
-    """The effective RP ID. Passkeys are cryptographically bound to
-    this string — it has to match across registration + authentication
-    and survive a login from any path on the same host. Prefer an
-    explicit env var (prod sets WEBAUTHN_RP_ID=dinerobook.com);
-    otherwise strip the port off the request Host (localhost:5000 → localhost)."""
-    explicit = os.environ.get("WEBAUTHN_RP_ID", "").strip()
-    if explicit:
-        return explicit
-    return request.host.split(":", 1)[0]
+    """The effective RP ID. Single source of truth lives in
+    `api.Modules.Auth.Services.passkey_rp_id` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_rp_id
+    return passkey_rp_id(request.host)
 
 def _webauthn_rp_name():
-    return "DineroBook"
+    """Brand label shown by the OS picker. Single source of truth
+    lives in `api.Modules.Auth.Services.passkey_rp_name` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_rp_name
+    return passkey_rp_name()
 
 def _webauthn_origin():
-    """Expected Origin header for WebAuthn verification — scheme + host.
-    The browser signs this alongside the challenge; a mismatch means
-    the request came from a different tab/frame and is rejected."""
-    return f"{request.scheme}://{request.host}"
+    """Expected Origin header for WebAuthn verification. Single
+    source of truth lives in
+    `api.Modules.Auth.Services.passkey_origin` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_origin
+    return passkey_origin(request.scheme, request.host)
 
 def _passkey_exclude_list(user):
-    """Credential descriptors for every passkey this user already has,
-    passed to the browser as excludeCredentials so the same physical
-    authenticator can't be registered twice on one account."""
-    return [
-        PublicKeyCredentialDescriptor(id=p.credential_id)
-        for p in Passkey.query.filter_by(user_id=user.id).all()
-    ]
+    """Credential descriptors for every passkey this user already has.
+    Single source of truth lives in
+    `api.Modules.Auth.Services.passkey_exclude_credentials` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_exclude_credentials
+    return passkey_exclude_credentials(db.session, user)
 
 def _passkey_eligible(user):
-    """Whether a user may enroll passkeys. Now: any logged-in user.
-    Kept as a single predicate so future tightening (e.g. "deny pending
-    self-deletion accounts") has one place to land."""
-    return bool(user)
+    """Whether a user may enroll passkeys. Single source of truth
+    lives in `api.Modules.Auth.Services.passkey_is_eligible` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_is_eligible
+    return passkey_is_eligible(user)
 
 def _update_user_password(user, current_pw, new_pw, confirm_pw):
     """Validate + apply a self-service password change. Returns
