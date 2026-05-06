@@ -34,7 +34,19 @@ class Settings(BaseSettings):
     # ── Web framework ──────────────────────────────────────────
     secret_key: str = Field(
         default="dev-secret-key-do-not-use-in-prod",
-        description="Used for JWT signing and session cookies.",
+        description="Used for Flask session cookies. Falls back as JWT "
+        "secret when AUTH_JWT_SECRET is unset.",
+    )
+
+    # ── Auth (JWT issuance) ────────────────────────────────────
+    auth_jwt_secret: str = Field(
+        default="",
+        description=(
+            "HS256 signing secret for the FastAPI JWT issuer. Empty "
+            "falls back to SECRET_KEY for dev convenience; production "
+            "should set this explicitly so JWT secret rotation is "
+            "independent of the Flask cookie secret."
+        ),
     )
 
     # ── Stripe (carried over from the Flask config) ────────────

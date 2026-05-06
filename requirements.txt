@@ -26,3 +26,7 @@ httpx==0.28.1  # FastAPI TestClient dependency
 # get routed into the FastAPI app while Flask owns / and everything
 # else during the strangler-fig migration. Removed at cleanup.
 a2wsgi==1.10.10
+# JWT issuance for the FastAPI auth surface (PR 19+). Per ADR:
+# JWT-claims auth model — full permission set as claims, 30-min
+# access token TTL, refresh token + jti blacklist.
+PyJWT==2.7.0
