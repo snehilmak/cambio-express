@@ -3016,51 +3016,47 @@ def push_test():
     return jsonify({"sent": n})
 
 # ── Referrals ────────────────────────────────────────────────
-REFERRAL_SELF_CENTS    = 10000   # $100 for the referrer
-REFERRAL_REFEREE_CENTS = 5000    # $50 for the new store
+from api.Modules.Billing.Services import (
+    REFERRAL_REFEREE_CENTS,
+    REFERRAL_SELF_CENTS,
+)
+
 
 def _new_referral_code():
-    """Mint an 8-char uppercase alphanumeric referral code, checking uniqueness.
-    Tries up to 12 times before giving up — that ceiling is effectively
-    unreachable at any realistic volume."""
-    alphabet = string.ascii_uppercase + string.digits
-    for _ in range(12):
-        code = "".join(secrets.choice(alphabet) for _ in range(8))
-        if not ReferralCode.query.filter_by(code=code).first():
-            return code
-    raise RuntimeError("Could not mint a unique referral code")
+    """Mint an 8-char uppercase alphanumeric referral code.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.new_referral_code` (PR 50).
+    """
+    from api.Modules.Billing.Services import (
+        new_referral_code as _svc_new_referral_code,
+    )
+    return _svc_new_referral_code(db.session)
 
 def ensure_referral_code(store):
     """Return the store's ReferralCode, creating it on demand.
 
-    Admins only see the crown once they're on a paid plan, so call sites
-    should already have checked `store.plan in {basic, pro}` — we don't
-    enforce here (the superadmin / testing flows may want to pre-mint).
+    Delegates to `api.Modules.Billing.Services.ensure_referral_code`
+    (PR 50). Admins only see the crown once they're on a paid plan,
+    so call sites should already have checked
+    `store.plan in {basic, pro}`.
     """
-    if not store:
-        return None
-    rc = ReferralCode.query.filter_by(owner_store_id=store.id).first()
-    if rc is not None:
-        return rc
-    rc = ReferralCode(
-        code=_new_referral_code(),
-        owner_store_id=store.id,
-        reward_self_cents=REFERRAL_SELF_CENTS,
-        reward_referee_cents=REFERRAL_REFEREE_CENTS,
+    from api.Modules.Billing.Services import (
+        ensure_referral_code as _svc_ensure_referral_code,
     )
-    db.session.add(rc); db.session.flush()
-    return rc
+    return _svc_ensure_referral_code(db.session, store)
 
 def lookup_referral_code(raw):
     """Return the active ReferralCode matching the raw input, or None.
-    Accepts either the code string or a URL like /signup?ref=ABC123."""
-    if not raw:
-        return None
-    code = raw.strip().upper()
-    if not code:
-        return None
-    rc = ReferralCode.query.filter_by(code=code, is_active=True).first()
-    return rc
+
+    Delegates to `api.Modules.Billing.Services.lookup_referral_code`
+    (PR 50). Accepts either the code string or a URL — URL extraction
+    happens at the form-parse boundary.
+    """
+    from api.Modules.Billing.Services import (
+        lookup_referral_code as _svc_lookup_referral_code,
+    )
+    return _svc_lookup_referral_code(db.session, raw)
 
 def apply_pending_referral_credits(referee_store):
     """Called from the Stripe webhook when a store transitions to a paid
