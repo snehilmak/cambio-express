@@ -9423,16 +9423,17 @@ def _line_item_kind_or_404(kind):
     return _LINE_ITEM_KINDS[kind]
 
 def _recompute_line_items_total(kind, store_id, report_date):
-    """Sum DailyLineItem rows of the given kind and push the total onto
-    the matching DailyReport field. Same contract as the drops /
-    check-deposits helpers."""
+    """Sum DailyLineItem rows of the given kind and push the total
+    onto the matching DailyReport field. Single source of truth lives
+    in `api.Modules.DailyBook.Services.recompute_line_items_total`
+    (PR 42); this Flask-scope wrapper resolves the kind→field
+    mapping from the legacy `_LINE_ITEM_KINDS` map and forwards."""
+    from api.Modules.DailyBook.Services import recompute_line_items_total
     field, _, _ = _LINE_ITEM_KINDS[kind]
-    total = (db.session.query(db.func.coalesce(db.func.sum(DailyLineItem.amount), 0.0))
-             .filter_by(store_id=store_id, report_date=report_date, kind=kind).scalar()) or 0.0
-    rpt = _ensure_daily_report(store_id, report_date)
-    setattr(rpt, field, float(total))
-    rpt.updated_at = datetime.utcnow()
-    return total
+    return recompute_line_items_total(
+        db.session, store_id, report_date,
+        kind=kind, daily_report_field=field,
+    )
 
 # Fields on DailyReport the main form still edits. Derived fields
 # (outside_cash_drops, checks_deposit, and every DailyReport field

@@ -8,6 +8,7 @@ from api.Modules.DailyBook.Services.line_items import (
     delete_line_item,
     parse_amount,
     parse_at_time,
+    recompute_line_items_total,
 )
 from api.Modules.DailyBook.Services.reports import (
     DailyReportSummary,
@@ -29,6 +30,7 @@ __all__ = [
     "lock_report",
     "parse_amount",
     "parse_at_time",
+    "recompute_line_items_total",
     "summarize_period",
     "summarize_report",
     "unlock_report",
