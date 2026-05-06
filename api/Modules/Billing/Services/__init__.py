@@ -13,13 +13,21 @@ from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
 )
+from api.Modules.Billing.Services.webhook import (
+    InvalidWebhookSignatureError,
+    derive_plan_from_price,
+    verify_webhook_signature,
+)
 
 __all__ = [
     "BillingError",
     "InvalidPlanError",
+    "InvalidWebhookSignatureError",
     "NoBillingCustomerError",
     "StripeServiceError",
     "create_billing_portal_session",
     "create_checkout_session",
+    "derive_plan_from_price",
     "resolve_price_ids",
+    "verify_webhook_signature",
 ]

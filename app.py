@@ -12909,12 +12909,15 @@ def stripe_webhook():
                                      6-month data retention countdown.
     Other event types are accepted (200 OK) but ignored.
     """
+    from api.Modules.Billing.Services import (
+        InvalidWebhookSignatureError, verify_webhook_signature,
+    )
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        event = verify_webhook_signature(payload, sig_header, webhook_secret)
+    except InvalidWebhookSignatureError as e:
         # Log the rejected delivery so Webhook Health surfaces it.
         try:
             db.session.add(WebhookEvent(
@@ -12950,18 +12953,12 @@ def stripe_webhook():
                     sub_id = obj.get("subscription", "")
                     customer_id = obj.get("customer", "")
                     try:
+                        from api.Modules.Billing.Services import (
+                            derive_plan_from_price,
+                        )
                         sub = stripe.Subscription.retrieve(sub_id)
                         price_id = sub["items"]["data"][0]["price"]["id"]
-                        # Map the Stripe price to the internal plan key.
-                        # basic + basic_yearly both grant the "basic" tier;
-                        # pro + pro_yearly both grant "pro". Anything unknown
-                        # falls back to "pro" (safer than locking the user out
-                        # of features they paid for).
-                        prices = _stripe_price_ids()
-                        basic_ids  = {prices["basic"], prices["basic_yearly"]} - {""}
-                        yearly_ids = {prices["basic_yearly"], prices["pro_yearly"]} - {""}
-                        store.plan = "basic" if price_id in basic_ids else "pro"
-                        store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
+                        store.plan, store.billing_cycle = derive_plan_from_price(price_id)
                     except Exception as e:
                         app.logger.error(f"Stripe sub retrieve error: {e}")
                         store.plan = "pro"
