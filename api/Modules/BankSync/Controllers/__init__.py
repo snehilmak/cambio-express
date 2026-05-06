@@ -18,9 +18,12 @@ from api.Core.Database import get_db
 from api.Modules.BankSync.Models import StripeBankAccount
 from api.Modules.BankSync.Repositories import (
     BankTransactionFilters,
+    list_accounts,
     list_rules,
 )
 from api.Modules.BankSync.Requests import (
+    BankAccountListResponse,
+    BankAccountRow,
     BankRuleListResponse,
     BankRuleRow,
     BankTransactionListResponse,
@@ -156,3 +159,45 @@ def list_rules_route(
         for r in rules
     ]
     return BankRuleListResponse(rows=rows, total=len(rows))
+
+
+@router.get("/accounts", response_model=BankAccountListResponse)
+def list_accounts_route(
+    store_ids: str = Query(...),
+    db: Session = Depends(get_db),
+) -> BankAccountListResponse:
+    """All connected Stripe Financial Connections accounts for the
+    given stores. Includes both enabled + disconnected accounts so
+    the UI can show "previously connected" history; clients filter
+    on `enabled` if they only want active ones."""
+    ids = _parse_store_ids(store_ids)
+    accounts = list_accounts(db, ids)
+    rows = [
+        BankAccountRow(
+            id=a.id,
+            institution_name=a.institution_name or "",
+            display_name=a.display_name or "",
+            nickname=a.nickname or "",
+            last4=a.last4 or "",
+            label=a.label,
+            category=a.category or "",
+            subcategory=a.subcategory or "",
+            currency=a.currency or "usd",
+            last_balance_cents=a.last_balance_cents or 0,
+            last_balance=a.last_balance,
+            last_balance_as_of=(
+                a.last_balance_as_of.isoformat()
+                if a.last_balance_as_of else ""
+            ),
+            enabled=bool(a.enabled),
+            connected_at=(
+                a.connected_at.isoformat() if a.connected_at else ""
+            ),
+            disconnected_at=(
+                a.disconnected_at.isoformat()
+                if a.disconnected_at else ""
+            ),
+        )
+        for a in accounts
+    ]
+    return BankAccountListResponse(rows=rows, total=len(rows))
