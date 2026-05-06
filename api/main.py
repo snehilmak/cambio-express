@@ -48,9 +48,7 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Customers.Controllers import router as customers_router
     app.include_router(customers_router, prefix="/customers", tags=["customers"])
 
-    # Transfers — third module. Read-side wired as of PR 12; write-side
-    # arrives in subsequent PRs once the create/edit business logic
-    # moves into Services.
+    # Transfers — third module. Read-side wired as of PR 12.
     from api.Modules.Transfers.Controllers import router as transfers_router
     app.include_router(transfers_router, prefix="/transfers", tags=["transfers"])
 
@@ -60,6 +58,11 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.BankSync.Controllers import router as banksync_router
     app.include_router(banksync_router, prefix="/bank", tags=["bank"])
 
+    # Auth — fifth module. Login + JWT verification wired as of PR 20.
+    # The full Auth migration (TOTP, passkey, refresh tokens) ships
+    # in subsequent PRs; this PR adds password-flow + Bearer dep.
+    from api.Modules.Auth.Controllers import router as auth_router
+    app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
