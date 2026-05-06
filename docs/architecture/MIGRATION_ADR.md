@@ -1,6 +1,7 @@
 # DineroBook Architecture Migration ADR
 
-> **Status:** DRAFT — pending review by software lead.
+> **Status:** ACCEPTED — software lead has answered all open questions.
+>            Migration kicks off with PR 1 (Reports module).
 > **Last updated:** 2026-05-06
 > **Authors:** Snehil Mak (product), Software Lead (architecture), Claude (drafting)
 
@@ -203,10 +204,12 @@ Per discussion with the software lead:
 | `dinerobook-api` | FastAPI backend extracted from this repo. | Created at start of Reports migration (PR 1). Initially populated by copying `app/` over. |
 | `dinerobook-web` | Frontend (React/Vue/HTMX — TBD by software lead). | Created when the API has enough endpoints to render a page (~end of Reports migration). |
 
-> **Open question (Q1):** Frontend stack — React, Vue, or HTMX?
-> HTMX is closest to the current Jinja2 server-rendered feel and would
-> let us reuse the design system as-is with minimal JS work. React/Vue
-> are more standard for "customer integrates with our API" stories.
+> **Q1 RESOLVED — Frontend stack: React.** Reasons given by the
+> software lead: most-standard "customer integrates with our API"
+> story, biggest hiring pool, mature tooling. Means the existing
+> Jinja2 design system gets reimplemented in React components — the
+> design tokens and visual language carry over (CSS-in-JS or CSS
+> modules, TBD when the frontend repo is created).
 
 ---
 
@@ -224,10 +227,24 @@ Flask sessions → JWT. A few concrete steps:
    like, just with a token in the cookie instead of an opaque
    server-side session ID).
 
-> **Open question (Q2):** Should the JWT carry user-role + permissions
-> as claims (faster, no DB hit per request) or just user-id (safer,
-> but every request hits the DB)? Default: claims, with a 5-minute
-> TTL so a permission revoke takes ≤ 5 min to land.
+> **Q2 RESOLVED — JWT carries the full permission set as claims.**
+> On successful login the auth service computes the user's effective
+> permissions once (resolving role-default + any per-user overrides
+> from the future permissions hierarchy feature) and embeds them
+> in the JWT. Subsequent requests read from the token; no DB hit
+> per request.
+>
+> **Concrete implications:**
+> - Use a moderate TTL (default: 30 minutes) so a permission revoke
+>   propagates within that window. Long-lived sessions get a refresh
+>   token that re-issues with fresh claims.
+> - On role change (admin promotes an employee, etc.), the auth
+>   service issues a new token immediately so the user doesn't have
+>   to wait for TTL expiry.
+> - Server-side blacklist of token IDs (`jti` claim) for hard
+>   revocations (account locked, password changed, etc.) — checked
+>   on every request but the lookup is small (Redis or just a DB
+>   table indexed on `jti`).
 
 ---
 
@@ -246,10 +263,24 @@ it host a **single multi-tenant deployment** (essentially: the SaaS
 gets `store_id` back, but customer-deployable doesn't). One codebase,
 two build flavors.
 
-> **Open question (Q3):** Which option? My recommendation is **B** —
-> stop investing in the SaaS, redirect all eng effort to the new
-> backend, eventually transition existing SaaS customers to self-
-> hosted. But that's a business decision, not an architecture one.
+> **Q3 RESOLVED — Option A: cut over the SaaS to the new FastAPI
+> codebase.** Rationale from the software lead: "we are not even at
+> production level yet so nothing to affect much." Translation: the
+> SaaS at dinerobook.com is early-stage with light load, so we don't
+> need a careful drawn-out migration to protect existing customers.
+> The new FastAPI app becomes the only codebase; Flask is removed in
+> the cleanup PR.
+>
+> **Concrete implications:**
+> - Strangler fig still applies (one module per PR, both serve traffic
+>   in parallel) — but the migration window can be aggressive since
+>   we're not protecting heavy production load.
+> - At cutover, dinerobook.com points to the FastAPI deployment.
+> - Multi-tenant code paths get **dropped entirely** in the cleanup
+>   PR — no need to keep them for a residual SaaS variant.
+> - Any existing SaaS customers get a one-time migration to a
+>   self-hosted Docker deployment. (Coordinate with whoever owns
+>   customer success.)
 
 ---
 
@@ -267,20 +298,23 @@ two build flavors.
 
 ---
 
-## 9. What needs sign-off before code moves
+## 9. Sign-off status
 
-- [ ] **Q1:** Frontend stack — React, Vue, HTMX, or something else?
-- [ ] **Q2:** JWT claims model — embed permissions or DB-lookup per request?
-- [ ] **Q3:** SaaS at dinerobook.com — Option A, B, or C?
-- [ ] Software lead reviews the directory layout in §2 and the layer rules.
-- [ ] Software lead reviews the module migration order in §4 and approves the Reports module as the starting reference implementation.
-- [ ] A `pre-prod` branch exists as a backup snapshot of `main` before
-      migration begins. **Done — `origin/pre-prod` created 2026-05-06.**
+- [x] **Q1:** Frontend stack — **React** (resolved 2026-05-06).
+- [x] **Q2:** JWT claims model — **Embed full permission set in JWT;
+      30-min TTL; refresh token + jti blacklist for hard revocation**
+      (resolved 2026-05-06).
+- [x] **Q3:** SaaS at dinerobook.com — **Option A: cut over** (resolved
+      2026-05-06). Aggressive migration window OK since light load.
+- [x] Software lead reviews the directory layout in §2 and the layer rules.
+- [x] Software lead reviews the module migration order in §4 and approves
+      the Reports module as the starting reference implementation.
+- [x] A `pre-prod` branch exists as a backup snapshot of `main` before
+      migration begins. **`origin/pre-prod` created 2026-05-06.**
 
-Once the three open questions land and the layout is approved, PR 1
-(Reports module migration) starts. Estimated ~1–2 weeks per module
-based on Reports being the smallest; transfers + bank sync will be
-larger.
+**All gates passed. PR 1 (Reports module migration) starts next.**
+Estimated ~1–2 weeks per module based on Reports being the smallest;
+transfers + bank sync will be larger.
 
 ---
 
@@ -299,3 +333,6 @@ larger.
 ## Changelog
 
 - **2026-05-06** — Initial draft (Claude). Pending software-lead review.
+- **2026-05-06** — All three open questions resolved by software lead:
+  React frontend, JWT-embedded permissions with 30-min TTL, hard cutover
+  for the SaaS. Status moved from DRAFT to ACCEPTED. Migration begins.
