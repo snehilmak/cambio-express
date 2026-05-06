@@ -152,6 +152,73 @@ def test_list_transfers_handles_null_fee_and_tax(test_store_id):
 # ── Pydantic schema sanity ──────────────────────────────────
 
 
+# ── delete_transfer ─────────────────────────────────────────
+
+
+def test_delete_transfer_removes_row(test_store_id):
+    from app import app as flask_app, db, Transfer
+    from api.Modules.Transfers.Services import delete_transfer
+    with flask_app.app_context():
+        tid = _seed_transfer(test_store_id, send_amount=100.0)
+        deleted = delete_transfer(db.session, tid, test_store_id)
+        db.session.commit()
+        assert deleted.send_amount == 100.0
+        assert db.session.get(Transfer, tid) is None
+
+
+def test_delete_transfer_cascades_audit_rows(test_store_id):
+    """TransferAudit rows referencing the transfer must be removed
+    before the transfer itself (the FK doesn't ON DELETE CASCADE)."""
+    from app import app as flask_app, db, TransferAudit
+    from api.Modules.Transfers.Services import delete_transfer
+    with flask_app.app_context():
+        tid = _seed_transfer(test_store_id, send_amount=100.0)
+        # Seed a TransferAudit row pointing at this transfer
+        a = TransferAudit(
+            store_id=test_store_id, transfer_id=tid,
+            user_id=None, employee_id=None, employee_name="",
+            action="edit", summary="something",
+        )
+        db.session.add(a); db.session.commit()
+        delete_transfer(db.session, tid, test_store_id)
+        db.session.commit()
+        # No audit rows for this transfer remain
+        remaining = (
+            db.session.query(TransferAudit)
+              .filter_by(transfer_id=tid).count()
+        )
+        assert remaining == 0
+
+
+def test_delete_transfer_raises_when_cross_store(test_store_id):
+    from app import app as flask_app, db, Store
+    from api.Modules.Transfers.Services import (
+        TransferNotFoundError, delete_transfer,
+    )
+    import pytest
+    with flask_app.app_context():
+        s2 = Store(name="Other", slug="other-tx-del-svc",
+                    email="o@x.com", plan="trial")
+        db.session.add(s2); db.session.commit()
+        tid = _seed_transfer(s2.id, send_amount=99.0)
+        with pytest.raises(TransferNotFoundError):
+            delete_transfer(db.session, tid, test_store_id)
+
+
+def test_delete_transfer_raises_for_unknown_id(test_store_id):
+    from app import app as flask_app, db
+    from api.Modules.Transfers.Services import (
+        TransferNotFoundError, delete_transfer,
+    )
+    import pytest
+    with flask_app.app_context():
+        with pytest.raises(TransferNotFoundError):
+            delete_transfer(db.session, 99999, test_store_id)
+
+
+# ── Pydantic schema sanity ──────────────────────────────────
+
+
 def test_transfer_row_validates_service_output(test_store_id):
     """A row produced via the service should be paintable into the
     TransferRow Pydantic model. If the wire shape ever drifts from

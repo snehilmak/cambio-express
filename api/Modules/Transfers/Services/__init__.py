@@ -7,7 +7,14 @@ audit + customer-upsert orchestration).
 """
 from api.Modules.Transfers.Services.transfers import (
     TransferListPage,
+    TransferNotFoundError,
+    delete_transfer,
     list_transfers,
 )
 
-__all__ = ["TransferListPage", "list_transfers"]
+__all__ = [
+    "TransferListPage",
+    "TransferNotFoundError",
+    "delete_transfer",
+    "list_transfers",
+]
