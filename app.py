@@ -4185,40 +4185,30 @@ def signup():
             app.logger.info(f"signup: invalid ref code '{ref_raw}' ignored")
 
         if not errors:
-            existing = User.query.filter_by(username=email).filter(
-                User.store_id.isnot(None)).first()
-            if existing:
-                errors["email"] = "An account with this email already exists."
-
-        if not errors:
-            slug_base = slugify(store_name)
-            slug = slug_base
-            counter = 1
-            while Store.query.filter_by(slug=slug).first():
-                slug = f"{slug_base}-{counter}"
-                counter += 1
-            s = Store(name=store_name, slug=slug, email=email,
-                      phone=phone, plan="trial")
-            if ref:
-                s.referred_by_code_id = ref.id
-            db.session.add(s)
-            db.session.flush()
-            s.trial_ends_at = datetime.utcnow() + timedelta(days=7)
-            s.grace_ends_at = s.trial_ends_at + timedelta(days=4)
-            u = User(store_id=s.id, username=email,
-                     full_name=store_name, role="admin")
-            u.set_password(password)
-            db.session.add(u)
-            db.session.commit()
-            session["user_id"] = u.id
-            session["role"] = u.role
-            session["store_id"] = s.id
-            if ref:
-                flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
-                      "off your first paid month when you subscribe.", "success")
+            from api.Modules.Auth.Services import (
+                SignupConflictError, create_store_and_admin,
+            )
+            try:
+                result = create_store_and_admin(
+                    db.session,
+                    store_name=store_name, email=email,
+                    password=password, phone=phone,
+                    referred_by_code_id=(ref.id if ref else None),
+                )
+            except SignupConflictError as e:
+                errors["email"] = str(e)
             else:
-                flash("Welcome! Your 7-day free trial has started.", "success")
-            return redirect(url_for("dashboard"))
+                db.session.commit()
+                u = result.admin
+                session["user_id"] = u.id
+                session["role"] = u.role
+                session["store_id"] = result.store.id
+                if ref:
+                    flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
+                          "off your first paid month when you subscribe.", "success")
+                else:
+                    flash("Welcome! Your 7-day free trial has started.", "success")
+                return redirect(url_for("dashboard"))
 
     return render_template("signup.html", errors=errors, form=form,
                            referral=ref, ref_code_raw=ref_raw)
