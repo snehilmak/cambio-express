@@ -1608,93 +1608,14 @@ def store_feature_enabled(store, flag_key):
 def stripe_health_check():
     """Return a dict describing the Stripe integration state.
 
-    Keys:
-      env: {secret_key, webhook_secret, basic_price_id, pro_price_id}  (booleans)
-      ok:  True if we reached Stripe and retrieved the account
-      account_email / account_id / mode: filled on success
-      price_ok: {basic, pro} — booleans, True if the ID resolved
-      error: str on failure
+    Single source of truth lives in
+    `api.Modules.Billing.Services.check_stripe_integration` (PR 53).
+    Used by the superadmin Overview tab to surface env-var
+    presence, account reachability, per-price validation, key-mode
+    pairing, and Financial Connections availability.
     """
-    env = {
-        "secret_key":            bool(os.environ.get("STRIPE_SECRET_KEY")),
-        "publishable_key":       bool(os.environ.get("STRIPE_PUBLISHABLE_KEY")),
-        "webhook_secret":        bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-    }
-    prices = _stripe_price_ids()
-    env["basic_price_id"]        = bool(prices["basic"])
-    env["basic_yearly_price_id"] = bool(prices["basic_yearly"])
-    env["pro_price_id"]          = bool(prices["pro"])
-    env["pro_yearly_price_id"]   = bool(prices["pro_yearly"])
-    result = {"env": env, "ok": False, "error": "",
-              "price_ok": {"basic": False, "basic_yearly": False,
-                           "pro": False, "pro_yearly": False},
-              # Per-price error string from the Stripe API. Lets the
-              # superadmin overview show "No such price …" or "test/live
-              # mismatch" without us having to guess at the cause.
-              "price_errors": {"basic": "", "basic_yearly": "",
-                               "pro": "", "pro_yearly": ""},
-              "fc_ok": False, "fc_error": "",
-              "key_pair_match": True}
-    if not env["secret_key"]:
-        result["error"] = "STRIPE_SECRET_KEY is not configured."
-        return result
-    try:
-        acct = stripe.Account.retrieve()
-        result["ok"] = True
-        result["account_id"]    = acct.get("id", "")
-        result["account_email"] = acct.get("email", "")
-        # Test-mode keys start with sk_test_; live keys with sk_live_.
-        result["mode"] = "test" if (os.environ.get("STRIPE_SECRET_KEY", "").startswith("sk_test_")) else "live"
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {e}"
-        return result
-    for plan, pid in prices.items():
-        if not pid:
-            continue
-        try:
-            stripe.Price.retrieve(pid)
-            result["price_ok"][plan] = True
-        except Exception as e:
-            # Capture the message so the superadmin overview can show why
-            # the price didn't validate (most often: the price was made
-            # in live mode but the secret key is from test mode, or vice
-            # versa). Truncate to keep the badge readable.
-            msg = str(e)
-            result["price_errors"][plan] = msg[:160]
-    # Publishable / secret key pairing: pk_test_ must go with sk_test_
-    # and pk_live_ with sk_live_. Mismatched keys make Stripe.js fail
-    # silently in the browser ("No such session") which is hard to
-    # diagnose without this hint.
-    pk = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-    if pk:
-        pk_mode = "live" if pk.startswith("pk_live_") else "test"
-        result["key_pair_match"] = (pk_mode == result.get("mode", ""))
-    # FC dry probe: try to create + immediately discard a Financial
-    # Connections session. Confirms the secret key has FC enabled and
-    # is paired correctly with the rest of the account.
-    if env["secret_key"]:
-        try:
-            stripe.financial_connections.Session.create(
-                account_holder={"type": "customer", "customer": "cus_test_invalid"},
-                permissions=["balances"],
-                filters={"countries": ["US"]},
-            )
-            # We don't actually expect this to succeed — the customer
-            # is fake. We're testing whether the API is reachable and
-            # the FC product is enabled on this account.
-            result["fc_ok"] = True
-        except stripe.error.InvalidRequestError as e:
-            # "No such customer" is the expected branch here — it means
-            # FC is enabled and our key is good; only the placeholder
-            # customer was rejected. Anything else is a real problem.
-            msg = str(e)
-            if "No such customer" in msg or "resource_missing" in msg:
-                result["fc_ok"] = True
-            else:
-                result["fc_error"] = msg[:160]
-        except Exception as e:
-            result["fc_error"] = f"{type(e).__name__}: {e}"[:160]
-    return result
+    from api.Modules.Billing.Services import check_stripe_integration
+    return check_stripe_integration()
 
 def active_announcements():
     """Currently-visible announcements (active, within start/expiry window)."""
