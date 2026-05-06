@@ -206,7 +206,7 @@ def test_list_respects_explicit_sort(test_store_id):
                         confirm_number="X-100")
         rows, _ = list_with_filters(
             db.session, [test_store_id],
-            TransferFilters(sort_slug="send_amount", sort_dir="asc"),
+            TransferFilters(sort_slug="amount", sort_dir="asc"),
         )
     assert rows[0].send_amount == 100.0
     assert rows[1].send_amount == 500.0

@@ -19,22 +19,20 @@ from sqlalchemy.orm import Session
 from api.Modules.Transfers.Models import Transfer
 
 
-# Sort columns whitelisted on the legacy /transfers route. Column
-# slugs map to ORM attrs so a malformed `?sort=` URL never picks an
-# arbitrary column.
+# Sort columns whitelisted on the legacy /transfers route. Slug names
+# match the existing `?sort=` query strings (and the column-header
+# links in `_transfers_table.html`) — don't rename without updating
+# the template too.
 SORT_COLUMNS = {
-    "send_date":      Transfer.send_date,
-    "company":        Transfer.company,
-    "service_type":   Transfer.service_type,
-    "sender":         Transfer.sender_name,
-    "recipient":      Transfer.recipient_name,
-    "country":        Transfer.country,
-    "confirm":        Transfer.confirm_number,
-    "batch":          Transfer.batch_id,
-    "send_amount":    Transfer.send_amount,
-    "fee":            Transfer.fee,
-    "federal_tax":    Transfer.federal_tax,
-    "status":         Transfer.status,
+    "date":      Transfer.send_date,
+    "sender":    Transfer.sender_name,
+    "company":   Transfer.company,
+    "amount":    Transfer.send_amount,
+    "recipient": Transfer.recipient_name,
+    "country":   Transfer.country,
+    "confirm":   Transfer.confirm_number,
+    "batch":     Transfer.batch_id,
+    "status":    Transfer.status,
 }
 
 
