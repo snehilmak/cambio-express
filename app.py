@@ -12965,13 +12965,12 @@ def stripe_webhook():
                         store.billing_cycle = "monthly"
                     store.stripe_customer_id = customer_id
                     store.stripe_subscription_id = sub_id
-                    # Returning customer: clear cancellation + retention timer.
-                    store.canceled_at = None
-                    store.data_retention_until = None
-                    # Reset the trial-reminder dedup flag too, so if this
-                    # subscription later lapses and a NEW trial ever begins,
-                    # the reminder cron sends fresh instead of no-oping.
-                    store.trial_reminder_sent_at = None
+                    # Returning customer: clear cancellation + retention
+                    # timer + trial-reminder dedup flag (delegated).
+                    from api.Modules.Billing.Services import (
+                        clear_cancellation_state,
+                    )
+                    clear_cancellation_state(store)
                     # Referral flow: mint the referrer's own code so they get
                     # the topbar crown immediately, and apply any pending
                     # referee credit from the code they signed up with.
@@ -12983,15 +12982,16 @@ def stripe_webhook():
                     db.session.commit()
 
         elif event["type"] == "customer.subscription.deleted":
+            from api.Modules.Billing.Services import (
+                apply_subscription_cancelled,
+                find_store_by_subscription_id,
+            )
             sub_id = event["data"]["object"].get("id", "")
-            store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
+            store = find_store_by_subscription_id(db.session, sub_id)
             if store:
-                now = datetime.utcnow()
-                store.plan = "inactive"
-                store.billing_cycle = ""
-                store.stripe_subscription_id = ""
-                store.canceled_at = now
-                store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
+                apply_subscription_cancelled(
+                    store, retention_days=DATA_RETENTION_DAYS,
+                )
                 db.session.commit()
 
     except Exception as e:

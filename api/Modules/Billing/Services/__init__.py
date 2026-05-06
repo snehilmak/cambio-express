@@ -9,6 +9,12 @@ from api.Modules.Billing.Services.checkout import (
     create_checkout_session,
     resolve_price_ids,
 )
+from api.Modules.Billing.Services.cancellation import (
+    DEFAULT_RETENTION_DAYS,
+    apply_subscription_cancelled,
+    clear_cancellation_state,
+    find_store_by_subscription_id,
+)
 from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
@@ -21,13 +27,17 @@ from api.Modules.Billing.Services.webhook import (
 
 __all__ = [
     "BillingError",
+    "DEFAULT_RETENTION_DAYS",
     "InvalidPlanError",
     "InvalidWebhookSignatureError",
     "NoBillingCustomerError",
     "StripeServiceError",
+    "apply_subscription_cancelled",
+    "clear_cancellation_state",
     "create_billing_portal_session",
     "create_checkout_session",
     "derive_plan_from_price",
+    "find_store_by_subscription_id",
     "resolve_price_ids",
     "verify_webhook_signature",
 ]
