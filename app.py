@@ -9055,34 +9055,15 @@ def _migrate_legacy_line_item_tables():
 # Each entry: (daily_report_field, singular_label, plural_label_for_count).
 # Adding a new kind is: one line here + one disclosure widget on the
 # daily-report template + removing the field from _DAILY_REPORT_FIELDS.
-_LINE_ITEM_KINDS = {
-    "return_payback": ("return_check_paid_back", "return check payback", "entries"),
-    "cash_purchase":  ("cash_purchases",         "cash purchase",        "entries"),
-    "cash_expense":   ("cash_expense",           "cash expense",         "entries"),
-    "check_purchase": ("check_purchases",        "check purchase",       "entries"),
-    "check_expense":  ("check_expense",          "check expense",        "entries"),
-    # Catch-all "other" buckets — a single day can have multiple
-    # ad-hoc cash-ins (refunds, owner contributions) and cash-outs
-    # (one-off payouts that don't fit Payroll or Drops). Backed by
-    # the same DailyLineItem model + auto-derived total contract as
-    # the rest of the kinds above.
-    "other_cash_in":  ("other_cash_in",          "other cash in",        "entries"),
-    "other_cash_out": ("other_cash_out",         "other cash out",       "entries"),
-    # Outside-cash drops (ATM drops, safe drops). Originally lived in
-    # its own DailyDrop table + bespoke routes/IIFE — collapsed into
-    # the generic kind system after the data migration. The legacy
-    # DailyDrop table is preserved (data not deleted) but the code
-    # path no longer references it.
-    "drop":           ("outside_cash_drops",     "drop",                 "drops"),
-    # Check deposits (morning/afternoon trips to the bank). Same
-    # story as drops — was its own CheckDeposit table; now a kind.
-    "check_deposit":  ("checks_deposit",         "check deposit",        "deposits"),
-}
-
-def _line_item_kind_or_404(kind):
-    if kind not in _LINE_ITEM_KINDS:
-        abort(404)
-    return _LINE_ITEM_KINDS[kind]
+# Daily-book line-item kind registry now lives in
+# api.Modules.DailyBook.Services.kinds (PR 68). The legacy names
+# below are re-exports / wrappers so existing call sites
+# (daily-report routes, _bank_category_label, monthly P&L feed)
+# keep their shape during the strangler-fig migration window.
+from api.Modules.DailyBook.Services import (
+    LINE_ITEM_KINDS as _LINE_ITEM_KINDS,
+    kind_or_404 as _line_item_kind_or_404,
+)
 
 def _recompute_line_items_total(kind, store_id, report_date):
     """Sum DailyLineItem rows of the given kind and push the total
