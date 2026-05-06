@@ -1495,23 +1495,34 @@ ADDONS_CATALOG = {
 }
 
 def store_addon_keys(store):
-    """Return the set of add-on keys currently active for a store."""
-    if not store or not store.addons:
-        return set()
-    return {k.strip() for k in store.addons.split(",") if k.strip()}
+    """Return the set of add-on keys currently active for a store.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.store_addon_keys` (PR 48); this
+    Flask-scope wrapper exists for legacy callers."""
+    from api.Modules.Billing.Services import (
+        store_addon_keys as _svc_store_addon_keys,
+    )
+    return _svc_store_addon_keys(store)
 
 def store_has_paid_plan(store):
-    return bool(store) and store.plan in ("basic", "pro")
+    """Single source of truth lives in
+    `api.Modules.Billing.Services.store_has_paid_plan` (PR 48)."""
+    from api.Modules.Billing.Services import (
+        store_has_paid_plan as _svc_store_has_paid_plan,
+    )
+    return _svc_store_has_paid_plan(store)
 
 # ── Cancellation & data retention ────────────────────────────
 DATA_RETENTION_DAYS = 180  # 6 months
 
 def data_retention_days_left(store):
-    """Days until cancelled-store data is purged. Returns None if not scheduled."""
-    if not store or not store.data_retention_until:
-        return None
-    delta = store.data_retention_until - datetime.utcnow()
-    return max(0, delta.days)
+    """Days until cancelled-store data is purged. Returns None if not scheduled.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.data_retention_days_left` (PR 48)."""
+    from api.Modules.Billing.Services import (
+        data_retention_days_left as _svc_data_retention_days_left,
+    )
+    return _svc_data_retention_days_left(store)
 
 # ── Superadmin helpers ───────────────────────────────────────
 def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
