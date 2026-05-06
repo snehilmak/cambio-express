@@ -11403,82 +11403,10 @@ def bank_transaction_move_date(txn_id):
     return redirect(request.referrer or url_for("bank_transactions"))
 
 # ── Rules CRUD ──────────────────────────────────────────────
-def _parse_rule_form(form, sid):
-    """Pull + validate a BankRule's fields from form data. Returns a
-    dict of attribute updates plus an error string (empty on success).
-    Reused by both new and edit handlers."""
-    desc_match_type = (form.get("desc_match_type") or "").strip()
-    desc_match_value = (form.get("desc_match_value") or "").strip()
-    sign_filter = (form.get("sign_filter") or "").strip()
-    target_kind = (form.get("target_kind") or "").strip()
-    if not target_kind:
-        return None, "Pick a category to apply when this rule matches."
-    if not _is_valid_bank_category(target_kind, sid):
-        return None, "Unknown category."
-    # Description match — both fields must be set together, or both empty.
-    if desc_match_type and not desc_match_value:
-        return None, "Enter a description value to match against."
-    if desc_match_value and not desc_match_type:
-        desc_match_type = "contains"
-    if desc_match_type and desc_match_type not in ("contains", "starts_with", "equals", "regex"):
-        return None, "Unknown description match type."
-    if sign_filter and sign_filter not in ("credit", "debit"):
-        return None, "Sign filter must be credit or debit."
-    # Amounts come in as positive dollar strings; store as absolute cents.
-    def _parse_dollars(label):
-        raw = (form.get(label) or "").strip()
-        if not raw:
-            return None, ""
-        try:
-            cents = int(round(float(raw) * 100))
-            if cents < 0:
-                return None, "Amounts must be non-negative."
-            return cents, ""
-        except ValueError:
-            return None, f"Invalid amount in {label}."
-    amount_min_cents, e1 = _parse_dollars("amount_min")
-    if e1: return None, e1
-    amount_max_cents, e2 = _parse_dollars("amount_max")
-    if e2: return None, e2
-    if (amount_min_cents is not None and amount_max_cents is not None
-            and amount_min_cents > amount_max_cents):
-        return None, "Min amount can't be greater than max."
-    # Account filter — must belong to the store.
-    account_filter_id = None
-    raw_acct = (form.get("account_filter_id") or "").strip()
-    if raw_acct:
-        try:
-            acct_id = int(raw_acct)
-        except ValueError:
-            return None, "Invalid account filter."
-        owned = StripeBankAccount.query.filter_by(
-            id=acct_id, store_id=sid).first()
-        if not owned:
-            return None, "Account filter does not belong to this store."
-        account_filter_id = acct_id
-    # At least one condition must be set — an empty rule would catch
-    # every transaction and is almost always a misconfiguration.
-    if (not desc_match_type and not sign_filter
-            and amount_min_cents is None and amount_max_cents is None
-            and account_filter_id is None):
-        return None, "Set at least one condition (description, sign, amount, or account)."
-    try:
-        priority = int(form.get("priority") or 100)
-    except ValueError:
-        priority = 100
-    return {
-        "enabled":           form.get("enabled") == "on",
-        "priority":          priority,
-        "desc_match_type":   desc_match_type,
-        "desc_match_value":  desc_match_value,
-        "sign_filter":       sign_filter,
-        "amount_min_cents":  amount_min_cents,
-        "amount_max_cents":  amount_max_cents,
-        "account_filter_id": account_filter_id,
-        "target_kind":       target_kind,
-        "auto_post":         form.get("auto_post") == "on",
-        "description":       (form.get("description") or "").strip()[:200],
-    }, ""
+# `_parse_rule_form` was extracted into
+# `api.Modules.BankSync.Services.rules.parse_rule_form` (PR 31). The
+# Flask routes below delegate validation, account-scope check, and
+# the row mutations to that Service.
 
 @app.route("/bank/rules")
 @pro_required
@@ -11496,13 +11424,21 @@ def bank_rules():
 @app.route("/bank/rules/new", methods=["POST"])
 @pro_required
 def bank_rule_new():
+    """Create a BankRule. Validation, account-scope check, and the
+    INSERT itself live in `api.Modules.BankSync.Services.rules`; this
+    route handles the Flask form-redirect + flash glue."""
+    from api.Modules.BankSync.Services import (
+        RuleValidationError, create_rule, parse_rule_form,
+    )
     sid = session["store_id"]
-    fields, err = _parse_rule_form(request.form, sid)
-    if err:
-        flash(err, "error")
+    try:
+        fields = parse_rule_form(
+            db.session, request.form, sid, _is_valid_bank_category,
+        )
+    except RuleValidationError as e:
+        flash(str(e), "error")
         return redirect(url_for("bank_rules"))
-    rule = BankRule(store_id=sid, **fields)
-    db.session.add(rule)
+    create_rule(db.session, sid, fields)
     db.session.commit()
     flash("Rule created.", "success")
     return redirect(url_for("bank_rules"))
@@ -11510,14 +11446,23 @@ def bank_rule_new():
 @app.route("/bank/rules/<int:rule_id>/edit", methods=["POST"])
 @pro_required
 def bank_rule_edit(rule_id):
+    """Update a BankRule. Cross-store rule_id 404s."""
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, RuleValidationError,
+        parse_rule_form, update_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    fields, err = _parse_rule_form(request.form, sid)
-    if err:
-        flash(err, "error")
+    try:
+        fields = parse_rule_form(
+            db.session, request.form, sid, _is_valid_bank_category,
+        )
+    except RuleValidationError as e:
+        flash(str(e), "error")
         return redirect(url_for("bank_rules"))
-    for k, v in fields.items():
-        setattr(rule, k, v)
+    try:
+        update_rule(db.session, rule_id, sid, fields)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash("Rule updated.", "success")
     return redirect(url_for("bank_rules"))
@@ -11525,9 +11470,14 @@ def bank_rule_edit(rule_id):
 @app.route("/bank/rules/<int:rule_id>/toggle", methods=["POST"])
 @pro_required
 def bank_rule_toggle(rule_id):
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, toggle_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    rule.enabled = not rule.enabled
+    try:
+        rule = toggle_rule(db.session, rule_id, sid)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash(f"Rule { 'enabled' if rule.enabled else 'disabled' }.", "success")
     return redirect(url_for("bank_rules"))
@@ -11535,9 +11485,14 @@ def bank_rule_toggle(rule_id):
 @app.route("/bank/rules/<int:rule_id>/delete", methods=["POST"])
 @pro_required
 def bank_rule_delete(rule_id):
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, delete_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    db.session.delete(rule)
+    try:
+        delete_rule(db.session, rule_id, sid)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash("Rule deleted.", "success")
     return redirect(url_for("bank_rules"))
