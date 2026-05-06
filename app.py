@@ -11,7 +11,6 @@ import click
 import pyotp
 import qrcode
 import qrcode.image.svg
-import io
 from slugify import slugify
 # WebAuthn / passkeys. The library ships both verify_* helpers and the
 # structs we need to build registration options. Lazy imports inside
@@ -893,30 +892,9 @@ class StoreOwnerLink(db.Model):
     linked_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
 
-class OwnerInviteCode(db.Model):
-    """LEGACY — replaced by `OwnerConnectCode` in May 2026.
-
-    The original flow was: store admin generates a code, owner redeems
-    it. That model accidentally let store admins remove their own owner
-    by deleting the StoreOwnerLink. The new flow inverts the direction:
-    owner generates the code, store admin redeems it, only the owner
-    can disconnect.
-
-    This class stays in the codebase only so legacy DBs that still have
-    the table can boot — `_drop_legacy_tables()` drops the underlying
-    table on next start. Once the table is gone everywhere this class
-    can be deleted too.
-    """
-    __tablename__ = "owner_invite_code"
-    id               = db.Column(db.Integer, primary_key=True)
-    store_id         = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
-    code             = db.Column(db.String(8), unique=True, nullable=False)
-    created_by       = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at       = db.Column(db.DateTime, nullable=False)
-    used_at          = db.Column(db.DateTime, nullable=True)
-    used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-
+# OwnerInviteCode (legacy, replaced by OwnerConnectCode in May 2026)
+# was removed in PR 35 cleanup. The `owner_invite_code` table stays in
+# `_DROPPED_TABLES` so legacy databases get the DROP TABLE on next boot.
 
 class OwnerConnectCode(db.Model):
     """Owner-generated invite code that a store admin redeems to link
