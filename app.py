@@ -12566,35 +12566,36 @@ def send_trial_reminders_cmd():
 
 def broadcast_announcement(announcement_id, base_url=None):
     """Fan out an announcement email to every opted-in user. Returns
-    the count of emails actually attempted (not counting users filtered
-    out). Idempotent: the first successful run stamps broadcast_sent_at
-    and subsequent calls no-op."""
-    base_url = base_url or os.environ.get("APP_BASE_URL",
-                                          "https://dinerobook.com")
+    the count of emails actually attempted (not counting users
+    filtered out). Idempotent: the first successful run stamps
+    `broadcast_sent_at` and subsequent calls no-op.
+
+    Eligibility query + subject derivation + plain-body template
+    live in `api.Modules.Notifications.Services.broadcasts`
+    (PR 66); this wrapper keeps the Flask-bound HTML rendering +
+    delivery glue.
+    """
+    from api.Modules.Notifications.Services import (
+        BROADCAST_PLAIN_BODY,
+        broadcast_eligible_recipients,
+        derive_broadcast_subject,
+    )
+    base_url = base_url or os.environ.get(
+        "APP_BASE_URL", "https://dinerobook.com",
+    )
     ann = db.session.get(Announcement, announcement_id)
     if ann is None:
         return 0
     if ann.broadcast_sent_at is not None:
         return 0  # already sent — idempotent
-    # First line of the message becomes the subject if it looks like
-    # a sentence; otherwise use a generic subject. Cap at 100 chars.
-    first_line = (ann.message or "").strip().split("\n", 1)[0]
-    subject = first_line[:100] if first_line else "A message from DineroBook"
-
-    recipients = User.query.filter(
-        User.is_active == True,
-        User.email != "",
-        User.notify_announcement_email == True,
-        User.email_bounced_at.is_(None),
-    ).all()
+    subject = derive_broadcast_subject(ann.message)
+    recipients = broadcast_eligible_recipients(db.session)
     now = datetime.utcnow()
     notifications_url = f"{base_url}/account/notifications"
-    plain_body = (
-        f"Announcement from DineroBook\n\n"
-        f"{ann.message}\n\n"
-        f"— DineroBook ({base_url})\n\n"
-        f"Don't want announcement emails? Turn them off:\n"
-        f"  {notifications_url}\n"
+    plain_body = BROADCAST_PLAIN_BODY.format(
+        message=ann.message,
+        base_url=base_url,
+        notifications_url=notifications_url,
     )
     sent = 0
     for u in recipients:
