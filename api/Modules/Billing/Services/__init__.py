@@ -15,6 +15,10 @@ from api.Modules.Billing.Services.cancellation import (
     clear_cancellation_state,
     find_store_by_subscription_id,
 )
+from api.Modules.Billing.Services.feature_flags import (
+    store_feature_enabled,
+    store_has_addon,
+)
 from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
@@ -52,6 +56,8 @@ __all__ = [
     "get_trial_status",
     "resolve_price_ids",
     "store_addon_keys",
+    "store_feature_enabled",
+    "store_has_addon",
     "store_has_paid_plan",
     "verify_webhook_signature",
 ]
