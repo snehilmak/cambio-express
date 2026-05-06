@@ -5,6 +5,13 @@ from api.Modules.BankSync.Services.builtin_rules import (
     is_bank_charge_slug,
     match_builtin_bank_rule,
 )
+from api.Modules.BankSync.Services.categories import (
+    BANK_CATEGORIES_NON_POSTING,
+    bank_category_groups,
+    bank_category_label,
+    is_daily_book_kind,
+    is_valid_bank_category,
+)
 from api.Modules.BankSync.Services.categorize import (
     categorize_transaction,
     uncategorize_transaction,
@@ -29,11 +36,14 @@ from api.Modules.BankSync.Services.transactions import (
 )
 
 __all__ = [
+    "BANK_CATEGORIES_NON_POSTING",
     "BUILTIN_BANK_RULES",
     "RuleFields",
     "RuleNotFoundError",
     "RuleValidationError",
     "TransactionListPage",
+    "bank_category_groups",
+    "bank_category_label",
     "bank_charges_breakdown_for_month",
     "bank_charges_for_month",
     "builtin_substrings",
@@ -41,6 +51,8 @@ __all__ = [
     "create_rule",
     "delete_rule",
     "is_bank_charge_slug",
+    "is_daily_book_kind",
+    "is_valid_bank_category",
     "list_transactions_page",
     "match_builtin_bank_rule",
     "parse_rule_form",
