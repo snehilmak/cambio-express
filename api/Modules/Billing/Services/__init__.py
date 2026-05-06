@@ -19,6 +19,11 @@ from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
 )
+from api.Modules.Billing.Services.store_state import (
+    data_retention_days_left,
+    store_addon_keys,
+    store_has_paid_plan,
+)
 from api.Modules.Billing.Services.trial import (
     EXPIRING_SOON_THRESHOLD_DAYS,
     get_trial_status,
@@ -41,9 +46,12 @@ __all__ = [
     "clear_cancellation_state",
     "create_billing_portal_session",
     "create_checkout_session",
+    "data_retention_days_left",
     "derive_plan_from_price",
     "find_store_by_subscription_id",
     "get_trial_status",
     "resolve_price_ids",
+    "store_addon_keys",
+    "store_has_paid_plan",
     "verify_webhook_signature",
 ]
