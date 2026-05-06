@@ -48,6 +48,12 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Customers.Controllers import router as customers_router
     app.include_router(customers_router, prefix="/customers", tags=["customers"])
 
+    # Transfers — third module. Read-side wired as of PR 12; write-side
+    # arrives in subsequent PRs once the create/edit business logic
+    # moves into Services.
+    from api.Modules.Transfers.Controllers import router as transfers_router
+    app.include_router(transfers_router, prefix="/transfers", tags=["transfers"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
