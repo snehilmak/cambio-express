@@ -12422,106 +12422,28 @@ def stripe_webhook():
     return jsonify({"received": True}), 200
 
 # ── Data retention purge ─────────────────────────────────────
-# Models that hold per-store data and must be wiped before the store row.
-_STORE_OWNED_MODELS = [
-    # TransferAudit must purge before Transfer (it has an FK to transfer.id),
-    # and StoreEmployee before any row that FKs to it — we null/ignore employee
-    # FKs on purge via the audit table's nullable column, but order still
-    # matters for cascade sanity.
-    "TransferAudit", "OperatorAuditLog",
-    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
-    "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    # BankTransaction must purge before StripeBankAccount — it FKs to it.
-    # BankRule + BankTransaction must purge before StripeBankAccount —
-    # both FK to it.
-    "MonthlyFinancial", "BankRule", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
-    "StoreEmployee", "Customer",
-    "ReferralCode", "ReferralRedemption",
-    # TVDisplay (store-keyed) — children handled by the explicit chain
-    # above this loop. Listing it here covers the parent row itself.
-    "TVDisplay",
-    "User",
-]
+# Per-store model registry + retention-purge implementation now
+# live in api.Modules.Billing.Services.retention (PR 64). The
+# legacy names below are re-exported / wrapped so any operator
+# tool that imported them by name keeps working during the
+# strangler-fig migration window.
+from api.Modules.Billing.Services import (
+    STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES,
+    STORE_OWNED_MODELS as _STORE_OWNED_MODELS,
+)
 
-# Models whose store FK isn't literally named `store_id`. The default for
-# anything absent here is `store_id`.
-_STORE_FK_OVERRIDES = {
-    "ReferralCode":       "owner_store_id",
-    "ReferralRedemption": "referee_store_id",
-}
 
 def purge_expired_stores():
-    """Hard-delete inactive stores whose retention window has elapsed."""
-    now = datetime.utcnow()
-    expired = Store.query.filter(
-        Store.plan == "inactive",
-        Store.data_retention_until.isnot(None),
-        Store.data_retention_until <= now,
-    ).all()
-    purged = 0
-    for s in expired:
-        # User-scoped auth rows have to go before the Users themselves so
-        # the User FK doesn't orphan on Postgres. Collect user ids in the
-        # store, wipe their Passkey rows, then let the regular loop purge
-        # the User rows.
-        user_ids = [uid for (uid,) in
-                    db.session.query(User.id).filter_by(store_id=s.id).all()]
-        if user_ids:
-            Passkey.query.filter(Passkey.user_id.in_(user_ids)).delete(
-                synchronize_session=False)
-            # EmailEvent.user_id is a nullable FK; we null it out for
-            # purged users so the event history (useful for
-            # post-purge forensics) doesn't block the User delete.
-            EmailEvent.query.filter(EmailEvent.user_id.in_(user_ids)).update(
-                {"user_id": None}, synchronize_session=False)
-        # TV-display tables form a chain (display → country → bank →
-        # rate) and only the top has store_id. Walk down explicitly so
-        # the FK constraints don't reject the deletes on Postgres.
-        # TVPairing also hangs off display_id, same FK story.
-        # TVPendingPair is loose (no display_id — pending pairs are
-        # device-side until claimed) but FK's into TVPairing via
-        # claimed_pairing_id, so we have to wipe pending rows that
-        # reference doomed pairings BEFORE the pairing delete.
-        display_ids = [d for (d,) in
-                       db.session.query(TVDisplay.id).filter_by(store_id=s.id).all()]
-        if display_ids:
-            doomed_pairing_ids = [p for (p,) in
-                                   db.session.query(TVPairing.id).filter(
-                                       TVPairing.display_id.in_(display_ids)).all()]
-            if doomed_pairing_ids:
-                TVPendingPair.query.filter(
-                    TVPendingPair.claimed_pairing_id.in_(doomed_pairing_ids)
-                ).delete(synchronize_session=False)
-            TVPairing.query.filter(
-                TVPairing.display_id.in_(display_ids)).delete(
-                    synchronize_session=False)
-            country_ids = [c for (c,) in
-                           db.session.query(TVDisplayCountry.id).filter(
-                               TVDisplayCountry.display_id.in_(display_ids)).all()]
-            if country_ids:
-                bank_ids = [b for (b,) in
-                            db.session.query(TVDisplayPayoutBank.id).filter(
-                                TVDisplayPayoutBank.country_id.in_(country_ids)).all()]
-                if bank_ids:
-                    TVDisplayRate.query.filter(
-                        TVDisplayRate.bank_id.in_(bank_ids)).delete(
-                            synchronize_session=False)
-                TVDisplayPayoutBank.query.filter(
-                    TVDisplayPayoutBank.country_id.in_(country_ids)).delete(
-                        synchronize_session=False)
-            TVDisplayCountry.query.filter(
-                TVDisplayCountry.display_id.in_(display_ids)).delete(
-                    synchronize_session=False)
-        for model_name in _STORE_OWNED_MODELS:
-            model = globals().get(model_name)
-            if model is not None:
-                fk = _STORE_FK_OVERRIDES.get(model_name, "store_id")
-                model.query.filter_by(**{fk: s.id}).delete(synchronize_session=False)
-        db.session.delete(s)
-        purged += 1
-    if purged:
-        db.session.commit()
-    return purged
+    """Hard-delete inactive stores whose retention window has elapsed.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.purge_expired_stores` (PR 64).
+    Per CLAUDE.md invariant #4 the retention window is set to
+    180 days when the cancellation Service flips a store to
+    `inactive`; this CLI walks every store past that window.
+    """
+    from api.Modules.Billing.Services import purge_expired_stores as _svc
+    return _svc(db.session)
 
 @app.cli.command("purge-expired-stores")
 def purge_expired_stores_cmd():
