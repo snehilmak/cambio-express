@@ -13,13 +13,25 @@ from api.Modules.Auth.Services.login import (
     permissions_for,
     verify_password_cross_store,
 )
+from api.Modules.Auth.Services.password_reset import (
+    IssuedToken,
+    consume_password_reset_token,
+    hash_token,
+    issue_password_reset_token,
+    verify_password_reset_token,
+)
 
 __all__ = [
+    "IssuedToken",
     "JWTIssuer",
     "LoginResult",
     "authenticate_password",
+    "consume_password_reset_token",
     "decode_access_token",
+    "hash_token",
     "issue_access_token",
+    "issue_password_reset_token",
     "permissions_for",
     "verify_password_cross_store",
+    "verify_password_reset_token",
 ]
