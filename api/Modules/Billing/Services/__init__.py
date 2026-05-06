@@ -19,6 +19,10 @@ from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
 )
+from api.Modules.Billing.Services.trial import (
+    EXPIRING_SOON_THRESHOLD_DAYS,
+    get_trial_status,
+)
 from api.Modules.Billing.Services.webhook import (
     InvalidWebhookSignatureError,
     derive_plan_from_price,
@@ -28,6 +32,7 @@ from api.Modules.Billing.Services.webhook import (
 __all__ = [
     "BillingError",
     "DEFAULT_RETENTION_DAYS",
+    "EXPIRING_SOON_THRESHOLD_DAYS",
     "InvalidPlanError",
     "InvalidWebhookSignatureError",
     "NoBillingCustomerError",
@@ -38,6 +43,7 @@ __all__ = [
     "create_checkout_session",
     "derive_plan_from_price",
     "find_store_by_subscription_id",
+    "get_trial_status",
     "resolve_price_ids",
     "verify_webhook_signature",
 ]

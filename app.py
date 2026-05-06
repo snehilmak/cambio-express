@@ -2077,23 +2077,16 @@ def get_trial_status(store):
     """Return trial status string for the given store.
 
     Returns: "exempt" | "active" | "expiring_soon" | "grace" | "expired"
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.get_trial_status` (PR 47); this
+    Flask-scope wrapper is here for the dozen+ legacy callers that
+    use the bare `get_trial_status(store)` shape.
     """
-    if store is None:
-        return "exempt"
-    if store.plan in ("basic", "pro"):
-        return "exempt"
-    if store.plan == "inactive":
-        return "expired"
-    if store.trial_ends_at is None:
-        return "exempt"
-    now = datetime.utcnow()
-    if store.grace_ends_at is not None and now >= store.grace_ends_at:
-        return "expired"
-    if now >= store.trial_ends_at:
-        return "grace"
-    if now >= store.trial_ends_at - timedelta(days=3):
-        return "expiring_soon"
-    return "active"
+    from api.Modules.Billing.Services import (
+        get_trial_status as _svc_get_trial_status,
+    )
+    return _svc_get_trial_status(store)
 
 @app.context_processor
 def inject_trial_context():
