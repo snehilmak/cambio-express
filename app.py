@@ -3184,68 +3184,56 @@ def privacy():
 # Nothing outside this block should set user_id on its own for a
 # 2FA-required role.
 
-RECOVERY_CODES_PER_USER = 10
 TOTP_ISSUER = "DineroBook"
+# Single source of truth for TOTP / recovery-code helpers lives in
+# api.Modules.Auth.Services.totp (PR 41). The Flask-scope wrappers
+# below forward to the Service so legacy callers keep their existing
+# call shape during the migration window.
+from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 
 def _needs_totp(user):
     """Which roles must use 2FA. Keep this the single gatekeeper."""
-    return bool(user and user.role == "superadmin")
+    from api.Modules.Auth.Services import needs_totp
+    return needs_totp(user)
 
 def _totp_is_enrolled(user):
-    return bool(user and user.totp_secret and user.totp_enrolled_at)
+    from api.Modules.Auth.Services import is_enrolled
+    return is_enrolled(user)
 
 def _pending_auth_user():
     uid = session.get("pending_auth_user_id")
     return db.session.get(User, uid) if uid else None
 
 def _hash_recovery_code(raw):
-    # Normalize so casing/whitespace/hyphen differences don't lock the
-    # user out. The display format is e.g. "ABCD-EFGH" but the stored
-    # hash is of the unhyphenated, uppercase form.
-    normalized = raw.strip().upper().replace("-", "").replace(" ", "")
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    from api.Modules.Auth.Services import hash_recovery_code
+    return hash_recovery_code(raw)
 
 def _format_recovery_code(raw):
-    """Pretty-print with a hyphen in the middle so codes are easier to
-    read and to transcribe — e.g. 'ABCD-EFGH'."""
-    s = raw.strip().upper()
-    return f"{s[:4]}-{s[4:]}" if len(s) == 8 else s
+    from api.Modules.Auth.Services import format_recovery_code
+    return format_recovery_code(raw)
 
 def _generate_recovery_codes(user):
     """Wipe any existing codes for this user and mint a fresh batch.
-    Returns the plaintext list (shown to the user exactly once)."""
-    RecoveryCode.query.filter_by(user_id=user.id).delete()
-    plaintext = []
-    for _ in range(RECOVERY_CODES_PER_USER):
-        raw = secrets.token_hex(4).upper()  # 8 hex chars
-        plaintext.append(raw)
-        db.session.add(RecoveryCode(user_id=user.id, code_hash=_hash_recovery_code(raw)))
+    Caller is responsible for the surrounding transaction; we commit
+    here for backwards-compat with existing call sites that never
+    saw the flush."""
+    from api.Modules.Auth.Services import generate_recovery_codes
+    codes = generate_recovery_codes(db.session, user)
     db.session.commit()
-    return [_format_recovery_code(c) for c in plaintext]
+    return codes
 
 def _consume_recovery_code(user, raw):
-    """Return True if `raw` matches an unused code for `user` and mark
-    it used. `raw` may be pasted with or without the hyphen."""
-    if not raw:
-        return False
-    row = (RecoveryCode.query
-           .filter_by(user_id=user.id, code_hash=_hash_recovery_code(raw), used_at=None)
-           .first())
-    if not row:
-        return False
-    row.used_at = datetime.utcnow()
-    db.session.commit()
-    return True
+    """Return True if `raw` matches an unused code for `user` and
+    mark it used. Commits on hit so legacy callers don't need to."""
+    from api.Modules.Auth.Services import consume_recovery_code
+    hit = consume_recovery_code(db.session, user, raw)
+    if hit:
+        db.session.commit()
+    return hit
 
 def _verify_totp(user, token):
-    """True if `token` is a valid current (or immediately adjacent) 6-digit
-    TOTP code for `user`. `valid_window=1` forgives a ±30s clock drift."""
-    if not (user and user.totp_secret and token):
-        return False
-    try:
-        return pyotp.TOTP(user.totp_secret).verify(str(token).strip(), valid_window=1)
-    except Exception:
-        return False
+    from api.Modules.Auth.Services import verify_totp_token
+    return verify_totp_token(user, token)
 
 def _totp_qr_svg(secret, username):
     """SVG <svg>…</svg> string encoding the TOTP provisioning URI.
