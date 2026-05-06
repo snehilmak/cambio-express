@@ -17,7 +17,10 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import User
-from api.Modules.Auth.Repositories import find_user_by_username_in_store
+from api.Modules.Auth.Repositories import (
+    find_user_by_username,
+    find_user_by_username_in_store,
+)
 from api.Modules.Auth.Services.jwt_issuer import (
     JWTIssuer,
     issue_access_token,
@@ -111,3 +114,34 @@ def authenticate_password(
         full_name=user.full_name or "",
         permissions=perms,
     )
+
+
+def verify_password_cross_store(
+    db: Session, username: str, password: str,
+) -> User | None:
+    """Cross-store credential check used by the legacy Flask `/login`
+    page (which doesn't yet know which store the user belongs to —
+    it picks the first matching username). Returns the User row when
+    creds + is_active pass; `None` otherwise.
+
+    Distinct from `authenticate_password`:
+    - takes only username + password (no store_id)
+    - returns the SQLAlchemy User row (Flask needs it for the TOTP
+      routing logic + session establishment), not a JWT-bearing
+      LoginResult
+    - returns None on failure instead of raising — Flask renders an
+      inline error string, doesn't translate to HTTP
+
+    This is a transitional helper. Once the Auth Flask flip
+    completes (Flask login HTML → React login form → /api/v2/auth/login),
+    this can be deleted; the React app will use the JWT-emitting
+    `authenticate_password` directly.
+    """
+    if not username or not password:
+        return None
+    user = find_user_by_username(db, username)
+    if user is None or not user.is_active:
+        return None
+    if not user.check_password(password):
+        return None
+    return user

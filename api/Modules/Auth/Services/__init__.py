@@ -11,6 +11,7 @@ from api.Modules.Auth.Services.login import (
     LoginResult,
     authenticate_password,
     permissions_for,
+    verify_password_cross_store,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "decode_access_token",
     "issue_access_token",
     "permissions_for",
+    "verify_password_cross_store",
 ]
