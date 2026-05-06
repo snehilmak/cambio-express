@@ -1,19 +1,20 @@
 """DailyLineItem write-side Service.
 
-Add + delete operations for DailyLineItem rows. Validation lives
-here so a malformed time/amount fails the same way regardless of
-whether the request came in via Flask form-post or the future
-FastAPI controller. The legacy `_recompute_line_items_total` and
-the `return_payback` / `return_check_id` UX gates stay in app.py
-for now — they touch the DailyReport rolled-up totals + the Return
-Checks integration which haven't migrated yet.
+Add + delete operations for DailyLineItem rows + the
+recompute-total helper that pushes the kind sum back onto the
+DailyReport row's matching field. Validation lives here so a
+malformed time/amount fails the same way regardless of whether the
+request came in via Flask form-post or the future FastAPI
+controller.
 """
 from datetime import date, datetime, time
 from typing import Iterable
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from api.Modules.DailyBook.Models import DailyLineItem
+from api.Modules.DailyBook.Services.reports import ensure_daily_report
 
 
 class LineItemValidationError(ValueError):
@@ -97,3 +98,35 @@ def delete_line_item(
         )
     db.delete(line_item)
     db.flush()
+
+
+def recompute_line_items_total(
+    db: Session, store_id: int, report_date: date,
+    *, kind: str, daily_report_field: str,
+) -> float:
+    """Sum DailyLineItem rows of the given kind for (store, date) and
+    push the total onto the matching DailyReport field.
+
+    `daily_report_field` is the attribute name on DailyReport that
+    stores the rolled-up total for `kind` (e.g. `cash_purchase` →
+    `cash_purchases`). The legacy `_LINE_ITEM_KINDS` map in app.py
+    holds the kind→field mapping; the Service takes the field name
+    explicitly so it doesn't have to know about the registry yet.
+
+    Caller commits. Returns the total (useful for log output / test
+    assertions).
+    """
+    total = (
+        db.query(func.coalesce(func.sum(DailyLineItem.amount), 0.0))
+          .filter_by(
+              store_id=store_id,
+              report_date=report_date,
+              kind=kind,
+          )
+          .scalar()
+    ) or 0.0
+    report = ensure_daily_report(db, store_id, report_date)
+    setattr(report, daily_report_field, float(total))
+    report.updated_at = datetime.utcnow()
+    db.flush()
+    return float(total)
