@@ -1593,17 +1593,17 @@ def record_op_audit(action, target_type, target_id, *, label="", summary=""):
     db.session.add(row)
 
 def store_feature_enabled(store, flag_key):
-    """Resolve a feature flag for a store: per-store override > global default > True."""
-    if store is not None:
-        override = StoreFeatureOverride.query.filter_by(
-            store_id=store.id, flag_key=flag_key
-        ).first()
-        if override is not None:
-            return bool(override.enabled)
-    flag = FeatureFlag.query.filter_by(key=flag_key).first()
-    if flag is None:
-        return True  # Unknown flag = allow by default (fail-open for undeclared features).
-    return bool(flag.enabled_by_default)
+    """Resolve a feature flag for a store: per-store override > global default > True.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.store_feature_enabled` (PR 49).
+    This Flask wrapper just hands the active session over so legacy
+    callers don't have to thread `db.session` through the call sites.
+    """
+    from api.Modules.Billing.Services import (
+        store_feature_enabled as _svc_store_feature_enabled,
+    )
+    return _svc_store_feature_enabled(db.session, store, flag_key)
 
 def stripe_health_check():
     """Return a dict describing the Stripe integration state.
@@ -5008,8 +5008,14 @@ def admin_subscription_toggle_addon(addon_key):
 def store_has_addon(store, addon_key):
     """Single predicate every gated route uses, so future Stripe-driven
     `customer.subscription.updated` syncs flip every gated surface in
-    one shot."""
-    return addon_key in store_addon_keys(store)
+    one shot.
+
+    Delegates to `api.Modules.Billing.Services.store_has_addon` (PR 49).
+    """
+    from api.Modules.Billing.Services import (
+        store_has_addon as _svc_store_has_addon,
+    )
+    return _svc_store_has_addon(store, addon_key)
 
 # ── TV Display add-on ────────────────────────────────────────
 #
