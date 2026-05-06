@@ -6325,45 +6325,23 @@ def _aggregate_transfers(store_ids, d_from, d_to, group_col):
     return aggregate(db.session, store_ids, d_from, d_to, group_col)
 
 
-# LEGACY shims — all six data fns below now delegate to
-# api.Modules.Reports.Services. Single source of truth for the
-# business logic; once `_make_report_routes` is migrated to call
-# the services directly (PR 5), these wrappers disappear.
-def _sales_by_company_data(store_ids, d_from, d_to):
-    from api.Modules.Reports.Services import sales_by_company
-    return sales_by_company(db.session, store_ids, d_from, d_to)
-
-
-def _sales_by_service_data(store_ids, d_from, d_to):
-    from api.Modules.Reports.Services import sales_by_service
-    return sales_by_service(db.session, store_ids, d_from, d_to)
-
-
-def _sales_by_employee_data(store_ids, d_from, d_to):
-    from api.Modules.Reports.Services import sales_by_employee
-    return sales_by_employee(db.session, store_ids, d_from, d_to)
-
-
-def _cashier_productivity_data(store_ids, d_from, d_to):
-    from api.Modules.Reports.Services import cashier_productivity
-    return cashier_productivity(db.session, store_ids, d_from, d_to)
-
-
-def _top_customers_data(store_ids, d_from, d_to, *, sort_by="sent", limit=50):
-    from api.Modules.Reports.Services import top_customers
-    return top_customers(
-        db.session, store_ids, d_from, d_to, sort_by=sort_by, limit=limit,
-    )
-
-
-def _top_recipients_data(store_ids, d_from, d_to, *, limit=50):
-    from api.Modules.Reports.Services import top_recipients
-    return top_recipients(db.session, store_ids, d_from, d_to, limit=limit)
-
-
-def _by_destination_country_data(store_ids, d_from, d_to):
-    from api.Modules.Reports.Services import by_destination_country
-    return by_destination_country(db.session, store_ids, d_from, d_to)
+# Adapter for the seven Reports services that used to be wrapped by
+# `_*_data` shims in this file. The shims existed during PRs 2-4 of
+# the strangler-fig migration so legacy callers (`_make_report_routes`
+# below) could keep their `(store_ids, d_from, d_to)` signature
+# while the business logic moved into `api.Modules.Reports.Services`.
+# Now that the services are stable and unit-tested (and exposed via
+# the FastAPI router at /api/v2/reports/*), the shims add no value —
+# call sites use this adapter inline.
+def _service_fn(service):
+    """Wraps a Reports service (which takes the SQLAlchemy Session as
+    its first argument) in the legacy `data_fn(store_ids, d_from, d_to,
+    **kwargs)` signature `_make_report_routes` expects. The Flask
+    route binds to `db.session`; the FastAPI route binds to its own
+    request-scoped session via `Depends(get_db)`."""
+    def _inner(store_ids, d_from, d_to, **kwargs):
+        return service(db.session, store_ids, d_from, d_to, **kwargs)
+    return _inner
 
 
 def _new_vs_returning_data(store_ids, d_from, d_to):
@@ -7048,10 +7026,20 @@ def _period_comparison_kpis(totals, rows, extra):
 # CSV column / row / totals lambdas. New reports go here — no
 # per-route boilerplate, no per-route owner wiring (the auto-mirror
 # below covers it).
+from api.Modules.Reports.Services import (  # noqa: E402
+    by_destination_country as _svc_by_destination_country,
+    cashier_productivity as _svc_cashier_productivity,
+    sales_by_company as _svc_sales_by_company,
+    sales_by_employee as _svc_sales_by_employee,
+    sales_by_service as _svc_sales_by_service,
+    top_customers as _svc_top_customers,
+    top_recipients as _svc_top_recipients,
+)
+
 _make_report_routes(
     "sales-by-company",
     title="Sales by Company",
-    data_fn=_sales_by_company_data,
+    data_fn=_service_fn(_svc_sales_by_company),
     template="report_sales_by_company.html",
     result_unit=("company", "companies"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7080,7 +7068,7 @@ _make_report_routes(
 _make_report_routes(
     "sales-by-service-type",
     title="Sales by Service Type",
-    data_fn=_sales_by_service_data,
+    data_fn=_service_fn(_svc_sales_by_service),
     template="report_sales_by_service_type.html",
     result_unit=("service type", "service types"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7109,7 +7097,7 @@ _make_report_routes(
 _make_report_routes(
     "sales-by-employee",
     title="Sales by Employee",
-    data_fn=_sales_by_employee_data,
+    data_fn=_service_fn(_svc_sales_by_employee),
     template="report_sales_by_employee.html",
     result_unit=("employee", "employees"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7138,7 +7126,7 @@ _make_report_routes(
 _make_report_routes(
     "cashier-productivity",
     title="Cashier Productivity",
-    data_fn=_cashier_productivity_data,
+    data_fn=_service_fn(_svc_cashier_productivity),
     template="report_cashier_productivity.html",
     result_unit=("cashier", "cashiers"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7168,7 +7156,7 @@ _make_report_routes(
 _make_report_routes(
     "top-customers",
     title="Top Customers by Volume",
-    data_fn=_top_customers_data,
+    data_fn=_service_fn(_svc_top_customers),
     template="report_top_customers.html",
     result_unit=("customer", "customers"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7187,8 +7175,11 @@ _make_report_routes(
 _make_report_routes(
     "top-senders",
     title="Top Senders",
-    data_fn=lambda store_ids, d_from, d_to: _top_customers_data(
-        store_ids, d_from, d_to, sort_by="count"),
+    data_fn=_service_fn(
+        lambda db_session, store_ids, d_from, d_to, **_: _svc_top_customers(
+            db_session, store_ids, d_from, d_to, sort_by="count",
+        ),
+    ),
     template="report_top_customers.html",  # identical layout
     result_unit=("sender", "senders"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7207,7 +7198,7 @@ _make_report_routes(
 _make_report_routes(
     "top-recipients",
     title="Top Recipients",
-    data_fn=_top_recipients_data,
+    data_fn=_service_fn(_svc_top_recipients),
     template="report_top_recipients.html",
     result_unit=("recipient", "recipients"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7226,7 +7217,7 @@ _make_report_routes(
 _make_report_routes(
     "by-destination-country",
     title="By Destination Country",
-    data_fn=_by_destination_country_data,
+    data_fn=_service_fn(_svc_by_destination_country),
     template="report_by_destination_country.html",
     result_unit=("country", "countries"),
     kpis_fn=lambda totals, rows, extra: [

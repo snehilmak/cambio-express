@@ -107,35 +107,6 @@ def test_cashier_productivity_marks_inactive(test_store_id):
     assert rows[0]["is_active"] is False
 
 
-# ── Legacy-shim equivalence ─────────────────────────────────
-
-
-def test_legacy_employee_shims_match_services(test_store_id):
-    from app import app as flask_app, db
-    today = date.today()
-    with flask_app.app_context():
-        uid = _seed_user(test_store_id, username="x@x.com", full_name="X")
-        eid = _seed_storeemployee(test_store_id, name="E1")
-        _seed_transfer(test_store_id, created_by=uid,
-                        employee_id=eid, send_amount=100.0)
-
-        from app import _sales_by_employee_data, _cashier_productivity_data
-        from api.Modules.Reports.Services import (
-            sales_by_employee, cashier_productivity,
-        )
-        l_rows, l_t = _sales_by_employee_data([test_store_id], today, today)
-        s_rows, s_t = sales_by_employee(
-            db.session, [test_store_id], today, today,
-        )
-        assert l_rows == s_rows and l_t == s_t
-
-        l_rows, l_t = _cashier_productivity_data([test_store_id], today, today)
-        s_rows, s_t = cashier_productivity(
-            db.session, [test_store_id], today, today,
-        )
-        assert l_rows == s_rows and l_t == s_t
-
-
 # ── Customer service ────────────────────────────────────────
 
 

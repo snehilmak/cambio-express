@@ -117,52 +117,6 @@ def test_top_recipients_respects_limit(test_store_id):
     assert totals["sent"] == 1500.0
 
 
-# ── Legacy-shim equivalence ─────────────────────────────────
-
-
-def test_legacy_shims_delegate_to_services(test_store_id):
-    """The legacy `_sales_by_*_data` fns in app.py are now 2-line
-    delegators. End-to-end equivalence: same inputs produce identical
-    output through both surfaces, until the legacy callers migrate
-    too (PR 5)."""
-    from app import app as flask_app, db
-    today = _today()
-    with flask_app.app_context():
-        _seed_transfer(test_store_id, send_amount=100.0, company="Intermex",
-                        service_type="Money Transfer", country="MX",
-                        recipient_name="Maria")
-        _seed_transfer(test_store_id, send_amount=200.0, company="Maxi",
-                        service_type="Top Up", country="GT",
-                        recipient_name="Carlos")
-
-        from app import (
-            _sales_by_company_data, _sales_by_service_data,
-            _by_destination_country_data, _top_recipients_data,
-        )
-        from api.Modules.Reports.Services import (
-            sales_by_company, sales_by_service,
-            by_destination_country, top_recipients,
-        )
-
-        for legacy_fn, service_fn in [
-            (_sales_by_company_data, sales_by_company),
-            (_sales_by_service_data, sales_by_service),
-            (_by_destination_country_data, by_destination_country),
-        ]:
-            l_rows, l_totals = legacy_fn([test_store_id], today, today)
-            s_rows, s_totals = service_fn(db.session, [test_store_id], today, today)
-            assert l_rows == s_rows, f"{service_fn.__name__} drift"
-            assert l_totals == s_totals
-
-        # top_recipients takes a `limit` kwarg.
-        l_rows, l_totals = _top_recipients_data([test_store_id], today, today, limit=10)
-        s_rows, s_totals = top_recipients(
-            db.session, [test_store_id], today, today, limit=10,
-        )
-        assert l_rows == s_rows
-        assert l_totals == s_totals
-
-
 # ── Pydantic schema sanity ──────────────────────────────────
 
 

@@ -63,8 +63,11 @@ def test_cashier_productivity_groups_by_employee_id(client, test_store_id):
 
     # Direct data-fn unit test — the registry-driven route adds CSRF
     # state, period chip, etc. that the data fn doesn't care about.
-    from app import _cashier_productivity_data
-    rows, totals = _cashier_productivity_data([test_store_id], today, today)
+    from app import db
+    from api.Modules.Reports.Services import cashier_productivity
+    rows, totals = cashier_productivity(
+        db.session, [test_store_id], today, today,
+    )
 
     assert totals["count"] == 4
     assert totals["sent"] == 1700.0
@@ -87,8 +90,11 @@ def test_cashier_productivity_marks_inactive(client, test_store_id):
     _make_transfer(client, test_store_id, send_date=today,
                    amount=100, employee_id=quit_emp, employee_name="Quit")
 
-    from app import _cashier_productivity_data
-    rows, totals = _cashier_productivity_data([test_store_id], today, today)
+    from app import db
+    from api.Modules.Reports.Services import cashier_productivity
+    rows, totals = cashier_productivity(
+        db.session, [test_store_id], today, today,
+    )
     assert len(rows) == 1
     assert rows[0]["cashier"] == "Quit"
     assert rows[0]["is_active"] is False
