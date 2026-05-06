@@ -18,6 +18,14 @@ from api.Modules.Auth.Services.password_change import (
     admin_set_password,
     change_password,
 )
+from api.Modules.Auth.Services.passkey import (
+    RP_NAME as PASSKEY_RP_NAME,
+    exclude_credentials as passkey_exclude_credentials,
+    is_eligible as passkey_is_eligible,
+    origin as passkey_origin,
+    rp_id as passkey_rp_id,
+    rp_name as passkey_rp_name,
+)
 from api.Modules.Auth.Services.password_reset import (
     IssuedToken,
     consume_password_reset_token,
@@ -51,6 +59,7 @@ __all__ = [
     "JWTIssuer",
     "LoginResult",
     "MIN_PASSWORD_LENGTH",
+    "PASSKEY_RP_NAME",
     "RECOVERY_CODES_PER_USER",
     "SignupConflictError",
     "SignupResult",
@@ -70,6 +79,11 @@ __all__ = [
     "issue_access_token",
     "issue_password_reset_token",
     "needs_totp",
+    "passkey_exclude_credentials",
+    "passkey_is_eligible",
+    "passkey_origin",
+    "passkey_rp_id",
+    "passkey_rp_name",
     "permissions_for",
     "verify_password_cross_store",
     "verify_password_reset_token",
