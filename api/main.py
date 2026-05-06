@@ -44,6 +44,10 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Reports.Controllers import router as reports_router
     app.include_router(reports_router, prefix="/reports", tags=["reports"])
 
+    # Customers — second module to migrate. Wired as of PR 8.
+    from api.Modules.Customers.Controllers import router as customers_router
+    app.include_router(customers_router, prefix="/customers", tags=["customers"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
