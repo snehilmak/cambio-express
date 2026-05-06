@@ -9321,19 +9321,23 @@ def delete_transfer(tid):
     by @admin_required at the route level, so hiding the button in the
     template is defense-in-depth, not the actual gate.
 
-    TransferAudit has an FK onto Transfer, so we drop the audit rows
-    for this transfer first. The transfer's audit history disappears
-    along with the record it described — the intent of deletion — but
-    anything downstream that aggregates from transfers (batch totals,
-    daily book MT auto-pre-fill, dashboard counts) is a live query, so
-    those recompute correctly on the next page load.
+    Audit-history cascade + the row delete delegate to
+    api.Modules.Transfers.Services.delete_transfer (PR 33). The
+    cross-route operator-audit log entry stays in Flask since
+    record_op_audit is a Flask-side concern.
     """
+    from api.Modules.Transfers.Services import (
+        TransferNotFoundError, delete_transfer as _svc_delete_transfer,
+    )
     sid = session.get("store_id")
     if not sid:
         flash("Select a store first.", "error")
         return redirect(url_for("dashboard"))
-    t = Transfer.query.filter_by(id=tid, store_id=sid).first_or_404()
-    # Capture a recognizable label BEFORE deletion so the audit row
+    try:
+        t = _svc_delete_transfer(db.session, tid, sid)
+    except TransferNotFoundError:
+        abort(404)
+    # Capture a recognizable label BEFORE the commit so the audit row
     # makes sense without needing to look up the (gone) transfer id.
     label = (f"{t.sender_name or '?'} → {t.recipient_name or '?'}"
              f" — ${t.send_amount or 0:,.2f}")
@@ -9341,9 +9345,6 @@ def delete_transfer(tid):
                     summary=f"confirm={t.confirm_number or ''} "
                             f"company={t.company or ''} "
                             f"status={t.status or ''}")
-    TransferAudit.query.filter_by(store_id=sid, transfer_id=t.id).delete(
-        synchronize_session=False)
-    db.session.delete(t)
     db.session.commit()
     flash("Transfer deleted.", "success")
     return redirect(url_for("transfers"))
