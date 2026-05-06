@@ -16,8 +16,13 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.BankSync.Models import StripeBankAccount
-from api.Modules.BankSync.Repositories import BankTransactionFilters
+from api.Modules.BankSync.Repositories import (
+    BankTransactionFilters,
+    list_rules,
+)
 from api.Modules.BankSync.Requests import (
+    BankRuleListResponse,
+    BankRuleRow,
     BankTransactionListResponse,
     BankTransactionRow,
 )
@@ -106,3 +111,48 @@ def list_transactions_route(
         page_total_cents=page_obj.page_total_cents,
         uncategorized_count=page_obj.uncategorized_count,
     )
+
+
+@router.get("/rules", response_model=BankRuleListResponse)
+def list_rules_route(
+    store_ids: str = Query(...),
+    enabled_only: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> BankRuleListResponse:
+    """Operator-managed BankRule list. Order matches the auto-
+    categorize sync's evaluation order (priority asc, id tie-break)
+    so the rules-manager UI shows what would actually fire first."""
+    ids = _parse_store_ids(store_ids)
+    rules = list_rules(db, ids, enabled_only=enabled_only)
+    # Decorate account_filter_id with the human-readable label so the
+    # UI doesn't have to follow the FK separately.
+    account_filter_ids = [
+        r.account_filter_id for r in rules if r.account_filter_id is not None
+    ]
+    labels = _account_labels(db, account_filter_ids)
+    rows = [
+        BankRuleRow(
+            id=r.id,
+            enabled=bool(r.enabled),
+            priority=r.priority,
+            desc_match_type=r.desc_match_type or "",
+            desc_match_value=r.desc_match_value or "",
+            sign_filter=r.sign_filter or "",
+            amount_min_cents=r.amount_min_cents,
+            amount_max_cents=r.amount_max_cents,
+            account_filter_id=r.account_filter_id,
+            account_filter_label=(
+                labels.get(r.account_filter_id, "")
+                if r.account_filter_id is not None else ""
+            ),
+            target_kind=r.target_kind,
+            auto_post=bool(r.auto_post),
+            description=r.description or "",
+            match_count=r.match_count or 0,
+            last_matched_at=(
+                r.last_matched_at.isoformat() if r.last_matched_at else ""
+            ),
+        )
+        for r in rules
+    ]
+    return BankRuleListResponse(rows=rows, total=len(rows))
