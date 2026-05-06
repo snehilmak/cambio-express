@@ -47,3 +47,13 @@ class TransferListResponse(BaseModel):
     per_page: int
     total_pages: int
     page_amount: float
+
+
+class TransferResponse(BaseModel):
+    """Single-transfer wrapped response. Uses the same TransferRow
+    shape as the list endpoint so the React detail view and table
+    can reuse the row component."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transfer: TransferRow

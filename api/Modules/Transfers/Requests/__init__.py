@@ -5,7 +5,12 @@ response validator instead of silently producing partial JSON.
 """
 from api.Modules.Transfers.Requests.transfers import (
     TransferListResponse,
+    TransferResponse,
     TransferRow,
 )
 
-__all__ = ["TransferListResponse", "TransferRow"]
+__all__ = [
+    "TransferListResponse",
+    "TransferResponse",
+    "TransferRow",
+]

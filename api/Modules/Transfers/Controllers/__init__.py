@@ -24,13 +24,17 @@ Layer rules:
 """
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
-from api.Modules.Transfers.Repositories import TransferFilters
+from api.Modules.Transfers.Repositories import (
+    TransferFilters,
+    get_by_id_in_stores,
+)
 from api.Modules.Transfers.Requests import (
     TransferListResponse,
+    TransferResponse,
     TransferRow,
 )
 from api.Modules.Transfers.Services import list_transfers
@@ -122,3 +126,23 @@ def list_route(
         total_pages=page_obj.total_pages,
         page_amount=page_obj.page_amount,
     )
+
+
+@router.get("/{transfer_id}", response_model=TransferResponse)
+def get_route(
+    transfer_id: int = Path(..., ge=1),
+    store_ids: str = Query(
+        ...,
+        description=(
+            "Caller's store scope, comma-separated. Cross-tenant "
+            "lookups return 404 (never 403 — keeps tenancy "
+            "boundaries opaque)."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> TransferResponse:
+    ids = _parse_store_ids(store_ids)
+    transfer = get_by_id_in_stores(db, transfer_id, ids)
+    if transfer is None:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    return TransferResponse(transfer=_to_row(transfer))
