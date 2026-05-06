@@ -38,16 +38,11 @@ def _register_routers(app: FastAPI) -> None:
     per PR (Reports → Customers → Transfers → BankSync → Auth/Billing
     → DailyBook). Once the list is complete, Flask is removed.
     """
-    # Reports — first module to migrate (PR 2-4 fill in the layers).
-    # Import is wrapped in try/except for the early stage where the
-    # module's controller doesn't exist yet; remove the guard once
-    # PR 4 lands and the import is unconditional.
-    try:
-        from api.Modules.Reports.Controllers import router as reports_router
-        app.include_router(reports_router, prefix="/reports", tags=["reports"])
-    except ImportError:
-        # Reports module not yet wired — that's expected during PR 1.
-        pass
+    # Reports — first module to migrate. Controllers are wired as of
+    # PR 4 (all four layers — Models, Repositories, Services,
+    # Controllers — now present).
+    from api.Modules.Reports.Controllers import router as reports_router
+    app.include_router(reports_router, prefix="/reports", tags=["reports"])
 
 
 def create_app() -> FastAPI:

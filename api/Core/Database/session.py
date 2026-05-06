@@ -90,12 +90,22 @@ engine = _EngineProxy()
 
 
 # Session factory — each call to SessionLocal() yields a fresh session.
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=_get_engine,  # callable that returns the Engine when needed
-    future=True,
-)
+# The factory itself is built lazily on first use so we don't force the
+# legacy Flask import at module-import time. SQLAlchemy 2.0 expects
+# `bind` to be a real Engine, not a callable, so we resolve it once.
+_session_factory: sessionmaker | None = None
+
+
+def SessionLocal() -> Session:
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(
+            autocommit=False,
+            autoflush=False,
+            bind=_get_engine(),
+            future=True,
+        )
+    return _session_factory()
 
 
 # Declarative base for new models defined in api/Modules/<X>/Models/.
