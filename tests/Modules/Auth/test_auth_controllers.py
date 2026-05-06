@@ -148,7 +148,16 @@ def test_me_rejects_tampered_token(test_store_id):
         },
     )
     token = login.json()["access_token"]
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # Replace the entire signature segment (after the second '.')
+    # with a same-length all-A's string. Single-char tamper at the
+    # end occasionally lands on a valid base64url padding boundary
+    # and the JWT decodes cleanly — that's the flake we keep
+    # regressing on. The whole-signature replacement is
+    # deterministic. Fall back to all-B's on the 1-in-2^N chance
+    # the genuine signature happens to be all-A's.
+    head, payload, sig = token.split(".")
+    fake_sig = "A" * len(sig) if sig != "A" * len(sig) else "B" * len(sig)
+    tampered = f"{head}.{payload}.{fake_sig}"
     resp = c.get(
         "/auth/me", headers={"Authorization": f"Bearer {tampered}"},
     )
