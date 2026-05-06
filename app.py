@@ -1617,18 +1617,13 @@ def stripe_health_check():
     return check_stripe_integration()
 
 def active_announcements():
-    """Currently-visible announcements (active, within start/expiry window)."""
-    now = datetime.utcnow()
-    q = Announcement.query.filter_by(is_active=True)
-    rows = q.order_by(Announcement.created_at.desc()).all()
-    out = []
-    for a in rows:
-        if a.starts_at and a.starts_at > now:
-            continue
-        if a.expires_at and a.expires_at <= now:
-            continue
-        out.append(a)
-    return out
+    """Currently-visible announcements (active, within start/expiry window).
+
+    Single source of truth lives in
+    `api.Modules.Announcements.Services.active_announcements` (PR 55).
+    """
+    from api.Modules.Announcements.Services import active_announcements as _svc
+    return _svc(db.session)
 
 
 # ── Platform anomaly detector ──────────────────────────────────
