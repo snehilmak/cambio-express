@@ -2249,23 +2249,15 @@ def _upsert_bank_transaction(store_id, account_row, api_obj):
 # where the transaction is reconciled but shouldn't double-count in
 # the daily book — internal transfers between own accounts, MT ACH
 # withdrawals that already match an ACHBatch, or "ignore" for noise.
-BANK_CATEGORIES_NON_POSTING = {
-    "internal_transfer":  "Internal transfer",
-    "mt_ach_intermex":    "MT ACH — Intermex",
-    "mt_ach_maxi":        "MT ACH — Maxi",
-    "mt_ach_barri":       "MT ACH — Barri",
-    # Bank-charge slugs are dynamically per-account: bank_charge_<last4>.
-    # All bank-charge variants roll up to MonthlyFinancial.bank_charges_total
-    # via a prefix match in _bank_charges_for_month, so totals are
-    # unaffected — only per-row labelling reflects the account each
-    # charge hit. Static 210/230 entries below are kept ONLY so the
-    # operator dropdown for Nizari stores still surfaces them; future
-    # banks get their valid slugs added dynamically by
-    # _bank_category_groups via the store's connected accounts.
-    "bank_charge_210":    "Bank charge — ••0210",
-    "bank_charge_230":    "Bank charge — ••0230 (MSB)",
-    "ignore":             "Ignore (don't reconcile)",
-}
+# Static bank category dict + the label / validation / grouping
+# helpers now live in api.Modules.BankSync.Services.categories
+# (PR 69). The constant is re-exported here so existing call sites
+# that import it by name (rules engine, categorize service, the
+# operator categorisation form) keep their shape during the
+# migration window.
+from api.Modules.BankSync.Services import (
+    BANK_CATEGORIES_NON_POSTING,
+)
 
 # Built-in (platform-managed) rules that fire after user-defined rules
 # don't match. Used for transaction descriptions that are STANDARD across
@@ -2297,73 +2289,39 @@ _BANK_CATEGORY_PL_FIELD = {}
 
 
 def _bank_category_label(slug):
-    """Operator-friendly label for a category slug."""
-    if not slug:
-        return "Uncategorized"
-    if slug in BANK_CATEGORIES_NON_POSTING:
-        return BANK_CATEGORIES_NON_POSTING[slug]
-    # Dynamic per-account bank-charge slug ("bank_charge_<last4>" for
-    # any last4 not in the static dict above) — render as
-    # "Bank charge — ••<last4>" so the UI doesn't show the raw slug.
-    if slug.startswith("bank_charge_"):
-        suffix = slug[len("bank_charge_"):]
-        if suffix:
-            return f"Bank charge — ••{suffix}"
-    if slug in _LINE_ITEM_KINDS:
-        return _LINE_ITEM_KINDS[slug][1].title()
-    return slug
+    """Operator-friendly label for a category slug. Single source
+    of truth lives in
+    `api.Modules.BankSync.Services.bank_category_label` (PR 69).
+    """
+    from api.Modules.BankSync.Services import bank_category_label
+    return bank_category_label(slug)
+
 
 def _is_valid_bank_category(slug, store_id):
-    """True if `slug` is an acceptable target for a manual bank-
-    transaction tag or a BankRule. Accepts every slug surfaced in
-    _bank_category_groups(store_id), including dynamic
-    bank_charge_<last4> for the store's connected accounts."""
-    if not slug:
-        return False
-    if slug in _LINE_ITEM_KINDS or slug in BANK_CATEGORIES_NON_POSTING:
-        return True
-    if slug.startswith("bank_charge_"):
-        last4 = slug[len("bank_charge_"):]
-        if not last4:
-            return False
-        for a in StripeBankAccount.query.filter_by(store_id=store_id).all():
-            if not a.last4:
-                continue
-            stripped = a.last4.lstrip("0") or a.last4
-            if last4 == stripped or last4 == a.last4:
-                return True
-    return False
+    """True iff `slug` is an acceptable target for a manual bank-
+    transaction tag or a BankRule. Single source of truth lives in
+    `api.Modules.BankSync.Services.is_valid_bank_category` (PR 69).
+    """
+    from api.Modules.BankSync.Services import is_valid_bank_category
+    return is_valid_bank_category(db.session, slug, store_id)
 
 
 def _bank_category_groups(store_id=None):
-    """Grouped (group_label, [(slug, label), ...]) tuples for dropdowns.
-
-    The two groups stay separate in the UI so operators don't confuse
-    auto-posting kinds with non-posting tags.
-
-    When `store_id` is given, the "Other" group is augmented with a
-    per-account `bank_charge_<last4>` entry for every connected
-    account that isn't already in the static dict — so single-account
-    or non-Nizari banks see a relevant bank-charge option.
+    """Grouped dropdown options for the bank-category picker.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_category_groups` (PR 69).
     """
-    daily = [(slug, meta[1].title()) for slug, meta in _LINE_ITEM_KINDS.items()]
-    other = dict(BANK_CATEGORIES_NON_POSTING)  # copy so we can extend
-    if store_id is not None:
-        accounts = StripeBankAccount.query.filter_by(store_id=store_id).all()
-        for a in accounts:
-            if not a.last4:
-                continue
-            stripped = a.last4.lstrip("0") or a.last4
-            slug = f"bank_charge_{stripped}"
-            if slug not in other:
-                other[slug] = f"Bank charge — ••{a.last4}"
-    return [
-        ("Daily-book line items", daily),
-        ("Other (no daily-book impact)", list(other.items())),
-    ]
+    from api.Modules.BankSync.Services import bank_category_groups
+    return bank_category_groups(db.session, store_id)
+
 
 def _is_daily_book_kind(slug):
-    return slug in _LINE_ITEM_KINDS
+    """True iff `slug` is a registered DailyBook line-item kind.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.is_daily_book_kind` (PR 69).
+    """
+    from api.Modules.BankSync.Services import is_daily_book_kind
+    return is_daily_book_kind(slug)
 
 def _bank_rule_matches(rule, txn):
     """True if every set condition on the rule matches the transaction.
