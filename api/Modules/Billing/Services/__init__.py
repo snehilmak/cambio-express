@@ -19,6 +19,7 @@ from api.Modules.Billing.Services.feature_flags import (
     store_feature_enabled,
     store_has_addon,
 )
+from api.Modules.Billing.Services.health import check_stripe_integration
 from api.Modules.Billing.Services.portal import (
     NoBillingCustomerError,
     create_billing_portal_session,
@@ -58,6 +59,7 @@ __all__ = [
     "StripeServiceError",
     "apply_pending_referral_credits",
     "apply_subscription_cancelled",
+    "check_stripe_integration",
     "clear_cancellation_state",
     "create_billing_portal_session",
     "create_checkout_session",
