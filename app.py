@@ -2364,25 +2364,16 @@ BANK_CATEGORIES_NON_POSTING = {
 #
 # Each entry: (description_substring, account_last4_or_None, target_kind).
 # An empty `account_last4` matches any account.
-_BUILTIN_BANK_RULES = [
-    # Nizari Progressive Federal Credit Union.
-    # Most fees can hit any of the operator's accounts; one (RDC fee)
-    # is MSB-account-only. Targets use the sentinel
-    # `bank_charge_per_account`, which the matcher resolves to
-    # `bank_charge_<last4>` based on the actual account each charge
-    # lands on. This way:
-    #  - Nizari (2 accounts) splits per-account in the UI.
-    #  - A bank with 1 account just gets one bank_charge_<last4> slug,
-    #    no artificial split.
-    # All resulting slugs roll up to the consolidated bank_charges_total
-    # P&L line via the prefix-match in _bank_charges_for_month.
-    ("REMOTE DEPOSIT FEE", "0230", "bank_charge_per_account"),
-    ("BELOW AVG BAL FEE",  "",     "bank_charge_per_account"),
-    ("CHECK DEPOSIT FEE",  "",     "bank_charge_per_account"),
-    ("MSB MONTHLY FEE",    "",     "bank_charge_per_account"),
-    ("MONTHLY SERVICE FEE","",     "bank_charge_per_account"),
-    ("MSB W/D FEE",        "",     "bank_charge_per_account"),
-]
+# Built-in bank rules + the bank-charge slug predicate live in
+# api.Modules.BankSync.Services.builtin_rules (PR 58). The legacy
+# names below are kept as thin re-exports so existing call sites
+# (categorization sweep, rule-conflict UI) keep their shape during
+# the strangler-fig migration window.
+from api.Modules.BankSync.Services import (
+    BUILTIN_BANK_RULES as _BUILTIN_BANK_RULES,
+    is_bank_charge_slug as _is_bank_charge_slug,
+    match_builtin_bank_rule as _match_builtin_bank_rule,
+)
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
 # Reserved for future non-bank-charge auto-feeds (e.g. credit-card
@@ -2391,41 +2382,6 @@ _BUILTIN_BANK_RULES = [
 # bank_charges_total via the prefix-match in _bank_charges_for_month
 # — they don't need explicit registry entries.
 _BANK_CATEGORY_PL_FIELD = {}
-
-def _match_builtin_bank_rule(txn, account):
-    """Return target_kind from _BUILTIN_BANK_RULES that matches the
-    transaction, or None if nothing matches."""
-    desc = (txn.description or "").upper()
-    last4 = (account.last4 or "") if account else ""
-    for substring, want_last4, target in _BUILTIN_BANK_RULES:
-        if substring not in desc:
-            continue
-        if want_last4 and last4 != want_last4:
-            continue
-        # Sentinel: resolve to a per-account bank-charge slug so the
-        # operator sees which account each charge hit. Strips leading
-        # zeros from last4 to match the historic 210/230 convention
-        # (last4 "0210" → slug "bank_charge_210"). If somehow no last4
-        # is available, the built-in skips — the legacy generic
-        # `bank_charge` slug is retired, so we'd rather not fire than
-        # tag with a phantom slug.
-        if target == "bank_charge_per_account":
-            if not last4:
-                return None
-            stripped = last4.lstrip("0") or last4
-            return f"bank_charge_{stripped}"
-        return target
-    return None
-
-
-def _is_bank_charge_slug(slug):
-    """True for any bank-charge category slug — generic or per-account
-    (bank_charge_210, bank_charge_230, or any future bank_charge_<last4>).
-    Single point of truth for "is this a bank-charge slug" used by the
-    P&L feed and the breakdown helper."""
-    if not slug:
-        return False
-    return slug == "bank_charge" or slug.startswith("bank_charge_")
 
 
 def _bank_category_label(slug):
