@@ -12543,65 +12543,38 @@ def purge_expired_stores_cmd():
 #     tomorrow. Cleared on resubscribe by the Stripe webhook so a
 #     second trial (post-reactivation) gets its own fresh reminder.
 
-_TRIAL_REMINDER_SUBJECT = "Your DineroBook trial ends in {days} days"
+# Trial-reminder eligibility queries + subject/body templates now
+# live in api.Modules.Notifications.Services.trial_reminders
+# (PR 65). The Flask-bound rendering + delivery (render_template,
+# _send_email, request-context fabrication for cron) stay here.
+from api.Modules.Notifications.Services import (
+    TRIAL_REMINDER_BODY as _TRIAL_REMINDER_BODY,
+    TRIAL_REMINDER_SUBJECT as _TRIAL_REMINDER_SUBJECT,
+    eligible_recipients as _trial_reminder_recipients_svc,
+    stores_due_for_reminder as _stores_due_for_reminder,
+)
 
-_TRIAL_REMINDER_BODY = """\
-Hi {name},
-
-Just a heads-up that your DineroBook trial for "{store_name}" ends on
-{trial_end_date}. That's {days} days from today.
-
-To keep your books, reports, and transfer history, subscribe before
-then:
-    {subscribe_url}
-
-No action is required if you'd rather let the trial expire; we keep
-your data for 180 days after cancellation so you can come back.
-
-Don't want trial reminders anymore? Turn them off on your
-notifications page:
-    {notifications_url}
-
-— DineroBook
-"""
 
 def _trial_reminder_recipients(store):
-    """Users who should get the reminder for this store: admins +
-    owners of this store with email + notify_trial_reminders=True."""
-    owner_user_ids = [
-        link.user_id for link in
-        StoreOwnerLink.query.filter_by(store_id=store.id).all()
-    ]
-    conds = [User.store_id == store.id]
-    if owner_user_ids:
-        # Owners live in a different store's user row but link back.
-        conds.append(User.id.in_(owner_user_ids))
-    candidates = User.query.filter(
-        User.is_active == True,
-        User.role.in_(("admin", "owner")),
-        User.email != "",
-        User.notify_trial_reminders == True,
-        db.or_(*conds),
-    ).all()
-    # Dedup — same user could be an owner AND an admin of this store.
-    return list({u.id: u for u in candidates}.values())
+    """Delegate to api.Modules.Notifications.Services.eligible_recipients."""
+    return _trial_reminder_recipients_svc(db.session, store)
+
 
 def send_trial_reminders(now=None, base_url=None):
     """Mail every eligible user whose store is in expiring_soon. Returns
     the count of emails actually sent (not counting users skipped for
     no-email or notify_trial_reminders=False). Idempotent thanks to
-    trial_reminder_sent_at; rerunning on the same day is a no-op."""
+    trial_reminder_sent_at; rerunning on the same day is a no-op.
+
+    Eligibility queries live in
+    `api.Modules.Notifications.Services.trial_reminders` (PR 65);
+    this wrapper keeps the Flask-bound rendering + delivery glue.
+    """
     now = now or datetime.utcnow()
     base_url = base_url or os.environ.get("APP_BASE_URL",
                                           "https://dinerobook.com")
     sent = 0
-    for store in Store.query.filter(
-        Store.plan == "trial",
-        Store.trial_ends_at.isnot(None),
-        Store.trial_reminder_sent_at.is_(None),
-    ).all():
-        if get_trial_status(store) != "expiring_soon":
-            continue
+    for store in _stores_due_for_reminder(db.session, now):
         days_left = max(0, (store.trial_ends_at - now).days)
         trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
         subscribe_url = f"{base_url}/subscribe"
