@@ -2681,48 +2681,33 @@ def offline():
 # Operators generate a VAPID keypair once (see docs/push-keys.md)
 # and set the three env vars below. When they're not set, push
 # endpoints return 501 and the opt-in UI stays hidden.
-VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
-VAPID_SUBJECT     = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+#
+# Delivery + the env-var read live in
+# api.Modules.Notifications.Services.push (PR 67); the legacy
+# names below are re-exports so existing call sites keep their
+# shape during the strangler-fig migration window.
+from api.Modules.Notifications.Services import push as _push_svc
+
+VAPID_PUBLIC_KEY  = _push_svc.VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
+VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
+
 
 def push_enabled() -> bool:
-    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+    """Single source of truth lives in
+    `api.Modules.Notifications.Services.push_is_enabled` (PR 67)."""
+    from api.Modules.Notifications.Services import push_is_enabled
+    return push_is_enabled()
 
-def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str | None = None) -> int:
+
+def send_push(user_id: int, title: str, body: str = "",
+              url: str = "/", tag: str | None = None) -> int:
     """Deliver a push notification to every device the user has
-    subscribed. Returns the number of successful sends. Dead
-    subscriptions (404/410 from the push provider) are cleaned up."""
-    if not push_enabled():
-        return 0
-    try:
-        from pywebpush import webpush, WebPushException
-    except ImportError:
-        app.logger.warning("pywebpush not installed; skipping send_push")
-        return 0
-    payload = json.dumps({k: v for k, v in {"title": title, "body": body, "url": url, "tag": tag}.items() if v is not None})
-    sent = 0
-    subs = PushSubscription.query.filter_by(user_id=user_id).all()
-    for s in subs:
-        try:
-            webpush(
-                subscription_info={
-                    "endpoint": s.endpoint,
-                    "keys": {"p256dh": s.p256dh, "auth": s.auth},
-                },
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": VAPID_SUBJECT},
-            )
-            sent += 1
-        except WebPushException as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status in (404, 410):
-                # Subscription gone — drop it.
-                db.session.delete(s)
-            else:
-                app.logger.warning(f"push send failed ({status}): {e}")
-    db.session.commit()
-    return sent
+    subscribed. Single source of truth lives in
+    `api.Modules.Notifications.Services.send_push` (PR 67).
+    """
+    from api.Modules.Notifications.Services import send_push as _svc
+    return _svc(db.session, user_id, title, body, url, tag)
 
 @app.route("/api/push/public-key")
 def push_public_key():
