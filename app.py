@@ -14447,6 +14447,32 @@ def init_db():
 
 init_db()
 
+# ── FastAPI strangler-fig dispatcher ─────────────────────────
+# The new modular FastAPI backend (under api/) is being built
+# alongside this Flask monolith per docs/architecture/MIGRATION_ADR.md.
+# Routes under /api/v2/* are forwarded into the FastAPI app via
+# Werkzeug's DispatcherMiddleware. Flask continues to handle /
+# and the rest of the URL space unchanged.
+#
+# Wrapped in try/except so a broken FastAPI import doesn't break
+# the Flask app — during early-stage migration, half the FastAPI
+# routers may not exist yet. Once Flask is removed (cleanup PR),
+# this whole block goes away and api/main.py becomes the entry
+# point.
+try:
+    from api.main import api_app as _fastapi_app
+    from a2wsgi import ASGIMiddleware
+    from werkzeug.middleware.dispatcher import DispatcherMiddleware
+    app.wsgi_app = DispatcherMiddleware(
+        app.wsgi_app,
+        {"/api/v2": ASGIMiddleware(_fastapi_app)},
+    )
+    app.logger.info("FastAPI mounted at /api/v2 (strangler-fig)")
+except Exception as _fastapi_err:
+    # Don't break Flask boot if the new backend fails to import.
+    # Log it loudly so it doesn't go unnoticed in dev.
+    app.logger.warning(f"FastAPI mount skipped: {_fastapi_err}")
+
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))
     print(f"🚀 DineroBook → http://0.0.0.0:{port}")
