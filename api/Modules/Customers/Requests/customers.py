@@ -67,3 +67,13 @@ class CustomerUpsertResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer: CustomerRow
+
+
+class CustomerResponse(BaseModel):
+    """Single-customer payload returned by GET /customers/{id}. Same
+    `customer` field name as CustomerUpsertResponse so the React
+    frontend can reuse the same parser."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer: CustomerRow

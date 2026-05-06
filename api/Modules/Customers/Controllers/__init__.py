@@ -22,11 +22,16 @@ Layer rules:
 """
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Customers.Repositories import (
+    find_by_id_in_stores,
+    sibling_store_ids,
+)
 from api.Modules.Customers.Requests import (
+    CustomerResponse,
     CustomerRow,
     CustomerSearchResponse,
     CustomerUpsertRequest,
@@ -122,3 +127,24 @@ def upsert_route(
     db.commit()
     home_names = _resolve_home_names(db, [cust], store_id)
     return CustomerUpsertResponse(customer=_row(cust, store_id, home_names))
+
+
+@router.get("/{customer_id}", response_model=CustomerResponse)
+def get_route(
+    customer_id: int = Path(..., ge=1),
+    store_id: int = Query(
+        ...,
+        description=(
+            "Caller's current store. Lookup is scoped to the owner "
+            "umbrella that contains this store. Customers in unrelated "
+            "stores 404."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> CustomerResponse:
+    siblings = sibling_store_ids(db, store_id)
+    cust = find_by_id_in_stores(db, customer_id, siblings)
+    if cust is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    home_names = _resolve_home_names(db, [cust], store_id)
+    return CustomerResponse(customer=_row(cust, store_id, home_names))

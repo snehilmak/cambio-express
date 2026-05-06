@@ -9,6 +9,7 @@ output dict and the schema fails the response validator instead of
 silently producing partial JSON.
 """
 from api.Modules.Customers.Requests.customers import (
+    CustomerResponse,
     CustomerRow,
     CustomerSearchResponse,
     CustomerUpsertRequest,
@@ -16,6 +17,7 @@ from api.Modules.Customers.Requests.customers import (
 )
 
 __all__ = [
+    "CustomerResponse",
     "CustomerRow",
     "CustomerSearchResponse",
     "CustomerUpsertRequest",
