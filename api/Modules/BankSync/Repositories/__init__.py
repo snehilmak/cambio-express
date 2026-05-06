@@ -8,6 +8,8 @@ from api.Modules.BankSync.Repositories.accounts import (
     list_accounts,
 )
 from api.Modules.BankSync.Repositories.rules import (
+    find_account_in_store,
+    get_rule_by_id,
     list_rules,
 )
 from api.Modules.BankSync.Repositories.transactions import (
@@ -18,6 +20,8 @@ from api.Modules.BankSync.Repositories.transactions import (
 
 __all__ = [
     "BankTransactionFilters",
+    "find_account_in_store",
+    "get_rule_by_id",
     "list_accounts",
     "list_rules",
     "list_transactions",
