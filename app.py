@@ -1628,120 +1628,32 @@ def active_announcements():
 
 # ── Platform anomaly detector ──────────────────────────────────
 # Surfaced on the superadmin overview tab. Returns a list of
-# {kind, severity, store, description, href} dicts ranked by severity
-# so the most-urgent items float to the top. Each rule is independent
-# and side-effect free; `_compute_platform_anomalies()` is safe to
-# call on every page render — the underlying queries are GROUP BYs
-# over `transfer` / `daily_report`, both indexed on `store_id`.
-#
-# Severity scale:
-#   "high"   — money is moving in unusual ways; admin should look now
-#   "medium" — something has changed; worth asking the operator about
-#   "low"    — informational; user-facing copy: "FYI"
-#
-# The detector is intentionally narrow today — quiet stores and
-# big over/short variances. New rules go here as `_anomaly_*` helpers
-# called from `_compute_platform_anomalies` in priority order.
-_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS = 30   # store was "active" if it had transfers in this window
-_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS  = 3    # ...but none in the most recent N days
-_ANOMALY_QUIET_MIN_PRIOR_TRANSFERS  = 5    # ignore tiny stores so we don't yell about idle trials
-_ANOMALY_OVERSHORT_LOOKBACK_DAYS = 7
-_ANOMALY_OVERSHORT_MEDIUM_THRESHOLD = 100.0   # |over_short| >= this = medium
-_ANOMALY_OVERSHORT_HIGH_THRESHOLD   = 200.0   # |over_short| >= this = high
-
-
-def _anomaly_quiet_stores(today):
-    """Stores that USED to be active but have gone silent. Returns
-    a list of anomaly dicts. Only flags stores on a paid plan or
-    active trial — inactive / cancelled stores aren't anomalies."""
-    cutoff_active = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS)
-    cutoff_quiet  = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS)
-    # Prior count + most-recent transfer date per store, in one query.
-    rows = (db.session.query(
-        Transfer.store_id,
-        db.func.count(Transfer.id),
-        db.func.max(Transfer.send_date),
-    ).filter(Transfer.send_date >= cutoff_active)
-     .group_by(Transfer.store_id).all())
-    out = []
-    if not rows:
-        return out
-    store_ids = [r[0] for r in rows]
-    stores = {s.id: s for s in
-              Store.query.filter(Store.id.in_(store_ids)).all()}
-    for sid, count, last_date in rows:
-        if int(count or 0) < _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS:
-            continue
-        if not last_date or last_date >= cutoff_quiet:
-            continue
-        store = stores.get(sid)
-        if not store or not store.is_active:
-            continue
-        if store.plan in ("inactive",):
-            continue
-        days_silent = (today - last_date).days
-        out.append({
-            "kind":        "quiet_store",
-            "severity":    "medium",
-            "store":       store,
-            "description": (f"{count} transfers in the last 30 days but "
-                            f"none in {days_silent} days — last on "
-                            f"{last_date.strftime('%b %d')}."),
-            "href":        url_for("superadmin_impersonate", store_id=store.id)
-                            if store else "",
-        })
-    return out
-
-
-def _anomaly_big_over_short(today):
-    """Daily reports in the last week with |over_short| over the
-    threshold. Big variance = either a counting mistake or something
-    worse; either way superadmin should know."""
-    cutoff = today - timedelta(days=_ANOMALY_OVERSHORT_LOOKBACK_DAYS)
-    rows = (DailyReport.query
-            .filter(DailyReport.report_date >= cutoff)
-            .filter(db.func.abs(DailyReport.over_short)
-                    >= _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD)
-            .order_by(db.func.abs(DailyReport.over_short).desc())
-            .limit(20).all())
-    if not rows:
-        return []
-    store_ids = list({r.store_id for r in rows})
-    stores = {s.id: s for s in
-              Store.query.filter(Store.id.in_(store_ids)).all()}
-    out = []
-    for r in rows:
-        store = stores.get(r.store_id)
-        if not store or not store.is_active:
-            continue
-        magnitude = abs(r.over_short)
-        severity = ("high" if magnitude >= _ANOMALY_OVERSHORT_HIGH_THRESHOLD
-                    else "medium")
-        direction = "over" if r.over_short > 0 else "short"
-        out.append({
-            "kind":        "big_over_short",
-            "severity":    severity,
-            "store":       store,
-            "description": (f"Daily book on {r.report_date.strftime('%b %d')}"
-                            f" closed ${magnitude:,.2f} {direction}."),
-            "href":        url_for("superadmin_impersonate", store_id=store.id)
-                            if store else "",
-        })
-    return out
+# Platform anomaly rules + the entry point now live in
+# `api.Modules.Superadmin.Services.anomalies` (PR 60). The
+# threshold constants are re-exported here so legacy callers
+# (any test that read them off the module, future rule tweaks)
+# keep their existing import paths during the migration window.
+from api.Modules.Superadmin.Services import (
+    ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD,
+    ANOMALY_OVERSHORT_LOOKBACK_DAYS as _ANOMALY_OVERSHORT_LOOKBACK_DAYS,
+    ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
+    ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS as _ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS,
+    ANOMALY_QUIET_LOOKBACK_QUIET_DAYS as _ANOMALY_QUIET_LOOKBACK_QUIET_DAYS,
+    ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS,
+)
 
 
 def _compute_platform_anomalies():
-    """Aggregate every anomaly rule into a single ranked list. Highest
-    severity first; within a severity tier, most-recent first. Capped
-    at 25 to keep the overview card scannable — if the queue runs
-    over, the truncation is a signal in itself."""
-    today = date.today()
-    anomalies = []
-    anomalies.extend(_anomaly_big_over_short(today))
-    anomalies.extend(_anomaly_quiet_stores(today))
-    severity_rank = {"high": 0, "medium": 1, "low": 2}
-    anomalies.sort(key=lambda a: severity_rank.get(a["severity"], 99))
-    return anomalies[:25]
+    """Aggregate every anomaly rule into a single ranked list.
+
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.compute_platform_anomalies`
+    (PR 60). The Service hands back the same dict shape the
+    superadmin Overview tab expects, so templates render
+    bit-for-bit identical badges.
+    """
+    from api.Modules.Superadmin.Services import compute_platform_anomalies
+    return compute_platform_anomalies(db.session)
 
 
 def _superadmin_dashboard_context():
