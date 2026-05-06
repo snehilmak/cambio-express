@@ -3059,69 +3059,19 @@ def lookup_referral_code(raw):
     return _svc_lookup_referral_code(db.session, raw)
 
 def apply_pending_referral_credits(referee_store):
-    """Called from the Stripe webhook when a store transitions to a paid
-    plan. If that store was referred AND hasn't been credited yet, apply
-    the referee's $50 to their Stripe balance and the referrer's $100
-    to theirs — recording a ReferralRedemption row so retries are safe.
+    """Apply Stripe customer-balance credits on the referee's paid
+    conversion + record a ReferralRedemption row so webhook retries
+    can't double-credit.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.apply_pending_referral_credits`
+    (PR 51). Caller commits — same transactional contract as
+    before.
     """
-    if not referee_store or not referee_store.referred_by_code_id:
-        return
-    # Already credited on this store? bail — keeps webhook retries idempotent.
-    if referee_store.referee_credit_applied_at:
-        return
-    rc = db.session.get(ReferralCode, referee_store.referred_by_code_id)
-    if not rc or not rc.is_active:
-        return
-    owner = db.session.get(Store, rc.owner_store_id)
-    if not owner:
-        return
-    now = datetime.utcnow()
-    # Referee credit: must have stripe_customer_id by this point (webhook
-    # fires on checkout.session.completed, which also sets it upstream).
-    referee_txn_id = ""
-    if referee_store.stripe_customer_id and stripe_is_configured():
-        try:
-            txn = stripe.Customer.create_balance_transaction(
-                referee_store.stripe_customer_id,
-                amount=-abs(rc.reward_referee_cents),
-                currency="usd",
-                description=f"Referral credit — welcome! Used code {rc.code}",
-                metadata={"referral_code": rc.code, "side": "referee"},
-            )
-            referee_txn_id = getattr(txn, "id", "") or ""
-        except stripe.error.StripeError as e:
-            app.logger.warning(f"referee credit failed for store {referee_store.id}: {e}")
-    # Referrer credit (only when they have a Stripe customer, which they
-    # do since they're on a paid plan — but guard anyway).
-    self_txn_id = ""
-    if owner.stripe_customer_id and stripe_is_configured():
-        try:
-            txn = stripe.Customer.create_balance_transaction(
-                owner.stripe_customer_id,
-                amount=-abs(rc.reward_self_cents),
-                currency="usd",
-                description=f"Referral reward — {referee_store.name} just subscribed",
-                metadata={"referral_code": rc.code, "side": "referrer",
-                          "referee_store_id": str(referee_store.id)},
-            )
-            self_txn_id = getattr(txn, "id", "") or ""
-        except stripe.error.StripeError as e:
-            app.logger.warning(f"referrer credit failed for referrer {owner.id}: {e}")
-    # Record the redemption regardless of whether Stripe succeeded — so we
-    # don't double-post on a webhook retry. The txn_id is "" on failure,
-    # and the superadmin can reconcile manually.
-    db.session.add(ReferralRedemption(
-        referral_code_id=rc.id,
-        referee_store_id=referee_store.id,
-        self_credit_applied_at=now if self_txn_id else None,
-        referee_credit_applied_at=now if referee_txn_id else None,
-        stripe_self_txn_id=self_txn_id,
-        stripe_referee_txn_id=referee_txn_id,
-    ))
-    rc.redeemed_count = (rc.redeemed_count or 0) + 1
-    referee_store.referee_credit_applied_at = now
-    # Caller commits — keeps this function transactional alongside the
-    # plan transition that triggered it.
+    from api.Modules.Billing.Services import (
+        apply_pending_referral_credits as _svc_apply_pending,
+    )
+    return _svc_apply_pending(db.session, referee_store)
 
 # ── Login ────────────────────────────────────────────────────
 # Installed PWAs open at `start_url` (currently "/") and hide the address

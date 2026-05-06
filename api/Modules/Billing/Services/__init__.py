@@ -26,6 +26,7 @@ from api.Modules.Billing.Services.portal import (
 from api.Modules.Billing.Services.referrals import (
     REFERRAL_REFEREE_CENTS,
     REFERRAL_SELF_CENTS,
+    apply_pending_referral_credits,
     ensure_referral_code,
     lookup_referral_code,
     new_referral_code,
@@ -55,6 +56,7 @@ __all__ = [
     "REFERRAL_REFEREE_CENTS",
     "REFERRAL_SELF_CENTS",
     "StripeServiceError",
+    "apply_pending_referral_credits",
     "apply_subscription_cancelled",
     "clear_cancellation_state",
     "create_billing_portal_session",
