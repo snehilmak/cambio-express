@@ -10108,106 +10108,23 @@ def _return_check_aging_buckets(store_ids, today=None):
 def _bank_charges_for_month(store_id, year, month, category_slug=None,
                              *, prefix=None):
     """Sum the absolute amount of BankTransactions tagged for the given
-    month. Pass either an exact `category_slug` or a `prefix` (used by
-    the bank-charges P&L feed to roll up every per-account slug like
-    bank_charge / bank_charge_210 / bank_charge_<last4> in one query).
-
-    Stored amounts are signed (debits negative); P&L expense columns
-    use positive numbers, so we abs().
-
-    Returns 0.0 when no transactions match — the monthly_report route
-    only LOCKs the field when this is > 0, leaving the manual P&L
-    value in place for stores without bank sync.
+    month. Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_charges_for_month` (PR 57).
     """
-    month_start = datetime(year, month, 1)
-    month_end_d = monthrange(year, month)[1]
-    month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    q = db.session.query(
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0)
-    ).filter(
-        BankTransaction.store_id == store_id,
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-    )
-    if prefix is not None:
-        from sqlalchemy import or_
-        # SQL prefix match. Trailing % does the heavy lifting; we also
-        # accept the bare prefix itself (no underscore suffix) so the
-        # legacy `bank_charge` slug counts.
-        q = q.filter(or_(
-            BankTransaction.category_slug == prefix,
-            BankTransaction.category_slug.like(f"{prefix}_%"),
-        ))
-    else:
-        q = q.filter(BankTransaction.category_slug == category_slug)
-    cents = q.scalar()
-    return abs(float(cents or 0)) / 100.0
+    from api.Modules.BankSync.Services import bank_charges_for_month as _svc
+    return _svc(db.session, store_id, year, month, category_slug,
+                prefix=prefix)
 
 def _bank_charges_breakdown_for_month(store_id, year, month):
     """Two-level breakdown feeding the expandable Bank Charges block on
-    the monthly P&L. Groups bank-charge transactions by description
-    string; each group exposes its individual rows.
-
-    Returns a list of dicts:
-      [
-        {"description": "REMOTE DEPOSIT FEE",
-         "total":       2.10,
-         "count":       1,
-         "transactions": [
-           {"posted_at": datetime, "amount": 2.10,
-            "account_label": "••0230" or nickname,
-            "description": "REMOTE DEPOSIT FEE 04/29"},
-         ]},
-        ...
-      ]
-
-    Sorted by total descending so the biggest contributor reads first.
-    Uses a prefix match on `bank_charge%` so every per-account slug
-    (bank_charge_210, bank_charge_230, future bank_charge_<last4>)
-    rolls into the breakdown without explicit registry maintenance.
+    the monthly P&L. Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_charges_breakdown_for_month`
+    (PR 57).
     """
-    from sqlalchemy import or_
-    month_start = datetime(year, month, 1)
-    month_end_d = monthrange(year, month)[1]
-    month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    rows = (BankTransaction.query
-            .filter(
-                BankTransaction.store_id == store_id,
-                or_(
-                    BankTransaction.category_slug == "bank_charge",
-                    BankTransaction.category_slug.like("bank_charge_%"),
-                ),
-                BankTransaction.posted_at >= month_start,
-                BankTransaction.posted_at <= month_end,
-            )
-            .order_by(BankTransaction.posted_at.desc()).all())
-    if not rows:
-        return []
-    # Map account ids → label so we don't N+1 lookup per transaction.
-    acct_ids = {r.stripe_bank_account_id for r in rows if r.stripe_bank_account_id}
-    accts = {a.id: a for a in StripeBankAccount.query.filter(
-        StripeBankAccount.id.in_(acct_ids)).all()} if acct_ids else {}
-    # Group by description. The exact full description is the key —
-    # operators want each variant visible (e.g. "REMOTE DEPOSIT FEE
-    # 04/29" and "REMOTE DEPOSIT FEE 05/02" group separately if the
-    # bank includes the date in the string). If you want strings to
-    # collapse on common prefixes that's a future enhancement.
-    groups = {}
-    for r in rows:
-        key = r.description or "(no description)"
-        g = groups.setdefault(key, {"description": key, "total": 0.0,
-                                     "count": 0, "transactions": []})
-        amt = abs(float(r.amount_cents or 0) / 100.0)
-        g["total"] += amt
-        g["count"] += 1
-        acct = accts.get(r.stripe_bank_account_id)
-        g["transactions"].append({
-            "posted_at": r.posted_at,
-            "amount":    amt,
-            "description": r.description or "",
-            "account_label": acct.label if acct else "",
-        })
-    return sorted(groups.values(), key=lambda g: g["total"], reverse=True)
+    from api.Modules.BankSync.Services import (
+        bank_charges_breakdown_for_month as _svc,
+    )
+    return _svc(db.session, store_id, year, month)
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
