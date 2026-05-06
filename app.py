@@ -8900,42 +8900,20 @@ def api_customers_search():
 @app.route("/api/customers/<int:cid>/recent-recipients")
 @login_required
 def api_customer_recent_recipients(cid):
-    """Last N distinct recipients this customer has sent to. Powers the
-    "recent recipients" chip row above the recipient_name input on the
-    transfer form — most senders send to the same 1-2 people, so a
-    one-tap chip cuts a lot of typing.
+    """Last N distinct recipients this customer has sent to. Powers
+    the "recent recipients" chip row above the recipient_name input
+    on the transfer form.
 
-    Scope is the umbrella so a returning sender at Store B sees the same
-    chips they'd see at Store A. Excludes Canceled / Rejected — recipients
-    of failed transfers aren't ones the sender will reuse."""
+    Scope, query, and result shape live in
+    api.Modules.Customers.Services.list_recent_recipients (PR 38);
+    this route is the Flask glue that authorises the request and
+    serialises the result."""
+    from api.Modules.Customers.Services import list_recent_recipients
     sid = session.get("store_id")
     if not sid:
         return jsonify([])
-    scope_ids = sibling_store_ids(sid)
-    cust = Customer.query.filter(
-        Customer.id == cid,
-        Customer.store_id.in_(scope_ids),
-    ).first()
-    if not cust:
-        return jsonify([])
-    rows = (db.session.query(
-        Transfer.recipient_name,
-        Transfer.country,
-        Transfer.recipient_phone,
-        db.func.max(Transfer.send_date),
-    ).filter(
-        Transfer.customer_id == cid,
-        Transfer.store_id.in_(scope_ids),
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-        Transfer.recipient_name != "",
-    ).group_by(Transfer.recipient_name, Transfer.country,
-               Transfer.recipient_phone)
-     .order_by(db.desc(db.func.max(Transfer.send_date)))
-     .limit(5).all())
-    return jsonify([
-        {"name": name, "country": country, "phone": phone}
-        for name, country, phone, _last in rows
-    ])
+    rows = list_recent_recipients(db.session, cid, sid)
+    return jsonify([r.to_dict() for r in rows])
 
 # ── Transfers ────────────────────────────────────────────────
 # Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
