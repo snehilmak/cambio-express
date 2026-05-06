@@ -175,3 +175,123 @@ def test_login_request_schema_rejects_empty_username():
     import pydantic
     with pytest.raises(pydantic.ValidationError):
         LoginRequest(username="", password="x")
+
+
+# ── verify_password_cross_store ─────────────────────────────
+
+
+def test_verify_password_cross_store_returns_user_on_success(test_store_id):
+    """Used by the legacy Flask /login page (which doesn't know which
+    store the user belongs to before the password check)."""
+    from app import app as flask_app, db
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        u = verify_password_cross_store(
+            db.session, "admin@test.com", "testpass123!",
+        )
+    assert u is not None
+    assert u.username == "admin@test.com"
+    assert u.role == "admin"
+
+
+def test_verify_password_cross_store_returns_none_on_bad_password(test_store_id):
+    from app import app as flask_app, db
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        u = verify_password_cross_store(
+            db.session, "admin@test.com", "wrong",
+        )
+    assert u is None
+
+
+def test_verify_password_cross_store_returns_none_for_unknown_user():
+    from app import app as flask_app, db
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        u = verify_password_cross_store(
+            db.session, "ghost@x.com", "anything",
+        )
+    assert u is None
+
+
+def test_verify_password_cross_store_rejects_disabled_user(test_store_id):
+    """Disabled accounts must fail the same way as wrong password —
+    no enumeration of "exists but disabled" via the response."""
+    from app import app as flask_app, db, User
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        u_obj = User(
+            store_id=test_store_id, username="quit-vp@x.com",
+            role="employee", is_active=False,
+        )
+        u_obj.set_password("p")
+        db.session.add(u_obj); db.session.commit()
+        u = verify_password_cross_store(
+            db.session, "quit-vp@x.com", "p",
+        )
+    assert u is None
+
+
+def test_verify_password_cross_store_finds_superadmin():
+    """Cross-store lookup must include the superadmin (which has
+    store_id=None)."""
+    from app import app as flask_app, db
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        u = verify_password_cross_store(
+            db.session, "superadmin", "super2025!",
+        )
+    assert u is not None
+    assert u.role == "superadmin"
+
+
+def test_verify_password_cross_store_handles_empty_inputs():
+    """Defensive: empty username or password short-circuits to None
+    instead of fishing the DB."""
+    from app import app as flask_app, db
+    from api.Modules.Auth.Services import verify_password_cross_store
+    with flask_app.app_context():
+        assert verify_password_cross_store(db.session, "", "x") is None
+        assert verify_password_cross_store(db.session, "x", "") is None
+        assert verify_password_cross_store(db.session, "", "") is None
+
+
+# ── Flask /login route end-to-end ───────────────────────────
+
+
+def test_flask_login_route_uses_service(client, test_store_id):
+    """Smoke test for the PR 30 flip: the Flask /login route should
+    accept valid credentials via the Service layer and establish the
+    session."""
+    resp = client.post(
+        "/login",
+        data={
+            "username": "superadmin",
+            "password": "super2025!",
+        },
+        follow_redirects=False,
+    )
+    # Successful POST redirects to the dashboard.
+    assert resp.status_code in (302, 303)
+
+
+def test_flask_login_route_rejects_bad_password(client, test_store_id):
+    resp = client.post(
+        "/login",
+        data={
+            "username": "superadmin",
+            "password": "wrong",
+        },
+    )
+    # Bad creds re-render login.html with the error string.
+    assert resp.status_code == 200
+    assert b"Invalid username or password" in resp.data
+
+
+def test_flask_login_route_rejects_unknown_user(client):
+    resp = client.post(
+        "/login",
+        data={"username": "nobody@x.com", "password": "x"},
+    )
+    assert resp.status_code == 200
+    assert b"Invalid username or password" in resp.data

@@ -3503,9 +3503,12 @@ def login():
             return redirect(url_for("login_store", slug=store.slug))
     error=None
     if request.method=="POST":
+        from api.Modules.Auth.Services import verify_password_cross_store
         username=request.form.get("username","").strip()
-        u=User.query.filter_by(username=username).first()
-        if u and u.is_active and u.check_password(request.form.get("password","")):
+        u = verify_password_cross_store(
+            db.session, username, request.form.get("password",""),
+        )
+        if u is not None:
             if u.role == "employee":
                 # Don't authenticate on the generic page, but leave a
                 # breadcrumb: persist the slug so their next hit to `/`
@@ -3620,9 +3623,23 @@ def login_store(slug):
         return redirect(url_for("dashboard"))
     error = None
     if request.method == "POST":
+        from api.Modules.Auth.Services import authenticate_password
+        from api.Modules.Auth.Services.login import AuthenticationError
         username = request.form.get("username", "").strip()
-        u = User.query.filter_by(username=username, store_id=store.id).first()
-        if u and u.is_active and u.check_password(request.form.get("password", "")):
+        try:
+            # Validate password + is_active via the Service layer.
+            # Per-store-scoped lookup (store.id is known here) — this
+            # is the correct path for the per-store sign-in page.
+            authenticate_password(
+                db.session, store_id=store.id, username=username,
+                password=request.form.get("password", ""),
+            )
+            u = User.query.filter_by(
+                username=username, store_id=store.id,
+            ).first()
+        except AuthenticationError:
+            u = None
+        if u is not None:
             session["user_id"] = u.id
             session["role"] = u.role
             session["store_id"] = u.store_id
