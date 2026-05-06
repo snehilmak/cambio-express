@@ -4047,59 +4047,32 @@ def logout():
 # UI; "previous-period" windows are the same length, ending the day
 # before the current window — that's what the delta badges compare to.
 
-_OWNER_TRANSFER_EXCLUDED = ["Canceled", "Rejected"]
+# Owner-side period math, store-id resolution, and KPI rollups
+# now live in api.Modules.Owners.Services.dashboard (PR 61). The
+# legacy names below are thin re-exports / wrappers so existing
+# callers (the dashboard, locations, and CSV-export routes) keep
+# their shape during the migration window.
+from api.Modules.Owners.Services import (
+    OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
+    owner_kpis as _svc_owner_kpis,
+    owner_period_window as _svc_owner_period_window,
+    owner_store_ids as _svc_owner_store_ids,
+)
+
 
 def _owner_period_window(period, today):
-    """Map a `today|month|year` selector to current + prior windows.
-
-    Returns (start, end, prev_start, prev_end, prev_label). The prior
-    window has the same number of days as the current and ends the day
-    before the current one starts, so KPI deltas are like-for-like.
-    """
-    if period == "month":
-        start = today.replace(day=1)
-        end = today
-        days = (end - start).days
-        prev_end = start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=days)
-        return start, end, prev_start, prev_end, "vs prior month"
-    if period == "year":
-        start = date(today.year, 1, 1)
-        end = today
-        days = (end - start).days
-        prev_end = start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=days)
-        return start, end, prev_start, prev_end, "vs prior year"
-    # default: today
-    return today, today, today - timedelta(days=1), today - timedelta(days=1), "vs yesterday"
+    """Delegate to api.Modules.Owners.Services.owner_period_window."""
+    return _svc_owner_period_window(period, today)
 
 
 def _owner_store_ids(user):
-    """Store IDs the given owner is linked to. Empty if none."""
-    links = StoreOwnerLink.query.filter_by(owner_id=user.id).all()
-    return [l.store_id for l in links]
+    """Delegate to api.Modules.Owners.Services.owner_store_ids."""
+    return _svc_owner_store_ids(db.session, user)
 
 
 def _owner_kpis(store_ids, start, end):
-    """Aggregate (transfer_count, volume, over_short) across the given
-    stores and date window. Excludes canceled/rejected transfers."""
-    if not store_ids:
-        return 0, 0.0, 0.0
-    tx_count = Transfer.query.filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).count()
-    vol = db.session.query(db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0)).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).scalar() or 0.0
-    os_total = db.session.query(db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0)).filter(
-        DailyReport.store_id.in_(store_ids),
-        DailyReport.report_date >= start, DailyReport.report_date <= end,
-    ).scalar() or 0.0
-    return int(tx_count), float(vol), float(os_total)
+    """Delegate to api.Modules.Owners.Services.owner_kpis."""
+    return _svc_owner_kpis(db.session, store_ids, start, end)
 
 
 def _owner_dashboard_context(user, period):
