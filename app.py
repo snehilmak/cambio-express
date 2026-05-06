@@ -1540,57 +1540,56 @@ def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
 def record_audit(action, target_type="", target_id="", details=""):
     """Append a row to the superadmin audit log.
 
-    Safe to call from any request — reads the current user from session so it
-    can stamp admin_name even if the User row is later deleted.
+    Safe to call from any request — reads the current user from
+    session so it can stamp admin_name even if the User row is
+    later deleted. Single source of truth lives in
+    `api.Modules.Audit.Services.record_superadmin_action` (PR 52).
     """
+    from api.Modules.Audit.Services import record_superadmin_action
     u = current_user()
     if not u:
         return
-    row = SuperadminAuditLog(
+    return record_superadmin_action(
+        db.session,
         admin_id=u.id,
         admin_name=u.full_name or u.username or "",
         action=action,
-        target_type=str(target_type)[:30],
-        target_id=str(target_id)[:60],
-        details=str(details)[:2000],
+        target_type=target_type,
+        target_id=target_id,
+        details=details,
     )
-    db.session.add(row)
-    # Intentionally no commit — caller commits as part of its own transaction.
 
 
 def record_op_audit(action, target_type, target_id, *, label="", summary=""):
-    """Append a row to the per-store operator audit log. Captures
-    user identity + role from session so the audit row stays useful
-    even after the User row is deleted.
+    """Append a row to the per-store operator audit log.
 
-    Targets:
-        'transfer' (delete-only — TransferAudit covers create/edit),
-        'daily_report', 'batch'
+    Captures user identity + role from session so the audit row
+    stays useful even after the User row is deleted. Single source
+    of truth lives in
+    `api.Modules.Audit.Services.record_operator_action` (PR 52).
 
-    Actions:
-        'create', 'update', 'delete', 'lock', 'unlock'
-
-    No commit — caller wraps in the same transaction as the mutation
-    so the audit row rolls back if the mutation fails.
+    Targets: 'transfer', 'daily_report', 'batch'.
+    Actions: 'create', 'update', 'delete', 'lock', 'unlock'.
     """
+    from api.Modules.Audit.Services import record_operator_action
     sid = session.get("store_id")
     if not sid:
         return
     u = current_user()
     if not u:
         return
-    row = OperatorAuditLog(
+    return record_operator_action(
+        db.session,
         store_id=sid,
         user_id=u.id,
-        user_name=(u.full_name or u.username or "")[:120],
-        user_role=str(u.role or "")[:20],
-        target_type=str(target_type)[:30],
-        target_id=str(target_id)[:60],
-        target_label=str(label)[:160],
-        action=str(action)[:30],
-        summary=str(summary)[:2000],
+        user_name=u.full_name or u.username or "",
+        user_role=u.role or "",
+        target_type=target_type,
+        target_id=target_id,
+        target_label=label,
+        action=action,
+        summary=summary,
     )
-    db.session.add(row)
 
 def store_feature_enabled(store, flag_key):
     """Resolve a feature flag for a store: per-store override > global default > True.
