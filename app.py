@@ -6325,136 +6325,45 @@ def _aggregate_transfers(store_ids, d_from, d_to, group_col):
     return aggregate(db.session, store_ids, d_from, d_to, group_col)
 
 
+# LEGACY shims — all six data fns below now delegate to
+# api.Modules.Reports.Services. Single source of truth for the
+# business logic; once `_make_report_routes` is migrated to call
+# the services directly (PR 5), these wrappers disappear.
 def _sales_by_company_data(store_ids, d_from, d_to):
-    """Group active transfers by company and rename the grouping key
-    to `company` for the per-row template."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.company)
-    for r in rows:
-        r["company"] = r.pop("key") or "(no company)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
+    from api.Modules.Reports.Services import sales_by_company
+    return sales_by_company(db.session, store_ids, d_from, d_to)
 
 
 def _sales_by_service_data(store_ids, d_from, d_to):
-    """Group active transfers by service_type (Money Transfer / Bill
-    Payment / Top Up / Recharge)."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.service_type)
-    for r in rows:
-        r["service_type"] = r.pop("key") or "(no service)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
+    from api.Modules.Reports.Services import sales_by_service
+    return sales_by_service(db.session, store_ids, d_from, d_to)
 
 
 def _sales_by_employee_data(store_ids, d_from, d_to):
-    """Group active transfers by created_by, then resolve user IDs to
-    display names via a single in-clause lookup. Transfers with no
-    `created_by` are bucketed as "(unattributed)" so legacy rows
-    don't disappear from the totals."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.created_by)
-    user_ids = [r["key"] for r in rows if r["key"] is not None]
-    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-    for r in rows:
-        uid = r.pop("key")
-        if uid is None:
-            r["employee"] = "(unattributed)"
-            r["username"] = ""
-        else:
-            u = users.get(uid)
-            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
-            r["username"] = u.username if u else ""
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
+    from api.Modules.Reports.Services import sales_by_employee
+    return sales_by_employee(db.session, store_ids, d_from, d_to)
 
 
 def _cashier_productivity_data(store_ids, d_from, d_to):
-    """Group active transfers by `Transfer.employee_id` (the cashier
-    on duty who processed the customer) and resolve to StoreEmployee
-    display names. Distinct from `_sales_by_employee_data`, which
-    groups by `created_by` (the login User who saved the row) — this
-    one answers "which cashier handled the most customers?" rather
-    than "which login authored the most rows?". Sorted by transfer
-    count desc so the busiest cashier floats to the top."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.employee_id)
-    employee_ids = [r["key"] for r in rows if r["key"] is not None]
-    employees = ({e.id: e for e in
-                  StoreEmployee.query.filter(
-                      StoreEmployee.id.in_(employee_ids)).all()}
-                 if employee_ids else {})
-    for r in rows:
-        eid = r.pop("key")
-        if eid is None:
-            r["cashier"] = "(unattributed)"
-            r["is_active"] = False
-        else:
-            e = employees.get(eid)
-            if e:
-                r["cashier"] = e.name
-                r["is_active"] = bool(e.is_active)
-            else:
-                r["cashier"] = f"Cashier #{eid}"
-                r["is_active"] = False
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    return rows, totals
+    from api.Modules.Reports.Services import cashier_productivity
+    return cashier_productivity(db.session, store_ids, d_from, d_to)
 
 
-def _top_customers_data(store_ids, d_from, d_to, *, sort_by="sent",
-                         limit=50):
-    """Group active transfers by customer_id, resolve to Customer rows
-    for display. Transfers without a customer link (legacy / walk-in)
-    are bucketed as "(walk-in)" so the totals match the dashboard.
-    Top `limit` rows by `sort_by` desc — "sent" for the volume view,
-    "count" for the most-active-sender view."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.customer_id)
-    cust_ids = [r["key"] for r in rows if r["key"] is not None]
-    customers = ({c.id: c for c in
-                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
-                 if cust_ids else {})
-    for r in rows:
-        cid = r.pop("key")
-        if cid is None:
-            r["customer"] = "(walk-in)"
-            r["phone"] = ""
-        else:
-            c = customers.get(cid)
-            if c:
-                r["customer"] = c.full_name or "(no name)"
-                r["phone"] = (f"{c.phone_country}{c.phone_number}"
-                              if c.phone_number else "")
-            else:
-                r["customer"] = f"Customer #{cid}"
-                r["phone"] = ""
-    rows.sort(key=lambda r: r[sort_by], reverse=True)
-    return rows[:limit], totals
+def _top_customers_data(store_ids, d_from, d_to, *, sort_by="sent", limit=50):
+    from api.Modules.Reports.Services import top_customers
+    return top_customers(
+        db.session, store_ids, d_from, d_to, sort_by=sort_by, limit=limit,
+    )
 
 
 def _top_recipients_data(store_ids, d_from, d_to, *, limit=50):
-    """Group active transfers by recipient_name string. Recipients
-    aren't stored in their own table — `Transfer.recipient_name` is
-    the only signal — so we just group on the string. Empty names
-    bucketed as "(no name)". Top `limit` by sent."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.recipient_name)
-    for r in rows:
-        r["recipient"] = r.pop("key") or "(no name)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows[:limit], totals
+    from api.Modules.Reports.Services import top_recipients
+    return top_recipients(db.session, store_ids, d_from, d_to, limit=limit)
 
 
 def _by_destination_country_data(store_ids, d_from, d_to):
-    """Group active transfers by destination country. Transfers
-    without a country bucketed as "(no country)"."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.country)
-    for r in rows:
-        r["country"] = r.pop("key") or "(no country)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
+    from api.Modules.Reports.Services import by_destination_country
+    return by_destination_country(db.session, store_ids, d_from, d_to)
 
 
 def _new_vs_returning_data(store_ids, d_from, d_to):
