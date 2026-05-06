@@ -2208,22 +2208,31 @@ MAX_BANK_SYNCS_PER_DAY = 5
 INITIAL_SYNC_DAYS_BACK = 1
 
 def stripe_is_configured():
-    """We can only start an FC session if Stripe is wired up."""
-    return bool(os.environ.get("STRIPE_SECRET_KEY"))
+    """We can only start an FC session if Stripe is wired up.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_is_configured` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_is_configured as _svc
+    return _svc()
 
 def stripe_publishable_key():
     """The pk_test_/pk_live_ key the browser uses to load Stripe.js.
-    Required for the FC connect modal — Stripe.js can't initialize
-    without it."""
-    return os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_publishable_key` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_publishable_key as _svc
+    return _svc()
 
 def stripe_mode():
-    """'live' if STRIPE_SECRET_KEY starts with sk_live_, else 'test'.
-    Empty string if no key is set."""
-    sk = os.environ.get("STRIPE_SECRET_KEY", "")
-    if not sk:
-        return ""
-    return "live" if sk.startswith("sk_live_") else "test"
+    """'live' / 'test' / '' depending on STRIPE_SECRET_KEY.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_mode` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_mode as _svc
+    return _svc()
 
 def _stripe_price_ids():
     """Resolve {plan_key: price_id} for all four plan tiers. Single

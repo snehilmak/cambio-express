@@ -22,7 +22,6 @@ Per CLAUDE.md invariant #12:
   the credit path is a no-op.
 """
 import logging
-import os
 import secrets
 import string
 from datetime import datetime
@@ -35,15 +34,10 @@ from api.Modules.Billing.Models import (
     ReferralRedemption,
     Store,
 )
+from api.Modules.Billing.Services.config import stripe_is_configured
 
 
 logger = logging.getLogger(__name__)
-
-
-def _stripe_is_configured() -> bool:
-    """Local copy of the legacy `stripe_is_configured` predicate so
-    the Service doesn't reach into app.py."""
-    return bool(os.environ.get("STRIPE_SECRET_KEY"))
 
 
 # Stripe customer-balance credits applied on each referee
@@ -173,7 +167,7 @@ def apply_pending_referral_credits(
 
     now = datetime.utcnow()
     referee_txn_id = ""
-    if referee_store.stripe_customer_id and _stripe_is_configured():
+    if referee_store.stripe_customer_id and stripe_is_configured():
         try:
             txn = stripe.Customer.create_balance_transaction(
                 referee_store.stripe_customer_id,
@@ -192,7 +186,7 @@ def apply_pending_referral_credits(
             )
 
     self_txn_id = ""
-    if owner.stripe_customer_id and _stripe_is_configured():
+    if owner.stripe_customer_id and stripe_is_configured():
         try:
             txn = stripe.Customer.create_balance_transaction(
                 owner.stripe_customer_id,
