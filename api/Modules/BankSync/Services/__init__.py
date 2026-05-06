@@ -20,6 +20,10 @@ from api.Modules.BankSync.Services.charges import (
     bank_charges_breakdown_for_month,
     bank_charges_for_month,
 )
+from api.Modules.BankSync.Services.matcher import (
+    find_matching_rule,
+    rule_matches,
+)
 from api.Modules.BankSync.Services.rules import (
     RuleFields,
     RuleNotFoundError,
@@ -50,12 +54,14 @@ __all__ = [
     "categorize_transaction",
     "create_rule",
     "delete_rule",
+    "find_matching_rule",
     "is_bank_charge_slug",
     "is_daily_book_kind",
     "is_valid_bank_category",
     "list_transactions_page",
     "match_builtin_bank_rule",
     "parse_rule_form",
+    "rule_matches",
     "toggle_rule",
     "uncategorize_transaction",
     "update_rule",

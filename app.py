@@ -2324,61 +2324,19 @@ def _is_daily_book_kind(slug):
     return is_daily_book_kind(slug)
 
 def _bank_rule_matches(rule, txn):
-    """True if every set condition on the rule matches the transaction.
-    Conditions left unset are treated as 'any'.
+    """True iff every set condition on `rule` matches `txn`.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.rule_matches` (PR 70)."""
+    from api.Modules.BankSync.Services import rule_matches
+    return rule_matches(rule, txn)
 
-    `rule.enabled` is None on a transient (un-persisted) row because
-    SQLAlchemy column defaults only fire on insert; treat None as True
-    so callers can match against a freshly-constructed rule.
-    """
-    if rule.enabled is False:
-        return False
-    # Description match
-    if rule.desc_match_type and rule.desc_match_value:
-        desc = (txn.description or "")
-        val = rule.desc_match_value
-        mt = rule.desc_match_type
-        if mt == "regex":
-            try:
-                if not re.search(val, desc, re.IGNORECASE):
-                    return False
-            except re.error:
-                return False
-        else:
-            d = desc.lower()
-            v = val.lower()
-            if mt == "contains" and v not in d:
-                return False
-            if mt == "starts_with" and not d.startswith(v):
-                return False
-            if mt == "equals" and d != v:
-                return False
-    # Sign filter
-    if rule.sign_filter == "credit" and (txn.amount_cents or 0) < 0:
-        return False
-    if rule.sign_filter == "debit" and (txn.amount_cents or 0) >= 0:
-        return False
-    # Amount range — both bounds use absolute cents
-    abs_cents = abs(txn.amount_cents or 0)
-    if rule.amount_min_cents is not None and abs_cents < rule.amount_min_cents:
-        return False
-    if rule.amount_max_cents is not None and abs_cents > rule.amount_max_cents:
-        return False
-    # Account filter
-    if rule.account_filter_id and rule.account_filter_id != txn.stripe_bank_account_id:
-        return False
-    return True
 
 def _find_matching_rule(store_id, txn):
-    """First enabled rule (lowest priority first) that matches the
-    transaction. None if no rule applies."""
-    rules = (BankRule.query
-             .filter_by(store_id=store_id, enabled=True)
-             .order_by(BankRule.priority.asc(), BankRule.id.asc()).all())
-    for rule in rules:
-        if _bank_rule_matches(rule, txn):
-            return rule
-    return None
+    """First enabled rule (lowest priority first) that matches.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.find_matching_rule` (PR 70)."""
+    from api.Modules.BankSync.Services import find_matching_rule
+    return find_matching_rule(db.session, store_id, txn)
 
 def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
     """Run the rule chain (operator BankRule → built-in) against an
