@@ -13,6 +13,11 @@ from api.Modules.Auth.Services.login import (
     permissions_for,
     verify_password_cross_store,
 )
+from api.Modules.Auth.Services.password_change import (
+    MIN_PASSWORD_LENGTH,
+    admin_set_password,
+    change_password,
+)
 from api.Modules.Auth.Services.password_reset import (
     IssuedToken,
     consume_password_reset_token,
@@ -34,9 +39,12 @@ __all__ = [
     "IssuedToken",
     "JWTIssuer",
     "LoginResult",
+    "MIN_PASSWORD_LENGTH",
     "SignupConflictError",
     "SignupResult",
+    "admin_set_password",
     "authenticate_password",
+    "change_password",
     "consume_password_reset_token",
     "create_store_and_admin",
     "decode_access_token",

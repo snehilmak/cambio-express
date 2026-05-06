@@ -3312,20 +3312,12 @@ def _passkey_eligible(user):
     return bool(user)
 
 def _update_user_password(user, current_pw, new_pw, confirm_pw):
-    """Validate + apply a password change. Returns ({} on success,
-    {field: message} on failure). Caller commits the session and
-    flashes; we keep this pure so it works from /admin/settings,
-    /account/security, or any future surface."""
-    errors = {}
-    if not user.check_password(current_pw or ""):
-        errors["current_password"] = "Current password is incorrect."
-    elif len(new_pw or "") < 8:
-        errors["new_password"] = "Password must be at least 8 characters."
-    elif new_pw != confirm_pw:
-        errors["confirm_password"] = "Passwords do not match."
-    if not errors:
-        user.set_password(new_pw)
-    return errors
+    """Validate + apply a self-service password change. Returns
+    `{}` on success or `{field: message}` on failure. Single source
+    of truth lives in `api.Modules.Auth.Services.change_password`
+    (PR 40); this wrapper is here for legacy call sites."""
+    from api.Modules.Auth.Services import change_password
+    return change_password(db.session, user, current_pw, new_pw, confirm_pw)
 
 def _update_user_display_name(user, raw):
     """Validate + apply a display-name change. Same return contract as
@@ -11775,18 +11767,28 @@ def admin_roster_rename(eid):
 @app.route("/admin/settings/team/<int:uid>", methods=["POST"])
 @admin_required
 def admin_reset_employee_password(uid):
+    """Admin-side employee password reset. Validation + apply
+    delegate to `api.Modules.Auth.Services.admin_set_password`
+    (PR 40); this Flask route handles the cross-store scope check
+    and the inline flash messages."""
+    from api.Modules.Auth.Services import admin_set_password
     sid = session["store_id"]
     emp = User.query.filter_by(id=uid, store_id=sid).first_or_404()
-    pw = request.form.get("password", "")
-    confirm = request.form.get("confirm_password", "")
-    if len(pw) < 8:
-        flash("Password must be at least 8 characters.", "error")
-    elif pw != confirm:
-        flash("Passwords do not match.", "error")
+    errors = admin_set_password(
+        db.session, emp,
+        request.form.get("password", ""),
+        request.form.get("confirm_password", ""),
+    )
+    if errors:
+        # Surface the first error as a flash (matches the legacy
+        # behaviour — only one message per round-trip).
+        flash(next(iter(errors.values())), "error")
     else:
-        emp.set_password(pw)
         db.session.commit()
-        flash(f"Password updated for {emp.full_name or emp.username}.", "success")
+        flash(
+            f"Password updated for {emp.full_name or emp.username}.",
+            "success",
+        )
     return redirect(url_for("admin_settings", tab="team"))
 
 

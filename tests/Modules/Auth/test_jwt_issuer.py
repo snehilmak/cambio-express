@@ -67,7 +67,14 @@ def test_decode_rejects_expired_token():
 
 
 def test_decode_rejects_tampered_token():
-    """Flipping a single byte in the token must invalidate the signature."""
+    """Tampering with the signature must invalidate the token.
+
+    Why we replace the whole signature instead of flipping one
+    char: the last char of a base64url string can be padding-
+    equivalent so a single-char flip occasionally decodes to the
+    same bytes. Replacing the entire signature with all-A's
+    (a different valid base64url string) is unambiguous.
+    """
     from api.Modules.Auth.Services import (
         JWTIssuer, decode_access_token, issue_access_token,
     )
@@ -75,8 +82,16 @@ def test_decode_rejects_tampered_token():
         sub=1, role="employee", store_id=1, permissions=[],
     )
     token = issue_access_token(issuer)
-    # Flip the last char — corrupts the signature.
-    tampered = token[:-1] + ("A" if token[-1] != "A" else "B")
+    header_payload, signature = token.rsplit(".", 1)
+    # Replace the signature with one of the same length but all A's.
+    # The HS256 signature is deterministic for a (header, payload,
+    # secret) tuple, so all-A's is guaranteed not to match.
+    bogus_sig = "A" * len(signature)
+    if bogus_sig == signature:
+        # 1-in-2^N edge case (the real signature happens to be all A's).
+        # Use B's instead to guarantee divergence.
+        bogus_sig = "B" * len(signature)
+    tampered = f"{header_payload}.{bogus_sig}"
     with pytest.raises(jwt.InvalidSignatureError):
         decode_access_token(tampered)
 
