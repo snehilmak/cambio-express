@@ -6302,51 +6302,27 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
 
 
 def _active_transfers_period_filters(store_ids, d_from, d_to):
-    """Standard filter set every Transfer-based report uses: scoped to
-    `store_ids` (list — accepts admin's [single id] or owner's umbrella),
-    posted in the period, and excluding Canceled / Rejected (same
-    convention as the dashboard + owner pages). Spread into a
-    .filter(...) call: `q.filter(*_active_transfers_period_filters(...))`."""
-    return (
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    )
+    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
+
+    The query logic now lives in the new layered module per the
+    migration ADR. This wrapper keeps every existing caller in
+    app.py working without changes; eventually those callers also
+    move into Reports services and this function disappears with
+    the cleanup PR."""
+    from api.Modules.Reports.Repositories.transfers import period_filters
+    return period_filters(store_ids, d_from, d_to)
 
 
 def _aggregate_transfers(store_ids, d_from, d_to, group_col):
-    """Group active transfers in the period by `group_col`, returning
-    (rows, totals). Each row exposes the grouped key + count + sums of
-    send_amount / fee / federal_tax + per-row avg. Totals carries the
-    same sums across all rows. Rows are NOT sorted — callers decide.
-    """
-    rows_q = (db.session.query(
-        group_col,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-     .group_by(group_col).all())
-    rows = []
-    totals = {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
-    for key, count, sent, fees, tax in rows_q:
-        c = int(count or 0)
-        sent = float(sent or 0); fees = float(fees or 0); tax = float(tax or 0)
-        rows.append({
-            "key":   key,
-            "count": c,
-            "sent":  sent,
-            "fees":  fees,
-            "tax":   tax,
-            "avg":   (sent / c) if c else 0.0,
-        })
-        totals["sent"]  += sent
-        totals["fees"]  += fees
-        totals["tax"]   += tax
-        totals["count"] += c
-    return rows, totals
+    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
+
+    See `_active_transfers_period_filters` above for the shim
+    rationale. Same single-source-of-truth principle: aggregation
+    SQL exists in exactly one place (the new repository), called
+    from both Flask and FastAPI paths during the strangler-fig
+    migration window."""
+    from api.Modules.Reports.Repositories.transfers import aggregate
+    return aggregate(db.session, store_ids, d_from, d_to, group_col)
 
 
 def _sales_by_company_data(store_ids, d_from, d_to):
