@@ -2223,21 +2223,13 @@ def stripe_mode():
     return "live" if sk.startswith("sk_live_") else "test"
 
 def _stripe_price_ids():
-    """Resolve {plan_key: price_id} for all four plan tiers.
-
-    Reads the four STRIPE_*_PRICE_ID env vars and returns a dict keyed
-    by the internal plan slug (basic / basic_yearly / pro / pro_yearly).
-    Empty string for unset env vars matches the get-or-default pattern
-    used at every prior call site. Centralised here so a future tier
-    change touches the env list once instead of grep-replacing across
-    health-check, subscribe, and webhook handlers.
-    """
-    return {
-        "basic":        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-        "basic_yearly": os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
-        "pro":          os.environ.get("STRIPE_PRO_PRICE_ID", ""),
-        "pro_yearly":   os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
-    }
+    """Resolve {plan_key: price_id} for all four plan tiers. Single
+    source of truth lives in
+    `api.Modules.Billing.Services.resolve_price_ids` (PR 43); this
+    Flask-scope wrapper exists so the legacy callers (subscribe page,
+    webhook handler, health check) keep their existing call shape."""
+    from api.Modules.Billing.Services import resolve_price_ids
+    return resolve_price_ids()
 
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
@@ -4821,38 +4813,34 @@ def subscribe():
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
 def subscribe_checkout():
-    """Create a Stripe Checkout Session for the chosen plan and redirect there.
+    """Create a Stripe Checkout Session for the chosen plan and redirect.
 
-    The webhook (checkout.session.completed) is what actually flips the store
-    onto the new plan — this route only initiates the payment flow.
+    Plan validation + Stripe Session creation delegate to
+    `api.Modules.Billing.Services.create_checkout_session` (PR 43);
+    this route handles the form parsing + flash/redirect glue.
+    The webhook (`checkout.session.completed`) is what actually flips
+    the store onto the new plan — this route only initiates the
+    payment flow.
     """
+    from api.Modules.Billing.Services import (
+        InvalidPlanError, StripeServiceError, create_checkout_session,
+    )
     store = current_store()
     plan = request.form.get("plan", "").strip()
-    # "_yearly" variants are separate Stripe prices but land on the same
-    # Store.plan value — basic_yearly→"basic", pro_yearly→"pro" — because
-    # Store.plan is about feature entitlement, not billing cadence.
-    price_map = _stripe_price_ids()
-    if plan not in price_map or not price_map[plan]:
-        flash("Invalid plan selected.", "error")
-        return redirect(url_for("subscribe"))
     try:
-        kwargs = dict(
-            mode="subscription",
-            line_items=[{"price": price_map[plan], "quantity": 1}],
-            metadata={"store_id": str(store.id)},
+        url = create_checkout_session(
+            store, plan=plan,
             success_url=url_for("subscribe_success", _external=True),
             cancel_url=url_for("subscribe", _external=True),
-            # Surface the discount-code entry field on the Stripe checkout page.
-            allow_promotion_codes=True,
         )
-        if store.stripe_customer_id:
-            kwargs["customer"] = store.stripe_customer_id
-        checkout_session = stripe.checkout.Session.create(**kwargs)
-        return redirect(checkout_session.url, code=303)
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe error: {e}")
+    except InvalidPlanError:
+        flash("Invalid plan selected.", "error")
+        return redirect(url_for("subscribe"))
+    except StripeServiceError as e:
+        app.logger.error(f"Stripe error: {e.__cause__}")
         flash("Payment service error. Please try again.", "error")
         return redirect(url_for("subscribe"))
+    return redirect(url, code=303)
 
 @app.route("/subscribe/success")
 @login_required
