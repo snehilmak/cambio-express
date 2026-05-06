@@ -9405,13 +9405,14 @@ def daily_list():
     )
 
 def _ensure_daily_report(store_id, report_date):
-    """Return the DailyReport for (store, date), creating an empty one if needed."""
-    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
-    if rpt is None:
-        rpt = DailyReport(store_id=store_id, report_date=report_date)
-        db.session.add(rpt)
-        db.session.flush()
-    return rpt
+    """Return the DailyReport for (store, date), creating an empty one
+    if needed. Single source of truth lives in
+    `api.Modules.DailyBook.Services.ensure_daily_report` (PR 34); this
+    Flask-scope wrapper exists so the legacy callers
+    (_recompute_line_items_total, daily_report POST) keep their
+    existing call shape during the migration window."""
+    from api.Modules.DailyBook.Services import ensure_daily_report
+    return ensure_daily_report(db.session, store_id, report_date)
 
 _DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
 
@@ -9767,16 +9768,29 @@ def daily_line_item_delete(ds, kind, item_id):
 def daily_report_lock(ds):
     """Lock a daily report so it stops accepting writes. Intended signal:
     'this day's books are closed.' Creates the DailyReport row if it
-    doesn't exist yet so the user can lock an empty day on purpose."""
+    doesn't exist yet so the user can lock an empty day on purpose.
+
+    Lock-state mutation delegates to api.Modules.DailyBook.Services
+    (PR 34). The cross-route operator-audit-log entry stays in Flask
+    since `record_op_audit` is a Flask-side helper."""
+    from api.Modules.DailyBook.Services import lock_report
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt = _ensure_daily_report(sid, report_date)
-    if not rpt.locked_at:
-        rpt.locked_at = datetime.utcnow()
-        rpt.locked_by = current_user().id
-        rpt.updated_at = datetime.utcnow()
+    rpt_before_lock_was_set = (
+        DailyReport.query.filter_by(
+            store_id=sid, report_date=report_date,
+        ).first()
+    )
+    was_locked = bool(
+        rpt_before_lock_was_set and rpt_before_lock_was_set.locked_at,
+    )
+    rpt = lock_report(
+        db.session, sid, report_date,
+        locked_by_user_id=current_user().id,
+    )
+    if not was_locked:
         record_op_audit("lock", "daily_report", rpt.id,
                          label=f"Daily {report_date.isoformat()}")
         db.session.commit()
@@ -9788,15 +9802,17 @@ def daily_report_lock(ds):
 def daily_report_unlock(ds):
     """Unlock a daily report. Admin-only; same gate as locking so an
     employee on shift can't undo a close."""
+    from api.Modules.DailyBook.Services import unlock_report
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt = DailyReport.query.filter_by(store_id=sid, report_date=report_date).first()
-    if rpt and rpt.locked_at:
-        rpt.locked_at = None
-        rpt.locked_by = None
-        rpt.updated_at = datetime.utcnow()
+    rpt_before = DailyReport.query.filter_by(
+        store_id=sid, report_date=report_date,
+    ).first()
+    was_locked = bool(rpt_before and rpt_before.locked_at)
+    rpt = unlock_report(db.session, sid, report_date)
+    if was_locked and rpt is not None:
         record_op_audit("unlock", "daily_report", rpt.id,
                          label=f"Daily {report_date.isoformat()}")
         db.session.commit()

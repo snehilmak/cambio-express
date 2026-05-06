@@ -1,18 +1,18 @@
-"""Daily-book summary services.
+"""Daily-book summary + lifecycle services.
 
-Read-side: turn raw DailyReport rows into the summary payloads the
-React frontend (and the legacy template, once flipped) wants.
-
-Two summaries:
+Read-side:
   summarize_report — one DailyReport, with the derived
                      receipts/disbursements/net totals.
   summarize_period — list of reports + per-store + grand totals
                      across a date range.
 
-Write-side (create/edit/lock/unlock + line-item CRUD) lands in PR 23+.
+Write-side (lock / unlock / ensure):
+  ensure_daily_report — fetch-or-create the (store, date) row.
+  lock_report — set locked_at/locked_by; idempotent if already locked.
+  unlock_report — clear locked_at/locked_by; no-op if no row exists.
 """
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Iterable
 
 from sqlalchemy.orm import Session
@@ -114,3 +114,55 @@ def summarize_period(
         net=total_receipts - total_disbursements,
         days_logged=len(summaries),
     )
+
+
+# ── Write-side lifecycle ─────────────────────────────────────
+
+
+def ensure_daily_report(
+    db: Session, store_id: int, report_date: date,
+) -> DailyReport:
+    """Return the DailyReport for `(store, date)`, creating an empty
+    one with all zero-default fields if it doesn't exist yet. Same
+    contract as the legacy `_ensure_daily_report`. The caller is
+    responsible for committing — we flush so the new row gets an id."""
+    report = find_report_by_date(db, store_id, report_date)
+    if report is None:
+        report = DailyReport(store_id=store_id, report_date=report_date)
+        db.add(report)
+        db.flush()
+    return report
+
+
+def lock_report(
+    db: Session, store_id: int, report_date: date,
+    locked_by_user_id: int | None = None,
+) -> DailyReport:
+    """Mark a daily report as locked. Idempotent — already-locked
+    reports keep their original locked_at/locked_by; we don't bump
+    updated_at in that case so re-clicking the lock button doesn't
+    look like an edit. Auto-creates an empty DailyReport if missing
+    so the user can lock an empty day on purpose."""
+    report = ensure_daily_report(db, store_id, report_date)
+    if report.locked_at is None:
+        now = datetime.utcnow()
+        report.locked_at = now
+        report.locked_by = locked_by_user_id
+        report.updated_at = now
+        db.flush()
+    return report
+
+
+def unlock_report(
+    db: Session, store_id: int, report_date: date,
+) -> DailyReport | None:
+    """Clear the lock on a daily report. Returns the unlocked row or
+    None when no report exists for the date (no-op)."""
+    report = find_report_by_date(db, store_id, report_date)
+    if report is None or report.locked_at is None:
+        return report
+    report.locked_at = None
+    report.locked_by = None
+    report.updated_at = datetime.utcnow()
+    db.flush()
+    return report
