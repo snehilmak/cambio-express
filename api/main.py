@@ -54,6 +54,12 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Transfers.Controllers import router as transfers_router
     app.include_router(transfers_router, prefix="/transfers", tags=["transfers"])
 
+    # BankSync — fourth module. Read-side wired as of PR 16. Listed
+    # under /bank/* because the legacy routes namespace bank-sync,
+    # bank-rules, and per-account UI under /bank/.
+    from api.Modules.BankSync.Controllers import router as banksync_router
+    app.include_router(banksync_router, prefix="/bank", tags=["bank"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.

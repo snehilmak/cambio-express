@@ -49,11 +49,15 @@ def list_transactions_page(
 
     page_total_cents = sum(abs(r.amount_cents or 0) for r in rows)
 
-    # Uncategorized count is computed over the full filtered window
-    # (independent of pagination) so the header pill stays accurate.
-    # Reuse the repository with `uncategorized_only=True`.
+    # Uncategorized count reflects the filter window with the
+    # category-related filters cleared so the pill stays accurate
+    # while the user toggles between categories. Date / account /
+    # sign / search filters still apply — the count is "uncategorized
+    # rows the user could currently be looking at".
     from dataclasses import replace
-    uncat_filters = replace(filters, uncategorized_only=True)
+    uncat_filters = replace(
+        filters, category_slug="", uncategorized_only=True,
+    )
     _, uncategorized_count = list_transactions(
         db, store_ids, uncat_filters, page=1, per_page=1,
     )
