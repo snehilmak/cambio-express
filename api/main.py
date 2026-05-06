@@ -64,6 +64,14 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Auth.Controllers import router as auth_router
     app.include_router(auth_router, prefix="/auth", tags=["auth"])
 
+    # DailyBook — sixth and final module. Read-side wired as of PR 23;
+    # write-side (create/edit/lock + line-item CRUD) ships in
+    # subsequent PRs. This completes the FastAPI router lineup —
+    # cleanup PR will then remove Flask.
+    from api.Modules.DailyBook.Controllers import router as dailybook_router
+    app.include_router(dailybook_router, prefix="/daily", tags=["daily"])
+
+
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
 
