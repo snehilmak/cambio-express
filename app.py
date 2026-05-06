@@ -8825,25 +8825,13 @@ PHONE_COUNTRY_CODES = [
 ]
 
 def sibling_store_ids(store_id):
-    """All store IDs that share at least one owner with the given store.
-
-    Includes the input store_id itself. Returns [store_id] when the store
-    has no Owner links (solo shop) so this is safe to call unconditionally.
-
-    Used to scope customer-directory queries: a multi-store owner should
-    see one unified customer list across all their locations, while
-    unrelated stores stay fully isolated.
-    """
-    owner_ids = [r.owner_id for r in
-                 StoreOwnerLink.query.filter_by(store_id=store_id).all()]
-    if not owner_ids:
-        return [store_id]
-    sibling_rows = (StoreOwnerLink.query
-                    .filter(StoreOwnerLink.owner_id.in_(owner_ids))
-                    .all())
-    ids = {r.store_id for r in sibling_rows}
-    ids.add(store_id)
-    return sorted(ids)
+    """Owner-umbrella resolution. Single source of truth lives in
+    `api.Modules.Customers.Repositories`; this Flask-scoped helper
+    just delegates so legacy callers (transfer routes, recent-recipients,
+    superadmin reports) keep their existing call shape during the
+    migration window."""
+    from api.Modules.Customers.Repositories import sibling_store_ids as _impl
+    return _impl(db.session, store_id)
 
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
                              address="", dob=None, customer_id=None):
@@ -8861,32 +8849,11 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
     so the customer record always tracks the latest info a cashier saw
     anywhere in the owner's portfolio.
     """
-    cust = None
-    sibling_ids = sibling_store_ids(store_id)
-    if customer_id:
-        cust = (Customer.query
-                .filter(Customer.id == customer_id,
-                        Customer.store_id.in_(sibling_ids))
-                .first())
-    if cust is None and phone_number:
-        cust = (Customer.query
-                .filter(Customer.store_id.in_(sibling_ids),
-                        Customer.phone_country == (phone_country or "+1"),
-                        Customer.phone_number == phone_number)
-                .first())
-    if cust is None:
-        cust = Customer(store_id=store_id, full_name=full_name or "",
-                        phone_country=(phone_country or "+1"),
-                        phone_number=phone_number or "")
-        db.session.add(cust)
-    if full_name:     cust.full_name     = full_name
-    if address:       cust.address       = address
-    if dob:           cust.dob           = dob
-    if phone_country: cust.phone_country = phone_country
-    if phone_number:  cust.phone_number  = phone_number
-    cust.updated_at = datetime.utcnow()
-    db.session.flush()
-    return cust
+    from api.Modules.Customers.Services import upsert as _customers_upsert
+    return _customers_upsert(
+        db.session, store_id, full_name, phone_country, phone_number,
+        address=address, dob=dob, customer_id=customer_id,
+    )
 
 @app.route("/api/customers/search")
 @login_required
@@ -8908,65 +8875,28 @@ def api_customers_search():
     creating a duplicate. Suggestions are populated only when the query is
     >= 4 chars and there's room (matches < 5) so the regular case stays fast.
     """
+    from api.Modules.Customers.Services import search as _customers_search
     sid = session.get("store_id")
     if not sid:
         return jsonify({"matches": [], "suggestions": []})
     q_text = request.args.get("q", "").strip()
-    if len(q_text) < 2:
-        return jsonify({"matches": [], "suggestions": []})
-    scope_ids = sibling_store_ids(sid)
 
-    # ── Exact-substring matches (the existing fast path) ─────
-    like = f"%{q_text}%"
-    rows = (Customer.query
-            .filter(Customer.store_id.in_(scope_ids))
-            .filter(db.or_(
-                Customer.phone_number.ilike(like),
-                Customer.full_name.ilike(like),
-            ))
-            .order_by(Customer.updated_at.desc())
-            .limit(10)
-            .all())
-    matched_ids = {c.id for c in rows}
-
-    # ── Fuzzy near-miss suggestions ──────────────────────────
-    # Pulled from the most-recently-updated 200 customers so we don't
-    # scan the whole directory on every keystroke. SequenceMatcher.ratio
-    # on 200 short strings is ~0.5ms — well under the autocomplete
-    # debounce window. Threshold 0.72 catches "Gonzales/Gonzalez" but
-    # not "Maria/Madison" (different name entirely).
-    suggestions = []
-    if len(q_text) >= 4 and len(rows) < 5:
-        from difflib import SequenceMatcher
-        q_lower = q_text.lower()
-        candidates = (Customer.query
-                      .filter(Customer.store_id.in_(scope_ids))
-                      .order_by(Customer.updated_at.desc())
-                      .limit(200).all())
-        scored = []
-        for c in candidates:
-            if c.id in matched_ids:
-                continue
-            name = (c.full_name or "").lower()
-            if not name:
-                continue
-            ratio = SequenceMatcher(None, q_lower, name).ratio()
-            if ratio >= 0.72:
-                scored.append((ratio, c))
-        scored.sort(key=lambda t: t[0], reverse=True)
-        suggestions = [c for _, c in scored[:3]]
+    matches, suggestions = _customers_search(db.session, sid, q_text)
 
     # Precompute the home-store name for rows not owned by the current
     # store so the UI can label "from Store A" on cross-store matches.
-    all_rows = list(rows) + list(suggestions)
-    other_store_ids = {c.store_id for c in all_rows if c.store_id != sid}
-    home_names = {}
-    if other_store_ids:
-        home_names = {s.id: s.name for s in
-                      Store.query.filter(Store.id.in_(other_store_ids)).all()}
+    other_store_ids = {
+        c.store_id for c in (list(matches) + list(suggestions))
+        if c.store_id != sid
+    }
+    home_names = (
+        {s.id: s.name for s in
+         Store.query.filter(Store.id.in_(other_store_ids)).all()}
+        if other_store_ids else {}
+    )
     return jsonify({
         "matches":     [c.to_dict(current_store_id=sid, home_names=home_names)
-                        for c in rows],
+                        for c in matches],
         "suggestions": [c.to_dict(current_store_id=sid, home_names=home_names)
                         for c in suggestions],
     })
