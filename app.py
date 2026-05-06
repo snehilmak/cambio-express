@@ -8943,115 +8943,65 @@ def api_customer_recent_recipients(cid):
     ])
 
 # ── Transfers ────────────────────────────────────────────────
-_TRANSFER_SORT_COLUMNS = {
-    "date":      Transfer.send_date,
-    "sender":    Transfer.sender_name,
-    "company":   Transfer.company,
-    "amount":    Transfer.send_amount,
-    "recipient": Transfer.recipient_name,
-    "country":   Transfer.country,
-    "confirm":   Transfer.confirm_number,
-    "batch":     Transfer.batch_id,
-    "status":    Transfer.status,
-}
+# Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
+# (PR 13). The Flask /transfers route delegates filter parsing + sort
+# resolution + pagination to the Service layer.
 
 
 @app.route("/transfers")
 @login_required
 def transfers():
-    user=current_user(); sid=session.get("store_id")
-    if not sid:
-        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
-    q=Transfer.query.filter_by(store_id=sid)
-    # Employees and admins see the same store-scoped transfer list. The
-    # earlier `created_by=self` + `send_date=today` clamps hid transfers
-    # the employee genuinely needs — a customer coming back days later
-    # to update a transfer's status often asks a different cashier.
-    # Cross-store isolation is still enforced by the store_id filter;
-    # the aggregate totals that reveal business-level info are hidden
-    # separately on the employee dashboard.
-    company=request.args.get("company",""); status=request.args.get("status","")
-    date_from=request.args.get("date_from",""); date_to=request.args.get("date_to","")
-    sender=request.args.get("sender","").strip()
-    recipient=request.args.get("recipient","").strip()
-    country=request.args.get("country","").strip()
-    confirm=request.args.get("confirm","").strip()
-    batch=request.args.get("batch","").strip()
-    search=request.args.get("q","").strip()
-    if company: q=q.filter_by(company=company)
-    if status:  q=q.filter_by(status=status)
-    if date_from:
-        # ValueError on bad user input from the query string. Silently
-        # ignore — we just skip the filter if the string isn't
-        # YYYY-MM-DD. Don't catch broader Exception — we want a real
-        # bug (e.g. an unexpected AttributeError) to actually raise.
-        try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
-        except ValueError: pass
-    if date_to:
-        try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
-        except ValueError: pass
-    if sender:    q=q.filter(Transfer.sender_name.ilike(f"%{sender}%"))
-    if recipient: q=q.filter(Transfer.recipient_name.ilike(f"%{recipient}%"))
-    if country:   q=q.filter(Transfer.country.ilike(f"%{country}%"))
-    if confirm:   q=q.filter(Transfer.confirm_number.ilike(f"%{confirm}%"))
-    if batch:     q=q.filter(Transfer.batch_id.ilike(f"%{batch}%"))
-    if search:
-        like=f"%{search}%"
-        q=q.filter(db.or_(
-            Transfer.sender_name.ilike(like),
-            Transfer.recipient_name.ilike(like),
-            Transfer.confirm_number.ilike(like),
-            Transfer.country.ilike(like),
-            Transfer.batch_id.ilike(like),
-        ))
-    # Sort: optional ?sort=<col>&dir=asc|desc. Falls back to the
-    # historical "newest first" ordering when the slug isn't in the
-    # whitelist — keeps the current default and prevents a malformed
-    # URL from picking an arbitrary column.
-    sort_slug = request.args.get("sort", "").strip()
-    sort_dir  = request.args.get("dir",  "desc").strip().lower()
-    if sort_dir not in ("asc", "desc"):
-        sort_dir = "desc"
-    sort_col = _TRANSFER_SORT_COLUMNS.get(sort_slug)
-    if sort_col is not None:
-        order = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
-        # Tie-break on created_at so equal-key rows have a stable order.
-        q = q.order_by(order, Transfer.created_at.desc())
-    else:
-        q = q.order_by(Transfer.send_date.desc(), Transfer.created_at.desc())
-        sort_slug = ""
-        sort_dir  = "desc"
-    PER_PAGE=50
-    try: page=max(1,int(request.args.get("page",1)))
-    except (TypeError, ValueError): page=1
-    total=q.count()
-    total_pages=max(1,(total+PER_PAGE-1)//PER_PAGE)
-    if page>total_pages: page=total_pages
-    rows=q.offset((page-1)*PER_PAGE).limit(PER_PAGE).all()
-    ctx = dict(user=user, transfers=rows,
-        company=company, status=status, date_from=date_from, date_to=date_to,
-        sender=sender, recipient=recipient, country=country, confirm=confirm,
-        batch=batch, q=search, page=page, total=total, total_pages=total_pages,
-        per_page=PER_PAGE,
-        sort=sort_slug, dir=sort_dir)
-    # Live-search AJAX path — called from templates/transfers.html's JS.
-    # Combined page total — send_amount + fee + federal_tax, matching the
-    # single "Amount" column the user sees in the table (each row shows
-    # the total with a hover-pill breakdown). Shared between the full and
-    # partial render paths so the header always matches the column sum.
-    page_amount = float(sum(
-        r.send_amount + r.fee + (r.federal_tax or 0) for r in rows))
-    ctx["page_amount"] = page_amount
+    """Per-store transfer ledger — list view with filters, sort, and
+    paginated/live-search rendering. Employees and admins see the same
+    store-scoped list (the earlier `created_by=self` clamp hid transfers
+    that returning customers needed). Aggregate totals that reveal
+    business-level info are gated separately on the employee dashboard.
 
-    # Returns the table+pager HTML plus meta so the client can update the
-    # card header without refetching the whole chrome.
+    Filtering, sorting, pagination, and the page-total math live in
+    `api.Modules.Transfers.Services.list_transfers` — this route only
+    handles request parsing and response rendering."""
+    from api.Modules.Transfers.Repositories import TransferFilters
+    from api.Modules.Transfers.Services import list_transfers
+    user = current_user(); sid = session.get("store_id")
+    if not sid:
+        flash("Select a store first.", "error")
+        return redirect(url_for("dashboard"))
+
+    filters = TransferFilters.from_query(request.args)
+    PER_PAGE = 50
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    page_obj = list_transfers(
+        db.session, [sid], filters, page=page, per_page=PER_PAGE,
+    )
+
+    ctx = dict(
+        user=user, transfers=page_obj.rows,
+        company=filters.company, status=filters.status,
+        date_from=request.args.get("date_from", ""),
+        date_to=request.args.get("date_to", ""),
+        sender=filters.sender, recipient=filters.recipient,
+        country=filters.country, confirm=filters.confirm,
+        batch=filters.batch, q=filters.q,
+        page=page_obj.page, total=page_obj.total,
+        total_pages=page_obj.total_pages,
+        per_page=page_obj.per_page,
+        sort=filters.sort_slug, dir=filters.sort_dir,
+        page_amount=page_obj.page_amount,
+    )
+
+    # Live-search AJAX path — called from templates/transfers.html's JS.
+    # Returns the table+pager HTML plus meta so the client can update
+    # the card header without refetching the whole chrome.
     if request.args.get("partial") == "1":
         return jsonify({
             "html":        render_template("_transfers_table.html", **ctx),
-            "total":       total,
-            "page":        page,
-            "total_pages": total_pages,
-            "page_amount": page_amount,
+            "total":       page_obj.total,
+            "page":        page_obj.page,
+            "total_pages": page_obj.total_pages,
+            "page_amount": page_obj.page_amount,
         })
     return render_template("transfers.html", **ctx)
 
