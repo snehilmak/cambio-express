@@ -11236,7 +11236,14 @@ def bank_stripe_sync_transactions():
 def bank_transactions():
     """Paginated list of pulled bank transactions. Live-search per
     CLAUDE.md invariant #14: ?partial=1 returns JSON, full GET returns
-    the page chrome."""
+    the page chrome.
+
+    Filtering, sorting, and pagination live in
+    `api.Modules.BankSync.Services.list_transactions_page` — this
+    route only handles request parsing and response rendering.
+    """
+    from api.Modules.BankSync.Repositories import BankTransactionFilters
+    from api.Modules.BankSync.Services import list_transactions_page
     store = current_store()
     sid = store.id
     is_partial = request.args.get("partial") == "1"
@@ -11247,30 +11254,23 @@ def bank_transactions():
     date_from  = (request.args.get("date_from") or "").strip()
     date_to    = (request.args.get("date_to") or "").strip()
 
-    qry = BankTransaction.query.filter_by(store_id=sid)
-    if account_id:
-        qry = qry.filter_by(stripe_bank_account_id=account_id)
-    if q and len(q) >= 2:
-        like = f"%{q}%"
-        qry = qry.filter(BankTransaction.description.ilike(like))
-    if date_from:
-        try:
-            d = datetime.strptime(date_from, "%Y-%m-%d")
-            qry = qry.filter(BankTransaction.posted_at >= d)
-        except ValueError:
-            pass
-    if date_to:
-        try:
-            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
-            qry = qry.filter(BankTransaction.posted_at < d)
-        except ValueError:
-            pass
-    total = qry.count()
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    page = min(page, total_pages)
-    rows = (qry.order_by(BankTransaction.posted_at.desc(),
-                         BankTransaction.id.desc())
-              .offset((page - 1) * per_page).limit(per_page).all())
+    # Map the legacy "account" param onto the Service's "account_id".
+    # Skip the description filter when the query is shorter than 2
+    # chars (legacy parity — the live-search debouncer also clamps).
+    filters = BankTransactionFilters.from_query({
+        "posted_from": date_from,
+        "posted_to": date_to,
+        "account_id": str(account_id) if account_id else "",
+        "q": q if len(q) >= 2 else "",
+    })
+    page_obj = list_transactions_page(
+        db.session, [sid], filters, page=page, per_page=per_page,
+    )
+    rows = page_obj.rows
+    total = page_obj.total
+    total_pages = page_obj.total_pages
+    page = page_obj.page
+
     accounts = (StripeBankAccount.query
                  .filter_by(store_id=sid, enabled=True)
                  .order_by(StripeBankAccount.connected_at.desc()).all())
