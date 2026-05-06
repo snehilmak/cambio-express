@@ -2698,60 +2698,26 @@ def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
 
 def _categorize_bank_transaction(txn, target_kind, rule=None,
                                   post_to_daily=True, report_date=None):
-    """Set the transaction's category. If target_kind is a daily-book
-    kind AND post_to_daily is True, also create a linked DailyLineItem.
-    Caller commits.
+    """Flask-side adapter for the categorize Service. Caller commits.
 
-    `report_date` (optional, datetime.date) overrides the daily-book
-    line's date. Used for the RDC case where the bank posts the
-    transaction next morning but the cash-handling event belongs on
-    the previous day's book. When None, defaults to the transaction's
-    posted_at date.
-
-    Idempotent: re-categorizing removes the previously-linked
-    DailyLineItem (if any) before creating a fresh one.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.categorize_transaction` (PR 36);
+    this wrapper forwards `db.session` + the legacy
+    `_is_daily_book_kind` predicate so the existing call sites keep
+    their shape during the migration window.
     """
-    # Drop any prior auto-created DailyLineItem.
-    if txn.daily_line_item_id:
-        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
-        if old is not None:
-            db.session.delete(old)
-        txn.daily_line_item_id = None
-
-    txn.category_slug = target_kind or ""
-    txn.matched_rule_id = rule.id if rule else None
-
-    if rule is not None:
-        rule.match_count = (rule.match_count or 0) + 1
-        rule.last_matched_at = datetime.utcnow()
-
-    if post_to_daily and target_kind and _is_daily_book_kind(target_kind):
-        when = txn.posted_at or datetime.utcnow()
-        line_date = report_date if report_date is not None else when.date()
-        line = DailyLineItem(
-            store_id=txn.store_id,
-            report_date=line_date,
-            kind=target_kind,
-            at_time=when.time(),
-            # The daily-book model expects positive amounts. We store
-            # the absolute value; the kind itself encodes whether it's
-            # an inflow or outflow for the daily report.
-            amount=abs(float(txn.amount_cents or 0) / 100.0),
-            note=(txn.description or "")[:120],
-        )
-        db.session.add(line)
-        db.session.flush()
-        txn.daily_line_item_id = line.id
+    from api.Modules.BankSync.Services import categorize_transaction
+    return categorize_transaction(
+        db.session, txn, target_kind,
+        rule=rule, post_to_daily=post_to_daily,
+        report_date=report_date,
+        is_daily_book_kind=_is_daily_book_kind,
+    )
 
 def _uncategorize_bank_transaction(txn):
-    """Clear category + delete linked DailyLineItem if any. Caller commits."""
-    if txn.daily_line_item_id:
-        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
-        if old is not None:
-            db.session.delete(old)
-        txn.daily_line_item_id = None
-    txn.category_slug = ""
-    txn.matched_rule_id = None
+    """Flask-side adapter for the uncategorize Service. Caller commits."""
+    from api.Modules.BankSync.Services import uncategorize_transaction
+    return uncategorize_transaction(db.session, txn)
 
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
