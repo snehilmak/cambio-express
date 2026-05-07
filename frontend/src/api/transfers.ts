@@ -77,6 +77,42 @@ export interface TransferResponse {
   transfer: TransferRow;
 }
 
+export interface CreateTransferBody {
+  send_date: string;
+  company: string;
+  service_type: string;
+  sender_name: string;
+  send_amount: number;
+  fee?: number;
+  commission?: number;
+  recipient_name?: string;
+  country?: string;
+  recipient_phone?: string;
+  sender_phone?: string;
+  sender_phone_country?: string;
+  sender_address?: string;
+  sender_dob?: string;
+  confirm_number?: string;
+  status?: string;
+  status_notes?: string;
+  batch_id?: string;
+  internal_notes?: string;
+  employee_id?: number | null;
+  customer_id?: number | null;
+}
+
+// POST /api/v2/transfers — server recomputes federal_tax from
+// (send_amount, service_type, country, store), so the client
+// CANNOT submit it (the schema's `extra="forbid"` rejects it).
+export async function createTransfer(
+  body: CreateTransferBody,
+): Promise<TransferResponse> {
+  return api<TransferResponse>("/api/v2/transfers", {
+    method: "POST",
+    json: body,
+  });
+}
+
 // Hook: fetch a single transfer by id, scoped to the user's
 // store(s). Server returns 404 (never 403) for cross-tenant
 // lookups so tenancy boundaries stay opaque.

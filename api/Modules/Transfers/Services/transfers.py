@@ -71,6 +71,130 @@ def list_transfers(
     )
 
 
+@dataclass
+class CreateTransferInput:
+    """Validated transfer-create payload. Mirrors the fields the
+    legacy `new_transfer` Flask route accepts; the Controller layer
+    parses + validates the HTTP request body into this shape so the
+    Service stays HTTP-agnostic.
+
+    `federal_tax` is intentionally NOT here — it's always recomputed
+    server-side from `(send_amount, service_type, country, store)`
+    via `federal_tax_for`. Mirrors the legacy invariant — the form
+    can't lie about the tax rate.
+    """
+    store_id: int
+    created_by_user_id: int
+    send_date: "object"        # datetime.date
+    company: str
+    service_type: str          # already passed through normalize_service_type
+    sender_name: str
+    send_amount: float
+    fee: float = 0.0
+    commission: float = 0.0
+    recipient_name: str = ""
+    country: str = ""
+    recipient_phone: str = ""
+    sender_phone: str = ""
+    sender_phone_country: str = "+1"
+    sender_address: str = ""
+    sender_dob: "object" = None  # datetime.date | None
+    confirm_number: str = ""
+    status: str = "Sent"
+    status_notes: str = ""
+    batch_id: str = ""
+    internal_notes: str = ""
+    employee_id: int | None = None
+    customer_id: int | None = None
+
+
+def create_transfer(
+    db: Session, payload: CreateTransferInput,
+) -> Transfer:
+    """Create a Transfer + its associated Customer upsert + audit
+    log entry. Returns the persisted Transfer row.
+
+    Composes the existing helpers:
+      • Customers.upsert            — sender directory
+      • federal_tax_for             — server-recomputed tax
+      • pick_employee               — required "processed by" attribution
+      • record_transfer_audit       — "created" log line
+
+    Raises ValueError if the employee can't be resolved within the
+    store. Caller is responsible for committing the outer transaction
+    so the row is visible to subsequent reads.
+    """
+    # Lazy import — these helpers live across modules + app.py.
+    from app import User, Store
+    from api.Modules.Customers.Services import upsert as upsert_customer
+    from api.Modules.Transfers.Services import (
+        federal_tax_for,
+        pick_employee,
+        record_transfer_audit,
+    )
+
+    user = db.query(User).filter_by(id=payload.created_by_user_id).first()
+    if user is None:
+        raise ValueError(f"Unknown created_by user_id={payload.created_by_user_id}")
+
+    emp, emp_name = pick_employee(db, payload.store_id, payload.employee_id)
+    if not emp:
+        raise ValueError(
+            "An employee from the store roster must be selected as "
+            "Processed by before saving."
+        )
+
+    cust = upsert_customer(
+        db, payload.store_id, payload.sender_name,
+        payload.sender_phone_country, payload.sender_phone,
+        address=payload.sender_address,
+        dob=payload.sender_dob,
+        customer_id=payload.customer_id,
+    )
+
+    store = db.query(Store).filter_by(id=payload.store_id).first()
+    fed_tax = federal_tax_for(
+        payload.send_amount, payload.service_type,
+        store, country=payload.country,
+    )
+
+    transfer = Transfer(
+        store_id=payload.store_id,
+        created_by=user.id,
+        customer_id=cust.id,
+        send_date=payload.send_date,
+        company=payload.company,
+        service_type=payload.service_type,
+        sender_name=payload.sender_name,
+        send_amount=payload.send_amount,
+        fee=payload.fee,
+        federal_tax=fed_tax,
+        commission=payload.commission,
+        recipient_name=payload.recipient_name,
+        country=payload.country,
+        recipient_phone=payload.recipient_phone,
+        sender_phone=payload.sender_phone,
+        sender_phone_country=payload.sender_phone_country,
+        sender_address=payload.sender_address,
+        sender_dob=payload.sender_dob,
+        confirm_number=payload.confirm_number,
+        status=payload.status or "Sent",
+        status_notes=payload.status_notes,
+        batch_id=payload.batch_id,
+        internal_notes=payload.internal_notes,
+        employee_id=emp.id,
+        employee_name=emp_name,
+    )
+    db.add(transfer)
+    db.flush()
+    record_transfer_audit(
+        db, transfer, user, "created", emp.id, emp_name,
+        f"Logged by {emp_name}.",
+    )
+    db.flush()
+    return transfer
+
+
 def delete_transfer(
     db: Session, transfer_id: int, store_id: int,
 ) -> Transfer:

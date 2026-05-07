@@ -222,3 +222,224 @@ def test_openapi_includes_transfers_path():
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/transfers" in paths
+
+
+# ── POST /transfers (write-side) ────────────────────────────
+
+
+def _login_admin_token(client_, test_store_id):
+    """Helper: log the seeded admin in via /auth/login and return
+    the JWT bearer token. Used by tests that call write-side
+    endpoints which require an authed principal."""
+    resp = client_.post(
+        "/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["access_token"]
+
+
+def _seed_employee(store_id, *, name="Cashier 1", is_active=True):
+    """Add a roster row so the create endpoint's pick_employee
+    has something to resolve to."""
+    from app import StoreEmployee, db
+    e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
+    db.session.add(e); db.session.commit()
+    return e.id
+
+
+def test_create_requires_jwt(test_store_id):
+    """No bearer header → 401 from get_principal."""
+    resp = _client().post(
+        "/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "Smoke Sender",
+            "send_amount": 100.0,
+        },
+    )
+    assert resp.status_code == 401
+
+
+def test_create_returns_201_and_persists(client, test_store_id):
+    """End-to-end: log in, post a transfer, verify the response
+    + that it lands in the DB.
+
+    Uses the Flask dispatcher path (mirrors how the SPA calls in
+    production through DispatcherMiddleware)."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id)
+
+    # Log in via the Flask dispatcher → FastAPI /auth/login.
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert login.status_code == 200, login.get_data(as_text=True)
+    token = login.get_json()["access_token"]
+
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "Jane Sender",
+            "sender_phone": "5551234567",
+            "send_amount": 250.0,
+            "fee": 5.0,
+            "country": "Mexico",
+            "recipient_name": "Bob Recipient",
+            "employee_id": emp_id,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+    row = body["transfer"]
+    assert row["sender_name"] == "Jane Sender"
+    assert row["company"] == "Intermex"
+    # Server-recomputed federal tax should be present (1% default
+    # store rate × $250 = $2.50). Don't pin the exact rate — the
+    # invariant is that it's > 0 and the client didn't supply it.
+    assert row["federal_tax"] > 0
+    assert row["total_collected"] == row["send_amount"] + row["fee"] + row["federal_tax"]
+
+    # Verify it persisted.
+    from app import Transfer, db
+    with flask_app.app_context():
+        t = db.session.get(Transfer, row["id"])
+        assert t is not None
+        assert t.store_id == test_store_id
+        assert t.sender_name == "Jane Sender"
+        assert t.employee_id == emp_id
+
+
+def test_create_recomputes_tax_ignoring_client_value(client, test_store_id):
+    """Tax invariant — client can't override the server-computed
+    federal_tax. We don't expose it as a request field at all
+    (extra=forbid), and the response shows the recomputed value."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id, name="C2")
+
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+
+    # Try to slip in a federal_tax field — schema must reject.
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+            "country": "Mexico",
+            "employee_id": emp_id,
+            "federal_tax": 99.99,   # not in schema
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_create_rejects_missing_employee(client, test_store_id):
+    """`pick_employee` returning None must produce 422."""
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+            "country": "Mexico",
+            "employee_id": None,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert "Processed by" in resp.get_data(as_text=True) or "employee" in resp.get_data(as_text=True).lower()
+
+
+def test_create_rejects_bad_send_date(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id, name="C3")
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "not-a-date",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+            "employee_id": emp_id,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_create_jwt_without_store_returns_403(client):
+    """Superadmin JWT (store_id=null) cannot create transfers via
+    this endpoint — it doesn't carry a store scope."""
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin", "password": "super2025!",
+            "store_id": None,
+        },
+    )
+    assert login.status_code == 200
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/transfers",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+            "employee_id": 1,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403

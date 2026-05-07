@@ -103,20 +103,46 @@ export default function Transfers() {
 
   return (
     <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Transfers</h1>
-        <p
+      <header
+        style={{
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1 style={titleStyle}>Transfers</h1>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              color: "var(--db-text-muted, #a3a3a3)",
+            }}
+          >
+            {data
+              ? `${data.total.toLocaleString()} total · page ${data.page} of ${
+                  data.total_pages || 1
+                }`
+              : "—"}
+          </p>
+        </div>
+        <Link
+          to="/transfers/new"
           style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
+            background: "var(--db-accent, #3fff00)",
+            color: "var(--db-on-accent, #0a0a0a)",
+            borderRadius: "0.5rem",
+            padding: "0.55rem 1rem",
+            fontFamily:
+              "var(--db-font-display, 'Space Grotesk', sans-serif)",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            textDecoration: "none",
           }}
         >
-          {data
-            ? `${data.total.toLocaleString()} total · page ${data.page} of ${
-                data.total_pages || 1
-              }`
-            : "—"}
-        </p>
+          + New transfer
+        </Link>
       </header>
 
       <FilterBar
