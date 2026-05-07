@@ -2086,93 +2086,23 @@ def ensure_stripe_customer(store):
     return _svc(db.session, store)
 
 def _upsert_fc_account(store_id, api_obj):
-    """Persist (or refresh) a FinancialConnectionsAccount into our cache."""
-    acct_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
-    existing = StripeBankAccount.query.filter_by(stripe_account_id=acct_id).first()
-    row = existing or StripeBankAccount(store_id=store_id, stripe_account_id=acct_id)
-    institution = api_obj.get("institution_name") if isinstance(api_obj, dict) else getattr(api_obj, "institution_name", "")
-    display     = api_obj.get("display_name")     if isinstance(api_obj, dict) else getattr(api_obj, "display_name", "")
-    last4       = api_obj.get("last4")            if isinstance(api_obj, dict) else getattr(api_obj, "last4", "")
-    category    = api_obj.get("category")         if isinstance(api_obj, dict) else getattr(api_obj, "category", "")
-    subcategory = api_obj.get("subcategory")      if isinstance(api_obj, dict) else getattr(api_obj, "subcategory", "")
-    row.institution_name = institution or row.institution_name or ""
-    row.display_name     = display or row.display_name or ""
-    row.last4            = last4 or row.last4 or ""
-    row.category         = category or row.category or ""
-    row.subcategory      = subcategory or row.subcategory or ""
-    # Balance payload lives inside the "balance" field; may be missing if
-    # the "balances" permission wasn't granted, or null if Stripe's
-    # async balance fetch hasn't completed yet (common right after
-    # connect when prefetch wasn't requested).
-    bal = api_obj.get("balance") if isinstance(api_obj, dict) else getattr(api_obj, "balance", None)
-    if bal:
-        current = bal.get("current") if isinstance(bal, dict) else getattr(bal, "current", None)
-        as_of   = bal.get("as_of")   if isinstance(bal, dict) else getattr(bal, "as_of", None)
-        # Stripe returns balances as a dict {"usd": <cents>}; we pick
-        # whatever matches the account currency, falling back to the
-        # first value. Guard against a missing/empty `current` so we
-        # don't crash with StopIteration / TypeError on partial responses.
-        cents = 0
-        if isinstance(current, dict) and current:
-            cents = current.get(row.currency or "usd") or next(iter(current.values()), 0)
-        elif current is not None:
-            cents = current
-        try:
-            row.last_balance_cents = int(cents or 0)
-        except (TypeError, ValueError):
-            row.last_balance_cents = 0
-        if as_of:
-            try:
-                row.last_balance_as_of = datetime.utcfromtimestamp(int(as_of))
-            except (TypeError, ValueError):
-                pass
-    row.enabled = True
-    row.disconnected_at = None
-    if existing is None:
-        db.session.add(row)
-    db.session.flush()
-    return row
+    """Persist (or refresh) a FinancialConnectionsAccount into our
+    cache. Single source of truth lives in
+    `api.Modules.BankSync.Services.upsert_fc_account` (PR 73).
+    """
+    from api.Modules.BankSync.Services import upsert_fc_account
+    return upsert_fc_account(db.session, store_id, api_obj)
+
 
 def refresh_bank_balances(store):
     """Pull fresh balances for every enabled account on the store.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.refresh_bank_balances` (PR 73).
 
-    Stripe requires the `balances` feature to be refreshed explicitly when
-    the cached value is stale; we call Account.refresh_account(
-    features=["balance"]) and then retrieve to capture the new snapshot.
-
-    Returns (updated_count, error_message_or_empty). The caller can
-    surface error_message in a flash so the operator sees *why* a
-    refresh failed without grepping the server log.
+    Returns `(updated_count, error_message_or_empty)`.
     """
-    if not stripe_is_configured():
-        return 0, "Stripe is not configured."
-    updated = 0
-    last_error = ""
-    for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
-        try:
-            # SDK note: the operation is `refresh_account` (not `refresh`).
-            # `refresh` is the inherited APIResource instance method that
-            # only re-fetches local state; calling it with kwargs raises
-            # "got an unexpected keyword argument 'features'".
-            stripe.financial_connections.Account.refresh_account(
-                acct.stripe_account_id, features=["balance"],
-            )
-            api_obj = stripe.financial_connections.Account.retrieve(acct.stripe_account_id)
-            _upsert_fc_account(store.id, api_obj)
-            updated += 1
-        except stripe.error.StripeError as e:
-            msg = e.user_message or str(e)
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
-            app.logger.warning(f"FC refresh failed for {acct.stripe_account_id}: {e}")
-        except Exception as e:
-            # Anything not a StripeError — usually a response-shape mismatch
-            # in _upsert_fc_account or a network blip. Logged with full
-            # traceback so the cause is visible in Render logs.
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
-            app.logger.exception(f"FC refresh crashed for {acct.stripe_account_id}")
-    if updated:
-        db.session.commit()
-    return updated, last_error
+    from api.Modules.BankSync.Services import refresh_bank_balances
+    return refresh_bank_balances(db.session, store)
 
 def _can_sync_bank_transactions(store, now=None):
     """Rate-limit gate for manual bank-transaction syncs.

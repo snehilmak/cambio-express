@@ -23,6 +23,10 @@ from api.Modules.BankSync.Services.charges import (
     bank_charges_breakdown_for_month,
     bank_charges_for_month,
 )
+from api.Modules.BankSync.Services.fc_accounts import (
+    refresh_bank_balances,
+    upsert_fc_account,
+)
 from api.Modules.BankSync.Services.matcher import (
     find_matching_rule,
     rule_matches,
@@ -75,10 +79,12 @@ __all__ = [
     "match_builtin_bank_rule",
     "migrate_generic_bank_charge_per_account",
     "parse_rule_form",
+    "refresh_bank_balances",
     "rule_matches",
     "sync_bank_transactions",
     "toggle_rule",
     "uncategorize_transaction",
     "update_rule",
     "upsert_bank_transaction",
+    "upsert_fc_account",
 ]
