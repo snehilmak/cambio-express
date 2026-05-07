@@ -3069,145 +3069,32 @@ def _hash_token(raw):
 # "sent", "failed", "unknown"}, error (str, "" on success), when
 # (datetime or None), last_to (obscured — we show only the domain
 # part so the page doesn't leak user email addresses), last_subject.
-_last_smtp_attempt = {
-    "status": "unknown", "error": "", "when": None,
-    "last_to_domain": "", "last_subject": "",
-}
+# Transactional email send + SMTP health probe now live in
+# api.Modules.Notifications.Services.smtp (PR 82). The legacy
+# names below are thin re-exports / wrappers so existing call
+# sites (password reset, trial reminders, announcement broadcast,
+# superadmin Overview health card, the test-email button) keep
+# their import shape during the migration window.
+from api.Modules.Notifications.Services import smtp as _smtp_svc
+
+# Live module-level alias for the health-card state. Uses
+# `_smtp_svc.last_attempt` directly so reads always see the
+# Service's canonical dict — direct mutation isn't supported.
+_last_smtp_attempt = _smtp_svc.last_attempt
+
 
 def _send_email(to_addr, subject, body, html=None):
-    """Send a transactional email. Returns True on success, False on
-    failure or when SMTP isn't configured. Every attempt updates
-    _last_smtp_attempt so the superadmin health card can show the
-    most recent outcome.
+    """Send a transactional email. Single source of truth lives
+    in `api.Modules.Notifications.Services.send_email` (PR 82)."""
+    return _smtp_svc.send_email(db.session, to_addr, subject, body, html)
 
-    When `html` is provided, the message is sent multipart/alternative
-    so email clients that strip HTML (or users who prefer plain text)
-    see `body`, and everyone else sees the rendered branded template.
-    Keep both — plaintext fallback is a deliverability signal (spam
-    filters flag HTML-only messages) and a real accessibility win.
-
-    Env vars required: SMTP_HOST, SMTP_USER, SMTP_PASS. Optional: SMTP_PORT
-    (default 587), SMTP_FROM (default SMTP_USER). When SMTP isn't configured
-    the caller is expected to log enough context that a superadmin can
-    retrieve the link manually.
-    """
-    global _last_smtp_attempt
-    host = os.environ.get("SMTP_HOST")
-    user = os.environ.get("SMTP_USER")
-    pw   = os.environ.get("SMTP_PASS")
-    now = datetime.utcnow()
-    to_norm = (to_addr or "").strip().lower()
-    to_domain = to_norm.split("@", 1)[1] if "@" in to_norm else ""
-    # Bounce suppression: if a User row with this email got stamped by a
-    # hard-bounce webhook, skip the send. Keeps us from hammering the
-    # provider with guaranteed-failing addresses, which Resend (and every
-    # other reputable provider) penalizes as a sender-reputation hit.
-    # NOTE: we only skip when we can positively match to a User with the
-    # stamp — superadmin test sends to personal addresses aren't gated.
-    suppressed = (db.session.query(User.id)
-                  .filter(db.func.lower(User.email) == to_norm,
-                          User.email_bounced_at.isnot(None))
-                  .first())
-    if suppressed:
-        _last_smtp_attempt = {
-            "status": "suppressed",
-            "error": f"{to_norm} is on the bounce suppression list",
-            "when": now, "last_to_domain": to_domain, "last_subject": subject,
-        }
-        app.logger.warning(
-            f"SMTP send suppressed (prior hard bounce) to *@{to_domain}")
-        return False
-    if not (host and user and pw):
-        _last_smtp_attempt = {
-            "status": "unconfigured", "error": "SMTP env vars not set",
-            "when": now, "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return False
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    sender = os.environ.get("SMTP_FROM", user)
-    msg = EmailMessage()
-    msg["From"] = sender
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    msg.set_content(body)
-    if html:
-        msg.add_alternative(html, subtype="html")
-    try:
-        with smtplib.SMTP(host, port, timeout=15) as s:
-            s.starttls()
-            s.login(user, pw)
-            s.send_message(msg)
-        _last_smtp_attempt = {
-            "status": "sent", "error": "", "when": now,
-            "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return True
-    except Exception as e:
-        # Cheap type + message is enough for the superadmin to see whether
-        # the auth creds are wrong, the host is unreachable, etc. — without
-        # dumping a traceback into the HTML.
-        err = f"{type(e).__name__}: {e}"
-        app.logger.warning(f"SMTP send failed to {to_domain or '(no-to)'}: {err}")
-        _last_smtp_attempt = {
-            "status": "failed", "error": err, "when": now,
-            "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return False
 
 def smtp_health_check():
-    """Return a dict describing the email-delivery integration state,
-    matching the shape of stripe_health_check so the template stays
-    symmetric. Doesn't do a live SMTP probe — reads _last_smtp_attempt
-    (updated on every _send_email call) and joins in delivery-event
-    totals from EmailEvent (updated by the Resend webhook)."""
-    env = {
-        "host":     bool(os.environ.get("SMTP_HOST")),
-        "user":     bool(os.environ.get("SMTP_USER")),
-        "password": bool(os.environ.get("SMTP_PASS")),
-        "from":     bool(os.environ.get("SMTP_FROM")),
-        "webhook_secret": bool(os.environ.get("RESEND_WEBHOOK_SECRET")),
-    }
-    configured = env["host"] and env["user"] and env["password"]
-
-    # Event totals over the last 7 days — a quick signal that:
-    #   - the webhook is wired (any events at all)
-    #   - bounce/complaint rate is under the ~2% Resend flags
-    # Safe to run every Overview load; indexed on created_at.
-    recent_events = {"delivered": 0, "bounced": 0, "complained": 0,
-                     "sent": 0, "opened": 0, "clicked": 0}
-    suppressed_count = 0
-    last_event_at = None
-    try:
-        since = datetime.utcnow() - timedelta(days=7)
-        rows = (db.session.query(EmailEvent.event_type, db.func.count(EmailEvent.id))
-                .filter(EmailEvent.created_at >= since)
-                .group_by(EmailEvent.event_type).all())
-        for t, n in rows:
-            # event_type comes in as "email.delivered" etc.
-            key = t.split(".", 1)[-1] if "." in t else t
-            if key in recent_events:
-                recent_events[key] = n
-        latest = (db.session.query(db.func.max(EmailEvent.created_at)).scalar())
-        last_event_at = latest
-        suppressed_count = User.query.filter(
-            User.email_bounced_at.isnot(None)).count()
-    except Exception:
-        # EmailEvent / User columns may not exist on a pristine test DB
-        # between migrations; don't blow up the Overview.
-        pass
-
-    return {
-        "env":         env,
-        "configured":  configured,
-        "status":      _last_smtp_attempt["status"],
-        "error":       _last_smtp_attempt["error"],
-        "when":        _last_smtp_attempt["when"],
-        "last_to_domain":  _last_smtp_attempt["last_to_domain"],
-        "last_subject":    _last_smtp_attempt["last_subject"],
-        "recent_events":   recent_events,
-        "last_event_at":   last_event_at,
-        "suppressed_count": suppressed_count,
-    }
+    """Return a dict describing email-delivery state. Single
+    source of truth lives in
+    `api.Modules.Notifications.Services.smtp_health_check`
+    (PR 82)."""
+    return _smtp_svc.health_check(db.session)
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():

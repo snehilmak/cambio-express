@@ -9,6 +9,10 @@ from api.Modules.Notifications.Services.push import (
     send_push,
     vapid_public_key,
 )
+from api.Modules.Notifications.Services.smtp import (
+    health_check as smtp_health_check,
+    send_email,
+)
 from api.Modules.Notifications.Services.trial_reminders import (
     TRIAL_REMINDER_BODY,
     TRIAL_REMINDER_SUBJECT,
@@ -24,7 +28,9 @@ __all__ = [
     "derive_broadcast_subject",
     "eligible_recipients",
     "push_is_enabled",
+    "send_email",
     "send_push",
+    "smtp_health_check",
     "stores_due_for_reminder",
     "vapid_public_key",
 ]
