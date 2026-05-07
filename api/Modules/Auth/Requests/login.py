@@ -29,6 +29,19 @@ class LoginCrossStoreRequest(BaseModel):
     password: str = Field(..., min_length=1)
 
 
+class ChangePasswordRequest(BaseModel):
+    """POST body for /auth/change-password. Takes the user's
+    current password (proof of identity) plus the new password
+    twice. Same validation rules as the legacy /account/security
+    form — length ≥ 8 and the two new entries must match."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(..., min_length=1)
+    new_password:     str = Field(..., min_length=1)
+    confirm_password: str = Field(..., min_length=1)
+
+
 class LoginResponse(BaseModel):
     """Successful-login response. `access_token` is the bearer JWT
     the client must send as `Authorization: Bearer <token>` on

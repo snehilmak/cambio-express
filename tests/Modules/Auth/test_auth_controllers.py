@@ -285,3 +285,150 @@ def test_cross_store_login_token_works_against_me(test_store_id):  # noqa: ARG00
     assert body["username"] == "admin@test.com"
     assert body["role"] == "admin"
     assert "store.admin" in body["permissions"]
+
+
+# ── POST /auth/change-password ──────────────────────────────
+
+
+def test_change_password_happy_path(client, test_store_id):
+    """End-to-end: log in, change password, log in with the new
+    one, verify the old one fails."""
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+
+    cp = client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": "testpass123!",
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass45678",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cp.status_code == 200
+    assert cp.get_json() == {"status": "ok"}
+
+    login2 = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "newpass45678",
+            "store_id": test_store_id,
+        },
+    )
+    assert login2.status_code == 200
+
+    fail = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert fail.status_code == 401
+
+    # Restore the password so the next test in the suite finds
+    # the seeded credential.
+    cp_back = client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": "newpass45678",
+            "new_password":     "testpass123!",
+            "confirm_password": "testpass123!",
+        },
+        headers={
+            "Authorization":
+                f"Bearer {login2.get_json()['access_token']}",
+        },
+    )
+    assert cp_back.status_code == 200
+
+
+def test_change_password_rejects_bad_current(client, test_store_id):
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": "wrong-old",
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass45678",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    body = resp.get_json()
+    assert body["detail"]["field"] == "current_password"
+
+
+def test_change_password_rejects_short(client, test_store_id):
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": "testpass123!",
+            "new_password":     "short",
+            "confirm_password": "short",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["detail"]["field"] == "new_password"
+
+
+def test_change_password_rejects_mismatch(client, test_store_id):
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/auth/change-password",
+        json={
+            "current_password": "testpass123!",
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass99999",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["detail"]["field"] == "confirm_password"
+
+
+def test_change_password_requires_jwt():
+    resp = _client().post(
+        "/auth/change-password",
+        json={
+            "current_password": "x",
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass45678",
+        },
+    )
+    assert resp.status_code == 401

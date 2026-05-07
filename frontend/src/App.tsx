@@ -14,6 +14,7 @@ import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import Reports from "./routes/Reports";
+import Settings from "./routes/Settings";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="reports"          element={<Reports />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="monthly"          element={<Monthly />} />
+        <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
