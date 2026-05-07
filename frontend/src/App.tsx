@@ -10,6 +10,7 @@ import EditDailyBook from "./routes/EditDailyBook";
 import EditTransfer from "./routes/EditTransfer";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
+import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import Reports from "./routes/Reports";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="daily/edit"       element={<EditDailyBook />} />
         <Route path="reports"          element={<Reports />} />
         <Route path="batches"          element={<Batches />} />
+        <Route path="monthly"          element={<Monthly />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>

@@ -77,6 +77,13 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Batches.Controllers import router as batches_router
     app.include_router(batches_router, prefix="/batches", tags=["batches"])
 
+    # Monthly — per-store, per-month P&L read-side. Write-side
+    # (the auto-derived bank-charges + line-item totals plus
+    # operator-editable fields) stays on Flask until subsequent
+    # PRs.
+    from api.Modules.Monthly.Controllers import router as monthly_router
+    app.include_router(monthly_router, prefix="/monthly", tags=["monthly"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
