@@ -3,8 +3,13 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   changePassword,
+  createTeamMember,
+  deactivateTeamMember,
   updateStoreInfo,
+  updateTeamMember,
   useStoreInfo,
+  useTeam,
+  type TeamMemberRow,
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -31,10 +36,205 @@ export default function Settings() {
       </header>
 
       <StoreInfoCard />
+      <TeamCard />
       <ChangePasswordCard />
     </main>
   );
 }
+
+function TeamCard() {
+  const queryClient = useQueryClient();
+  const identity = getCurrentIdentity();
+  const { data, isLoading, isError } = useTeam();
+  const [newName, setNewName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const canEdit =
+    identity?.role === "admin" ||
+    identity?.role === "owner" ||
+    identity?.role === "superadmin";
+
+  function refetch() {
+    queryClient.invalidateQueries({ queryKey: ["admin", "team"] });
+    // Also invalidate the transfer-form's roster hook so the
+    // dropdown picks up new / removed cashiers without a reload.
+    queryClient.invalidateQueries({ queryKey: ["transfers", "employees"] });
+  }
+
+  async function add() {
+    setErr(null);
+    setBusy(true);
+    try {
+      await createTeamMember(newName);
+      setNewName("");
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't add member");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggle(m: TeamMemberRow) {
+    setErr(null);
+    try {
+      await updateTeamMember(m.id, { is_active: !m.is_active });
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't update");
+    }
+  }
+
+  async function remove(m: TeamMemberRow) {
+    setErr(null);
+    try {
+      await deactivateTeamMember(m.id);
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't deactivate");
+    }
+  }
+
+  if (identity?.store_id == null) return null;
+
+  return (
+    <section style={cardStyle}>
+      <h2 style={sectionTitleStyle}>Team</h2>
+      <p
+        style={{
+          margin: "0 0 1rem",
+          fontSize: "0.85rem",
+          color: "var(--db-text-muted, #a3a3a3)",
+        }}
+      >
+        Cashier names that appear in the "Processed by" dropdown
+        on the transfer form. Deactivated rows stay so historical
+        transfer attribution survives.
+      </p>
+
+      {isLoading && <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>Loading…</p>}
+      {isError && (
+        <p style={{ margin: 0, color: "var(--db-negative, #ff3b30)" }}>
+          Could not load team.
+        </p>
+      )}
+
+      {data && (
+        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1rem" }}>
+          {data.members.length === 0 && (
+            <li
+              style={{
+                padding: "0.5rem 0",
+                color: "var(--db-text-muted, #a3a3a3)",
+              }}
+            >
+              No team members yet.
+            </li>
+          )}
+          {data.members.map((m) => (
+            <li
+              key={m.id}
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "center",
+                padding: "0.4rem 0",
+                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+              }}
+            >
+              <span
+                style={{
+                  flex: 1,
+                  color: m.is_active
+                    ? "var(--db-text, #f5f5f5)"
+                    : "var(--db-text-muted, #a3a3a3)",
+                  textDecoration: m.is_active ? "none" : "line-through",
+                }}
+              >
+                {m.name}
+              </span>
+              {canEdit && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => toggle(m)}
+                    style={miniBtnStyle}
+                    title={m.is_active ? "Deactivate" : "Reactivate"}
+                  >
+                    {m.is_active ? "Deactivate" : "Reactivate"}
+                  </button>
+                  {m.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => remove(m)}
+                      style={miniBtnStyle}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canEdit && (
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="New cashier name"
+            style={inputStyle}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newName.trim()) {
+                e.preventDefault();
+                add();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={busy || !newName.trim()}
+            style={{
+              ...saveBtnStyle,
+              opacity: busy || !newName.trim() ? 0.6 : 1,
+              cursor: busy ? "wait" : "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            + Add
+          </button>
+        </div>
+      )}
+      {err && (
+        <p
+          role="alert"
+          style={{
+            margin: "0.5rem 0 0",
+            color: "var(--db-negative, #ff3b30)",
+            fontSize: "0.9rem",
+          }}
+        >
+          {err}
+        </p>
+      )}
+    </section>
+  );
+}
+
+const miniBtnStyle: React.CSSProperties = {
+  background: "transparent",
+  color: "var(--db-text-muted, #a3a3a3)",
+  border: "1px solid var(--db-border, #262626)",
+  borderRadius: "0.4rem",
+  padding: "0.25rem 0.6rem",
+  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontSize: "0.8rem",
+  cursor: "pointer",
+};
 
 function StoreInfoCard() {
   const queryClient = useQueryClient();
