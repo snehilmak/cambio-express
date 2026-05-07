@@ -196,7 +196,17 @@ class User(db.Model):
     # bounce on this user's email. `_send_email()` skips suppressed
     # recipients.
     email_bounced_at    = db.Column(db.DateTime, nullable=True)
-    __table_args__ = (db.UniqueConstraint("store_id","username"),)
+    __table_args__ = (
+        db.UniqueConstraint("store_id", "username"),
+        # Cross-store username lookup. The unique constraint above
+        # leads with `store_id`, so it can't serve queries that
+        # filter on `username` alone — `verify_password_cross_store`
+        # (the generic `/login` POST), `find_user_by_username`
+        # (CLI password reset / superadmin recovery), and the
+        # signup duplicate-check (`User.username == email`) all
+        # scan the table without this index.
+        db.Index("ix_user_username", "username"),
+    )
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
 
@@ -11285,6 +11295,13 @@ _ADDED_INDEXES = [
     # on (store_id, phone_country, phone_number) stays put for
     # duplicate prevention.
     ("ix_customer_phone",           "customer", "phone_country, phone_number"),
+    # User cross-store username lookup (PR 106). Standalone index
+    # on `username`; the existing unique constraint on
+    # (store_id, username) stays put. `user` is a Postgres reserved
+    # word, but `_ensure_added_indexes()` already double-quotes the
+    # table name in the DDL — so the plain table name here is
+    # correct. Quoting it twice would produce `""user""`.
+    ("ix_user_username",            "user",     "username"),
 ]
 
 
