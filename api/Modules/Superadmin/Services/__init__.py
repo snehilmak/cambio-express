@@ -18,9 +18,12 @@ from api.Modules.Superadmin.Services.reports import (
     PLAN_MRR,
     active_stores_by_plan,
     churn_cohort,
+    conversion_rate,
     login_activity,
     mrr_arr,
     signup_funnel,
+    time_to_convert,
+    trial_expiry_timing,
 )
 
 __all__ = [
@@ -36,9 +39,12 @@ __all__ = [
     "churn_cohort",
     "compute_mrr",
     "compute_platform_anomalies",
+    "conversion_rate",
     "login_activity",
     "mrr_arr",
     "quiet_store_anomalies",
     "signup_funnel",
     "superadmin_dashboard_context",
+    "time_to_convert",
+    "trial_expiry_timing",
 ]

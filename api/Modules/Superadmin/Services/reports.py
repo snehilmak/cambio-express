@@ -166,6 +166,138 @@ def mrr_arr(
     return rows, totals
 
 
+def conversion_rate(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """For stores that signed up in the period: how many graduated
+    from trial to paid by today? Single summary row.
+    """
+    from app import Store
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+
+    cohort = (
+        db.query(Store)
+          .filter(
+              Store.created_at >= day_start(d_from),
+              Store.created_at <= day_end(d_to),
+          )
+          .all()
+    )
+    total = len(cohort)
+    paid  = sum(1 for s in cohort if s.plan in ("basic", "pro"))
+    trial = sum(1 for s in cohort if s.plan == "trial")
+    inactive = total - paid - trial
+    rate = (paid / total * 100.0) if total else 0.0
+    rows = [
+        {"label": "Paid",     "count": paid,     "tone": "neon"},
+        {"label": "Trial",    "count": trial,    "tone": "muted"},
+        {"label": "Inactive", "count": inactive, "tone": "muted"},
+    ]
+    totals = {"total": total, "paid": paid, "rate": rate, "count": total}
+    return rows, totals
+
+
+def time_to_convert(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """For paid stores that signed up in the period, days from
+    signup (created_at) to today as a proxy for "activation
+    delay" — we don't yet log the exact trial→paid timestamp.
+    """
+    from datetime import datetime
+    from app import Store
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+
+    paid = (
+        db.query(Store)
+          .filter(
+              Store.created_at >= day_start(d_from),
+              Store.created_at <= day_end(d_to),
+              Store.plan.in_(["basic", "pro"]),
+          )
+          .all()
+    )
+    today = datetime.utcnow()
+    rows: list[dict] = []
+    for s in paid:
+        if not s.created_at:
+            continue
+        rows.append({
+            "slug":       s.slug,
+            "name":       s.name,
+            "signed_up":  s.created_at.date(),
+            "plan":       (s.plan or "").title(),
+            "days":       (today - s.created_at).days,
+        })
+    rows.sort(key=lambda r: r["days"])
+    avg = (sum(r["days"] for r in rows) / len(rows)) if rows else 0.0
+    totals = {"count": len(rows), "avg_days": avg}
+    return rows, totals
+
+
+def trial_expiry_timing(
+    db: Session,
+    d_from: date,  # unused — point-in-time at end-of-period
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Bucket trial stores by where they are in their trial window
+    (counted at end-of-period). Helps see whether stores convert
+    early, late, or roll into expiry. `d_from` is unused — point-
+    in-time at end-of-period.
+    """
+    from datetime import datetime
+    from app import Store
+    from api.Modules.Reports.Services.date_helpers import day_end
+
+    trials = (
+        db.query(Store)
+          .filter(
+              Store.plan == "trial",
+              Store.created_at <= day_end(d_to),
+          )
+          .all()
+    )
+    today = datetime.utcnow()
+    buckets = {
+        "≤ 7 days into trial":         0,
+        "8–14 days":                   0,
+        "15–21 days":                  0,
+        "22+ days":                    0,
+        "Trial expired (no upgrade)":  0,
+    }
+    for s in trials:
+        if not s.created_at:
+            continue
+        days = (today - s.created_at).days
+        if s.trial_ends_at and today > s.trial_ends_at:
+            buckets["Trial expired (no upgrade)"] += 1
+        elif days <= 7:
+            buckets["≤ 7 days into trial"] += 1
+        elif days <= 14:
+            buckets["8–14 days"] += 1
+        elif days <= 21:
+            buckets["15–21 days"] += 1
+        else:
+            buckets["22+ days"] += 1
+    rows = [
+        {"bucket": k, "count": v}
+        for k, v in buckets.items() if v > 0
+    ]
+    totals = {
+        "count":        sum(b["count"] for b in rows),
+        "trials_total": len(trials),
+    }
+    return rows, totals
+
+
 def churn_cohort(
     db: Session,
     d_from: date,
