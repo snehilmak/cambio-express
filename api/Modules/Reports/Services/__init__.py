@@ -31,6 +31,7 @@ from .period_comparison import (
     PL_INCOME_LINES,
     period_comparison,
 )
+from .period_pl import period_pl
 from .sales import (
     by_destination_country,
     sales_by_company,
@@ -48,6 +49,7 @@ __all__ = [
     "day_start",
     "fees_vs_tax",
     "period_comparison",
+    "period_pl",
     "sales_by_company",
     "sales_by_employee",
     "sales_by_service",

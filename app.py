@@ -5562,44 +5562,11 @@ from api.Modules.Reports.Services import (
 
 
 def _period_pl_data(store_ids, d_from, d_to):
-    """Aggregate DailyReport rows in the period into income / expense
-    lines. Money-transfer fees come from Transfer (not DailyReport).
-    The view is a daily-book P&L — it does NOT include MonthlyFinancial
-    manual fields like credit_card_fees / accounting_charges, since
-    those are per-month entries that don't decompose to a date range."""
-    daily = DailyReport.query.filter(
-        DailyReport.store_id.in_(store_ids),
-        DailyReport.report_date >= d_from,
-        DailyReport.report_date <= d_to,
-    ).all()
-    fee_total = (db.session.query(
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0))
-      .filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-      .scalar()) or 0.0
-
-    rows = []
-    income_total = 0.0
-    for label, attr in _PL_INCOME_LINES:
-        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
-        rows.append({"label": label, "section": "Income", "amount": v})
-        income_total += v
-    rows.append({"label": "Money Transfer Fees", "section": "Income",
-                 "amount": float(fee_total)})
-    income_total += float(fee_total)
-
-    expense_total = 0.0
-    for label, attr in _PL_EXPENSE_LINES:
-        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
-        rows.append({"label": label, "section": "Expenses", "amount": v})
-        expense_total += v
-
-    totals = {
-        "income":   income_total,
-        "expenses": expense_total,
-        "net":      income_total - expense_total,
-        "days":     len(daily),
-    }
-    return rows, totals
+    """Aggregate DailyReport + Transfer fees in the period into a
+    daily-book P&L. Single source of truth lives in
+    `api.Modules.Reports.Services.period_pl` (PR 87)."""
+    from api.Modules.Reports.Services import period_pl
+    return period_pl(db.session, store_ids, d_from, d_to)
 
 
 # ── ACH Volume ───────────────────────────────────────────────
