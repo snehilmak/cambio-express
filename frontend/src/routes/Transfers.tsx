@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   useTransfers,
@@ -266,16 +266,30 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id}>
+            <tr
+              key={r.id}
+              style={{ transition: "background 120ms ease" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  "var(--db-surface, #0a0a0a)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
               <td style={cellStyle}>
-                <span style={monoMuted}>{r.send_date}</span>
+                <Link to={`/transfers/${r.id}`} style={linkStyle}>
+                  <span style={monoMuted}>{r.send_date}</span>
+                </Link>
               </td>
               <td style={cellStyle}>{r.company}</td>
               <td style={cellStyle}>{r.sender_name}</td>
               <td style={cellStyle}>{r.recipient_name || "—"}</td>
               <td style={cellStyle}>{r.country || "—"}</td>
               <td style={cellStyle}>
-                <span style={monoMuted}>{r.confirm_number || "—"}</span>
+                <Link to={`/transfers/${r.id}`} style={linkStyle}>
+                  <span style={monoMuted}>{r.confirm_number || "—"}</span>
+                </Link>
               </td>
               <td style={cellStyle}>{r.status}</td>
               <td style={{ ...cellStyle, textAlign: "right" }}>
@@ -410,6 +424,11 @@ const monoMuted: React.CSSProperties = {
   ...mono,
   fontSize: "0.85rem",
   color: "var(--db-text-muted, #a3a3a3)",
+};
+
+const linkStyle: React.CSSProperties = {
+  color: "inherit",
+  textDecoration: "none",
 };
 
 const pagerBtnStyle = (disabled: boolean): React.CSSProperties => ({

@@ -5,6 +5,7 @@ import Dashboard from "./routes/Dashboard";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
 import NotFound from "./routes/NotFound";
+import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 
 // Top-level routing for the SPA. Each new screen registers here.
@@ -34,6 +35,14 @@ export default function App() {
         element={
           <RequireAuth>
             <Transfers />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="transfers/:id"
+        element={
+          <RequireAuth>
+            <TransferDetail />
           </RequireAuth>
         }
       />

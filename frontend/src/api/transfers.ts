@@ -73,6 +73,32 @@ export function useRecentTransfers({ limit = 10 }: RecentTransfersOptions = {}) 
   });
 }
 
+export interface TransferResponse {
+  transfer: TransferRow;
+}
+
+// Hook: fetch a single transfer by id, scoped to the user's
+// store(s). Server returns 404 (never 403) for cross-tenant
+// lookups so tenancy boundaries stay opaque.
+export function useTransfer(transferId: number | undefined) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+
+  return useQuery<TransferResponse>({
+    enabled:
+      transferId !== undefined &&
+      storeId !== null &&
+      storeId !== undefined,
+    queryKey: ["transfers", "detail", transferId, storeId],
+    queryFn: async () => {
+      const params = new URLSearchParams({ store_ids: String(storeId) });
+      return api<TransferResponse>(
+        `/api/v2/transfers/${transferId}?${params.toString()}`,
+      );
+    },
+  });
+}
+
 export interface TransferFilters {
   q?: string;
   date_from?: string;
