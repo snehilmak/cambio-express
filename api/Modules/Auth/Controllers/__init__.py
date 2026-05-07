@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 import jwt
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Models import User
 from api.Modules.Auth.Requests import (
+    ChangePasswordRequest,
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
@@ -24,6 +26,7 @@ from api.Modules.Auth.Requests import (
 from api.Modules.Auth.Services import (
     authenticate_password,
     authenticate_password_cross_store,
+    change_password,
     decode_access_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
@@ -139,3 +142,36 @@ def me_route(claims: dict = Depends(get_principal)) -> dict:
         "store_id": claims.get("store_id"),
         "permissions": claims.get("perms", []),
     }
+
+
+@router.post("/change-password")
+def change_password_route(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Self-service password change. Authed via JWT — the user
+    proves identity twice (current via password, ownership via
+    bearer token). Returns either `{"status": "ok"}` on success
+    or 422 with a field-level error message on validation
+    failure (length / mismatch / bad current).
+    """
+    user_id = int(claims["sub"])
+    user = db.query(User).filter_by(id=user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    errors = change_password(
+        db, user,
+        body.current_password,
+        body.new_password,
+        body.confirm_password,
+    )
+    if errors:
+        # Surface the first field error as the FastAPI detail —
+        # matches how the SPA currently consumes 422 messages.
+        field, msg = next(iter(errors.items()))
+        raise HTTPException(
+            status_code=422, detail={"field": field, "message": msg},
+        )
+    db.commit()
+    return {"status": "ok"}

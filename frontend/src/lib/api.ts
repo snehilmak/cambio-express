@@ -58,10 +58,23 @@ export async function api<T = unknown>(
       const onLogin = window.location.pathname === "/app/login";
       if (!onLogin) window.location.assign("/app/login");
     }
-    const message =
-      typeof parsed === "object" && parsed && "detail" in parsed
-        ? String((parsed as Record<string, unknown>).detail)
-        : `Request failed (${resp.status})`;
+    let message = `Request failed (${resp.status})`;
+    if (typeof parsed === "object" && parsed && "detail" in parsed) {
+      const detail = (parsed as Record<string, unknown>).detail;
+      if (typeof detail === "string") {
+        message = detail;
+      } else if (
+        detail &&
+        typeof detail === "object" &&
+        "message" in (detail as Record<string, unknown>)
+      ) {
+        // Field-level error envelope (e.g. /auth/change-password
+        // returns {detail: {field, message}}).
+        message = String(
+          (detail as Record<string, unknown>).message,
+        );
+      }
+    }
     throw new ApiError(resp.status, message, parsed);
   }
   return parsed as T;
