@@ -25,6 +25,7 @@ from .bank_charges import bank_charges_by_account
 from .customers import top_customers
 from .date_helpers import day_end, day_start
 from .employees import cashier_productivity, sales_by_employee
+from .fees_vs_tax import fees_vs_tax
 from .sales import (
     by_destination_country,
     sales_by_company,
@@ -38,6 +39,7 @@ __all__ = [
     "cashier_productivity",
     "day_end",
     "day_start",
+    "fees_vs_tax",
     "sales_by_company",
     "sales_by_employee",
     "sales_by_service",
