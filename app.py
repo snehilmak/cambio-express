@@ -7925,27 +7925,14 @@ def _pick_employee(store_id, raw_id):
 # Fields whose changes are interesting to surface in the audit log summary.
 # Sender PII edits are included (addr/phone/dob) since the customer directory
 # propagates them across sibling stores and admins want to see who edited.
-_TRANSFER_AUDIT_FIELDS = [
-    ("send_date",      "Send date"),
-    ("company",        "Company"),
-    ("service_type",   "Service"),
-    ("sender_name",    "Sender"),
-    ("send_amount",    "Amount"),
-    ("fee",            "Fee"),
-    ("federal_tax",    "Tax"),
-    ("commission",     "Commission"),
-    ("recipient_name", "Recipient"),
-    ("country",        "Country"),
-    ("recipient_phone","Recipient phone"),
-    ("sender_phone",   "Sender phone"),
-    ("sender_address", "Sender address"),
-    ("confirm_number", "Confirm #"),
-    ("status",         "Status"),
-    ("status_notes",   "Status notes"),
-    ("batch_id",       "Batch"),
-    ("internal_notes", "Notes"),
-    ("employee_name",  "Processed by"),
-]
+# Transfer audit-log helpers + the audited-fields registry now
+# live in api.Modules.Transfers.Services.audit (PR 77). The
+# legacy name is re-exported so any tooling that imported
+# `_TRANSFER_AUDIT_FIELDS` directly keeps working during the
+# strangler-fig migration window.
+from api.Modules.Transfers.Services import (
+    TRANSFER_AUDIT_FIELDS as _TRANSFER_AUDIT_FIELDS,
+)
 
 # Service types other than Money Transfer don't carry the 1% federal tax —
 # bill payments, top-ups, and recharges aren't ACH-withdrawal flows where
@@ -7984,34 +7971,34 @@ def _federal_tax_for(send_amount, service_type, store, country=None):
     return federal_tax_for(send_amount, service_type, store, country)
 
 def _summarize_transfer_changes(before, after, max_fields=4):
-    """Format a before/after diff into the audit log summary string."""
-    parts = []
-    for field, label in _TRANSFER_AUDIT_FIELDS:
-        old, new = before.get(field), after.get(field)
-        if (old or None) == (new or None):
-            continue
-        old_s = "—" if old in (None, "") else str(old)
-        new_s = "—" if new in (None, "") else str(new)
-        parts.append(f"{label}: {old_s} → {new_s}")
-    if len(parts) > max_fields:
-        overflow = len(parts) - max_fields
-        parts = parts[:max_fields] + [f"+{overflow} more field{'s' if overflow != 1 else ''}"]
-    return "; ".join(parts)
+    """Format a before/after diff into the audit-log summary
+    string. Single source of truth lives in
+    `api.Modules.Transfers.Services.summarize_transfer_changes`
+    (PR 77)."""
+    from api.Modules.Transfers.Services import (
+        summarize_transfer_changes,
+    )
+    return summarize_transfer_changes(before, after, max_fields)
 
-def _record_transfer_audit(transfer, user, action, employee_id, employee_name, summary):
-    db.session.add(TransferAudit(
-        store_id=transfer.store_id,
-        transfer_id=transfer.id,
-        user_id=user.id if user else None,
-        employee_id=employee_id,
-        employee_name=employee_name,
-        action=action,
-        summary=summary,
-    ))
+
+def _record_transfer_audit(transfer, user, action, employee_id,
+                            employee_name, summary):
+    """Append a TransferAudit row. Single source of truth lives
+    in `api.Modules.Transfers.Services.record_transfer_audit`
+    (PR 77)."""
+    from api.Modules.Transfers.Services import record_transfer_audit
+    return record_transfer_audit(
+        db.session, transfer, user, action,
+        employee_id, employee_name, summary,
+    )
+
 
 def _transfer_snapshot(t):
-    """Capture the subset of Transfer fields we audit, as a dict."""
-    return {field: getattr(t, field, None) for field, _ in _TRANSFER_AUDIT_FIELDS}
+    """Capture the audited subset of `t` as a dict. Single source
+    of truth lives in
+    `api.Modules.Transfers.Services.transfer_snapshot` (PR 77)."""
+    from api.Modules.Transfers.Services import transfer_snapshot
+    return transfer_snapshot(t)
 
 def _transfer_form_ctx(store):
     return dict(
