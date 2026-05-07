@@ -13,6 +13,22 @@ class LoginRequest(BaseModel):
     store_id: int | None = None
 
 
+class LoginCrossStoreRequest(BaseModel):
+    """POST body for /auth/login-cross-store. The SPA's generic
+    landing page doesn't know which store a user belongs to — this
+    endpoint takes username + password only and looks up the
+    user's home store across all stores (first match wins, like
+    the legacy Flask `/login` POST). Employees get rejected here
+    because they're expected to use their store's slug-scoped
+    sign-in URL.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(..., min_length=1, max_length=255)
+    password: str = Field(..., min_length=1)
+
+
 class LoginResponse(BaseModel):
     """Successful-login response. `access_token` is the bearer JWT
     the client must send as `Authorization: Bearer <token>` on

@@ -116,6 +116,53 @@ def authenticate_password(
     )
 
 
+def authenticate_password_cross_store(
+    db: Session, *, username: str, password: str,
+) -> LoginResult:
+    """Cross-store JWT login for the SPA. Same shape as
+    `authenticate_password` but does NOT require `store_id` — the
+    user's home store is looked up by username across all stores
+    (first match wins, like the legacy `/login` POST).
+
+    Raises `AuthenticationError` on any failure path.
+
+    Employees are intentionally rejected here because the legacy
+    flow does the same: an employee on the cookieless landing
+    page is told to use their store's sign-in URL instead. Keeps
+    the SPA's UX consistent with the existing site during the
+    cutover.
+    """
+    user = verify_password_cross_store(db, username, password)
+    if user is None:
+        raise AuthenticationError("Invalid username or password")
+    if user.role == "employee":
+        # Same behavior as the legacy /login route — employees
+        # must sign in via their store's slug-scoped page.
+        raise AuthenticationError(
+            "Please use your store's sign-in page",
+        )
+
+    perms = permissions_for(user.role)
+    issuer = JWTIssuer(
+        sub=user.id,
+        role=user.role,
+        store_id=user.store_id,
+        permissions=perms,
+        full_name=user.full_name or "",
+        username=user.username,
+    )
+    token = issue_access_token(issuer)
+    return LoginResult(
+        access_token=token,
+        user_id=user.id,
+        role=user.role,
+        store_id=user.store_id,
+        username=user.username,
+        full_name=user.full_name or "",
+        permissions=perms,
+    )
+
+
 def verify_password_cross_store(
     db: Session, username: str, password: str,
 ) -> User | None:

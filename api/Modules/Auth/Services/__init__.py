@@ -10,6 +10,7 @@ from api.Modules.Auth.Services.jwt_issuer import (
 from api.Modules.Auth.Services.login import (
     LoginResult,
     authenticate_password,
+    authenticate_password_cross_store,
     permissions_for,
     verify_password_cross_store,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "TOTP_VALID_WINDOW",
     "admin_set_password",
     "authenticate_password",
+    "authenticate_password_cross_store",
     "change_password",
     "consume_password_reset_token",
     "consume_recovery_code",
