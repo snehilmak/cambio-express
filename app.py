@@ -8120,45 +8120,36 @@ _TRANSFER_AUDIT_FIELDS = [
 # tax would be remitted. The transfer form's dropdown options must match
 # this set exactly. Server-side check is the gate; the JS preview just
 # mirrors the same rule for live feedback.
-SERVICE_TYPES = ("Money Transfer", "Bill Payment", "Top Up", "Recharge")
-_TAX_EXEMPT_SERVICES = frozenset(SERVICE_TYPES) - {"Money Transfer"}
-
-# Recipient countries that don't carry the federal-tax remittance.
-# The tax is the percentage the IRS collects on money sent ABROAD —
-# domestic transfers (within the US) skip it entirely. Same enforcement
-# pattern as _TAX_EXEMPT_SERVICES: server zeros tax when the country
-# matches; the JS toggles the field's visibility for live UX.
-_DOMESTIC_COUNTRIES = frozenset({"United States"})
-
-# Countries shown in the recipient-country dropdown on the transfer
-# form. Single source so server validation, template, and tests agree.
-# 'United States' is included so admins can log a domestic transfer
-# (no federal tax). 'Other' stays as the catch-all for anything else.
-TRANSFER_COUNTRIES = (
-    "United States", "Mexico", "Guatemala", "El Salvador", "Honduras",
-    "Dominican Republic", "Colombia", "Ecuador", "Peru", "Other",
+# Service type / tax constants + helpers now live in
+# api.Modules.Transfers.Services.tax (PR 76). The legacy names
+# below are re-exports / wrappers so existing call sites
+# (new_transfer, edit_transfer, _transfer_form_ctx, the JS
+# preview's hidden-form keys, the dropdown population) keep
+# their shape during the strangler-fig migration window.
+from api.Modules.Transfers.Services import (
+    DOMESTIC_COUNTRIES as _DOMESTIC_COUNTRIES,
+    SERVICE_TYPES,
+    TAX_EXEMPT_SERVICES as _TAX_EXEMPT_SERVICES,
+    TRANSFER_COUNTRIES,
 )
 
+
 def _normalize_service_type(raw):
-    """Coerce the form input to a known service type. Anything we don't
-    recognize falls back to Money Transfer (the historical default), so a
-    bad client value can't quietly disable tax."""
-    val = (raw or "").strip()
-    return val if val in SERVICE_TYPES else "Money Transfer"
+    """Coerce the form input to a known service type. Single
+    source of truth lives in
+    `api.Modules.Transfers.Services.normalize_service_type`
+    (PR 76)."""
+    from api.Modules.Transfers.Services import normalize_service_type
+    return normalize_service_type(raw)
+
 
 def _federal_tax_for(send_amount, service_type, store, country=None):
-    """The single source of truth for transfer tax. Bill Payment / Top Up /
-    Recharge skip the tax entirely; Money Transfer applies the store's
-    configured rate UNLESS the recipient country is domestic (US), in
-    which case the tax also skips (it's only owed on money leaving the
-    country). Both new_transfer and edit_transfer call this so the
-    rule can't drift between create and update."""
-    if service_type in _TAX_EXEMPT_SERVICES:
-        return 0.0
-    if country and country.strip() in _DOMESTIC_COUNTRIES:
-        return 0.0
-    rate = (store.federal_tax_rate if store else None) or 0
-    return round((send_amount or 0) * rate, 2)
+    """The single source of truth for transfer tax. Single source
+    of truth lives in
+    `api.Modules.Transfers.Services.federal_tax_for` (PR 76).
+    """
+    from api.Modules.Transfers.Services import federal_tax_for
+    return federal_tax_for(send_amount, service_type, store, country)
 
 def _summarize_transfer_changes(before, after, max_fields=4):
     """Format a before/after diff into the audit log summary string."""
