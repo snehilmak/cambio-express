@@ -5166,40 +5166,11 @@ def _returned_check_status_data(store_ids, d_from, d_to):
 
 # ── Bank Transactions Breakdown ──────────────────────────────
 def _bank_txn_breakdown_data(store_ids, d_from, d_to):
-    """Group BankTransaction rows posted in the period by category_slug,
-    summing absolute amount + count. Uncategorised rows bucketed under
-    "(uncategorised)". Sorted by absolute amount desc."""
-    month_start = _day_start(d_from)
-    month_end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        BankTransaction.category_slug,
-        db.func.count(BankTransaction.id),
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
-    ).filter(
-        BankTransaction.store_id.in_(store_ids),
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-    ).group_by(BankTransaction.category_slug).all())
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "inflow": 0.0, "outflow": 0.0}
-    for slug, count, cents in rows_q:
-        c = int(count or 0)
-        signed = float(cents or 0) / 100.0
-        rows.append({
-            "slug":   slug or "",
-            "label":  _bank_category_label(slug or ""),
-            "count":  c,
-            "signed": signed,
-            "amount": abs(signed),
-        })
-        totals["count"]  += c
-        totals["amount"] += abs(signed)
-        if signed >= 0:
-            totals["inflow"]  += signed
-        else:
-            totals["outflow"] += signed
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Group BankTransaction rows by category_slug. Single source
+    of truth lives in
+    `api.Modules.Reports.Services.bank_txn_breakdown` (PR 91)."""
+    from api.Modules.Reports.Services import bank_txn_breakdown
+    return bank_txn_breakdown(db.session, store_ids, d_from, d_to)
 
 
 # ── Daily Drops ──────────────────────────────────────────────
