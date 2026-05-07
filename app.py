@@ -295,6 +295,19 @@ class Transfer(db.Model):
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
     creator        = db.relationship("User", foreign_keys=[created_by])
     employee       = db.relationship("StoreEmployee", foreign_keys=[employee_id])
+    # Indexes for the hot-path queries:
+    # • (store_id, send_date)   the period filter every Reports aggregator uses
+    # • customer_id             the umbrella-customer + new-vs-returning lookup
+    # • created_by              the sales-by-employee + employee-activity reports
+    # • status                  the active-vs-cancelled filter on every list view
+    # • confirm_number          the transfers-list "look up by confirmation #" search
+    __table_args__ = (
+        db.Index("ix_transfer_store_send_date", "store_id", "send_date"),
+        db.Index("ix_transfer_customer_id",    "customer_id"),
+        db.Index("ix_transfer_created_by",     "created_by"),
+        db.Index("ix_transfer_status",         "status"),
+        db.Index("ix_transfer_confirm_number", "confirm_number"),
+    )
     @property
     def total_collected(self):
         """What the customer actually handed over: send amount + store fee + federal tax."""
@@ -11241,6 +11254,56 @@ def _ensure_added_columns():
         except Exception as e:
             app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
 
+# Indexes added after the table existed in production. Like
+# `_ADDED_COLUMNS`, this is the no-framework migration path:
+# `db.create_all()` only adds indexes when the table is being CREATED,
+# so any index added later to a model needs an explicit
+# `CREATE INDEX IF NOT EXISTS` to land on existing prod databases.
+#
+# Each entry is `(index_name, table, column_csv)`. Idempotent and
+# safe on every boot — `IF NOT EXISTS` is a no-op once the index is
+# in place, and the model declarations stay the source of truth so
+# fresh installs get the indexes via `db.create_all()`.
+_ADDED_INDEXES = [
+    # Transfer hot path (PR 104).
+    ("ix_transfer_store_send_date", "transfer", "store_id, send_date"),
+    ("ix_transfer_customer_id",     "transfer", "customer_id"),
+    ("ix_transfer_created_by",      "transfer", "created_by"),
+    ("ix_transfer_status",          "transfer", "status"),
+    ("ix_transfer_confirm_number",  "transfer", "confirm_number"),
+]
+
+
+def _ensure_added_indexes():
+    """Apply the _ADDED_INDEXES migrations. Idempotent and safe on
+    every boot.
+
+    Both sqlite and Postgres support `CREATE INDEX IF NOT EXISTS`,
+    so the same DDL works for both. Each statement runs in its own
+    transaction on Postgres so one failure doesn't poison the rest.
+    Failures log a warning instead of crashing boot — a missing
+    index slows queries but doesn't stop the app.
+    """
+    try:
+        dialect = db.engine.dialect.name
+    except Exception as e:
+        app.logger.warning(f"index migration skipped (no engine): {e}")
+        return
+    for name, table, cols in _ADDED_INDEXES:
+        ddl = f'CREATE INDEX IF NOT EXISTS {name} ON "{table}" ({cols})'
+        try:
+            if dialect == "sqlite":
+                with db.engine.connect() as conn:
+                    conn.exec_driver_sql(ddl)
+                    conn.commit()
+            else:
+                with db.engine.begin() as conn:
+                    conn.exec_driver_sql(ddl)
+        except Exception as e:
+            app.logger.warning(
+                f"{dialect} CREATE INDEX failed for {name}: {e}")
+
+
 # Legacy tables that have been removed from the model registry but may
 # still exist in production databases. DROP TABLE IF EXISTS is idempotent
 # on every restart — safe to leave forever.
@@ -11554,6 +11617,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         _ensure_added_columns()
+        _ensure_added_indexes()
         _drop_legacy_tables()
         _rename_maxi_transfer_to_maxi()
         # One-time copy of legacy DailyDrop + CheckDeposit rows into
