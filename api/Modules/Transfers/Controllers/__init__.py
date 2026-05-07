@@ -41,10 +41,12 @@ from api.Modules.Transfers.Requests import (
 )
 from api.Modules.Transfers.Services import (
     CreateTransferInput,
+    TransferNotFoundError,
     create_transfer,
     list_transfers,
     normalize_service_type,
     parse_dob,
+    update_transfer,
 )
 
 
@@ -220,4 +222,76 @@ def get_route(
     transfer = get_by_id_in_stores(db, transfer_id, ids)
     if transfer is None:
         raise HTTPException(status_code=404, detail="Transfer not found")
+    return TransferResponse(transfer=_to_row(transfer))
+
+
+@router.put("/{transfer_id}", response_model=TransferResponse)
+def update_route(
+    transfer_id: int = Path(..., ge=1),
+    body: CreateTransferRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransferResponse:
+    """Update an existing transfer in the JWT principal's store.
+    Same body shape as POST /transfers — every field is replaceable
+    (no PATCH semantics). Server recomputes federal_tax just like
+    create. Audit log captures the diff via summarize_transfer_changes.
+    Cross-tenant updates return 404 to keep tenancy opaque.
+    """
+    store_id_claim = claims.get("store_id")
+    if store_id_claim is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner to edit transfers."
+            ),
+        )
+    user_id = int(claims["sub"])
+
+    try:
+        send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="send_date must be YYYY-MM-DD",
+        )
+    sender_dob = parse_dob(body.sender_dob)
+
+    payload = CreateTransferInput(
+        store_id=int(store_id_claim),
+        created_by_user_id=user_id,
+        send_date=send_date,
+        company=body.company,
+        service_type=normalize_service_type(body.service_type),
+        sender_name=body.sender_name,
+        send_amount=float(body.send_amount or 0),
+        fee=float(body.fee or 0),
+        commission=float(body.commission or 0),
+        recipient_name=body.recipient_name,
+        country=body.country,
+        recipient_phone=body.recipient_phone,
+        sender_phone=body.sender_phone,
+        sender_phone_country=body.sender_phone_country or "+1",
+        sender_address=body.sender_address,
+        sender_dob=sender_dob,
+        confirm_number=body.confirm_number,
+        status=body.status or "Sent",
+        status_notes=body.status_notes,
+        batch_id=body.batch_id,
+        internal_notes=body.internal_notes,
+        employee_id=body.employee_id,
+        customer_id=body.customer_id,
+    )
+    try:
+        transfer = update_transfer(
+            db,
+            transfer_id=transfer_id,
+            store_id=int(store_id_claim),
+            payload=payload,
+        )
+    except TransferNotFoundError:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
     return TransferResponse(transfer=_to_row(transfer))

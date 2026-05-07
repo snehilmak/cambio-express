@@ -195,6 +195,111 @@ def create_transfer(
     return transfer
 
 
+def update_transfer(
+    db: Session, *, transfer_id: int, store_id: int,
+    payload: CreateTransferInput,
+) -> Transfer:
+    """Update an existing transfer + audit + customer-upsert.
+
+    Mirrors the write path of `create_transfer` but operates on an
+    existing row rather than creating one. Reuses the same
+    CreateTransferInput shape — every field is replaceable, no
+    PATCH semantics. Cross-tenant lookups raise
+    `TransferNotFoundError` (never 403, keeps tenancy opaque).
+
+    The audit summary is built from a before/after diff via
+    `transfer_snapshot` + `summarize_changes` so the audit log
+    only mentions the fields that actually changed.
+    """
+    from app import User, Store
+    from api.Modules.Customers.Services import upsert as upsert_customer
+    from api.Modules.Transfers.Services import (
+        TRANSFER_AUDIT_FIELDS,
+        federal_tax_for,
+        pick_employee,
+        record_transfer_audit,
+        summarize_transfer_changes,
+        transfer_snapshot,
+    )
+    from datetime import datetime as _dt
+
+    transfer = get_by_id_in_stores(db, transfer_id, [store_id])
+    if transfer is None:
+        raise TransferNotFoundError(f"Transfer id={transfer_id}")
+
+    user = db.query(User).filter_by(id=payload.created_by_user_id).first()
+    if user is None:
+        raise ValueError(
+            f"Unknown actor user_id={payload.created_by_user_id}"
+        )
+
+    emp, emp_name = pick_employee(db, store_id, payload.employee_id)
+    if not emp:
+        raise ValueError(
+            "An employee from the store roster must be selected as "
+            "Processed by before saving."
+        )
+
+    cust = upsert_customer(
+        db, store_id, payload.sender_name,
+        payload.sender_phone_country, payload.sender_phone,
+        address=payload.sender_address,
+        dob=payload.sender_dob,
+        customer_id=payload.customer_id or transfer.customer_id,
+    )
+
+    store = db.query(Store).filter_by(id=store_id).first()
+
+    before = transfer_snapshot(transfer)
+
+    transfer.send_date              = payload.send_date
+    transfer.company                = payload.company
+    transfer.service_type           = payload.service_type
+    transfer.sender_name            = payload.sender_name
+    transfer.send_amount            = payload.send_amount
+    transfer.fee                    = payload.fee
+    transfer.commission             = payload.commission
+    transfer.recipient_name         = payload.recipient_name
+    transfer.country                = payload.country
+    transfer.recipient_phone        = payload.recipient_phone
+    transfer.sender_phone           = payload.sender_phone
+    transfer.sender_phone_country   = payload.sender_phone_country
+    transfer.sender_address         = payload.sender_address
+    transfer.sender_dob             = payload.sender_dob
+    transfer.confirm_number         = payload.confirm_number
+    transfer.status                 = payload.status or "Sent"
+    transfer.status_notes           = payload.status_notes
+    transfer.batch_id               = payload.batch_id
+    transfer.internal_notes         = payload.internal_notes
+    transfer.employee_id            = emp.id
+    transfer.employee_name          = emp_name
+    transfer.customer_id            = cust.id
+    # Always recompute server-side — same invariant as create.
+    transfer.federal_tax            = federal_tax_for(
+        transfer.send_amount, transfer.service_type, store,
+        country=transfer.country,
+    )
+    transfer.updated_at             = _dt.utcnow()
+
+    after = transfer_snapshot(transfer)
+    summary = summarize_transfer_changes(before, after) or "No field changes."
+
+    # Status-only edits are a distinct audit action so the admin
+    # view can highlight them. Mirrors the legacy edit_transfer
+    # route exactly.
+    changed_fields = {
+        f for f, _ in TRANSFER_AUDIT_FIELDS
+        if (before.get(f) or None) != (after.get(f) or None)
+    }
+    action = "status_changed" if changed_fields == {"status"} else "updated"
+
+    record_transfer_audit(
+        db, transfer, user, action, emp.id, emp_name, summary,
+    )
+    db.flush()
+    return transfer
+
+
 def delete_transfer(
     db: Session, transfer_id: int, store_id: int,
 ) -> Transfer:
