@@ -1,0 +1,36 @@
+/*
+ * SPA top-level layout. All design tokens (colors, fonts, spacing)
+ * come from /static/design-tokens.css (loaded in index.html). Don't
+ * add brand colors here — see CLAUDE.md "Design system" invariant.
+ */
+
+:root {
+  color-scheme: dark;
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  background: var(--db-surface, #0a0a0a);
+  color: var(--db-text, #f5f5f5);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--db-surface, #0a0a0a);
+  color: var(--db-text, #f5f5f5);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Honor user motion preference — see CLAUDE.md "Motion is part of
+   the design system". Strip transitions for reduced-motion users. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
