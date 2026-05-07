@@ -61,17 +61,42 @@ export default function TransferDetail() {
     <main style={pageStyle}>
       <BackLink />
 
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Transfer #{t.id}</h1>
-        <p
+      <header
+        style={{
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1 style={titleStyle}>Transfer #{t.id}</h1>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              color: "var(--db-text-muted, #a3a3a3)",
+              fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            }}
+          >
+            {t.send_date} · {t.company} · {t.service_type}
+          </p>
+        </div>
+        <Link
+          to={`/transfers/${t.id}/edit`}
           style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            background: "transparent",
+            color: "var(--db-text, #f5f5f5)",
+            border: "1px solid var(--db-border, #262626)",
+            borderRadius: "0.5rem",
+            padding: "0.5rem 1rem",
+            textDecoration: "none",
+            fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+            fontSize: "0.9rem",
           }}
         >
-          {t.send_date} · {t.company} · {t.service_type}
-        </p>
+          Edit
+        </Link>
       </header>
 
       <section style={cardStyle}>

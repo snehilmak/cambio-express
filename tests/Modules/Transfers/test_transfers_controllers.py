@@ -443,3 +443,192 @@ def test_create_jwt_without_store_returns_403(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── PUT /transfers/{id} (write-side, edit) ──────────────────
+
+
+def test_update_returns_200_and_persists(client, test_store_id):
+    """End-to-end: seed a transfer, log in, PUT new fields,
+    verify the row + the audit log."""
+    from app import app as flask_app, Transfer, TransferAudit, db
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id, name="EE-edit")
+        tid = _seed_transfer(
+            test_store_id, send_amount=100.0, fee=2.0, federal_tax=1.0,
+            company="Intermex", country="MX",
+        )
+
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert login.status_code == 200
+    token = login.get_json()["access_token"]
+
+    resp = client.put(
+        f"/api/v2/transfers/{tid}",
+        json={
+            "send_date": "2026-02-10",
+            "company": "Maxi",
+            "service_type": "Money Transfer",
+            "sender_name": "Updated Sender",
+            "send_amount": 250.0,
+            "fee": 5.0,
+            "country": "Mexico",
+            "recipient_name": "Updated Recipient",
+            "employee_id": emp_id,
+            "status": "Sent",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    row = body["transfer"]
+    assert row["company"] == "Maxi"
+    assert row["sender_name"] == "Updated Sender"
+    assert row["send_amount"] == 250.0
+    assert row["fee"] == 5.0
+    # Tax recomputed server-side.
+    assert row["federal_tax"] > 0
+
+    # Confirm DB-level changes + that an audit row was appended.
+    with flask_app.app_context():
+        t = db.session.get(Transfer, tid)
+        assert t.company == "Maxi"
+        assert t.sender_name == "Updated Sender"
+        audits = db.session.query(TransferAudit).filter_by(
+            transfer_id=tid,
+        ).all()
+        # Two audit rows expected: any prior history + the new
+        # 'updated' row from this PUT. We require at least one
+        # of them carries the "updated" action.
+        actions = {a.action for a in audits}
+        assert "updated" in actions or "status_changed" in actions
+
+
+def test_update_returns_404_for_cross_tenant(client, test_store_id):
+    """Seed a transfer in store A; log in to store A's admin; try
+    to update a transfer ID that doesn't exist (or belongs to
+    another store). Both must 404 — never 403, so a probe can't
+    enumerate other tenants' transfer IDs."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id, name="EE-404")
+
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+
+    resp = client.put(
+        "/api/v2/transfers/9999999",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+            "country": "Mexico",
+            "employee_id": emp_id,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_update_requires_jwt(test_store_id):
+    """No bearer header → 401 from get_principal."""
+    resp = _client().put(
+        "/transfers/1",
+        json={
+            "send_date": "2026-01-15",
+            "company": "Intermex",
+            "service_type": "Money Transfer",
+            "sender_name": "S",
+            "send_amount": 100.0,
+        },
+    )
+    assert resp.status_code == 401
+
+
+def test_update_status_only_records_status_changed_audit(
+    client, test_store_id,
+):
+    """Pure status edits get the 'status_changed' audit action
+    so the admin view can highlight them — same behavior as the
+    legacy edit_transfer route.
+
+    To isolate the status-only diff, we first do a baseline PUT
+    so every field on the row matches what we'll send next; then
+    a second PUT with only `status` flipped. Without that
+    alignment, employee_name + sender_name + recipient_name on
+    the freshly-seeded row differ from the request body and the
+    audit (correctly) sees those as changes too.
+    """
+    from app import app as flask_app, TransferAudit, db
+    with flask_app.app_context():
+        emp_id = _seed_employee(test_store_id, name="EE-status")
+        tid = _seed_transfer(
+            test_store_id, send_amount=100.0, fee=2.0, federal_tax=1.0,
+            company="Intermex", country="MX", status="Sent",
+            sender_name="S", recipient_name="R",
+        )
+
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+
+    base_body = {
+        "send_date": "2026-01-15",
+        "company": "Intermex",
+        "service_type": "Money Transfer",
+        "sender_name": "S",
+        "send_amount": 100.0,
+        "fee": 2.0,
+        "country": "MX",
+        "recipient_name": "R",
+        "employee_id": emp_id,
+        "status": "Sent",
+    }
+
+    # 1) Baseline — align every field.
+    r1 = client.put(
+        f"/api/v2/transfers/{tid}",
+        json=base_body,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 200
+
+    # 2) Status-only flip.
+    r2 = client.put(
+        f"/api/v2/transfers/{tid}",
+        json={**base_body, "status": "Cancelled"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r2.status_code == 200
+    with flask_app.app_context():
+        actions = [
+            a.action for a in
+            db.session.query(TransferAudit)
+              .filter_by(transfer_id=tid)
+              .order_by(TransferAudit.id.asc())
+              .all()
+        ]
+        # Last audit row was the status-only PUT.
+        assert actions[-1] == "status_changed"

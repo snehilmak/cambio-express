@@ -35,6 +35,7 @@ from api.Modules.Transfers.Services.transfers import (
     create_transfer,
     delete_transfer,
     list_transfers,
+    update_transfer,
 )
 
 __all__ = [
@@ -59,4 +60,5 @@ __all__ = [
     "store_mt_companies",
     "summarize_transfer_changes",
     "transfer_snapshot",
+    "update_transfer",
 ]

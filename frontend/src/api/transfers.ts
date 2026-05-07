@@ -113,6 +113,20 @@ export async function createTransfer(
   });
 }
 
+// PUT /api/v2/transfers/{id} — full replacement (no PATCH). Same
+// shape as create. Server recomputes federal_tax + audits the
+// before/after diff via record_transfer_audit. Cross-tenant
+// updates 404 by design.
+export async function updateTransfer(
+  transferId: number,
+  body: CreateTransferBody,
+): Promise<TransferResponse> {
+  return api<TransferResponse>(`/api/v2/transfers/${transferId}`, {
+    method: "PUT",
+    json: body,
+  });
+}
+
 // Hook: fetch a single transfer by id, scoped to the user's
 // store(s). Server returns 404 (never 403) for cross-tenant
 // lookups so tenancy boundaries stay opaque.
