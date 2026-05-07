@@ -5571,31 +5571,11 @@ def _period_pl_data(store_ids, d_from, d_to):
 
 # ── ACH Volume ───────────────────────────────────────────────
 def _ach_volume_data(store_ids, d_from, d_to):
-    """Group ACHBatch rows in the period by company. Per-company:
-    batch count + ach_amount sum."""
-    rows_q = (db.session.query(
-        ACHBatch.company,
-        db.func.count(ACHBatch.id),
-        db.func.coalesce(db.func.sum(ACHBatch.ach_amount), 0.0),
-    ).filter(
-        ACHBatch.store_id.in_(store_ids),
-        ACHBatch.ach_date >= d_from,
-        ACHBatch.ach_date <= d_to,
-    ).group_by(ACHBatch.company).all())
-    rows = []
-    totals = {"count": 0, "amount": 0.0}
-    for company, count, amount in rows_q:
-        c = int(count or 0); a = float(amount or 0.0)
-        rows.append({
-            "company": company or "(no company)",
-            "count":   c,
-            "amount":  a,
-            "avg":     (a / c) if c else 0.0,
-        })
-        totals["count"]  += c
-        totals["amount"] += a
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Group ACHBatch rows in the period by company. Single source
+    of truth lives in `api.Modules.Reports.Services.ach_volume`
+    (PR 88)."""
+    from api.Modules.Reports.Services import ach_volume
+    return ach_volume(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank Charges by Account ──────────────────────────────────
