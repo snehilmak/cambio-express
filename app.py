@@ -11722,6 +11722,91 @@ def init_db():
 init_db()
 
 # ── FastAPI strangler-fig dispatcher ─────────────────────────
+# ── SPA shell at /app/* ─────────────────────────────────────────
+#
+# The new React/Vite SPA is being built alongside the legacy Jinja
+# site. Flask serves its compiled bundle from `frontend/dist/`:
+#
+#   /app/                    → frontend/dist/index.html
+#   /app/<client-route>      → frontend/dist/index.html (SPA fallback)
+#   /app/assets/<file>       → frontend/dist/assets/<file>
+#
+# Any URL not under /app/ continues to hit the legacy Jinja routes
+# untouched. Once the SPA is feature-complete and the cutover is
+# done, Jinja routes get retired in a final cleanup PR.
+#
+# In local dev we typically run `cd frontend && npm run dev` (Vite
+# at :5173, proxies /api/v2 + /static back to Flask), and ignore
+# this block entirely. This block is what serves the SPA in
+# production after `npm run build` writes the dist/ directory.
+
+_SPA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "frontend", "dist")
+
+
+def _spa_index_html():
+    """Return the SPA shell or a helpful 503 if the build is missing.
+    Missing-build is a deploy-time misconfiguration (Node build step
+    didn't run) — we surface it loudly rather than 404 so the
+    operator knows what's wrong."""
+    index_path = os.path.join(_SPA_DIR, "index.html")
+    if not os.path.exists(index_path):
+        return (
+            "<!doctype html><meta charset=utf-8><title>SPA not built</title>"
+            "<body style='font-family:monospace;padding:2rem'>"
+            "<h1>SPA bundle missing</h1>"
+            "<p>Expected <code>frontend/dist/index.html</code> to exist.</p>"
+            "<p>For local dev: <code>cd frontend && npm run dev</code> "
+            "and visit <code>http://localhost:5173/app/</code>.</p>"
+            "<p>For prod: ensure the build step runs "
+            "<code>cd frontend && npm ci && npm run build</code>.</p>"
+            "</body>"
+        ), 503
+    with open(index_path, "rb") as fh:
+        body = fh.read()
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    # Don't cache the shell — JS asset filenames are content-hashed
+    # so the browser always re-fetches index.html and picks up the
+    # latest build.
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
+@app.route("/app/")
+@app.route("/app/<path:_subpath>")
+def spa_shell(_subpath: str = ""):  # noqa: ARG001 — path is for client routing
+    """Serve the SPA shell for any /app/* route. The SPA's React
+    Router takes over client-side; the path argument is ignored
+    server-side because every route renders the same index.html
+    bundle."""
+    return _spa_index_html()
+
+
+@app.route("/app")
+def spa_shell_no_slash():
+    """Redirect bare /app to /app/ so React Router's basename
+    (`/app`) resolves correctly. Without the trailing slash, asset
+    URLs in index.html (which use the /app/ base) get appended to
+    /app instead of /app/ and break."""
+    return redirect("/app/", code=301)
+
+
+@app.route("/app/assets/<path:filename>")
+def spa_asset(filename: str):
+    """Serve a content-hashed asset (JS/CSS/images) emitted by Vite.
+    Hashes change on every build, so cache aggressively."""
+    assets_dir = os.path.join(_SPA_DIR, "assets")
+    resp = send_from_directory(assets_dir, filename)
+    # Vite content-hashes filenames, so an immutable 1-year cache is
+    # safe — a new build emits a new filename and the old one falls
+    # out of use without a cache buster.
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+# ── FastAPI strangler-fig at /api/v2 ────────────────────────────
+#
 # The new modular FastAPI backend (under api/) is being built
 # alongside this Flask monolith per docs/architecture/MIGRATION_ADR.md.
 # Routes under /api/v2/* are forwarded into the FastAPI app via
