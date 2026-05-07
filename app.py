@@ -5212,75 +5212,10 @@ def _parse_threshold(args, default=3000):
 
 # ── Employee Activity ────────────────────────────────────────
 def _employee_activity_data(store_ids, d_from, d_to):
-    """Per-employee activity: count + sent (active transfers) + cancel
-    count + last_activity timestamp. Different from Sales by Employee
-    in that it includes cancelled / rejected — this is an audit /
-    activity view, not a revenue view."""
-    # Active transfers per employee.
-    active_q = (db.session.query(
-        Transfer.created_by,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.max(Transfer.send_date),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.created_by).all())
-    # Cancelled / Rejected count per employee.
-    cancel_q = (db.session.query(
-        Transfer.created_by,
-        db.func.count(Transfer.id),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.created_by).all())
-    cancels_by_uid = {uid: int(c or 0) for uid, c in cancel_q}
-    # Resolve user names.
-    all_uids = ({uid for uid, *_ in active_q if uid is not None}
-                | {uid for uid, _ in cancel_q if uid is not None})
-    users = ({u.id: u for u in User.query.filter(User.id.in_(all_uids)).all()}
-             if all_uids else {})
-    rows_by_uid = {}
-    for uid, count, sent, last_date in active_q:
-        rows_by_uid[uid] = {
-            "uid":           uid,
-            "count":         int(count or 0),
-            "sent":          float(sent or 0),
-            "cancels":       cancels_by_uid.get(uid, 0),
-            "last_activity": last_date,
-        }
-    # Add employees who only have cancelled transfers (no active rows).
-    for uid, c in cancels_by_uid.items():
-        if uid not in rows_by_uid:
-            rows_by_uid[uid] = {
-                "uid":           uid,
-                "count":         0,
-                "sent":          0.0,
-                "cancels":       c,
-                "last_activity": None,
-            }
-    rows = []
-    for uid, r in rows_by_uid.items():
-        if uid is None:
-            r["employee"] = "(unattributed)"
-            r["username"] = ""
-        else:
-            u = users.get(uid)
-            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
-            r["username"] = u.username if u else ""
-        del r["uid"]
-        rows.append(r)
-    rows.sort(key=lambda r: (r["count"] + r["cancels"]), reverse=True)
-    totals = {
-        "count":   sum(r["count"]   for r in rows),
-        "sent":    sum(r["sent"]    for r in rows),
-        "cancels": sum(r["cancels"] for r in rows),
-    }
-    return rows, totals
+    """Per-employee activity audit. Single source of truth lives
+    in `api.Modules.Reports.Services.employee_activity` (PR 94)."""
+    from api.Modules.Reports.Services import employee_activity
+    return employee_activity(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank-Rule Audit Log ──────────────────────────────────────
