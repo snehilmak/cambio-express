@@ -11,6 +11,11 @@ from api.Modules.Transfers.Services.audit import (
     summarize_changes as summarize_transfer_changes,
     transfer_snapshot,
 )
+from api.Modules.Transfers.Services.form_inputs import (
+    active_roster,
+    parse_dob,
+    pick_employee,
+)
 from api.Modules.Transfers.Services.tax import (
     DOMESTIC_COUNTRIES,
     SERVICE_TYPES,
@@ -34,10 +39,13 @@ __all__ = [
     "TRANSFER_COUNTRIES",
     "TransferListPage",
     "TransferNotFoundError",
+    "active_roster",
     "delete_transfer",
     "federal_tax_for",
     "list_transfers",
     "normalize_service_type",
+    "parse_dob",
+    "pick_employee",
     "record_transfer_audit",
     "summarize_transfer_changes",
     "transfer_snapshot",

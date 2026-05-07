@@ -7895,32 +7895,27 @@ def transfers():
     return render_template("transfers.html", **ctx)
 
 def _parse_dob(raw):
-    """Parse a YYYY-MM-DD date string from the form, or None when blank/bad."""
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, "%Y-%m-%d").date()
-    except ValueError:
-        return None
+    """Parse a YYYY-MM-DD date string from the form, or None when
+    blank/bad. Single source of truth lives in
+    `api.Modules.Transfers.Services.parse_dob` (PR 78)."""
+    from api.Modules.Transfers.Services import parse_dob
+    return parse_dob(raw)
+
 
 def _active_roster(store_id):
-    """Names available in the "Processed by" dropdown. Inactive roster rows
-    are hidden so cashiers can't credit new transfers to former employees."""
-    return StoreEmployee.query.filter_by(
-        store_id=store_id, is_active=True
-    ).order_by(StoreEmployee.name.asc()).all()
+    """Names available in the "Processed by" dropdown. Single
+    source of truth lives in
+    `api.Modules.Transfers.Services.active_roster` (PR 78)."""
+    from api.Modules.Transfers.Services import active_roster
+    return active_roster(db.session, store_id)
+
 
 def _pick_employee(store_id, raw_id):
-    """Resolve a form `employee_id` value against the store's roster.
-    Returns (employee_or_none, display_name). Cross-store picks are rejected."""
-    try:
-        eid = int(raw_id) if raw_id else None
-    except (TypeError, ValueError):
-        return None, ""
-    if not eid:
-        return None, ""
-    emp = StoreEmployee.query.filter_by(id=eid, store_id=store_id).first()
-    return (emp, emp.name) if emp else (None, "")
+    """Resolve a form `employee_id` value against the roster.
+    Single source of truth lives in
+    `api.Modules.Transfers.Services.pick_employee` (PR 78)."""
+    from api.Modules.Transfers.Services import pick_employee
+    return pick_employee(db.session, store_id, raw_id)
 
 # Fields whose changes are interesting to surface in the audit log summary.
 # Sender PII edits are included (addr/phone/dob) since the customer directory
