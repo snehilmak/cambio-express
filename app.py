@@ -6192,95 +6192,26 @@ def _sa_passkey_adoption_data(d_from, d_to):
 
 
 def _sa_password_resets_data(d_from, d_to):
-    """Password-reset token activity in the period. Each row: a
-    sample of recent tokens with status (used vs. expired vs. open)."""
-    tokens = PasswordResetToken.query.filter(
-        PasswordResetToken.created_at >= _day_start(d_from),
-        PasswordResetToken.created_at <= _day_end(d_to),
-    ).order_by(PasswordResetToken.created_at.desc()).all()
-    # Pre-fetch the User rows in a single IN-query — was N+1 with
-    # db.session.get() per token.
-    user_ids = {t.user_id for t in tokens if t.user_id}
-    users = ({u.id: u for u in
-              User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-    now = datetime.utcnow()
-    rows = []
-    used = expired = open_count = 0
-    for t in tokens:
-        if t.used_at:
-            status = "Used"; used += 1
-        elif t.expires_at and now > t.expires_at:
-            status = "Expired"; expired += 1
-        else:
-            status = "Open"; open_count += 1
-        u = users.get(t.user_id) if t.user_id else None
-        rows.append({
-            "created_at": t.created_at,
-            "username":   u.username if u else "(deleted)",
-            "role":       u.role if u else "",
-            "status":     status,
-        })
-    totals = {"count":   len(tokens),
-              "used":    used,
-              "expired": expired,
-              "open":    open_count}
-    return rows, totals
+    """Password-reset token activity. Single source of truth lives
+    in `api.Modules.Superadmin.Services.password_resets` (PR 101)."""
+    from api.Modules.Superadmin.Services import password_resets
+    return password_resets(db.session, d_from, d_to)
 
 
 def _sa_suspended_stores_data(d_from, d_to):
-    """Stores currently suspended (is_active=False) or marked
-    inactive (plan='inactive'). Point-in-time at end of period."""
-    end_of_to = _day_end(d_to)
-    suspended = Store.query.filter(
-        Store.created_at <= end_of_to,
-        db.or_(Store.is_active == False,
-               Store.plan == "inactive"),
-    ).all()
-    rows = []
-    for s in suspended:
-        reason = []
-        if not s.is_active:
-            reason.append("suspended")
-        if s.plan == "inactive":
-            reason.append("plan inactive")
-        rows.append({
-            "slug": s.slug,
-            "name": s.name,
-            "plan": (s.plan or "").title(),
-            "reason": " · ".join(reason),
-            "canceled_at": s.canceled_at,
-        })
-    rows.sort(key=lambda r: r["name"].lower())
-    totals = {"count": len(rows)}
-    return rows, totals
+    """Stores currently suspended or inactive. Single source of
+    truth lives in
+    `api.Modules.Superadmin.Services.suspended_stores` (PR 101)."""
+    from api.Modules.Superadmin.Services import suspended_stores
+    return suspended_stores(db.session, d_from, d_to)
 
 
 def _sa_retention_queue_data(d_from, d_to):
-    """Stores in the 180-day data-retention delete window (those
-    with `data_retention_until` set). Once the date passes,
-    purge_expired_stores wipes them. Point-in-time."""
-    stores = Store.query.filter(
-        Store.data_retention_until.isnot(None),
-    ).order_by(Store.data_retention_until.asc()).all()
-    today = date.today()
-    rows = []
-    for s in stores:
-        until = (s.data_retention_until.date()
-                 if hasattr(s.data_retention_until, "date")
-                 else s.data_retention_until)
-        days_left = (until - today).days
-        rows.append({
-            "slug": s.slug,
-            "name": s.name,
-            "plan": (s.plan or "").title(),
-            "until": until,
-            "days_left": days_left,
-            "ready_to_purge": days_left <= 0,
-        })
-    totals = {"count": len(rows),
-              "ready_to_purge": sum(1 for r in rows if r["ready_to_purge"])}
-    return rows, totals
+    """Stores in the data-retention delete queue. Single source
+    of truth lives in
+    `api.Modules.Superadmin.Services.retention_queue` (PR 101)."""
+    from api.Modules.Superadmin.Services import retention_queue
+    return retention_queue(db.session, d_from, d_to)
 
 
 def _stripe_period_unix(d_from, d_to):
