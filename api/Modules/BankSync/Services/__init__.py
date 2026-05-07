@@ -1,4 +1,7 @@
 """BankSync — Services. Business logic on top of the Repository layer."""
+from api.Modules.BankSync.Services.applier import (
+    apply_rules_to_uncategorized_row,
+)
 from api.Modules.BankSync.Services.builtin_rules import (
     BUILTIN_BANK_RULES,
     builtin_substrings,
@@ -46,6 +49,7 @@ __all__ = [
     "RuleNotFoundError",
     "RuleValidationError",
     "TransactionListPage",
+    "apply_rules_to_uncategorized_row",
     "bank_category_groups",
     "bank_category_label",
     "bank_charges_breakdown_for_month",
