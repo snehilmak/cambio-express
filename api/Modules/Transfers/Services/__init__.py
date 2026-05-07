@@ -11,6 +11,10 @@ from api.Modules.Transfers.Services.audit import (
     summarize_changes as summarize_transfer_changes,
     transfer_snapshot,
 )
+from api.Modules.Transfers.Services.companies import (
+    DEFAULT_MT_COMPANIES,
+    store_mt_companies,
+)
 from api.Modules.Transfers.Services.form_inputs import (
     active_roster,
     parse_dob,
@@ -32,6 +36,7 @@ from api.Modules.Transfers.Services.transfers import (
 )
 
 __all__ = [
+    "DEFAULT_MT_COMPANIES",
     "DOMESTIC_COUNTRIES",
     "SERVICE_TYPES",
     "TAX_EXEMPT_SERVICES",
@@ -47,6 +52,7 @@ __all__ = [
     "parse_dob",
     "pick_employee",
     "record_transfer_audit",
+    "store_mt_companies",
     "summarize_transfer_changes",
     "transfer_snapshot",
 ]

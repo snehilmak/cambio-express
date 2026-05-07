@@ -8186,18 +8186,14 @@ KNOWN_MT_COMPANIES = [
     "Inter Cambio", "Sigue", "MoneyGram", "Western Union",
     "Dolex", "Viamericas", "Transfast", "Pangea", "Boss Revolution",
 ]
-DEFAULT_MT_COMPANIES = ["Intermex", "Maxi", "Barri"]
-
-def store_mt_companies(store):
-    """The active list of money-transfer companies for a store.
-
-    Falls back to DEFAULT_MT_COMPANIES when the Store.companies CSV is
-    empty — so existing stores keep working the moment the migration
-    lands, and new stores get a sensible default on signup.
-    """
-    if store is None or not (store.companies or "").strip():
-        return list(DEFAULT_MT_COMPANIES)
-    return [c.strip() for c in store.companies.split(",") if c.strip()]
+# Money-transfer company list resolution now lives in
+# api.Modules.Transfers.Services.companies (PR 80). Re-exports
+# below preserve the legacy import shape during the migration
+# window.
+from api.Modules.Transfers.Services import (
+    DEFAULT_MT_COMPANIES,
+    store_mt_companies,
+)
 
 @app.route("/daily")
 @admin_required
