@@ -471,6 +471,144 @@ def passkey_adoption(
     return rows, totals
 
 
+def password_resets(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Password-reset token activity in the period.
+
+    Each row: created_at + username + role + status (Used /
+    Expired / Open). Tokens are pre-loaded with their users in
+    a single IN-query (avoiding N+1).
+    """
+    from datetime import datetime
+    from app import PasswordResetToken, User
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+
+    tokens = (
+        db.query(PasswordResetToken)
+          .filter(
+              PasswordResetToken.created_at >= day_start(d_from),
+              PasswordResetToken.created_at <= day_end(d_to),
+          )
+          .order_by(PasswordResetToken.created_at.desc())
+          .all()
+    )
+    user_ids = {t.user_id for t in tokens if t.user_id}
+    users = (
+        {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()}
+        if user_ids else {}
+    )
+    now = datetime.utcnow()
+    rows: list[dict] = []
+    used = expired = open_count = 0
+    for t in tokens:
+        if t.used_at:
+            status = "Used"; used += 1
+        elif t.expires_at and now > t.expires_at:
+            status = "Expired"; expired += 1
+        else:
+            status = "Open"; open_count += 1
+        u = users.get(t.user_id) if t.user_id else None
+        rows.append({
+            "created_at": t.created_at,
+            "username":   u.username if u else "(deleted)",
+            "role":       u.role if u else "",
+            "status":     status,
+        })
+    totals = {
+        "count":   len(tokens),
+        "used":    used,
+        "expired": expired,
+        "open":    open_count,
+    }
+    return rows, totals
+
+
+def suspended_stores(
+    db: Session,
+    d_from: date,  # unused — point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stores currently suspended (`is_active=False`) or marked
+    inactive (`plan='inactive'`). Point-in-time at end of period.
+    """
+    from sqlalchemy import or_
+    from app import Store
+    from api.Modules.Reports.Services.date_helpers import day_end
+
+    suspended = (
+        db.query(Store)
+          .filter(
+              Store.created_at <= day_end(d_to),
+              or_(Store.is_active == False, Store.plan == "inactive"),
+          )
+          .all()
+    )
+    rows: list[dict] = []
+    for s in suspended:
+        reason = []
+        if not s.is_active:
+            reason.append("suspended")
+        if s.plan == "inactive":
+            reason.append("plan inactive")
+        rows.append({
+            "slug":        s.slug,
+            "name":        s.name,
+            "plan":        (s.plan or "").title(),
+            "reason":      " · ".join(reason),
+            "canceled_at": s.canceled_at,
+        })
+    rows.sort(key=lambda r: r["name"].lower())
+    totals = {"count": len(rows)}
+    return rows, totals
+
+
+def retention_queue(
+    db: Session,
+    d_from: date,  # unused — point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stores in the 180-day data-retention delete window (those
+    with `data_retention_until` set). Once the date passes,
+    `purge_expired_stores` wipes them. Point-in-time.
+    """
+    from datetime import date as _date
+    from app import Store
+
+    stores = (
+        db.query(Store)
+          .filter(Store.data_retention_until.isnot(None))
+          .order_by(Store.data_retention_until.asc())
+          .all()
+    )
+    today = _date.today()
+    rows: list[dict] = []
+    for s in stores:
+        until = (
+            s.data_retention_until.date()
+            if hasattr(s.data_retention_until, "date")
+            else s.data_retention_until
+        )
+        days_left = (until - today).days
+        rows.append({
+            "slug":           s.slug,
+            "name":           s.name,
+            "plan":           (s.plan or "").title(),
+            "until":          until,
+            "days_left":      days_left,
+            "ready_to_purge": days_left <= 0,
+        })
+    totals = {
+        "count":          len(rows),
+        "ready_to_purge": sum(1 for r in rows if r["ready_to_purge"]),
+    }
+    return rows, totals
+
+
 def churn_cohort(
     db: Session,
     d_from: date,
