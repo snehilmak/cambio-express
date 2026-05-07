@@ -6120,92 +6120,19 @@ def _sa_login_activity_data(d_from, d_to):
     return login_activity(db.session, d_from, d_to)
 
 
-# Hard-coded plan price table. Used by MRR/ARR + churn cohort. When
-# Stripe pricing changes, update here. Yearly prices are normalised
-# to monthly equivalents for the MRR sum.
-_PLAN_MRR = {
-    ("basic", "monthly"): 49.0,
-    ("basic", "yearly"):  490.0 / 12.0,
-    ("pro",   "monthly"): 99.0,
-    ("pro",   "yearly"):  990.0 / 12.0,
-}
-
-
 def _sa_mrr_arr_data(d_from, d_to):
-    """MRR + ARR by plan/cycle. Counts active (non-trial, non-
-    inactive) stores at end of period."""
-    end_of_to = _day_end(d_to)
-    q = (db.session.query(
-        Store.plan, Store.billing_cycle, db.func.count(Store.id),
-    ).filter(
-        Store.created_at <= end_of_to,
-        Store.plan.in_(["basic", "pro"]),
-    ).group_by(Store.plan, Store.billing_cycle).all())
-    rows = []
-    totals = {"mrr": 0.0, "stores": 0}
-    for plan, cycle, count in q:
-        c = int(count or 0)
-        cycle = (cycle or "monthly")
-        per_store_mrr = _PLAN_MRR.get((plan, cycle), 0.0)
-        mrr = per_store_mrr * c
-        rows.append({
-            "plan":  plan.title(),
-            "cycle": cycle.title(),
-            "stores": c,
-            "mrr":   mrr,
-            "arr":   mrr * 12.0,
-        })
-        totals["mrr"]    += mrr
-        totals["stores"] += c
-    rows.sort(key=lambda r: r["mrr"], reverse=True)
-    totals["arr"] = totals["mrr"] * 12.0
-    return rows, totals
+    """MRR + ARR by plan/cycle. Single source of truth lives in
+    `api.Modules.Superadmin.Services.mrr_arr` (PR 98)."""
+    from api.Modules.Superadmin.Services import mrr_arr
+    return mrr_arr(db.session, d_from, d_to)
 
 
 def _sa_churn_cohort_data(d_from, d_to):
-    """Stores cancelled in the period bucketed by signup-month
-    cohort. Each row: cohort label + count cancelled + paid stores
-    that survived (still active from that cohort).
-
-    Active counts are pulled in a single GROUP BY query (was N+1 —
-    one COUNT per cohort month)."""
-    cancelled_q = (Store.query
-        .filter(
-            Store.canceled_at >= _day_start(d_from),
-            Store.canceled_at <= _day_end(d_to),
-        ).all())
-    by_cohort = {}
-    for s in cancelled_q:
-        if not s.created_at:
-            continue
-        cohort = s.created_at.strftime("%Y-%m")
-        by_cohort.setdefault(cohort, {"cancelled": 0, "active": 0})
-        by_cohort[cohort]["cancelled"] += 1
-    if by_cohort:
-        # Single GROUP BY on the strftime expression — one round-trip
-        # for every cohort's active count.
-        cohort_expr = db.func.strftime("%Y-%m", Store.created_at)
-        active_q = (db.session.query(
-            cohort_expr, db.func.count(Store.id),
-        ).filter(
-            Store.canceled_at.is_(None),
-            Store.plan.in_(["basic", "pro"]),
-            cohort_expr.in_(list(by_cohort.keys())),
-        ).group_by(cohort_expr).all())
-        for cohort, count in active_q:
-            if cohort in by_cohort:
-                by_cohort[cohort]["active"] = int(count or 0)
-    rows = [{"cohort": cohort,
-             "cancelled": v["cancelled"],
-             "active":    v["active"],
-             "churn_pct": (v["cancelled"] / (v["cancelled"] + v["active"])
-                            * 100.0)
-                          if (v["cancelled"] + v["active"]) else 0.0,
-            } for cohort, v in by_cohort.items()]
-    rows.sort(key=lambda r: r["cohort"], reverse=True)
-    totals = {"cancelled": sum(r["cancelled"] for r in rows),
-              "active":    sum(r["active"]    for r in rows)}
-    return rows, totals
+    """Stores cancelled in the period by signup-month cohort.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.churn_cohort` (PR 98)."""
+    from api.Modules.Superadmin.Services import churn_cohort
+    return churn_cohort(db.session, d_from, d_to)
 
 
 def _sa_conversion_rate_data(d_from, d_to):

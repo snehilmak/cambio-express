@@ -15,8 +15,11 @@ from api.Modules.Superadmin.Services.dashboard import (
     superadmin_dashboard_context,
 )
 from api.Modules.Superadmin.Services.reports import (
+    PLAN_MRR,
     active_stores_by_plan,
+    churn_cohort,
     login_activity,
+    mrr_arr,
     signup_funnel,
 )
 
@@ -27,11 +30,14 @@ __all__ = [
     "ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS",
     "ANOMALY_QUIET_LOOKBACK_QUIET_DAYS",
     "ANOMALY_QUIET_MIN_PRIOR_TRANSFERS",
+    "PLAN_MRR",
     "active_stores_by_plan",
     "big_over_short_anomalies",
+    "churn_cohort",
     "compute_mrr",
     "compute_platform_anomalies",
     "login_activity",
+    "mrr_arr",
     "quiet_store_anomalies",
     "signup_funnel",
     "superadmin_dashboard_context",
