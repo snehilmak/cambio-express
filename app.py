@@ -342,7 +342,7 @@ class StoreEmployee(db.Model):
     """
     __tablename__ = "store_employee"
     id         = db.Column(db.Integer, primary_key=True)
-    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     name       = db.Column(db.String(120), nullable=False)
     is_active  = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -361,7 +361,7 @@ class OperatorAuditLog(db.Model):
     """
     __tablename__ = "operator_audit_log"
     id           = db.Column(db.Integer, primary_key=True)
-    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     user_name    = db.Column(db.String(120), default="")
     user_role    = db.Column(db.String(20),  default="")
@@ -386,7 +386,7 @@ class TransferAudit(db.Model):
     """
     __tablename__ = "transfer_audit"
     id             = db.Column(db.Integer, primary_key=True)
-    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     transfer_id    = db.Column(db.Integer, db.ForeignKey("transfer.id"), nullable=False)
     user_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     employee_id    = db.Column(db.Integer, db.ForeignKey("store_employee.id"), nullable=True)
@@ -487,7 +487,7 @@ class DailyDrop(db.Model):
     """
     __tablename__ = "daily_drop"
     id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date = db.Column(db.Date, nullable=False)
     drop_time   = db.Column(db.Time, nullable=False)
     amount      = db.Column(db.Float, nullable=False)
@@ -515,7 +515,7 @@ class CheckDeposit(db.Model):
     """
     __tablename__ = "check_deposit"
     id           = db.Column(db.Integer, primary_key=True)
-    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date  = db.Column(db.Date, nullable=False)
     deposit_time = db.Column(db.Time, nullable=False)
     amount       = db.Column(db.Float, nullable=False)
@@ -588,7 +588,7 @@ class ReturnCheck(db.Model):
     """
     __tablename__ = "return_check"
     id              = db.Column(db.Integer, primary_key=True)
-    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     bounced_on      = db.Column(db.Date, nullable=False)
     customer_name   = db.Column(db.String(120), nullable=False)
     check_number    = db.Column(db.String(40),  default="")
@@ -685,7 +685,7 @@ class DailyLineItem(db.Model):
     """
     __tablename__ = "daily_line_item"
     id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date = db.Column(db.Date, nullable=False)
     # One of the keys in _LINE_ITEM_KINDS. Not a DB enum so new kinds
     # can be introduced with zero migration.
@@ -808,7 +808,7 @@ class StripeBankAccount(db.Model):
     """
     __tablename__ = "stripe_bank_account"
     id                   = db.Column(db.Integer, primary_key=True)
-    store_id             = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id             = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     stripe_account_id    = db.Column(db.String(60), unique=True, nullable=False)
     institution_name     = db.Column(db.String(120), default="")
     display_name         = db.Column(db.String(120), default="")
@@ -930,7 +930,7 @@ class StoreOwnerLink(db.Model):
     __tablename__ = "store_owner_link"
     id        = db.Column(db.Integer, primary_key=True)
     owner_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    store_id  = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id  = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     linked_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
 
@@ -11317,6 +11317,23 @@ _ADDED_INDEXES = [
     # standalone `at` and `user_id` indexes from `index=True` stay
     # untouched — this is purely additive.
     ("ix_login_event_at_user",      "login_event", "at, user_id"),
+    # Missing FK indexes on `store_id` for cascade-delete + JOIN
+    # performance (PR 108). Postgres does not auto-index FKs, and
+    # the data-retention purge (`purge_expired_stores`) does
+    # `DELETE FROM <tbl> WHERE store_id = ?` on every per-store
+    # table — without these, each cascade is a full table scan.
+    # Names match SQLAlchemy's `index=True` auto-naming
+    # (`ix_<tbl>_store_id`) so fresh installs and existing-prod
+    # installs converge on the same name.
+    ("ix_store_employee_store_id",      "store_employee",      "store_id"),
+    ("ix_operator_audit_log_store_id",  "operator_audit_log",  "store_id"),
+    ("ix_transfer_audit_store_id",      "transfer_audit",      "store_id"),
+    ("ix_daily_drop_store_id",          "daily_drop",          "store_id"),
+    ("ix_check_deposit_store_id",       "check_deposit",       "store_id"),
+    ("ix_return_check_store_id",        "return_check",        "store_id"),
+    ("ix_daily_line_item_store_id",     "daily_line_item",     "store_id"),
+    ("ix_stripe_bank_account_store_id", "stripe_bank_account", "store_id"),
+    ("ix_store_owner_link_store_id",    "store_owner_link",    "store_id"),
 ]
 
 
