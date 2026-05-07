@@ -2032,8 +2032,11 @@ BANK_SYNC_COOLDOWN_MINUTES = 15
 MAX_BANK_SYNCS_PER_DAY = 5
 # How many days back to pull on initial connect. Per-product
 # decision: yesterday + today only — minimal cost, still catches
-# any same-day deposits that haven't been entered into the daily book.
-INITIAL_SYNC_DAYS_BACK = 1
+# any same-day deposits that haven't been entered into the daily
+# book. The constant now lives in
+# api.Modules.BankSync.Services.sync (PR 72); re-exported here
+# so legacy callers keep their import shape during migration.
+from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 
 def stripe_is_configured():
     """We can only start an FC session if Stripe is wired up.
@@ -2210,37 +2213,13 @@ def _record_bank_sync(store, now=None):
 
 def _upsert_bank_transaction(store_id, account_row, api_obj):
     """Persist (or refresh) a Stripe FC Transaction into our cache.
-    Idempotent on stripe_transaction_id."""
-    txn_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
-    existing = BankTransaction.query.filter_by(stripe_transaction_id=txn_id).first()
-    row = existing or BankTransaction(
-        store_id=store_id,
-        stripe_bank_account_id=account_row.id,
-        stripe_transaction_id=txn_id,
-        amount_cents=0,
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.upsert_bank_transaction` (PR 72).
+    """
+    from api.Modules.BankSync.Services import upsert_bank_transaction
+    return upsert_bank_transaction(
+        db.session, store_id, account_row, api_obj,
     )
-    amt = api_obj.get("amount") if isinstance(api_obj, dict) else getattr(api_obj, "amount", 0)
-    cur = api_obj.get("currency") if isinstance(api_obj, dict) else getattr(api_obj, "currency", "usd")
-    desc = api_obj.get("description") if isinstance(api_obj, dict) else getattr(api_obj, "description", "")
-    status = api_obj.get("status") if isinstance(api_obj, dict) else getattr(api_obj, "status", "posted")
-    transacted_at = (api_obj.get("transacted_at") if isinstance(api_obj, dict)
-                     else getattr(api_obj, "transacted_at", None))
-    try:
-        row.amount_cents = int(amt or 0)
-    except (TypeError, ValueError):
-        row.amount_cents = 0
-    row.currency = (cur or "usd").lower()
-    row.description = (desc or "")[:500]
-    row.status = status or "posted"
-    if transacted_at:
-        try:
-            row.posted_at = datetime.utcfromtimestamp(int(transacted_at))
-        except (TypeError, ValueError):
-            pass
-    if existing is None:
-        db.session.add(row)
-    db.session.flush()
-    return row, (existing is None)
 
 # ── Bank reconcile + rules ──────────────────────────────────
 # Categories that can appear on a BankTransaction.category_slug. The
@@ -2378,186 +2357,35 @@ def _uncategorize_bank_transaction(txn):
 
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.sync_bank_transactions` (PR 72).
 
-    `since` / `until` are datetimes mapped to Stripe's
-    transacted_at[gte] / transacted_at[lte] filters (Stripe expects unix
-    seconds). When `since` is None, we use the latest posted_at we've
-    already cached for that account, falling back to the
-    INITIAL_SYNC_DAYS_BACK window. Stripe Transaction.list paginates
-    in 100s; we use auto_paging_iter to walk every page.
-
-    Returns (new_rows, total_seen, last_error). new_rows is the count
-    of rows we inserted (vs updated); total_seen counts every row
-    we touched. last_error is empty unless one or more accounts errored.
+    Returns `(new_rows, total_seen, last_error)`.
     """
-    if not stripe_is_configured():
-        return 0, 0, "Stripe is not configured."
-    new_rows = 0
-    total = 0
-    last_error = ""
-    now = datetime.utcnow()
-    fallback_since = datetime.combine(
-        (now - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
-        datetime.min.time())
-    for acct in StripeBankAccount.query.filter_by(
-            store_id=store.id, enabled=True).all():
-        try:
-            # Idempotent self-heal: ensure this account is subscribed to
-            # the transactions feature. Accounts connected before the
-            # subscribe step was added to bank_stripe_return won't have
-            # any transactions otherwise. Stripe accepts the call on
-            # already-subscribed accounts without error.
-            try:
-                stripe.financial_connections.Account.subscribe(
-                    acct.stripe_account_id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions subscribe (sync) failed for "
-                    f"{acct.stripe_account_id}: {e}")
-            # Trigger an explicit refresh so Stripe pulls fresh data
-            # from the bank before we list. The refresh is async — this
-            # call may return stale data, but the NEXT manual sync will
-            # see whatever the bank has now. Best-effort; failure is
-            # logged but doesn't abort the sync.
-            try:
-                stripe.financial_connections.Account.refresh_account(
-                    acct.stripe_account_id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions refresh (sync) failed for "
-                    f"{acct.stripe_account_id}: {e}")
-            # Resolve the lower bound. Two paths:
-            # - Caller-provided `since` (initial connect uses this to
-            #   request yesterday + today only).
-            # - Otherwise: rolling 7-day lookback. Stripe FC surfaces
-            #   transactions retroactively — a transaction posted on
-            #   May 1 may not appear in Stripe's feed until May 3 — so
-            #   filtering strictly by `max(posted_at) we already have`
-            #   would skip late-arriving rows. Re-fetching old rows is
-            #   free (Transaction.list is billed per call, not per row,
-            #   and _upsert_bank_transaction dedupes on
-            #   stripe_transaction_id). 7 days covers Stripe's typical
-            #   retroactive window with margin.
-            if since is not None:
-                lo = since
-            else:
-                lo = max(datetime.utcnow() - timedelta(days=7),
-                          fallback_since)
-            params = {
-                "account": acct.stripe_account_id,
-                "limit": 100,
-                "transacted_at": {"gte": int(lo.timestamp())},
-            }
-            if until is not None:
-                params["transacted_at"]["lte"] = int(until.timestamp())
-            for txn in stripe.financial_connections.Transaction.list(
-                    **params).auto_paging_iter():
-                row, inserted = _upsert_bank_transaction(store.id, acct, txn)
-                if inserted:
-                    new_rows += 1
-                # Apply rules whenever the row is uncategorised — both
-                # fresh inserts AND backfill of older rows that landed
-                # before a matching rule existed. Operator overrides
-                # (any non-empty category_slug) survive untouched.
-                # auto_post is suppressed during backfill so we don't
-                # surprise-post into an already-reconciled daily book.
-                _apply_rules_to_uncategorized_row(
-                    row, acct, allow_auto_post=inserted)
-                total += 1
-        except stripe.error.StripeError as e:
-            msg = e.user_message or str(e)
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
-            app.logger.warning(f"FC txn sync failed for {acct.stripe_account_id}: {e}")
-        except Exception as e:
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
-            app.logger.exception(f"FC txn sync crashed for {acct.stripe_account_id}")
-    if total:
-        db.session.commit()
-    # DB-side backfill: catch historical uncategorised rows that fall
-    # OUTSIDE Stripe's 7-day API window — those never came through
-    # the loop above so the per-row backfill never saw them. This pass
-    # is purely DB-side, no API call, and matches the same rule chain.
-    backfilled = _backfill_uncategorized_rows(store.id)
-    if backfilled:
-        db.session.commit()
-    # One-shot legacy migration: rows tagged generically as
-    # `bank_charge` by an older built-in rule get split into
-    # bank_charge_<last4> based on the account they hit. Idempotent;
-    # no-op once all legacy rows have been migrated.
-    migrated = _migrate_generic_bank_charge_per_account(store.id)
-    if migrated:
-        db.session.commit()
-    return new_rows, total, last_error
+    from api.Modules.BankSync.Services import sync_bank_transactions
+    return sync_bank_transactions(db.session, store, since, until)
 
 
 def _migrate_generic_bank_charge_per_account(store_id):
-    """Retag rows previously bulked into `bank_charge` by the older
-    account-agnostic built-ins (BELOW AVG BAL FEE, CHECK DEPOSIT FEE,
-    MSB MONTHLY FEE, MONTHLY SERVICE FEE) into bank_charge_<last4>
-    based on the account each charge hit. Returns the count migrated.
-    Caller commits.
-
-    Only retags when the description matches a current built-in
-    substring — that confirms the row was auto-tagged, not a deliberate
-    operator override that happened to use the generic slug.
-
-    Idempotent: rows already on a per-account slug are left alone.
-    Once every store has been migrated, the function is a permanent
-    no-op and can be dropped.
-    """
-    accounts = {a.id: a for a in StripeBankAccount.query
-                .filter_by(store_id=store_id).all()}
-    rows = (BankTransaction.query
-            .filter(BankTransaction.store_id == store_id,
-                    BankTransaction.category_slug == "bank_charge")
-            .all())
-    builtin_substrings = {sub for sub, _, _ in _BUILTIN_BANK_RULES}
-    migrated = 0
-    for row in rows:
-        acct = accounts.get(row.stripe_bank_account_id)
-        if not acct or not acct.last4:
-            continue
-        # Same stripped-last4 convention as the matcher.
-        stripped = acct.last4.lstrip("0") or acct.last4
-        desc = (row.description or "").upper()
-        if not any(sub in desc for sub in builtin_substrings):
-            # Description doesn't match any current built-in — treat
-            # the existing `bank_charge` tag as an operator override
-            # and don't touch it.
-            continue
-        row.category_slug = f"bank_charge_{stripped}"
-        migrated += 1
-    return migrated
+    """One-shot legacy migration of generic `bank_charge` rows.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.migrate_generic_bank_charge_per_account`
+    (PR 72)."""
+    from api.Modules.BankSync.Services import (
+        migrate_generic_bank_charge_per_account,
+    )
+    return migrate_generic_bank_charge_per_account(db.session, store_id)
 
 
 def _backfill_uncategorized_rows(store_id):
     """Run the rule chain against every uncategorised BankTransaction
-    in the store, regardless of age. Catches rows older than the
-    Stripe 7-day API window. Returns the count newly tagged. Caller
-    commits.
-
-    This is what makes "I added a new built-in rule, my old Nizari
-    transactions just got tagged on the next sync" work — without it,
-    historical rows would stay uncategorised forever because Stripe
-    won't re-yield them through Transaction.list.
-    """
-    from sqlalchemy import or_
-    rows = (BankTransaction.query
-            .filter(BankTransaction.store_id == store_id,
-                    or_(BankTransaction.category_slug.is_(None),
-                        BankTransaction.category_slug == ""))
-            .all())
-    if not rows:
-        return 0
-    accounts = {a.id: a for a in StripeBankAccount.query
-                .filter_by(store_id=store_id).all()}
-    tagged = 0
-    for row in rows:
-        acct = accounts.get(row.stripe_bank_account_id)
-        if _apply_rules_to_uncategorized_row(
-                row, acct, allow_auto_post=False):
-            tagged += 1
-    return tagged
+    in the store. Single source of truth lives in
+    `api.Modules.BankSync.Services.backfill_uncategorized_rows`
+    (PR 72)."""
+    from api.Modules.BankSync.Services import (
+        backfill_uncategorized_rows,
+    )
+    return backfill_uncategorized_rows(db.session, store_id)
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
