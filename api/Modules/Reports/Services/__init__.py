@@ -23,6 +23,7 @@ the new FastAPI controllers (PR 4) hit the same code.
 """
 from .ach_volume import ach_volume
 from .bank_charges import bank_charges_by_account
+from .bank_rule_audit import bank_rule_audit
 from .bank_txn_breakdown import bank_txn_breakdown
 from .customer_segments import new_vs_returning
 from .customers import top_customers
@@ -51,6 +52,7 @@ __all__ = [
     "PL_INCOME_LINES",
     "ach_volume",
     "bank_charges_by_account",
+    "bank_rule_audit",
     "bank_txn_breakdown",
     "by_destination_country",
     "cashier_productivity",
