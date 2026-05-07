@@ -5551,23 +5551,14 @@ def _cancelled_transfers_data(store_ids, d_from, d_to):
 # ── Period P&L ───────────────────────────────────────────────
 # Daily-book lines that flow into the P&L. The (label, attr,
 # section) tuples drive the line-item rendering + CSV.
-_PL_INCOME_LINES = [
-    ("Taxable Sales",          "taxable_sales"),
-    ("Non-Taxable Sales",      "non_taxable"),
-    ("Bill Payment Charges",   "bill_payment_charge"),
-    ("Phone Recargas",         "phone_recargas"),
-    ("Boost Mobile",           "boost_mobile"),
-    ("Check Cashing Fees",     "check_cashing_fees"),
-    ("Return Check Hold Fees", "return_check_hold_fees"),
-    ("Rebates / Commissions",  "rebates_commissions"),
-]
-_PL_EXPENSE_LINES = [
-    ("Cash Purchases",  "cash_purchases"),
-    ("Check Purchases", "check_purchases"),
-    ("Cash Expenses",   "cash_expense"),
-    ("Check Expenses",  "check_expense"),
-    ("Cash Payroll",    "payroll_expense"),
-]
+# Daily-book P&L line constants now live in
+# api.Modules.Reports.Services.period_comparison (PR 86).
+# Re-exported here so existing call sites (period P&L, period
+# comparison, monthly P&L feed) keep their import shape.
+from api.Modules.Reports.Services import (
+    PL_EXPENSE_LINES as _PL_EXPENSE_LINES,
+    PL_INCOME_LINES as _PL_INCOME_LINES,
+)
 
 
 def _period_pl_data(store_ids, d_from, d_to):
@@ -5653,85 +5644,14 @@ def _bank_charges_by_account_data(store_ids, d_from, d_to):
 # ── Period Comparison ────────────────────────────────────────
 def _period_comparison_data(store_ids, d_from, d_to,
                               *, compare_from=None, compare_to=None):
-    """Compare the chosen period against another period. Defaults to
-    the immediately-prior period of the same length when
-    `compare_from` / `compare_to` aren't provided. Pass arbitrary
-    dates to compare against any custom window — e.g. this month
-    vs. the same month last year.
-
-    If only one of compare_from / compare_to is provided we still
-    fall back to the auto-prior — both must be set for custom
-    comparison."""
-    if compare_from and compare_to:
-        prior_from, prior_to = compare_from, compare_to
-        # Normalise if user picked them backwards.
-        if prior_from > prior_to:
-            prior_from, prior_to = prior_to, prior_from
-    else:
-        span = (d_to - d_from).days + 1
-        prior_to   = d_from - timedelta(days=1)
-        prior_from = prior_to - timedelta(days=span - 1)
-
-    def _bundle(s, e):
-        # Active transfer aggregates.
-        sent, fee_sum, tax_sum, count = (db.session.query(
-            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-            db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-            db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-            db.func.count(Transfer.id),
-        ).filter(*_active_transfers_period_filters(store_ids, s, e)).one())
-        # Daily P&L aggregates.
-        daily = DailyReport.query.filter(
-            DailyReport.store_id.in_(store_ids),
-            DailyReport.report_date >= s,
-            DailyReport.report_date <= e,
-        ).all()
-        income = sum(float(getattr(r, a) or 0)
-                     for r in daily for _, a in _PL_INCOME_LINES) + float(fee_sum or 0)
-        expenses = sum(float(getattr(r, a) or 0)
-                       for r in daily for _, a in _PL_EXPENSE_LINES)
-        return {
-            "transfers":  int(count or 0),
-            "send_total": float(sent or 0),
-            "fees":       float(fee_sum or 0),
-            "tax":        float(tax_sum or 0),
-            "income":     income,
-            "expenses":   expenses,
-            "net":        income - expenses,
-        }
-
-    cur   = _bundle(d_from, d_to)
-    prior = _bundle(prior_from, prior_to)
-
-    metrics = [
-        ("Transfers",     "transfers",  False),
-        ("Total Sent",    "send_total", True),
-        ("Fees Earned",   "fees",       True),
-        ("Federal Tax",   "tax",        True),
-        ("Total Income",  "income",     True),
-        ("Total Expenses","expenses",   True),
-        ("Net Income",    "net",        True),
-    ]
-    rows = []
-    for label, key, is_money in metrics:
-        c = cur[key]; p = prior[key]
-        delta = c - p
-        pct = (delta / p * 100.0) if p else (100.0 if c else 0.0)
-        rows.append({
-            "label": label,
-            "current": c,
-            "prior":   p,
-            "delta":   delta,
-            "pct":     pct,
-            "is_money": is_money,
-        })
-    totals = {
-        "current_label": (
-            f"{d_from.strftime('%b %d')} – {d_to.strftime('%b %d, %Y')}"),
-        "prior_label":   (
-            f"{prior_from.strftime('%b %d')} – {prior_to.strftime('%b %d, %Y')}"),
-    }
-    return rows, totals
+    """Compare the chosen period against another period. Single
+    source of truth lives in
+    `api.Modules.Reports.Services.period_comparison` (PR 86)."""
+    from api.Modules.Reports.Services import period_comparison
+    return period_comparison(
+        db.session, store_ids, d_from, d_to,
+        compare_from=compare_from, compare_to=compare_to,
+    )
 
 
 # ── Fees vs. Federal Tax ─────────────────────────────────────

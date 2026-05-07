@@ -26,6 +26,11 @@ from .customers import top_customers
 from .date_helpers import day_end, day_start
 from .employees import cashier_productivity, sales_by_employee
 from .fees_vs_tax import fees_vs_tax
+from .period_comparison import (
+    PL_EXPENSE_LINES,
+    PL_INCOME_LINES,
+    period_comparison,
+)
 from .sales import (
     by_destination_country,
     sales_by_company,
@@ -34,12 +39,15 @@ from .sales import (
 )
 
 __all__ = [
+    "PL_EXPENSE_LINES",
+    "PL_INCOME_LINES",
     "bank_charges_by_account",
     "by_destination_country",
     "cashier_productivity",
     "day_end",
     "day_start",
     "fees_vs_tax",
+    "period_comparison",
     "sales_by_company",
     "sales_by_employee",
     "sales_by_service",
