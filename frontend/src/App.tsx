@@ -2,6 +2,7 @@ import { Outlet, Route, Routes } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
+import Batches from "./routes/Batches";
 import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
@@ -42,6 +43,7 @@ export default function App() {
         <Route path="daily"            element={<DailyBook />} />
         <Route path="daily/edit"       element={<EditDailyBook />} />
         <Route path="reports"          element={<Reports />} />
+        <Route path="batches"          element={<Batches />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
