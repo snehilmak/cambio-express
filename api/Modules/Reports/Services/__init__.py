@@ -28,6 +28,7 @@ from .customer_segments import new_vs_returning
 from .customers import top_customers
 from .daily_aggregates import check_deposits, daily_drops
 from .date_helpers import day_end, day_start
+from .employee_activity import employee_activity
 from .employees import cashier_productivity, sales_by_employee
 from .fees_vs_tax import fees_vs_tax
 from .high_value_transfers import high_value_transfers
@@ -57,6 +58,7 @@ __all__ = [
     "daily_drops",
     "day_end",
     "day_start",
+    "employee_activity",
     "fees_vs_tax",
     "high_value_transfers",
     "new_vs_returning",
