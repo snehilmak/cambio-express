@@ -25,6 +25,7 @@ from .ach_volume import ach_volume
 from .bank_charges import bank_charges_by_account
 from .bank_rule_audit import bank_rule_audit
 from .bank_txn_breakdown import bank_txn_breakdown
+from .cancelled_transfers import cancelled_transfers
 from .customer_segments import new_vs_returning
 from .customers import top_customers
 from .daily_aggregates import check_deposits, daily_drops
@@ -55,6 +56,7 @@ __all__ = [
     "bank_rule_audit",
     "bank_txn_breakdown",
     "by_destination_country",
+    "cancelled_transfers",
     "cashier_productivity",
     "check_deposits",
     "daily_drops",
