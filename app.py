@@ -5140,70 +5140,11 @@ def _service_fn(service):
 
 
 def _new_vs_returning_data(store_ids, d_from, d_to):
-    """Split senders active in the period into "new" vs "returning"
-    based on whether they had any prior transfer with this store
-    before `d_from`. Walk-in (customer_id IS NULL) transfers can't be
-    classified — same person can't be tracked across visits — so
-    they're aggregated separately as a third bucket. Returns
-    (rows, totals)."""
-    period_q = (db.session.query(
-        Transfer.customer_id,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-     .group_by(Transfer.customer_id).all())
-
-    new_count = returning_count = walkin_count = 0
-    new_sent = returning_sent = walkin_sent = 0.0
-    new_txns = returning_txns = walkin_txns = 0
-
-    cust_ids = [c for c, _, _ in period_q if c is not None]
-    pre_ids = set()
-    if cust_ids:
-        pre_ids = {row[0] for row in (db.session.query(Transfer.customer_id)
-            .filter(
-                Transfer.store_id.in_(store_ids),
-                Transfer.send_date < d_from,
-                Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-                Transfer.customer_id.in_(cust_ids),
-            ).distinct().all())}
-
-    for cid, count, sent in period_q:
-        sent = float(sent or 0); count = int(count or 0)
-        if cid is None:
-            walkin_count += 1
-            walkin_sent  += sent
-            walkin_txns  += count
-        elif cid in pre_ids:
-            returning_count += 1
-            returning_sent  += sent
-            returning_txns  += count
-        else:
-            new_count += 1
-            new_sent  += sent
-            new_txns  += count
-
-    rows = [
-        {"bucket": "New senders",       "customers": new_count,
-         "txns":   new_txns,            "sent":      new_sent,
-         "tone":   "primary"},
-        {"bucket": "Returning senders", "customers": returning_count,
-         "txns":   returning_txns,      "sent":      returning_sent,
-         "tone":   "neon"},
-    ]
-    if walkin_count:
-        rows.append({"bucket": "Walk-in (unidentified)",
-                     "customers": walkin_count,
-                     "txns": walkin_txns, "sent": walkin_sent,
-                     "tone": "muted"})
-    totals = {
-        "customers": new_count + returning_count + walkin_count,
-        "txns":      new_txns + returning_txns + walkin_txns,
-        "sent":      new_sent + returning_sent + walkin_sent,
-        "new_count":       new_count,
-        "returning_count": returning_count,
-    }
-    return rows, totals
+    """Split senders into new / returning / walk-in buckets.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.new_vs_returning` (PR 89)."""
+    from api.Modules.Reports.Services import new_vs_returning
+    return new_vs_returning(db.session, store_ids, d_from, d_to)
 
 
 def _csv_response(buf, fname):
