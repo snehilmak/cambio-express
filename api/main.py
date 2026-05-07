@@ -84,6 +84,12 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Monthly.Controllers import router as monthly_router
     app.include_router(monthly_router, prefix="/monthly", tags=["monthly"])
 
+    # Admin — store-info / team / owner-access endpoints for
+    # the SPA's settings page. Mirrors the legacy
+    # /admin/settings tabbed page in scope.
+    from api.Modules.Admin.Controllers import router as admin_router
+    app.include_router(admin_router, prefix="/admin", tags=["admin"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.

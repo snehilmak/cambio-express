@@ -1,6 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { changePassword } from "../api/account";
+import {
+  changePassword,
+  updateStoreInfo,
+  useStoreInfo,
+} from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
@@ -25,8 +30,215 @@ export default function Settings() {
         </p>
       </header>
 
+      <StoreInfoCard />
       <ChangePasswordCard />
     </main>
+  );
+}
+
+function StoreInfoCard() {
+  const queryClient = useQueryClient();
+  const identity = getCurrentIdentity();
+  const { data, isLoading, isError } = useStoreInfo();
+
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [taxRatePct, setTaxRatePct] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
+
+  // Hydrate the form from the read-side row when it arrives.
+  // Federal tax is stored as a decimal (0.01 = 1%) but operators
+  // think in percents — display + edit accordingly.
+  useEffect(() => {
+    if (!data?.store) return;
+    setName(data.store.name);
+    setEmail(data.store.email);
+    setPhone(data.store.phone);
+    setAddress(data.store.address);
+    setTaxRatePct(((data.store.federal_tax_rate || 0) * 100).toFixed(2));
+  }, [data]);
+
+  const canEdit =
+    identity?.role === "admin" ||
+    identity?.role === "owner" ||
+    identity?.role === "superadmin";
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setOkMsg(null);
+    setBusy(true);
+    try {
+      await updateStoreInfo({
+        name, email, phone, address,
+        federal_tax_rate: Number(taxRatePct) / 100,
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["admin", "store-info"],
+      });
+      setOkMsg("Store info saved.");
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (identity?.store_id == null) {
+    return (
+      <section style={cardStyle}>
+        <h2 style={sectionTitleStyle}>Store</h2>
+        <p
+          style={{
+            margin: 0,
+            fontSize: "0.9rem",
+            color: "var(--db-text-muted, #a3a3a3)",
+          }}
+        >
+          Sign in as a store admin to manage store info.
+        </p>
+      </section>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <section style={cardStyle}>
+        <h2 style={sectionTitleStyle}>Store</h2>
+        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>Loading…</p>
+      </section>
+    );
+  }
+  if (isError || !data) {
+    return (
+      <section style={cardStyle}>
+        <h2 style={sectionTitleStyle}>Store</h2>
+        <p
+          style={{
+            margin: 0,
+            color: "var(--db-negative, #ff3b30)",
+          }}
+        >
+          Could not load store info.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section style={cardStyle}>
+      <h2 style={sectionTitleStyle}>Store</h2>
+      <p
+        style={{
+          margin: "0 0 1rem",
+          fontSize: "0.85rem",
+          color: "var(--db-text-muted, #a3a3a3)",
+        }}
+      >
+        Slug{" "}
+        <code
+          style={{
+            fontFamily:
+              "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            color: "var(--db-text, #f5f5f5)",
+          }}
+        >
+          {data.store.slug}
+        </code>{" "}
+        · plan {data.store.plan}
+      </p>
+      <form
+        onSubmit={onSubmit}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
+          gap: "0.85rem",
+        }}
+      >
+        <Field label="Store name">
+          <input type="text" value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={!canEdit}
+            style={inputStyle} required />
+        </Field>
+        <Field label="Email">
+          <input type="email" value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            disabled={!canEdit}
+            style={inputStyle} />
+        </Field>
+        <Field label="Phone">
+          <input type="tel" value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            disabled={!canEdit}
+            style={inputStyle} />
+        </Field>
+        <Field label="Address">
+          <input type="text" value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            disabled={!canEdit}
+            style={inputStyle} />
+        </Field>
+        <Field label="Federal tax rate (%)">
+          <input type="number" step="0.01" min="0" max="100"
+            value={taxRatePct}
+            onChange={(e) => setTaxRatePct(e.target.value)}
+            disabled={!canEdit}
+            style={inputStyle} />
+        </Field>
+        {err && (
+          <p
+            role="alert"
+            style={{
+              margin: 0,
+              gridColumn: "1 / -1",
+              color: "var(--db-negative, #ff3b30)",
+              fontSize: "0.9rem",
+            }}
+          >
+            {err}
+          </p>
+        )}
+        {okMsg && (
+          <p
+            role="status"
+            style={{
+              margin: 0,
+              gridColumn: "1 / -1",
+              color: "var(--db-accent, #3fff00)",
+              fontSize: "0.9rem",
+            }}
+          >
+            {okMsg}
+          </p>
+        )}
+        {canEdit && (
+          <div
+            style={{
+              gridColumn: "1 / -1",
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
+          >
+            <button
+              type="submit"
+              disabled={busy || !name}
+              style={{
+                ...saveBtnStyle,
+                opacity: busy || !name ? 0.6 : 1,
+                cursor: busy ? "wait" : "pointer",
+              }}
+            >
+              {busy ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+      </form>
+    </section>
   );
 }
 
