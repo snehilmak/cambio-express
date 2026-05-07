@@ -7710,30 +7710,12 @@ def dashboard():
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
 # picker displays these in order so the common choices stay on top.
-PHONE_COUNTRY_CODES = [
-    ("+1",   "United States / Canada"),
-    ("+52",  "Mexico"),
-    ("+502", "Guatemala"),
-    ("+503", "El Salvador"),
-    ("+504", "Honduras"),
-    ("+505", "Nicaragua"),
-    ("+506", "Costa Rica"),
-    ("+507", "Panama"),
-    ("+509", "Haiti"),
-    ("+57",  "Colombia"),
-    ("+593", "Ecuador"),
-    ("+51",  "Peru"),
-    ("+58",  "Venezuela"),
-    ("+54",  "Argentina"),
-    ("+55",  "Brazil"),
-    ("+56",  "Chile"),
-    ("+91",  "India"),
-    ("+92",  "Pakistan"),
-    ("+63",  "Philippines"),
-    ("+234", "Nigeria"),
-    ("+254", "Kenya"),
-    ("+233", "Ghana"),
-]
+# Phone-country-code reference list for the customer + transfer
+# forms now lives in
+# `api.Modules.Customers.Services.phone_codes` (PR 79). Re-exported
+# here so legacy callers (the transfer-form context, autocomplete
+# response shape) keep their existing import shape.
+from api.Modules.Customers.Services import PHONE_COUNTRY_CODES
 
 def sibling_store_ids(store_id):
     """Owner-umbrella resolution. Single source of truth lives in
