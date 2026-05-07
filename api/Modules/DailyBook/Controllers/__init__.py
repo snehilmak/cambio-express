@@ -26,8 +26,10 @@ from api.Modules.DailyBook.Requests import (
 from api.Modules.DailyBook.Services import (
     DailyReportLockedError,
     DailyReportSummary,
+    lock_report,
     summarize_period,
     summarize_report,
+    unlock_report,
     update_daily_report,
 )
 
@@ -171,4 +173,73 @@ def update_daily_route(
             status_code=500,
             detail="Daily report disappeared after save",
         )
+    return DailyReportResponse(report=_to_row(summary))
+
+
+@router.post(
+    "/{store_id}/{report_date}/lock",
+    response_model=DailyReportResponse,
+)
+def lock_daily_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> DailyReportResponse:
+    """Mark a daily report as locked. Auto-creates the row when
+    missing so a cashier can lock an empty day on purpose.
+    Idempotent — already-locked reports keep their original
+    locked_at/locked_by. Cross-store / superadmin → 403."""
+    d = _parse_date(report_date, field="report_date")
+    claim_store = claims.get("store_id")
+    if claim_store is None or int(claim_store) != int(store_id):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not authorize edits to this store's "
+                "daily book."
+            ),
+        )
+    user_id = int(claims["sub"])
+    lock_report(db, int(store_id), d, locked_by_user_id=user_id)
+    db.commit()
+    summary = summarize_report(db, int(store_id), d)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="Lock failed")
+    return DailyReportResponse(report=_to_row(summary))
+
+
+@router.post(
+    "/{store_id}/{report_date}/unlock",
+    response_model=DailyReportResponse,
+)
+def unlock_daily_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> DailyReportResponse:
+    """Clear the lock on a daily report. Cross-store /
+    superadmin → 403. Returns 404 if the date never had a report
+    at all (nothing to unlock)."""
+    d = _parse_date(report_date, field="report_date")
+    claim_store = claims.get("store_id")
+    if claim_store is None or int(claim_store) != int(store_id):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not authorize edits to this store's "
+                "daily book."
+            ),
+        )
+    result = unlock_report(db, int(store_id), d)
+    db.commit()
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No daily report logged for this date",
+        )
+    summary = summarize_report(db, int(store_id), d)
+    if summary is None:
+        raise HTTPException(status_code=500, detail="Unlock failed")
     return DailyReportResponse(report=_to_row(summary))

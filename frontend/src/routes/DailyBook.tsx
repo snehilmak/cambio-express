@@ -1,7 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { useDailyReport, type DailyReportRow } from "../api/dailybook";
+import {
+  lockDailyReport,
+  unlockDailyReport,
+  useDailyReport,
+  type DailyReportRow,
+} from "../api/dailybook";
+import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
 // Daily book page at /app/daily. Read-only view of a single
@@ -36,6 +43,34 @@ export default function DailyBook() {
 
   const date = dateParam ?? todayIso();
   const { data, isLoading, isError, error, isFetching } = useDailyReport(date);
+  const queryClient = useQueryClient();
+  const [lockBusy, setLockBusy] = useState(false);
+  const [lockError, setLockError] = useState<string | null>(null);
+
+  async function toggleLock() {
+    if (identity?.store_id == null) return;
+    setLockError(null);
+    setLockBusy(true);
+    try {
+      if (data?.locked) {
+        await unlockDailyReport(identity.store_id, date);
+      } else {
+        await lockDailyReport(identity.store_id, date);
+      }
+      // Refresh the read-side hook for this day so the UI flips.
+      await queryClient.invalidateQueries({
+        queryKey: ["dailybook", "report", identity.store_id, date],
+      });
+    } catch (err) {
+      setLockError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not change lock state.",
+      );
+    } finally {
+      setLockBusy(false);
+    }
+  }
 
   if (identity?.store_id == null) {
     return (
@@ -114,6 +149,25 @@ export default function DailyBook() {
           <button onClick={() => shiftDate(1)} style={dateBtnStyle}>
             Day →
           </button>
+          <button
+            type="button"
+            onClick={toggleLock}
+            disabled={lockBusy}
+            style={{
+              background: "transparent",
+              color: "var(--db-text, #f5f5f5)",
+              border: "1px solid var(--db-border, #262626)",
+              borderRadius: "0.5rem",
+              padding: "0.45rem 0.85rem",
+              fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+              fontSize: "0.85rem",
+              cursor: lockBusy ? "wait" : "pointer",
+              opacity: lockBusy ? 0.6 : 1,
+              marginLeft: "0.5rem",
+            }}
+          >
+            {lockBusy ? "…" : data?.locked ? "Unlock" : "Lock"}
+          </button>
           <Link
             to={`/daily/edit?date=${date}`}
             style={{
@@ -125,13 +179,24 @@ export default function DailyBook() {
               fontSize: "0.85rem",
               fontWeight: 600,
               textDecoration: "none",
-              marginLeft: "0.5rem",
             }}
           >
             Edit
           </Link>
         </div>
       </header>
+      {lockError && (
+        <p
+          role="alert"
+          style={{
+            margin: "0 0 1rem",
+            color: "var(--db-negative, #ff3b30)",
+            fontSize: "0.9rem",
+          }}
+        >
+          {lockError}
+        </p>
+      )}
 
       {isLoading && <p style={emptyStyle}>Loading…</p>}
       {isError && (

@@ -262,3 +262,94 @@ def test_put_requires_jwt(test_store_id):
         json={"taxable_sales": 100.0},
     )
     assert resp.status_code == 401
+
+
+# ── POST /daily/{store}/{date}/lock + /unlock ───────────────
+
+
+def test_lock_creates_and_locks(client, test_store_id):
+    """Locking a day with no report yet auto-creates + locks it."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()["report"]["locked"] is True
+
+
+def test_lock_is_idempotent(client, test_store_id):
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    r1 = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    r2 = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == r2.status_code == 200
+    assert r2.get_json()["report"]["locked"] is True
+
+
+def test_unlock_clears_the_lock(client, test_store_id):
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    # Lock first.
+    client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Then unlock.
+    resp = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/unlock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["report"]["locked"] is False
+
+
+def test_unlock_404_when_no_report(client, test_store_id):
+    """Unlocking a date that never had a report → 404. The
+    lock endpoint auto-creates; unlock doesn't."""
+    today_iso = date.today().isoformat()
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/unlock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_lock_unlock_reject_cross_store_jwt(client, test_store_id):
+    """Superadmin / wrong-store JWT can't lock or unlock."""
+    today_iso = date.today().isoformat()
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin", "password": "super2025!",
+            "store_id": None,
+        },
+    )
+    token = login.get_json()["access_token"]
+    r1 = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    r2 = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/unlock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 403
+    assert r2.status_code == 403
+
+
+def test_lock_unlock_require_jwt(test_store_id):
+    today_iso = date.today().isoformat()
+    c = _client()
+    r1 = c.post(f"/daily/{test_store_id}/{today_iso}/lock")
+    r2 = c.post(f"/daily/{test_store_id}/{today_iso}/unlock")
+    assert r1.status_code == 401
+    assert r2.status_code == 401

@@ -73,6 +73,28 @@ export async function updateDailyReport(
   );
 }
 
+// POST /api/v2/daily/{store_id}/{date}/lock — auto-creates the
+// row when missing, marks it as locked. Idempotent.
+export async function lockDailyReport(
+  storeId: number, date: string,
+): Promise<DailyReportResponse> {
+  return api<DailyReportResponse>(
+    `/api/v2/daily/${storeId}/${date}/lock`,
+    { method: "POST", json: {} },
+  );
+}
+
+// POST /api/v2/daily/{store_id}/{date}/unlock — clears the lock.
+// 404 if no report exists for that date.
+export async function unlockDailyReport(
+  storeId: number, date: string,
+): Promise<DailyReportResponse> {
+  return api<DailyReportResponse>(
+    `/api/v2/daily/${storeId}/${date}/unlock`,
+    { method: "POST", json: {} },
+  );
+}
+
 // `date` is YYYY-MM-DD. When undefined the hook is disabled.
 export function useDailyReport(date: string | undefined) {
   const identity = getCurrentIdentity();
