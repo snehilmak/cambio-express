@@ -6237,97 +6237,24 @@ def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
 
 
 def _sa_refunds_data(d_from, d_to):
-    """Stripe refunds in the period grouped by reason."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
-    try:
-        objs = _stripe_iter(stripe.Refund.list,
-                             created={"gte": gte, "lte": lte})
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    by_reason = {}
-    for r in objs:
-        amt = float(r.get("amount", 0) or 0) / 100.0
-        reason = (r.get("reason") or "(no reason)").replace("_", " ").title()
-        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
-        by_reason[reason]["count"]  += 1
-        by_reason[reason]["amount"] += amt
-        totals["count"]  += 1
-        totals["amount"] += amt
-    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
-            for k, v in by_reason.items()]
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Stripe refunds in the period. Single source of truth lives
+    in `api.Modules.Superadmin.Services.refunds` (PR 102)."""
+    from api.Modules.Superadmin.Services import refunds
+    return refunds(db.session, d_from, d_to)
 
 
 def _sa_failed_payments_data(d_from, d_to):
-    """Recent failed Stripe charges in the period. Stripe doesn't
-    expose a server-side `failed` filter on Charge.list, so we pull
-    a capped page and filter client-side."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
-    try:
-        objs = _stripe_iter(stripe.Charge.list,
-                             created={"gte": gte, "lte": lte},
-                             max_total=500)
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    by_reason = {}
-    for c in objs:
-        if c.get("status") != "failed" and c.get("paid", True):
-            continue
-        amt = float(c.get("amount", 0) or 0) / 100.0
-        outcome = c.get("outcome") or {}
-        reason = (outcome.get("reason")
-                   or c.get("failure_message")
-                   or "(unknown)")[:80]
-        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
-        by_reason[reason]["count"]  += 1
-        by_reason[reason]["amount"] += amt
-        totals["count"]  += 1
-        totals["amount"] += amt
-    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
-            for k, v in by_reason.items()]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    return rows, totals
+    """Recent failed Stripe charges. Single source of truth lives
+    in `api.Modules.Superadmin.Services.failed_payments` (PR 102)."""
+    from api.Modules.Superadmin.Services import failed_payments
+    return failed_payments(db.session, d_from, d_to)
 
 
 def _sa_payouts_data(d_from, d_to):
-    """Stripe payouts to the platform bank account in the period."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": "",
-              "paid": 0, "pending": 0, "failed": 0}
-    try:
-        objs = _stripe_iter(stripe.Payout.list,
-                             created={"gte": gte, "lte": lte})
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    for p in objs:
-        amt = float(p.get("amount", 0) or 0) / 100.0
-        arrival_ts = p.get("arrival_date")
-        arrival = (datetime.utcfromtimestamp(arrival_ts).date()
-                    if arrival_ts else None)
-        status = p.get("status", "") or ""
-        rows.append({
-            "id":      p.get("id", ""),
-            "amount":  amt,
-            "status":  status.title(),
-            "method":  (p.get("method") or "").replace("_", " ").title(),
-            "arrival": arrival,
-        })
-        totals["count"]  += 1
-        totals["amount"] += amt
-        if status == "paid":    totals["paid"]    += 1
-        if status == "pending": totals["pending"] += 1
-        if status == "failed":  totals["failed"]  += 1
-    rows.sort(key=lambda r: r["arrival"] or date.min, reverse=True)
-    return rows, totals
+    """Stripe payouts to the platform. Single source of truth lives
+    in `api.Modules.Superadmin.Services.payouts` (PR 102)."""
+    from api.Modules.Superadmin.Services import payouts
+    return payouts(db.session, d_from, d_to)
 
 
 def _sa_dau_mau_data(d_from, d_to):
