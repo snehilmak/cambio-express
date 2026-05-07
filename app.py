@@ -5642,44 +5642,12 @@ def _ach_volume_data(store_ids, d_from, d_to):
 
 # ── Bank Charges by Account ──────────────────────────────────
 def _bank_charges_by_account_data(store_ids, d_from, d_to):
-    """Sum BankTransaction rows tagged as bank charges, grouped by
-    account. Uses prefix match on category_slug so any per-account
-    bank_charge_<last4> rolls up."""
-    from sqlalchemy import or_
-    month_start = _day_start(d_from)
-    month_end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        BankTransaction.stripe_bank_account_id,
-        db.func.count(BankTransaction.id),
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
-    ).filter(
-        BankTransaction.store_id.in_(store_ids),
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-        or_(BankTransaction.category_slug == "bank_charge",
-            BankTransaction.category_slug.like("bank_charge_%")),
-    ).group_by(BankTransaction.stripe_bank_account_id).all())
-    acct_ids = [aid for aid, *_ in rows_q if aid is not None]
-    accounts = ({a.id: a for a in StripeBankAccount.query
-                 .filter(StripeBankAccount.id.in_(acct_ids)).all()}
-                if acct_ids else {})
-    rows = []
-    totals = {"count": 0, "amount": 0.0}
-    for aid, count, cents in rows_q:
-        c = int(count or 0)
-        amt = abs(float(cents or 0)) / 100.0
-        a = accounts.get(aid)
-        rows.append({
-            "account": a.label if a else "(no account)",
-            "last4":   a.last4 if a else "",
-            "count":   c,
-            "amount":  amt,
-            "avg":     (amt / c) if c else 0.0,
-        })
-        totals["count"]  += c
-        totals["amount"] += amt
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Sum BankTransaction rows tagged as bank charges, grouped
+    by account. Single source of truth lives in
+    `api.Modules.Reports.Services.bank_charges_by_account`
+    (PR 84)."""
+    from api.Modules.Reports.Services import bank_charges_by_account
+    return bank_charges_by_account(db.session, store_ids, d_from, d_to)
 
 
 # ── Period Comparison ────────────────────────────────────────
