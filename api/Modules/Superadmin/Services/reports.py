@@ -298,6 +298,179 @@ def trial_expiry_timing(
     return rows, totals
 
 
+def bank_sync_adoption(
+    db: Session,
+    d_from: date,  # unused — adoption is point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stores with at least one connected `StripeBankAccount`,
+    grouped by plan. Period filter is ignored — adoption is
+    point-in-time at end of period (we don't have a per-day
+    history of when each account connected).
+    """
+    from app import Store, StripeBankAccount
+    from api.Modules.Reports.Services.date_helpers import day_end
+
+    connected_ids = {
+        sid for (sid,) in
+        db.query(StripeBankAccount.store_id).distinct().all()
+    }
+    all_stores = (
+        db.query(Store)
+          .filter(Store.created_at <= day_end(d_to))
+          .all()
+    )
+    by_plan: dict[str, dict] = {}
+    for s in all_stores:
+        plan = _plan_label(s.plan)
+        b = by_plan.setdefault(plan, {"connected": 0, "total": 0})
+        b["total"] += 1
+        if s.id in connected_ids:
+            b["connected"] += 1
+    rows = [
+        {
+            "plan":      plan,
+            "connected": v["connected"],
+            "total":     v["total"],
+            "rate_pct": (
+                v["connected"] / v["total"] * 100.0
+                if v["total"] else 0.0
+            ),
+        }
+        for plan, v in by_plan.items()
+    ]
+    rows.sort(key=lambda r: r["rate_pct"], reverse=True)
+    totals = {
+        "connected": sum(r["connected"] for r in rows),
+        "total":     sum(r["total"]     for r in rows),
+    }
+    totals["rate_pct"] = (
+        totals["connected"] / totals["total"] * 100.0
+        if totals["total"] else 0.0
+    )
+    return rows, totals
+
+
+def tv_display_adoption(
+    db: Session,
+    d_from: date,  # unused — point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stores with the TV-display add-on enabled
+    (`Store.addons` contains 'tv_display').
+    """
+    from app import Store
+    from api.Modules.Reports.Services.date_helpers import day_end
+
+    stores = (
+        db.query(Store)
+          .filter(Store.created_at <= day_end(d_to))
+          .all()
+    )
+    enabled = [
+        s for s in stores if "tv_display" in (s.addons or "")
+    ]
+    rows = [
+        {
+            "slug": s.slug,
+            "name": s.name,
+            "plan": (s.plan or "").title(),
+        }
+        for s in enabled
+    ]
+    rows.sort(key=lambda r: r["name"].lower())
+    totals = {"count": len(enabled), "total_stores": len(stores)}
+    return rows, totals
+
+
+def owner_adoption(
+    db: Session,
+    d_from: date,  # unused — point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Owners with multiple linked stores (umbrella ownership).
+    Each row: owner display label + email + linked-store count.
+    Single-store owners are excluded.
+    """
+    from app import StoreOwnerLink, User
+
+    rows_q = (
+        db.query(
+            StoreOwnerLink.owner_id,
+            func.count(StoreOwnerLink.store_id),
+        )
+        .group_by(StoreOwnerLink.owner_id)
+        .all()
+    )
+    multi = [(oid, c) for oid, c in rows_q if (c or 0) > 1]
+    if not multi:
+        return [], {"count": 0, "owners": 0}
+
+    user_ids = [oid for oid, _ in multi]
+    users = {
+        u.id: u
+        for u in db.query(User).filter(User.id.in_(user_ids)).all()
+    }
+    rows = []
+    for oid, count in multi:
+        u = users.get(oid)
+        rows.append({
+            "owner":  (u.full_name or u.username) if u else f"User #{oid}",
+            "email":  (u.email or u.username) if u else "",
+            "stores": int(count or 0),
+        })
+    rows.sort(key=lambda r: r["stores"], reverse=True)
+    totals = {
+        "count":  len(rows),
+        "owners": len(rows),
+        "stores": sum(r["stores"] for r in rows),
+    }
+    return rows, totals
+
+
+def passkey_adoption(
+    db: Session,
+    d_from: date,  # unused — point-in-time
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Users with at least one passkey, grouped by role.
+    Helps gauge rollout of passwordless auth.
+    """
+    from app import Passkey, User
+
+    user_ids = {
+        uid for (uid,) in db.query(Passkey.user_id).distinct().all()
+    }
+    total_users = db.query(User).count()
+    rate_pct = (
+        len(user_ids) / total_users * 100.0 if total_users else 0.0
+    )
+    if not user_ids:
+        return [], {
+            "count": 0,
+            "users_with_passkey": 0,
+            "total_users": total_users,
+            "rate_pct": rate_pct,
+        }
+    users = db.query(User).filter(User.id.in_(user_ids)).all()
+    by_role: dict[str, int] = {}
+    for u in users:
+        r = (u.role or "(unknown)").title()
+        by_role[r] = by_role.get(r, 0) + 1
+    rows = [
+        {"role": role, "count": count}
+        for role, count in by_role.items()
+    ]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals = {
+        "count":              len(user_ids),
+        "users_with_passkey": len(user_ids),
+        "total_users":        total_users,
+        "rate_pct":           rate_pct,
+    }
+    return rows, totals
+
+
 def churn_cohort(
     db: Session,
     d_from: date,
