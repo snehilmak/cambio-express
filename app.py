@@ -5229,34 +5229,11 @@ def _bank_rule_audit_data(store_ids, d_from, d_to):
 
 # ── Cancelled Transfers ──────────────────────────────────────
 def _cancelled_transfers_data(store_ids, d_from, d_to):
-    """List Cancelled / Rejected transfers in the period."""
-    rows_q = (Transfer.query
-              .filter(
-                Transfer.store_id.in_(store_ids),
-                Transfer.send_date >= d_from,
-                Transfer.send_date <= d_to,
-                Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
-              )
-              .order_by(Transfer.send_date.desc(), Transfer.id.desc())
-              .all())
-    rows = [{
-        "send_date":     t.send_date,
-        "sender_name":   t.sender_name or "",
-        "recipient_name":t.recipient_name or "",
-        "country":       t.country or "",
-        "company":       t.company or "",
-        "amount":        float(t.send_amount or 0),
-        "status":        t.status or "",
-        "status_notes":  t.status_notes or "",
-        "confirm":       t.confirm_number or "",
-    } for t in rows_q]
-    totals = {
-        "count":     len(rows),
-        "amount":    sum(r["amount"] for r in rows),
-        "canceled":  sum(1 for r in rows if r["status"] == "Canceled"),
-        "rejected":  sum(1 for r in rows if r["status"] == "Rejected"),
-    }
-    return rows, totals
+    """List Cancelled / Rejected transfers in the period.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.cancelled_transfers` (PR 96)."""
+    from api.Modules.Reports.Services import cancelled_transfers
+    return cancelled_transfers(db.session, store_ids, d_from, d_to)
 
 
 # ── Period P&L ───────────────────────────────────────────────
