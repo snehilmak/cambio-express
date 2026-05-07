@@ -4,8 +4,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange, month_name
-import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile
+import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile, sys
 from email.message import EmailMessage
+
+# When run via `python app.py` the running module is `__main__`, not
+# `app`. Submodules in api/Modules/*/Models/__init__.py do
+# `from app import ...` (re-export shim during the strangler-fig
+# migration window). Without this aliasing, that import re-executes
+# this file as a fresh `app` module and re-enters the Service chain
+# circularly. Aliasing `__main__` to `app` makes those re-exports
+# resolve against the partial-but-progressing module instead.
+if __name__ == "__main__" and "app" not in sys.modules:
+    sys.modules["app"] = sys.modules[__name__]
 import stripe
 import click
 import pyotp
