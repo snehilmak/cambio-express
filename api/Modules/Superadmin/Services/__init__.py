@@ -17,13 +17,17 @@ from api.Modules.Superadmin.Services.dashboard import (
 from api.Modules.Superadmin.Services.reports import (
     PLAN_MRR,
     active_stores_by_plan,
+    bank_sync_adoption,
     churn_cohort,
     conversion_rate,
     login_activity,
     mrr_arr,
+    owner_adoption,
+    passkey_adoption,
     signup_funnel,
     time_to_convert,
     trial_expiry_timing,
+    tv_display_adoption,
 )
 
 __all__ = [
@@ -35,6 +39,7 @@ __all__ = [
     "ANOMALY_QUIET_MIN_PRIOR_TRANSFERS",
     "PLAN_MRR",
     "active_stores_by_plan",
+    "bank_sync_adoption",
     "big_over_short_anomalies",
     "churn_cohort",
     "compute_mrr",
@@ -42,9 +47,12 @@ __all__ = [
     "conversion_rate",
     "login_activity",
     "mrr_arr",
+    "owner_adoption",
+    "passkey_adoption",
     "quiet_store_anomalies",
     "signup_funnel",
     "superadmin_dashboard_context",
     "time_to_convert",
     "trial_expiry_timing",
+    "tv_display_adoption",
 ]
