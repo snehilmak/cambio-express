@@ -44,6 +44,14 @@ jobs:
         # a ~5pt margin so new code is incentivized to carry its own tests.
         # tests/smoke/ excluded here — that layer needs Playwright + a
         # real browser and runs in the dedicated step below.
+        #
+        # `--concurrency=thread` is required on Python 3.12: without it,
+        # coverage's tracer interacts badly with FastAPI/asyncio task
+        # cleanup and leaks `Task was destroyed but it is pending!`
+        # errors that corrupt the SQLAlchemy seed-fixture state for the
+        # next test (manifests as `test_unlock_404_when_no_report` failing
+        # at SETUP because the seeded test-store row goes missing).
+        # Verified locally: passes on 3.12 with the flag, errors without it.
         env:
           DATABASE_URL: "sqlite:///:memory:"
           SECRET_KEY: "ci-secret"
@@ -52,7 +60,7 @@ jobs:
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: |
-          coverage run --source=app -m pytest -q --ignore=tests/smoke
+          coverage run --source=app --concurrency=thread -m pytest -q --ignore=tests/smoke
           coverage report --fail-under=60
 
       # ── Browser smoke layer ───────────────────────────────────
