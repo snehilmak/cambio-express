@@ -8244,10 +8244,12 @@ def _ensure_daily_report(store_id, report_date):
 _DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
 
 def _daily_is_locked(store_id, report_date):
-    """True if a DailyReport exists for (store, date) and is locked.
-    Write routes call this first and bail before touching the DB."""
-    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
-    return bool(rpt and rpt.locked_at)
+    """True iff DailyReport for (store, date) is locked. Single
+    source of truth lives in
+    `api.Modules.DailyBook.Services.is_daily_report_locked` (PR 81).
+    """
+    from api.Modules.DailyBook.Services import is_daily_report_locked
+    return is_daily_report_locked(db.session, store_id, report_date)
 
 def _reject_if_locked(store_id, report_date, ds):
     """Shared guard for every daily-book write route. Returns a Flask

@@ -17,6 +17,9 @@ from api.Modules.DailyBook.Services.line_items import (
     parse_at_time,
     recompute_line_items_total,
 )
+from api.Modules.DailyBook.Services.locks import (
+    is_locked as is_daily_report_locked,
+)
 from api.Modules.DailyBook.Services.reports import (
     DailyReportSummary,
     PeriodSummary,
@@ -37,6 +40,7 @@ __all__ = [
     "delete_line_item",
     "ensure_daily_report",
     "field_for_kind",
+    "is_daily_report_locked",
     "is_known_kind",
     "kind_or_404",
     "lock_report",
