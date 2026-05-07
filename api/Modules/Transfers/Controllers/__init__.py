@@ -35,6 +35,8 @@ from api.Modules.Transfers.Repositories import (
 )
 from api.Modules.Transfers.Requests import (
     CreateTransferRequest,
+    EmployeeRow,
+    RosterResponse,
     TransferListResponse,
     TransferResponse,
     TransferRow,
@@ -42,6 +44,7 @@ from api.Modules.Transfers.Requests import (
 from api.Modules.Transfers.Services import (
     CreateTransferInput,
     TransferNotFoundError,
+    active_roster,
     create_transfer,
     list_transfers,
     normalize_service_type,
@@ -88,6 +91,34 @@ def _to_row(t) -> TransferRow:
         status=t.status or "Sent",
         batch_id=t.batch_id or "",
         employee_name=t.employee_name or "",
+    )
+
+
+@router.get("/employees", response_model=RosterResponse)
+def employees_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> RosterResponse:
+    """Active store-employee roster for the JWT principal's store.
+    Powers the "Processed by" dropdown on the SPA's create + edit
+    transfer forms. Inactive employees are filtered out so cashiers
+    can't credit new transfers to former employees.
+
+    Returns 403 when the JWT has no store scope (superadmin) — the
+    roster is store-specific.
+    """
+    store_id = claims.get("store_id")
+    if store_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a store "
+                "admin or owner to load the roster."
+            ),
+        )
+    rows = active_roster(db, int(store_id))
+    return RosterResponse(
+        employees=[EmployeeRow(id=r.id, name=r.name or "") for r in rows],
     )
 
 

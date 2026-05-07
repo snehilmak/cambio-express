@@ -561,6 +561,66 @@ def test_update_requires_jwt(test_store_id):
     assert resp.status_code == 401
 
 
+# ── GET /transfers/employees (roster picker) ────────────────
+
+
+def test_employees_returns_active_roster(client, test_store_id):
+    """Roster endpoint returns the JWT principal's store roster,
+    filtered to active employees only — feeds the SPA's
+    'Processed by' dropdown."""
+    from app import app as flask_app, StoreEmployee, db
+    with flask_app.app_context():
+        e1 = StoreEmployee(store_id=test_store_id, name="Alice", is_active=True)
+        e2 = StoreEmployee(store_id=test_store_id, name="Bob", is_active=True)
+        e3 = StoreEmployee(store_id=test_store_id, name="ZRetired", is_active=False)
+        db.session.add_all([e1, e2, e3]); db.session.commit()
+
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+
+    resp = client.get(
+        "/api/v2/transfers/employees",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    names = [e["name"] for e in body["employees"]]
+    assert "Alice" in names and "Bob" in names
+    # Inactive must be filtered out — same UX guarantee as the
+    # legacy admin "Processed by" dropdown.
+    assert "ZRetired" not in names
+
+
+def test_employees_requires_jwt():
+    resp = _client().get("/transfers/employees")
+    assert resp.status_code == 401
+
+
+def test_employees_rejects_superadmin(client):
+    """Superadmin tokens have no store scope — the endpoint can't
+    pick a roster, so it 403s."""
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin", "password": "super2025!",
+            "store_id": None,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.get(
+        "/api/v2/transfers/employees",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
 def test_update_status_only_records_status_changed_audit(
     client, test_store_id,
 ):

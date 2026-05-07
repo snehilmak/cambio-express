@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import {
   updateTransfer,
+  useEmployees,
   useTransfer,
   type CreateTransferBody,
 } from "../api/transfers";
@@ -36,6 +37,7 @@ export default function EditTransfer() {
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
   const detail = useTransfer(Number.isFinite(transferId) ? transferId : undefined);
+  const roster = useEmployees();
 
   const [form, setForm] = useState<CreateTransferBody | null>(null);
   const [busy, setBusy] = useState(false);
@@ -260,15 +262,22 @@ export default function EditTransfer() {
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Processed by</h2>
           <Grid>
-            <Field label="Employee ID">
-              <input type="number" min="1"
+            <Field label="Employee">
+              <select
                 value={form.employee_id ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
                   set("employee_id", v ? Number(v) : null);
                 }}
-                placeholder="Roster ID"
-                style={inputStyle} required />
+                style={inputStyle}
+                required
+                disabled={roster.isLoading}
+              >
+                <option value="">— Select —</option>
+                {roster.data?.employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
+              </select>
             </Field>
           </Grid>
           <p style={{
@@ -276,8 +285,7 @@ export default function EditTransfer() {
             fontSize: "0.85rem",
             color: "var(--db-text-muted, #a3a3a3)",
           }}>
-            Required: who made this edit. Roster picker dropdown
-            lands in the next PR.
+            Required: who made this edit.
           </p>
         </section>
 
