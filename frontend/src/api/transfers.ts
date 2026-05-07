@@ -127,6 +127,34 @@ export async function updateTransfer(
   });
 }
 
+export interface EmployeeRow {
+  id: number;
+  name: string;
+}
+
+interface RosterResponse {
+  employees: EmployeeRow[];
+}
+
+// Hook: active store-employee roster for the JWT principal's
+// store. Powers the "Processed by" dropdown on the create + edit
+// forms. Returns the same envelope as
+// /api/v2/transfers/employees. Inactive employees are filtered
+// server-side.
+export function useEmployees() {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<RosterResponse>({
+    enabled: storeId !== null && storeId !== undefined,
+    queryKey: ["transfers", "employees", storeId],
+    queryFn: () => api<RosterResponse>("/api/v2/transfers/employees"),
+    // The roster changes infrequently — admins add cashiers at
+    // most a few times a month — so a 5-minute stale window
+    // keeps the dropdown responsive without spamming the API.
+    staleTime: 5 * 60_000,
+  });
+}
+
 // Hook: fetch a single transfer by id, scoped to the user's
 // store(s). Server returns 404 (never 403) for cross-tenant
 // lookups so tenancy boundaries stay opaque.

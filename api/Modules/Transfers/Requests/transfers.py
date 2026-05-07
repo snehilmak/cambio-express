@@ -59,6 +59,27 @@ class TransferResponse(BaseModel):
     transfer: TransferRow
 
 
+class EmployeeRow(BaseModel):
+    """One active StoreEmployee for the "Processed by" dropdown.
+    The legacy admin page (Settings → Team) holds the canonical
+    list — this payload is just enough for the SPA's transfer form
+    to populate a roster <select>."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str
+
+
+class RosterResponse(BaseModel):
+    """Wrapped roster. Same shape pattern as the rest of the
+    Transfers module's read-side payloads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    employees: list[EmployeeRow]
+
+
 class CreateTransferRequest(BaseModel):
     """POST body for /transfers. Mirrors the legacy `new_transfer`
     Flask form fields. `federal_tax` is intentionally absent — the

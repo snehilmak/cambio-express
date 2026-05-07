@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import {
   createTransfer,
+  useEmployees,
   type CreateTransferBody,
 } from "../api/transfers";
 import { ApiError } from "../lib/api";
@@ -38,6 +39,7 @@ function todayIso() {
 export default function NewTransfer() {
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
+  const roster = useEmployees();
 
   const [form, setForm] = useState<CreateTransferBody>({
     send_date: todayIso(),
@@ -281,31 +283,53 @@ export default function NewTransfer() {
         <section style={cardStyle}>
           <h2 style={sectionTitleStyle}>Processed by</h2>
           <Grid>
-            <Field label="Employee ID">
-              <input
-                type="number"
-                min="1"
+            <Field label="Employee">
+              <select
                 value={form.employee_id ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
                   set("employee_id", v ? Number(v) : null);
                 }}
-                placeholder="Roster ID"
                 style={inputStyle}
                 required
-              />
+                disabled={roster.isLoading}
+              >
+                <option value="">— Select —</option>
+                {roster.data?.employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name}
+                  </option>
+                ))}
+              </select>
             </Field>
           </Grid>
-          <p
-            style={{
-              margin: "0.5rem 0 0",
-              fontSize: "0.85rem",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}
-          >
-            A roster picker dropdown lands in the next PR — for now,
-            paste the employee's ID from the legacy admin page.
-          </p>
+          {roster.isError && (
+            <p
+              style={{
+                margin: "0.5rem 0 0",
+                fontSize: "0.85rem",
+                color: "var(--db-negative, #ff3b30)",
+              }}
+            >
+              Couldn't load roster. Add cashiers via Settings → Team
+              on the legacy admin page.
+            </p>
+          )}
+          {!roster.isLoading &&
+            !roster.isError &&
+            roster.data &&
+            roster.data.employees.length === 0 && (
+              <p
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.85rem",
+                  color: "var(--db-text-muted, #a3a3a3)",
+                }}
+              >
+                No active employees on this store's roster yet. Add
+                them via Settings → Team on the legacy admin page.
+              </p>
+            )}
         </section>
 
         {error && (
