@@ -72,3 +72,56 @@ export function useRecentTransfers({ limit = 10 }: RecentTransfersOptions = {}) 
     },
   });
 }
+
+export interface TransferFilters {
+  q?: string;
+  date_from?: string;
+  date_to?: string;
+  status?: string;
+}
+
+interface TransfersPageOptions extends TransferFilters {
+  page: number;
+  perPage: number;
+}
+
+// Hook: paginated transfer list with filters. Powers the
+// /app/transfers page. Same backend endpoint as
+// `useRecentTransfers` — different query key + filters so
+// TanStack Query caches them independently.
+export function useTransfers({
+  page, perPage, q, date_from, date_to, status,
+}: TransfersPageOptions) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+
+  return useQuery<TransferListResponse>({
+    enabled: storeId !== null && storeId !== undefined,
+    // Include all filter values in the key so the cache
+    // invalidates correctly when the user types.
+    queryKey: [
+      "transfers", "list", storeId, page, perPage,
+      q ?? "", date_from ?? "", date_to ?? "", status ?? "",
+    ],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        store_ids: String(storeId),
+        page: String(page),
+        per_page: String(perPage),
+        sort: "send_date",
+        dir: "desc",
+      });
+      if (q) params.set("q", q);
+      if (date_from) params.set("date_from", date_from);
+      if (date_to) params.set("date_to", date_to);
+      if (status) params.set("status", status);
+      return api<TransferListResponse>(
+        `/api/v2/transfers?${params.toString()}`,
+      );
+    },
+    // Keep showing the previous page's data while the next
+    // page is loading — avoids a flash of "Loading..." that
+    // makes pagination feel laggy.
+    placeholderData: (prev) => prev,
+  });
+}

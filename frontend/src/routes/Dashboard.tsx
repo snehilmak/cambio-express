@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { useRecentTransfers, type TransferRow } from "../api/transfers";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
@@ -124,7 +124,25 @@ function RecentTransfersCard() {
       {data && data.rows.length === 0 && (
         <Empty>No transfers recorded yet for this store.</Empty>
       )}
-      {data && data.rows.length > 0 && <TransfersTable rows={data.rows} />}
+      {data && data.rows.length > 0 && (
+        <>
+          <TransfersTable rows={data.rows} />
+          <div style={{ marginTop: "0.75rem", textAlign: "right" }}>
+            <Link
+              to="/transfers"
+              style={{
+                color: "var(--db-accent, #3fff00)",
+                fontFamily:
+                  "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                fontSize: "0.9rem",
+                textDecoration: "none",
+              }}
+            >
+              View all transfers →
+            </Link>
+          </div>
+        </>
+      )}
     </Card>
   );
 }
