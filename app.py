@@ -2339,36 +2339,18 @@ def _find_matching_rule(store_id, txn):
     return find_matching_rule(db.session, store_id, txn)
 
 def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
-    """Run the rule chain (operator BankRule → built-in) against an
-    uncategorised bank transaction and tag it. Returns True if the
-    row was tagged.
-
-    Idempotent: rows that already have a category_slug are left
-    untouched, so operator overrides survive.
-
-    `allow_auto_post` controls whether a matched operator rule with
-    auto_post=True also creates a DailyLineItem. Pass True for
-    freshly-inserted rows (operator's expressed intent on new data),
-    False when backfilling historical rows (the daily book may
-    already be reconciled — let the operator post manually).
-    Built-in rules never post to the daily book regardless.
-
-    Caller commits.
+    """Run the rule chain (operator BankRule → built-in) against
+    an uncategorised bank transaction and tag it. Single source of
+    truth lives in
+    `api.Modules.BankSync.Services.apply_rules_to_uncategorized_row`
+    (PR 71).
     """
-    if row.category_slug:
-        return False
-    rule = _find_matching_rule(row.store_id, row)
-    if rule is not None:
-        _categorize_bank_transaction(
-            row, rule.target_kind, rule=rule,
-            post_to_daily=(rule.auto_post and allow_auto_post))
-        return True
-    builtin = _match_builtin_bank_rule(row, account)
-    if builtin:
-        _categorize_bank_transaction(
-            row, builtin, rule=None, post_to_daily=False)
-        return True
-    return False
+    from api.Modules.BankSync.Services import (
+        apply_rules_to_uncategorized_row,
+    )
+    return apply_rules_to_uncategorized_row(
+        db.session, row, account, allow_auto_post=allow_auto_post,
+    )
 
 
 def _categorize_bank_transaction(txn, target_kind, rule=None,
