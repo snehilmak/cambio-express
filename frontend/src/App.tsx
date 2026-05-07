@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 
 import RequireAuth from "./components/RequireAuth";
+import Customers from "./routes/Customers";
 import Dashboard from "./routes/Dashboard";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
@@ -43,6 +44,14 @@ export default function App() {
         element={
           <RequireAuth>
             <TransferDetail />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="customers"
+        element={
+          <RequireAuth>
+            <Customers />
           </RequireAuth>
         }
       />
