@@ -174,15 +174,17 @@ Why strangler fig: every PR ships to production; we never have a
 
 Per discussion with the software lead:
 
-| # | Module | Why this order | Risk |
-|---|---|---|---|
-| 1 | **Reports** | Read-heavy, no writes, no external deps. Lowest risk reference impl. | Low |
-| 2 | **Customers** | Self-contained CRUD. Touches every transfer, but the surface is small. | Low |
-| 3 | **Transfers** | Big write surface (the core product). Most queries route through here. | Medium |
-| 4 | **Bank Sync** | External Stripe FC dependency; webhooks; reconciliation logic. | High |
-| 5 | **Auth + Billing** | Cross-cutting (every request touches auth). Saved for last so we can refactor sessions → JWT once. | High |
-| 6 | **Daily Book + Monthly P&L + Return Checks + Batches** | Bookkeeping core. Heavy P&L math. Migrate in one batch since they share the daily-line-item plumbing. | Medium |
-| 7 | **Cleanup** | Drop Flask, drop multi-tenant code, drop superadmin, swap UI to new frontend repo. | Low (mechanical) |
+| # | Module | Why this order | Risk | Status |
+|---|---|---|---|---|
+| 1 | **Reports** | Read-heavy, no writes, no external deps. Lowest risk reference impl. | Low | ✅ Done — all layers + Flask flip merged |
+| 2 | **Customers** | Self-contained CRUD. Touches every transfer, but the surface is small. | Low | ✅ Done — search + upsert + get-by-id + Flask flip merged |
+| 3 | **Transfers** | Big write surface (the core product). Most queries route through here. | Medium | 🟡 Read-side complete — list + get-by-id + Flask flip on `/transfers`. Write-side (create/edit/delete) still on Flask. |
+| 4 | **Bank Sync** | External Stripe FC dependency; webhooks; reconciliation logic. | High | 🟡 Read-side complete — `/bank/transactions` + `/bank/rules` + `/bank/accounts`. Write-side (rule CRUD, manual categorize, daily-book post) still on Flask. |
+| 5 | **Auth + Billing** | Cross-cutting (every request touches auth). Saved for last so we can refactor sessions → JWT once. | High | 🟡 Password login + JWT issuer + `/auth/me` complete. TOTP/passkey/refresh + Flask login flip pending. |
+| 6 | **Daily Book + Monthly P&L + Return Checks + Batches** | Bookkeeping core. Heavy P&L math. Migrate in one batch since they share the daily-line-item plumbing. | Medium | 🟡 DailyBook read-side complete — `/daily/{store}/{date}` + period summary + `/daily` list flip. Monthly P&L / Return Checks / Batches still on Flask. Write-side (save report, lock/unlock, line items) still on Flask. |
+| 7 | **Cleanup** | Drop Flask, drop multi-tenant code, drop superadmin, swap UI to new frontend repo. | Low (mechanical) | ⏳ Pending — depends on completing modules 3-6 write-side + Auth Flask flip. |
+
+**As of 2026-05-06:** 27 PRs merged on `pre-prod`. The FastAPI router lineup (`/api/v2/{reports,customers,transfers,bank,auth,daily}/*`) is complete for the read-side; legacy Flask continues to own write-side endpoints and HTML chrome.
 
 ### Definition of done per module migration PR
 
@@ -336,3 +338,14 @@ transfers + bank sync will be larger.
 - **2026-05-06** — All three open questions resolved by software lead:
   React frontend, JWT-embedded permissions with 30-min TTL, hard cutover
   for the SaaS. Status moved from DRAFT to ACCEPTED. Migration begins.
+- **2026-05-06** — Migration progress refresh: 27 PRs merged on
+  `pre-prod`. Module-status column added to the migration-order table.
+  Reports + Customers fully migrated; Transfers + BankSync + Auth +
+  DailyBook read-side scaffolding complete; write-side + Auth Flask
+  flip pending.
+- **2026-05-06** — Codebase tree note: legacy `app/` package was
+  renamed to `api/` early in PR 1 to avoid Python import collision
+  with `app.py` (Python imports the package first, which broke every
+  `from app import …`). All ADR references to `app/Modules/...`
+  should be read as `api/Modules/...` until the cleanup PR removes
+  the legacy module.

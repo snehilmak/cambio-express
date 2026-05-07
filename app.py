@@ -4,14 +4,23 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
 from calendar import monthrange, month_name
-import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile
+import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile, sys
 from email.message import EmailMessage
+
+# When run via `python app.py` the running module is `__main__`, not
+# `app`. Submodules in api/Modules/*/Models/__init__.py do
+# `from app import ...` (re-export shim during the strangler-fig
+# migration window). Without this aliasing, that import re-executes
+# this file as a fresh `app` module and re-enters the Service chain
+# circularly. Aliasing `__main__` to `app` makes those re-exports
+# resolve against the partial-but-progressing module instead.
+if __name__ == "__main__" and "app" not in sys.modules:
+    sys.modules["app"] = sys.modules[__name__]
 import stripe
 import click
 import pyotp
 import qrcode
 import qrcode.image.svg
-import io
 from slugify import slugify
 # WebAuthn / passkeys. The library ships both verify_* helpers and the
 # structs we need to build registration options. Lazy imports inside
@@ -893,30 +902,9 @@ class StoreOwnerLink(db.Model):
     linked_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
 
-class OwnerInviteCode(db.Model):
-    """LEGACY — replaced by `OwnerConnectCode` in May 2026.
-
-    The original flow was: store admin generates a code, owner redeems
-    it. That model accidentally let store admins remove their own owner
-    by deleting the StoreOwnerLink. The new flow inverts the direction:
-    owner generates the code, store admin redeems it, only the owner
-    can disconnect.
-
-    This class stays in the codebase only so legacy DBs that still have
-    the table can boot — `_drop_legacy_tables()` drops the underlying
-    table on next start. Once the table is gone everywhere this class
-    can be deleted too.
-    """
-    __tablename__ = "owner_invite_code"
-    id               = db.Column(db.Integer, primary_key=True)
-    store_id         = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
-    code             = db.Column(db.String(8), unique=True, nullable=False)
-    created_by       = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
-    expires_at       = db.Column(db.DateTime, nullable=False)
-    used_at          = db.Column(db.DateTime, nullable=True)
-    used_by_owner_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-
+# OwnerInviteCode (legacy, replaced by OwnerConnectCode in May 2026)
+# was removed in PR 35 cleanup. The `owner_invite_code` table stays in
+# `_DROPPED_TABLES` so legacy databases get the DROP TABLE on next boot.
 
 class OwnerConnectCode(db.Model):
     """Owner-generated invite code that a store admin redeems to link
@@ -1517,504 +1505,174 @@ ADDONS_CATALOG = {
 }
 
 def store_addon_keys(store):
-    """Return the set of add-on keys currently active for a store."""
-    if not store or not store.addons:
-        return set()
-    return {k.strip() for k in store.addons.split(",") if k.strip()}
+    """Return the set of add-on keys currently active for a store.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.store_addon_keys` (PR 48); this
+    Flask-scope wrapper exists for legacy callers."""
+    from api.Modules.Billing.Services import (
+        store_addon_keys as _svc_store_addon_keys,
+    )
+    return _svc_store_addon_keys(store)
 
 def store_has_paid_plan(store):
-    return bool(store) and store.plan in ("basic", "pro")
+    """Single source of truth lives in
+    `api.Modules.Billing.Services.store_has_paid_plan` (PR 48)."""
+    from api.Modules.Billing.Services import (
+        store_has_paid_plan as _svc_store_has_paid_plan,
+    )
+    return _svc_store_has_paid_plan(store)
 
 # ── Cancellation & data retention ────────────────────────────
 DATA_RETENTION_DAYS = 180  # 6 months
 
 def data_retention_days_left(store):
-    """Days until cancelled-store data is purged. Returns None if not scheduled."""
-    if not store or not store.data_retention_until:
-        return None
-    delta = store.data_retention_until - datetime.utcnow()
-    return max(0, delta.days)
+    """Days until cancelled-store data is purged. Returns None if not scheduled.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.data_retention_days_left` (PR 48)."""
+    from api.Modules.Billing.Services import (
+        data_retention_days_left as _svc_data_retention_days_left,
+    )
+    return _svc_data_retention_days_left(store)
 
 # ── Superadmin helpers ───────────────────────────────────────
 def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
     """Return MRR components and total from subscriber counts.
-
-    Yearly subscribers are amortised to /12. Prices: Basic $35/mo or
-    $350/yr; Pro $45/mo or $420/yr.
-    """
-    bm = basic_monthly * 35
-    by_ = round(basic_yearly * 350 / 12)
-    pm = pro_monthly * 45
-    py_ = round(pro_yearly * 420 / 12)
-    return bm, by_, pm, py_, bm + by_ + pm + py_
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.compute_mrr` (PR 75)."""
+    from api.Modules.Superadmin.Services import compute_mrr
+    return compute_mrr(basic_monthly, basic_yearly,
+                       pro_monthly, pro_yearly)
 
 def record_audit(action, target_type="", target_id="", details=""):
     """Append a row to the superadmin audit log.
 
-    Safe to call from any request — reads the current user from session so it
-    can stamp admin_name even if the User row is later deleted.
+    Safe to call from any request — reads the current user from
+    session so it can stamp admin_name even if the User row is
+    later deleted. Single source of truth lives in
+    `api.Modules.Audit.Services.record_superadmin_action` (PR 52).
     """
+    from api.Modules.Audit.Services import record_superadmin_action
     u = current_user()
     if not u:
         return
-    row = SuperadminAuditLog(
+    return record_superadmin_action(
+        db.session,
         admin_id=u.id,
         admin_name=u.full_name or u.username or "",
         action=action,
-        target_type=str(target_type)[:30],
-        target_id=str(target_id)[:60],
-        details=str(details)[:2000],
+        target_type=target_type,
+        target_id=target_id,
+        details=details,
     )
-    db.session.add(row)
-    # Intentionally no commit — caller commits as part of its own transaction.
 
 
 def record_op_audit(action, target_type, target_id, *, label="", summary=""):
-    """Append a row to the per-store operator audit log. Captures
-    user identity + role from session so the audit row stays useful
-    even after the User row is deleted.
+    """Append a row to the per-store operator audit log.
 
-    Targets:
-        'transfer' (delete-only — TransferAudit covers create/edit),
-        'daily_report', 'batch'
+    Captures user identity + role from session so the audit row
+    stays useful even after the User row is deleted. Single source
+    of truth lives in
+    `api.Modules.Audit.Services.record_operator_action` (PR 52).
 
-    Actions:
-        'create', 'update', 'delete', 'lock', 'unlock'
-
-    No commit — caller wraps in the same transaction as the mutation
-    so the audit row rolls back if the mutation fails.
+    Targets: 'transfer', 'daily_report', 'batch'.
+    Actions: 'create', 'update', 'delete', 'lock', 'unlock'.
     """
+    from api.Modules.Audit.Services import record_operator_action
     sid = session.get("store_id")
     if not sid:
         return
     u = current_user()
     if not u:
         return
-    row = OperatorAuditLog(
+    return record_operator_action(
+        db.session,
         store_id=sid,
         user_id=u.id,
-        user_name=(u.full_name or u.username or "")[:120],
-        user_role=str(u.role or "")[:20],
-        target_type=str(target_type)[:30],
-        target_id=str(target_id)[:60],
-        target_label=str(label)[:160],
-        action=str(action)[:30],
-        summary=str(summary)[:2000],
+        user_name=u.full_name or u.username or "",
+        user_role=u.role or "",
+        target_type=target_type,
+        target_id=target_id,
+        target_label=label,
+        action=action,
+        summary=summary,
     )
-    db.session.add(row)
 
 def store_feature_enabled(store, flag_key):
-    """Resolve a feature flag for a store: per-store override > global default > True."""
-    if store is not None:
-        override = StoreFeatureOverride.query.filter_by(
-            store_id=store.id, flag_key=flag_key
-        ).first()
-        if override is not None:
-            return bool(override.enabled)
-    flag = FeatureFlag.query.filter_by(key=flag_key).first()
-    if flag is None:
-        return True  # Unknown flag = allow by default (fail-open for undeclared features).
-    return bool(flag.enabled_by_default)
+    """Resolve a feature flag for a store: per-store override > global default > True.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.store_feature_enabled` (PR 49).
+    This Flask wrapper just hands the active session over so legacy
+    callers don't have to thread `db.session` through the call sites.
+    """
+    from api.Modules.Billing.Services import (
+        store_feature_enabled as _svc_store_feature_enabled,
+    )
+    return _svc_store_feature_enabled(db.session, store, flag_key)
 
 def stripe_health_check():
     """Return a dict describing the Stripe integration state.
 
-    Keys:
-      env: {secret_key, webhook_secret, basic_price_id, pro_price_id}  (booleans)
-      ok:  True if we reached Stripe and retrieved the account
-      account_email / account_id / mode: filled on success
-      price_ok: {basic, pro} — booleans, True if the ID resolved
-      error: str on failure
+    Single source of truth lives in
+    `api.Modules.Billing.Services.check_stripe_integration` (PR 53).
+    Used by the superadmin Overview tab to surface env-var
+    presence, account reachability, per-price validation, key-mode
+    pairing, and Financial Connections availability.
     """
-    env = {
-        "secret_key":            bool(os.environ.get("STRIPE_SECRET_KEY")),
-        "publishable_key":       bool(os.environ.get("STRIPE_PUBLISHABLE_KEY")),
-        "webhook_secret":        bool(os.environ.get("STRIPE_WEBHOOK_SECRET")),
-    }
-    prices = _stripe_price_ids()
-    env["basic_price_id"]        = bool(prices["basic"])
-    env["basic_yearly_price_id"] = bool(prices["basic_yearly"])
-    env["pro_price_id"]          = bool(prices["pro"])
-    env["pro_yearly_price_id"]   = bool(prices["pro_yearly"])
-    result = {"env": env, "ok": False, "error": "",
-              "price_ok": {"basic": False, "basic_yearly": False,
-                           "pro": False, "pro_yearly": False},
-              # Per-price error string from the Stripe API. Lets the
-              # superadmin overview show "No such price …" or "test/live
-              # mismatch" without us having to guess at the cause.
-              "price_errors": {"basic": "", "basic_yearly": "",
-                               "pro": "", "pro_yearly": ""},
-              "fc_ok": False, "fc_error": "",
-              "key_pair_match": True}
-    if not env["secret_key"]:
-        result["error"] = "STRIPE_SECRET_KEY is not configured."
-        return result
-    try:
-        acct = stripe.Account.retrieve()
-        result["ok"] = True
-        result["account_id"]    = acct.get("id", "")
-        result["account_email"] = acct.get("email", "")
-        # Test-mode keys start with sk_test_; live keys with sk_live_.
-        result["mode"] = "test" if (os.environ.get("STRIPE_SECRET_KEY", "").startswith("sk_test_")) else "live"
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {e}"
-        return result
-    for plan, pid in prices.items():
-        if not pid:
-            continue
-        try:
-            stripe.Price.retrieve(pid)
-            result["price_ok"][plan] = True
-        except Exception as e:
-            # Capture the message so the superadmin overview can show why
-            # the price didn't validate (most often: the price was made
-            # in live mode but the secret key is from test mode, or vice
-            # versa). Truncate to keep the badge readable.
-            msg = str(e)
-            result["price_errors"][plan] = msg[:160]
-    # Publishable / secret key pairing: pk_test_ must go with sk_test_
-    # and pk_live_ with sk_live_. Mismatched keys make Stripe.js fail
-    # silently in the browser ("No such session") which is hard to
-    # diagnose without this hint.
-    pk = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
-    if pk:
-        pk_mode = "live" if pk.startswith("pk_live_") else "test"
-        result["key_pair_match"] = (pk_mode == result.get("mode", ""))
-    # FC dry probe: try to create + immediately discard a Financial
-    # Connections session. Confirms the secret key has FC enabled and
-    # is paired correctly with the rest of the account.
-    if env["secret_key"]:
-        try:
-            stripe.financial_connections.Session.create(
-                account_holder={"type": "customer", "customer": "cus_test_invalid"},
-                permissions=["balances"],
-                filters={"countries": ["US"]},
-            )
-            # We don't actually expect this to succeed — the customer
-            # is fake. We're testing whether the API is reachable and
-            # the FC product is enabled on this account.
-            result["fc_ok"] = True
-        except stripe.error.InvalidRequestError as e:
-            # "No such customer" is the expected branch here — it means
-            # FC is enabled and our key is good; only the placeholder
-            # customer was rejected. Anything else is a real problem.
-            msg = str(e)
-            if "No such customer" in msg or "resource_missing" in msg:
-                result["fc_ok"] = True
-            else:
-                result["fc_error"] = msg[:160]
-        except Exception as e:
-            result["fc_error"] = f"{type(e).__name__}: {e}"[:160]
-    return result
+    from api.Modules.Billing.Services import check_stripe_integration
+    return check_stripe_integration()
 
 def active_announcements():
-    """Currently-visible announcements (active, within start/expiry window)."""
-    now = datetime.utcnow()
-    q = Announcement.query.filter_by(is_active=True)
-    rows = q.order_by(Announcement.created_at.desc()).all()
-    out = []
-    for a in rows:
-        if a.starts_at and a.starts_at > now:
-            continue
-        if a.expires_at and a.expires_at <= now:
-            continue
-        out.append(a)
-    return out
+    """Currently-visible announcements (active, within start/expiry window).
+
+    Single source of truth lives in
+    `api.Modules.Announcements.Services.active_announcements` (PR 55).
+    """
+    from api.Modules.Announcements.Services import active_announcements as _svc
+    return _svc(db.session)
 
 
 # ── Platform anomaly detector ──────────────────────────────────
 # Surfaced on the superadmin overview tab. Returns a list of
-# {kind, severity, store, description, href} dicts ranked by severity
-# so the most-urgent items float to the top. Each rule is independent
-# and side-effect free; `_compute_platform_anomalies()` is safe to
-# call on every page render — the underlying queries are GROUP BYs
-# over `transfer` / `daily_report`, both indexed on `store_id`.
-#
-# Severity scale:
-#   "high"   — money is moving in unusual ways; admin should look now
-#   "medium" — something has changed; worth asking the operator about
-#   "low"    — informational; user-facing copy: "FYI"
-#
-# The detector is intentionally narrow today — quiet stores and
-# big over/short variances. New rules go here as `_anomaly_*` helpers
-# called from `_compute_platform_anomalies` in priority order.
-_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS = 30   # store was "active" if it had transfers in this window
-_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS  = 3    # ...but none in the most recent N days
-_ANOMALY_QUIET_MIN_PRIOR_TRANSFERS  = 5    # ignore tiny stores so we don't yell about idle trials
-_ANOMALY_OVERSHORT_LOOKBACK_DAYS = 7
-_ANOMALY_OVERSHORT_MEDIUM_THRESHOLD = 100.0   # |over_short| >= this = medium
-_ANOMALY_OVERSHORT_HIGH_THRESHOLD   = 200.0   # |over_short| >= this = high
-
-
-def _anomaly_quiet_stores(today):
-    """Stores that USED to be active but have gone silent. Returns
-    a list of anomaly dicts. Only flags stores on a paid plan or
-    active trial — inactive / cancelled stores aren't anomalies."""
-    cutoff_active = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS)
-    cutoff_quiet  = today - timedelta(days=_ANOMALY_QUIET_LOOKBACK_QUIET_DAYS)
-    # Prior count + most-recent transfer date per store, in one query.
-    rows = (db.session.query(
-        Transfer.store_id,
-        db.func.count(Transfer.id),
-        db.func.max(Transfer.send_date),
-    ).filter(Transfer.send_date >= cutoff_active)
-     .group_by(Transfer.store_id).all())
-    out = []
-    if not rows:
-        return out
-    store_ids = [r[0] for r in rows]
-    stores = {s.id: s for s in
-              Store.query.filter(Store.id.in_(store_ids)).all()}
-    for sid, count, last_date in rows:
-        if int(count or 0) < _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS:
-            continue
-        if not last_date or last_date >= cutoff_quiet:
-            continue
-        store = stores.get(sid)
-        if not store or not store.is_active:
-            continue
-        if store.plan in ("inactive",):
-            continue
-        days_silent = (today - last_date).days
-        out.append({
-            "kind":        "quiet_store",
-            "severity":    "medium",
-            "store":       store,
-            "description": (f"{count} transfers in the last 30 days but "
-                            f"none in {days_silent} days — last on "
-                            f"{last_date.strftime('%b %d')}."),
-            "href":        url_for("superadmin_impersonate", store_id=store.id)
-                            if store else "",
-        })
-    return out
-
-
-def _anomaly_big_over_short(today):
-    """Daily reports in the last week with |over_short| over the
-    threshold. Big variance = either a counting mistake or something
-    worse; either way superadmin should know."""
-    cutoff = today - timedelta(days=_ANOMALY_OVERSHORT_LOOKBACK_DAYS)
-    rows = (DailyReport.query
-            .filter(DailyReport.report_date >= cutoff)
-            .filter(db.func.abs(DailyReport.over_short)
-                    >= _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD)
-            .order_by(db.func.abs(DailyReport.over_short).desc())
-            .limit(20).all())
-    if not rows:
-        return []
-    store_ids = list({r.store_id for r in rows})
-    stores = {s.id: s for s in
-              Store.query.filter(Store.id.in_(store_ids)).all()}
-    out = []
-    for r in rows:
-        store = stores.get(r.store_id)
-        if not store or not store.is_active:
-            continue
-        magnitude = abs(r.over_short)
-        severity = ("high" if magnitude >= _ANOMALY_OVERSHORT_HIGH_THRESHOLD
-                    else "medium")
-        direction = "over" if r.over_short > 0 else "short"
-        out.append({
-            "kind":        "big_over_short",
-            "severity":    severity,
-            "store":       store,
-            "description": (f"Daily book on {r.report_date.strftime('%b %d')}"
-                            f" closed ${magnitude:,.2f} {direction}."),
-            "href":        url_for("superadmin_impersonate", store_id=store.id)
-                            if store else "",
-        })
-    return out
+# Platform anomaly rules + the entry point now live in
+# `api.Modules.Superadmin.Services.anomalies` (PR 60). The
+# threshold constants are re-exported here so legacy callers
+# (any test that read them off the module, future rule tweaks)
+# keep their existing import paths during the migration window.
+from api.Modules.Superadmin.Services import (
+    ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD,
+    ANOMALY_OVERSHORT_LOOKBACK_DAYS as _ANOMALY_OVERSHORT_LOOKBACK_DAYS,
+    ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
+    ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS as _ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS,
+    ANOMALY_QUIET_LOOKBACK_QUIET_DAYS as _ANOMALY_QUIET_LOOKBACK_QUIET_DAYS,
+    ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS,
+)
 
 
 def _compute_platform_anomalies():
-    """Aggregate every anomaly rule into a single ranked list. Highest
-    severity first; within a severity tier, most-recent first. Capped
-    at 25 to keep the overview card scannable — if the queue runs
-    over, the truncation is a signal in itself."""
-    today = date.today()
-    anomalies = []
-    anomalies.extend(_anomaly_big_over_short(today))
-    anomalies.extend(_anomaly_quiet_stores(today))
-    severity_rank = {"high": 0, "medium": 1, "low": 2}
-    anomalies.sort(key=lambda a: severity_rank.get(a["severity"], 99))
-    return anomalies[:25]
+    """Aggregate every anomaly rule into a single ranked list.
+
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.compute_platform_anomalies`
+    (PR 60). The Service hands back the same dict shape the
+    superadmin Overview tab expects, so templates render
+    bit-for-bit identical badges.
+    """
+    from api.Modules.Superadmin.Services import compute_platform_anomalies
+    return compute_platform_anomalies(db.session)
 
 
 def _superadmin_dashboard_context():
     """Platform-wide BI metrics for the superadmin Dashboard.
-
-    Returns the kwargs dict that dashboard_superadmin.html expects: KPI
-    counters (with 30d deltas), 90-day signup trend split by direct vs
-    referral, plan distribution, MRR breakdown, referral leaderboard,
-    30-day transfer volume by company, and a merged activity feed.
-
-    MRR math is delegated to `_compute_mrr` so both pages stay in sync.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.superadmin_dashboard_context`
+    (PR 75). Returns the kwargs dict
+    `dashboard_superadmin.html` expects.
     """
-    now = datetime.utcnow()
-    today_d = date.today()
-    d30_ago = now - timedelta(days=30)
-    d60_ago = now - timedelta(days=60)
-    d90_ago = now - timedelta(days=90)
-
-    plan_rows = db.session.query(
-        Store.plan, Store.billing_cycle, db.func.count(Store.id)
-    ).group_by(Store.plan, Store.billing_cycle).all()
-
-    basic_monthly = basic_yearly = pro_monthly = pro_yearly = 0
-    trial_count = inactive_count = 0
-    for p, cycle, n in plan_rows:
-        if p == "basic":
-            if cycle == "yearly": basic_yearly += n
-            else:                 basic_monthly += n
-        elif p == "pro":
-            if cycle == "yearly": pro_yearly += n
-            else:                 pro_monthly += n
-        elif p == "trial":
-            trial_count += n
-        elif p == "inactive":
-            inactive_count += n
-
-    basic_count = basic_monthly + basic_yearly
-    pro_count   = pro_monthly + pro_yearly
-    paid_count  = basic_count + pro_count
-    total_stores = Store.query.count()
-    active_count = Store.query.filter_by(is_active=True).count()
-
-    (basic_monthly_mrr, basic_yearly_mrr,
-     pro_monthly_mrr,   pro_yearly_mrr,
-     estimated_mrr) = _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly)
-
-    new_stores_30d = Store.query.filter(Store.created_at >= d30_ago).count()
-    new_stores_prev30 = Store.query.filter(
-        Store.created_at >= d60_ago, Store.created_at < d30_ago
-    ).count()
-    new_stores_delta = new_stores_30d - new_stores_prev30
-
-    churn_30d = Store.query.filter(
-        Store.canceled_at.isnot(None), Store.canceled_at >= d30_ago
-    ).count()
-    churn_prev30 = Store.query.filter(
-        Store.canceled_at.isnot(None),
-        Store.canceled_at >= d60_ago, Store.canceled_at < d30_ago
-    ).count()
-    churn_delta = churn_30d - churn_prev30
-
-    # 90-day daily signup series, split by direct vs referral. SQLite's
-    # date(col) returns an ISO string, Postgres' returns a date — normalize.
-    signup_rows = db.session.query(
-        db.func.date(Store.created_at).label("d"),
-        db.func.sum(case((Store.referred_by_code_id.is_(None), 1), else_=0)).label("direct"),
-        db.func.sum(case((Store.referred_by_code_id.isnot(None), 1), else_=0)).label("referral"),
-    ).filter(Store.created_at >= d90_ago).group_by("d").all()
-
-    by_day = {}
-    for d_val, direct, referral in signup_rows:
-        key = d_val.isoformat() if hasattr(d_val, "isoformat") else str(d_val)
-        by_day[key] = (int(direct or 0), int(referral or 0))
-
-    signup_labels, signup_direct, signup_referral = [], [], []
-    for i in range(89, -1, -1):
-        d = today_d - timedelta(days=i)
-        key = d.isoformat()
-        direct, referral = by_day.get(key, (0, 0))
-        signup_labels.append(key)
-        signup_direct.append(direct)
-        signup_referral.append(referral)
-
-    plan_dist = [
-        {"label": "Trial",    "count": trial_count},
-        {"label": "Basic",    "count": basic_count},
-        {"label": "Pro",      "count": pro_count},
-        {"label": "Inactive", "count": inactive_count},
-    ]
-
-    top_referrers_raw = (
-        db.session.query(ReferralCode, Store)
-        .join(Store, ReferralCode.owner_store_id == Store.id)
-        .filter(ReferralCode.redeemed_count > 0)
-        .order_by(ReferralCode.redeemed_count.desc())
-        .limit(5).all()
+    from api.Modules.Superadmin.Services import (
+        superadmin_dashboard_context,
     )
-    top_referrers = [
-        {
-            "store_name": s.name,
-            "slug": s.slug,
-            "code": rc.code,
-            "redeemed": rc.redeemed_count,
-            "reward_total_cents": rc.redeemed_count * rc.reward_self_cents,
-        }
-        for rc, s in top_referrers_raw
-    ]
-    referral_signups = Store.query.filter(Store.referred_by_code_id.isnot(None)).count()
-    direct_signups = total_stores - referral_signups
-
-    volume_rows = (
-        db.session.query(
-            Transfer.company,
-            db.func.count(Transfer.id),
-            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        )
-        .filter(Transfer.created_at >= d30_ago,
-                Transfer.status.notin_(["Canceled", "Rejected"]))
-        .group_by(Transfer.company)
-        .order_by(db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc())
-        .limit(6).all()
-    )
-    volume_by_company = [
-        {"company": co or "—", "count": int(cnt), "total": float(tot or 0)}
-        for co, cnt, tot in volume_rows
-    ]
-    total_volume_30d = sum(v["total"] for v in volume_by_company)
-    total_transfers_30d = sum(v["count"] for v in volume_by_company)
-
-    recent_signups = Store.query.order_by(Store.created_at.desc()).limit(10).all()
-    recent_cancels = (Store.query
-        .filter(Store.canceled_at.isnot(None))
-        .order_by(Store.canceled_at.desc()).limit(10).all())
-    activity = []
-    for s in recent_signups:
-        activity.append({
-            "when": s.created_at,
-            "kind": "signup",
-            "store_name": s.name,
-            "detail": "via referral" if s.referred_by_code_id else "direct signup",
-            "plan": s.plan,
-        })
-    for s in recent_cancels:
-        activity.append({
-            "when": s.canceled_at,
-            "kind": "cancel",
-            "store_name": s.name,
-            "detail": "canceled subscription",
-            "plan": s.plan,
-        })
-    activity.sort(key=lambda a: a["when"] or datetime.min, reverse=True)
-    activity = activity[:12]
-
-    stores = Store.query.order_by(Store.created_at.desc()).all()
-
-    return dict(
-        total_stores=total_stores, active_count=active_count,
-        trial_count=trial_count, paid_count=paid_count,
-        estimated_mrr=estimated_mrr, inactive_count=inactive_count,
-        new_stores_30d=new_stores_30d, new_stores_delta=new_stores_delta,
-        churn_30d=churn_30d, churn_delta=churn_delta,
-        basic_monthly=basic_monthly, basic_yearly=basic_yearly,
-        pro_monthly=pro_monthly, pro_yearly=pro_yearly,
-        basic_monthly_mrr=basic_monthly_mrr, basic_yearly_mrr=basic_yearly_mrr,
-        pro_monthly_mrr=pro_monthly_mrr, pro_yearly_mrr=pro_yearly_mrr,
-        basic_count=basic_count, pro_count=pro_count,
-        signup_labels=signup_labels, signup_direct=signup_direct,
-        signup_referral=signup_referral,
-        plan_dist=plan_dist,
-        volume_by_company=volume_by_company,
-        total_volume_30d=total_volume_30d,
-        total_transfers_30d=total_transfers_30d,
-        top_referrers=top_referrers,
-        direct_signups=direct_signups, referral_signups=referral_signups,
-        activity=activity,
-        stores=stores,
-    )
+    return superadmin_dashboard_context(db.session)
 
 def login_required(f):
     @wraps(f)
@@ -2099,23 +1757,16 @@ def get_trial_status(store):
     """Return trial status string for the given store.
 
     Returns: "exempt" | "active" | "expiring_soon" | "grace" | "expired"
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.get_trial_status` (PR 47); this
+    Flask-scope wrapper is here for the dozen+ legacy callers that
+    use the bare `get_trial_status(store)` shape.
     """
-    if store is None:
-        return "exempt"
-    if store.plan in ("basic", "pro"):
-        return "exempt"
-    if store.plan == "inactive":
-        return "expired"
-    if store.trial_ends_at is None:
-        return "exempt"
-    now = datetime.utcnow()
-    if store.grace_ends_at is not None and now >= store.grace_ends_at:
-        return "expired"
-    if now >= store.trial_ends_at:
-        return "grace"
-    if now >= store.trial_ends_at - timedelta(days=3):
-        return "expiring_soon"
-    return "active"
+    from api.Modules.Billing.Services import (
+        get_trial_status as _svc_get_trial_status,
+    )
+    return _svc_get_trial_status(store)
 
 @app.context_processor
 def inject_trial_context():
@@ -2223,172 +1874,77 @@ BANK_SYNC_COOLDOWN_MINUTES = 15
 MAX_BANK_SYNCS_PER_DAY = 5
 # How many days back to pull on initial connect. Per-product
 # decision: yesterday + today only — minimal cost, still catches
-# any same-day deposits that haven't been entered into the daily book.
-INITIAL_SYNC_DAYS_BACK = 1
+# any same-day deposits that haven't been entered into the daily
+# book. The constant now lives in
+# api.Modules.BankSync.Services.sync (PR 72); re-exported here
+# so legacy callers keep their import shape during migration.
+from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 
 def stripe_is_configured():
-    """We can only start an FC session if Stripe is wired up."""
-    return bool(os.environ.get("STRIPE_SECRET_KEY"))
+    """We can only start an FC session if Stripe is wired up.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_is_configured` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_is_configured as _svc
+    return _svc()
 
 def stripe_publishable_key():
     """The pk_test_/pk_live_ key the browser uses to load Stripe.js.
-    Required for the FC connect modal — Stripe.js can't initialize
-    without it."""
-    return os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_publishable_key` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_publishable_key as _svc
+    return _svc()
 
 def stripe_mode():
-    """'live' if STRIPE_SECRET_KEY starts with sk_live_, else 'test'.
-    Empty string if no key is set."""
-    sk = os.environ.get("STRIPE_SECRET_KEY", "")
-    if not sk:
-        return ""
-    return "live" if sk.startswith("sk_live_") else "test"
+    """'live' / 'test' / '' depending on STRIPE_SECRET_KEY.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.stripe_mode` (PR 54).
+    """
+    from api.Modules.Billing.Services import stripe_mode as _svc
+    return _svc()
 
 def _stripe_price_ids():
-    """Resolve {plan_key: price_id} for all four plan tiers.
-
-    Reads the four STRIPE_*_PRICE_ID env vars and returns a dict keyed
-    by the internal plan slug (basic / basic_yearly / pro / pro_yearly).
-    Empty string for unset env vars matches the get-or-default pattern
-    used at every prior call site. Centralised here so a future tier
-    change touches the env list once instead of grep-replacing across
-    health-check, subscribe, and webhook handlers.
-    """
-    return {
-        "basic":        os.environ.get("STRIPE_BASIC_PRICE_ID", ""),
-        "basic_yearly": os.environ.get("STRIPE_BASIC_YEARLY_PRICE_ID", ""),
-        "pro":          os.environ.get("STRIPE_PRO_PRICE_ID", ""),
-        "pro_yearly":   os.environ.get("STRIPE_PRO_YEARLY_PRICE_ID", ""),
-    }
+    """Resolve {plan_key: price_id} for all four plan tiers. Single
+    source of truth lives in
+    `api.Modules.Billing.Services.resolve_price_ids` (PR 43); this
+    Flask-scope wrapper exists so the legacy callers (subscribe page,
+    webhook handler, health check) keep their existing call shape."""
+    from api.Modules.Billing.Services import resolve_price_ids
+    return resolve_price_ids()
 
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
 
-    Stripe FC requires an `account_holder={"type":"customer", ...}` on
-    every Financial Connections session — so even trial / inactive stores
-    that haven't paid yet need a customer record to link a bank account.
-    We reuse the existing billing customer when present.
-
-    Self-heals when the cached id was created in a different Stripe mode
-    (e.g. test → live migration). On "No such customer" the cached id is
-    cleared and a fresh customer is minted in the current mode. Customer
-    retrieves are not metered, so the verify-then-use cost is effectively
-    zero per connect attempt.
+    Single source of truth lives in
+    `api.Modules.Billing.Services.ensure_stripe_customer` (PR 56).
+    Self-heals when the cached id was created in a different
+    Stripe mode (e.g. test → live migration).
     """
-    if store.stripe_customer_id:
-        try:
-            stripe.Customer.retrieve(store.stripe_customer_id)
-            return store.stripe_customer_id
-        except stripe.error.InvalidRequestError as e:
-            msg = str(e)
-            if "No such customer" in msg or "resource_missing" in msg:
-                app.logger.warning(
-                    f"Stripe customer {store.stripe_customer_id} not found "
-                    f"in current mode for store {store.id}; minting fresh.")
-                store.stripe_customer_id = ""
-            else:
-                raise
-    try:
-        cust = stripe.Customer.create(
-            email=(store.email or None),
-            name=store.name,
-            metadata={"store_id": str(store.id)},
-        )
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe customer create failed for store {store.id}: {e}")
-        raise
-    store.stripe_customer_id = cust.id
-    db.session.commit()
-    return cust.id
+    from api.Modules.Billing.Services import ensure_stripe_customer as _svc
+    return _svc(db.session, store)
 
 def _upsert_fc_account(store_id, api_obj):
-    """Persist (or refresh) a FinancialConnectionsAccount into our cache."""
-    acct_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
-    existing = StripeBankAccount.query.filter_by(stripe_account_id=acct_id).first()
-    row = existing or StripeBankAccount(store_id=store_id, stripe_account_id=acct_id)
-    institution = api_obj.get("institution_name") if isinstance(api_obj, dict) else getattr(api_obj, "institution_name", "")
-    display     = api_obj.get("display_name")     if isinstance(api_obj, dict) else getattr(api_obj, "display_name", "")
-    last4       = api_obj.get("last4")            if isinstance(api_obj, dict) else getattr(api_obj, "last4", "")
-    category    = api_obj.get("category")         if isinstance(api_obj, dict) else getattr(api_obj, "category", "")
-    subcategory = api_obj.get("subcategory")      if isinstance(api_obj, dict) else getattr(api_obj, "subcategory", "")
-    row.institution_name = institution or row.institution_name or ""
-    row.display_name     = display or row.display_name or ""
-    row.last4            = last4 or row.last4 or ""
-    row.category         = category or row.category or ""
-    row.subcategory      = subcategory or row.subcategory or ""
-    # Balance payload lives inside the "balance" field; may be missing if
-    # the "balances" permission wasn't granted, or null if Stripe's
-    # async balance fetch hasn't completed yet (common right after
-    # connect when prefetch wasn't requested).
-    bal = api_obj.get("balance") if isinstance(api_obj, dict) else getattr(api_obj, "balance", None)
-    if bal:
-        current = bal.get("current") if isinstance(bal, dict) else getattr(bal, "current", None)
-        as_of   = bal.get("as_of")   if isinstance(bal, dict) else getattr(bal, "as_of", None)
-        # Stripe returns balances as a dict {"usd": <cents>}; we pick
-        # whatever matches the account currency, falling back to the
-        # first value. Guard against a missing/empty `current` so we
-        # don't crash with StopIteration / TypeError on partial responses.
-        cents = 0
-        if isinstance(current, dict) and current:
-            cents = current.get(row.currency or "usd") or next(iter(current.values()), 0)
-        elif current is not None:
-            cents = current
-        try:
-            row.last_balance_cents = int(cents or 0)
-        except (TypeError, ValueError):
-            row.last_balance_cents = 0
-        if as_of:
-            try:
-                row.last_balance_as_of = datetime.utcfromtimestamp(int(as_of))
-            except (TypeError, ValueError):
-                pass
-    row.enabled = True
-    row.disconnected_at = None
-    if existing is None:
-        db.session.add(row)
-    db.session.flush()
-    return row
+    """Persist (or refresh) a FinancialConnectionsAccount into our
+    cache. Single source of truth lives in
+    `api.Modules.BankSync.Services.upsert_fc_account` (PR 73).
+    """
+    from api.Modules.BankSync.Services import upsert_fc_account
+    return upsert_fc_account(db.session, store_id, api_obj)
+
 
 def refresh_bank_balances(store):
     """Pull fresh balances for every enabled account on the store.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.refresh_bank_balances` (PR 73).
 
-    Stripe requires the `balances` feature to be refreshed explicitly when
-    the cached value is stale; we call Account.refresh_account(
-    features=["balance"]) and then retrieve to capture the new snapshot.
-
-    Returns (updated_count, error_message_or_empty). The caller can
-    surface error_message in a flash so the operator sees *why* a
-    refresh failed without grepping the server log.
+    Returns `(updated_count, error_message_or_empty)`.
     """
-    if not stripe_is_configured():
-        return 0, "Stripe is not configured."
-    updated = 0
-    last_error = ""
-    for acct in StripeBankAccount.query.filter_by(store_id=store.id, enabled=True).all():
-        try:
-            # SDK note: the operation is `refresh_account` (not `refresh`).
-            # `refresh` is the inherited APIResource instance method that
-            # only re-fetches local state; calling it with kwargs raises
-            # "got an unexpected keyword argument 'features'".
-            stripe.financial_connections.Account.refresh_account(
-                acct.stripe_account_id, features=["balance"],
-            )
-            api_obj = stripe.financial_connections.Account.retrieve(acct.stripe_account_id)
-            _upsert_fc_account(store.id, api_obj)
-            updated += 1
-        except stripe.error.StripeError as e:
-            msg = e.user_message or str(e)
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
-            app.logger.warning(f"FC refresh failed for {acct.stripe_account_id}: {e}")
-        except Exception as e:
-            # Anything not a StripeError — usually a response-shape mismatch
-            # in _upsert_fc_account or a network blip. Logged with full
-            # traceback so the cause is visible in Render logs.
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
-            app.logger.exception(f"FC refresh crashed for {acct.stripe_account_id}")
-    if updated:
-        db.session.commit()
-    return updated, last_error
+    from api.Modules.BankSync.Services import refresh_bank_balances
+    return refresh_bank_balances(db.session, store)
 
 def _can_sync_bank_transactions(store, now=None):
     """Rate-limit gate for manual bank-transaction syncs.
@@ -2429,37 +1985,13 @@ def _record_bank_sync(store, now=None):
 
 def _upsert_bank_transaction(store_id, account_row, api_obj):
     """Persist (or refresh) a Stripe FC Transaction into our cache.
-    Idempotent on stripe_transaction_id."""
-    txn_id = api_obj.get("id") if isinstance(api_obj, dict) else api_obj.id
-    existing = BankTransaction.query.filter_by(stripe_transaction_id=txn_id).first()
-    row = existing or BankTransaction(
-        store_id=store_id,
-        stripe_bank_account_id=account_row.id,
-        stripe_transaction_id=txn_id,
-        amount_cents=0,
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.upsert_bank_transaction` (PR 72).
+    """
+    from api.Modules.BankSync.Services import upsert_bank_transaction
+    return upsert_bank_transaction(
+        db.session, store_id, account_row, api_obj,
     )
-    amt = api_obj.get("amount") if isinstance(api_obj, dict) else getattr(api_obj, "amount", 0)
-    cur = api_obj.get("currency") if isinstance(api_obj, dict) else getattr(api_obj, "currency", "usd")
-    desc = api_obj.get("description") if isinstance(api_obj, dict) else getattr(api_obj, "description", "")
-    status = api_obj.get("status") if isinstance(api_obj, dict) else getattr(api_obj, "status", "posted")
-    transacted_at = (api_obj.get("transacted_at") if isinstance(api_obj, dict)
-                     else getattr(api_obj, "transacted_at", None))
-    try:
-        row.amount_cents = int(amt or 0)
-    except (TypeError, ValueError):
-        row.amount_cents = 0
-    row.currency = (cur or "usd").lower()
-    row.description = (desc or "")[:500]
-    row.status = status or "posted"
-    if transacted_at:
-        try:
-            row.posted_at = datetime.utcfromtimestamp(int(transacted_at))
-        except (TypeError, ValueError):
-            pass
-    if existing is None:
-        db.session.add(row)
-    db.session.flush()
-    return row, (existing is None)
 
 # ── Bank reconcile + rules ──────────────────────────────────
 # Categories that can appear on a BankTransaction.category_slug. The
@@ -2468,23 +2000,15 @@ def _upsert_bank_transaction(store_id, account_row, api_obj):
 # where the transaction is reconciled but shouldn't double-count in
 # the daily book — internal transfers between own accounts, MT ACH
 # withdrawals that already match an ACHBatch, or "ignore" for noise.
-BANK_CATEGORIES_NON_POSTING = {
-    "internal_transfer":  "Internal transfer",
-    "mt_ach_intermex":    "MT ACH — Intermex",
-    "mt_ach_maxi":        "MT ACH — Maxi",
-    "mt_ach_barri":       "MT ACH — Barri",
-    # Bank-charge slugs are dynamically per-account: bank_charge_<last4>.
-    # All bank-charge variants roll up to MonthlyFinancial.bank_charges_total
-    # via a prefix match in _bank_charges_for_month, so totals are
-    # unaffected — only per-row labelling reflects the account each
-    # charge hit. Static 210/230 entries below are kept ONLY so the
-    # operator dropdown for Nizari stores still surfaces them; future
-    # banks get their valid slugs added dynamically by
-    # _bank_category_groups via the store's connected accounts.
-    "bank_charge_210":    "Bank charge — ••0210",
-    "bank_charge_230":    "Bank charge — ••0230 (MSB)",
-    "ignore":             "Ignore (don't reconcile)",
-}
+# Static bank category dict + the label / validation / grouping
+# helpers now live in api.Modules.BankSync.Services.categories
+# (PR 69). The constant is re-exported here so existing call sites
+# that import it by name (rules engine, categorize service, the
+# operator categorisation form) keep their shape during the
+# migration window.
+from api.Modules.BankSync.Services import (
+    BANK_CATEGORIES_NON_POSTING,
+)
 
 # Built-in (platform-managed) rules that fire after user-defined rules
 # don't match. Used for transaction descriptions that are STANDARD across
@@ -2495,25 +2019,16 @@ BANK_CATEGORIES_NON_POSTING = {
 #
 # Each entry: (description_substring, account_last4_or_None, target_kind).
 # An empty `account_last4` matches any account.
-_BUILTIN_BANK_RULES = [
-    # Nizari Progressive Federal Credit Union.
-    # Most fees can hit any of the operator's accounts; one (RDC fee)
-    # is MSB-account-only. Targets use the sentinel
-    # `bank_charge_per_account`, which the matcher resolves to
-    # `bank_charge_<last4>` based on the actual account each charge
-    # lands on. This way:
-    #  - Nizari (2 accounts) splits per-account in the UI.
-    #  - A bank with 1 account just gets one bank_charge_<last4> slug,
-    #    no artificial split.
-    # All resulting slugs roll up to the consolidated bank_charges_total
-    # P&L line via the prefix-match in _bank_charges_for_month.
-    ("REMOTE DEPOSIT FEE", "0230", "bank_charge_per_account"),
-    ("BELOW AVG BAL FEE",  "",     "bank_charge_per_account"),
-    ("CHECK DEPOSIT FEE",  "",     "bank_charge_per_account"),
-    ("MSB MONTHLY FEE",    "",     "bank_charge_per_account"),
-    ("MONTHLY SERVICE FEE","",     "bank_charge_per_account"),
-    ("MSB W/D FEE",        "",     "bank_charge_per_account"),
-]
+# Built-in bank rules + the bank-charge slug predicate live in
+# api.Modules.BankSync.Services.builtin_rules (PR 58). The legacy
+# names below are kept as thin re-exports so existing call sites
+# (categorization sweep, rule-conflict UI) keep their shape during
+# the strangler-fig migration window.
+from api.Modules.BankSync.Services import (
+    BUILTIN_BANK_RULES as _BUILTIN_BANK_RULES,
+    is_bank_charge_slug as _is_bank_charge_slug,
+    match_builtin_bank_rule as _match_builtin_bank_rule,
+)
 
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
 # Reserved for future non-bank-charge auto-feeds (e.g. credit-card
@@ -2523,440 +2038,126 @@ _BUILTIN_BANK_RULES = [
 # — they don't need explicit registry entries.
 _BANK_CATEGORY_PL_FIELD = {}
 
-def _match_builtin_bank_rule(txn, account):
-    """Return target_kind from _BUILTIN_BANK_RULES that matches the
-    transaction, or None if nothing matches."""
-    desc = (txn.description or "").upper()
-    last4 = (account.last4 or "") if account else ""
-    for substring, want_last4, target in _BUILTIN_BANK_RULES:
-        if substring not in desc:
-            continue
-        if want_last4 and last4 != want_last4:
-            continue
-        # Sentinel: resolve to a per-account bank-charge slug so the
-        # operator sees which account each charge hit. Strips leading
-        # zeros from last4 to match the historic 210/230 convention
-        # (last4 "0210" → slug "bank_charge_210"). If somehow no last4
-        # is available, the built-in skips — the legacy generic
-        # `bank_charge` slug is retired, so we'd rather not fire than
-        # tag with a phantom slug.
-        if target == "bank_charge_per_account":
-            if not last4:
-                return None
-            stripped = last4.lstrip("0") or last4
-            return f"bank_charge_{stripped}"
-        return target
-    return None
-
-
-def _is_bank_charge_slug(slug):
-    """True for any bank-charge category slug — generic or per-account
-    (bank_charge_210, bank_charge_230, or any future bank_charge_<last4>).
-    Single point of truth for "is this a bank-charge slug" used by the
-    P&L feed and the breakdown helper."""
-    if not slug:
-        return False
-    return slug == "bank_charge" or slug.startswith("bank_charge_")
-
 
 def _bank_category_label(slug):
-    """Operator-friendly label for a category slug."""
-    if not slug:
-        return "Uncategorized"
-    if slug in BANK_CATEGORIES_NON_POSTING:
-        return BANK_CATEGORIES_NON_POSTING[slug]
-    # Dynamic per-account bank-charge slug ("bank_charge_<last4>" for
-    # any last4 not in the static dict above) — render as
-    # "Bank charge — ••<last4>" so the UI doesn't show the raw slug.
-    if slug.startswith("bank_charge_"):
-        suffix = slug[len("bank_charge_"):]
-        if suffix:
-            return f"Bank charge — ••{suffix}"
-    if slug in _LINE_ITEM_KINDS:
-        return _LINE_ITEM_KINDS[slug][1].title()
-    return slug
+    """Operator-friendly label for a category slug. Single source
+    of truth lives in
+    `api.Modules.BankSync.Services.bank_category_label` (PR 69).
+    """
+    from api.Modules.BankSync.Services import bank_category_label
+    return bank_category_label(slug)
+
 
 def _is_valid_bank_category(slug, store_id):
-    """True if `slug` is an acceptable target for a manual bank-
-    transaction tag or a BankRule. Accepts every slug surfaced in
-    _bank_category_groups(store_id), including dynamic
-    bank_charge_<last4> for the store's connected accounts."""
-    if not slug:
-        return False
-    if slug in _LINE_ITEM_KINDS or slug in BANK_CATEGORIES_NON_POSTING:
-        return True
-    if slug.startswith("bank_charge_"):
-        last4 = slug[len("bank_charge_"):]
-        if not last4:
-            return False
-        for a in StripeBankAccount.query.filter_by(store_id=store_id).all():
-            if not a.last4:
-                continue
-            stripped = a.last4.lstrip("0") or a.last4
-            if last4 == stripped or last4 == a.last4:
-                return True
-    return False
+    """True iff `slug` is an acceptable target for a manual bank-
+    transaction tag or a BankRule. Single source of truth lives in
+    `api.Modules.BankSync.Services.is_valid_bank_category` (PR 69).
+    """
+    from api.Modules.BankSync.Services import is_valid_bank_category
+    return is_valid_bank_category(db.session, slug, store_id)
 
 
 def _bank_category_groups(store_id=None):
-    """Grouped (group_label, [(slug, label), ...]) tuples for dropdowns.
-
-    The two groups stay separate in the UI so operators don't confuse
-    auto-posting kinds with non-posting tags.
-
-    When `store_id` is given, the "Other" group is augmented with a
-    per-account `bank_charge_<last4>` entry for every connected
-    account that isn't already in the static dict — so single-account
-    or non-Nizari banks see a relevant bank-charge option.
+    """Grouped dropdown options for the bank-category picker.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_category_groups` (PR 69).
     """
-    daily = [(slug, meta[1].title()) for slug, meta in _LINE_ITEM_KINDS.items()]
-    other = dict(BANK_CATEGORIES_NON_POSTING)  # copy so we can extend
-    if store_id is not None:
-        accounts = StripeBankAccount.query.filter_by(store_id=store_id).all()
-        for a in accounts:
-            if not a.last4:
-                continue
-            stripped = a.last4.lstrip("0") or a.last4
-            slug = f"bank_charge_{stripped}"
-            if slug not in other:
-                other[slug] = f"Bank charge — ••{a.last4}"
-    return [
-        ("Daily-book line items", daily),
-        ("Other (no daily-book impact)", list(other.items())),
-    ]
+    from api.Modules.BankSync.Services import bank_category_groups
+    return bank_category_groups(db.session, store_id)
+
 
 def _is_daily_book_kind(slug):
-    return slug in _LINE_ITEM_KINDS
+    """True iff `slug` is a registered DailyBook line-item kind.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.is_daily_book_kind` (PR 69).
+    """
+    from api.Modules.BankSync.Services import is_daily_book_kind
+    return is_daily_book_kind(slug)
 
 def _bank_rule_matches(rule, txn):
-    """True if every set condition on the rule matches the transaction.
-    Conditions left unset are treated as 'any'.
+    """True iff every set condition on `rule` matches `txn`.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.rule_matches` (PR 70)."""
+    from api.Modules.BankSync.Services import rule_matches
+    return rule_matches(rule, txn)
 
-    `rule.enabled` is None on a transient (un-persisted) row because
-    SQLAlchemy column defaults only fire on insert; treat None as True
-    so callers can match against a freshly-constructed rule.
-    """
-    if rule.enabled is False:
-        return False
-    # Description match
-    if rule.desc_match_type and rule.desc_match_value:
-        desc = (txn.description or "")
-        val = rule.desc_match_value
-        mt = rule.desc_match_type
-        if mt == "regex":
-            try:
-                if not re.search(val, desc, re.IGNORECASE):
-                    return False
-            except re.error:
-                return False
-        else:
-            d = desc.lower()
-            v = val.lower()
-            if mt == "contains" and v not in d:
-                return False
-            if mt == "starts_with" and not d.startswith(v):
-                return False
-            if mt == "equals" and d != v:
-                return False
-    # Sign filter
-    if rule.sign_filter == "credit" and (txn.amount_cents or 0) < 0:
-        return False
-    if rule.sign_filter == "debit" and (txn.amount_cents or 0) >= 0:
-        return False
-    # Amount range — both bounds use absolute cents
-    abs_cents = abs(txn.amount_cents or 0)
-    if rule.amount_min_cents is not None and abs_cents < rule.amount_min_cents:
-        return False
-    if rule.amount_max_cents is not None and abs_cents > rule.amount_max_cents:
-        return False
-    # Account filter
-    if rule.account_filter_id and rule.account_filter_id != txn.stripe_bank_account_id:
-        return False
-    return True
 
 def _find_matching_rule(store_id, txn):
-    """First enabled rule (lowest priority first) that matches the
-    transaction. None if no rule applies."""
-    rules = (BankRule.query
-             .filter_by(store_id=store_id, enabled=True)
-             .order_by(BankRule.priority.asc(), BankRule.id.asc()).all())
-    for rule in rules:
-        if _bank_rule_matches(rule, txn):
-            return rule
-    return None
+    """First enabled rule (lowest priority first) that matches.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.find_matching_rule` (PR 70)."""
+    from api.Modules.BankSync.Services import find_matching_rule
+    return find_matching_rule(db.session, store_id, txn)
 
 def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
-    """Run the rule chain (operator BankRule → built-in) against an
-    uncategorised bank transaction and tag it. Returns True if the
-    row was tagged.
-
-    Idempotent: rows that already have a category_slug are left
-    untouched, so operator overrides survive.
-
-    `allow_auto_post` controls whether a matched operator rule with
-    auto_post=True also creates a DailyLineItem. Pass True for
-    freshly-inserted rows (operator's expressed intent on new data),
-    False when backfilling historical rows (the daily book may
-    already be reconciled — let the operator post manually).
-    Built-in rules never post to the daily book regardless.
-
-    Caller commits.
+    """Run the rule chain (operator BankRule → built-in) against
+    an uncategorised bank transaction and tag it. Single source of
+    truth lives in
+    `api.Modules.BankSync.Services.apply_rules_to_uncategorized_row`
+    (PR 71).
     """
-    if row.category_slug:
-        return False
-    rule = _find_matching_rule(row.store_id, row)
-    if rule is not None:
-        _categorize_bank_transaction(
-            row, rule.target_kind, rule=rule,
-            post_to_daily=(rule.auto_post and allow_auto_post))
-        return True
-    builtin = _match_builtin_bank_rule(row, account)
-    if builtin:
-        _categorize_bank_transaction(
-            row, builtin, rule=None, post_to_daily=False)
-        return True
-    return False
+    from api.Modules.BankSync.Services import (
+        apply_rules_to_uncategorized_row,
+    )
+    return apply_rules_to_uncategorized_row(
+        db.session, row, account, allow_auto_post=allow_auto_post,
+    )
 
 
 def _categorize_bank_transaction(txn, target_kind, rule=None,
                                   post_to_daily=True, report_date=None):
-    """Set the transaction's category. If target_kind is a daily-book
-    kind AND post_to_daily is True, also create a linked DailyLineItem.
-    Caller commits.
+    """Flask-side adapter for the categorize Service. Caller commits.
 
-    `report_date` (optional, datetime.date) overrides the daily-book
-    line's date. Used for the RDC case where the bank posts the
-    transaction next morning but the cash-handling event belongs on
-    the previous day's book. When None, defaults to the transaction's
-    posted_at date.
-
-    Idempotent: re-categorizing removes the previously-linked
-    DailyLineItem (if any) before creating a fresh one.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.categorize_transaction` (PR 36);
+    this wrapper forwards `db.session` + the legacy
+    `_is_daily_book_kind` predicate so the existing call sites keep
+    their shape during the migration window.
     """
-    # Drop any prior auto-created DailyLineItem.
-    if txn.daily_line_item_id:
-        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
-        if old is not None:
-            db.session.delete(old)
-        txn.daily_line_item_id = None
-
-    txn.category_slug = target_kind or ""
-    txn.matched_rule_id = rule.id if rule else None
-
-    if rule is not None:
-        rule.match_count = (rule.match_count or 0) + 1
-        rule.last_matched_at = datetime.utcnow()
-
-    if post_to_daily and target_kind and _is_daily_book_kind(target_kind):
-        when = txn.posted_at or datetime.utcnow()
-        line_date = report_date if report_date is not None else when.date()
-        line = DailyLineItem(
-            store_id=txn.store_id,
-            report_date=line_date,
-            kind=target_kind,
-            at_time=when.time(),
-            # The daily-book model expects positive amounts. We store
-            # the absolute value; the kind itself encodes whether it's
-            # an inflow or outflow for the daily report.
-            amount=abs(float(txn.amount_cents or 0) / 100.0),
-            note=(txn.description or "")[:120],
-        )
-        db.session.add(line)
-        db.session.flush()
-        txn.daily_line_item_id = line.id
+    from api.Modules.BankSync.Services import categorize_transaction
+    return categorize_transaction(
+        db.session, txn, target_kind,
+        rule=rule, post_to_daily=post_to_daily,
+        report_date=report_date,
+        is_daily_book_kind=_is_daily_book_kind,
+    )
 
 def _uncategorize_bank_transaction(txn):
-    """Clear category + delete linked DailyLineItem if any. Caller commits."""
-    if txn.daily_line_item_id:
-        old = db.session.get(DailyLineItem, txn.daily_line_item_id)
-        if old is not None:
-            db.session.delete(old)
-        txn.daily_line_item_id = None
-    txn.category_slug = ""
-    txn.matched_rule_id = None
+    """Flask-side adapter for the uncategorize Service. Caller commits."""
+    from api.Modules.BankSync.Services import uncategorize_transaction
+    return uncategorize_transaction(db.session, txn)
 
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.sync_bank_transactions` (PR 72).
 
-    `since` / `until` are datetimes mapped to Stripe's
-    transacted_at[gte] / transacted_at[lte] filters (Stripe expects unix
-    seconds). When `since` is None, we use the latest posted_at we've
-    already cached for that account, falling back to the
-    INITIAL_SYNC_DAYS_BACK window. Stripe Transaction.list paginates
-    in 100s; we use auto_paging_iter to walk every page.
-
-    Returns (new_rows, total_seen, last_error). new_rows is the count
-    of rows we inserted (vs updated); total_seen counts every row
-    we touched. last_error is empty unless one or more accounts errored.
+    Returns `(new_rows, total_seen, last_error)`.
     """
-    if not stripe_is_configured():
-        return 0, 0, "Stripe is not configured."
-    new_rows = 0
-    total = 0
-    last_error = ""
-    now = datetime.utcnow()
-    fallback_since = datetime.combine(
-        (now - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
-        datetime.min.time())
-    for acct in StripeBankAccount.query.filter_by(
-            store_id=store.id, enabled=True).all():
-        try:
-            # Idempotent self-heal: ensure this account is subscribed to
-            # the transactions feature. Accounts connected before the
-            # subscribe step was added to bank_stripe_return won't have
-            # any transactions otherwise. Stripe accepts the call on
-            # already-subscribed accounts without error.
-            try:
-                stripe.financial_connections.Account.subscribe(
-                    acct.stripe_account_id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions subscribe (sync) failed for "
-                    f"{acct.stripe_account_id}: {e}")
-            # Trigger an explicit refresh so Stripe pulls fresh data
-            # from the bank before we list. The refresh is async — this
-            # call may return stale data, but the NEXT manual sync will
-            # see whatever the bank has now. Best-effort; failure is
-            # logged but doesn't abort the sync.
-            try:
-                stripe.financial_connections.Account.refresh_account(
-                    acct.stripe_account_id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions refresh (sync) failed for "
-                    f"{acct.stripe_account_id}: {e}")
-            # Resolve the lower bound. Two paths:
-            # - Caller-provided `since` (initial connect uses this to
-            #   request yesterday + today only).
-            # - Otherwise: rolling 7-day lookback. Stripe FC surfaces
-            #   transactions retroactively — a transaction posted on
-            #   May 1 may not appear in Stripe's feed until May 3 — so
-            #   filtering strictly by `max(posted_at) we already have`
-            #   would skip late-arriving rows. Re-fetching old rows is
-            #   free (Transaction.list is billed per call, not per row,
-            #   and _upsert_bank_transaction dedupes on
-            #   stripe_transaction_id). 7 days covers Stripe's typical
-            #   retroactive window with margin.
-            if since is not None:
-                lo = since
-            else:
-                lo = max(datetime.utcnow() - timedelta(days=7),
-                          fallback_since)
-            params = {
-                "account": acct.stripe_account_id,
-                "limit": 100,
-                "transacted_at": {"gte": int(lo.timestamp())},
-            }
-            if until is not None:
-                params["transacted_at"]["lte"] = int(until.timestamp())
-            for txn in stripe.financial_connections.Transaction.list(
-                    **params).auto_paging_iter():
-                row, inserted = _upsert_bank_transaction(store.id, acct, txn)
-                if inserted:
-                    new_rows += 1
-                # Apply rules whenever the row is uncategorised — both
-                # fresh inserts AND backfill of older rows that landed
-                # before a matching rule existed. Operator overrides
-                # (any non-empty category_slug) survive untouched.
-                # auto_post is suppressed during backfill so we don't
-                # surprise-post into an already-reconciled daily book.
-                _apply_rules_to_uncategorized_row(
-                    row, acct, allow_auto_post=inserted)
-                total += 1
-        except stripe.error.StripeError as e:
-            msg = e.user_message or str(e)
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {msg}"
-            app.logger.warning(f"FC txn sync failed for {acct.stripe_account_id}: {e}")
-        except Exception as e:
-            last_error = f"{acct.display_name or acct.stripe_account_id}: {type(e).__name__}: {e}"
-            app.logger.exception(f"FC txn sync crashed for {acct.stripe_account_id}")
-    if total:
-        db.session.commit()
-    # DB-side backfill: catch historical uncategorised rows that fall
-    # OUTSIDE Stripe's 7-day API window — those never came through
-    # the loop above so the per-row backfill never saw them. This pass
-    # is purely DB-side, no API call, and matches the same rule chain.
-    backfilled = _backfill_uncategorized_rows(store.id)
-    if backfilled:
-        db.session.commit()
-    # One-shot legacy migration: rows tagged generically as
-    # `bank_charge` by an older built-in rule get split into
-    # bank_charge_<last4> based on the account they hit. Idempotent;
-    # no-op once all legacy rows have been migrated.
-    migrated = _migrate_generic_bank_charge_per_account(store.id)
-    if migrated:
-        db.session.commit()
-    return new_rows, total, last_error
+    from api.Modules.BankSync.Services import sync_bank_transactions
+    return sync_bank_transactions(db.session, store, since, until)
 
 
 def _migrate_generic_bank_charge_per_account(store_id):
-    """Retag rows previously bulked into `bank_charge` by the older
-    account-agnostic built-ins (BELOW AVG BAL FEE, CHECK DEPOSIT FEE,
-    MSB MONTHLY FEE, MONTHLY SERVICE FEE) into bank_charge_<last4>
-    based on the account each charge hit. Returns the count migrated.
-    Caller commits.
-
-    Only retags when the description matches a current built-in
-    substring — that confirms the row was auto-tagged, not a deliberate
-    operator override that happened to use the generic slug.
-
-    Idempotent: rows already on a per-account slug are left alone.
-    Once every store has been migrated, the function is a permanent
-    no-op and can be dropped.
-    """
-    accounts = {a.id: a for a in StripeBankAccount.query
-                .filter_by(store_id=store_id).all()}
-    rows = (BankTransaction.query
-            .filter(BankTransaction.store_id == store_id,
-                    BankTransaction.category_slug == "bank_charge")
-            .all())
-    builtin_substrings = {sub for sub, _, _ in _BUILTIN_BANK_RULES}
-    migrated = 0
-    for row in rows:
-        acct = accounts.get(row.stripe_bank_account_id)
-        if not acct or not acct.last4:
-            continue
-        # Same stripped-last4 convention as the matcher.
-        stripped = acct.last4.lstrip("0") or acct.last4
-        desc = (row.description or "").upper()
-        if not any(sub in desc for sub in builtin_substrings):
-            # Description doesn't match any current built-in — treat
-            # the existing `bank_charge` tag as an operator override
-            # and don't touch it.
-            continue
-        row.category_slug = f"bank_charge_{stripped}"
-        migrated += 1
-    return migrated
+    """One-shot legacy migration of generic `bank_charge` rows.
+    Single source of truth lives in
+    `api.Modules.BankSync.Services.migrate_generic_bank_charge_per_account`
+    (PR 72)."""
+    from api.Modules.BankSync.Services import (
+        migrate_generic_bank_charge_per_account,
+    )
+    return migrate_generic_bank_charge_per_account(db.session, store_id)
 
 
 def _backfill_uncategorized_rows(store_id):
     """Run the rule chain against every uncategorised BankTransaction
-    in the store, regardless of age. Catches rows older than the
-    Stripe 7-day API window. Returns the count newly tagged. Caller
-    commits.
-
-    This is what makes "I added a new built-in rule, my old Nizari
-    transactions just got tagged on the next sync" work — without it,
-    historical rows would stay uncategorised forever because Stripe
-    won't re-yield them through Transaction.list.
-    """
-    from sqlalchemy import or_
-    rows = (BankTransaction.query
-            .filter(BankTransaction.store_id == store_id,
-                    or_(BankTransaction.category_slug.is_(None),
-                        BankTransaction.category_slug == ""))
-            .all())
-    if not rows:
-        return 0
-    accounts = {a.id: a for a in StripeBankAccount.query
-                .filter_by(store_id=store_id).all()}
-    tagged = 0
-    for row in rows:
-        acct = accounts.get(row.stripe_bank_account_id)
-        if _apply_rules_to_uncategorized_row(
-                row, acct, allow_auto_post=False):
-            tagged += 1
-    return tagged
+    in the store. Single source of truth lives in
+    `api.Modules.BankSync.Services.backfill_uncategorized_rows`
+    (PR 72)."""
+    from api.Modules.BankSync.Services import (
+        backfill_uncategorized_rows,
+    )
+    return backfill_uncategorized_rows(db.session, store_id)
 
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
@@ -2978,48 +2179,33 @@ def offline():
 # Operators generate a VAPID keypair once (see docs/push-keys.md)
 # and set the three env vars below. When they're not set, push
 # endpoints return 501 and the opt-in UI stays hidden.
-VAPID_PUBLIC_KEY  = os.environ.get("VAPID_PUBLIC_KEY", "")
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
-VAPID_SUBJECT     = os.environ.get("VAPID_SUBJECT", "mailto:admin@example.com")
+#
+# Delivery + the env-var read live in
+# api.Modules.Notifications.Services.push (PR 67); the legacy
+# names below are re-exports so existing call sites keep their
+# shape during the strangler-fig migration window.
+from api.Modules.Notifications.Services import push as _push_svc
+
+VAPID_PUBLIC_KEY  = _push_svc.VAPID_PUBLIC_KEY
+VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
+VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
+
 
 def push_enabled() -> bool:
-    return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
+    """Single source of truth lives in
+    `api.Modules.Notifications.Services.push_is_enabled` (PR 67)."""
+    from api.Modules.Notifications.Services import push_is_enabled
+    return push_is_enabled()
 
-def send_push(user_id: int, title: str, body: str = "", url: str = "/", tag: str | None = None) -> int:
+
+def send_push(user_id: int, title: str, body: str = "",
+              url: str = "/", tag: str | None = None) -> int:
     """Deliver a push notification to every device the user has
-    subscribed. Returns the number of successful sends. Dead
-    subscriptions (404/410 from the push provider) are cleaned up."""
-    if not push_enabled():
-        return 0
-    try:
-        from pywebpush import webpush, WebPushException
-    except ImportError:
-        app.logger.warning("pywebpush not installed; skipping send_push")
-        return 0
-    payload = json.dumps({k: v for k, v in {"title": title, "body": body, "url": url, "tag": tag}.items() if v is not None})
-    sent = 0
-    subs = PushSubscription.query.filter_by(user_id=user_id).all()
-    for s in subs:
-        try:
-            webpush(
-                subscription_info={
-                    "endpoint": s.endpoint,
-                    "keys": {"p256dh": s.p256dh, "auth": s.auth},
-                },
-                data=payload,
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": VAPID_SUBJECT},
-            )
-            sent += 1
-        except WebPushException as e:
-            status = getattr(getattr(e, "response", None), "status_code", None)
-            if status in (404, 410):
-                # Subscription gone — drop it.
-                db.session.delete(s)
-            else:
-                app.logger.warning(f"push send failed ({status}): {e}")
-    db.session.commit()
-    return sent
+    subscribed. Single source of truth lives in
+    `api.Modules.Notifications.Services.send_push` (PR 67).
+    """
+    from api.Modules.Notifications.Services import send_push as _svc
+    return _svc(db.session, user_id, title, body, url, tag)
 
 @app.route("/api/push/public-key")
 def push_public_key():
@@ -3076,116 +2262,62 @@ def push_test():
     return jsonify({"sent": n})
 
 # ── Referrals ────────────────────────────────────────────────
-REFERRAL_SELF_CENTS    = 10000   # $100 for the referrer
-REFERRAL_REFEREE_CENTS = 5000    # $50 for the new store
+from api.Modules.Billing.Services import (
+    REFERRAL_REFEREE_CENTS,
+    REFERRAL_SELF_CENTS,
+)
+
 
 def _new_referral_code():
-    """Mint an 8-char uppercase alphanumeric referral code, checking uniqueness.
-    Tries up to 12 times before giving up — that ceiling is effectively
-    unreachable at any realistic volume."""
-    alphabet = string.ascii_uppercase + string.digits
-    for _ in range(12):
-        code = "".join(secrets.choice(alphabet) for _ in range(8))
-        if not ReferralCode.query.filter_by(code=code).first():
-            return code
-    raise RuntimeError("Could not mint a unique referral code")
+    """Mint an 8-char uppercase alphanumeric referral code.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.new_referral_code` (PR 50).
+    """
+    from api.Modules.Billing.Services import (
+        new_referral_code as _svc_new_referral_code,
+    )
+    return _svc_new_referral_code(db.session)
 
 def ensure_referral_code(store):
     """Return the store's ReferralCode, creating it on demand.
 
-    Admins only see the crown once they're on a paid plan, so call sites
-    should already have checked `store.plan in {basic, pro}` — we don't
-    enforce here (the superadmin / testing flows may want to pre-mint).
+    Delegates to `api.Modules.Billing.Services.ensure_referral_code`
+    (PR 50). Admins only see the crown once they're on a paid plan,
+    so call sites should already have checked
+    `store.plan in {basic, pro}`.
     """
-    if not store:
-        return None
-    rc = ReferralCode.query.filter_by(owner_store_id=store.id).first()
-    if rc is not None:
-        return rc
-    rc = ReferralCode(
-        code=_new_referral_code(),
-        owner_store_id=store.id,
-        reward_self_cents=REFERRAL_SELF_CENTS,
-        reward_referee_cents=REFERRAL_REFEREE_CENTS,
+    from api.Modules.Billing.Services import (
+        ensure_referral_code as _svc_ensure_referral_code,
     )
-    db.session.add(rc); db.session.flush()
-    return rc
+    return _svc_ensure_referral_code(db.session, store)
 
 def lookup_referral_code(raw):
     """Return the active ReferralCode matching the raw input, or None.
-    Accepts either the code string or a URL like /signup?ref=ABC123."""
-    if not raw:
-        return None
-    code = raw.strip().upper()
-    if not code:
-        return None
-    rc = ReferralCode.query.filter_by(code=code, is_active=True).first()
-    return rc
+
+    Delegates to `api.Modules.Billing.Services.lookup_referral_code`
+    (PR 50). Accepts either the code string or a URL — URL extraction
+    happens at the form-parse boundary.
+    """
+    from api.Modules.Billing.Services import (
+        lookup_referral_code as _svc_lookup_referral_code,
+    )
+    return _svc_lookup_referral_code(db.session, raw)
 
 def apply_pending_referral_credits(referee_store):
-    """Called from the Stripe webhook when a store transitions to a paid
-    plan. If that store was referred AND hasn't been credited yet, apply
-    the referee's $50 to their Stripe balance and the referrer's $100
-    to theirs — recording a ReferralRedemption row so retries are safe.
+    """Apply Stripe customer-balance credits on the referee's paid
+    conversion + record a ReferralRedemption row so webhook retries
+    can't double-credit.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.apply_pending_referral_credits`
+    (PR 51). Caller commits — same transactional contract as
+    before.
     """
-    if not referee_store or not referee_store.referred_by_code_id:
-        return
-    # Already credited on this store? bail — keeps webhook retries idempotent.
-    if referee_store.referee_credit_applied_at:
-        return
-    rc = db.session.get(ReferralCode, referee_store.referred_by_code_id)
-    if not rc or not rc.is_active:
-        return
-    owner = db.session.get(Store, rc.owner_store_id)
-    if not owner:
-        return
-    now = datetime.utcnow()
-    # Referee credit: must have stripe_customer_id by this point (webhook
-    # fires on checkout.session.completed, which also sets it upstream).
-    referee_txn_id = ""
-    if referee_store.stripe_customer_id and stripe_is_configured():
-        try:
-            txn = stripe.Customer.create_balance_transaction(
-                referee_store.stripe_customer_id,
-                amount=-abs(rc.reward_referee_cents),
-                currency="usd",
-                description=f"Referral credit — welcome! Used code {rc.code}",
-                metadata={"referral_code": rc.code, "side": "referee"},
-            )
-            referee_txn_id = getattr(txn, "id", "") or ""
-        except stripe.error.StripeError as e:
-            app.logger.warning(f"referee credit failed for store {referee_store.id}: {e}")
-    # Referrer credit (only when they have a Stripe customer, which they
-    # do since they're on a paid plan — but guard anyway).
-    self_txn_id = ""
-    if owner.stripe_customer_id and stripe_is_configured():
-        try:
-            txn = stripe.Customer.create_balance_transaction(
-                owner.stripe_customer_id,
-                amount=-abs(rc.reward_self_cents),
-                currency="usd",
-                description=f"Referral reward — {referee_store.name} just subscribed",
-                metadata={"referral_code": rc.code, "side": "referrer",
-                          "referee_store_id": str(referee_store.id)},
-            )
-            self_txn_id = getattr(txn, "id", "") or ""
-        except stripe.error.StripeError as e:
-            app.logger.warning(f"referrer credit failed for referrer {owner.id}: {e}")
-    # Record the redemption regardless of whether Stripe succeeded — so we
-    # don't double-post on a webhook retry. The txn_id is "" on failure,
-    # and the superadmin can reconcile manually.
-    db.session.add(ReferralRedemption(
-        referral_code_id=rc.id,
-        referee_store_id=referee_store.id,
-        self_credit_applied_at=now if self_txn_id else None,
-        referee_credit_applied_at=now if referee_txn_id else None,
-        stripe_self_txn_id=self_txn_id,
-        stripe_referee_txn_id=referee_txn_id,
-    ))
-    rc.redeemed_count = (rc.redeemed_count or 0) + 1
-    referee_store.referee_credit_applied_at = now
-    # Caller commits — keeps this function transactional alongside the
-    # plan transition that triggered it.
+    from api.Modules.Billing.Services import (
+        apply_pending_referral_credits as _svc_apply_pending,
+    )
+    return _svc_apply_pending(db.session, referee_store)
 
 # ── Login ────────────────────────────────────────────────────
 # Installed PWAs open at `start_url` (currently "/") and hide the address
@@ -3240,68 +2372,56 @@ def privacy():
 # Nothing outside this block should set user_id on its own for a
 # 2FA-required role.
 
-RECOVERY_CODES_PER_USER = 10
 TOTP_ISSUER = "DineroBook"
+# Single source of truth for TOTP / recovery-code helpers lives in
+# api.Modules.Auth.Services.totp (PR 41). The Flask-scope wrappers
+# below forward to the Service so legacy callers keep their existing
+# call shape during the migration window.
+from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 
 def _needs_totp(user):
     """Which roles must use 2FA. Keep this the single gatekeeper."""
-    return bool(user and user.role == "superadmin")
+    from api.Modules.Auth.Services import needs_totp
+    return needs_totp(user)
 
 def _totp_is_enrolled(user):
-    return bool(user and user.totp_secret and user.totp_enrolled_at)
+    from api.Modules.Auth.Services import is_enrolled
+    return is_enrolled(user)
 
 def _pending_auth_user():
     uid = session.get("pending_auth_user_id")
     return db.session.get(User, uid) if uid else None
 
 def _hash_recovery_code(raw):
-    # Normalize so casing/whitespace/hyphen differences don't lock the
-    # user out. The display format is e.g. "ABCD-EFGH" but the stored
-    # hash is of the unhyphenated, uppercase form.
-    normalized = raw.strip().upper().replace("-", "").replace(" ", "")
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    from api.Modules.Auth.Services import hash_recovery_code
+    return hash_recovery_code(raw)
 
 def _format_recovery_code(raw):
-    """Pretty-print with a hyphen in the middle so codes are easier to
-    read and to transcribe — e.g. 'ABCD-EFGH'."""
-    s = raw.strip().upper()
-    return f"{s[:4]}-{s[4:]}" if len(s) == 8 else s
+    from api.Modules.Auth.Services import format_recovery_code
+    return format_recovery_code(raw)
 
 def _generate_recovery_codes(user):
     """Wipe any existing codes for this user and mint a fresh batch.
-    Returns the plaintext list (shown to the user exactly once)."""
-    RecoveryCode.query.filter_by(user_id=user.id).delete()
-    plaintext = []
-    for _ in range(RECOVERY_CODES_PER_USER):
-        raw = secrets.token_hex(4).upper()  # 8 hex chars
-        plaintext.append(raw)
-        db.session.add(RecoveryCode(user_id=user.id, code_hash=_hash_recovery_code(raw)))
+    Caller is responsible for the surrounding transaction; we commit
+    here for backwards-compat with existing call sites that never
+    saw the flush."""
+    from api.Modules.Auth.Services import generate_recovery_codes
+    codes = generate_recovery_codes(db.session, user)
     db.session.commit()
-    return [_format_recovery_code(c) for c in plaintext]
+    return codes
 
 def _consume_recovery_code(user, raw):
-    """Return True if `raw` matches an unused code for `user` and mark
-    it used. `raw` may be pasted with or without the hyphen."""
-    if not raw:
-        return False
-    row = (RecoveryCode.query
-           .filter_by(user_id=user.id, code_hash=_hash_recovery_code(raw), used_at=None)
-           .first())
-    if not row:
-        return False
-    row.used_at = datetime.utcnow()
-    db.session.commit()
-    return True
+    """Return True if `raw` matches an unused code for `user` and
+    mark it used. Commits on hit so legacy callers don't need to."""
+    from api.Modules.Auth.Services import consume_recovery_code
+    hit = consume_recovery_code(db.session, user, raw)
+    if hit:
+        db.session.commit()
+    return hit
 
 def _verify_totp(user, token):
-    """True if `token` is a valid current (or immediately adjacent) 6-digit
-    TOTP code for `user`. `valid_window=1` forgives a ±30s clock drift."""
-    if not (user and user.totp_secret and token):
-        return False
-    try:
-        return pyotp.TOTP(user.totp_secret).verify(str(token).strip(), valid_window=1)
-    except Exception:
-        return False
+    from api.Modules.Auth.Services import verify_totp_token
+    return verify_totp_token(user, token)
 
 def _totp_qr_svg(secret, username):
     """SVG <svg>…</svg> string encoding the TOTP provisioning URI.
@@ -3333,55 +2453,44 @@ def _finalize_2fa_login(user):
 # through TOTP; passkey is the parallel path.
 
 def _webauthn_rp_id():
-    """The effective RP ID. Passkeys are cryptographically bound to
-    this string — it has to match across registration + authentication
-    and survive a login from any path on the same host. Prefer an
-    explicit env var (prod sets WEBAUTHN_RP_ID=dinerobook.com);
-    otherwise strip the port off the request Host (localhost:5000 → localhost)."""
-    explicit = os.environ.get("WEBAUTHN_RP_ID", "").strip()
-    if explicit:
-        return explicit
-    return request.host.split(":", 1)[0]
+    """The effective RP ID. Single source of truth lives in
+    `api.Modules.Auth.Services.passkey_rp_id` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_rp_id
+    return passkey_rp_id(request.host)
 
 def _webauthn_rp_name():
-    return "DineroBook"
+    """Brand label shown by the OS picker. Single source of truth
+    lives in `api.Modules.Auth.Services.passkey_rp_name` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_rp_name
+    return passkey_rp_name()
 
 def _webauthn_origin():
-    """Expected Origin header for WebAuthn verification — scheme + host.
-    The browser signs this alongside the challenge; a mismatch means
-    the request came from a different tab/frame and is rejected."""
-    return f"{request.scheme}://{request.host}"
+    """Expected Origin header for WebAuthn verification. Single
+    source of truth lives in
+    `api.Modules.Auth.Services.passkey_origin` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_origin
+    return passkey_origin(request.scheme, request.host)
 
 def _passkey_exclude_list(user):
-    """Credential descriptors for every passkey this user already has,
-    passed to the browser as excludeCredentials so the same physical
-    authenticator can't be registered twice on one account."""
-    return [
-        PublicKeyCredentialDescriptor(id=p.credential_id)
-        for p in Passkey.query.filter_by(user_id=user.id).all()
-    ]
+    """Credential descriptors for every passkey this user already has.
+    Single source of truth lives in
+    `api.Modules.Auth.Services.passkey_exclude_credentials` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_exclude_credentials
+    return passkey_exclude_credentials(db.session, user)
 
 def _passkey_eligible(user):
-    """Whether a user may enroll passkeys. Now: any logged-in user.
-    Kept as a single predicate so future tightening (e.g. "deny pending
-    self-deletion accounts") has one place to land."""
-    return bool(user)
+    """Whether a user may enroll passkeys. Single source of truth
+    lives in `api.Modules.Auth.Services.passkey_is_eligible` (PR 63)."""
+    from api.Modules.Auth.Services import passkey_is_eligible
+    return passkey_is_eligible(user)
 
 def _update_user_password(user, current_pw, new_pw, confirm_pw):
-    """Validate + apply a password change. Returns ({} on success,
-    {field: message} on failure). Caller commits the session and
-    flashes; we keep this pure so it works from /admin/settings,
-    /account/security, or any future surface."""
-    errors = {}
-    if not user.check_password(current_pw or ""):
-        errors["current_password"] = "Current password is incorrect."
-    elif len(new_pw or "") < 8:
-        errors["new_password"] = "Password must be at least 8 characters."
-    elif new_pw != confirm_pw:
-        errors["confirm_password"] = "Passwords do not match."
-    if not errors:
-        user.set_password(new_pw)
-    return errors
+    """Validate + apply a self-service password change. Returns
+    `{}` on success or `{field: message}` on failure. Single source
+    of truth lives in `api.Modules.Auth.Services.change_password`
+    (PR 40); this wrapper is here for legacy call sites."""
+    from api.Modules.Auth.Services import change_password
+    return change_password(db.session, user, current_pw, new_pw, confirm_pw)
 
 def _update_user_display_name(user, raw):
     """Validate + apply a display-name change. Same return contract as
@@ -3503,9 +2612,12 @@ def login():
             return redirect(url_for("login_store", slug=store.slug))
     error=None
     if request.method=="POST":
+        from api.Modules.Auth.Services import verify_password_cross_store
         username=request.form.get("username","").strip()
-        u=User.query.filter_by(username=username).first()
-        if u and u.is_active and u.check_password(request.form.get("password","")):
+        u = verify_password_cross_store(
+            db.session, username, request.form.get("password",""),
+        )
+        if u is not None:
             if u.role == "employee":
                 # Don't authenticate on the generic page, but leave a
                 # breadcrumb: persist the slug so their next hit to `/`
@@ -3620,9 +2732,23 @@ def login_store(slug):
         return redirect(url_for("dashboard"))
     error = None
     if request.method == "POST":
+        from api.Modules.Auth.Services import authenticate_password
+        from api.Modules.Auth.Services.login import AuthenticationError
         username = request.form.get("username", "").strip()
-        u = User.query.filter_by(username=username, store_id=store.id).first()
-        if u and u.is_active and u.check_password(request.form.get("password", "")):
+        try:
+            # Validate password + is_active via the Service layer.
+            # Per-store-scoped lookup (store.id is known here) — this
+            # is the correct path for the per-store sign-in page.
+            authenticate_password(
+                db.session, store_id=store.id, username=username,
+                password=request.form.get("password", ""),
+            )
+            u = User.query.filter_by(
+                username=username, store_id=store.id,
+            ).first()
+        except AuthenticationError:
+            u = None
+        if u is not None:
             session["user_id"] = u.id
             session["role"] = u.role
             session["store_id"] = u.store_id
@@ -3953,145 +3079,32 @@ def _hash_token(raw):
 # "sent", "failed", "unknown"}, error (str, "" on success), when
 # (datetime or None), last_to (obscured — we show only the domain
 # part so the page doesn't leak user email addresses), last_subject.
-_last_smtp_attempt = {
-    "status": "unknown", "error": "", "when": None,
-    "last_to_domain": "", "last_subject": "",
-}
+# Transactional email send + SMTP health probe now live in
+# api.Modules.Notifications.Services.smtp (PR 82). The legacy
+# names below are thin re-exports / wrappers so existing call
+# sites (password reset, trial reminders, announcement broadcast,
+# superadmin Overview health card, the test-email button) keep
+# their import shape during the migration window.
+from api.Modules.Notifications.Services import smtp as _smtp_svc
+
+# Live module-level alias for the health-card state. Uses
+# `_smtp_svc.last_attempt` directly so reads always see the
+# Service's canonical dict — direct mutation isn't supported.
+_last_smtp_attempt = _smtp_svc.last_attempt
+
 
 def _send_email(to_addr, subject, body, html=None):
-    """Send a transactional email. Returns True on success, False on
-    failure or when SMTP isn't configured. Every attempt updates
-    _last_smtp_attempt so the superadmin health card can show the
-    most recent outcome.
+    """Send a transactional email. Single source of truth lives
+    in `api.Modules.Notifications.Services.send_email` (PR 82)."""
+    return _smtp_svc.send_email(db.session, to_addr, subject, body, html)
 
-    When `html` is provided, the message is sent multipart/alternative
-    so email clients that strip HTML (or users who prefer plain text)
-    see `body`, and everyone else sees the rendered branded template.
-    Keep both — plaintext fallback is a deliverability signal (spam
-    filters flag HTML-only messages) and a real accessibility win.
-
-    Env vars required: SMTP_HOST, SMTP_USER, SMTP_PASS. Optional: SMTP_PORT
-    (default 587), SMTP_FROM (default SMTP_USER). When SMTP isn't configured
-    the caller is expected to log enough context that a superadmin can
-    retrieve the link manually.
-    """
-    global _last_smtp_attempt
-    host = os.environ.get("SMTP_HOST")
-    user = os.environ.get("SMTP_USER")
-    pw   = os.environ.get("SMTP_PASS")
-    now = datetime.utcnow()
-    to_norm = (to_addr or "").strip().lower()
-    to_domain = to_norm.split("@", 1)[1] if "@" in to_norm else ""
-    # Bounce suppression: if a User row with this email got stamped by a
-    # hard-bounce webhook, skip the send. Keeps us from hammering the
-    # provider with guaranteed-failing addresses, which Resend (and every
-    # other reputable provider) penalizes as a sender-reputation hit.
-    # NOTE: we only skip when we can positively match to a User with the
-    # stamp — superadmin test sends to personal addresses aren't gated.
-    suppressed = (db.session.query(User.id)
-                  .filter(db.func.lower(User.email) == to_norm,
-                          User.email_bounced_at.isnot(None))
-                  .first())
-    if suppressed:
-        _last_smtp_attempt = {
-            "status": "suppressed",
-            "error": f"{to_norm} is on the bounce suppression list",
-            "when": now, "last_to_domain": to_domain, "last_subject": subject,
-        }
-        app.logger.warning(
-            f"SMTP send suppressed (prior hard bounce) to *@{to_domain}")
-        return False
-    if not (host and user and pw):
-        _last_smtp_attempt = {
-            "status": "unconfigured", "error": "SMTP env vars not set",
-            "when": now, "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return False
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    sender = os.environ.get("SMTP_FROM", user)
-    msg = EmailMessage()
-    msg["From"] = sender
-    msg["To"] = to_addr
-    msg["Subject"] = subject
-    msg.set_content(body)
-    if html:
-        msg.add_alternative(html, subtype="html")
-    try:
-        with smtplib.SMTP(host, port, timeout=15) as s:
-            s.starttls()
-            s.login(user, pw)
-            s.send_message(msg)
-        _last_smtp_attempt = {
-            "status": "sent", "error": "", "when": now,
-            "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return True
-    except Exception as e:
-        # Cheap type + message is enough for the superadmin to see whether
-        # the auth creds are wrong, the host is unreachable, etc. — without
-        # dumping a traceback into the HTML.
-        err = f"{type(e).__name__}: {e}"
-        app.logger.warning(f"SMTP send failed to {to_domain or '(no-to)'}: {err}")
-        _last_smtp_attempt = {
-            "status": "failed", "error": err, "when": now,
-            "last_to_domain": to_domain, "last_subject": subject,
-        }
-        return False
 
 def smtp_health_check():
-    """Return a dict describing the email-delivery integration state,
-    matching the shape of stripe_health_check so the template stays
-    symmetric. Doesn't do a live SMTP probe — reads _last_smtp_attempt
-    (updated on every _send_email call) and joins in delivery-event
-    totals from EmailEvent (updated by the Resend webhook)."""
-    env = {
-        "host":     bool(os.environ.get("SMTP_HOST")),
-        "user":     bool(os.environ.get("SMTP_USER")),
-        "password": bool(os.environ.get("SMTP_PASS")),
-        "from":     bool(os.environ.get("SMTP_FROM")),
-        "webhook_secret": bool(os.environ.get("RESEND_WEBHOOK_SECRET")),
-    }
-    configured = env["host"] and env["user"] and env["password"]
-
-    # Event totals over the last 7 days — a quick signal that:
-    #   - the webhook is wired (any events at all)
-    #   - bounce/complaint rate is under the ~2% Resend flags
-    # Safe to run every Overview load; indexed on created_at.
-    recent_events = {"delivered": 0, "bounced": 0, "complained": 0,
-                     "sent": 0, "opened": 0, "clicked": 0}
-    suppressed_count = 0
-    last_event_at = None
-    try:
-        since = datetime.utcnow() - timedelta(days=7)
-        rows = (db.session.query(EmailEvent.event_type, db.func.count(EmailEvent.id))
-                .filter(EmailEvent.created_at >= since)
-                .group_by(EmailEvent.event_type).all())
-        for t, n in rows:
-            # event_type comes in as "email.delivered" etc.
-            key = t.split(".", 1)[-1] if "." in t else t
-            if key in recent_events:
-                recent_events[key] = n
-        latest = (db.session.query(db.func.max(EmailEvent.created_at)).scalar())
-        last_event_at = latest
-        suppressed_count = User.query.filter(
-            User.email_bounced_at.isnot(None)).count()
-    except Exception:
-        # EmailEvent / User columns may not exist on a pristine test DB
-        # between migrations; don't blow up the Overview.
-        pass
-
-    return {
-        "env":         env,
-        "configured":  configured,
-        "status":      _last_smtp_attempt["status"],
-        "error":       _last_smtp_attempt["error"],
-        "when":        _last_smtp_attempt["when"],
-        "last_to_domain":  _last_smtp_attempt["last_to_domain"],
-        "last_subject":    _last_smtp_attempt["last_subject"],
-        "recent_events":   recent_events,
-        "last_event_at":   last_event_at,
-        "suppressed_count": suppressed_count,
-    }
+    """Return a dict describing email-delivery state. Single
+    source of truth lives in
+    `api.Modules.Notifications.Services.smtp_health_check`
+    (PR 82)."""
+    return _smtp_svc.health_check(db.session)
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
@@ -4100,85 +3113,74 @@ def forgot_password():
     The response is deliberately the same whether the account exists or not,
     so attackers can't probe for registered emails. Employees aren't supported
     here; they should ask their store admin (admin_reset_employee_password).
+    Superadmin is excluded — recovery via `flask reset-superadmin` (CLAUDE.md
+    invariant #10).
+
+    Token issuance + same-user invalidation delegate to
+    api.Modules.Auth.Services.issue_password_reset_token (PR 37). Email
+    rendering + SMTP delivery + the warning log line stay in Flask
+    since they're cross-cutting infrastructure concerns.
     """
+    from api.Modules.Auth.Services import issue_password_reset_token
     sent = False
     if request.method == "POST":
         username = request.form.get("username", "").strip().lower()
         sent = True
-        if username:
-            # Superadmin is intentionally excluded: email-based reset would
-            # be a 2FA bypass. Recovery is via `flask reset-superadmin` from
-            # the Render shell. The response is still the "sent" message so
-            # attackers can't tell a superadmin from a non-existent account.
-            u = (User.query.filter_by(username=username)
-                 .filter(User.role.in_(("admin", "owner")))
-                 .first())
-            if u and u.is_active:
-                # Invalidate any still-valid tokens for this user, then mint fresh.
-                now = datetime.utcnow()
-                (PasswordResetToken.query
-                 .filter(PasswordResetToken.user_id == u.id,
-                         PasswordResetToken.used_at.is_(None),
-                         PasswordResetToken.expires_at > now)
-                 .update({"used_at": now}, synchronize_session=False))
-                raw = secrets.token_urlsafe(48)
-                db.session.add(PasswordResetToken(
-                    user_id=u.id, token_hash=_hash_token(raw),
-                    expires_at=now + timedelta(hours=PASSWORD_RESET_TTL_HOURS),
-                ))
-                db.session.commit()
-                reset_url = url_for("reset_password", token=raw, _external=True)
-                body = (
-                    "Hi,\n\n"
-                    "Someone (hopefully you) requested a password reset for your DineroBook "
-                    "account. Follow this link within the next hour to set a new password:\n\n"
-                    f"  {reset_url}\n\n"
-                    "If you didn't request this you can safely ignore this email — your "
-                    "current password will keep working.\n"
+        result = issue_password_reset_token(
+            db.session, username, ttl_hours=PASSWORD_RESET_TTL_HOURS,
+        )
+        if result is not None:
+            db.session.commit()
+            u = result.user
+            reset_url = url_for(
+                "reset_password", token=result.raw_token, _external=True,
+            )
+            body = (
+                "Hi,\n\n"
+                "Someone (hopefully you) requested a password reset for your DineroBook "
+                "account. Follow this link within the next hour to set a new password:\n\n"
+                f"  {reset_url}\n\n"
+                "If you didn't request this you can safely ignore this email — your "
+                "current password will keep working.\n"
+            )
+            html = render_template(
+                "emails/password_reset.html",
+                preheader="Reset your DineroBook password — link expires in 1 hour.",
+                name=u.full_name or "",
+                reset_url=reset_url,
+                year=datetime.utcnow().year,
+                base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
+            )
+            # Prefer the explicit email field (landed with /account/profile)
+            # over the username. Username doubles as email for most admins
+            # today, but owners often have a display username that isn't
+            # an address — without this fallback their reset mail bounces.
+            to_addr = (u.email or u.username).strip()
+            delivered = _send_email(to_addr, "Reset your DineroBook password", body, html=html)
+            if not delivered:
+                # No SMTP configured (or send failed): log the URL so the
+                # superadmin can retrieve it from the server logs and
+                # relay it to the user manually.
+                app.logger.warning(
+                    f"[password-reset] email send skipped for {u.username}; "
+                    f"reset URL: {reset_url}"
                 )
-                html = render_template(
-                    "emails/password_reset.html",
-                    preheader="Reset your DineroBook password — link expires in 1 hour.",
-                    name=u.full_name or "",
-                    reset_url=reset_url,
-                    year=datetime.utcnow().year,
-                    base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
-                )
-                # Prefer the explicit email field (landed with /account/profile)
-                # over the username. Username doubles as email for most admins
-                # today, but owners often have a display username that isn't
-                # an address — without this fallback their reset mail bounces.
-                to_addr = (u.email or u.username).strip()
-                delivered = _send_email(to_addr, "Reset your DineroBook password", body, html=html)
-                if not delivered:
-                    # No SMTP configured (or send failed): log the URL so the
-                    # superadmin can retrieve it from the server logs and
-                    # relay it to the user manually.
-                    app.logger.warning(
-                        f"[password-reset] email send skipped for {u.username}; "
-                        f"reset URL: {reset_url}"
-                    )
     return render_template("forgot_password.html", sent=sent)
 
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_password(token):
     """Step 2 of the reset flow — verify the token and set the new password.
 
-    Tokens are one-time-use and expire after PASSWORD_RESET_TTL_HOURS. We
-    look them up by sha256 so the raw token never sits in the DB.
+    Tokens are one-time-use and expire after PASSWORD_RESET_TTL_HOURS.
+    Token verification + password apply delegate to
+    api.Modules.Auth.Services (PR 37). Inline form-validation + flash
+    rendering stay in Flask since they're presentation concerns.
     """
-    now = datetime.utcnow()
-    row = (PasswordResetToken.query
-           .filter_by(token_hash=_hash_token(token))
-           .first())
-    invalid = (row is None or row.used_at is not None or row.expires_at <= now)
-    # Belt-and-suspenders: even if a token somehow exists for a superadmin
-    # (it can't via /forgot-password today, but defense in depth), refuse
-    # to honor it. Superadmin resets go through the Flask CLI.
-    if row and not invalid:
-        target = db.session.get(User, row.user_id)
-        if target and target.role == "superadmin":
-            invalid = True
+    from api.Modules.Auth.Services import (
+        consume_password_reset_token, verify_password_reset_token,
+    )
+    row = verify_password_reset_token(db.session, token)
+    invalid = row is None
     error = None
     if request.method == "POST" and not invalid:
         pw1 = request.form.get("password", "")
@@ -4188,14 +3190,16 @@ def reset_password(token):
         elif pw1 != pw2:
             error = "Passwords do not match."
         else:
-            u = db.session.get(User, row.user_id)
-            if u:
-                u.set_password(pw1)
-                row.used_at = now
+            try:
+                consume_password_reset_token(db.session, row, pw1)
                 db.session.commit()
-                flash("Password updated. You can now sign in with your new password.", "success")
+                flash(
+                    "Password updated. You can now sign in with your new password.",
+                    "success",
+                )
                 return redirect(url_for("login"))
-            error = "Account no longer exists."
+            except LookupError:
+                error = "Account no longer exists."
     return render_template("reset_password.html", invalid=invalid, error=error, token=token)
 
 @app.route("/signup", methods=["GET", "POST"])
@@ -4233,40 +3237,30 @@ def signup():
             app.logger.info(f"signup: invalid ref code '{ref_raw}' ignored")
 
         if not errors:
-            existing = User.query.filter_by(username=email).filter(
-                User.store_id.isnot(None)).first()
-            if existing:
-                errors["email"] = "An account with this email already exists."
-
-        if not errors:
-            slug_base = slugify(store_name)
-            slug = slug_base
-            counter = 1
-            while Store.query.filter_by(slug=slug).first():
-                slug = f"{slug_base}-{counter}"
-                counter += 1
-            s = Store(name=store_name, slug=slug, email=email,
-                      phone=phone, plan="trial")
-            if ref:
-                s.referred_by_code_id = ref.id
-            db.session.add(s)
-            db.session.flush()
-            s.trial_ends_at = datetime.utcnow() + timedelta(days=7)
-            s.grace_ends_at = s.trial_ends_at + timedelta(days=4)
-            u = User(store_id=s.id, username=email,
-                     full_name=store_name, role="admin")
-            u.set_password(password)
-            db.session.add(u)
-            db.session.commit()
-            session["user_id"] = u.id
-            session["role"] = u.role
-            session["store_id"] = s.id
-            if ref:
-                flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
-                      "off your first paid month when you subscribe.", "success")
+            from api.Modules.Auth.Services import (
+                SignupConflictError, create_store_and_admin,
+            )
+            try:
+                result = create_store_and_admin(
+                    db.session,
+                    store_name=store_name, email=email,
+                    password=password, phone=phone,
+                    referred_by_code_id=(ref.id if ref else None),
+                )
+            except SignupConflictError as e:
+                errors["email"] = str(e)
             else:
-                flash("Welcome! Your 7-day free trial has started.", "success")
-            return redirect(url_for("dashboard"))
+                db.session.commit()
+                u = result.admin
+                session["user_id"] = u.id
+                session["role"] = u.role
+                session["store_id"] = result.store.id
+                if ref:
+                    flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
+                          "off your first paid month when you subscribe.", "success")
+                else:
+                    flash("Welcome! Your 7-day free trial has started.", "success")
+                return redirect(url_for("dashboard"))
 
     return render_template("signup.html", errors=errors, form=form,
                            referral=ref, ref_code_raw=ref_raw)
@@ -4332,238 +3326,50 @@ def logout():
 # UI; "previous-period" windows are the same length, ending the day
 # before the current window — that's what the delta badges compare to.
 
-_OWNER_TRANSFER_EXCLUDED = ["Canceled", "Rejected"]
+# Owner-side period math, store-id resolution, and KPI rollups
+# now live in api.Modules.Owners.Services.dashboard (PR 61). The
+# legacy names below are thin re-exports / wrappers so existing
+# callers (the dashboard, locations, and CSV-export routes) keep
+# their shape during the migration window.
+from api.Modules.Owners.Services import (
+    OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
+    owner_kpis as _svc_owner_kpis,
+    owner_period_window as _svc_owner_period_window,
+    owner_store_ids as _svc_owner_store_ids,
+)
+
 
 def _owner_period_window(period, today):
-    """Map a `today|month|year` selector to current + prior windows.
-
-    Returns (start, end, prev_start, prev_end, prev_label). The prior
-    window has the same number of days as the current and ends the day
-    before the current one starts, so KPI deltas are like-for-like.
-    """
-    if period == "month":
-        start = today.replace(day=1)
-        end = today
-        days = (end - start).days
-        prev_end = start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=days)
-        return start, end, prev_start, prev_end, "vs prior month"
-    if period == "year":
-        start = date(today.year, 1, 1)
-        end = today
-        days = (end - start).days
-        prev_end = start - timedelta(days=1)
-        prev_start = prev_end - timedelta(days=days)
-        return start, end, prev_start, prev_end, "vs prior year"
-    # default: today
-    return today, today, today - timedelta(days=1), today - timedelta(days=1), "vs yesterday"
+    """Delegate to api.Modules.Owners.Services.owner_period_window."""
+    return _svc_owner_period_window(period, today)
 
 
 def _owner_store_ids(user):
-    """Store IDs the given owner is linked to. Empty if none."""
-    links = StoreOwnerLink.query.filter_by(owner_id=user.id).all()
-    return [l.store_id for l in links]
+    """Delegate to api.Modules.Owners.Services.owner_store_ids."""
+    return _svc_owner_store_ids(db.session, user)
 
 
 def _owner_kpis(store_ids, start, end):
-    """Aggregate (transfer_count, volume, over_short) across the given
-    stores and date window. Excludes canceled/rejected transfers."""
-    if not store_ids:
-        return 0, 0.0, 0.0
-    tx_count = Transfer.query.filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).count()
-    vol = db.session.query(db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0)).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).scalar() or 0.0
-    os_total = db.session.query(db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0)).filter(
-        DailyReport.store_id.in_(store_ids),
-        DailyReport.report_date >= start, DailyReport.report_date <= end,
-    ).scalar() or 0.0
-    return int(tx_count), float(vol), float(os_total)
+    """Delegate to api.Modules.Owners.Services.owner_kpis."""
+    return _svc_owner_kpis(db.session, store_ids, start, end)
 
 
 def _owner_dashboard_context(user, period):
-    """Rich metrics for /owner/dashboard.
-
-    Mirrors the superadmin dashboard pattern: KPI cards with prior-period
-    deltas, a 30-day daily volume area chart (always 30d so the trend
-    shape is independent of the selector), per-company donut for the
-    selected window, and a per-store volume comparison bar.
+    """Rich metrics for /owner/dashboard. Single source of truth
+    lives in `api.Modules.Owners.Services.owner_dashboard_context`
+    (PR 74).
     """
-    today = date.today()
-    start, end, prev_start, prev_end, prev_label = _owner_period_window(period, today)
-    store_ids = _owner_store_ids(user)
-    stores = (Store.query.filter(Store.id.in_(store_ids)).order_by(Store.name).all()
-              if store_ids else [])
-
-    agg_transfers, agg_volume, agg_over_short = _owner_kpis(store_ids, start, end)
-    prev_transfers, prev_volume, prev_over_short = _owner_kpis(store_ids, prev_start, prev_end)
-
-    # 30-day daily volume series — fixed window, used for the area chart.
-    d30_ago = today - timedelta(days=29)
-    daily_rows = (db.session.query(
-        Transfer.send_date,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d30_ago, Transfer.send_date <= today,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.send_date).all() if store_ids else [])
-    by_day_vol = {d: float(v or 0) for d, _c, v in daily_rows}
-    by_day_cnt = {d: int(c or 0) for d, c, _v in daily_rows}
-    series_labels, series_volume, series_count = [], [], []
-    for i in range(29, -1, -1):
-        d = today - timedelta(days=i)
-        series_labels.append(d.isoformat())
-        series_volume.append(round(by_day_vol.get(d, 0.0), 2))
-        series_count.append(by_day_cnt.get(d, 0))
-
-    # Per-company breakdown for the selected period.
-    co_rows = (db.session.query(
-        Transfer.company,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.company).order_by(
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc()
-    ).all() if store_ids else [])
-    company_breakdown = [
-        {"company": (co or "—"), "count": int(cnt),
-         "volume": float(v or 0), "fees": float(f or 0)}
-        for co, cnt, v, f in co_rows
-    ]
-
-    # Per-store volume comparison for the selected period.
-    store_rows = (db.session.query(
-        Transfer.store_id,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.store_id).all() if store_ids else [])
-    store_stat = {sid: (int(c), float(v or 0)) for sid, c, v in store_rows}
-    store_comparison = []
-    for s in stores:
-        c, v = store_stat.get(s.id, (0, 0.0))
-        store_comparison.append({"id": s.id, "name": s.name, "count": c, "volume": v})
-    store_comparison.sort(key=lambda x: x["volume"], reverse=True)
-
-    # Return-check rollups across the owner's whole umbrella. Owner
-    # cares about: outstanding pending balance, period recoveries
-    # vs. losses, aging buckets (chase candidates), and a 12-month
-    # bar chart of recoveries vs losses+fraud.
-    rc_period = _return_check_period_aggregates(store_ids, start, end)
-    rc_aging = _return_check_aging_buckets(store_ids, today=today)
-    rc_labels, rc_recoveries, rc_losses = _return_check_monthly_series(
-        store_ids, today=today)
-
-    return dict(
-        user=user, period=period, prev_label=prev_label,
-        period_start=start, period_end=end,
-        store_count=len(stores), stores=stores,
-        agg_transfers=agg_transfers, agg_volume=agg_volume,
-        agg_over_short=agg_over_short,
-        agg_transfers_delta=agg_transfers - prev_transfers,
-        agg_volume_delta=agg_volume - prev_volume,
-        agg_over_short_delta=agg_over_short - prev_over_short,
-        series_labels=series_labels, series_volume=series_volume,
-        series_count=series_count,
-        company_breakdown=company_breakdown,
-        store_comparison=store_comparison,
-        rc_period=rc_period, rc_aging=rc_aging,
-        rc_labels=rc_labels, rc_recoveries=rc_recoveries,
-        rc_losses=rc_losses,
-    )
+    from api.Modules.Owners.Services import owner_dashboard_context
+    return owner_dashboard_context(db.session, user, period)
 
 
 def _owner_locations_payload(user, period, query):
-    """Per-store rows for /owner/locations.
-
-    Each row has the basic period-scoped stats (transfers, volume,
-    over/short) plus a per-company chip list so the owner sees provider
-    mix at a glance without drilling in. `query` is a substring matched
-    case-insensitively against store name.
+    """Per-store rows for /owner/locations. Single source of truth
+    lives in `api.Modules.Owners.Services.owner_locations_payload`
+    (PR 74).
     """
-    today = date.today()
-    start, end, *_ = _owner_period_window(period, today)
-    store_ids = _owner_store_ids(user)
-    if not store_ids:
-        return [], 0
-
-    base_q = Store.query.filter(Store.id.in_(store_ids))
-    if query:
-        ql = "%{}%".format(query.lower())
-        base_q = base_q.filter(db.func.lower(Store.name).like(ql))
-    stores = base_q.order_by(Store.name).all()
-    if not stores:
-        return [], len(store_ids)
-
-    visible_ids = [s.id for s in stores]
-
-    transfer_rows = db.session.query(
-        Transfer.store_id,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(
-        Transfer.store_id.in_(visible_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.store_id).all()
-    transfer_stat = {sid: (int(c), float(v or 0)) for sid, c, v in transfer_rows}
-
-    daily_rows = db.session.query(
-        DailyReport.store_id,
-        db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0),
-        db.func.count(DailyReport.id),
-    ).filter(
-        DailyReport.store_id.in_(visible_ids),
-        DailyReport.report_date >= start, DailyReport.report_date <= end,
-    ).group_by(DailyReport.store_id).all()
-    daily_stat = {sid: (float(os_v or 0), int(rc or 0)) for sid, os_v, rc in daily_rows}
-
-    # Per-store, per-company chips (small, ≤ 6 each in practice).
-    co_rows = db.session.query(
-        Transfer.store_id, Transfer.company,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(
-        Transfer.store_id.in_(visible_ids),
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.store_id, Transfer.company).all()
-    co_by_store = {}
-    for sid, co, c, v in co_rows:
-        co_by_store.setdefault(sid, []).append({
-            "company": (co or "—"), "count": int(c), "volume": float(v or 0),
-        })
-    for sid in co_by_store:
-        co_by_store[sid].sort(key=lambda x: x["volume"], reverse=True)
-
-    rows = []
-    for s in stores:
-        c, v = transfer_stat.get(s.id, (0, 0.0))
-        os_v, rc = daily_stat.get(s.id, (0.0, 0))
-        rows.append({
-            "store": s,
-            "transfer_count": c,
-            "volume": v,
-            "over_short": os_v,
-            "report_count": rc,
-            "companies": co_by_store.get(s.id, []),
-        })
-    return rows, len(store_ids)
+    from api.Modules.Owners.Services import owner_locations_payload
+    return owner_locations_payload(db.session, user, period, query)
 
 
 @app.route("/owner/dashboard")
@@ -4899,38 +3705,34 @@ def subscribe():
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
 def subscribe_checkout():
-    """Create a Stripe Checkout Session for the chosen plan and redirect there.
+    """Create a Stripe Checkout Session for the chosen plan and redirect.
 
-    The webhook (checkout.session.completed) is what actually flips the store
-    onto the new plan — this route only initiates the payment flow.
+    Plan validation + Stripe Session creation delegate to
+    `api.Modules.Billing.Services.create_checkout_session` (PR 43);
+    this route handles the form parsing + flash/redirect glue.
+    The webhook (`checkout.session.completed`) is what actually flips
+    the store onto the new plan — this route only initiates the
+    payment flow.
     """
+    from api.Modules.Billing.Services import (
+        InvalidPlanError, StripeServiceError, create_checkout_session,
+    )
     store = current_store()
     plan = request.form.get("plan", "").strip()
-    # "_yearly" variants are separate Stripe prices but land on the same
-    # Store.plan value — basic_yearly→"basic", pro_yearly→"pro" — because
-    # Store.plan is about feature entitlement, not billing cadence.
-    price_map = _stripe_price_ids()
-    if plan not in price_map or not price_map[plan]:
-        flash("Invalid plan selected.", "error")
-        return redirect(url_for("subscribe"))
     try:
-        kwargs = dict(
-            mode="subscription",
-            line_items=[{"price": price_map[plan], "quantity": 1}],
-            metadata={"store_id": str(store.id)},
+        url = create_checkout_session(
+            store, plan=plan,
             success_url=url_for("subscribe_success", _external=True),
             cancel_url=url_for("subscribe", _external=True),
-            # Surface the discount-code entry field on the Stripe checkout page.
-            allow_promotion_codes=True,
         )
-        if store.stripe_customer_id:
-            kwargs["customer"] = store.stripe_customer_id
-        checkout_session = stripe.checkout.Session.create(**kwargs)
-        return redirect(checkout_session.url, code=303)
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe error: {e}")
+    except InvalidPlanError:
+        flash("Invalid plan selected.", "error")
+        return redirect(url_for("subscribe"))
+    except StripeServiceError as e:
+        app.logger.error(f"Stripe error: {e.__cause__}")
         flash("Payment service error. Please try again.", "error")
         return redirect(url_for("subscribe"))
+    return redirect(url, code=303)
 
 @app.route("/subscribe/success")
 @login_required
@@ -5005,26 +3807,26 @@ def admin_subscription():
     )
 
 def _open_billing_portal(store, error_msg, log_label="billing portal"):
-    """Open the Stripe Customer Portal for `store` and 303-redirect there.
+    """Flask-side adapter for the billing-portal Service. On success
+    303-redirects to Stripe; on Stripe error flashes `error_msg` and
+    redirects back to /admin/subscription.
 
-    On failure, flashes `error_msg` and redirects back to
-    /admin/subscription. Centralizes the Stripe boilerplate that the
-    portal-open and the cancel-via-portal routes used to duplicate
-    line for line — the only thing that varies is which error
-    message + log label to show when Stripe fails.
-
-    Returns a Flask response. Caller is responsible for the
-    pre-checks (does the store have a Stripe customer id, is the
-    plan paid, etc.) so this helper stays single-purpose.
+    Caller handles the pre-checks (paid plan, stripe_customer_id
+    present, etc.). Single source of truth lives in
+    `api.Modules.Billing.Services.create_billing_portal_session`
+    (PR 44).
     """
+    from api.Modules.Billing.Services import (
+        StripeServiceError, create_billing_portal_session,
+    )
     try:
-        portal = stripe.billing_portal.Session.create(
-            customer=store.stripe_customer_id,
+        url = create_billing_portal_session(
+            store,
             return_url=url_for("admin_subscription", _external=True),
         )
-        return redirect(portal.url, code=303)
-    except stripe.error.StripeError as e:
-        app.logger.error(f"Stripe {log_label} error: {e}")
+        return redirect(url, code=303)
+    except StripeServiceError as e:
+        app.logger.error(f"Stripe {log_label} error: {e.__cause__}")
         flash(error_msg, "error")
         return redirect(url_for("admin_subscription"))
 
@@ -5094,8 +3896,14 @@ def admin_subscription_toggle_addon(addon_key):
 def store_has_addon(store, addon_key):
     """Single predicate every gated route uses, so future Stripe-driven
     `customer.subscription.updated` syncs flip every gated surface in
-    one shot."""
-    return addon_key in store_addon_keys(store)
+    one shot.
+
+    Delegates to `api.Modules.Billing.Services.store_has_addon` (PR 49).
+    """
+    from api.Modules.Billing.Services import (
+        store_has_addon as _svc_store_has_addon,
+    )
+    return _svc_store_has_addon(store, addon_key)
 
 # ── TV Display add-on ────────────────────────────────────────
 #
@@ -6101,17 +4909,14 @@ _GENERIC_VIEW_TEMPLATES = {
 }
 
 
-def _day_start(d):
-    """00:00:00 of date `d` as a naive datetime — used by every SA
-    report data fn that converts a calendar date into the start of
-    the period for SQL timestamp comparisons."""
-    return datetime(d.year, d.month, d.day)
-
-
-def _day_end(d):
-    """23:59:59 of date `d` as a naive datetime — end-of-period
-    counterpart to `_day_start`."""
-    return datetime(d.year, d.month, d.day, 23, 59, 59)
+# Calendar-date → naive datetime boundary helpers now live in
+# api.Modules.Reports.Services.date_helpers (PR 83). Re-exports
+# below preserve the legacy import shape during the migration
+# window.
+from api.Modules.Reports.Services import (
+    day_end as _day_end,
+    day_start as _day_start,
+)
 
 
 def _render_report_generic(template, data_fn, *,
@@ -6302,250 +5107,54 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
 
 
 def _active_transfers_period_filters(store_ids, d_from, d_to):
-    """Standard filter set every Transfer-based report uses: scoped to
-    `store_ids` (list — accepts admin's [single id] or owner's umbrella),
-    posted in the period, and excluding Canceled / Rejected (same
-    convention as the dashboard + owner pages). Spread into a
-    .filter(...) call: `q.filter(*_active_transfers_period_filters(...))`."""
-    return (
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    )
+    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
+
+    The query logic now lives in the new layered module per the
+    migration ADR. This wrapper keeps every existing caller in
+    app.py working without changes; eventually those callers also
+    move into Reports services and this function disappears with
+    the cleanup PR."""
+    from api.Modules.Reports.Repositories.transfers import period_filters
+    return period_filters(store_ids, d_from, d_to)
 
 
 def _aggregate_transfers(store_ids, d_from, d_to, group_col):
-    """Group active transfers in the period by `group_col`, returning
-    (rows, totals). Each row exposes the grouped key + count + sums of
-    send_amount / fee / federal_tax + per-row avg. Totals carries the
-    same sums across all rows. Rows are NOT sorted — callers decide.
-    """
-    rows_q = (db.session.query(
-        group_col,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-     .group_by(group_col).all())
-    rows = []
-    totals = {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
-    for key, count, sent, fees, tax in rows_q:
-        c = int(count or 0)
-        sent = float(sent or 0); fees = float(fees or 0); tax = float(tax or 0)
-        rows.append({
-            "key":   key,
-            "count": c,
-            "sent":  sent,
-            "fees":  fees,
-            "tax":   tax,
-            "avg":   (sent / c) if c else 0.0,
-        })
-        totals["sent"]  += sent
-        totals["fees"]  += fees
-        totals["tax"]   += tax
-        totals["count"] += c
-    return rows, totals
+    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
+
+    See `_active_transfers_period_filters` above for the shim
+    rationale. Same single-source-of-truth principle: aggregation
+    SQL exists in exactly one place (the new repository), called
+    from both Flask and FastAPI paths during the strangler-fig
+    migration window."""
+    from api.Modules.Reports.Repositories.transfers import aggregate
+    return aggregate(db.session, store_ids, d_from, d_to, group_col)
 
 
-def _sales_by_company_data(store_ids, d_from, d_to):
-    """Group active transfers by company and rename the grouping key
-    to `company` for the per-row template."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.company)
-    for r in rows:
-        r["company"] = r.pop("key") or "(no company)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
-
-
-def _sales_by_service_data(store_ids, d_from, d_to):
-    """Group active transfers by service_type (Money Transfer / Bill
-    Payment / Top Up / Recharge)."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.service_type)
-    for r in rows:
-        r["service_type"] = r.pop("key") or "(no service)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
-
-
-def _sales_by_employee_data(store_ids, d_from, d_to):
-    """Group active transfers by created_by, then resolve user IDs to
-    display names via a single in-clause lookup. Transfers with no
-    `created_by` are bucketed as "(unattributed)" so legacy rows
-    don't disappear from the totals."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.created_by)
-    user_ids = [r["key"] for r in rows if r["key"] is not None]
-    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-    for r in rows:
-        uid = r.pop("key")
-        if uid is None:
-            r["employee"] = "(unattributed)"
-            r["username"] = ""
-        else:
-            u = users.get(uid)
-            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
-            r["username"] = u.username if u else ""
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
-
-
-def _cashier_productivity_data(store_ids, d_from, d_to):
-    """Group active transfers by `Transfer.employee_id` (the cashier
-    on duty who processed the customer) and resolve to StoreEmployee
-    display names. Distinct from `_sales_by_employee_data`, which
-    groups by `created_by` (the login User who saved the row) — this
-    one answers "which cashier handled the most customers?" rather
-    than "which login authored the most rows?". Sorted by transfer
-    count desc so the busiest cashier floats to the top."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.employee_id)
-    employee_ids = [r["key"] for r in rows if r["key"] is not None]
-    employees = ({e.id: e for e in
-                  StoreEmployee.query.filter(
-                      StoreEmployee.id.in_(employee_ids)).all()}
-                 if employee_ids else {})
-    for r in rows:
-        eid = r.pop("key")
-        if eid is None:
-            r["cashier"] = "(unattributed)"
-            r["is_active"] = False
-        else:
-            e = employees.get(eid)
-            if e:
-                r["cashier"] = e.name
-                r["is_active"] = bool(e.is_active)
-            else:
-                r["cashier"] = f"Cashier #{eid}"
-                r["is_active"] = False
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    return rows, totals
-
-
-def _top_customers_data(store_ids, d_from, d_to, *, sort_by="sent",
-                         limit=50):
-    """Group active transfers by customer_id, resolve to Customer rows
-    for display. Transfers without a customer link (legacy / walk-in)
-    are bucketed as "(walk-in)" so the totals match the dashboard.
-    Top `limit` rows by `sort_by` desc — "sent" for the volume view,
-    "count" for the most-active-sender view."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.customer_id)
-    cust_ids = [r["key"] for r in rows if r["key"] is not None]
-    customers = ({c.id: c for c in
-                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
-                 if cust_ids else {})
-    for r in rows:
-        cid = r.pop("key")
-        if cid is None:
-            r["customer"] = "(walk-in)"
-            r["phone"] = ""
-        else:
-            c = customers.get(cid)
-            if c:
-                r["customer"] = c.full_name or "(no name)"
-                r["phone"] = (f"{c.phone_country}{c.phone_number}"
-                              if c.phone_number else "")
-            else:
-                r["customer"] = f"Customer #{cid}"
-                r["phone"] = ""
-    rows.sort(key=lambda r: r[sort_by], reverse=True)
-    return rows[:limit], totals
-
-
-def _top_recipients_data(store_ids, d_from, d_to, *, limit=50):
-    """Group active transfers by recipient_name string. Recipients
-    aren't stored in their own table — `Transfer.recipient_name` is
-    the only signal — so we just group on the string. Empty names
-    bucketed as "(no name)". Top `limit` by sent."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.recipient_name)
-    for r in rows:
-        r["recipient"] = r.pop("key") or "(no name)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows[:limit], totals
-
-
-def _by_destination_country_data(store_ids, d_from, d_to):
-    """Group active transfers by destination country. Transfers
-    without a country bucketed as "(no country)"."""
-    rows, totals = _aggregate_transfers(store_ids, d_from, d_to,
-                                         Transfer.country)
-    for r in rows:
-        r["country"] = r.pop("key") or "(no country)"
-    rows.sort(key=lambda r: r["sent"], reverse=True)
-    return rows, totals
+# Adapter for the seven Reports services that used to be wrapped by
+# `_*_data` shims in this file. The shims existed during PRs 2-4 of
+# the strangler-fig migration so legacy callers (`_make_report_routes`
+# below) could keep their `(store_ids, d_from, d_to)` signature
+# while the business logic moved into `api.Modules.Reports.Services`.
+# Now that the services are stable and unit-tested (and exposed via
+# the FastAPI router at /api/v2/reports/*), the shims add no value —
+# call sites use this adapter inline.
+def _service_fn(service):
+    """Wraps a Reports service (which takes the SQLAlchemy Session as
+    its first argument) in the legacy `data_fn(store_ids, d_from, d_to,
+    **kwargs)` signature `_make_report_routes` expects. The Flask
+    route binds to `db.session`; the FastAPI route binds to its own
+    request-scoped session via `Depends(get_db)`."""
+    def _inner(store_ids, d_from, d_to, **kwargs):
+        return service(db.session, store_ids, d_from, d_to, **kwargs)
+    return _inner
 
 
 def _new_vs_returning_data(store_ids, d_from, d_to):
-    """Split senders active in the period into "new" vs "returning"
-    based on whether they had any prior transfer with this store
-    before `d_from`. Walk-in (customer_id IS NULL) transfers can't be
-    classified — same person can't be tracked across visits — so
-    they're aggregated separately as a third bucket. Returns
-    (rows, totals)."""
-    period_q = (db.session.query(
-        Transfer.customer_id,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-     .group_by(Transfer.customer_id).all())
-
-    new_count = returning_count = walkin_count = 0
-    new_sent = returning_sent = walkin_sent = 0.0
-    new_txns = returning_txns = walkin_txns = 0
-
-    cust_ids = [c for c, _, _ in period_q if c is not None]
-    pre_ids = set()
-    if cust_ids:
-        pre_ids = {row[0] for row in (db.session.query(Transfer.customer_id)
-            .filter(
-                Transfer.store_id.in_(store_ids),
-                Transfer.send_date < d_from,
-                Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-                Transfer.customer_id.in_(cust_ids),
-            ).distinct().all())}
-
-    for cid, count, sent in period_q:
-        sent = float(sent or 0); count = int(count or 0)
-        if cid is None:
-            walkin_count += 1
-            walkin_sent  += sent
-            walkin_txns  += count
-        elif cid in pre_ids:
-            returning_count += 1
-            returning_sent  += sent
-            returning_txns  += count
-        else:
-            new_count += 1
-            new_sent  += sent
-            new_txns  += count
-
-    rows = [
-        {"bucket": "New senders",       "customers": new_count,
-         "txns":   new_txns,            "sent":      new_sent,
-         "tone":   "primary"},
-        {"bucket": "Returning senders", "customers": returning_count,
-         "txns":   returning_txns,      "sent":      returning_sent,
-         "tone":   "neon"},
-    ]
-    if walkin_count:
-        rows.append({"bucket": "Walk-in (unidentified)",
-                     "customers": walkin_count,
-                     "txns": walkin_txns, "sent": walkin_sent,
-                     "tone": "muted"})
-    totals = {
-        "customers": new_count + returning_count + walkin_count,
-        "txns":      new_txns + returning_txns + walkin_txns,
-        "sent":      new_sent + returning_sent + walkin_sent,
-        "new_count":       new_count,
-        "returning_count": returning_count,
-    }
-    return rows, totals
+    """Split senders into new / returning / walk-in buckets.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.new_vs_returning` (PR 89)."""
+    from api.Modules.Reports.Services import new_vs_returning
+    return new_vs_returning(db.session, store_ids, d_from, d_to)
 
 
 def _csv_response(buf, fname):
@@ -6558,172 +5167,49 @@ def _csv_response(buf, fname):
 
 # ── Returned Check Status ────────────────────────────────────
 def _returned_check_status_data(store_ids, d_from, d_to):
-    """Group ReturnCheck rows bounced in the period by status. Each
-    bucket exposes count + total `amount` + total `recovered_amount`
-    (only meaningful for status='recovered'). Plus a derived net
-    G/L line: recovered - (loss + fraud).
-    """
-    rows_q = ReturnCheck.query.filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheck.bounced_on >= d_from,
-        ReturnCheck.bounced_on <= d_to,
-    ).all()
-    buckets = {s: {"count": 0, "amount": 0.0, "recovered": 0.0}
-               for s in RETURN_CHECK_STATUSES}
-    for rc in rows_q:
-        b = buckets.setdefault(rc.status, {"count": 0, "amount": 0.0,
-                                            "recovered": 0.0})
-        b["count"]  += 1
-        b["amount"] += float(rc.amount or 0)
-        if rc.status == "recovered":
-            # recovered_total is a property over related
-            # ReturnCheckPayment rows (the canonical recovery source).
-            b["recovered"] += float(rc.recovered_total or 0)
-    # Render in fixed display order so the cards always read the same.
-    display_order = ["pending", "recovered", "loss", "fraud"]
-    rows = []
-    for status in display_order:
-        b = buckets.get(status, {"count": 0, "amount": 0.0, "recovered": 0.0})
-        if b["count"] == 0:
-            continue
-        rows.append({
-            "status":    status.title(),
-            "status_key": status,
-            "count":     b["count"],
-            "amount":    b["amount"],
-            "recovered": b["recovered"],
-        })
-    totals = {
-        "count":      sum(b["count"]     for b in buckets.values()),
-        "amount":     sum(b["amount"]    for b in buckets.values()),
-        "recovered":  buckets.get("recovered", {}).get("recovered", 0.0),
-        "loss_fraud": (buckets.get("loss", {}).get("amount", 0.0)
-                       + buckets.get("fraud", {}).get("amount", 0.0)),
-    }
-    totals["net_gl"] = totals["recovered"] - totals["loss_fraud"]
-    return rows, totals
+    """Group ReturnCheck rows bounced in the period by status.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.returned_check_status` (PR 90)."""
+    from api.Modules.Reports.Services import returned_check_status
+    return returned_check_status(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank Transactions Breakdown ──────────────────────────────
 def _bank_txn_breakdown_data(store_ids, d_from, d_to):
-    """Group BankTransaction rows posted in the period by category_slug,
-    summing absolute amount + count. Uncategorised rows bucketed under
-    "(uncategorised)". Sorted by absolute amount desc."""
-    month_start = _day_start(d_from)
-    month_end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        BankTransaction.category_slug,
-        db.func.count(BankTransaction.id),
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
-    ).filter(
-        BankTransaction.store_id.in_(store_ids),
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-    ).group_by(BankTransaction.category_slug).all())
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "inflow": 0.0, "outflow": 0.0}
-    for slug, count, cents in rows_q:
-        c = int(count or 0)
-        signed = float(cents or 0) / 100.0
-        rows.append({
-            "slug":   slug or "",
-            "label":  _bank_category_label(slug or ""),
-            "count":  c,
-            "signed": signed,
-            "amount": abs(signed),
-        })
-        totals["count"]  += c
-        totals["amount"] += abs(signed)
-        if signed >= 0:
-            totals["inflow"]  += signed
-        else:
-            totals["outflow"] += signed
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Group BankTransaction rows by category_slug. Single source
+    of truth lives in
+    `api.Modules.Reports.Services.bank_txn_breakdown` (PR 91)."""
+    from api.Modules.Reports.Services import bank_txn_breakdown
+    return bank_txn_breakdown(db.session, store_ids, d_from, d_to)
 
 
 # ── Daily Drops ──────────────────────────────────────────────
 def _daily_drops_data(store_ids, d_from, d_to):
     """Sum DailyDrop rows in the period, grouped by report_date.
-    Each row: date + count + total. Plus a roll-up total."""
-    rows_q = (db.session.query(
-        DailyDrop.report_date,
-        db.func.count(DailyDrop.id),
-        db.func.coalesce(db.func.sum(DailyDrop.amount), 0.0),
-    ).filter(
-        DailyDrop.store_id.in_(store_ids),
-        DailyDrop.report_date >= d_from,
-        DailyDrop.report_date <= d_to,
-    ).group_by(DailyDrop.report_date).all())
-    rows = [{
-        "date":   d,
-        "count":  int(count or 0),
-        "amount": float(amount or 0),
-    } for d, count, amount in rows_q]
-    rows.sort(key=lambda r: r["date"], reverse=True)
-    totals = {
-        "count":  sum(r["count"]  for r in rows),
-        "amount": sum(r["amount"] for r in rows),
-    }
-    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
-    return rows, totals
+    Single source of truth lives in
+    `api.Modules.Reports.Services.daily_drops` (PR 92)."""
+    from api.Modules.Reports.Services import daily_drops
+    return daily_drops(db.session, store_ids, d_from, d_to)
 
 
 # ── Check Deposits ───────────────────────────────────────────
 def _check_deposits_data(store_ids, d_from, d_to):
-    """Sum CheckDeposit rows in the period, grouped by report_date."""
-    rows_q = (db.session.query(
-        CheckDeposit.report_date,
-        db.func.count(CheckDeposit.id),
-        db.func.coalesce(db.func.sum(CheckDeposit.amount), 0.0),
-    ).filter(
-        CheckDeposit.store_id.in_(store_ids),
-        CheckDeposit.report_date >= d_from,
-        CheckDeposit.report_date <= d_to,
-    ).group_by(CheckDeposit.report_date).all())
-    rows = [{
-        "date":   d,
-        "count":  int(count or 0),
-        "amount": float(amount or 0),
-    } for d, count, amount in rows_q]
-    rows.sort(key=lambda r: r["date"], reverse=True)
-    totals = {
-        "count":  sum(r["count"]  for r in rows),
-        "amount": sum(r["amount"] for r in rows),
-    }
-    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
-    return rows, totals
+    """Sum CheckDeposit rows in the period, grouped by report_date.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.check_deposits` (PR 92)."""
+    from api.Modules.Reports.Services import check_deposits
+    return check_deposits(db.session, store_ids, d_from, d_to)
 
 
 # ── High-Value Transfers ─────────────────────────────────────
 def _high_value_transfers_data(store_ids, d_from, d_to, threshold):
-    """List active transfers in the period whose `send_amount` is at
-    or above `threshold`. Returns rows + totals (no grouping — each
-    row is a single Transfer)."""
-    rows_q = (Transfer.query
-              .filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-              .filter(Transfer.send_amount >= threshold)
-              .order_by(Transfer.send_amount.desc(),
-                        Transfer.send_date.desc())
-              .all())
-    rows = [{
-        "send_date":     t.send_date,
-        "sender_name":   t.sender_name or "",
-        "recipient_name":t.recipient_name or "",
-        "country":       t.country or "",
-        "company":       t.company or "",
-        "amount":        float(t.send_amount or 0),
-        "fee":           float(t.fee or 0),
-        "tax":           float(t.federal_tax or 0),
-        "confirm":       t.confirm_number or "",
-    } for t in rows_q]
-    totals = {
-        "count":  len(rows),
-        "amount": sum(r["amount"] for r in rows),
-        "fees":   sum(r["fee"]    for r in rows),
-        "tax":    sum(r["tax"]    for r in rows),
-    }
-    return rows, totals
+    """List active transfers in the period >= threshold. Single
+    source of truth lives in
+    `api.Modules.Reports.Services.high_value_transfers` (PR 93)."""
+    from api.Modules.Reports.Services import high_value_transfers
+    return high_value_transfers(
+        db.session, store_ids, d_from, d_to, threshold,
+    )
 
 
 def _parse_threshold(args, default=3000):
@@ -6736,405 +5222,90 @@ def _parse_threshold(args, default=3000):
 
 # ── Employee Activity ────────────────────────────────────────
 def _employee_activity_data(store_ids, d_from, d_to):
-    """Per-employee activity: count + sent (active transfers) + cancel
-    count + last_activity timestamp. Different from Sales by Employee
-    in that it includes cancelled / rejected — this is an audit /
-    activity view, not a revenue view."""
-    # Active transfers per employee.
-    active_q = (db.session.query(
-        Transfer.created_by,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.max(Transfer.send_date),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.created_by).all())
-    # Cancelled / Rejected count per employee.
-    cancel_q = (db.session.query(
-        Transfer.created_by,
-        db.func.count(Transfer.id),
-    ).filter(
-        Transfer.store_id.in_(store_ids),
-        Transfer.send_date >= d_from,
-        Transfer.send_date <= d_to,
-        Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.created_by).all())
-    cancels_by_uid = {uid: int(c or 0) for uid, c in cancel_q}
-    # Resolve user names.
-    all_uids = ({uid for uid, *_ in active_q if uid is not None}
-                | {uid for uid, _ in cancel_q if uid is not None})
-    users = ({u.id: u for u in User.query.filter(User.id.in_(all_uids)).all()}
-             if all_uids else {})
-    rows_by_uid = {}
-    for uid, count, sent, last_date in active_q:
-        rows_by_uid[uid] = {
-            "uid":           uid,
-            "count":         int(count or 0),
-            "sent":          float(sent or 0),
-            "cancels":       cancels_by_uid.get(uid, 0),
-            "last_activity": last_date,
-        }
-    # Add employees who only have cancelled transfers (no active rows).
-    for uid, c in cancels_by_uid.items():
-        if uid not in rows_by_uid:
-            rows_by_uid[uid] = {
-                "uid":           uid,
-                "count":         0,
-                "sent":          0.0,
-                "cancels":       c,
-                "last_activity": None,
-            }
-    rows = []
-    for uid, r in rows_by_uid.items():
-        if uid is None:
-            r["employee"] = "(unattributed)"
-            r["username"] = ""
-        else:
-            u = users.get(uid)
-            r["employee"] = (u.full_name or u.username) if u else f"User #{uid}"
-            r["username"] = u.username if u else ""
-        del r["uid"]
-        rows.append(r)
-    rows.sort(key=lambda r: (r["count"] + r["cancels"]), reverse=True)
-    totals = {
-        "count":   sum(r["count"]   for r in rows),
-        "sent":    sum(r["sent"]    for r in rows),
-        "cancels": sum(r["cancels"] for r in rows),
-    }
-    return rows, totals
+    """Per-employee activity audit. Single source of truth lives
+    in `api.Modules.Reports.Services.employee_activity` (PR 94)."""
+    from api.Modules.Reports.Services import employee_activity
+    return employee_activity(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank-Rule Audit Log ──────────────────────────────────────
 def _bank_rule_audit_data(store_ids, d_from, d_to):
-    """Group BankTransaction rows that were auto-categorised by an
-    operator BankRule (matched_rule_id IS NOT NULL) by rule. Each
-    rule: count of matched txns + total absolute amount. Manual
-    operator overrides (matched_rule_id IS NULL even if categorised)
-    are not counted — those weren't a rule firing."""
-    month_start = _day_start(d_from)
-    month_end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        BankTransaction.matched_rule_id,
-        db.func.count(BankTransaction.id),
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
-    ).filter(
-        BankTransaction.store_id.in_(store_ids),
-        BankTransaction.matched_rule_id.isnot(None),
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-    ).group_by(BankTransaction.matched_rule_id).all())
-    rule_ids = [rid for rid, *_ in rows_q]
-    rules = ({r.id: r for r in BankRule.query.filter(BankRule.id.in_(rule_ids)).all()}
-             if rule_ids else {})
-    rows = []
-    for rid, count, cents in rows_q:
-        rule = rules.get(rid)
-        if rule is None:
-            label = f"Rule #{rid} (deleted)"
-            target = ""
-            match = ""
-        else:
-            label = f"Rule #{rule.id}"
-            target = _bank_category_label(rule.target_kind or "")
-            match = (f'{rule.desc_match_type or "any"}: '
-                     f'"{rule.desc_match_value or ""}"').strip(": ")
-        rows.append({
-            "rule_id": rid,
-            "label":   label,
-            "target":  target,
-            "match":   match,
-            "count":   int(count or 0),
-            "amount":  abs(float(cents or 0)) / 100.0,
-        })
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {
-        "count":  sum(r["count"]  for r in rows),
-        "amount": sum(r["amount"] for r in rows),
-        "rules":  len(rows),
-    }
-    return rows, totals
+    """Per-rule audit of operator-defined BankRule firings.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.bank_rule_audit` (PR 95)."""
+    from api.Modules.Reports.Services import bank_rule_audit
+    return bank_rule_audit(db.session, store_ids, d_from, d_to)
 
 
 # ── Cancelled Transfers ──────────────────────────────────────
 def _cancelled_transfers_data(store_ids, d_from, d_to):
-    """List Cancelled / Rejected transfers in the period."""
-    rows_q = (Transfer.query
-              .filter(
-                Transfer.store_id.in_(store_ids),
-                Transfer.send_date >= d_from,
-                Transfer.send_date <= d_to,
-                Transfer.status.in_(_OWNER_TRANSFER_EXCLUDED),
-              )
-              .order_by(Transfer.send_date.desc(), Transfer.id.desc())
-              .all())
-    rows = [{
-        "send_date":     t.send_date,
-        "sender_name":   t.sender_name or "",
-        "recipient_name":t.recipient_name or "",
-        "country":       t.country or "",
-        "company":       t.company or "",
-        "amount":        float(t.send_amount or 0),
-        "status":        t.status or "",
-        "status_notes":  t.status_notes or "",
-        "confirm":       t.confirm_number or "",
-    } for t in rows_q]
-    totals = {
-        "count":     len(rows),
-        "amount":    sum(r["amount"] for r in rows),
-        "canceled":  sum(1 for r in rows if r["status"] == "Canceled"),
-        "rejected":  sum(1 for r in rows if r["status"] == "Rejected"),
-    }
-    return rows, totals
+    """List Cancelled / Rejected transfers in the period.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.cancelled_transfers` (PR 96)."""
+    from api.Modules.Reports.Services import cancelled_transfers
+    return cancelled_transfers(db.session, store_ids, d_from, d_to)
 
 
 # ── Period P&L ───────────────────────────────────────────────
 # Daily-book lines that flow into the P&L. The (label, attr,
 # section) tuples drive the line-item rendering + CSV.
-_PL_INCOME_LINES = [
-    ("Taxable Sales",          "taxable_sales"),
-    ("Non-Taxable Sales",      "non_taxable"),
-    ("Bill Payment Charges",   "bill_payment_charge"),
-    ("Phone Recargas",         "phone_recargas"),
-    ("Boost Mobile",           "boost_mobile"),
-    ("Check Cashing Fees",     "check_cashing_fees"),
-    ("Return Check Hold Fees", "return_check_hold_fees"),
-    ("Rebates / Commissions",  "rebates_commissions"),
-]
-_PL_EXPENSE_LINES = [
-    ("Cash Purchases",  "cash_purchases"),
-    ("Check Purchases", "check_purchases"),
-    ("Cash Expenses",   "cash_expense"),
-    ("Check Expenses",  "check_expense"),
-    ("Cash Payroll",    "payroll_expense"),
-]
+# Daily-book P&L line constants now live in
+# api.Modules.Reports.Services.period_comparison (PR 86).
+# Re-exported here so existing call sites (period P&L, period
+# comparison, monthly P&L feed) keep their import shape.
+from api.Modules.Reports.Services import (
+    PL_EXPENSE_LINES as _PL_EXPENSE_LINES,
+    PL_INCOME_LINES as _PL_INCOME_LINES,
+)
 
 
 def _period_pl_data(store_ids, d_from, d_to):
-    """Aggregate DailyReport rows in the period into income / expense
-    lines. Money-transfer fees come from Transfer (not DailyReport).
-    The view is a daily-book P&L — it does NOT include MonthlyFinancial
-    manual fields like credit_card_fees / accounting_charges, since
-    those are per-month entries that don't decompose to a date range."""
-    daily = DailyReport.query.filter(
-        DailyReport.store_id.in_(store_ids),
-        DailyReport.report_date >= d_from,
-        DailyReport.report_date <= d_to,
-    ).all()
-    fee_total = (db.session.query(
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0))
-      .filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-      .scalar()) or 0.0
-
-    rows = []
-    income_total = 0.0
-    for label, attr in _PL_INCOME_LINES:
-        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
-        rows.append({"label": label, "section": "Income", "amount": v})
-        income_total += v
-    rows.append({"label": "Money Transfer Fees", "section": "Income",
-                 "amount": float(fee_total)})
-    income_total += float(fee_total)
-
-    expense_total = 0.0
-    for label, attr in _PL_EXPENSE_LINES:
-        v = sum(float(getattr(r, attr) or 0.0) for r in daily)
-        rows.append({"label": label, "section": "Expenses", "amount": v})
-        expense_total += v
-
-    totals = {
-        "income":   income_total,
-        "expenses": expense_total,
-        "net":      income_total - expense_total,
-        "days":     len(daily),
-    }
-    return rows, totals
+    """Aggregate DailyReport + Transfer fees in the period into a
+    daily-book P&L. Single source of truth lives in
+    `api.Modules.Reports.Services.period_pl` (PR 87)."""
+    from api.Modules.Reports.Services import period_pl
+    return period_pl(db.session, store_ids, d_from, d_to)
 
 
 # ── ACH Volume ───────────────────────────────────────────────
 def _ach_volume_data(store_ids, d_from, d_to):
-    """Group ACHBatch rows in the period by company. Per-company:
-    batch count + ach_amount sum."""
-    rows_q = (db.session.query(
-        ACHBatch.company,
-        db.func.count(ACHBatch.id),
-        db.func.coalesce(db.func.sum(ACHBatch.ach_amount), 0.0),
-    ).filter(
-        ACHBatch.store_id.in_(store_ids),
-        ACHBatch.ach_date >= d_from,
-        ACHBatch.ach_date <= d_to,
-    ).group_by(ACHBatch.company).all())
-    rows = []
-    totals = {"count": 0, "amount": 0.0}
-    for company, count, amount in rows_q:
-        c = int(count or 0); a = float(amount or 0.0)
-        rows.append({
-            "company": company or "(no company)",
-            "count":   c,
-            "amount":  a,
-            "avg":     (a / c) if c else 0.0,
-        })
-        totals["count"]  += c
-        totals["amount"] += a
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Group ACHBatch rows in the period by company. Single source
+    of truth lives in `api.Modules.Reports.Services.ach_volume`
+    (PR 88)."""
+    from api.Modules.Reports.Services import ach_volume
+    return ach_volume(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank Charges by Account ──────────────────────────────────
 def _bank_charges_by_account_data(store_ids, d_from, d_to):
-    """Sum BankTransaction rows tagged as bank charges, grouped by
-    account. Uses prefix match on category_slug so any per-account
-    bank_charge_<last4> rolls up."""
-    from sqlalchemy import or_
-    month_start = _day_start(d_from)
-    month_end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        BankTransaction.stripe_bank_account_id,
-        db.func.count(BankTransaction.id),
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0),
-    ).filter(
-        BankTransaction.store_id.in_(store_ids),
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-        or_(BankTransaction.category_slug == "bank_charge",
-            BankTransaction.category_slug.like("bank_charge_%")),
-    ).group_by(BankTransaction.stripe_bank_account_id).all())
-    acct_ids = [aid for aid, *_ in rows_q if aid is not None]
-    accounts = ({a.id: a for a in StripeBankAccount.query
-                 .filter(StripeBankAccount.id.in_(acct_ids)).all()}
-                if acct_ids else {})
-    rows = []
-    totals = {"count": 0, "amount": 0.0}
-    for aid, count, cents in rows_q:
-        c = int(count or 0)
-        amt = abs(float(cents or 0)) / 100.0
-        a = accounts.get(aid)
-        rows.append({
-            "account": a.label if a else "(no account)",
-            "last4":   a.last4 if a else "",
-            "count":   c,
-            "amount":  amt,
-            "avg":     (amt / c) if c else 0.0,
-        })
-        totals["count"]  += c
-        totals["amount"] += amt
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Sum BankTransaction rows tagged as bank charges, grouped
+    by account. Single source of truth lives in
+    `api.Modules.Reports.Services.bank_charges_by_account`
+    (PR 84)."""
+    from api.Modules.Reports.Services import bank_charges_by_account
+    return bank_charges_by_account(db.session, store_ids, d_from, d_to)
 
 
 # ── Period Comparison ────────────────────────────────────────
 def _period_comparison_data(store_ids, d_from, d_to,
                               *, compare_from=None, compare_to=None):
-    """Compare the chosen period against another period. Defaults to
-    the immediately-prior period of the same length when
-    `compare_from` / `compare_to` aren't provided. Pass arbitrary
-    dates to compare against any custom window — e.g. this month
-    vs. the same month last year.
-
-    If only one of compare_from / compare_to is provided we still
-    fall back to the auto-prior — both must be set for custom
-    comparison."""
-    if compare_from and compare_to:
-        prior_from, prior_to = compare_from, compare_to
-        # Normalise if user picked them backwards.
-        if prior_from > prior_to:
-            prior_from, prior_to = prior_to, prior_from
-    else:
-        span = (d_to - d_from).days + 1
-        prior_to   = d_from - timedelta(days=1)
-        prior_from = prior_to - timedelta(days=span - 1)
-
-    def _bundle(s, e):
-        # Active transfer aggregates.
-        sent, fee_sum, tax_sum, count = (db.session.query(
-            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-            db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-            db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-            db.func.count(Transfer.id),
-        ).filter(*_active_transfers_period_filters(store_ids, s, e)).one())
-        # Daily P&L aggregates.
-        daily = DailyReport.query.filter(
-            DailyReport.store_id.in_(store_ids),
-            DailyReport.report_date >= s,
-            DailyReport.report_date <= e,
-        ).all()
-        income = sum(float(getattr(r, a) or 0)
-                     for r in daily for _, a in _PL_INCOME_LINES) + float(fee_sum or 0)
-        expenses = sum(float(getattr(r, a) or 0)
-                       for r in daily for _, a in _PL_EXPENSE_LINES)
-        return {
-            "transfers":  int(count or 0),
-            "send_total": float(sent or 0),
-            "fees":       float(fee_sum or 0),
-            "tax":        float(tax_sum or 0),
-            "income":     income,
-            "expenses":   expenses,
-            "net":        income - expenses,
-        }
-
-    cur   = _bundle(d_from, d_to)
-    prior = _bundle(prior_from, prior_to)
-
-    metrics = [
-        ("Transfers",     "transfers",  False),
-        ("Total Sent",    "send_total", True),
-        ("Fees Earned",   "fees",       True),
-        ("Federal Tax",   "tax",        True),
-        ("Total Income",  "income",     True),
-        ("Total Expenses","expenses",   True),
-        ("Net Income",    "net",        True),
-    ]
-    rows = []
-    for label, key, is_money in metrics:
-        c = cur[key]; p = prior[key]
-        delta = c - p
-        pct = (delta / p * 100.0) if p else (100.0 if c else 0.0)
-        rows.append({
-            "label": label,
-            "current": c,
-            "prior":   p,
-            "delta":   delta,
-            "pct":     pct,
-            "is_money": is_money,
-        })
-    totals = {
-        "current_label": (
-            f"{d_from.strftime('%b %d')} – {d_to.strftime('%b %d, %Y')}"),
-        "prior_label":   (
-            f"{prior_from.strftime('%b %d')} – {prior_to.strftime('%b %d, %Y')}"),
-    }
-    return rows, totals
+    """Compare the chosen period against another period. Single
+    source of truth lives in
+    `api.Modules.Reports.Services.period_comparison` (PR 86)."""
+    from api.Modules.Reports.Services import period_comparison
+    return period_comparison(
+        db.session, store_ids, d_from, d_to,
+        compare_from=compare_from, compare_to=compare_to,
+    )
 
 
 # ── Fees vs. Federal Tax ─────────────────────────────────────
 def _fees_vs_tax_data(store_ids, d_from, d_to):
-    """Side-by-side: total fees (store revenue) vs. total federal tax
-    (passes through with the ACH withdrawal). Useful for sanity-
-    checking that the federal-tax rate is being applied consistently."""
-    fee_total, tax_total, count = (db.session.query(
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-        db.func.count(Transfer.id),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to)).one())
-    fee_total = float(fee_total or 0.0)
-    tax_total = float(tax_total or 0.0)
-    rows = [
-        {"label":  "Fees (store revenue)",
-         "amount": fee_total,
-         "note":   "Stays with the store as transaction fee revenue."},
-        {"label":  "Federal Tax (pass-through)",
-         "amount": tax_total,
-         "note":   "Leaves with the ACH withdrawal — not store revenue."},
-    ]
-    totals = {
-        "fees":   fee_total,
-        "tax":    tax_total,
-        "count":  int(count or 0),
-        "ratio":  (tax_total / fee_total) if fee_total else 0.0,
-    }
-    return rows, totals
+    """Side-by-side: total fees vs. federal tax. Single source of
+    truth lives in `api.Modules.Reports.Services.fees_vs_tax`
+    (PR 85)."""
+    from api.Modules.Reports.Services import fees_vs_tax
+    return fees_vs_tax(db.session, store_ids, d_from, d_to)
 
 
 # ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
@@ -7163,10 +5334,20 @@ def _period_comparison_kpis(totals, rows, extra):
 # CSV column / row / totals lambdas. New reports go here — no
 # per-route boilerplate, no per-route owner wiring (the auto-mirror
 # below covers it).
+from api.Modules.Reports.Services import (  # noqa: E402
+    by_destination_country as _svc_by_destination_country,
+    cashier_productivity as _svc_cashier_productivity,
+    sales_by_company as _svc_sales_by_company,
+    sales_by_employee as _svc_sales_by_employee,
+    sales_by_service as _svc_sales_by_service,
+    top_customers as _svc_top_customers,
+    top_recipients as _svc_top_recipients,
+)
+
 _make_report_routes(
     "sales-by-company",
     title="Sales by Company",
-    data_fn=_sales_by_company_data,
+    data_fn=_service_fn(_svc_sales_by_company),
     template="report_sales_by_company.html",
     result_unit=("company", "companies"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7195,7 +5376,7 @@ _make_report_routes(
 _make_report_routes(
     "sales-by-service-type",
     title="Sales by Service Type",
-    data_fn=_sales_by_service_data,
+    data_fn=_service_fn(_svc_sales_by_service),
     template="report_sales_by_service_type.html",
     result_unit=("service type", "service types"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7224,7 +5405,7 @@ _make_report_routes(
 _make_report_routes(
     "sales-by-employee",
     title="Sales by Employee",
-    data_fn=_sales_by_employee_data,
+    data_fn=_service_fn(_svc_sales_by_employee),
     template="report_sales_by_employee.html",
     result_unit=("employee", "employees"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7253,7 +5434,7 @@ _make_report_routes(
 _make_report_routes(
     "cashier-productivity",
     title="Cashier Productivity",
-    data_fn=_cashier_productivity_data,
+    data_fn=_service_fn(_svc_cashier_productivity),
     template="report_cashier_productivity.html",
     result_unit=("cashier", "cashiers"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7283,7 +5464,7 @@ _make_report_routes(
 _make_report_routes(
     "top-customers",
     title="Top Customers by Volume",
-    data_fn=_top_customers_data,
+    data_fn=_service_fn(_svc_top_customers),
     template="report_top_customers.html",
     result_unit=("customer", "customers"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7302,8 +5483,11 @@ _make_report_routes(
 _make_report_routes(
     "top-senders",
     title="Top Senders",
-    data_fn=lambda store_ids, d_from, d_to: _top_customers_data(
-        store_ids, d_from, d_to, sort_by="count"),
+    data_fn=_service_fn(
+        lambda db_session, store_ids, d_from, d_to, **_: _svc_top_customers(
+            db_session, store_ids, d_from, d_to, sort_by="count",
+        ),
+    ),
     template="report_top_customers.html",  # identical layout
     result_unit=("sender", "senders"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7322,7 +5506,7 @@ _make_report_routes(
 _make_report_routes(
     "top-recipients",
     title="Top Recipients",
-    data_fn=_top_recipients_data,
+    data_fn=_service_fn(_svc_top_recipients),
     template="report_top_recipients.html",
     result_unit=("recipient", "recipients"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7341,7 +5525,7 @@ _make_report_routes(
 _make_report_routes(
     "by-destination-country",
     title="By Destination Country",
-    data_fn=_by_destination_country_data,
+    data_fn=_service_fn(_svc_by_destination_country),
     template="report_by_destination_country.html",
     result_unit=("country", "countries"),
     kpis_fn=lambda totals, rows, extra: [
@@ -7923,425 +6107,121 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
 
 # ── Superadmin report data functions ─────────────────────────
 def _sa_active_stores_by_plan_data(d_from, d_to):
-    """Headcount of stores per plan (trial / basic / pro / inactive),
-    filtered to stores created on or before d_to (counts existing
-    stores at end of period, not just newcomers). Inactive includes
-    cancelled subs."""
-    q = (db.session.query(
-        Store.plan, db.func.count(Store.id),
-    ).filter(
-        Store.created_at <= _day_end(d_to),
-    ).group_by(Store.plan).all())
-    rows = [{"plan": (plan or "(unknown)").title(),
-             "count": int(c or 0)} for plan, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows),
-              "plans": len(rows)}
-    return rows, totals
+    """Headcount of stores per plan. Single source of truth lives
+    in `api.Modules.Superadmin.Services.active_stores_by_plan`
+    (PR 97)."""
+    from api.Modules.Superadmin.Services import active_stores_by_plan
+    return active_stores_by_plan(db.session, d_from, d_to)
 
 
 def _sa_signup_funnel_data(d_from, d_to):
-    """Stores created in the period bucketed by current plan. Useful
-    for measuring signup → activation success."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    q = (db.session.query(
-        Store.plan, db.func.count(Store.id),
-    ).filter(
-        Store.created_at >= start,
-        Store.created_at <= end_of_to,
-    ).group_by(Store.plan).all())
-    rows = [{"plan": (plan or "(unknown)").title(),
-             "count": int(c or 0)} for plan, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows)}
-    return rows, totals
+    """Stores created in the period bucketed by current plan.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.signup_funnel` (PR 97)."""
+    from api.Modules.Superadmin.Services import signup_funnel
+    return signup_funnel(db.session, d_from, d_to)
 
 
 def _sa_login_activity_data(d_from, d_to):
-    """Most-recent login per role, plus unique-login counts in the
-    period. Drives the platform-health DAU / MAU dashboards once we
-    have a per-day login log; for now it surfaces the per-role split
-    using User.last_login_at."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    q = (db.session.query(
-        User.role, db.func.count(User.id),
-    ).filter(
-        User.last_login_at >= start,
-        User.last_login_at <= end_of_to,
-    ).group_by(User.role).all())
-    rows = [{"role": (role or "(unknown)").title(),
-             "count": int(c or 0)} for role, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows)}
-    return rows, totals
-
-
-# Hard-coded plan price table. Used by MRR/ARR + churn cohort. When
-# Stripe pricing changes, update here. Yearly prices are normalised
-# to monthly equivalents for the MRR sum.
-_PLAN_MRR = {
-    ("basic", "monthly"): 49.0,
-    ("basic", "yearly"):  490.0 / 12.0,
-    ("pro",   "monthly"): 99.0,
-    ("pro",   "yearly"):  990.0 / 12.0,
-}
+    """Per-role unique login counts in the period. Single source
+    of truth lives in
+    `api.Modules.Superadmin.Services.login_activity` (PR 97)."""
+    from api.Modules.Superadmin.Services import login_activity
+    return login_activity(db.session, d_from, d_to)
 
 
 def _sa_mrr_arr_data(d_from, d_to):
-    """MRR + ARR by plan/cycle. Counts active (non-trial, non-
-    inactive) stores at end of period."""
-    end_of_to = _day_end(d_to)
-    q = (db.session.query(
-        Store.plan, Store.billing_cycle, db.func.count(Store.id),
-    ).filter(
-        Store.created_at <= end_of_to,
-        Store.plan.in_(["basic", "pro"]),
-    ).group_by(Store.plan, Store.billing_cycle).all())
-    rows = []
-    totals = {"mrr": 0.0, "stores": 0}
-    for plan, cycle, count in q:
-        c = int(count or 0)
-        cycle = (cycle or "monthly")
-        per_store_mrr = _PLAN_MRR.get((plan, cycle), 0.0)
-        mrr = per_store_mrr * c
-        rows.append({
-            "plan":  plan.title(),
-            "cycle": cycle.title(),
-            "stores": c,
-            "mrr":   mrr,
-            "arr":   mrr * 12.0,
-        })
-        totals["mrr"]    += mrr
-        totals["stores"] += c
-    rows.sort(key=lambda r: r["mrr"], reverse=True)
-    totals["arr"] = totals["mrr"] * 12.0
-    return rows, totals
+    """MRR + ARR by plan/cycle. Single source of truth lives in
+    `api.Modules.Superadmin.Services.mrr_arr` (PR 98)."""
+    from api.Modules.Superadmin.Services import mrr_arr
+    return mrr_arr(db.session, d_from, d_to)
 
 
 def _sa_churn_cohort_data(d_from, d_to):
-    """Stores cancelled in the period bucketed by signup-month
-    cohort. Each row: cohort label + count cancelled + paid stores
-    that survived (still active from that cohort).
-
-    Active counts are pulled in a single GROUP BY query (was N+1 —
-    one COUNT per cohort month)."""
-    cancelled_q = (Store.query
-        .filter(
-            Store.canceled_at >= _day_start(d_from),
-            Store.canceled_at <= _day_end(d_to),
-        ).all())
-    by_cohort = {}
-    for s in cancelled_q:
-        if not s.created_at:
-            continue
-        cohort = s.created_at.strftime("%Y-%m")
-        by_cohort.setdefault(cohort, {"cancelled": 0, "active": 0})
-        by_cohort[cohort]["cancelled"] += 1
-    if by_cohort:
-        # Single GROUP BY on the strftime expression — one round-trip
-        # for every cohort's active count.
-        cohort_expr = db.func.strftime("%Y-%m", Store.created_at)
-        active_q = (db.session.query(
-            cohort_expr, db.func.count(Store.id),
-        ).filter(
-            Store.canceled_at.is_(None),
-            Store.plan.in_(["basic", "pro"]),
-            cohort_expr.in_(list(by_cohort.keys())),
-        ).group_by(cohort_expr).all())
-        for cohort, count in active_q:
-            if cohort in by_cohort:
-                by_cohort[cohort]["active"] = int(count or 0)
-    rows = [{"cohort": cohort,
-             "cancelled": v["cancelled"],
-             "active":    v["active"],
-             "churn_pct": (v["cancelled"] / (v["cancelled"] + v["active"])
-                            * 100.0)
-                          if (v["cancelled"] + v["active"]) else 0.0,
-            } for cohort, v in by_cohort.items()]
-    rows.sort(key=lambda r: r["cohort"], reverse=True)
-    totals = {"cancelled": sum(r["cancelled"] for r in rows),
-              "active":    sum(r["active"]    for r in rows)}
-    return rows, totals
+    """Stores cancelled in the period by signup-month cohort.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.churn_cohort` (PR 98)."""
+    from api.Modules.Superadmin.Services import churn_cohort
+    return churn_cohort(db.session, d_from, d_to)
 
 
 def _sa_conversion_rate_data(d_from, d_to):
-    """For stores that signed up in the period: how many graduated
-    from trial to paid by today? Single summary row."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    cohort = Store.query.filter(
-        Store.created_at >= start,
-        Store.created_at <= end_of_to,
-    ).all()
-    total = len(cohort)
-    paid  = sum(1 for s in cohort if s.plan in ("basic", "pro"))
-    trial = sum(1 for s in cohort if s.plan == "trial")
-    inactive = total - paid - trial
-    rate = (paid / total * 100.0) if total else 0.0
-    rows = [
-        {"label": "Paid",     "count": paid,     "tone": "neon"},
-        {"label": "Trial",    "count": trial,    "tone": "muted"},
-        {"label": "Inactive", "count": inactive, "tone": "muted"},
-    ]
-    totals = {"total": total, "paid": paid, "rate": rate, "count": total}
-    return rows, totals
+    """Single summary of trial→paid conversion in the period.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.conversion_rate` (PR 99)."""
+    from api.Modules.Superadmin.Services import conversion_rate
+    return conversion_rate(db.session, d_from, d_to)
 
 
 def _sa_time_to_convert_data(d_from, d_to):
-    """For paid stores that signed up in the period, average days
-    from signup (created_at) to today as a proxy for "activation
-    delay" (we don't yet log the exact transition timestamp)."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    paid = Store.query.filter(
-        Store.created_at >= start,
-        Store.created_at <= end_of_to,
-        Store.plan.in_(["basic", "pro"]),
-    ).all()
-    today = datetime.utcnow()
-    rows = []
-    for s in paid:
-        if not s.created_at:
-            continue
-        days = (today - s.created_at).days
-        rows.append({"slug": s.slug, "name": s.name,
-                     "signed_up": s.created_at.date(),
-                     "plan": (s.plan or "").title(),
-                     "days": days})
-    rows.sort(key=lambda r: r["days"])
-    avg = (sum(r["days"] for r in rows) / len(rows)) if rows else 0.0
-    totals = {"count": len(rows),
-              "avg_days": avg}
-    return rows, totals
+    """Days-since-signup for paid stores. Single source of truth
+    lives in `api.Modules.Superadmin.Services.time_to_convert`
+    (PR 99)."""
+    from api.Modules.Superadmin.Services import time_to_convert
+    return time_to_convert(db.session, d_from, d_to)
 
 
 def _sa_trial_expiry_timing_data(d_from, d_to):
-    """Bucket trial stores by where they are in their trial window
-    (counted at end-of-period). Helps see whether stores convert
-    early, late, or roll into expiry."""
-    end_of_to = _day_end(d_to)
-    trials = Store.query.filter(
-        Store.plan == "trial",
-        Store.created_at <= end_of_to,
-    ).all()
-    today = datetime.utcnow()
-    buckets = {"≤ 7 days into trial": 0, "8–14 days": 0,
-               "15–21 days": 0, "22+ days": 0,
-               "Trial expired (no upgrade)": 0}
-    for s in trials:
-        if not s.created_at:
-            continue
-        days = (today - s.created_at).days
-        if s.trial_ends_at and today > s.trial_ends_at:
-            buckets["Trial expired (no upgrade)"] += 1
-        elif days <= 7:
-            buckets["≤ 7 days into trial"] += 1
-        elif days <= 14:
-            buckets["8–14 days"] += 1
-        elif days <= 21:
-            buckets["15–21 days"] += 1
-        else:
-            buckets["22+ days"] += 1
-    rows = [{"bucket": k, "count": v} for k, v in buckets.items()
-            if v > 0]
-    totals = {"count": sum(b["count"] for b in rows),
-              "trials_total": len(trials)}
-    return rows, totals
+    """Bucket trial stores by where they are in their trial window.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.trial_expiry_timing` (PR 99)."""
+    from api.Modules.Superadmin.Services import trial_expiry_timing
+    return trial_expiry_timing(db.session, d_from, d_to)
 
 
 def _sa_bank_sync_adoption_data(d_from, d_to):
     """Stores with at least one connected StripeBankAccount, by plan.
-    Period filter is ignored — adoption is point-in-time at end of
-    period. Day filter on adoption-date would need a history table
-    we don't have today."""
-    end_of_to = _day_end(d_to)
-    # Stores with bank accounts.
-    connected_ids = {sid for (sid,) in db.session.query(
-        StripeBankAccount.store_id
-    ).distinct().all()}
-    all_stores = Store.query.filter(
-        Store.created_at <= end_of_to,
-    ).all()
-    by_plan = {}
-    for s in all_stores:
-        plan = (s.plan or "(unknown)").title()
-        b = by_plan.setdefault(plan, {"connected": 0, "total": 0})
-        b["total"] += 1
-        if s.id in connected_ids:
-            b["connected"] += 1
-    rows = [{"plan": plan, "connected": v["connected"],
-             "total":     v["total"],
-             "rate_pct":  (v["connected"] / v["total"] * 100.0)
-                           if v["total"] else 0.0}
-            for plan, v in by_plan.items()]
-    rows.sort(key=lambda r: r["rate_pct"], reverse=True)
-    totals = {"connected": sum(r["connected"] for r in rows),
-              "total":     sum(r["total"]     for r in rows)}
-    totals["rate_pct"] = (totals["connected"] / totals["total"] * 100.0
-                           if totals["total"] else 0.0)
-    return rows, totals
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.bank_sync_adoption` (PR 100)."""
+    from api.Modules.Superadmin.Services import bank_sync_adoption
+    return bank_sync_adoption(db.session, d_from, d_to)
 
 
 def _sa_tv_display_adoption_data(d_from, d_to):
-    """Stores with the TV-display add-on enabled (Store.addons
-    contains 'tv_display'). Point-in-time at end of period."""
-    end_of_to = _day_end(d_to)
-    stores = Store.query.filter(
-        Store.created_at <= end_of_to,
-    ).all()
-    enabled = [s for s in stores if "tv_display" in (s.addons or "")]
-    rows = [{"slug": s.slug, "name": s.name,
-             "plan": (s.plan or "").title()} for s in enabled]
-    rows.sort(key=lambda r: r["name"].lower())
-    totals = {"count": len(enabled),
-              "total_stores": len(stores)}
-    return rows, totals
+    """Stores with the TV-display add-on enabled. Single source of
+    truth lives in
+    `api.Modules.Superadmin.Services.tv_display_adoption` (PR 100)."""
+    from api.Modules.Superadmin.Services import tv_display_adoption
+    return tv_display_adoption(db.session, d_from, d_to)
 
 
 def _sa_owner_adoption_data(d_from, d_to):
-    """Owners with multiple linked stores (umbrella ownership).
-    Each row: owner email + linked store count."""
-    rows_q = (db.session.query(
-        StoreOwnerLink.owner_id, db.func.count(StoreOwnerLink.store_id),
-    ).group_by(StoreOwnerLink.owner_id).all())
-    multi = [(oid, c) for oid, c in rows_q if (c or 0) > 1]
-    if not multi:
-        return [], {"count": 0, "owners": 0}
-    user_ids = [oid for oid, _ in multi]
-    users = {u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
-    rows = []
-    for oid, count in multi:
-        u = users.get(oid)
-        rows.append({
-            "owner": (u.full_name or u.username) if u else f"User #{oid}",
-            "email": (u.email or u.username) if u else "",
-            "stores": int(count or 0),
-        })
-    rows.sort(key=lambda r: r["stores"], reverse=True)
-    totals = {"count": len(rows),
-              "owners": len(rows),
-              "stores": sum(r["stores"] for r in rows)}
-    return rows, totals
+    """Owners with multiple linked stores. Single source of truth
+    lives in `api.Modules.Superadmin.Services.owner_adoption`
+    (PR 100)."""
+    from api.Modules.Superadmin.Services import owner_adoption
+    return owner_adoption(db.session, d_from, d_to)
 
 
 def _sa_passkey_adoption_data(d_from, d_to):
-    """Users with at least one passkey, grouped by role. Helps gauge
-    rollout of passwordless auth."""
-    user_ids = {uid for (uid,) in db.session.query(
-        Passkey.user_id).distinct().all()}
-    total_users = User.query.count()
-    rate_pct = (len(user_ids) / total_users * 100.0) if total_users else 0.0
-    if not user_ids:
-        return [], {"count": 0, "users_with_passkey": 0,
-                    "total_users": total_users,
-                    "rate_pct": rate_pct}
-    users = User.query.filter(User.id.in_(user_ids)).all()
-    by_role = {}
-    for u in users:
-        r = (u.role or "(unknown)").title()
-        by_role[r] = by_role.get(r, 0) + 1
-    rows = [{"role": role, "count": count}
-            for role, count in by_role.items()]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": len(user_ids),
-              "users_with_passkey": len(user_ids),
-              "total_users":        total_users,
-              "rate_pct":           rate_pct}
-    return rows, totals
+    """Users with at least one passkey, by role. Single source of
+    truth lives in
+    `api.Modules.Superadmin.Services.passkey_adoption` (PR 100)."""
+    from api.Modules.Superadmin.Services import passkey_adoption
+    return passkey_adoption(db.session, d_from, d_to)
 
 
 def _sa_password_resets_data(d_from, d_to):
-    """Password-reset token activity in the period. Each row: a
-    sample of recent tokens with status (used vs. expired vs. open)."""
-    tokens = PasswordResetToken.query.filter(
-        PasswordResetToken.created_at >= _day_start(d_from),
-        PasswordResetToken.created_at <= _day_end(d_to),
-    ).order_by(PasswordResetToken.created_at.desc()).all()
-    # Pre-fetch the User rows in a single IN-query — was N+1 with
-    # db.session.get() per token.
-    user_ids = {t.user_id for t in tokens if t.user_id}
-    users = ({u.id: u for u in
-              User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-    now = datetime.utcnow()
-    rows = []
-    used = expired = open_count = 0
-    for t in tokens:
-        if t.used_at:
-            status = "Used"; used += 1
-        elif t.expires_at and now > t.expires_at:
-            status = "Expired"; expired += 1
-        else:
-            status = "Open"; open_count += 1
-        u = users.get(t.user_id) if t.user_id else None
-        rows.append({
-            "created_at": t.created_at,
-            "username":   u.username if u else "(deleted)",
-            "role":       u.role if u else "",
-            "status":     status,
-        })
-    totals = {"count":   len(tokens),
-              "used":    used,
-              "expired": expired,
-              "open":    open_count}
-    return rows, totals
+    """Password-reset token activity. Single source of truth lives
+    in `api.Modules.Superadmin.Services.password_resets` (PR 101)."""
+    from api.Modules.Superadmin.Services import password_resets
+    return password_resets(db.session, d_from, d_to)
 
 
 def _sa_suspended_stores_data(d_from, d_to):
-    """Stores currently suspended (is_active=False) or marked
-    inactive (plan='inactive'). Point-in-time at end of period."""
-    end_of_to = _day_end(d_to)
-    suspended = Store.query.filter(
-        Store.created_at <= end_of_to,
-        db.or_(Store.is_active == False,
-               Store.plan == "inactive"),
-    ).all()
-    rows = []
-    for s in suspended:
-        reason = []
-        if not s.is_active:
-            reason.append("suspended")
-        if s.plan == "inactive":
-            reason.append("plan inactive")
-        rows.append({
-            "slug": s.slug,
-            "name": s.name,
-            "plan": (s.plan or "").title(),
-            "reason": " · ".join(reason),
-            "canceled_at": s.canceled_at,
-        })
-    rows.sort(key=lambda r: r["name"].lower())
-    totals = {"count": len(rows)}
-    return rows, totals
+    """Stores currently suspended or inactive. Single source of
+    truth lives in
+    `api.Modules.Superadmin.Services.suspended_stores` (PR 101)."""
+    from api.Modules.Superadmin.Services import suspended_stores
+    return suspended_stores(db.session, d_from, d_to)
 
 
 def _sa_retention_queue_data(d_from, d_to):
-    """Stores in the 180-day data-retention delete window (those
-    with `data_retention_until` set). Once the date passes,
-    purge_expired_stores wipes them. Point-in-time."""
-    stores = Store.query.filter(
-        Store.data_retention_until.isnot(None),
-    ).order_by(Store.data_retention_until.asc()).all()
-    today = date.today()
-    rows = []
-    for s in stores:
-        until = (s.data_retention_until.date()
-                 if hasattr(s.data_retention_until, "date")
-                 else s.data_retention_until)
-        days_left = (until - today).days
-        rows.append({
-            "slug": s.slug,
-            "name": s.name,
-            "plan": (s.plan or "").title(),
-            "until": until,
-            "days_left": days_left,
-            "ready_to_purge": days_left <= 0,
-        })
-    totals = {"count": len(rows),
-              "ready_to_purge": sum(1 for r in rows if r["ready_to_purge"])}
-    return rows, totals
+    """Stores in the data-retention delete queue. Single source
+    of truth lives in
+    `api.Modules.Superadmin.Services.retention_queue` (PR 101)."""
+    from api.Modules.Superadmin.Services import retention_queue
+    return retention_queue(db.session, d_from, d_to)
 
 
 def _stripe_period_unix(d_from, d_to):
@@ -8367,173 +6247,39 @@ def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
 
 
 def _sa_refunds_data(d_from, d_to):
-    """Stripe refunds in the period grouped by reason."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
-    try:
-        objs = _stripe_iter(stripe.Refund.list,
-                             created={"gte": gte, "lte": lte})
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    by_reason = {}
-    for r in objs:
-        amt = float(r.get("amount", 0) or 0) / 100.0
-        reason = (r.get("reason") or "(no reason)").replace("_", " ").title()
-        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
-        by_reason[reason]["count"]  += 1
-        by_reason[reason]["amount"] += amt
-        totals["count"]  += 1
-        totals["amount"] += amt
-    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
-            for k, v in by_reason.items()]
-    rows.sort(key=lambda r: r["amount"], reverse=True)
-    return rows, totals
+    """Stripe refunds in the period. Single source of truth lives
+    in `api.Modules.Superadmin.Services.refunds` (PR 102)."""
+    from api.Modules.Superadmin.Services import refunds
+    return refunds(db.session, d_from, d_to)
 
 
 def _sa_failed_payments_data(d_from, d_to):
-    """Recent failed Stripe charges in the period. Stripe doesn't
-    expose a server-side `failed` filter on Charge.list, so we pull
-    a capped page and filter client-side."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
-    try:
-        objs = _stripe_iter(stripe.Charge.list,
-                             created={"gte": gte, "lte": lte},
-                             max_total=500)
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    by_reason = {}
-    for c in objs:
-        if c.get("status") != "failed" and c.get("paid", True):
-            continue
-        amt = float(c.get("amount", 0) or 0) / 100.0
-        outcome = c.get("outcome") or {}
-        reason = (outcome.get("reason")
-                   or c.get("failure_message")
-                   or "(unknown)")[:80]
-        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
-        by_reason[reason]["count"]  += 1
-        by_reason[reason]["amount"] += amt
-        totals["count"]  += 1
-        totals["amount"] += amt
-    rows = [{"reason": k, "count": v["count"], "amount": v["amount"]}
-            for k, v in by_reason.items()]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    return rows, totals
+    """Recent failed Stripe charges. Single source of truth lives
+    in `api.Modules.Superadmin.Services.failed_payments` (PR 102)."""
+    from api.Modules.Superadmin.Services import failed_payments
+    return failed_payments(db.session, d_from, d_to)
 
 
 def _sa_payouts_data(d_from, d_to):
-    """Stripe payouts to the platform bank account in the period."""
-    gte, lte = _stripe_period_unix(d_from, d_to)
-    rows = []
-    totals = {"count": 0, "amount": 0.0, "stripe_error": "",
-              "paid": 0, "pending": 0, "failed": 0}
-    try:
-        objs = _stripe_iter(stripe.Payout.list,
-                             created={"gte": gte, "lte": lte})
-    except Exception as e:
-        totals["stripe_error"] = str(e) or type(e).__name__
-        return rows, totals
-    for p in objs:
-        amt = float(p.get("amount", 0) or 0) / 100.0
-        arrival_ts = p.get("arrival_date")
-        arrival = (datetime.utcfromtimestamp(arrival_ts).date()
-                    if arrival_ts else None)
-        status = p.get("status", "") or ""
-        rows.append({
-            "id":      p.get("id", ""),
-            "amount":  amt,
-            "status":  status.title(),
-            "method":  (p.get("method") or "").replace("_", " ").title(),
-            "arrival": arrival,
-        })
-        totals["count"]  += 1
-        totals["amount"] += amt
-        if status == "paid":    totals["paid"]    += 1
-        if status == "pending": totals["pending"] += 1
-        if status == "failed":  totals["failed"]  += 1
-    rows.sort(key=lambda r: r["arrival"] or date.min, reverse=True)
-    return rows, totals
+    """Stripe payouts to the platform. Single source of truth lives
+    in `api.Modules.Superadmin.Services.payouts` (PR 102)."""
+    from api.Modules.Superadmin.Services import payouts
+    return payouts(db.session, d_from, d_to)
 
 
 def _sa_dau_mau_data(d_from, d_to):
-    """Distinct-user counts per day in the period from LoginEvent.
-    Each row = one day with the count of unique users who logged in
-    that day.
-
-    Forward-only: LoginEvent only collects rows from when the model
-    ships, so periods before that show zeroes. The empty-state
-    template surfaces this honestly.
-    """
-    start = _day_start(d_from)
-    end   = _day_end(d_to)
-
-    # Distinct user_id × day. Use SQLite-friendly date() expression.
-    day_col = db.func.date(LoginEvent.at)
-    per_day_q = (db.session.query(
-        day_col, db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(
-        LoginEvent.at >= start, LoginEvent.at <= end,
-    ).group_by(day_col).order_by(day_col.desc()).all())
-    rows = [{"day": d, "users": int(c or 0)} for d, c in per_day_q]
-
-    # MAU = distinct users in the period.
-    mau = (db.session.query(
-        db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(
-        LoginEvent.at >= start, LoginEvent.at <= end,
-    ).scalar()) or 0
-    # DAU (today, if today is within the period) = distinct users
-    # whose login today.
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    dau = (db.session.query(
-        db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(LoginEvent.at >= today_start).scalar()) or 0
-    stickiness = (dau / mau * 100.0) if mau else 0.0
-    avg_per_day = (sum(r["users"] for r in rows) / len(rows)
-                    if rows else 0.0)
-    totals = {
-        "dau":          dau,
-        "mau":          int(mau),
-        "stickiness":   stickiness,
-        "avg_per_day":  avg_per_day,
-        "active_days":  len(rows),
-    }
-    return rows, totals
+    """Distinct-user counts per day. Single source of truth lives
+    in `api.Modules.Superadmin.Services.dau_mau` (PR 103)."""
+    from api.Modules.Superadmin.Services import dau_mau
+    return dau_mau(db.session, d_from, d_to)
 
 
 def _sa_webhook_health_data(d_from, d_to):
-    """Inbound Stripe webhook deliveries grouped by status. Sourced
-    from WebhookEvent which is populated by the /webhooks/stripe
-    handler on every delivery (including signature failures)."""
-    start = _day_start(d_from)
-    end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        WebhookEvent.status, db.func.count(WebhookEvent.id),
-    ).filter(
-        WebhookEvent.received_at >= start,
-        WebhookEvent.received_at <= end,
-    ).group_by(WebhookEvent.status).all())
-    rows = []
-    totals = {"count": 0, "ok": 0, "errors": 0}
-    for status, count in rows_q:
-        c = int(count or 0)
-        rows.append({"status": (status or "unknown").replace("_", " ").title(),
-                     "status_key": status or "",
-                     "count": c})
-        totals["count"] += c
-        if status == "ok":
-            totals["ok"] += c
-        else:
-            totals["errors"] += c
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals["failure_pct"] = (totals["errors"] / totals["count"] * 100.0
-                              if totals["count"] else 0.0)
-    return rows, totals
+    """Inbound Stripe webhooks by status. Single source of truth
+    lives in `api.Modules.Superadmin.Services.webhook_health`
+    (PR 103)."""
+    from api.Modules.Superadmin.Services import webhook_health
+    return webhook_health(db.session, d_from, d_to)
 
 
 # ── Superadmin reports: registry of routes ───────────────────
@@ -8923,51 +6669,21 @@ def dashboard():
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
 # picker displays these in order so the common choices stay on top.
-PHONE_COUNTRY_CODES = [
-    ("+1",   "United States / Canada"),
-    ("+52",  "Mexico"),
-    ("+502", "Guatemala"),
-    ("+503", "El Salvador"),
-    ("+504", "Honduras"),
-    ("+505", "Nicaragua"),
-    ("+506", "Costa Rica"),
-    ("+507", "Panama"),
-    ("+509", "Haiti"),
-    ("+57",  "Colombia"),
-    ("+593", "Ecuador"),
-    ("+51",  "Peru"),
-    ("+58",  "Venezuela"),
-    ("+54",  "Argentina"),
-    ("+55",  "Brazil"),
-    ("+56",  "Chile"),
-    ("+91",  "India"),
-    ("+92",  "Pakistan"),
-    ("+63",  "Philippines"),
-    ("+234", "Nigeria"),
-    ("+254", "Kenya"),
-    ("+233", "Ghana"),
-]
+# Phone-country-code reference list for the customer + transfer
+# forms now lives in
+# `api.Modules.Customers.Services.phone_codes` (PR 79). Re-exported
+# here so legacy callers (the transfer-form context, autocomplete
+# response shape) keep their existing import shape.
+from api.Modules.Customers.Services import PHONE_COUNTRY_CODES
 
 def sibling_store_ids(store_id):
-    """All store IDs that share at least one owner with the given store.
-
-    Includes the input store_id itself. Returns [store_id] when the store
-    has no Owner links (solo shop) so this is safe to call unconditionally.
-
-    Used to scope customer-directory queries: a multi-store owner should
-    see one unified customer list across all their locations, while
-    unrelated stores stay fully isolated.
-    """
-    owner_ids = [r.owner_id for r in
-                 StoreOwnerLink.query.filter_by(store_id=store_id).all()]
-    if not owner_ids:
-        return [store_id]
-    sibling_rows = (StoreOwnerLink.query
-                    .filter(StoreOwnerLink.owner_id.in_(owner_ids))
-                    .all())
-    ids = {r.store_id for r in sibling_rows}
-    ids.add(store_id)
-    return sorted(ids)
+    """Owner-umbrella resolution. Single source of truth lives in
+    `api.Modules.Customers.Repositories`; this Flask-scoped helper
+    just delegates so legacy callers (transfer routes, recent-recipients,
+    superadmin reports) keep their existing call shape during the
+    migration window."""
+    from api.Modules.Customers.Repositories import sibling_store_ids as _impl
+    return _impl(db.session, store_id)
 
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
                              address="", dob=None, customer_id=None):
@@ -8985,32 +6701,11 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
     so the customer record always tracks the latest info a cashier saw
     anywhere in the owner's portfolio.
     """
-    cust = None
-    sibling_ids = sibling_store_ids(store_id)
-    if customer_id:
-        cust = (Customer.query
-                .filter(Customer.id == customer_id,
-                        Customer.store_id.in_(sibling_ids))
-                .first())
-    if cust is None and phone_number:
-        cust = (Customer.query
-                .filter(Customer.store_id.in_(sibling_ids),
-                        Customer.phone_country == (phone_country or "+1"),
-                        Customer.phone_number == phone_number)
-                .first())
-    if cust is None:
-        cust = Customer(store_id=store_id, full_name=full_name or "",
-                        phone_country=(phone_country or "+1"),
-                        phone_number=phone_number or "")
-        db.session.add(cust)
-    if full_name:     cust.full_name     = full_name
-    if address:       cust.address       = address
-    if dob:           cust.dob           = dob
-    if phone_country: cust.phone_country = phone_country
-    if phone_number:  cust.phone_number  = phone_number
-    cust.updated_at = datetime.utcnow()
-    db.session.flush()
-    return cust
+    from api.Modules.Customers.Services import upsert as _customers_upsert
+    return _customers_upsert(
+        db.session, store_id, full_name, phone_country, phone_number,
+        address=address, dob=dob, customer_id=customer_id,
+    )
 
 @app.route("/api/customers/search")
 @login_required
@@ -9032,65 +6727,28 @@ def api_customers_search():
     creating a duplicate. Suggestions are populated only when the query is
     >= 4 chars and there's room (matches < 5) so the regular case stays fast.
     """
+    from api.Modules.Customers.Services import search as _customers_search
     sid = session.get("store_id")
     if not sid:
         return jsonify({"matches": [], "suggestions": []})
     q_text = request.args.get("q", "").strip()
-    if len(q_text) < 2:
-        return jsonify({"matches": [], "suggestions": []})
-    scope_ids = sibling_store_ids(sid)
 
-    # ── Exact-substring matches (the existing fast path) ─────
-    like = f"%{q_text}%"
-    rows = (Customer.query
-            .filter(Customer.store_id.in_(scope_ids))
-            .filter(db.or_(
-                Customer.phone_number.ilike(like),
-                Customer.full_name.ilike(like),
-            ))
-            .order_by(Customer.updated_at.desc())
-            .limit(10)
-            .all())
-    matched_ids = {c.id for c in rows}
-
-    # ── Fuzzy near-miss suggestions ──────────────────────────
-    # Pulled from the most-recently-updated 200 customers so we don't
-    # scan the whole directory on every keystroke. SequenceMatcher.ratio
-    # on 200 short strings is ~0.5ms — well under the autocomplete
-    # debounce window. Threshold 0.72 catches "Gonzales/Gonzalez" but
-    # not "Maria/Madison" (different name entirely).
-    suggestions = []
-    if len(q_text) >= 4 and len(rows) < 5:
-        from difflib import SequenceMatcher
-        q_lower = q_text.lower()
-        candidates = (Customer.query
-                      .filter(Customer.store_id.in_(scope_ids))
-                      .order_by(Customer.updated_at.desc())
-                      .limit(200).all())
-        scored = []
-        for c in candidates:
-            if c.id in matched_ids:
-                continue
-            name = (c.full_name or "").lower()
-            if not name:
-                continue
-            ratio = SequenceMatcher(None, q_lower, name).ratio()
-            if ratio >= 0.72:
-                scored.append((ratio, c))
-        scored.sort(key=lambda t: t[0], reverse=True)
-        suggestions = [c for _, c in scored[:3]]
+    matches, suggestions = _customers_search(db.session, sid, q_text)
 
     # Precompute the home-store name for rows not owned by the current
     # store so the UI can label "from Store A" on cross-store matches.
-    all_rows = list(rows) + list(suggestions)
-    other_store_ids = {c.store_id for c in all_rows if c.store_id != sid}
-    home_names = {}
-    if other_store_ids:
-        home_names = {s.id: s.name for s in
-                      Store.query.filter(Store.id.in_(other_store_ids)).all()}
+    other_store_ids = {
+        c.store_id for c in (list(matches) + list(suggestions))
+        if c.store_id != sid
+    }
+    home_names = (
+        {s.id: s.name for s in
+         Store.query.filter(Store.id.in_(other_store_ids)).all()}
+        if other_store_ids else {}
+    )
     return jsonify({
         "matches":     [c.to_dict(current_store_id=sid, home_names=home_names)
-                        for c in rows],
+                        for c in matches],
         "suggestions": [c.to_dict(current_store_id=sid, home_names=home_names)
                         for c in suggestions],
     })
@@ -9099,283 +6757,184 @@ def api_customers_search():
 @app.route("/api/customers/<int:cid>/recent-recipients")
 @login_required
 def api_customer_recent_recipients(cid):
-    """Last N distinct recipients this customer has sent to. Powers the
-    "recent recipients" chip row above the recipient_name input on the
-    transfer form — most senders send to the same 1-2 people, so a
-    one-tap chip cuts a lot of typing.
+    """Last N distinct recipients this customer has sent to. Powers
+    the "recent recipients" chip row above the recipient_name input
+    on the transfer form.
 
-    Scope is the umbrella so a returning sender at Store B sees the same
-    chips they'd see at Store A. Excludes Canceled / Rejected — recipients
-    of failed transfers aren't ones the sender will reuse."""
+    Scope, query, and result shape live in
+    api.Modules.Customers.Services.list_recent_recipients (PR 38);
+    this route is the Flask glue that authorises the request and
+    serialises the result."""
+    from api.Modules.Customers.Services import list_recent_recipients
     sid = session.get("store_id")
     if not sid:
         return jsonify([])
-    scope_ids = sibling_store_ids(sid)
-    cust = Customer.query.filter(
-        Customer.id == cid,
-        Customer.store_id.in_(scope_ids),
-    ).first()
-    if not cust:
-        return jsonify([])
-    rows = (db.session.query(
-        Transfer.recipient_name,
-        Transfer.country,
-        Transfer.recipient_phone,
-        db.func.max(Transfer.send_date),
-    ).filter(
-        Transfer.customer_id == cid,
-        Transfer.store_id.in_(scope_ids),
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-        Transfer.recipient_name != "",
-    ).group_by(Transfer.recipient_name, Transfer.country,
-               Transfer.recipient_phone)
-     .order_by(db.desc(db.func.max(Transfer.send_date)))
-     .limit(5).all())
-    return jsonify([
-        {"name": name, "country": country, "phone": phone}
-        for name, country, phone, _last in rows
-    ])
+    rows = list_recent_recipients(db.session, cid, sid)
+    return jsonify([r.to_dict() for r in rows])
 
 # ── Transfers ────────────────────────────────────────────────
-_TRANSFER_SORT_COLUMNS = {
-    "date":      Transfer.send_date,
-    "sender":    Transfer.sender_name,
-    "company":   Transfer.company,
-    "amount":    Transfer.send_amount,
-    "recipient": Transfer.recipient_name,
-    "country":   Transfer.country,
-    "confirm":   Transfer.confirm_number,
-    "batch":     Transfer.batch_id,
-    "status":    Transfer.status,
-}
+# Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
+# (PR 13). The Flask /transfers route delegates filter parsing + sort
+# resolution + pagination to the Service layer.
 
 
 @app.route("/transfers")
 @login_required
 def transfers():
-    user=current_user(); sid=session.get("store_id")
-    if not sid:
-        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
-    q=Transfer.query.filter_by(store_id=sid)
-    # Employees and admins see the same store-scoped transfer list. The
-    # earlier `created_by=self` + `send_date=today` clamps hid transfers
-    # the employee genuinely needs — a customer coming back days later
-    # to update a transfer's status often asks a different cashier.
-    # Cross-store isolation is still enforced by the store_id filter;
-    # the aggregate totals that reveal business-level info are hidden
-    # separately on the employee dashboard.
-    company=request.args.get("company",""); status=request.args.get("status","")
-    date_from=request.args.get("date_from",""); date_to=request.args.get("date_to","")
-    sender=request.args.get("sender","").strip()
-    recipient=request.args.get("recipient","").strip()
-    country=request.args.get("country","").strip()
-    confirm=request.args.get("confirm","").strip()
-    batch=request.args.get("batch","").strip()
-    search=request.args.get("q","").strip()
-    if company: q=q.filter_by(company=company)
-    if status:  q=q.filter_by(status=status)
-    if date_from:
-        # ValueError on bad user input from the query string. Silently
-        # ignore — we just skip the filter if the string isn't
-        # YYYY-MM-DD. Don't catch broader Exception — we want a real
-        # bug (e.g. an unexpected AttributeError) to actually raise.
-        try: q=q.filter(Transfer.send_date>=datetime.strptime(date_from,"%Y-%m-%d").date())
-        except ValueError: pass
-    if date_to:
-        try: q=q.filter(Transfer.send_date<=datetime.strptime(date_to,"%Y-%m-%d").date())
-        except ValueError: pass
-    if sender:    q=q.filter(Transfer.sender_name.ilike(f"%{sender}%"))
-    if recipient: q=q.filter(Transfer.recipient_name.ilike(f"%{recipient}%"))
-    if country:   q=q.filter(Transfer.country.ilike(f"%{country}%"))
-    if confirm:   q=q.filter(Transfer.confirm_number.ilike(f"%{confirm}%"))
-    if batch:     q=q.filter(Transfer.batch_id.ilike(f"%{batch}%"))
-    if search:
-        like=f"%{search}%"
-        q=q.filter(db.or_(
-            Transfer.sender_name.ilike(like),
-            Transfer.recipient_name.ilike(like),
-            Transfer.confirm_number.ilike(like),
-            Transfer.country.ilike(like),
-            Transfer.batch_id.ilike(like),
-        ))
-    # Sort: optional ?sort=<col>&dir=asc|desc. Falls back to the
-    # historical "newest first" ordering when the slug isn't in the
-    # whitelist — keeps the current default and prevents a malformed
-    # URL from picking an arbitrary column.
-    sort_slug = request.args.get("sort", "").strip()
-    sort_dir  = request.args.get("dir",  "desc").strip().lower()
-    if sort_dir not in ("asc", "desc"):
-        sort_dir = "desc"
-    sort_col = _TRANSFER_SORT_COLUMNS.get(sort_slug)
-    if sort_col is not None:
-        order = sort_col.asc() if sort_dir == "asc" else sort_col.desc()
-        # Tie-break on created_at so equal-key rows have a stable order.
-        q = q.order_by(order, Transfer.created_at.desc())
-    else:
-        q = q.order_by(Transfer.send_date.desc(), Transfer.created_at.desc())
-        sort_slug = ""
-        sort_dir  = "desc"
-    PER_PAGE=50
-    try: page=max(1,int(request.args.get("page",1)))
-    except (TypeError, ValueError): page=1
-    total=q.count()
-    total_pages=max(1,(total+PER_PAGE-1)//PER_PAGE)
-    if page>total_pages: page=total_pages
-    rows=q.offset((page-1)*PER_PAGE).limit(PER_PAGE).all()
-    ctx = dict(user=user, transfers=rows,
-        company=company, status=status, date_from=date_from, date_to=date_to,
-        sender=sender, recipient=recipient, country=country, confirm=confirm,
-        batch=batch, q=search, page=page, total=total, total_pages=total_pages,
-        per_page=PER_PAGE,
-        sort=sort_slug, dir=sort_dir)
-    # Live-search AJAX path — called from templates/transfers.html's JS.
-    # Combined page total — send_amount + fee + federal_tax, matching the
-    # single "Amount" column the user sees in the table (each row shows
-    # the total with a hover-pill breakdown). Shared between the full and
-    # partial render paths so the header always matches the column sum.
-    page_amount = float(sum(
-        r.send_amount + r.fee + (r.federal_tax or 0) for r in rows))
-    ctx["page_amount"] = page_amount
+    """Per-store transfer ledger — list view with filters, sort, and
+    paginated/live-search rendering. Employees and admins see the same
+    store-scoped list (the earlier `created_by=self` clamp hid transfers
+    that returning customers needed). Aggregate totals that reveal
+    business-level info are gated separately on the employee dashboard.
 
-    # Returns the table+pager HTML plus meta so the client can update the
-    # card header without refetching the whole chrome.
+    Filtering, sorting, pagination, and the page-total math live in
+    `api.Modules.Transfers.Services.list_transfers` — this route only
+    handles request parsing and response rendering."""
+    from api.Modules.Transfers.Repositories import TransferFilters
+    from api.Modules.Transfers.Services import list_transfers
+    user = current_user(); sid = session.get("store_id")
+    if not sid:
+        flash("Select a store first.", "error")
+        return redirect(url_for("dashboard"))
+
+    filters = TransferFilters.from_query(request.args)
+    PER_PAGE = 50
+    try:
+        page = max(1, int(request.args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    page_obj = list_transfers(
+        db.session, [sid], filters, page=page, per_page=PER_PAGE,
+    )
+
+    ctx = dict(
+        user=user, transfers=page_obj.rows,
+        company=filters.company, status=filters.status,
+        date_from=request.args.get("date_from", ""),
+        date_to=request.args.get("date_to", ""),
+        sender=filters.sender, recipient=filters.recipient,
+        country=filters.country, confirm=filters.confirm,
+        batch=filters.batch, q=filters.q,
+        page=page_obj.page, total=page_obj.total,
+        total_pages=page_obj.total_pages,
+        per_page=page_obj.per_page,
+        sort=filters.sort_slug, dir=filters.sort_dir,
+        page_amount=page_obj.page_amount,
+    )
+
+    # Live-search AJAX path — called from templates/transfers.html's JS.
+    # Returns the table+pager HTML plus meta so the client can update
+    # the card header without refetching the whole chrome.
     if request.args.get("partial") == "1":
         return jsonify({
             "html":        render_template("_transfers_table.html", **ctx),
-            "total":       total,
-            "page":        page,
-            "total_pages": total_pages,
-            "page_amount": page_amount,
+            "total":       page_obj.total,
+            "page":        page_obj.page,
+            "total_pages": page_obj.total_pages,
+            "page_amount": page_obj.page_amount,
         })
     return render_template("transfers.html", **ctx)
 
 def _parse_dob(raw):
-    """Parse a YYYY-MM-DD date string from the form, or None when blank/bad."""
-    if not raw:
-        return None
-    try:
-        return datetime.strptime(raw, "%Y-%m-%d").date()
-    except ValueError:
-        return None
+    """Parse a YYYY-MM-DD date string from the form, or None when
+    blank/bad. Single source of truth lives in
+    `api.Modules.Transfers.Services.parse_dob` (PR 78)."""
+    from api.Modules.Transfers.Services import parse_dob
+    return parse_dob(raw)
+
 
 def _active_roster(store_id):
-    """Names available in the "Processed by" dropdown. Inactive roster rows
-    are hidden so cashiers can't credit new transfers to former employees."""
-    return StoreEmployee.query.filter_by(
-        store_id=store_id, is_active=True
-    ).order_by(StoreEmployee.name.asc()).all()
+    """Names available in the "Processed by" dropdown. Single
+    source of truth lives in
+    `api.Modules.Transfers.Services.active_roster` (PR 78)."""
+    from api.Modules.Transfers.Services import active_roster
+    return active_roster(db.session, store_id)
+
 
 def _pick_employee(store_id, raw_id):
-    """Resolve a form `employee_id` value against the store's roster.
-    Returns (employee_or_none, display_name). Cross-store picks are rejected."""
-    try:
-        eid = int(raw_id) if raw_id else None
-    except (TypeError, ValueError):
-        return None, ""
-    if not eid:
-        return None, ""
-    emp = StoreEmployee.query.filter_by(id=eid, store_id=store_id).first()
-    return (emp, emp.name) if emp else (None, "")
+    """Resolve a form `employee_id` value against the roster.
+    Single source of truth lives in
+    `api.Modules.Transfers.Services.pick_employee` (PR 78)."""
+    from api.Modules.Transfers.Services import pick_employee
+    return pick_employee(db.session, store_id, raw_id)
 
 # Fields whose changes are interesting to surface in the audit log summary.
 # Sender PII edits are included (addr/phone/dob) since the customer directory
 # propagates them across sibling stores and admins want to see who edited.
-_TRANSFER_AUDIT_FIELDS = [
-    ("send_date",      "Send date"),
-    ("company",        "Company"),
-    ("service_type",   "Service"),
-    ("sender_name",    "Sender"),
-    ("send_amount",    "Amount"),
-    ("fee",            "Fee"),
-    ("federal_tax",    "Tax"),
-    ("commission",     "Commission"),
-    ("recipient_name", "Recipient"),
-    ("country",        "Country"),
-    ("recipient_phone","Recipient phone"),
-    ("sender_phone",   "Sender phone"),
-    ("sender_address", "Sender address"),
-    ("confirm_number", "Confirm #"),
-    ("status",         "Status"),
-    ("status_notes",   "Status notes"),
-    ("batch_id",       "Batch"),
-    ("internal_notes", "Notes"),
-    ("employee_name",  "Processed by"),
-]
+# Transfer audit-log helpers + the audited-fields registry now
+# live in api.Modules.Transfers.Services.audit (PR 77). The
+# legacy name is re-exported so any tooling that imported
+# `_TRANSFER_AUDIT_FIELDS` directly keeps working during the
+# strangler-fig migration window.
+from api.Modules.Transfers.Services import (
+    TRANSFER_AUDIT_FIELDS as _TRANSFER_AUDIT_FIELDS,
+)
 
 # Service types other than Money Transfer don't carry the 1% federal tax —
 # bill payments, top-ups, and recharges aren't ACH-withdrawal flows where
 # tax would be remitted. The transfer form's dropdown options must match
 # this set exactly. Server-side check is the gate; the JS preview just
 # mirrors the same rule for live feedback.
-SERVICE_TYPES = ("Money Transfer", "Bill Payment", "Top Up", "Recharge")
-_TAX_EXEMPT_SERVICES = frozenset(SERVICE_TYPES) - {"Money Transfer"}
-
-# Recipient countries that don't carry the federal-tax remittance.
-# The tax is the percentage the IRS collects on money sent ABROAD —
-# domestic transfers (within the US) skip it entirely. Same enforcement
-# pattern as _TAX_EXEMPT_SERVICES: server zeros tax when the country
-# matches; the JS toggles the field's visibility for live UX.
-_DOMESTIC_COUNTRIES = frozenset({"United States"})
-
-# Countries shown in the recipient-country dropdown on the transfer
-# form. Single source so server validation, template, and tests agree.
-# 'United States' is included so admins can log a domestic transfer
-# (no federal tax). 'Other' stays as the catch-all for anything else.
-TRANSFER_COUNTRIES = (
-    "United States", "Mexico", "Guatemala", "El Salvador", "Honduras",
-    "Dominican Republic", "Colombia", "Ecuador", "Peru", "Other",
+# Service type / tax constants + helpers now live in
+# api.Modules.Transfers.Services.tax (PR 76). The legacy names
+# below are re-exports / wrappers so existing call sites
+# (new_transfer, edit_transfer, _transfer_form_ctx, the JS
+# preview's hidden-form keys, the dropdown population) keep
+# their shape during the strangler-fig migration window.
+from api.Modules.Transfers.Services import (
+    DOMESTIC_COUNTRIES as _DOMESTIC_COUNTRIES,
+    SERVICE_TYPES,
+    TAX_EXEMPT_SERVICES as _TAX_EXEMPT_SERVICES,
+    TRANSFER_COUNTRIES,
 )
 
+
 def _normalize_service_type(raw):
-    """Coerce the form input to a known service type. Anything we don't
-    recognize falls back to Money Transfer (the historical default), so a
-    bad client value can't quietly disable tax."""
-    val = (raw or "").strip()
-    return val if val in SERVICE_TYPES else "Money Transfer"
+    """Coerce the form input to a known service type. Single
+    source of truth lives in
+    `api.Modules.Transfers.Services.normalize_service_type`
+    (PR 76)."""
+    from api.Modules.Transfers.Services import normalize_service_type
+    return normalize_service_type(raw)
+
 
 def _federal_tax_for(send_amount, service_type, store, country=None):
-    """The single source of truth for transfer tax. Bill Payment / Top Up /
-    Recharge skip the tax entirely; Money Transfer applies the store's
-    configured rate UNLESS the recipient country is domestic (US), in
-    which case the tax also skips (it's only owed on money leaving the
-    country). Both new_transfer and edit_transfer call this so the
-    rule can't drift between create and update."""
-    if service_type in _TAX_EXEMPT_SERVICES:
-        return 0.0
-    if country and country.strip() in _DOMESTIC_COUNTRIES:
-        return 0.0
-    rate = (store.federal_tax_rate if store else None) or 0
-    return round((send_amount or 0) * rate, 2)
+    """The single source of truth for transfer tax. Single source
+    of truth lives in
+    `api.Modules.Transfers.Services.federal_tax_for` (PR 76).
+    """
+    from api.Modules.Transfers.Services import federal_tax_for
+    return federal_tax_for(send_amount, service_type, store, country)
 
 def _summarize_transfer_changes(before, after, max_fields=4):
-    """Format a before/after diff into the audit log summary string."""
-    parts = []
-    for field, label in _TRANSFER_AUDIT_FIELDS:
-        old, new = before.get(field), after.get(field)
-        if (old or None) == (new or None):
-            continue
-        old_s = "—" if old in (None, "") else str(old)
-        new_s = "—" if new in (None, "") else str(new)
-        parts.append(f"{label}: {old_s} → {new_s}")
-    if len(parts) > max_fields:
-        overflow = len(parts) - max_fields
-        parts = parts[:max_fields] + [f"+{overflow} more field{'s' if overflow != 1 else ''}"]
-    return "; ".join(parts)
+    """Format a before/after diff into the audit-log summary
+    string. Single source of truth lives in
+    `api.Modules.Transfers.Services.summarize_transfer_changes`
+    (PR 77)."""
+    from api.Modules.Transfers.Services import (
+        summarize_transfer_changes,
+    )
+    return summarize_transfer_changes(before, after, max_fields)
 
-def _record_transfer_audit(transfer, user, action, employee_id, employee_name, summary):
-    db.session.add(TransferAudit(
-        store_id=transfer.store_id,
-        transfer_id=transfer.id,
-        user_id=user.id if user else None,
-        employee_id=employee_id,
-        employee_name=employee_name,
-        action=action,
-        summary=summary,
-    ))
+
+def _record_transfer_audit(transfer, user, action, employee_id,
+                            employee_name, summary):
+    """Append a TransferAudit row. Single source of truth lives
+    in `api.Modules.Transfers.Services.record_transfer_audit`
+    (PR 77)."""
+    from api.Modules.Transfers.Services import record_transfer_audit
+    return record_transfer_audit(
+        db.session, transfer, user, action,
+        employee_id, employee_name, summary,
+    )
+
 
 def _transfer_snapshot(t):
-    """Capture the subset of Transfer fields we audit, as a dict."""
-    return {field: getattr(t, field, None) for field, _ in _TRANSFER_AUDIT_FIELDS}
+    """Capture the audited subset of `t` as a dict. Single source
+    of truth lives in
+    `api.Modules.Transfers.Services.transfer_snapshot` (PR 77)."""
+    from api.Modules.Transfers.Services import transfer_snapshot
+    return transfer_snapshot(t)
 
 def _transfer_form_ctx(store):
     return dict(
@@ -9548,19 +7107,23 @@ def delete_transfer(tid):
     by @admin_required at the route level, so hiding the button in the
     template is defense-in-depth, not the actual gate.
 
-    TransferAudit has an FK onto Transfer, so we drop the audit rows
-    for this transfer first. The transfer's audit history disappears
-    along with the record it described — the intent of deletion — but
-    anything downstream that aggregates from transfers (batch totals,
-    daily book MT auto-pre-fill, dashboard counts) is a live query, so
-    those recompute correctly on the next page load.
+    Audit-history cascade + the row delete delegate to
+    api.Modules.Transfers.Services.delete_transfer (PR 33). The
+    cross-route operator-audit log entry stays in Flask since
+    record_op_audit is a Flask-side concern.
     """
+    from api.Modules.Transfers.Services import (
+        TransferNotFoundError, delete_transfer as _svc_delete_transfer,
+    )
     sid = session.get("store_id")
     if not sid:
         flash("Select a store first.", "error")
         return redirect(url_for("dashboard"))
-    t = Transfer.query.filter_by(id=tid, store_id=sid).first_or_404()
-    # Capture a recognizable label BEFORE deletion so the audit row
+    try:
+        t = _svc_delete_transfer(db.session, tid, sid)
+    except TransferNotFoundError:
+        abort(404)
+    # Capture a recognizable label BEFORE the commit so the audit row
     # makes sense without needing to look up the (gone) transfer id.
     label = (f"{t.sender_name or '?'} → {t.recipient_name or '?'}"
              f" — ${t.send_amount or 0:,.2f}")
@@ -9568,9 +7131,6 @@ def delete_transfer(tid):
                     summary=f"confirm={t.confirm_number or ''} "
                             f"company={t.company or ''} "
                             f"status={t.status or ''}")
-    TransferAudit.query.filter_by(store_id=sid, transfer_id=t.id).delete(
-        synchronize_session=False)
-    db.session.delete(t)
     db.session.commit()
     flash("Transfer deleted.", "success")
     return redirect(url_for("transfers"))
@@ -9585,53 +7145,66 @@ KNOWN_MT_COMPANIES = [
     "Inter Cambio", "Sigue", "MoneyGram", "Western Union",
     "Dolex", "Viamericas", "Transfast", "Pangea", "Boss Revolution",
 ]
-DEFAULT_MT_COMPANIES = ["Intermex", "Maxi", "Barri"]
-
-def store_mt_companies(store):
-    """The active list of money-transfer companies for a store.
-
-    Falls back to DEFAULT_MT_COMPANIES when the Store.companies CSV is
-    empty — so existing stores keep working the moment the migration
-    lands, and new stores get a sensible default on signup.
-    """
-    if store is None or not (store.companies or "").strip():
-        return list(DEFAULT_MT_COMPANIES)
-    return [c.strip() for c in store.companies.split(",") if c.strip()]
+# Money-transfer company list resolution now lives in
+# api.Modules.Transfers.Services.companies (PR 80). Re-exports
+# below preserve the legacy import shape during the migration
+# window.
+from api.Modules.Transfers.Services import (
+    DEFAULT_MT_COMPANIES,
+    store_mt_companies,
+)
 
 @app.route("/daily")
 @admin_required
 def daily_list():
-    user=current_user(); sid=session["store_id"]; today=date.today()
-    month=int(request.args.get("month",today.month)); year=int(request.args.get("year",today.year))
-    days_in_month=monthrange(year,month)[1]
-    reports={r.report_date.day:r for r in DailyReport.query.filter(
-        DailyReport.store_id==sid,
-        db.extract("year",DailyReport.report_date)==year,
-        db.extract("month",DailyReport.report_date)==month).all()}
-    month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=year,month=month).first()
-    prev_month=month-1 if month>1 else 12; prev_year=year if month>1 else year-1
-    next_month=month+1 if month<12 else 1; next_year=year if month<12 else year+1
-    return render_template("daily_list.html",user=user,year=year,month=month,
-        days=days_in_month,reports=reports,month_report=month_report,today=today,
-        month_name=month_name[month],
-        prev_month=prev_month,prev_year=prev_year,next_month=next_month,next_year=next_year)
+    """Calendar view of one month's DailyReport rows. Read-side
+    delegates to api.Modules.DailyBook.Repositories so the same
+    "give me reports in [d_from, d_to]" query lives in one place."""
+    from api.Modules.DailyBook.Repositories import list_reports_in_period
+    user = current_user(); sid = session["store_id"]; today = date.today()
+    month = int(request.args.get("month", today.month))
+    year = int(request.args.get("year", today.year))
+    days_in_month = monthrange(year, month)[1]
+    d_from = date(year, month, 1)
+    d_to = date(year, month, days_in_month)
+    reports = {
+        r.report_date.day: r
+        for r in list_reports_in_period(db.session, [sid], d_from, d_to)
+    }
+    month_report = MonthlyFinancial.query.filter_by(
+        store_id=sid, year=year, month=month,
+    ).first()
+    prev_month = month - 1 if month > 1 else 12
+    prev_year = year if month > 1 else year - 1
+    next_month = month + 1 if month < 12 else 1
+    next_year = year if month < 12 else year + 1
+    return render_template(
+        "daily_list.html", user=user, year=year, month=month,
+        days=days_in_month, reports=reports, month_report=month_report,
+        today=today, month_name=month_name[month],
+        prev_month=prev_month, prev_year=prev_year,
+        next_month=next_month, next_year=next_year,
+    )
 
 def _ensure_daily_report(store_id, report_date):
-    """Return the DailyReport for (store, date), creating an empty one if needed."""
-    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
-    if rpt is None:
-        rpt = DailyReport(store_id=store_id, report_date=report_date)
-        db.session.add(rpt)
-        db.session.flush()
-    return rpt
+    """Return the DailyReport for (store, date), creating an empty one
+    if needed. Single source of truth lives in
+    `api.Modules.DailyBook.Services.ensure_daily_report` (PR 34); this
+    Flask-scope wrapper exists so the legacy callers
+    (_recompute_line_items_total, daily_report POST) keep their
+    existing call shape during the migration window."""
+    from api.Modules.DailyBook.Services import ensure_daily_report
+    return ensure_daily_report(db.session, store_id, report_date)
 
 _DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
 
 def _daily_is_locked(store_id, report_date):
-    """True if a DailyReport exists for (store, date) and is locked.
-    Write routes call this first and bail before touching the DB."""
-    rpt = DailyReport.query.filter_by(store_id=store_id, report_date=report_date).first()
-    return bool(rpt and rpt.locked_at)
+    """True iff DailyReport for (store, date) is locked. Single
+    source of truth lives in
+    `api.Modules.DailyBook.Services.is_daily_report_locked` (PR 81).
+    """
+    from api.Modules.DailyBook.Services import is_daily_report_locked
+    return is_daily_report_locked(db.session, store_id, report_date)
 
 def _reject_if_locked(store_id, report_date, ds):
     """Shared guard for every daily-book write route. Returns a Flask
@@ -9721,46 +7294,28 @@ def _migrate_legacy_line_item_tables():
 # Each entry: (daily_report_field, singular_label, plural_label_for_count).
 # Adding a new kind is: one line here + one disclosure widget on the
 # daily-report template + removing the field from _DAILY_REPORT_FIELDS.
-_LINE_ITEM_KINDS = {
-    "return_payback": ("return_check_paid_back", "return check payback", "entries"),
-    "cash_purchase":  ("cash_purchases",         "cash purchase",        "entries"),
-    "cash_expense":   ("cash_expense",           "cash expense",         "entries"),
-    "check_purchase": ("check_purchases",        "check purchase",       "entries"),
-    "check_expense":  ("check_expense",          "check expense",        "entries"),
-    # Catch-all "other" buckets — a single day can have multiple
-    # ad-hoc cash-ins (refunds, owner contributions) and cash-outs
-    # (one-off payouts that don't fit Payroll or Drops). Backed by
-    # the same DailyLineItem model + auto-derived total contract as
-    # the rest of the kinds above.
-    "other_cash_in":  ("other_cash_in",          "other cash in",        "entries"),
-    "other_cash_out": ("other_cash_out",         "other cash out",       "entries"),
-    # Outside-cash drops (ATM drops, safe drops). Originally lived in
-    # its own DailyDrop table + bespoke routes/IIFE — collapsed into
-    # the generic kind system after the data migration. The legacy
-    # DailyDrop table is preserved (data not deleted) but the code
-    # path no longer references it.
-    "drop":           ("outside_cash_drops",     "drop",                 "drops"),
-    # Check deposits (morning/afternoon trips to the bank). Same
-    # story as drops — was its own CheckDeposit table; now a kind.
-    "check_deposit":  ("checks_deposit",         "check deposit",        "deposits"),
-}
-
-def _line_item_kind_or_404(kind):
-    if kind not in _LINE_ITEM_KINDS:
-        abort(404)
-    return _LINE_ITEM_KINDS[kind]
+# Daily-book line-item kind registry now lives in
+# api.Modules.DailyBook.Services.kinds (PR 68). The legacy names
+# below are re-exports / wrappers so existing call sites
+# (daily-report routes, _bank_category_label, monthly P&L feed)
+# keep their shape during the strangler-fig migration window.
+from api.Modules.DailyBook.Services import (
+    LINE_ITEM_KINDS as _LINE_ITEM_KINDS,
+    kind_or_404 as _line_item_kind_or_404,
+)
 
 def _recompute_line_items_total(kind, store_id, report_date):
-    """Sum DailyLineItem rows of the given kind and push the total onto
-    the matching DailyReport field. Same contract as the drops /
-    check-deposits helpers."""
+    """Sum DailyLineItem rows of the given kind and push the total
+    onto the matching DailyReport field. Single source of truth lives
+    in `api.Modules.DailyBook.Services.recompute_line_items_total`
+    (PR 42); this Flask-scope wrapper resolves the kind→field
+    mapping from the legacy `_LINE_ITEM_KINDS` map and forwards."""
+    from api.Modules.DailyBook.Services import recompute_line_items_total
     field, _, _ = _LINE_ITEM_KINDS[kind]
-    total = (db.session.query(db.func.coalesce(db.func.sum(DailyLineItem.amount), 0.0))
-             .filter_by(store_id=store_id, report_date=report_date, kind=kind).scalar()) or 0.0
-    rpt = _ensure_daily_report(store_id, report_date)
-    setattr(rpt, field, float(total))
-    rpt.updated_at = datetime.utcnow()
-    return total
+    return recompute_line_items_total(
+        db.session, store_id, report_date,
+        kind=kind, daily_report_field=field,
+    )
 
 # Fields on DailyReport the main form still edits. Derived fields
 # (outside_cash_drops, checks_deposit, and every DailyReport field
@@ -9886,7 +7441,16 @@ def daily_line_item_new(ds, kind):
     """Append a single line item of the given kind for this report date.
 
     Kind must be one of _LINE_ITEM_KINDS; unknown kinds 404 so a
-    malformed URL can't silently create an orphan row."""
+    malformed URL can't silently create an orphan row.
+
+    Validation + INSERT delegate to api.Modules.DailyBook.Services
+    (PR 32). The Flask route handles request parsing, locked-day
+    rejection, the return-payback UX gate, and the post-insert
+    DailyReport total recompute."""
+    from api.Modules.DailyBook.Services import (
+        LineItemValidationError, add_line_item,
+        parse_amount, parse_at_time,
+    )
     _, label, _ = _line_item_kind_or_404(kind)
     sid = session["store_id"]
     # Return-check paybacks come exclusively from the Return Checks
@@ -9906,30 +7470,20 @@ def daily_line_item_new(ds, kind):
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
     blocked = _reject_if_locked(sid, report_date, ds)
     if blocked is not None: return blocked
-    raw_time = request.form.get("at_time", "").strip()
-    raw_amt  = request.form.get("amount", "").strip()
-    err = None
-    at_time = amount = None
     try:
-        at_time = datetime.strptime(raw_time, "%H:%M").time()
-    except ValueError:
-        err = "Enter a valid time (HH:MM)."
-    if err is None:
-        try:
-            amount = float(raw_amt)
-            if amount <= 0: raise ValueError
-        except ValueError:
-            err = "Amount must be greater than zero."
-    if err:
-        if _wants_json(): return jsonify({"ok": False, "error": err}), 400
-        flash(err, "error"); return redirect(url_for("daily_report", ds=ds))
-    db.session.add(DailyLineItem(
+        at_time = parse_at_time(request.form.get("at_time", "").strip())
+        amount = parse_amount(request.form.get("amount", "").strip())
+    except LineItemValidationError as e:
+        msg = str(e)
+        if _wants_json(): return jsonify({"ok": False, "error": msg}), 400
+        flash(msg, "error"); return redirect(url_for("daily_report", ds=ds))
+    add_line_item(
+        db.session,
         store_id=sid, report_date=report_date, kind=kind,
         at_time=at_time, amount=amount,
-        note=request.form.get("note", "").strip()[:120],
+        note=request.form.get("note", ""),
         created_by=current_user().id,
-    ))
-    db.session.flush()
+    )
     _recompute_line_items_total(kind, sid, report_date)
     db.session.commit()
     if _wants_json():
@@ -9940,7 +7494,14 @@ def daily_line_item_new(ds, kind):
 @app.route("/daily/<string:ds>/line-items/<string:kind>/<int:item_id>/delete", methods=["POST"])
 @admin_required
 def daily_line_item_delete(ds, kind, item_id):
-    """Delete a single line item and refresh the rolled-up total."""
+    """Delete a single line item and refresh the rolled-up total.
+
+    Validation + DELETE delegate to api.Modules.DailyBook.Services
+    (PR 32). The return-check linkage check lives in the Service so
+    the cashier-side and Return-Checks-side delete paths can't drift."""
+    from api.Modules.DailyBook.Services import (
+        LineItemValidationError, delete_line_item,
+    )
     _, label, _ = _line_item_kind_or_404(kind)
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
@@ -9953,20 +7514,14 @@ def daily_line_item_delete(ds, kind, item_id):
            .filter_by(id=item_id, store_id=sid,
                       report_date=report_date, kind=kind)
            .first_or_404())
-    # Return-check-linked paybacks are owned by the Return Checks page
-    # — letting the cashier delete them here would diverge the daily
-    # book from the source of truth. Front-end hides the Remove button
-    # for these rows; this is the server-side guard against a hand-
-    # crafted POST.
-    if row.return_check_id is not None:
-        msg = ("This payback is linked to a return check. Remove it "
-               "from Books → Return Checks (delete the payment).")
+    try:
+        delete_line_item(db.session, row)
+    except LineItemValidationError as e:
+        msg = str(e)
         if _wants_json():
             return jsonify({"ok": False, "error": msg}), 403
         flash(msg, "error")
         return redirect(url_for("daily_report", ds=ds))
-    db.session.delete(row)
-    db.session.flush()
     _recompute_line_items_total(kind, sid, report_date)
     db.session.commit()
     if _wants_json():
@@ -9979,16 +7534,29 @@ def daily_line_item_delete(ds, kind, item_id):
 def daily_report_lock(ds):
     """Lock a daily report so it stops accepting writes. Intended signal:
     'this day's books are closed.' Creates the DailyReport row if it
-    doesn't exist yet so the user can lock an empty day on purpose."""
+    doesn't exist yet so the user can lock an empty day on purpose.
+
+    Lock-state mutation delegates to api.Modules.DailyBook.Services
+    (PR 34). The cross-route operator-audit-log entry stays in Flask
+    since `record_op_audit` is a Flask-side helper."""
+    from api.Modules.DailyBook.Services import lock_report
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt = _ensure_daily_report(sid, report_date)
-    if not rpt.locked_at:
-        rpt.locked_at = datetime.utcnow()
-        rpt.locked_by = current_user().id
-        rpt.updated_at = datetime.utcnow()
+    rpt_before_lock_was_set = (
+        DailyReport.query.filter_by(
+            store_id=sid, report_date=report_date,
+        ).first()
+    )
+    was_locked = bool(
+        rpt_before_lock_was_set and rpt_before_lock_was_set.locked_at,
+    )
+    rpt = lock_report(
+        db.session, sid, report_date,
+        locked_by_user_id=current_user().id,
+    )
+    if not was_locked:
         record_op_audit("lock", "daily_report", rpt.id,
                          label=f"Daily {report_date.isoformat()}")
         db.session.commit()
@@ -10000,15 +7568,17 @@ def daily_report_lock(ds):
 def daily_report_unlock(ds):
     """Unlock a daily report. Admin-only; same gate as locking so an
     employee on shift can't undo a close."""
+    from api.Modules.DailyBook.Services import unlock_report
     sid = session["store_id"]
     try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt = DailyReport.query.filter_by(store_id=sid, report_date=report_date).first()
-    if rpt and rpt.locked_at:
-        rpt.locked_at = None
-        rpt.locked_by = None
-        rpt.updated_at = datetime.utcnow()
+    rpt_before = DailyReport.query.filter_by(
+        store_id=sid, report_date=report_date,
+    ).first()
+    was_locked = bool(rpt_before and rpt_before.locked_at)
+    rpt = unlock_report(db.session, sid, report_date)
+    if was_locked and rpt is not None:
         record_op_audit("unlock", "daily_report", rpt.id,
                          label=f"Daily {report_date.isoformat()}")
         db.session.commit()
@@ -10400,311 +7970,73 @@ def admin_tax_export_zip():
 # admin list page + owner dashboard share queries.
 
 def _return_check_writeoff_total(store_ids, start, end, status_value):
-    """Sum the still-owed balance of return checks marked `status_value`
-    (typically 'loss' or 'fraud') whose status_changed_on falls in
-    [start, end]. Subtracts payments already received against each
-    parent — partial recoveries before the close were already booked
-    as recoveries in their own months.
+    """Sum the still-owed balance of return checks marked `status_value`.
+    Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_writeoff_total` (PR 62).
     """
-    rows = (db.session.query(ReturnCheck.id, ReturnCheck.amount)
-            .filter(
-                ReturnCheck.store_id.in_(store_ids),
-                ReturnCheck.status == status_value,
-                ReturnCheck.status_changed_on >= start,
-                ReturnCheck.status_changed_on <= end,
-            ).all())
-    if not rows:
-        return 0.0
-    rc_ids = [rid for rid, _ in rows]
-    # Sum payments per parent, all in one query so we don't N+1
-    # for stores with lots of write-offs.
-    paid_rows = (db.session.query(
-        ReturnCheckPayment.return_check_id,
-        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0),
-    ).filter(ReturnCheckPayment.return_check_id.in_(rc_ids))
-     .group_by(ReturnCheckPayment.return_check_id).all())
-    paid_by = {rid: float(s or 0.0) for rid, s in paid_rows}
-    total = 0.0
-    for rid, amt in rows:
-        total += max(0.0, float(amt or 0.0) - paid_by.get(rid, 0.0))
-    return total
+    from api.Modules.Owners.Services import return_check_writeoff_total
+    return return_check_writeoff_total(
+        db.session, store_ids, start, end, status_value,
+    )
+
 
 def _return_check_period_aggregates(store_ids, start, end):
-    """Sum recoveries (by payment date) and losses+fraud (by parent
-    status-change date), plus the still-pending balance.
-
-    Recoveries are measured at the PAYMENT level — a $300 installment
-    in April and $400 in May contribute to those months separately,
-    even though the parent ReturnCheck is the same row. This matches
-    the user's mental model: money received this month = recovery
-    this month, regardless of when the original check bounced.
-
-    Losses + fraud are measured at the parent level — they're a
-    single closing event, not a stream. The amount is the REMAINING
-    balance at the time of the write-off (parent.amount minus
-    payments already received), so a partially-recovered check that
-    eventually goes bad only reports the unrecovered portion as the
-    loss.
-
-    Empty store list returns zeros — caller doesn't need to short-
-    circuit. Returns gain-positive `net_gl` (used by owner dashboard);
-    `_return_check_monthly_pl` flips the sign for the P&L expense
-    column.
+    """Sum recoveries / losses / fraud / pending balance for the
+    window. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_period_aggregates`
+    (PR 62). Returns gain-positive `net_gl`; `_return_check_monthly_pl`
+    flips the sign for the P&L expense column.
     """
-    if not store_ids:
-        return {"recoveries": 0.0, "losses": 0.0, "fraud": 0.0,
-                "net_gl": 0.0, "pending": 0.0, "pending_count": 0}
-
-    # Recoveries: Σ payments by paid_on, joined to parent for the
-    # store filter. Note the payment itself doesn't carry store_id —
-    # the parent does — so we join through.
-    rec = db.session.query(
-        db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
-    ).join(
-        ReturnCheck, ReturnCheckPayment.return_check_id == ReturnCheck.id
-    ).filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheckPayment.paid_on >= start,
-        ReturnCheckPayment.paid_on <= end,
-    ).scalar() or 0.0
-
-    # Losses + fraud: closed ReturnChecks whose status_changed_on falls
-    # in the window. The contribution is the REMAINING balance, not
-    # the original amount — partial recoveries before the close were
-    # already booked as recoveries on their own months. The summing
-    # logic lives in the module-level _return_check_writeoff_total
-    # helper so it can be unit-tested without spinning up the parent.
-    loss  = _return_check_writeoff_total(store_ids, start, end, "loss")
-    fraud = _return_check_writeoff_total(store_ids, start, end, "fraud")
-
-    pending_q = db.session.query(
-        db.func.coalesce(db.func.sum(ReturnCheck.amount), 0.0),
-        db.func.count(ReturnCheck.id),
-    ).filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheck.status == "pending",
-        ReturnCheck.bounced_on <= end,
-    ).first()
-    pending_amount_total = float(pending_q[0] or 0.0)
-    pending_count = int(pending_q[1] or 0)
-    # Subtract installments already received against pending parents
-    # so the "Pending balance" KPI shows the OUTSTANDING owed, not
-    # the original face value.
-    if pending_count > 0:
-        pending_paid = (db.session.query(
-            db.func.coalesce(db.func.sum(ReturnCheckPayment.amount), 0.0)
-        ).join(ReturnCheck,
-               ReturnCheckPayment.return_check_id == ReturnCheck.id)
-         .filter(
-             ReturnCheck.store_id.in_(store_ids),
-             ReturnCheck.status == "pending",
-             ReturnCheck.bounced_on <= end,
-         ).scalar() or 0.0)
-        pending = max(0.0, pending_amount_total - float(pending_paid))
-    else:
-        pending = 0.0
-
-    return {
-        "recoveries":   float(rec),
-        "losses":       float(loss),
-        "fraud":        float(fraud),
-        "net_gl":       float(rec) - float(loss) - float(fraud),
-        "pending":      pending,
-        "pending_count": pending_count,
-    }
+    from api.Modules.Owners.Services import return_check_period_aggregates
+    return return_check_period_aggregates(db.session, store_ids, start, end)
 
 
 def _return_check_aging_buckets(store_ids, today=None):
     """Pending balance sliced into 0–30 / 31–60 / 61–90 / 90+ day
-    buckets by `bounced_on`. Helps the owner spot stale receivables
-    that probably won't recover."""
-    if today is None:
-        today = date.today()
-    if not store_ids:
-        return [
-            {"label": "0–30 d",  "amount": 0.0, "count": 0},
-            {"label": "31–60 d", "amount": 0.0, "count": 0},
-            {"label": "61–90 d", "amount": 0.0, "count": 0},
-            {"label": "90+ d",   "amount": 0.0, "count": 0},
-        ]
-    rows = ReturnCheck.query.filter(
-        ReturnCheck.store_id.in_(store_ids),
-        ReturnCheck.status == "pending",
-    ).all()
-    buckets = [
-        {"label": "0–30 d",  "amount": 0.0, "count": 0, "max": 30},
-        {"label": "31–60 d", "amount": 0.0, "count": 0, "max": 60},
-        {"label": "61–90 d", "amount": 0.0, "count": 0, "max": 90},
-        {"label": "90+ d",   "amount": 0.0, "count": 0, "max": None},
-    ]
-    for r in rows:
-        age = (today - r.bounced_on).days if r.bounced_on else 0
-        for b in buckets:
-            if b["max"] is None or age <= b["max"]:
-                b["amount"] += float(r.amount or 0.0)
-                b["count"]  += 1
-                break
-    for b in buckets:
-        b.pop("max", None)
-    return buckets
+    buckets. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_aging_buckets` (PR 62).
+    """
+    from api.Modules.Owners.Services import return_check_aging_buckets
+    return return_check_aging_buckets(db.session, store_ids, today=today)
 
 
 def _bank_charges_for_month(store_id, year, month, category_slug=None,
                              *, prefix=None):
     """Sum the absolute amount of BankTransactions tagged for the given
-    month. Pass either an exact `category_slug` or a `prefix` (used by
-    the bank-charges P&L feed to roll up every per-account slug like
-    bank_charge / bank_charge_210 / bank_charge_<last4> in one query).
-
-    Stored amounts are signed (debits negative); P&L expense columns
-    use positive numbers, so we abs().
-
-    Returns 0.0 when no transactions match — the monthly_report route
-    only LOCKs the field when this is > 0, leaving the manual P&L
-    value in place for stores without bank sync.
+    month. Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_charges_for_month` (PR 57).
     """
-    month_start = datetime(year, month, 1)
-    month_end_d = monthrange(year, month)[1]
-    month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    q = db.session.query(
-        db.func.coalesce(db.func.sum(BankTransaction.amount_cents), 0)
-    ).filter(
-        BankTransaction.store_id == store_id,
-        BankTransaction.posted_at >= month_start,
-        BankTransaction.posted_at <= month_end,
-    )
-    if prefix is not None:
-        from sqlalchemy import or_
-        # SQL prefix match. Trailing % does the heavy lifting; we also
-        # accept the bare prefix itself (no underscore suffix) so the
-        # legacy `bank_charge` slug counts.
-        q = q.filter(or_(
-            BankTransaction.category_slug == prefix,
-            BankTransaction.category_slug.like(f"{prefix}_%"),
-        ))
-    else:
-        q = q.filter(BankTransaction.category_slug == category_slug)
-    cents = q.scalar()
-    return abs(float(cents or 0)) / 100.0
+    from api.Modules.BankSync.Services import bank_charges_for_month as _svc
+    return _svc(db.session, store_id, year, month, category_slug,
+                prefix=prefix)
 
 def _bank_charges_breakdown_for_month(store_id, year, month):
     """Two-level breakdown feeding the expandable Bank Charges block on
-    the monthly P&L. Groups bank-charge transactions by description
-    string; each group exposes its individual rows.
-
-    Returns a list of dicts:
-      [
-        {"description": "REMOTE DEPOSIT FEE",
-         "total":       2.10,
-         "count":       1,
-         "transactions": [
-           {"posted_at": datetime, "amount": 2.10,
-            "account_label": "••0230" or nickname,
-            "description": "REMOTE DEPOSIT FEE 04/29"},
-         ]},
-        ...
-      ]
-
-    Sorted by total descending so the biggest contributor reads first.
-    Uses a prefix match on `bank_charge%` so every per-account slug
-    (bank_charge_210, bank_charge_230, future bank_charge_<last4>)
-    rolls into the breakdown without explicit registry maintenance.
+    the monthly P&L. Single source of truth lives in
+    `api.Modules.BankSync.Services.bank_charges_breakdown_for_month`
+    (PR 57).
     """
-    from sqlalchemy import or_
-    month_start = datetime(year, month, 1)
-    month_end_d = monthrange(year, month)[1]
-    month_end = datetime(year, month, month_end_d, 23, 59, 59)
-    rows = (BankTransaction.query
-            .filter(
-                BankTransaction.store_id == store_id,
-                or_(
-                    BankTransaction.category_slug == "bank_charge",
-                    BankTransaction.category_slug.like("bank_charge_%"),
-                ),
-                BankTransaction.posted_at >= month_start,
-                BankTransaction.posted_at <= month_end,
-            )
-            .order_by(BankTransaction.posted_at.desc()).all())
-    if not rows:
-        return []
-    # Map account ids → label so we don't N+1 lookup per transaction.
-    acct_ids = {r.stripe_bank_account_id for r in rows if r.stripe_bank_account_id}
-    accts = {a.id: a for a in StripeBankAccount.query.filter(
-        StripeBankAccount.id.in_(acct_ids)).all()} if acct_ids else {}
-    # Group by description. The exact full description is the key —
-    # operators want each variant visible (e.g. "REMOTE DEPOSIT FEE
-    # 04/29" and "REMOTE DEPOSIT FEE 05/02" group separately if the
-    # bank includes the date in the string). If you want strings to
-    # collapse on common prefixes that's a future enhancement.
-    groups = {}
-    for r in rows:
-        key = r.description or "(no description)"
-        g = groups.setdefault(key, {"description": key, "total": 0.0,
-                                     "count": 0, "transactions": []})
-        amt = abs(float(r.amount_cents or 0) / 100.0)
-        g["total"] += amt
-        g["count"] += 1
-        acct = accts.get(r.stripe_bank_account_id)
-        g["transactions"].append({
-            "posted_at": r.posted_at,
-            "amount":    amt,
-            "description": r.description or "",
-            "account_label": acct.label if acct else "",
-        })
-    return sorted(groups.values(), key=lambda g: g["total"], reverse=True)
+    from api.Modules.BankSync.Services import (
+        bank_charges_breakdown_for_month as _svc,
+    )
+    return _svc(db.session, store_id, year, month)
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
-    using EXPENSE convention so it slots correctly into the
-    expense column on monthly_report (which subtracts from net income).
-
-      positive  → net loss for the month (losses + fraud > recoveries)
-      negative  → net gain for the month (recoveries > losses + fraud)
-
-    Note: _return_check_period_aggregates['net_gl'] uses the OPPOSITE
-    convention (positive = gain) because that's what the owner
-    dashboard shows. We deliberately negate here so each consumer
-    reads the right sign for its context.
+    using EXPENSE convention. Single source of truth lives in
+    `api.Modules.Owners.Services.return_check_monthly_pl` (PR 62).
     """
-    start = date(year, month, 1)
-    end   = date(year, month, monthrange(year, month)[1])
-    agg = _return_check_period_aggregates([store_id], start, end)
-    # Flip the sign: dashboard's "net_gl" is gain-positive, P&L line
-    # is loss-positive (expense convention).
-    return -agg["net_gl"]
+    from api.Modules.Owners.Services import return_check_monthly_pl
+    return return_check_monthly_pl(db.session, store_id, year, month)
 
 
 def _return_check_monthly_series(store_ids, today=None):
-    """12-month bars for the owner dashboard: per-month recoveries
-    (positive) and losses+fraud (negative). Labels are 'YYYY-MM' so
-    ApexCharts renders them as a date axis."""
-    if today is None:
-        today = date.today()
-    months = []
-    y, m = today.year, today.month
-    for _ in range(12):
-        months.append((y, m))
-        m -= 1
-        if m == 0:
-            m = 12
-            y -= 1
-    months.reverse()  # oldest → newest
-    labels, recoveries, losses = [], [], []
-    if not store_ids:
-        for (yy, mm) in months:
-            labels.append(f"{yy:04d}-{mm:02d}")
-            recoveries.append(0.0)
-            losses.append(0.0)
-        return labels, recoveries, losses
-    for (yy, mm) in months:
-        s = date(yy, mm, 1)
-        e = date(yy, mm, monthrange(yy, mm)[1])
-        agg = _return_check_period_aggregates(store_ids, s, e)
-        labels.append(f"{yy:04d}-{mm:02d}")
-        recoveries.append(round(agg["recoveries"], 2))
-        # Combine loss + fraud — both are write-offs from the P&L's POV.
-        losses.append(round(agg["losses"] + agg["fraud"], 2))
-    return labels, recoveries, losses
+    """12-month bars for the owner dashboard. Single source of truth
+    lives in `api.Modules.Owners.Services.return_check_monthly_series`
+    (PR 62).
+    """
+    from api.Modules.Owners.Services import return_check_monthly_series
+    return return_check_monthly_series(db.session, store_ids, today=today)
 
 
 def _return_check_list_payload(store_id, status, query, date_from, date_to):
@@ -11480,7 +8812,14 @@ def bank_stripe_sync_transactions():
 def bank_transactions():
     """Paginated list of pulled bank transactions. Live-search per
     CLAUDE.md invariant #14: ?partial=1 returns JSON, full GET returns
-    the page chrome."""
+    the page chrome.
+
+    Filtering, sorting, and pagination live in
+    `api.Modules.BankSync.Services.list_transactions_page` — this
+    route only handles request parsing and response rendering.
+    """
+    from api.Modules.BankSync.Repositories import BankTransactionFilters
+    from api.Modules.BankSync.Services import list_transactions_page
     store = current_store()
     sid = store.id
     is_partial = request.args.get("partial") == "1"
@@ -11491,30 +8830,23 @@ def bank_transactions():
     date_from  = (request.args.get("date_from") or "").strip()
     date_to    = (request.args.get("date_to") or "").strip()
 
-    qry = BankTransaction.query.filter_by(store_id=sid)
-    if account_id:
-        qry = qry.filter_by(stripe_bank_account_id=account_id)
-    if q and len(q) >= 2:
-        like = f"%{q}%"
-        qry = qry.filter(BankTransaction.description.ilike(like))
-    if date_from:
-        try:
-            d = datetime.strptime(date_from, "%Y-%m-%d")
-            qry = qry.filter(BankTransaction.posted_at >= d)
-        except ValueError:
-            pass
-    if date_to:
-        try:
-            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
-            qry = qry.filter(BankTransaction.posted_at < d)
-        except ValueError:
-            pass
-    total = qry.count()
-    total_pages = max(1, (total + per_page - 1) // per_page)
-    page = min(page, total_pages)
-    rows = (qry.order_by(BankTransaction.posted_at.desc(),
-                         BankTransaction.id.desc())
-              .offset((page - 1) * per_page).limit(per_page).all())
+    # Map the legacy "account" param onto the Service's "account_id".
+    # Skip the description filter when the query is shorter than 2
+    # chars (legacy parity — the live-search debouncer also clamps).
+    filters = BankTransactionFilters.from_query({
+        "posted_from": date_from,
+        "posted_to": date_to,
+        "account_id": str(account_id) if account_id else "",
+        "q": q if len(q) >= 2 else "",
+    })
+    page_obj = list_transactions_page(
+        db.session, [sid], filters, page=page, per_page=per_page,
+    )
+    rows = page_obj.rows
+    total = page_obj.total
+    total_pages = page_obj.total_pages
+    page = page_obj.page
+
     accounts = (StripeBankAccount.query
                  .filter_by(store_id=sid, enabled=True)
                  .order_by(StripeBankAccount.connected_at.desc()).all())
@@ -11616,82 +8948,10 @@ def bank_transaction_move_date(txn_id):
     return redirect(request.referrer or url_for("bank_transactions"))
 
 # ── Rules CRUD ──────────────────────────────────────────────
-def _parse_rule_form(form, sid):
-    """Pull + validate a BankRule's fields from form data. Returns a
-    dict of attribute updates plus an error string (empty on success).
-    Reused by both new and edit handlers."""
-    desc_match_type = (form.get("desc_match_type") or "").strip()
-    desc_match_value = (form.get("desc_match_value") or "").strip()
-    sign_filter = (form.get("sign_filter") or "").strip()
-    target_kind = (form.get("target_kind") or "").strip()
-    if not target_kind:
-        return None, "Pick a category to apply when this rule matches."
-    if not _is_valid_bank_category(target_kind, sid):
-        return None, "Unknown category."
-    # Description match — both fields must be set together, or both empty.
-    if desc_match_type and not desc_match_value:
-        return None, "Enter a description value to match against."
-    if desc_match_value and not desc_match_type:
-        desc_match_type = "contains"
-    if desc_match_type and desc_match_type not in ("contains", "starts_with", "equals", "regex"):
-        return None, "Unknown description match type."
-    if sign_filter and sign_filter not in ("credit", "debit"):
-        return None, "Sign filter must be credit or debit."
-    # Amounts come in as positive dollar strings; store as absolute cents.
-    def _parse_dollars(label):
-        raw = (form.get(label) or "").strip()
-        if not raw:
-            return None, ""
-        try:
-            cents = int(round(float(raw) * 100))
-            if cents < 0:
-                return None, "Amounts must be non-negative."
-            return cents, ""
-        except ValueError:
-            return None, f"Invalid amount in {label}."
-    amount_min_cents, e1 = _parse_dollars("amount_min")
-    if e1: return None, e1
-    amount_max_cents, e2 = _parse_dollars("amount_max")
-    if e2: return None, e2
-    if (amount_min_cents is not None and amount_max_cents is not None
-            and amount_min_cents > amount_max_cents):
-        return None, "Min amount can't be greater than max."
-    # Account filter — must belong to the store.
-    account_filter_id = None
-    raw_acct = (form.get("account_filter_id") or "").strip()
-    if raw_acct:
-        try:
-            acct_id = int(raw_acct)
-        except ValueError:
-            return None, "Invalid account filter."
-        owned = StripeBankAccount.query.filter_by(
-            id=acct_id, store_id=sid).first()
-        if not owned:
-            return None, "Account filter does not belong to this store."
-        account_filter_id = acct_id
-    # At least one condition must be set — an empty rule would catch
-    # every transaction and is almost always a misconfiguration.
-    if (not desc_match_type and not sign_filter
-            and amount_min_cents is None and amount_max_cents is None
-            and account_filter_id is None):
-        return None, "Set at least one condition (description, sign, amount, or account)."
-    try:
-        priority = int(form.get("priority") or 100)
-    except ValueError:
-        priority = 100
-    return {
-        "enabled":           form.get("enabled") == "on",
-        "priority":          priority,
-        "desc_match_type":   desc_match_type,
-        "desc_match_value":  desc_match_value,
-        "sign_filter":       sign_filter,
-        "amount_min_cents":  amount_min_cents,
-        "amount_max_cents":  amount_max_cents,
-        "account_filter_id": account_filter_id,
-        "target_kind":       target_kind,
-        "auto_post":         form.get("auto_post") == "on",
-        "description":       (form.get("description") or "").strip()[:200],
-    }, ""
+# `_parse_rule_form` was extracted into
+# `api.Modules.BankSync.Services.rules.parse_rule_form` (PR 31). The
+# Flask routes below delegate validation, account-scope check, and
+# the row mutations to that Service.
 
 @app.route("/bank/rules")
 @pro_required
@@ -11709,13 +8969,21 @@ def bank_rules():
 @app.route("/bank/rules/new", methods=["POST"])
 @pro_required
 def bank_rule_new():
+    """Create a BankRule. Validation, account-scope check, and the
+    INSERT itself live in `api.Modules.BankSync.Services.rules`; this
+    route handles the Flask form-redirect + flash glue."""
+    from api.Modules.BankSync.Services import (
+        RuleValidationError, create_rule, parse_rule_form,
+    )
     sid = session["store_id"]
-    fields, err = _parse_rule_form(request.form, sid)
-    if err:
-        flash(err, "error")
+    try:
+        fields = parse_rule_form(
+            db.session, request.form, sid, _is_valid_bank_category,
+        )
+    except RuleValidationError as e:
+        flash(str(e), "error")
         return redirect(url_for("bank_rules"))
-    rule = BankRule(store_id=sid, **fields)
-    db.session.add(rule)
+    create_rule(db.session, sid, fields)
     db.session.commit()
     flash("Rule created.", "success")
     return redirect(url_for("bank_rules"))
@@ -11723,14 +8991,23 @@ def bank_rule_new():
 @app.route("/bank/rules/<int:rule_id>/edit", methods=["POST"])
 @pro_required
 def bank_rule_edit(rule_id):
+    """Update a BankRule. Cross-store rule_id 404s."""
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, RuleValidationError,
+        parse_rule_form, update_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    fields, err = _parse_rule_form(request.form, sid)
-    if err:
-        flash(err, "error")
+    try:
+        fields = parse_rule_form(
+            db.session, request.form, sid, _is_valid_bank_category,
+        )
+    except RuleValidationError as e:
+        flash(str(e), "error")
         return redirect(url_for("bank_rules"))
-    for k, v in fields.items():
-        setattr(rule, k, v)
+    try:
+        update_rule(db.session, rule_id, sid, fields)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash("Rule updated.", "success")
     return redirect(url_for("bank_rules"))
@@ -11738,9 +9015,14 @@ def bank_rule_edit(rule_id):
 @app.route("/bank/rules/<int:rule_id>/toggle", methods=["POST"])
 @pro_required
 def bank_rule_toggle(rule_id):
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, toggle_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    rule.enabled = not rule.enabled
+    try:
+        rule = toggle_rule(db.session, rule_id, sid)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash(f"Rule { 'enabled' if rule.enabled else 'disabled' }.", "success")
     return redirect(url_for("bank_rules"))
@@ -11748,9 +9030,14 @@ def bank_rule_toggle(rule_id):
 @app.route("/bank/rules/<int:rule_id>/delete", methods=["POST"])
 @pro_required
 def bank_rule_delete(rule_id):
+    from api.Modules.BankSync.Services import (
+        RuleNotFoundError, delete_rule,
+    )
     sid = session["store_id"]
-    rule = BankRule.query.filter_by(id=rule_id, store_id=sid).first_or_404()
-    db.session.delete(rule)
+    try:
+        delete_rule(db.session, rule_id, sid)
+    except RuleNotFoundError:
+        abort(404)
     db.session.commit()
     flash("Rule deleted.", "success")
     return redirect(url_for("bank_rules"))
@@ -12113,18 +9400,28 @@ def admin_roster_rename(eid):
 @app.route("/admin/settings/team/<int:uid>", methods=["POST"])
 @admin_required
 def admin_reset_employee_password(uid):
+    """Admin-side employee password reset. Validation + apply
+    delegate to `api.Modules.Auth.Services.admin_set_password`
+    (PR 40); this Flask route handles the cross-store scope check
+    and the inline flash messages."""
+    from api.Modules.Auth.Services import admin_set_password
     sid = session["store_id"]
     emp = User.query.filter_by(id=uid, store_id=sid).first_or_404()
-    pw = request.form.get("password", "")
-    confirm = request.form.get("confirm_password", "")
-    if len(pw) < 8:
-        flash("Password must be at least 8 characters.", "error")
-    elif pw != confirm:
-        flash("Passwords do not match.", "error")
+    errors = admin_set_password(
+        db.session, emp,
+        request.form.get("password", ""),
+        request.form.get("confirm_password", ""),
+    )
+    if errors:
+        # Surface the first error as a flash (matches the legacy
+        # behaviour — only one message per round-trip).
+        flash(next(iter(errors.values())), "error")
     else:
-        emp.set_password(pw)
         db.session.commit()
-        flash(f"Password updated for {emp.full_name or emp.username}.", "success")
+        flash(
+            f"Password updated for {emp.full_name or emp.username}.",
+            "success",
+        )
     return redirect(url_for("admin_settings", tab="team"))
 
 
@@ -13261,19 +10558,27 @@ def resend_webhook():
 def stripe_webhook():
     """Stripe webhook receiver.
 
-    Handled events:
-      checkout.session.completed   — flip the store onto the new plan, store
-                                     Stripe IDs, clear any retention timer.
-      customer.subscription.deleted — mark the store inactive and start the
-                                     6-month data retention countdown.
-    Other event types are accepted (200 OK) but ignored.
+    HTTP-facing wrapper. The verified-event dispatch + per-event
+    business logic lives in
+    `api.Modules.Billing.Services.handle_stripe_event` (PR 59).
+    The route owns:
+      - the request body / Stripe-Signature header pull
+      - the WebhookEvent log-row write (signature_err / ok /
+        processing_err) so the Webhook Health report has data
+      - the HTTP response shape (400 on bad sig, 200 on accepted
+        delivery so Stripe doesn't retry handler bugs forever)
     """
+    from api.Modules.Billing.Services import (
+        InvalidWebhookSignatureError,
+        handle_stripe_event,
+        verify_webhook_signature,
+    )
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature", "")
     webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        event = verify_webhook_signature(payload, sig_header, webhook_secret)
+    except InvalidWebhookSignatureError as e:
         # Log the rejected delivery so Webhook Health surfaces it.
         try:
             db.session.add(WebhookEvent(
@@ -13299,63 +10604,9 @@ def stripe_webhook():
         log_row = None
 
     try:
-
-        if event["type"] == "checkout.session.completed":
-            obj = event["data"]["object"]
-            store_id = obj.get("metadata", {}).get("store_id")
-            if store_id:
-                store = db.session.get(Store, int(store_id))
-                if store:
-                    sub_id = obj.get("subscription", "")
-                    customer_id = obj.get("customer", "")
-                    try:
-                        sub = stripe.Subscription.retrieve(sub_id)
-                        price_id = sub["items"]["data"][0]["price"]["id"]
-                        # Map the Stripe price to the internal plan key.
-                        # basic + basic_yearly both grant the "basic" tier;
-                        # pro + pro_yearly both grant "pro". Anything unknown
-                        # falls back to "pro" (safer than locking the user out
-                        # of features they paid for).
-                        prices = _stripe_price_ids()
-                        basic_ids  = {prices["basic"], prices["basic_yearly"]} - {""}
-                        yearly_ids = {prices["basic_yearly"], prices["pro_yearly"]} - {""}
-                        store.plan = "basic" if price_id in basic_ids else "pro"
-                        store.billing_cycle = "yearly" if price_id in yearly_ids else "monthly"
-                    except Exception as e:
-                        app.logger.error(f"Stripe sub retrieve error: {e}")
-                        store.plan = "pro"
-                        store.billing_cycle = "monthly"
-                    store.stripe_customer_id = customer_id
-                    store.stripe_subscription_id = sub_id
-                    # Returning customer: clear cancellation + retention timer.
-                    store.canceled_at = None
-                    store.data_retention_until = None
-                    # Reset the trial-reminder dedup flag too, so if this
-                    # subscription later lapses and a NEW trial ever begins,
-                    # the reminder cron sends fresh instead of no-oping.
-                    store.trial_reminder_sent_at = None
-                    # Referral flow: mint the referrer's own code so they get
-                    # the topbar crown immediately, and apply any pending
-                    # referee credit from the code they signed up with.
-                    try:
-                        ensure_referral_code(store)
-                        apply_pending_referral_credits(store)
-                    except Exception as e:
-                        app.logger.warning(f"referral hook error for store {store.id}: {e}")
-                    db.session.commit()
-
-        elif event["type"] == "customer.subscription.deleted":
-            sub_id = event["data"]["object"].get("id", "")
-            store = Store.query.filter_by(stripe_subscription_id=sub_id).first()
-            if store:
-                now = datetime.utcnow()
-                store.plan = "inactive"
-                store.billing_cycle = ""
-                store.stripe_subscription_id = ""
-                store.canceled_at = now
-                store.data_retention_until = now + timedelta(days=DATA_RETENTION_DAYS)
-                db.session.commit()
-
+        handle_stripe_event(
+            db.session, event, retention_days=DATA_RETENTION_DAYS,
+        )
     except Exception as e:
         # Don't let a handler bug 500 a Stripe delivery — log + ack.
         # Stripe retries on non-2xx, so a 200 with logged error keeps
@@ -13373,106 +10624,28 @@ def stripe_webhook():
     return jsonify({"received": True}), 200
 
 # ── Data retention purge ─────────────────────────────────────
-# Models that hold per-store data and must be wiped before the store row.
-_STORE_OWNED_MODELS = [
-    # TransferAudit must purge before Transfer (it has an FK to transfer.id),
-    # and StoreEmployee before any row that FKs to it — we null/ignore employee
-    # FKs on purge via the audit table's nullable column, but order still
-    # matters for cascade sanity.
-    "TransferAudit", "OperatorAuditLog",
-    "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
-    "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    # BankTransaction must purge before StripeBankAccount — it FKs to it.
-    # BankRule + BankTransaction must purge before StripeBankAccount —
-    # both FK to it.
-    "MonthlyFinancial", "BankRule", "BankTransaction", "StripeBankAccount", "StoreOwnerLink",
-    "StoreEmployee", "Customer",
-    "ReferralCode", "ReferralRedemption",
-    # TVDisplay (store-keyed) — children handled by the explicit chain
-    # above this loop. Listing it here covers the parent row itself.
-    "TVDisplay",
-    "User",
-]
+# Per-store model registry + retention-purge implementation now
+# live in api.Modules.Billing.Services.retention (PR 64). The
+# legacy names below are re-exported / wrapped so any operator
+# tool that imported them by name keeps working during the
+# strangler-fig migration window.
+from api.Modules.Billing.Services import (
+    STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES,
+    STORE_OWNED_MODELS as _STORE_OWNED_MODELS,
+)
 
-# Models whose store FK isn't literally named `store_id`. The default for
-# anything absent here is `store_id`.
-_STORE_FK_OVERRIDES = {
-    "ReferralCode":       "owner_store_id",
-    "ReferralRedemption": "referee_store_id",
-}
 
 def purge_expired_stores():
-    """Hard-delete inactive stores whose retention window has elapsed."""
-    now = datetime.utcnow()
-    expired = Store.query.filter(
-        Store.plan == "inactive",
-        Store.data_retention_until.isnot(None),
-        Store.data_retention_until <= now,
-    ).all()
-    purged = 0
-    for s in expired:
-        # User-scoped auth rows have to go before the Users themselves so
-        # the User FK doesn't orphan on Postgres. Collect user ids in the
-        # store, wipe their Passkey rows, then let the regular loop purge
-        # the User rows.
-        user_ids = [uid for (uid,) in
-                    db.session.query(User.id).filter_by(store_id=s.id).all()]
-        if user_ids:
-            Passkey.query.filter(Passkey.user_id.in_(user_ids)).delete(
-                synchronize_session=False)
-            # EmailEvent.user_id is a nullable FK; we null it out for
-            # purged users so the event history (useful for
-            # post-purge forensics) doesn't block the User delete.
-            EmailEvent.query.filter(EmailEvent.user_id.in_(user_ids)).update(
-                {"user_id": None}, synchronize_session=False)
-        # TV-display tables form a chain (display → country → bank →
-        # rate) and only the top has store_id. Walk down explicitly so
-        # the FK constraints don't reject the deletes on Postgres.
-        # TVPairing also hangs off display_id, same FK story.
-        # TVPendingPair is loose (no display_id — pending pairs are
-        # device-side until claimed) but FK's into TVPairing via
-        # claimed_pairing_id, so we have to wipe pending rows that
-        # reference doomed pairings BEFORE the pairing delete.
-        display_ids = [d for (d,) in
-                       db.session.query(TVDisplay.id).filter_by(store_id=s.id).all()]
-        if display_ids:
-            doomed_pairing_ids = [p for (p,) in
-                                   db.session.query(TVPairing.id).filter(
-                                       TVPairing.display_id.in_(display_ids)).all()]
-            if doomed_pairing_ids:
-                TVPendingPair.query.filter(
-                    TVPendingPair.claimed_pairing_id.in_(doomed_pairing_ids)
-                ).delete(synchronize_session=False)
-            TVPairing.query.filter(
-                TVPairing.display_id.in_(display_ids)).delete(
-                    synchronize_session=False)
-            country_ids = [c for (c,) in
-                           db.session.query(TVDisplayCountry.id).filter(
-                               TVDisplayCountry.display_id.in_(display_ids)).all()]
-            if country_ids:
-                bank_ids = [b for (b,) in
-                            db.session.query(TVDisplayPayoutBank.id).filter(
-                                TVDisplayPayoutBank.country_id.in_(country_ids)).all()]
-                if bank_ids:
-                    TVDisplayRate.query.filter(
-                        TVDisplayRate.bank_id.in_(bank_ids)).delete(
-                            synchronize_session=False)
-                TVDisplayPayoutBank.query.filter(
-                    TVDisplayPayoutBank.country_id.in_(country_ids)).delete(
-                        synchronize_session=False)
-            TVDisplayCountry.query.filter(
-                TVDisplayCountry.display_id.in_(display_ids)).delete(
-                    synchronize_session=False)
-        for model_name in _STORE_OWNED_MODELS:
-            model = globals().get(model_name)
-            if model is not None:
-                fk = _STORE_FK_OVERRIDES.get(model_name, "store_id")
-                model.query.filter_by(**{fk: s.id}).delete(synchronize_session=False)
-        db.session.delete(s)
-        purged += 1
-    if purged:
-        db.session.commit()
-    return purged
+    """Hard-delete inactive stores whose retention window has elapsed.
+
+    Single source of truth lives in
+    `api.Modules.Billing.Services.purge_expired_stores` (PR 64).
+    Per CLAUDE.md invariant #4 the retention window is set to
+    180 days when the cancellation Service flips a store to
+    `inactive`; this CLI walks every store past that window.
+    """
+    from api.Modules.Billing.Services import purge_expired_stores as _svc
+    return _svc(db.session)
 
 @app.cli.command("purge-expired-stores")
 def purge_expired_stores_cmd():
@@ -13497,65 +10670,38 @@ def purge_expired_stores_cmd():
 #     tomorrow. Cleared on resubscribe by the Stripe webhook so a
 #     second trial (post-reactivation) gets its own fresh reminder.
 
-_TRIAL_REMINDER_SUBJECT = "Your DineroBook trial ends in {days} days"
+# Trial-reminder eligibility queries + subject/body templates now
+# live in api.Modules.Notifications.Services.trial_reminders
+# (PR 65). The Flask-bound rendering + delivery (render_template,
+# _send_email, request-context fabrication for cron) stay here.
+from api.Modules.Notifications.Services import (
+    TRIAL_REMINDER_BODY as _TRIAL_REMINDER_BODY,
+    TRIAL_REMINDER_SUBJECT as _TRIAL_REMINDER_SUBJECT,
+    eligible_recipients as _trial_reminder_recipients_svc,
+    stores_due_for_reminder as _stores_due_for_reminder,
+)
 
-_TRIAL_REMINDER_BODY = """\
-Hi {name},
-
-Just a heads-up that your DineroBook trial for "{store_name}" ends on
-{trial_end_date}. That's {days} days from today.
-
-To keep your books, reports, and transfer history, subscribe before
-then:
-    {subscribe_url}
-
-No action is required if you'd rather let the trial expire; we keep
-your data for 180 days after cancellation so you can come back.
-
-Don't want trial reminders anymore? Turn them off on your
-notifications page:
-    {notifications_url}
-
-— DineroBook
-"""
 
 def _trial_reminder_recipients(store):
-    """Users who should get the reminder for this store: admins +
-    owners of this store with email + notify_trial_reminders=True."""
-    owner_user_ids = [
-        link.user_id for link in
-        StoreOwnerLink.query.filter_by(store_id=store.id).all()
-    ]
-    conds = [User.store_id == store.id]
-    if owner_user_ids:
-        # Owners live in a different store's user row but link back.
-        conds.append(User.id.in_(owner_user_ids))
-    candidates = User.query.filter(
-        User.is_active == True,
-        User.role.in_(("admin", "owner")),
-        User.email != "",
-        User.notify_trial_reminders == True,
-        db.or_(*conds),
-    ).all()
-    # Dedup — same user could be an owner AND an admin of this store.
-    return list({u.id: u for u in candidates}.values())
+    """Delegate to api.Modules.Notifications.Services.eligible_recipients."""
+    return _trial_reminder_recipients_svc(db.session, store)
+
 
 def send_trial_reminders(now=None, base_url=None):
     """Mail every eligible user whose store is in expiring_soon. Returns
     the count of emails actually sent (not counting users skipped for
     no-email or notify_trial_reminders=False). Idempotent thanks to
-    trial_reminder_sent_at; rerunning on the same day is a no-op."""
+    trial_reminder_sent_at; rerunning on the same day is a no-op.
+
+    Eligibility queries live in
+    `api.Modules.Notifications.Services.trial_reminders` (PR 65);
+    this wrapper keeps the Flask-bound rendering + delivery glue.
+    """
     now = now or datetime.utcnow()
     base_url = base_url or os.environ.get("APP_BASE_URL",
                                           "https://dinerobook.com")
     sent = 0
-    for store in Store.query.filter(
-        Store.plan == "trial",
-        Store.trial_ends_at.isnot(None),
-        Store.trial_reminder_sent_at.is_(None),
-    ).all():
-        if get_trial_status(store) != "expiring_soon":
-            continue
+    for store in _stores_due_for_reminder(db.session, now):
         days_left = max(0, (store.trial_ends_at - now).days)
         trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
         subscribe_url = f"{base_url}/subscribe"
@@ -13625,35 +10771,36 @@ def send_trial_reminders_cmd():
 
 def broadcast_announcement(announcement_id, base_url=None):
     """Fan out an announcement email to every opted-in user. Returns
-    the count of emails actually attempted (not counting users filtered
-    out). Idempotent: the first successful run stamps broadcast_sent_at
-    and subsequent calls no-op."""
-    base_url = base_url or os.environ.get("APP_BASE_URL",
-                                          "https://dinerobook.com")
+    the count of emails actually attempted (not counting users
+    filtered out). Idempotent: the first successful run stamps
+    `broadcast_sent_at` and subsequent calls no-op.
+
+    Eligibility query + subject derivation + plain-body template
+    live in `api.Modules.Notifications.Services.broadcasts`
+    (PR 66); this wrapper keeps the Flask-bound HTML rendering +
+    delivery glue.
+    """
+    from api.Modules.Notifications.Services import (
+        BROADCAST_PLAIN_BODY,
+        broadcast_eligible_recipients,
+        derive_broadcast_subject,
+    )
+    base_url = base_url or os.environ.get(
+        "APP_BASE_URL", "https://dinerobook.com",
+    )
     ann = db.session.get(Announcement, announcement_id)
     if ann is None:
         return 0
     if ann.broadcast_sent_at is not None:
         return 0  # already sent — idempotent
-    # First line of the message becomes the subject if it looks like
-    # a sentence; otherwise use a generic subject. Cap at 100 chars.
-    first_line = (ann.message or "").strip().split("\n", 1)[0]
-    subject = first_line[:100] if first_line else "A message from DineroBook"
-
-    recipients = User.query.filter(
-        User.is_active == True,
-        User.email != "",
-        User.notify_announcement_email == True,
-        User.email_bounced_at.is_(None),
-    ).all()
+    subject = derive_broadcast_subject(ann.message)
+    recipients = broadcast_eligible_recipients(db.session)
     now = datetime.utcnow()
     notifications_url = f"{base_url}/account/notifications"
-    plain_body = (
-        f"Announcement from DineroBook\n\n"
-        f"{ann.message}\n\n"
-        f"— DineroBook ({base_url})\n\n"
-        f"Don't want announcement emails? Turn them off:\n"
-        f"  {notifications_url}\n"
+    plain_body = BROADCAST_PLAIN_BODY.format(
+        message=ann.message,
+        base_url=base_url,
+        notifications_url=notifications_url,
     )
     sent = 0
     for u in recipients:
@@ -14446,6 +11593,32 @@ def init_db():
         # row a fresh DB needs. (2FA is mandatory and enforced at login.)
 
 init_db()
+
+# ── FastAPI strangler-fig dispatcher ─────────────────────────
+# The new modular FastAPI backend (under api/) is being built
+# alongside this Flask monolith per docs/architecture/MIGRATION_ADR.md.
+# Routes under /api/v2/* are forwarded into the FastAPI app via
+# Werkzeug's DispatcherMiddleware. Flask continues to handle /
+# and the rest of the URL space unchanged.
+#
+# Wrapped in try/except so a broken FastAPI import doesn't break
+# the Flask app — during early-stage migration, half the FastAPI
+# routers may not exist yet. Once Flask is removed (cleanup PR),
+# this whole block goes away and api/main.py becomes the entry
+# point.
+try:
+    from api.main import api_app as _fastapi_app
+    from a2wsgi import ASGIMiddleware
+    from werkzeug.middleware.dispatcher import DispatcherMiddleware
+    app.wsgi_app = DispatcherMiddleware(
+        app.wsgi_app,
+        {"/api/v2": ASGIMiddleware(_fastapi_app)},
+    )
+    app.logger.info("FastAPI mounted at /api/v2 (strangler-fig)")
+except Exception as _fastapi_err:
+    # Don't break Flask boot if the new backend fails to import.
+    # Log it loudly so it doesn't go unnoticed in dev.
+    app.logger.warning(f"FastAPI mount skipped: {_fastapi_err}")
 
 if __name__=="__main__":
     port=int(os.environ.get("PORT",5000))

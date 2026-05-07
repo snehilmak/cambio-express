@@ -96,10 +96,13 @@ def _superadmin_client(app):
 
 
 def _reset_last_attempt():
-    app_module._last_smtp_attempt = {
-        "status": "unknown", "error": "", "when": None,
-        "last_to_domain": "", "last_subject": "",
-    }
+    """Reset the SMTP health-card state. The canonical dict lives
+    on `api.Modules.Notifications.Services.smtp.last_attempt`
+    (PR 82); `app_module._last_smtp_attempt` is an alias to it.
+    Mutate in place so any outstanding alias still points at
+    the live dict."""
+    from api.Modules.Notifications.Services import smtp as smtp_svc
+    smtp_svc.reset_last_attempt()
 
 
 def test_overview_renders_email_service_card(client):
@@ -127,11 +130,12 @@ def test_overview_shows_connected_when_last_send_succeeded(client):
     os.environ["SMTP_HOST"] = "smtp.test"
     os.environ["SMTP_USER"] = "u"
     os.environ["SMTP_PASS"] = "p"
-    app_module._last_smtp_attempt = {
+    from api.Modules.Notifications.Services import smtp as smtp_svc
+    smtp_svc.last_attempt.update({
         "status": "sent", "error": "",
         "when": datetime(2025, 1, 15, 10, 30, 0),
         "last_to_domain": "customer.example", "last_subject": "X",
-    }
+    })
     body = _superadmin_client(client.application).get(
         "/superadmin/controls?tab=overview").data.decode()
     assert "Connected" in body
@@ -145,12 +149,13 @@ def test_overview_shows_failing_with_error_on_last_send_failure(client):
     os.environ["SMTP_HOST"] = "smtp.test"
     os.environ["SMTP_USER"] = "u"
     os.environ["SMTP_PASS"] = "p"
-    app_module._last_smtp_attempt = {
+    from api.Modules.Notifications.Services import smtp as smtp_svc
+    smtp_svc.last_attempt.update({
         "status": "failed",
         "error": "SMTPAuthenticationError: 535 bad creds",
         "when": datetime(2025, 1, 15, 10, 30, 0),
         "last_to_domain": "customer.example", "last_subject": "X",
-    }
+    })
     body = _superadmin_client(client.application).get(
         "/superadmin/controls?tab=overview").data.decode()
     assert "Failing" in body
