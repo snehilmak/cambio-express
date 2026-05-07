@@ -1,5 +1,6 @@
-import { Route, Routes } from "react-router-dom";
+import { Outlet, Route, Routes } from "react-router-dom";
 
+import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
 import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
@@ -11,69 +12,45 @@ import Reports from "./routes/Reports";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 
-// Top-level routing for the SPA. Each new screen registers here.
+// Top-level routing for the SPA.
 //
 //   /              → bounces to /login or /dashboard
-//   /login         → unauthed-only login form
-//   /dashboard     → authed (RequireAuth bounces if no JWT)
-//   /transfers    → authed transfers list + filters
+//   /login         → unauthed-only login form (no shell)
+//   <AuthedShell>  → applies RequireAuth + AppShell (sidebar +
+//                     topbar) to every nested route
+//     /dashboard, /transfers, /transfers/:id, /customers,
+//     /daily, /reports
 //
-// As Jinja screens migrate (daily book, reports, settings)
-// each lands as its own <Route /> wrapped in <RequireAuth>.
+// Adding a new authed screen = adding one nested <Route> under
+// the AuthedShell layout — no need to repeat RequireAuth +
+// AppShell wrappers per page.
 export default function App() {
   return (
     <Routes>
       <Route index element={<Home />} />
       <Route path="login" element={<Login />} />
-      <Route
-        path="dashboard"
-        element={
-          <RequireAuth>
-            <Dashboard />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="transfers"
-        element={
-          <RequireAuth>
-            <Transfers />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="transfers/:id"
-        element={
-          <RequireAuth>
-            <TransferDetail />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="customers"
-        element={
-          <RequireAuth>
-            <Customers />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="daily"
-        element={
-          <RequireAuth>
-            <DailyBook />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="reports"
-        element={
-          <RequireAuth>
-            <Reports />
-          </RequireAuth>
-        }
-      />
+      <Route element={<AuthedShell />}>
+        <Route path="dashboard"        element={<Dashboard />} />
+        <Route path="transfers"        element={<Transfers />} />
+        <Route path="transfers/:id"    element={<TransferDetail />} />
+        <Route path="customers"        element={<Customers />} />
+        <Route path="daily"            element={<DailyBook />} />
+        <Route path="reports"          element={<Reports />} />
+      </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
+  );
+}
+
+// Layout route. Bounces unauthed users to /login (RequireAuth)
+// and wraps the authed page in the sidebar + topbar shell.
+// `<Outlet />` renders the matched child route inside.
+function AuthedShell() {
+  return (
+    <RequireAuth>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </RequireAuth>
   );
 }

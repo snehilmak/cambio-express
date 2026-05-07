@@ -1,31 +1,22 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 import { useRecentTransfers, type TransferRow } from "../api/transfers";
-import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
+import { getCurrentIdentity } from "../lib/auth";
 
-// Authed landing page. Header shows identity + sign-out, the body
-// renders one card per data source. Each card is independent —
-// own query, own loading/error state — so a slow endpoint doesn't
-// block the rest of the page.
+// Authed landing page. Identity + sign-out live in the AppShell
+// topbar — this body just renders one card per data source.
+// Each card is independent — own query, own loading/error state.
 //
 // SPA-4 ships the first card (Recent transfers). Subsequent PRs
 // add today's totals, pending ACH, and the trial-status banner.
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const identity = getCurrentIdentity();
-
-  function onLogout() {
-    clearAccessToken();
-    navigate("/login", { replace: true });
-  }
-
   return (
     <main
       style={{
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        padding: "2.5rem 1.5rem",
+        padding: "2rem 1.5rem",
         maxWidth: "70rem",
         margin: "0 auto",
         width: "100%",
@@ -33,53 +24,18 @@ export default function Dashboard() {
         gap: "1.5rem",
       }}
     >
-      <header
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-              fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-              fontWeight: 600,
-              margin: 0,
-            }}
-          >
-            Dashboard
-          </h1>
-          <p
-            style={{
-              margin: "0.35rem 0 0",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}
-          >
-            Signed in as{" "}
-            <strong style={{ color: "var(--db-text, #f5f5f5)" }}>
-              {identity?.username || "—"}
-            </strong>
-            {identity?.role && (
-              <>
-                {" "}· role{" "}
-                <code
-                  style={{
-                    fontFamily:
-                      "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                  }}
-                >
-                  {identity.role}
-                </code>
-              </>
-            )}
-          </p>
-        </div>
-        <button onClick={onLogout} style={logoutBtnStyle}>
-          Sign out
-        </button>
+      <header>
+        <h1
+          style={{
+            fontFamily:
+              "var(--db-font-display, 'Space Grotesk', sans-serif)",
+            fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
+            fontWeight: 600,
+            margin: 0,
+          }}
+        >
+          Dashboard
+        </h1>
       </header>
 
       <RecentTransfersCard />
@@ -296,16 +252,4 @@ function Empty({
 const cellStyle: React.CSSProperties = {
   padding: "0.75rem",
   borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-};
-
-const logoutBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.5rem 1rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.9rem",
-  cursor: "pointer",
-  transition: "border-color 120ms ease, background 120ms ease",
 };
