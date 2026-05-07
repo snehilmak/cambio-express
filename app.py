@@ -5768,31 +5768,11 @@ def _period_comparison_data(store_ids, d_from, d_to,
 
 # ── Fees vs. Federal Tax ─────────────────────────────────────
 def _fees_vs_tax_data(store_ids, d_from, d_to):
-    """Side-by-side: total fees (store revenue) vs. total federal tax
-    (passes through with the ACH withdrawal). Useful for sanity-
-    checking that the federal-tax rate is being applied consistently."""
-    fee_total, tax_total, count = (db.session.query(
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-        db.func.count(Transfer.id),
-    ).filter(*_active_transfers_period_filters(store_ids, d_from, d_to)).one())
-    fee_total = float(fee_total or 0.0)
-    tax_total = float(tax_total or 0.0)
-    rows = [
-        {"label":  "Fees (store revenue)",
-         "amount": fee_total,
-         "note":   "Stays with the store as transaction fee revenue."},
-        {"label":  "Federal Tax (pass-through)",
-         "amount": tax_total,
-         "note":   "Leaves with the ACH withdrawal — not store revenue."},
-    ]
-    totals = {
-        "fees":   fee_total,
-        "tax":    tax_total,
-        "count":  int(count or 0),
-        "ratio":  (tax_total / fee_total) if fee_total else 0.0,
-    }
-    return rows, totals
+    """Side-by-side: total fees vs. federal tax. Single source of
+    truth lives in `api.Modules.Reports.Services.fees_vs_tax`
+    (PR 85)."""
+    from api.Modules.Reports.Services import fees_vs_tax
+    return fees_vs_tax(db.session, store_ids, d_from, d_to)
 
 
 # ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
