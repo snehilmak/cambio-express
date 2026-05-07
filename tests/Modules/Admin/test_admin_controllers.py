@@ -34,8 +34,11 @@ def test_get_store_info_returns_envelope(client, test_store_id):
     assert body["store"]["id"] == test_store_id
 
 
-def test_get_store_info_requires_jwt():
-    resp = _client().get("/admin/store-info")
+def test_get_store_info_requires_jwt(client):
+    """Routes through the Flask dispatcher (same path as prod
+    SPA) to avoid leaking FastAPI TestClient asyncio tasks on
+    Python 3.12."""
+    resp = client.get("/api/v2/admin/store-info")
     assert resp.status_code == 401
 
 
@@ -127,9 +130,12 @@ def test_put_store_info_rejects_bad_tax_rate(client, test_store_id):
     assert resp.status_code == 422
 
 
-def test_put_store_info_requires_jwt():
-    resp = _client().put(
-        "/admin/store-info",
+def test_put_store_info_requires_jwt(client):
+    """Routes through the Flask dispatcher (same path as prod
+    SPA) to avoid leaking FastAPI TestClient asyncio tasks on
+    Python 3.12."""
+    resp = client.put(
+        "/api/v2/admin/store-info",
         json={"name": "X"},
     )
     assert resp.status_code == 401
@@ -311,12 +317,17 @@ def test_team_endpoints_require_admin_role(client):
                 db.session.delete(u2); db.session.commit()
 
 
-def test_team_endpoints_require_jwt():
-    c = _client()
-    g = c.get("/admin/team")
-    p = c.post("/admin/team", json={"name": "X"})
-    u = c.put("/admin/team/1", json={"name": "X"})
-    d = c.delete("/admin/team/1")
+def test_team_endpoints_require_jwt(client):
+    """All four verbs reject unauthed callers. Routes through
+    the Flask dispatcher (the same path the SPA uses in prod) —
+    avoids creating bare FastAPI TestClient instances that leak
+    asyncio tasks on Python 3.12 + tip the cumulative-leak
+    threshold that causes test_unlock_404_when_no_report's
+    setup to fail."""
+    g = client.get("/api/v2/admin/team")
+    p = client.post("/api/v2/admin/team", json={"name": "X"})
+    u = client.put("/api/v2/admin/team/1", json={"name": "X"})
+    d = client.delete("/api/v2/admin/team/1")
     assert g.status_code == 401
     assert p.status_code == 401
     assert u.status_code == 401
