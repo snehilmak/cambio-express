@@ -60,7 +60,7 @@ jobs:
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: |
-          coverage run --source=app --concurrency=thread -m pytest -q --ignore=tests/smoke
+          coverage run -m pytest --tb=short -rfE --ignore=tests/smoke
           coverage report --fail-under=60
 
       # ── Browser smoke layer ───────────────────────────────────
