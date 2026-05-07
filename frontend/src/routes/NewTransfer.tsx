@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
+import SenderAutocomplete from "../components/SenderAutocomplete";
 import {
   createTransfer,
   useEmployees,
@@ -174,11 +175,24 @@ export default function NewTransfer() {
           <h2 style={sectionTitleStyle}>Sender</h2>
           <Grid>
             <Field label="Full name">
-              <input
-                type="text"
+              <SenderAutocomplete
                 value={form.sender_name}
-                onChange={(e) => set("sender_name", e.target.value)}
-                style={inputStyle}
+                onChange={(v) => set("sender_name", v)}
+                onPick={(row) => {
+                  // Autofill the rest of the sender block from the
+                  // picked customer row + remember the customer_id
+                  // so the upsert reuses the same record.
+                  setForm((f) => ({
+                    ...f,
+                    sender_name: row.full_name,
+                    sender_phone_country: row.phone_country || "+1",
+                    sender_phone: row.phone_number,
+                    sender_address: row.address,
+                    sender_dob: row.dob || "",
+                    customer_id: row.id,
+                  }));
+                }}
+                onClearPickedId={() => set("customer_id", null)}
                 required
               />
             </Field>
@@ -208,6 +222,18 @@ export default function NewTransfer() {
               />
             </Field>
           </Grid>
+          {form.customer_id && (
+            <p
+              style={{
+                margin: "0.5rem 0 0",
+                fontSize: "0.85rem",
+                color: "var(--db-text-muted, #a3a3a3)",
+              }}
+            >
+              Linked to customer #{form.customer_id} — edits sync
+              back to the customer directory.
+            </p>
+          )}
         </section>
 
         <section style={cardStyle}>
