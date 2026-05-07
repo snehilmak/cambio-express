@@ -4899,17 +4899,14 @@ _GENERIC_VIEW_TEMPLATES = {
 }
 
 
-def _day_start(d):
-    """00:00:00 of date `d` as a naive datetime — used by every SA
-    report data fn that converts a calendar date into the start of
-    the period for SQL timestamp comparisons."""
-    return datetime(d.year, d.month, d.day)
-
-
-def _day_end(d):
-    """23:59:59 of date `d` as a naive datetime — end-of-period
-    counterpart to `_day_start`."""
-    return datetime(d.year, d.month, d.day, 23, 59, 59)
+# Calendar-date → naive datetime boundary helpers now live in
+# api.Modules.Reports.Services.date_helpers (PR 83). Re-exports
+# below preserve the legacy import shape during the migration
+# window.
+from api.Modules.Reports.Services import (
+    day_end as _day_end,
+    day_start as _day_start,
+)
 
 
 def _render_report_generic(template, data_fn, *,
