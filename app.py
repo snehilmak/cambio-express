@@ -6097,59 +6097,27 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
 
 # ── Superadmin report data functions ─────────────────────────
 def _sa_active_stores_by_plan_data(d_from, d_to):
-    """Headcount of stores per plan (trial / basic / pro / inactive),
-    filtered to stores created on or before d_to (counts existing
-    stores at end of period, not just newcomers). Inactive includes
-    cancelled subs."""
-    q = (db.session.query(
-        Store.plan, db.func.count(Store.id),
-    ).filter(
-        Store.created_at <= _day_end(d_to),
-    ).group_by(Store.plan).all())
-    rows = [{"plan": (plan or "(unknown)").title(),
-             "count": int(c or 0)} for plan, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows),
-              "plans": len(rows)}
-    return rows, totals
+    """Headcount of stores per plan. Single source of truth lives
+    in `api.Modules.Superadmin.Services.active_stores_by_plan`
+    (PR 97)."""
+    from api.Modules.Superadmin.Services import active_stores_by_plan
+    return active_stores_by_plan(db.session, d_from, d_to)
 
 
 def _sa_signup_funnel_data(d_from, d_to):
-    """Stores created in the period bucketed by current plan. Useful
-    for measuring signup → activation success."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    q = (db.session.query(
-        Store.plan, db.func.count(Store.id),
-    ).filter(
-        Store.created_at >= start,
-        Store.created_at <= end_of_to,
-    ).group_by(Store.plan).all())
-    rows = [{"plan": (plan or "(unknown)").title(),
-             "count": int(c or 0)} for plan, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows)}
-    return rows, totals
+    """Stores created in the period bucketed by current plan.
+    Single source of truth lives in
+    `api.Modules.Superadmin.Services.signup_funnel` (PR 97)."""
+    from api.Modules.Superadmin.Services import signup_funnel
+    return signup_funnel(db.session, d_from, d_to)
 
 
 def _sa_login_activity_data(d_from, d_to):
-    """Most-recent login per role, plus unique-login counts in the
-    period. Drives the platform-health DAU / MAU dashboards once we
-    have a per-day login log; for now it surfaces the per-role split
-    using User.last_login_at."""
-    end_of_to = _day_end(d_to)
-    start = _day_start(d_from)
-    q = (db.session.query(
-        User.role, db.func.count(User.id),
-    ).filter(
-        User.last_login_at >= start,
-        User.last_login_at <= end_of_to,
-    ).group_by(User.role).all())
-    rows = [{"role": (role or "(unknown)").title(),
-             "count": int(c or 0)} for role, c in q]
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals = {"count": sum(r["count"] for r in rows)}
-    return rows, totals
+    """Per-role unique login counts in the period. Single source
+    of truth lives in
+    `api.Modules.Superadmin.Services.login_activity` (PR 97)."""
+    from api.Modules.Superadmin.Services import login_activity
+    return login_activity(db.session, d_from, d_to)
 
 
 # Hard-coded plan price table. Used by MRR/ARR + churn cohort. When
