@@ -763,6 +763,117 @@ def payouts(
     return rows, totals
 
 
+def dau_mau(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Distinct-user counts per day in the period from LoginEvent.
+
+    Each row = one day with the count of unique users who logged
+    in that day. Totals carry MAU (distinct users in period), DAU
+    (distinct users today), and stickiness = DAU/MAU * 100.
+
+    Forward-only: LoginEvent only collects rows from when the
+    model ships, so periods before that show zeroes.
+    """
+    from datetime import date as _date, datetime
+    from app import LoginEvent
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+
+    start = day_start(d_from)
+    end   = day_end(d_to)
+
+    day_col = func.date(LoginEvent.at)
+    per_day_q = (
+        db.query(
+            day_col,
+            func.count(func.distinct(LoginEvent.user_id)),
+        )
+        .filter(LoginEvent.at >= start, LoginEvent.at <= end)
+        .group_by(day_col)
+        .order_by(day_col.desc())
+        .all()
+    )
+    rows = [
+        {"day": d, "users": int(c or 0)}
+        for d, c in per_day_q
+    ]
+
+    mau = (
+        db.query(func.count(func.distinct(LoginEvent.user_id)))
+          .filter(LoginEvent.at >= start, LoginEvent.at <= end)
+          .scalar()
+    ) or 0
+    today_start = datetime.combine(_date.today(), datetime.min.time())
+    dau = (
+        db.query(func.count(func.distinct(LoginEvent.user_id)))
+          .filter(LoginEvent.at >= today_start)
+          .scalar()
+    ) or 0
+    stickiness  = (dau / mau * 100.0) if mau else 0.0
+    avg_per_day = (
+        sum(r["users"] for r in rows) / len(rows) if rows else 0.0
+    )
+    totals = {
+        "dau":         dau,
+        "mau":         int(mau),
+        "stickiness":  stickiness,
+        "avg_per_day": avg_per_day,
+        "active_days": len(rows),
+    }
+    return rows, totals
+
+
+def webhook_health(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Inbound Stripe webhook deliveries grouped by status.
+
+    Sourced from WebhookEvent — populated by /webhooks/stripe on
+    every delivery (including signature failures). Totals carry
+    `ok`, `errors`, `failure_pct`.
+    """
+    from app import WebhookEvent
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+
+    rows_q = (
+        db.query(WebhookEvent.status, func.count(WebhookEvent.id))
+          .filter(
+              WebhookEvent.received_at >= day_start(d_from),
+              WebhookEvent.received_at <= day_end(d_to),
+          )
+          .group_by(WebhookEvent.status)
+          .all()
+    )
+    rows: list[dict] = []
+    totals = {"count": 0, "ok": 0, "errors": 0}
+    for status, count in rows_q:
+        c = int(count or 0)
+        rows.append({
+            "status":     (status or "unknown").replace("_", " ").title(),
+            "status_key": status or "",
+            "count":      c,
+        })
+        totals["count"] += c
+        if status == "ok":
+            totals["ok"] += c
+        else:
+            totals["errors"] += c
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    totals["failure_pct"] = (
+        totals["errors"] / totals["count"] * 100.0
+        if totals["count"] else 0.0
+    )
+    return rows, totals
+
+
 def churn_cohort(
     db: Session,
     d_from: date,
