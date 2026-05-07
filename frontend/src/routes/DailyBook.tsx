@@ -3,10 +3,14 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  createLineItem,
+  deleteLineItem,
   lockDailyReport,
   unlockDailyReport,
   useDailyReport,
+  useLineItems,
   type DailyReportRow,
+  type LineItemRow,
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -211,9 +215,317 @@ export default function DailyBook() {
         </p>
       )}
       {data && <ReportContent r={data} />}
+      {!isLoading && !isError && identity?.store_id != null && (
+        <LineItemsSection
+          storeId={identity.store_id}
+          date={date}
+          locked={Boolean(data?.locked)}
+        />
+      )}
     </main>
   );
 }
+
+// Line items grouped by kind. Add + delete inline; the daily
+// report's derived fields (cash_purchases, drops, etc.) recompute
+// server-side after each mutation, so the badge/total elsewhere
+// on the page reflects new state on the next refetch.
+const LINE_ITEM_KINDS: Array<{ kind: string; label: string }> = [
+  { kind: "drop",            label: "Drops" },
+  { kind: "check_deposit",   label: "Check deposits" },
+  { kind: "cash_expense",    label: "Cash expenses" },
+  { kind: "check_expense",   label: "Check expenses" },
+  { kind: "cash_purchase",   label: "Cash purchases" },
+  { kind: "check_purchase",  label: "Check purchases" },
+  { kind: "other_cash_in",   label: "Other cash in" },
+  { kind: "other_cash_out",  label: "Other cash out" },
+  { kind: "return_payback",  label: "Return paybacks" },
+];
+
+function LineItemsSection({
+  storeId, date, locked,
+}: { storeId: number; date: string; locked: boolean }) {
+  return (
+    <section
+      style={{
+        background: "var(--db-surface-2, #141414)",
+        border: "1px solid var(--db-border, #262626)",
+        borderRadius: "0.75rem",
+        padding: "1.25rem 1.5rem",
+      }}
+    >
+      <h2
+        style={{
+          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+          fontSize: "0.95rem",
+          textTransform: "uppercase",
+          letterSpacing: "0.05em",
+          color: "var(--db-text-muted, #a3a3a3)",
+          margin: "0 0 1rem",
+        }}
+      >
+        Line items
+      </h2>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
+          gap: "1rem",
+        }}
+      >
+        {LINE_ITEM_KINDS.map((k) => (
+          <KindGroup
+            key={k.kind}
+            storeId={storeId}
+            date={date}
+            kind={k.kind}
+            label={k.label}
+            locked={locked}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function KindGroup({
+  storeId, date, kind, label, locked,
+}: {
+  storeId: number; date: string; kind: string; label: string;
+  locked: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const { data } = useLineItems(date, kind);
+  const items = data?.items ?? [];
+  const total = items.reduce((s, r) => s + (r.amount || 0), 0);
+
+  const [time, setTime] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function refetch() {
+    queryClient.invalidateQueries({
+      queryKey: ["dailybook", "line-items", storeId, date, kind],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ["dailybook", "report", storeId, date],
+    });
+  }
+
+  async function add() {
+    setErr(null);
+    setBusy(true);
+    try {
+      await createLineItem(storeId, date, {
+        kind, at_time: time, amount: Number(amount), note,
+      });
+      setTime(""); setAmount(""); setNote("");
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't add row");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(row: LineItemRow) {
+    setErr(null);
+    try {
+      await deleteLineItem(storeId, row.id);
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't delete");
+    }
+  }
+
+  return (
+    <div
+      style={{
+        background: "var(--db-surface, #0a0a0a)",
+        border: "1px solid var(--db-border-subtle, #1f1f1f)",
+        borderRadius: "0.5rem",
+        padding: "0.75rem 1rem",
+      }}
+    >
+      <header
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <h3
+          style={{
+            fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+            fontSize: "0.95rem",
+            fontWeight: 500,
+            margin: 0,
+          }}
+        >
+          {label}
+        </h3>
+        <span
+          style={{
+            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            fontSize: "0.85rem",
+            color: "var(--db-text-muted, #a3a3a3)",
+          }}
+        >
+          ${total.toFixed(2)}
+        </span>
+      </header>
+
+      {items.length === 0 ? (
+        <p
+          style={{
+            margin: "0.25rem 0 0.75rem",
+            fontSize: "0.85rem",
+            color: "var(--db-text-muted, #a3a3a3)",
+          }}
+        >
+          No entries yet.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 0.5rem" }}>
+          {items.map((r) => (
+            <li
+              key={r.id}
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "baseline",
+                padding: "0.35rem 0",
+                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+                fontSize: "0.9rem",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                  color: "var(--db-text-muted, #a3a3a3)",
+                  minWidth: "3.5rem",
+                }}
+              >
+                {r.at_time}
+              </span>
+              <span
+                style={{
+                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                  minWidth: "5rem",
+                }}
+              >
+                ${r.amount.toFixed(2)}
+              </span>
+              <span style={{ flex: 1, color: "var(--db-text-muted, #a3a3a3)" }}>
+                {r.note || "—"}
+              </span>
+              <button
+                type="button"
+                onClick={() => remove(r)}
+                disabled={locked || r.return_check_id != null}
+                title={
+                  r.return_check_id != null
+                    ? "Linked to a return check; remove from Books → Return Checks"
+                    : locked ? "Day is locked" : "Delete"
+                }
+                style={{
+                  background: "transparent",
+                  color: "var(--db-text-muted, #a3a3a3)",
+                  border: "none",
+                  cursor:
+                    locked || r.return_check_id != null
+                      ? "not-allowed" : "pointer",
+                  fontSize: "0.85rem",
+                }}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {!locked && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "5rem 6rem 1fr auto",
+            gap: "0.4rem",
+            marginTop: "0.4rem",
+          }}
+        >
+          <input
+            type="time"
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+            placeholder="HH:MM"
+            style={miniInputStyle}
+          />
+          <input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Amount"
+            style={miniInputStyle}
+          />
+          <input
+            type="text"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (optional)"
+            style={miniInputStyle}
+          />
+          <button
+            type="button"
+            onClick={add}
+            disabled={busy || !time || !amount}
+            style={{
+              background: "var(--db-accent, #3fff00)",
+              color: "var(--db-on-accent, #0a0a0a)",
+              border: "none",
+              borderRadius: "0.4rem",
+              padding: "0.35rem 0.75rem",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: busy ? "wait" : "pointer",
+              opacity: busy || !time || !amount ? 0.6 : 1,
+            }}
+          >
+            {busy ? "…" : "+ Add"}
+          </button>
+        </div>
+      )}
+      {err && (
+        <p
+          role="alert"
+          style={{
+            margin: "0.4rem 0 0",
+            fontSize: "0.8rem",
+            color: "var(--db-negative, #ff3b30)",
+          }}
+        >
+          {err}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const miniInputStyle: React.CSSProperties = {
+  background: "var(--db-surface-2, #141414)",
+  border: "1px solid var(--db-border, #262626)",
+  borderRadius: "0.4rem",
+  padding: "0.35rem 0.5rem",
+  color: "var(--db-text, #f5f5f5)",
+  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontSize: "0.85rem",
+  outline: "none",
+};
 
 function ReportContent({ r }: { r: DailyReportRow }) {
   return (

@@ -17,16 +17,30 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.DailyBook.Models import DailyLineItem
+from api.Modules.DailyBook.Repositories import list_line_items
 from api.Modules.DailyBook.Requests import (
     DailyReportResponse,
     DailyReportRow,
     DailyReportUpdateRequest,
+    LineItemCreateRequest,
+    LineItemListResponse,
+    LineItemRow,
     PeriodSummaryResponse,
 )
 from api.Modules.DailyBook.Services import (
     DailyReportLockedError,
     DailyReportSummary,
+    LINE_ITEM_KINDS,
+    LineItemValidationError,
+    add_line_item,
+    delete_line_item,
+    field_for_kind,
+    is_known_kind,
     lock_report,
+    parse_amount,
+    parse_at_time,
+    recompute_line_items_total,
     summarize_period,
     summarize_report,
     unlock_report,
@@ -243,3 +257,163 @@ def unlock_daily_route(
     if summary is None:
         raise HTTPException(status_code=500, detail="Unlock failed")
     return DailyReportResponse(report=_to_row(summary))
+
+
+# ── Line items ─────────────────────────────────────────────
+
+
+def _line_item_row(item: DailyLineItem) -> LineItemRow:
+    return LineItemRow(
+        id=item.id,
+        kind=item.kind,
+        at_time=item.at_time.strftime("%H:%M") if item.at_time else "",
+        amount=float(item.amount or 0),
+        note=item.note or "",
+        return_check_id=item.return_check_id,
+    )
+
+
+def _require_store_match(claims: dict, store_id: int) -> None:
+    """Reject when the JWT's store_id claim doesn't match the URL.
+    Cross-store + superadmin both → 403 with the same opaque
+    message — never leak which case tripped."""
+    claim_store = claims.get("store_id")
+    if claim_store is None or int(claim_store) != int(store_id):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not authorize edits to this store's "
+                "daily book."
+            ),
+        )
+
+
+@router.get(
+    "/{store_id}/{report_date}/line-items",
+    response_model=LineItemListResponse,
+)
+def line_items_list_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    kind: str = Query(
+        "",
+        description=(
+            "Optional kind filter (cash_purchase, drop, etc.). "
+            "Empty returns every kind for the day."
+        ),
+    ),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> LineItemListResponse:
+    """Read-side endpoint for the daily book's line-item table.
+    Auth + tenancy gate is the same as the rest of the daily-
+    book write-side endpoints."""
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    if kind and not is_known_kind(kind):
+        raise HTTPException(
+            status_code=422, detail=f"Unknown kind: {kind!r}",
+        )
+    rows = list_line_items(
+        db, int(store_id), d,
+        kinds=[kind] if kind else None,
+    )
+    return LineItemListResponse(items=[_line_item_row(r) for r in rows])
+
+
+@router.post(
+    "/{store_id}/{report_date}/line-items",
+    response_model=LineItemRow,
+    status_code=201,
+)
+def line_items_create_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    body: LineItemCreateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> LineItemRow:
+    """Insert one line item under (store_id, report_date, kind).
+    Server validates kind, time format, and positive amount via
+    the same parsers the legacy form uses (`parse_at_time`,
+    `parse_amount`) so error messages match for cutover parity.
+
+    After the insert, the matching DailyReport field is
+    re-derived from the kind's running total so the daily P&L
+    stays consistent without an explicit re-save.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    user_id = int(claims["sub"])
+
+    if not is_known_kind(body.kind):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown line-item kind: {body.kind!r}",
+        )
+    try:
+        at = parse_at_time(body.at_time)
+        amt = parse_amount(str(body.amount))
+        row = add_line_item(
+            db,
+            store_id=int(store_id),
+            report_date=d,
+            kind=body.kind,
+            at_time=at,
+            amount=amt,
+            note=body.note,
+            created_by=user_id,
+            allowed_kinds=LINE_ITEM_KINDS.keys(),
+        )
+        # Re-derive the DailyReport's matching field so the daily
+        # P&L stays in sync without a separate save round-trip.
+        target_field = field_for_kind(body.kind)
+        if target_field:
+            recompute_line_items_total(
+                db, int(store_id), d,
+                kind=body.kind, daily_report_field=target_field,
+            )
+    except LineItemValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return _line_item_row(row)
+
+
+@router.delete(
+    "/{store_id}/line-items/{item_id}",
+    status_code=204,
+)
+def line_items_delete_route(
+    store_id: int = Path(..., ge=1),
+    item_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Delete one line item. The Service rejects deletes for rows
+    linked to a ReturnCheck (see DailyLineItem.return_check_id) —
+    those mirror Return-Checks-side state and must be removed
+    from there. We also re-derive the DailyReport field after
+    the delete so the daily P&L stays accurate."""
+    _require_store_match(claims, store_id)
+    item = (
+        db.query(DailyLineItem)
+          .filter_by(id=item_id, store_id=int(store_id))
+          .first()
+    )
+    if item is None:
+        # Same opaque 404 for missing IDs and cross-tenant probes.
+        raise HTTPException(status_code=404, detail="Line item not found")
+
+    report_date = item.report_date
+    kind = item.kind
+    try:
+        delete_line_item(db, item)
+    except LineItemValidationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    target_field = field_for_kind(kind)
+    if target_field:
+        recompute_line_items_total(
+            db, int(store_id), report_date,
+            kind=kind, daily_report_field=target_field,
+        )
+    db.commit()
