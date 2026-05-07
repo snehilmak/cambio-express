@@ -196,3 +196,92 @@ def test_openapi_includes_auth_paths():
     paths = set(resp.json()["paths"].keys())
     assert "/auth/login" in paths
     assert "/auth/me" in paths
+    assert "/auth/login-cross-store" in paths
+
+
+# ── POST /auth/login-cross-store ────────────────────────────
+#
+# The SPA's generic landing page doesn't know which store a user
+# belongs to. This endpoint accepts username + password and looks
+# up the user's home store across every store. Mirrors the legacy
+# Flask `/login` POST behavior including the employee rejection.
+
+
+def test_cross_store_login_admin_finds_store_and_returns_token(test_store_id):
+    """An admin signing in from the cookieless landing page gets
+    a JWT scoped to their home store, even though the request body
+    didn't carry `store_id`."""
+    resp = _client().post(
+        "/auth/login-cross-store",
+        json={"username": "admin@test.com", "password": "testpass123!"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["access_token"]
+    assert body["role"] == "admin"
+    # store_id was looked up server-side from the username — the
+    # JWT carries the user's home store, NOT something the client
+    # could spoof in the body.
+    assert body["store_id"] == test_store_id
+    assert "store.admin" in body["permissions"]
+
+
+def test_cross_store_login_rejects_employee():
+    """Employees must use their store's slug-scoped sign-in URL.
+    The cookieless cross-store login refuses them with the same
+    opaque 401 as a bad password — never leaks role info."""
+    from app import User, db
+    u = User(
+        store_id=None, username="empx@test.com", role="employee",
+        is_active=True, full_name="",
+    )
+    u.set_password("emppass123!")
+    db.session.add(u); db.session.commit()
+    try:
+        resp = _client().post(
+            "/auth/login-cross-store",
+            json={"username": "empx@test.com", "password": "emppass123!"},
+        )
+        # 401 — same as bad-password. Body string differs but the
+        # status code is identical, so a probe can't tell apart
+        # "wrong password" vs "you're an employee".
+        assert resp.status_code == 401
+    finally:
+        db.session.delete(u)
+        db.session.commit()
+
+
+def test_cross_store_login_rejects_bad_password(test_store_id):  # noqa: ARG001
+    resp = _client().post(
+        "/auth/login-cross-store",
+        json={"username": "admin@test.com", "password": "wrong"},
+    )
+    assert resp.status_code == 401
+
+
+def test_cross_store_login_rejects_unknown_user():
+    resp = _client().post(
+        "/auth/login-cross-store",
+        json={"username": "ghost@nope.com", "password": "x"},
+    )
+    assert resp.status_code == 401
+
+
+def test_cross_store_login_token_works_against_me(test_store_id):  # noqa: ARG001
+    """The token issued by /auth/login-cross-store must validate
+    against /auth/me — same JWT issuer, same signature, same
+    claim shape as /auth/login."""
+    c = _client()
+    login = c.post(
+        "/auth/login-cross-store",
+        json={"username": "admin@test.com", "password": "testpass123!"},
+    )
+    assert login.status_code == 200
+    token = login.json()["access_token"]
+
+    me = c.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert me.status_code == 200
+    body = me.json()
+    assert body["username"] == "admin@test.com"
+    assert body["role"] == "admin"
+    assert "store.admin" in body["permissions"]

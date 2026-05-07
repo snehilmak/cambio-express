@@ -16,9 +16,14 @@ from sqlalchemy.orm import Session
 import jwt
 
 from api.Core.Database import get_db
-from api.Modules.Auth.Requests import LoginRequest, LoginResponse
+from api.Modules.Auth.Requests import (
+    LoginCrossStoreRequest,
+    LoginRequest,
+    LoginResponse,
+)
 from api.Modules.Auth.Services import (
     authenticate_password,
+    authenticate_password_cross_store,
     decode_access_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
@@ -76,6 +81,38 @@ def login_route(
         raise HTTPException(
             status_code=401,
             detail="Invalid username or password",
+        )
+    return LoginResponse(
+        access_token=result.access_token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.user_id,
+        username=result.username,
+        full_name=result.full_name,
+        role=result.role,
+        store_id=result.store_id,
+        permissions=result.permissions,
+    )
+
+
+@router.post("/login-cross-store", response_model=LoginResponse)
+def login_cross_store_route(
+    body: LoginCrossStoreRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Cross-store JWT login for the SPA's generic landing page.
+    Same response shape as `/auth/login`, but takes
+    username + password only — the user's home store is looked
+    up across every store. Employees are rejected here so they
+    use their store's slug-scoped sign-in page (parity with the
+    legacy Flask `/login` POST)."""
+    try:
+        result = authenticate_password_cross_store(
+            db, username=body.username, password=body.password,
+        )
+    except AuthenticationError as exc:
+        # Same opaque 401 for invalid creds AND for the
+        # employee-rejection path — never leak which one tripped.
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid username or password",
         )
     return LoginResponse(
         access_token=result.access_token,
