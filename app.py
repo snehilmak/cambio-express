@@ -5176,54 +5176,19 @@ def _bank_txn_breakdown_data(store_ids, d_from, d_to):
 # ── Daily Drops ──────────────────────────────────────────────
 def _daily_drops_data(store_ids, d_from, d_to):
     """Sum DailyDrop rows in the period, grouped by report_date.
-    Each row: date + count + total. Plus a roll-up total."""
-    rows_q = (db.session.query(
-        DailyDrop.report_date,
-        db.func.count(DailyDrop.id),
-        db.func.coalesce(db.func.sum(DailyDrop.amount), 0.0),
-    ).filter(
-        DailyDrop.store_id.in_(store_ids),
-        DailyDrop.report_date >= d_from,
-        DailyDrop.report_date <= d_to,
-    ).group_by(DailyDrop.report_date).all())
-    rows = [{
-        "date":   d,
-        "count":  int(count or 0),
-        "amount": float(amount or 0),
-    } for d, count, amount in rows_q]
-    rows.sort(key=lambda r: r["date"], reverse=True)
-    totals = {
-        "count":  sum(r["count"]  for r in rows),
-        "amount": sum(r["amount"] for r in rows),
-    }
-    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
-    return rows, totals
+    Single source of truth lives in
+    `api.Modules.Reports.Services.daily_drops` (PR 92)."""
+    from api.Modules.Reports.Services import daily_drops
+    return daily_drops(db.session, store_ids, d_from, d_to)
 
 
 # ── Check Deposits ───────────────────────────────────────────
 def _check_deposits_data(store_ids, d_from, d_to):
-    """Sum CheckDeposit rows in the period, grouped by report_date."""
-    rows_q = (db.session.query(
-        CheckDeposit.report_date,
-        db.func.count(CheckDeposit.id),
-        db.func.coalesce(db.func.sum(CheckDeposit.amount), 0.0),
-    ).filter(
-        CheckDeposit.store_id.in_(store_ids),
-        CheckDeposit.report_date >= d_from,
-        CheckDeposit.report_date <= d_to,
-    ).group_by(CheckDeposit.report_date).all())
-    rows = [{
-        "date":   d,
-        "count":  int(count or 0),
-        "amount": float(amount or 0),
-    } for d, count, amount in rows_q]
-    rows.sort(key=lambda r: r["date"], reverse=True)
-    totals = {
-        "count":  sum(r["count"]  for r in rows),
-        "amount": sum(r["amount"] for r in rows),
-    }
-    totals["avg_per_day"] = totals["amount"] / len(rows) if rows else 0.0
-    return rows, totals
+    """Sum CheckDeposit rows in the period, grouped by report_date.
+    Single source of truth lives in
+    `api.Modules.Reports.Services.check_deposits` (PR 92)."""
+    from api.Modules.Reports.Services import check_deposits
+    return check_deposits(db.session, store_ids, d_from, d_to)
 
 
 # ── High-Value Transfers ─────────────────────────────────────
