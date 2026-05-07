@@ -5,6 +5,7 @@ import RequireAuth from "./components/RequireAuth";
 import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
+import EditDailyBook from "./routes/EditDailyBook";
 import EditTransfer from "./routes/EditTransfer";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
@@ -39,6 +40,7 @@ export default function App() {
         <Route path="transfers/:id/edit" element={<EditTransfer />} />
         <Route path="customers"        element={<Customers />} />
         <Route path="daily"            element={<DailyBook />} />
+        <Route path="daily/edit"       element={<EditDailyBook />} />
         <Route path="reports"          element={<Reports />} />
       </Route>
       <Route path="*" element={<NotFound />} />

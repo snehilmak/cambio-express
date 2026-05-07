@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useDailyReport, type DailyReportRow } from "../api/dailybook";
 import { getCurrentIdentity } from "../lib/auth";
@@ -114,6 +114,22 @@ export default function DailyBook() {
           <button onClick={() => shiftDate(1)} style={dateBtnStyle}>
             Day →
           </button>
+          <Link
+            to={`/daily/edit?date=${date}`}
+            style={{
+              background: "var(--db-accent, #3fff00)",
+              color: "var(--db-on-accent, #0a0a0a)",
+              borderRadius: "0.5rem",
+              padding: "0.45rem 0.85rem",
+              fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              textDecoration: "none",
+              marginLeft: "0.5rem",
+            }}
+          >
+            Edit
+          </Link>
         </div>
       </header>
 

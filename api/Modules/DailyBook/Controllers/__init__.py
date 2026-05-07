@@ -16,15 +16,19 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.DailyBook.Requests import (
     DailyReportResponse,
     DailyReportRow,
+    DailyReportUpdateRequest,
     PeriodSummaryResponse,
 )
 from api.Modules.DailyBook.Services import (
+    DailyReportLockedError,
     DailyReportSummary,
     summarize_period,
     summarize_report,
+    update_daily_report,
 )
 
 
@@ -94,5 +98,77 @@ def daily_route(
         raise HTTPException(
             status_code=404,
             detail="No daily report logged for this date",
+        )
+    return DailyReportResponse(report=_to_row(summary))
+
+
+@router.put(
+    "/{store_id}/{report_date}",
+    response_model=DailyReportResponse,
+)
+def update_daily_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    body: DailyReportUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> DailyReportResponse:
+    """Save the editable totals for one daily report.
+
+    JWT-authed. The principal's `store_id` claim must match the
+    URL `store_id` — cross-store writes return 403 to keep
+    tenancy boundaries opaque (the endpoint isn't an enumeration
+    oracle for other stores' report dates).
+
+    Locked reports return 403 with a clear "unlock first"
+    message — same UX as the legacy template's locked-banner.
+
+    Auto-creates the row when the date is new.
+
+    Line-item-derived fields (drops, check deposits, MT
+    company breakdowns) are NOT writable here — they're driven
+    by their own tables and migrate in follow-up PRs.
+    """
+    d = _parse_date(report_date, field="report_date")
+
+    claim_store = claims.get("store_id")
+    if claim_store is None or int(claim_store) != int(store_id):
+        # Same opaque 403 for "no store scope" and
+        # "wrong store" — never leak which one tripped.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not authorize edits to this store's "
+                "daily book."
+            ),
+        )
+
+    # Drop the `notes` field; everything else is the float subset
+    # that update_daily_report writes via setattr — only fields
+    # the caller actually included land on the row.
+    payload = body.model_dump(exclude_unset=True)
+    notes = payload.pop("notes", "")
+    fields = {k: float(v) for k, v in payload.items() if v is not None}
+
+    try:
+        update_daily_report(
+            db,
+            store_id=int(store_id),
+            report_date=d,
+            fields=fields,
+            notes=notes,
+        )
+    except DailyReportLockedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    db.commit()
+
+    summary = summarize_report(db, int(store_id), d)
+    if summary is None:
+        # Should never happen — update_daily_report ensured the
+        # row exists. Defensive: surface as 500 rather than
+        # confusing the client with a phantom 404.
+        raise HTTPException(
+            status_code=500,
+            detail="Daily report disappeared after save",
         )
     return DailyReportResponse(report=_to_row(summary))
