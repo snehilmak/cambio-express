@@ -7,6 +7,7 @@ import Dashboard from "./routes/Dashboard";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
 import NotFound from "./routes/NotFound";
+import Reports from "./routes/Reports";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 
@@ -61,6 +62,14 @@ export default function App() {
         element={
           <RequireAuth>
             <DailyBook />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="reports"
+        element={
+          <RequireAuth>
+            <Reports />
           </RequireAuth>
         }
       />
