@@ -5193,33 +5193,13 @@ def _check_deposits_data(store_ids, d_from, d_to):
 
 # ── High-Value Transfers ─────────────────────────────────────
 def _high_value_transfers_data(store_ids, d_from, d_to, threshold):
-    """List active transfers in the period whose `send_amount` is at
-    or above `threshold`. Returns rows + totals (no grouping — each
-    row is a single Transfer)."""
-    rows_q = (Transfer.query
-              .filter(*_active_transfers_period_filters(store_ids, d_from, d_to))
-              .filter(Transfer.send_amount >= threshold)
-              .order_by(Transfer.send_amount.desc(),
-                        Transfer.send_date.desc())
-              .all())
-    rows = [{
-        "send_date":     t.send_date,
-        "sender_name":   t.sender_name or "",
-        "recipient_name":t.recipient_name or "",
-        "country":       t.country or "",
-        "company":       t.company or "",
-        "amount":        float(t.send_amount or 0),
-        "fee":           float(t.fee or 0),
-        "tax":           float(t.federal_tax or 0),
-        "confirm":       t.confirm_number or "",
-    } for t in rows_q]
-    totals = {
-        "count":  len(rows),
-        "amount": sum(r["amount"] for r in rows),
-        "fees":   sum(r["fee"]    for r in rows),
-        "tax":    sum(r["tax"]    for r in rows),
-    }
-    return rows, totals
+    """List active transfers in the period >= threshold. Single
+    source of truth lives in
+    `api.Modules.Reports.Services.high_value_transfers` (PR 93)."""
+    from api.Modules.Reports.Services import high_value_transfers
+    return high_value_transfers(
+        db.session, store_ids, d_from, d_to, threshold,
+    )
 
 
 def _parse_threshold(args, default=3000):

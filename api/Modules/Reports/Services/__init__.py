@@ -30,6 +30,7 @@ from .daily_aggregates import check_deposits, daily_drops
 from .date_helpers import day_end, day_start
 from .employees import cashier_productivity, sales_by_employee
 from .fees_vs_tax import fees_vs_tax
+from .high_value_transfers import high_value_transfers
 from .period_comparison import (
     PL_EXPENSE_LINES,
     PL_INCOME_LINES,
@@ -57,6 +58,7 @@ __all__ = [
     "day_end",
     "day_start",
     "fees_vs_tax",
+    "high_value_transfers",
     "new_vs_returning",
     "period_comparison",
     "period_pl",
