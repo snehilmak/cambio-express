@@ -34,6 +34,7 @@ from .period_comparison import (
     period_comparison,
 )
 from .period_pl import period_pl
+from .returned_checks import returned_check_status
 from .sales import (
     by_destination_country,
     sales_by_company,
@@ -54,6 +55,7 @@ __all__ = [
     "new_vs_returning",
     "period_comparison",
     "period_pl",
+    "returned_check_status",
     "sales_by_company",
     "sales_by_employee",
     "sales_by_service",
