@@ -95,6 +95,66 @@ export async function unlockDailyReport(
   );
 }
 
+// ── Line items ──────────────────────────────────────────────
+
+export interface LineItemRow {
+  id: number;
+  kind: string;
+  at_time: string;  // HH:MM
+  amount: number;
+  note: string;
+  return_check_id: number | null;
+}
+
+interface LineItemListResponse {
+  items: LineItemRow[];
+}
+
+// Hook: line items for one (store, date), optionally narrowed
+// to a single kind.
+export function useLineItems(date: string | undefined, kind?: string) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<LineItemListResponse>({
+    enabled:
+      Boolean(date) && storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "line-items", storeId, date, kind ?? ""],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (kind) params.set("kind", kind);
+      const qs = params.toString() ? `?${params}` : "";
+      return api<LineItemListResponse>(
+        `/api/v2/daily/${storeId}/${date}/line-items${qs}`,
+      );
+    },
+  });
+}
+
+export interface LineItemCreateBody {
+  kind: string;
+  at_time: string;  // HH:MM
+  amount: number;
+  note?: string;
+}
+
+export async function createLineItem(
+  storeId: number, date: string, body: LineItemCreateBody,
+): Promise<LineItemRow> {
+  return api<LineItemRow>(
+    `/api/v2/daily/${storeId}/${date}/line-items`,
+    { method: "POST", json: body },
+  );
+}
+
+export async function deleteLineItem(
+  storeId: number, itemId: number,
+): Promise<void> {
+  await api<void>(
+    `/api/v2/daily/${storeId}/line-items/${itemId}`,
+    { method: "DELETE" },
+  );
+}
+
 // `date` is YYYY-MM-DD. When undefined the hook is disabled.
 export function useDailyReport(date: string | undefined) {
   const identity = getCurrentIdentity();
