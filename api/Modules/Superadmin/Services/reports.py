@@ -609,6 +609,160 @@ def retention_queue(
     return rows, totals
 
 
+def _stripe_period_unix(d_from: date, d_to: date) -> tuple[int, int]:
+    """(gte, lte) Unix timestamps covering [d_from, d_to] inclusive."""
+    from api.Modules.Reports.Services.date_helpers import (
+        day_end, day_start,
+    )
+    return (
+        int(day_start(d_from).timestamp()),
+        int(day_end(d_to).timestamp()),
+    )
+
+
+def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
+                 **kwargs) -> list:
+    """Page through a Stripe `list` API up to `max_total` rows."""
+    import stripe
+    if not stripe.api_key:
+        raise RuntimeError("Stripe API key not configured")
+    items: list = []
+    for obj in list_call(**kwargs, limit=limit_per_call).auto_paging_iter():
+        items.append(obj)
+        if len(items) >= max_total:
+            break
+    return items
+
+
+def refunds(
+    db: Session,  # unused — Stripe API call
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stripe refunds in the period grouped by reason."""
+    import stripe
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows: list[dict] = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(
+            stripe.Refund.list, created={"gte": gte, "lte": lte},
+        )
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason: dict[str, dict] = {}
+    for r in objs:
+        amt = float(r.get("amount", 0) or 0) / 100.0
+        reason = (
+            (r.get("reason") or "(no reason)")
+            .replace("_", " ").title()
+        )
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [
+        {"reason": k, "count": v["count"], "amount": v["amount"]}
+        for k, v in by_reason.items()
+    ]
+    rows.sort(key=lambda r: r["amount"], reverse=True)
+    return rows, totals
+
+
+def failed_payments(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Recent failed Stripe charges in the period.
+
+    Stripe doesn't expose a server-side `failed` filter on
+    Charge.list, so we pull a capped page and filter client-side.
+    """
+    import stripe
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows: list[dict] = []
+    totals = {"count": 0, "amount": 0.0, "stripe_error": ""}
+    try:
+        objs = _stripe_iter(
+            stripe.Charge.list,
+            created={"gte": gte, "lte": lte},
+            max_total=500,
+        )
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    by_reason: dict[str, dict] = {}
+    for c in objs:
+        if c.get("status") != "failed" and c.get("paid", True):
+            continue
+        amt = float(c.get("amount", 0) or 0) / 100.0
+        outcome = c.get("outcome") or {}
+        reason = (
+            outcome.get("reason")
+            or c.get("failure_message")
+            or "(unknown)"
+        )[:80]
+        by_reason.setdefault(reason, {"count": 0, "amount": 0.0})
+        by_reason[reason]["count"]  += 1
+        by_reason[reason]["amount"] += amt
+        totals["count"]  += 1
+        totals["amount"] += amt
+    rows = [
+        {"reason": k, "count": v["count"], "amount": v["amount"]}
+        for k, v in by_reason.items()
+    ]
+    rows.sort(key=lambda r: r["count"], reverse=True)
+    return rows, totals
+
+
+def payouts(
+    db: Session,
+    d_from: date,
+    d_to: date,
+) -> tuple[list[dict], dict]:
+    """Stripe payouts to the platform bank account in the period."""
+    from datetime import date as _date, datetime
+    import stripe
+    gte, lte = _stripe_period_unix(d_from, d_to)
+    rows: list[dict] = []
+    totals = {
+        "count": 0, "amount": 0.0, "stripe_error": "",
+        "paid": 0, "pending": 0, "failed": 0,
+    }
+    try:
+        objs = _stripe_iter(
+            stripe.Payout.list, created={"gte": gte, "lte": lte},
+        )
+    except Exception as e:
+        totals["stripe_error"] = str(e) or type(e).__name__
+        return rows, totals
+    for p in objs:
+        amt = float(p.get("amount", 0) or 0) / 100.0
+        arrival_ts = p.get("arrival_date")
+        arrival = (
+            datetime.utcfromtimestamp(arrival_ts).date()
+            if arrival_ts else None
+        )
+        status = p.get("status", "") or ""
+        rows.append({
+            "id":      p.get("id", ""),
+            "amount":  amt,
+            "status":  status.title(),
+            "method":  (p.get("method") or "").replace("_", " ").title(),
+            "arrival": arrival,
+        })
+        totals["count"]  += 1
+        totals["amount"] += amt
+        if status == "paid":    totals["paid"]    += 1
+        if status == "pending": totals["pending"] += 1
+        if status == "failed":  totals["failed"]  += 1
+    rows.sort(key=lambda r: r["arrival"] or _date.min, reverse=True)
+    return rows, totals
+
+
 def churn_cohort(
     db: Session,
     d_from: date,
