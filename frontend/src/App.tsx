@@ -7,6 +7,7 @@ import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
+import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import Reports from "./routes/Reports";
 import TransferDetail from "./routes/TransferDetail";
@@ -32,6 +33,7 @@ export default function App() {
       <Route element={<AuthedShell />}>
         <Route path="dashboard"        element={<Dashboard />} />
         <Route path="transfers"        element={<Transfers />} />
+        <Route path="transfers/new"    element={<NewTransfer />} />
         <Route path="transfers/:id"    element={<TransferDetail />} />
         <Route path="customers"        element={<Customers />} />
         <Route path="daily"            element={<DailyBook />} />

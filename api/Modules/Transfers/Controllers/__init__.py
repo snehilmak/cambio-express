@@ -28,16 +28,24 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Transfers.Repositories import (
     TransferFilters,
     get_by_id_in_stores,
 )
 from api.Modules.Transfers.Requests import (
+    CreateTransferRequest,
     TransferListResponse,
     TransferResponse,
     TransferRow,
 )
-from api.Modules.Transfers.Services import list_transfers
+from api.Modules.Transfers.Services import (
+    CreateTransferInput,
+    create_transfer,
+    list_transfers,
+    normalize_service_type,
+    parse_dob,
+)
 
 
 router = APIRouter()
@@ -126,6 +134,73 @@ def list_route(
         total_pages=page_obj.total_pages,
         page_amount=page_obj.page_amount,
     )
+
+
+@router.post("", response_model=TransferResponse, status_code=201)
+def create_route(
+    body: CreateTransferRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransferResponse:
+    """Create a transfer in the JWT principal's store. Server
+    recomputes federal_tax server-side from
+    `(send_amount, service_type, country, store)` so the client
+    can't lie about the rate. Audited in the same transaction
+    via `record_transfer_audit`.
+    """
+    store_id_claim = claims.get("store_id")
+    if store_id_claim is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner to create transfers."
+            ),
+        )
+    user_id = int(claims["sub"])
+
+    try:
+        send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="send_date must be YYYY-MM-DD",
+        )
+    sender_dob = parse_dob(body.sender_dob)
+
+    payload = CreateTransferInput(
+        store_id=int(store_id_claim),
+        created_by_user_id=user_id,
+        send_date=send_date,
+        company=body.company,
+        # Always pass through the same normalize_service_type the
+        # legacy form uses — anything unrecognized falls back to
+        # "Money Transfer" and the tax math runs on that.
+        service_type=normalize_service_type(body.service_type),
+        sender_name=body.sender_name,
+        send_amount=float(body.send_amount or 0),
+        fee=float(body.fee or 0),
+        commission=float(body.commission or 0),
+        recipient_name=body.recipient_name,
+        country=body.country,
+        recipient_phone=body.recipient_phone,
+        sender_phone=body.sender_phone,
+        sender_phone_country=body.sender_phone_country or "+1",
+        sender_address=body.sender_address,
+        sender_dob=sender_dob,
+        confirm_number=body.confirm_number,
+        status=body.status or "Sent",
+        status_notes=body.status_notes,
+        batch_id=body.batch_id,
+        internal_notes=body.internal_notes,
+        employee_id=body.employee_id,
+        customer_id=body.customer_id,
+    )
+    try:
+        transfer = create_transfer(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return TransferResponse(transfer=_to_row(transfer))
 
 
 @router.get("/{transfer_id}", response_model=TransferResponse)

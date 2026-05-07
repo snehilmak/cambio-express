@@ -29,13 +29,16 @@ from api.Modules.Transfers.Services.tax import (
     normalize_service_type,
 )
 from api.Modules.Transfers.Services.transfers import (
+    CreateTransferInput,
     TransferListPage,
     TransferNotFoundError,
+    create_transfer,
     delete_transfer,
     list_transfers,
 )
 
 __all__ = [
+    "CreateTransferInput",
     "DEFAULT_MT_COMPANIES",
     "DOMESTIC_COUNTRIES",
     "SERVICE_TYPES",
@@ -45,6 +48,7 @@ __all__ = [
     "TransferListPage",
     "TransferNotFoundError",
     "active_roster",
+    "create_transfer",
     "delete_transfer",
     "federal_tax_for",
     "list_transfers",
