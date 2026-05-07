@@ -21,6 +21,7 @@ The legacy `_sales_by_company_data` etc. in `app.py` are now
 source of truth for the business logic; both Flask templates and
 the new FastAPI controllers (PR 4) hit the same code.
 """
+from .ach_volume import ach_volume
 from .bank_charges import bank_charges_by_account
 from .customers import top_customers
 from .date_helpers import day_end, day_start
@@ -42,6 +43,7 @@ from .sales import (
 __all__ = [
     "PL_EXPENSE_LINES",
     "PL_INCOME_LINES",
+    "ach_volume",
     "bank_charges_by_account",
     "by_destination_country",
     "cashier_productivity",
