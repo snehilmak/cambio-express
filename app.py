@@ -1203,6 +1203,17 @@ class LoginEvent(db.Model):
     at      = db.Column(db.DateTime, default=datetime.utcnow,
                          nullable=False, index=True)
     method  = db.Column(db.String(20), default="")  # password / passkey / totp
+    # Covering composite for the DAU/MAU aggregator. The query is
+    # `WHERE at BETWEEN ? AND ? GROUP BY date(at)` with
+    # `count(distinct user_id)` — leading on `at` lets the planner
+    # do a range scan and have `user_id` already in-index for the
+    # distinct-count, no heap fetch per row. The standalone `at`
+    # and `user_id` indexes (declared above via `index=True`) stay
+    # — they cover other paths (FK joins, "logins for user X") and
+    # removing them would risk slow paths we haven't audited.
+    __table_args__ = (
+        db.Index("ix_login_event_at_user", "at", "user_id"),
+    )
 
 
 # ── TV display add-on ────────────────────────────────────────
@@ -11302,6 +11313,10 @@ _ADDED_INDEXES = [
     # table name in the DDL — so the plain table name here is
     # correct. Quoting it twice would produce `""user""`.
     ("ix_user_username",            "user",     "username"),
+    # LoginEvent DAU/MAU covering composite (PR 107). The
+    # standalone `at` and `user_id` indexes from `index=True` stay
+    # untouched — this is purely additive.
+    ("ix_login_event_at_user",      "login_event", "at, user_id"),
 ]
 
 
