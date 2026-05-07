@@ -6258,79 +6258,18 @@ def _sa_payouts_data(d_from, d_to):
 
 
 def _sa_dau_mau_data(d_from, d_to):
-    """Distinct-user counts per day in the period from LoginEvent.
-    Each row = one day with the count of unique users who logged in
-    that day.
-
-    Forward-only: LoginEvent only collects rows from when the model
-    ships, so periods before that show zeroes. The empty-state
-    template surfaces this honestly.
-    """
-    start = _day_start(d_from)
-    end   = _day_end(d_to)
-
-    # Distinct user_id × day. Use SQLite-friendly date() expression.
-    day_col = db.func.date(LoginEvent.at)
-    per_day_q = (db.session.query(
-        day_col, db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(
-        LoginEvent.at >= start, LoginEvent.at <= end,
-    ).group_by(day_col).order_by(day_col.desc()).all())
-    rows = [{"day": d, "users": int(c or 0)} for d, c in per_day_q]
-
-    # MAU = distinct users in the period.
-    mau = (db.session.query(
-        db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(
-        LoginEvent.at >= start, LoginEvent.at <= end,
-    ).scalar()) or 0
-    # DAU (today, if today is within the period) = distinct users
-    # whose login today.
-    today_start = datetime.combine(date.today(), datetime.min.time())
-    dau = (db.session.query(
-        db.func.count(db.func.distinct(LoginEvent.user_id))
-    ).filter(LoginEvent.at >= today_start).scalar()) or 0
-    stickiness = (dau / mau * 100.0) if mau else 0.0
-    avg_per_day = (sum(r["users"] for r in rows) / len(rows)
-                    if rows else 0.0)
-    totals = {
-        "dau":          dau,
-        "mau":          int(mau),
-        "stickiness":   stickiness,
-        "avg_per_day":  avg_per_day,
-        "active_days":  len(rows),
-    }
-    return rows, totals
+    """Distinct-user counts per day. Single source of truth lives
+    in `api.Modules.Superadmin.Services.dau_mau` (PR 103)."""
+    from api.Modules.Superadmin.Services import dau_mau
+    return dau_mau(db.session, d_from, d_to)
 
 
 def _sa_webhook_health_data(d_from, d_to):
-    """Inbound Stripe webhook deliveries grouped by status. Sourced
-    from WebhookEvent which is populated by the /webhooks/stripe
-    handler on every delivery (including signature failures)."""
-    start = _day_start(d_from)
-    end   = _day_end(d_to)
-    rows_q = (db.session.query(
-        WebhookEvent.status, db.func.count(WebhookEvent.id),
-    ).filter(
-        WebhookEvent.received_at >= start,
-        WebhookEvent.received_at <= end,
-    ).group_by(WebhookEvent.status).all())
-    rows = []
-    totals = {"count": 0, "ok": 0, "errors": 0}
-    for status, count in rows_q:
-        c = int(count or 0)
-        rows.append({"status": (status or "unknown").replace("_", " ").title(),
-                     "status_key": status or "",
-                     "count": c})
-        totals["count"] += c
-        if status == "ok":
-            totals["ok"] += c
-        else:
-            totals["errors"] += c
-    rows.sort(key=lambda r: r["count"], reverse=True)
-    totals["failure_pct"] = (totals["errors"] / totals["count"] * 100.0
-                              if totals["count"] else 0.0)
-    return rows, totals
+    """Inbound Stripe webhooks by status. Single source of truth
+    lives in `api.Modules.Superadmin.Services.webhook_health`
+    (PR 103)."""
+    from api.Modules.Superadmin.Services import webhook_health
+    return webhook_health(db.session, d_from, d_to)
 
 
 # ── Superadmin reports: registry of routes ───────────────────

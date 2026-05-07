@@ -20,6 +20,7 @@ from api.Modules.Superadmin.Services.reports import (
     bank_sync_adoption,
     churn_cohort,
     conversion_rate,
+    dau_mau,
     failed_payments,
     login_activity,
     mrr_arr,
@@ -34,6 +35,7 @@ from api.Modules.Superadmin.Services.reports import (
     time_to_convert,
     trial_expiry_timing,
     tv_display_adoption,
+    webhook_health,
 )
 
 __all__ = [
@@ -51,6 +53,7 @@ __all__ = [
     "compute_mrr",
     "compute_platform_anomalies",
     "conversion_rate",
+    "dau_mau",
     "failed_payments",
     "login_activity",
     "mrr_arr",
@@ -67,4 +70,5 @@ __all__ = [
     "time_to_convert",
     "trial_expiry_timing",
     "tv_display_adoption",
+    "webhook_health",
 ]
