@@ -51,7 +51,8 @@ const NAV: NavGroup[] = [
   {
     title: "Finance",
     items: [
-      { to: "/reports",   label: "Reports", icon: iconReports() },
+      { to: "/reports",   label: "Reports",     icon: iconReports() },
+      { to: "/batches",   label: "ACH batches", icon: iconBatches() },
     ],
   },
 ];
@@ -332,6 +333,17 @@ function iconReports() {
       <path d="M8 15v-4" />
       <path d="M12 15V8" />
       <path d="M16 15v-6" />
+    </svg>
+  );
+}
+function iconBatches() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M3 5h18" />
+      <path d="M3 12h18" />
+      <path d="M3 19h18" />
     </svg>
   );
 }

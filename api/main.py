@@ -71,6 +71,12 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.DailyBook.Controllers import router as dailybook_router
     app.include_router(dailybook_router, prefix="/daily", tags=["daily"])
 
+    # Batches — ACH batch read-side, added during the SPA
+    # cutover migration. Write-side (create/edit/link transfers)
+    # still on Flask until subsequent PRs.
+    from api.Modules.Batches.Controllers import router as batches_router
+    app.include_router(batches_router, prefix="/batches", tags=["batches"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
