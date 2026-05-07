@@ -220,6 +220,15 @@ class Customer(db.Model):
     __table_args__ = (
         db.UniqueConstraint("store_id", "phone_country", "phone_number",
                             name="uq_customer_store_phone"),
+        # Umbrella-upsert lookup: `find_by_phone_in_stores()` filters
+        # `store_id IN (sibling_ids) AND phone_country = ? AND
+        # phone_number = ?`. The unique constraint above leads with
+        # `store_id`, so it forces N index seeks for an N-store
+        # umbrella. Indexing on (phone_country, phone_number) lets
+        # the planner do a single seek and filter on store_id —
+        # cheaper for owner umbrellas with several stores, no worse
+        # for single-store admins.
+        db.Index("ix_customer_phone", "phone_country", "phone_number"),
     )
 
     def to_dict(self, current_store_id=None, home_names=None):
@@ -11271,6 +11280,11 @@ _ADDED_INDEXES = [
     ("ix_transfer_created_by",      "transfer", "created_by"),
     ("ix_transfer_status",          "transfer", "status"),
     ("ix_transfer_confirm_number",  "transfer", "confirm_number"),
+    # Customer umbrella-upsert lookup (PR 105). Non-unique on
+    # (phone_country, phone_number); the existing unique constraint
+    # on (store_id, phone_country, phone_number) stays put for
+    # duplicate prevention.
+    ("ix_customer_phone",           "customer", "phone_country, phone_number"),
 ]
 
 
