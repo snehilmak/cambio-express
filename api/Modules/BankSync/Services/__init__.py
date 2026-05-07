@@ -37,6 +37,13 @@ from api.Modules.BankSync.Services.rules import (
     toggle_rule,
     update_rule,
 )
+from api.Modules.BankSync.Services.sync import (
+    INITIAL_SYNC_DAYS_BACK,
+    backfill_uncategorized_rows,
+    migrate_generic_bank_charge_per_account,
+    sync_bank_transactions,
+    upsert_bank_transaction,
+)
 from api.Modules.BankSync.Services.transactions import (
     TransactionListPage,
     list_transactions_page,
@@ -45,11 +52,13 @@ from api.Modules.BankSync.Services.transactions import (
 __all__ = [
     "BANK_CATEGORIES_NON_POSTING",
     "BUILTIN_BANK_RULES",
+    "INITIAL_SYNC_DAYS_BACK",
     "RuleFields",
     "RuleNotFoundError",
     "RuleValidationError",
     "TransactionListPage",
     "apply_rules_to_uncategorized_row",
+    "backfill_uncategorized_rows",
     "bank_category_groups",
     "bank_category_label",
     "bank_charges_breakdown_for_month",
@@ -64,9 +73,12 @@ __all__ = [
     "is_valid_bank_category",
     "list_transactions_page",
     "match_builtin_bank_rule",
+    "migrate_generic_bank_charge_per_account",
     "parse_rule_form",
     "rule_matches",
+    "sync_bank_transactions",
     "toggle_rule",
     "uncategorize_transaction",
     "update_rule",
+    "upsert_bank_transaction",
 ]
