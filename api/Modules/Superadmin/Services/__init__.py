@@ -10,6 +10,10 @@ from api.Modules.Superadmin.Services.anomalies import (
     compute_platform_anomalies,
     quiet_store_anomalies,
 )
+from api.Modules.Superadmin.Services.dashboard import (
+    compute_mrr,
+    superadmin_dashboard_context,
+)
 
 __all__ = [
     "ANOMALY_OVERSHORT_HIGH_THRESHOLD",
@@ -19,6 +23,8 @@ __all__ = [
     "ANOMALY_QUIET_LOOKBACK_QUIET_DAYS",
     "ANOMALY_QUIET_MIN_PRIOR_TRANSFERS",
     "big_over_short_anomalies",
+    "compute_mrr",
     "compute_platform_anomalies",
     "quiet_store_anomalies",
+    "superadmin_dashboard_context",
 ]
