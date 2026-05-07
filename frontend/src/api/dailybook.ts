@@ -40,6 +40,39 @@ export interface DailyReportResponse {
   report: DailyReportRow;
 }
 
+export interface DailyReportUpdateBody {
+  taxable_sales?: number;
+  non_taxable?: number;
+  sales_tax?: number;
+  bill_payment_charge?: number;
+  phone_recargas?: number;
+  boost_mobile?: number;
+  money_order?: number;
+  check_cashing_fees?: number;
+  return_check_hold_fees?: number;
+  forward_balance?: number;
+  from_bank?: number;
+  rebates_commissions?: number;
+  cash_deposit?: number;
+  safe_balance?: number;
+  payroll_expense?: number;
+  over_short?: number;
+  notes?: string;
+}
+
+// PUT /api/v2/daily/{store_id}/{date} — saves the editable
+// totals. The schema is extra=forbid server-side, so derived
+// fields (money_transfer, drops, check_deposits, etc.) MUST NOT
+// be in the body — they roll up from line items.
+export async function updateDailyReport(
+  storeId: number, date: string, body: DailyReportUpdateBody,
+): Promise<DailyReportResponse> {
+  return api<DailyReportResponse>(
+    `/api/v2/daily/${storeId}/${date}`,
+    { method: "PUT", json: body },
+  );
+}
+
 // `date` is YYYY-MM-DD. When undefined the hook is disabled.
 export function useDailyReport(date: string | undefined) {
   const identity = getCurrentIdentity();

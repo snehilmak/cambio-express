@@ -50,3 +50,32 @@ class PeriodSummaryResponse(BaseModel):
     total_disbursements: float
     net: float
     days_logged: int
+
+
+class DailyReportUpdateRequest(BaseModel):
+    """PUT body for /daily/{store_id}/{date}. Only the editable
+    top-level totals + notes — line-item-derived fields
+    (cash_purchases, drops, etc.) come from their own tables and
+    aren't writable here. Every numeric field is optional so the
+    SPA can submit a partial form (only what the cashier edited).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    taxable_sales:           float | None = None
+    non_taxable:             float | None = None
+    sales_tax:               float | None = None
+    bill_payment_charge:     float | None = None
+    phone_recargas:          float | None = None
+    boost_mobile:            float | None = None
+    money_order:             float | None = None
+    check_cashing_fees:      float | None = None
+    return_check_hold_fees:  float | None = None
+    forward_balance:         float | None = None
+    from_bank:               float | None = None
+    rebates_commissions:     float | None = None
+    cash_deposit:            float | None = None
+    safe_balance:            float | None = None
+    payroll_expense:         float | None = None
+    over_short:              float | None = None
+    notes:                   str = ""
