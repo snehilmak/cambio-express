@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import SenderAutocomplete from "../components/SenderAutocomplete";
 import {
   updateTransfer,
   useEmployees,
@@ -191,9 +192,27 @@ export default function EditTransfer() {
           <h2 style={sectionTitleStyle}>Sender</h2>
           <Grid>
             <Field label="Full name">
-              <input type="text" value={form.sender_name}
-                onChange={(e) => set("sender_name", e.target.value)}
-                style={inputStyle} required />
+              <SenderAutocomplete
+                value={form.sender_name}
+                onChange={(v) => set("sender_name", v)}
+                onPick={(row) => {
+                  setForm((f) =>
+                    f
+                      ? {
+                          ...f,
+                          sender_name: row.full_name,
+                          sender_phone_country: row.phone_country || "+1",
+                          sender_phone: row.phone_number,
+                          sender_address: row.address,
+                          sender_dob: row.dob || "",
+                          customer_id: row.id,
+                        }
+                      : f,
+                  );
+                }}
+                onClearPickedId={() => set("customer_id", null)}
+                required
+              />
             </Field>
             <Field label="Phone country">
               <input type="text" value={form.sender_phone_country}
@@ -211,6 +230,16 @@ export default function EditTransfer() {
                 style={inputStyle} />
             </Field>
           </Grid>
+          {form.customer_id && (
+            <p style={{
+              margin: "0.5rem 0 0",
+              fontSize: "0.85rem",
+              color: "var(--db-text-muted, #a3a3a3)",
+            }}>
+              Linked to customer #{form.customer_id} — edits sync
+              back to the customer directory.
+            </p>
+          )}
         </section>
 
         <section style={cardStyle}>
