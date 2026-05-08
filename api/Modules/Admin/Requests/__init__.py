@@ -1,4 +1,9 @@
 """Admin — Pydantic schemas."""
+from api.Modules.Admin.Requests.addons import (
+    AddonListResponse,
+    AddonRow,
+    AddonToggleResponse,
+)
 from api.Modules.Admin.Requests.store_info import (
     StoreInfoResponse,
     StoreInfoRow,
@@ -12,6 +17,9 @@ from api.Modules.Admin.Requests.team import (
 )
 
 __all__ = [
+    "AddonListResponse",
+    "AddonRow",
+    "AddonToggleResponse",
     "StoreInfoResponse",
     "StoreInfoRow",
     "StoreInfoUpdateRequest",

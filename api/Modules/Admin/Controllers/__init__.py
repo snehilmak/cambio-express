@@ -19,6 +19,9 @@ from api.Modules.Admin.Repositories import (
     list_team,
 )
 from api.Modules.Admin.Requests import (
+    AddonListResponse,
+    AddonRow,
+    AddonToggleResponse,
     StoreInfoResponse,
     StoreInfoRow,
     StoreInfoUpdateRequest,
@@ -203,3 +206,91 @@ def deactivate_team_member_route(
         raise HTTPException(status_code=404, detail="Team member not found")
     deactivate_team_member(db, member)
     db.commit()
+
+
+# ── Subscription add-ons ────────────────────────────────────
+
+
+def _adapt_addon(key: str, addon: dict, *, is_active: bool) -> "AddonRow":
+    return AddonRow(
+        key=key,
+        name=addon.get("name", key),
+        price_label=addon.get("price_label", ""),
+        tagline=addon.get("tagline", ""),
+        status=addon.get("status", "live"),
+        is_active=is_active,
+    )
+
+
+@router.get("/addons", response_model=AddonListResponse)
+def list_addons_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AddonListResponse:
+    """List every available add-on for the principal's store with
+    its is_active flag. has_paid_plan tells the SPA whether the
+    Toggle button should be enabled — add-ons require an active
+    Basic or Pro subscription per the legacy contract."""
+    sid = _require_store(claims)
+    from app import (
+        ADDONS_CATALOG, store_addon_keys, store_feature_enabled,
+        store_has_paid_plan,
+    )
+    store = find_store(db, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    active_keys = store_addon_keys(store)
+    rows: list[AddonRow] = []
+    for key, addon in ADDONS_CATALOG.items():
+        # Hide flag-gated add-ons whose flag is OFF for this store.
+        if not store_feature_enabled(store, f"addon_{key}"):
+            continue
+        rows.append(_adapt_addon(
+            key, addon, is_active=(key in active_keys),
+        ))
+    return AddonListResponse(
+        rows=rows, total=len(rows),
+        has_paid_plan=store_has_paid_plan(store),
+    )
+
+
+@router.post("/addons/{addon_key}/toggle", response_model=AddonToggleResponse)
+def toggle_addon_route(
+    addon_key: str,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AddonToggleResponse:
+    """Toggle an add-on for the principal's store. Mirrors the
+    legacy /admin/subscription/addons/<key> form. Requires an
+    active paid plan; coming-soon add-ons can be requested but
+    not flipped on."""
+    sid = _require_store(claims)
+    from app import (
+        ADDONS_CATALOG, store_addon_keys, store_has_paid_plan,
+    )
+    store = find_store(db, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    addon = ADDONS_CATALOG.get(addon_key)
+    if addon is None:
+        raise HTTPException(status_code=404, detail="Unknown add-on")
+    if not store_has_paid_plan(store):
+        raise HTTPException(
+            status_code=409,
+            detail="Add-ons require an active Basic or Pro subscription.",
+        )
+    if addon.get("status") == "coming_soon":
+        raise HTTPException(
+            status_code=409,
+            detail=f"{addon.get('name', addon_key)} is coming soon.",
+        )
+    keys = store_addon_keys(store)
+    if addon_key in keys:
+        keys.discard(addon_key)
+    else:
+        keys.add(addon_key)
+    store.addons = ",".join(sorted(keys))
+    db.commit()
+    return AddonToggleResponse(
+        addon=_adapt_addon(addon_key, addon, is_active=(addon_key in keys)),
+    )
