@@ -1,0 +1,207 @@
+"""Announcements module — Controllers (FastAPI router).
+
+Mounts at `/api/v2/announcements/*`. Endpoints:
+
+  GET    /announcements          → list every announcement (newest first)
+  POST   /announcements          → create a new banner (+ optional broadcast)
+  POST   /announcements/{id}/toggle → enable / disable
+  DELETE /announcements/{id}     → hard-delete
+
+Auth: requires JWT principal with role="superadmin". Mirrors the
+legacy /superadmin/announcements/* form handlers but returns JSON
+envelopes the SPA can render directly.
+
+Every mutation calls `record_audit()` so the
+`/superadmin/audit-log` view stays the single source of truth for
+"who did what" — same invariant as the legacy site (CLAUDE.md
+invariant #7).
+"""
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, Depends, HTTPException, Path
+from sqlalchemy.orm import Session
+
+from api.Core.Database import get_db
+from api.Modules.Announcements.Requests import (
+    AnnouncementCreateRequest,
+    AnnouncementListResponse,
+    AnnouncementResponse,
+    AnnouncementRow,
+    AnnouncementToggleRequest,
+)
+from api.Modules.Audit.Services import record_superadmin_action
+from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Models import User
+
+
+router = APIRouter()
+
+
+def _require_superadmin_user(db: Session, claims: dict) -> User:
+    """Resolve JWT → User and gate on role=superadmin. Returns the
+    User row so the audit trail can stamp admin_id + admin_name from
+    canonical DB values (not whatever the JWT claims happen to carry)."""
+    if claims.get("role") != "superadmin":
+        raise HTTPException(
+            status_code=403, detail="Superadmin scope required.",
+        )
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=401, detail="JWT subject does not resolve to a user.",
+        )
+    return user
+
+
+def _audit(db: Session, user: User, action: str, *,
+           target_type: str = "", target_id: str = "", details: str = ""):
+    """Thin wrapper that goes straight to the Service so we don't need
+    Flask's request context (the legacy `record_audit` reads
+    `current_user()` from Flask session, which isn't set inside a
+    FastAPI route through the dispatcher)."""
+    record_superadmin_action(
+        db,
+        admin_id=user.id,
+        admin_name=user.full_name or user.username or "",
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details,
+    )
+
+
+def _iso(dt) -> str:
+    return dt.isoformat() if dt else ""
+
+
+def _is_visible(a) -> bool:
+    """Mirrors the active_announcements predicate: row must be
+    is_active AND inside its starts_at/expires_at window."""
+    if not a.is_active:
+        return False
+    now = datetime.utcnow()
+    if a.starts_at and now < a.starts_at:
+        return False
+    if a.expires_at and now > a.expires_at:
+        return False
+    return True
+
+
+def _adapt(a) -> AnnouncementRow:
+    return AnnouncementRow(
+        id=a.id,
+        message=a.message or "",
+        level=a.level or "info",
+        is_active=bool(a.is_active),
+        is_visible=_is_visible(a),
+        starts_at=_iso(a.starts_at),
+        expires_at=_iso(a.expires_at),
+        created_at=_iso(a.created_at),
+        created_by=a.created_by,
+        broadcast_requested=bool(a.broadcast_requested),
+        broadcast_sent_at=_iso(getattr(a, "broadcast_sent_at", None)),
+    )
+
+
+@router.get("", response_model=AnnouncementListResponse)
+def list_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AnnouncementListResponse:
+    """Every announcement, newest first. Includes inactive + expired
+    rows so the superadmin has the full history; the SPA can dim
+    the rows where `is_visible` is False."""
+    _require_superadmin_user(db, claims)
+    from app import Announcement
+    rows = (
+        db.query(Announcement)
+          .order_by(Announcement.created_at.desc())
+          .all()
+    )
+    return AnnouncementListResponse(
+        rows=[_adapt(a) for a in rows], total=len(rows),
+    )
+
+
+@router.post("", response_model=AnnouncementResponse, status_code=201)
+def create_route(
+    body: AnnouncementCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AnnouncementResponse:
+    """Mint a new banner. `expires_days=0` (or omitted) means no
+    expiry. `broadcast=True` queues the message for the broadcast-
+    email fan-out (one-shot at create time)."""
+    user = _require_superadmin_user(db, claims)
+    from app import Announcement
+    expires_at = (
+        datetime.utcnow() + timedelta(days=body.expires_days)
+        if body.expires_days else None
+    )
+    a = Announcement(
+        message=body.message[:2000],
+        level=body.level,
+        is_active=True,
+        starts_at=datetime.utcnow(),
+        expires_at=expires_at,
+        created_by=user.id,
+        broadcast_requested=body.broadcast,
+    )
+    db.add(a); db.flush()
+    _audit(
+        db, user, "create_announcement",
+        target_type="announcement", target_id=str(a.id),
+        details=f"level={body.level}, broadcast={body.broadcast}",
+    )
+    db.commit()
+    return AnnouncementResponse(announcement=_adapt(a))
+
+
+@router.post(
+    "/{ann_id}/toggle", response_model=AnnouncementResponse,
+)
+def toggle_route(
+    body: AnnouncementToggleRequest,
+    ann_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AnnouncementResponse:
+    user = _require_superadmin_user(db, claims)
+    from app import Announcement
+    a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
+    if a is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    a.is_active = body.is_active
+    _audit(
+        db, user, "toggle_announcement",
+        target_type="announcement", target_id=str(a.id),
+        details=f"is_active={body.is_active}",
+    )
+    db.commit()
+    return AnnouncementResponse(announcement=_adapt(a))
+
+
+@router.delete("/{ann_id}", status_code=204)
+def delete_route(
+    ann_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    user = _require_superadmin_user(db, claims)
+    from app import Announcement
+    a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
+    if a is None:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    _audit(
+        db, user, "delete_announcement",
+        target_type="announcement", target_id=str(a.id),
+        details=(a.message or "")[:80],
+    )
+    db.delete(a)
+    db.commit()
+    return None
