@@ -34,3 +34,27 @@ class BankTransactionListResponse(BaseModel):
     total_pages: int
     page_total_cents: int
     uncategorized_count: int
+
+
+class CategorizeRequest(BaseModel):
+    """POST body for /bank/transactions/{txn_id}/categorize.
+
+    `target_kind` is a slug from `BANK_CATEGORIES_NON_POSTING` or
+    `_LINE_ITEM_KINDS` (e.g. "bank_charge_210", "cash_deposit").
+    `post_to_daily=False` keeps the assignment metadata-only and
+    skips creating the matching DailyLineItem (used when the
+    operator wants the P&L tag without a daily-book mirror)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    target_kind: str = Field(..., min_length=1, max_length=60)
+    post_to_daily: bool = True
+
+
+class CategorizeResponse(BaseModel):
+    """Returned from categorize / uncategorize. Echoes the row's
+    new category state so the SPA can update without re-fetching."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    transaction: BankTransactionRow
