@@ -40,3 +40,43 @@ export function useSuperadminStores() {
       api<SuperadminStoreListResponse>("/api/v2/superadmin/stores"),
   });
 }
+
+
+export interface SuperadminAuditRow {
+  id: number;
+  admin_id: number | null;
+  admin_name: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  details: string;
+  created_at: string;
+}
+
+export interface SuperadminAuditListResponse {
+  rows: SuperadminAuditRow[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+}
+
+export function useSuperadminAuditLog(
+  page = 1, action = "", perPage = 50,
+) {
+  const identity = getCurrentIdentity();
+  return useQuery<SuperadminAuditListResponse>({
+    enabled: identity?.role === "superadmin",
+    queryKey: ["superadmin", "audit-log", identity?.user_id, page, action, perPage],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set("page", String(page));
+      p.set("per_page", String(perPage));
+      if (action) p.set("action", action);
+      return api<SuperadminAuditListResponse>(
+        `/api/v2/superadmin/audit-log?${p.toString()}`,
+      );
+    },
+    placeholderData: (prev) => prev,
+  });
+}

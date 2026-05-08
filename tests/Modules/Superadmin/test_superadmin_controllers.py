@@ -105,3 +105,99 @@ def test_stores_includes_billing_and_retention_fields(client, test_store_id):
         "trial_ends_at", "grace_ends_at", "data_retention_until",
         "stripe_customer_id", "stripe_subscription_id",
     } == set(row.keys())
+
+
+# ── /superadmin/audit-log ────────────────────────────────────
+
+
+def _seed_audit(action="extend_trial", target_type="store", target_id="42",
+                details="", admin_name="Super Admin"):
+    from app import SuperadminAuditLog, db
+    row = SuperadminAuditLog(
+        admin_id=None, admin_name=admin_name,
+        action=action, target_type=target_type, target_id=target_id,
+        details=details,
+    )
+    db.session.add(row); db.session.commit()
+    return row.id
+
+
+def test_audit_log_requires_jwt(client):
+    resp = client.get("/api/v2/superadmin/audit-log")
+    assert resp.status_code == 401
+
+
+def test_audit_log_rejects_admin_role(client, test_store_id):
+    token = _login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/superadmin/audit-log",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_audit_log_returns_paginated_envelope(client):
+    from app import app as flask_app
+    with flask_app.app_context():
+        for i in range(3):
+            _seed_audit(action=f"act_{i}")
+    token = _login_superadmin(client)
+    resp = client.get(
+        "/api/v2/superadmin/audit-log",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert set(body.keys()) == {
+        "rows", "total", "page", "per_page", "total_pages",
+    }
+    assert body["total"] == 3
+    assert body["page"] == 1
+    assert body["per_page"] == 50
+    assert body["total_pages"] == 1
+
+
+def test_audit_log_orders_newest_first(client):
+    from app import app as flask_app
+    with flask_app.app_context():
+        oldest = _seed_audit(action="oldest")
+        newest = _seed_audit(action="newest")
+    token = _login_superadmin(client)
+    body = client.get(
+        "/api/v2/superadmin/audit-log",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    ids = [r["id"] for r in body["rows"]]
+    assert ids[0] == newest
+    assert ids[-1] == oldest
+
+
+def test_audit_log_filters_by_action(client):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_audit(action="extend_trial")
+        _seed_audit(action="comp_plan")
+        _seed_audit(action="extend_trial")
+    token = _login_superadmin(client)
+    body = client.get(
+        "/api/v2/superadmin/audit-log?action=extend",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["total"] == 2
+    assert all("extend" in r["action"] for r in body["rows"])
+
+
+def test_audit_log_pagination(client):
+    from app import app as flask_app
+    with flask_app.app_context():
+        for i in range(5):
+            _seed_audit(action=f"act_{i}")
+    token = _login_superadmin(client)
+    body = client.get(
+        "/api/v2/superadmin/audit-log?page=2&per_page=2",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["total"] == 5
+    assert body["page"] == 2
+    assert body["total_pages"] == 3
+    assert len(body["rows"]) == 2

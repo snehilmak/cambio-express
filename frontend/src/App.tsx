@@ -24,6 +24,7 @@ import ReturnCheckForm from "./routes/ReturnCheckForm";
 import ReturnChecks from "./routes/ReturnChecks";
 import Settings from "./routes/Settings";
 import Signup from "./routes/Signup";
+import SuperadminAuditLog from "./routes/SuperadminAuditLog";
 import SuperadminStores from "./routes/SuperadminStores";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
@@ -68,7 +69,8 @@ export default function App() {
         <Route path="return-checks/new"      element={<ReturnCheckForm />} />
         <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
         <Route path="owner/locations" element={<OwnerLocations />} />
-        <Route path="superadmin/stores" element={<SuperadminStores />} />
+        <Route path="superadmin/stores"     element={<SuperadminStores />} />
+        <Route path="superadmin/audit-log"  element={<SuperadminAuditLog />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
