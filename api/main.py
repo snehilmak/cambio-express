@@ -135,6 +135,17 @@ def _register_routers(app: FastAPI) -> None:
         announcements_router, prefix="/announcements", tags=["announcements"],
     )
 
+    # FeatureFlags — superadmin CRUD over the platform-wide flag
+    # registry. Per-store overrides ship in a follow-up.
+    from api.Modules.FeatureFlags.Controllers import (
+        router as feature_flags_router,
+    )
+    app.include_router(
+        feature_flags_router,
+        prefix="/feature-flags",
+        tags=["feature-flags"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
