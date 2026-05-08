@@ -127,3 +127,27 @@ export async function deactivateTeamMember(id: number): Promise<void> {
     { method: "DELETE" },
   );
 }
+
+export async function forgotPassword(
+  email: string,
+): Promise<{ status: string }> {
+  return api<{ status: string }>(
+    "/api/v2/auth/forgot-password",
+    { method: "POST", json: { email } },
+  );
+}
+
+export interface ResetPasswordBody {
+  token: string;
+  new_password: string;
+  confirm_password: string;
+}
+
+export async function resetPassword(
+  body: ResetPasswordBody,
+): Promise<{ status: string }> {
+  return api<{ status: string }>(
+    "/api/v2/auth/reset-password",
+    { method: "POST", json: body },
+  );
+}

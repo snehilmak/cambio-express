@@ -128,9 +128,21 @@ export default function Login() {
               style={{
                 fontSize: "0.85rem",
                 color: "var(--db-text-muted, #a3a3a3)",
+                display: "flex",
+                justifyContent: "space-between",
               }}
             >
-              Password
+              <span>Password</span>
+              <Link
+                to="/forgot-password"
+                style={{
+                  color: "var(--db-text-muted, #a3a3a3)",
+                  fontSize: "0.78rem",
+                  textDecoration: "none",
+                }}
+              >
+                Forgot?
+              </Link>
             </span>
             <input
               type="password"

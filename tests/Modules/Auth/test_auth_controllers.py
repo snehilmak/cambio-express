@@ -547,3 +547,191 @@ def test_signup_rejects_extra_fields(client):
         },
     )
     assert resp.status_code == 422
+
+
+# ── POST /auth/forgot-password ─ /auth/reset-password ──────
+
+
+def test_forgot_password_always_returns_ok_for_unknown_email(client):
+    """Unknown emails MUST silently no-op — never reveal whether
+    a given address is registered (CLAUDE.md security invariant)."""
+    resp = client.post(
+        "/api/v2/auth/forgot-password",
+        json={"email": "ghost@nope.com"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json() == {"status": "ok"}
+
+
+def test_forgot_password_issues_token_for_known_user(client, test_store_id):  # noqa: ARG001
+    """Known-good email mints a PasswordResetToken row that the
+    legacy SMTP delivery path can pick up."""
+    from app import PasswordResetToken, db, app as flask_app
+    resp = client.post(
+        "/api/v2/auth/forgot-password",
+        json={"email": "admin@test.com"},
+    )
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        tokens = (
+            db.session.query(PasswordResetToken)
+              .filter_by(used_at=None)
+              .all()
+        )
+        assert len(tokens) >= 1
+
+
+def test_forgot_password_response_does_not_leak_token(client, test_store_id):  # noqa: ARG001
+    """Response body must never include the raw token. The legacy
+    contract is `{"status": "ok"}` and that's it."""
+    resp = client.post(
+        "/api/v2/auth/forgot-password",
+        json={"email": "admin@test.com"},
+    )
+    body = resp.get_json()
+    assert "token" not in str(body).lower()
+    assert "raw" not in str(body).lower()
+
+
+def test_reset_password_round_trip(client, test_store_id):
+    """Issue a token via the Service helper, then consume it via
+    the endpoint, then log in with the new password."""
+    from app import db, app as flask_app
+    from api.Modules.Auth.Services import issue_password_reset_token
+    with flask_app.app_context():
+        issued = issue_password_reset_token(db.session, "admin@test.com")
+        db.session.commit()
+        raw = issued.raw_token
+
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": raw,
+            "new_password":     "freshpass789",
+            "confirm_password": "freshpass789",
+        },
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json() == {"status": "ok"}
+
+    # Old password rejected.
+    bad = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert bad.status_code == 401
+
+    # New password works.
+    good = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "freshpass789",
+            "store_id": test_store_id,
+        },
+    )
+    assert good.status_code == 200
+
+
+def test_reset_password_rejects_invalid_token(client):
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": "not-a-real-token",
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass45678",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_reset_password_rejects_expired_token(client, test_store_id):  # noqa: ARG001
+    """Tokens past expires_at should 400 even if otherwise valid."""
+    from app import PasswordResetToken, db, app as flask_app
+    from api.Modules.Auth.Services import issue_password_reset_token
+    from datetime import datetime, timedelta
+    with flask_app.app_context():
+        issued = issue_password_reset_token(db.session, "admin@test.com")
+        db.session.commit()
+        raw = issued.raw_token
+        # Manually expire it.
+        row = (
+            db.session.query(PasswordResetToken)
+              .filter_by(user_id=issued.user.id, used_at=None)
+              .first()
+        )
+        row.expires_at = datetime.utcnow() - timedelta(hours=1)
+        db.session.commit()
+
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": raw,
+            "new_password":     "newpass45678",
+            "confirm_password": "newpass45678",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_reset_password_rejects_mismatched_confirm(client):
+    """Even with a valid-shaped token, mismatched confirm → 422
+    BEFORE we hit the DB. Defense against typos."""
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": "doesnt-matter",
+            "new_password":     "passwordA12",
+            "confirm_password": "passwordB12",
+        },
+    )
+    assert resp.status_code == 422
+    body = resp.get_json()
+    assert body["detail"]["field"] == "confirm_password"
+
+
+def test_reset_password_rejects_short_new_password(client):
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": "x",
+            "new_password":     "short",
+            "confirm_password": "short",
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_reset_password_consumed_token_cannot_be_reused(client, test_store_id):  # noqa: ARG001
+    """One-time use enforced — second consume of the same token
+    returns 400."""
+    from app import db, app as flask_app
+    from api.Modules.Auth.Services import issue_password_reset_token
+    with flask_app.app_context():
+        issued = issue_password_reset_token(db.session, "admin@test.com")
+        db.session.commit()
+        raw = issued.raw_token
+
+    r1 = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": raw,
+            "new_password":     "firstpass11",
+            "confirm_password": "firstpass11",
+        },
+    )
+    assert r1.status_code == 200
+
+    r2 = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": raw,
+            "new_password":     "secondpass11",
+            "confirm_password": "secondpass11",
+        },
+    )
+    assert r2.status_code == 400
