@@ -102,6 +102,12 @@ def _register_routers(app: FastAPI) -> None:
         tags=["return-checks"],
     )
 
+    # Owners — multi-store owner umbrella read-side. First slice
+    # ships /owner/locations; dashboard, P&L rollup, store drill-
+    # down, and connect/unlink invitation flow follow.
+    from api.Modules.Owners.Controllers import router as owners_router
+    app.include_router(owners_router, prefix="/owner", tags=["owner"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
