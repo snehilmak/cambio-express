@@ -1,7 +1,23 @@
-"""HTTP integration tests for the BankSync Controllers (PR 16)."""
-from datetime import datetime, timedelta
+"""HTTP integration tests for the BankSync Controllers.
 
-from fastapi.testclient import TestClient
+After SPA-29 these endpoints derive `store_id` from the JWT
+principal — explicit `store_ids` query params are gone. Tests
+log in as the seeded admin and pass the resulting bearer token,
+mirroring the ReturnChecks / Batches / Monthly test pattern.
+"""
+from datetime import datetime
+
+
+def _login(client, store_id):
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
 
 
 def _seed_account(store_id, *, last4="0000", nickname=""):
@@ -18,8 +34,8 @@ def _seed_account(store_id, *, last4="0000", nickname=""):
 
 
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
-                description="X", category_slug="",
-                posted_at=None, stripe_transaction_id=None):
+              description="X", category_slug="",
+              posted_at=None, stripe_transaction_id=None):
     from app import BankTransaction, db
     t = BankTransaction(
         store_id=store_id,
@@ -37,31 +53,28 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
     return t.id
 
 
-def _client():
-    from api.main import api_app
-    return TestClient(api_app)
+# ── Auth gate ───────────────────────────────────────────────
 
 
-# ── Validation ──────────────────────────────────────────────
+def test_list_requires_jwt(client):
+    resp = client.get("/api/v2/bank/transactions")
+    assert resp.status_code == 401
 
 
-def test_list_requires_store_ids():
-    resp = _client().get("/bank/transactions")
-    assert resp.status_code == 422
-
-
-def test_list_rejects_invalid_sign():
-    resp = _client().get(
-        "/bank/transactions",
-        params={"store_ids": "1", "sign": "garbage"},
+def test_list_rejects_invalid_sign(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?sign=garbage",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
 
 
-def test_list_rejects_out_of_range_per_page():
-    resp = _client().get(
-        "/bank/transactions",
-        params={"store_ids": "1", "per_page": 1000},
+def test_list_rejects_out_of_range_per_page(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?per_page=1000",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
 
@@ -69,17 +82,19 @@ def test_list_rejects_out_of_range_per_page():
 # ── Happy paths ─────────────────────────────────────────────
 
 
-def test_list_response_envelope(test_store_id):
+def test_list_response_envelope(client, test_store_id):
     from app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id, nickname="Operating")
         _seed_txn(test_store_id, a, amount_cents=-100,
-                    description="REMOTE DEPOSIT FEE")
-    resp = _client().get(
-        "/bank/transactions", params={"store_ids": str(test_store_id)},
+                  description="REMOTE DEPOSIT FEE")
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    body = resp.json()
+    body = resp.get_json()
     assert set(body.keys()) == {
         "rows", "total", "page", "per_page", "total_pages",
         "page_total_cents", "uncategorized_count",
@@ -91,129 +106,138 @@ def test_list_response_envelope(test_store_id):
     assert row["account_label"] == "Operating"
 
 
-def test_list_filters_by_account(test_store_id):
+def test_list_filters_by_account(client, test_store_id):
     from app import app as flask_app
     with flask_app.app_context():
         a1 = _seed_account(test_store_id, last4="1111")
         a2 = _seed_account(test_store_id, last4="2222")
         _seed_txn(test_store_id, a1, description="A1")
         _seed_txn(test_store_id, a2, description="A2")
-    resp = _client().get(
-        "/bank/transactions",
-        params={"store_ids": str(test_store_id), "account_id": str(a1)},
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/bank/transactions?account_id={a1}",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    descs = {r["description"] for r in resp.json()["rows"]}
+    descs = {r["description"] for r in resp.get_json()["rows"]}
     assert descs == {"A1"}
 
 
-def test_list_filters_by_sign(test_store_id):
+def test_list_filters_by_sign(client, test_store_id):
     from app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, amount_cents=-100, description="DEBIT")
         _seed_txn(test_store_id, a, amount_cents=200, description="CREDIT")
-    resp = _client().get(
-        "/bank/transactions",
-        params={"store_ids": str(test_store_id), "sign": "credit"},
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?sign=credit",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    descs = {r["description"] for r in resp.json()["rows"]}
+    descs = {r["description"] for r in resp.get_json()["rows"]}
     assert descs == {"CREDIT"}
 
 
-def test_list_uncategorized_only_filter(test_store_id):
+def test_list_uncategorized_only_filter(client, test_store_id):
     from app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="UNTAGGED",
-                   stripe_transaction_id="u")
+                  stripe_transaction_id="u")
         _seed_txn(
             test_store_id, a,
             description="TAGGED",
             category_slug="bank_charge_210",
             stripe_transaction_id="c",
         )
-    resp = _client().get(
-        "/bank/transactions",
-        params={
-            "store_ids": str(test_store_id),
-            "uncategorized_only": "true",
-        },
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?uncategorized_only=true",
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    descs = {r["description"] for r in resp.json()["rows"]}
+    descs = {r["description"] for r in resp.get_json()["rows"]}
     assert descs == {"UNTAGGED"}
 
 
-def test_list_uncategorized_count_independent_of_filter(test_store_id):
+def test_list_uncategorized_count_independent_of_filter(client, test_store_id):
     """`uncategorized_count` reflects every uncategorized row across
     the filter window, not just the rows matching `uncategorized_only`."""
     from app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="U1",
-                   stripe_transaction_id="u1")
+                  stripe_transaction_id="u1")
         _seed_txn(test_store_id, a, description="U2",
-                   stripe_transaction_id="u2")
+                  stripe_transaction_id="u2")
         _seed_txn(
             test_store_id, a,
             description="C1",
             category_slug="bank_charge_210",
             stripe_transaction_id="c1",
         )
-    # Caller filters by category_slug — the response total is 1, but
-    # uncategorized_count must still report the 2 uncategorized rows.
-    resp = _client().get(
-        "/bank/transactions",
-        params={
-            "store_ids": str(test_store_id),
-            "category_slug": "bank_charge_210",
-        },
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?category_slug=bank_charge_210",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    body = resp.json()
+    body = resp.get_json()
     assert body["total"] == 1
     assert body["uncategorized_count"] == 2
 
 
-def test_list_pagination(test_store_id):
+def test_list_pagination(client, test_store_id):
     from app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         for i in range(5):
             _seed_txn(test_store_id, a, description=f"T{i}",
-                       stripe_transaction_id=f"t{i}")
-    resp = _client().get(
-        "/bank/transactions",
-        params={
-            "store_ids": str(test_store_id),
-            "page": 1, "per_page": 2,
-        },
+                      stripe_transaction_id=f"t{i}")
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/bank/transactions?page=1&per_page=2",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    body = resp.json()
+    body = resp.get_json()
     assert body["total"] == 5
     assert body["total_pages"] == 3
     assert len(body["rows"]) == 2
 
 
-# ── Strangler-fig dispatch ──────────────────────────────────
+# ── Cross-tenant safety ─────────────────────────────────────
 
 
-def test_flask_dispatcher_routes_bank_to_fastapi(client, test_store_id):
-    from app import app as flask_app
+def test_list_scoped_to_principal_store(client, test_store_id):
+    """Even if a sibling store has transactions, the JWT-scoped list
+    only sees the principal's store. Confirms that the dropped
+    `store_ids` query param can't be smuggled back in via the URL."""
+    from app import Store, db, app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
-        _seed_txn(test_store_id, a, description="VIA-FLASK")
+        _seed_txn(test_store_id, a, description="MINE",
+                  stripe_transaction_id="mine")
+        # Sibling store with its own account + txn
+        other = Store(name="Other", slug="other-store", plan="trial")
+        db.session.add(other); db.session.commit()
+        other_id = other.id
+        b = _seed_account(other_id, last4="9999")
+        _seed_txn(other_id, b, description="THEIRS",
+                  stripe_transaction_id="theirs")
+    token = _login(client, test_store_id)
     resp = client.get(
-        f"/api/v2/bank/transactions?store_ids={test_store_id}",
+        "/api/v2/bank/transactions",
+        headers={"Authorization": f"Bearer {token}"},
     )
-    assert resp.status_code == 200
-    assert resp.is_json
-    assert resp.get_json()["total"] == 1
+    descs = {r["description"] for r in resp.get_json()["rows"]}
+    assert descs == {"MINE"}
 
 
-def test_openapi_includes_bank_path():
-    resp = _client().get("/openapi.json")
+# ── OpenAPI shape ───────────────────────────────────────────
+
+
+def test_openapi_includes_bank_path(client):
+    resp = client.get("/api/v2/openapi.json")
     assert resp.status_code == 200
-    paths = set(resp.json()["paths"].keys())
+    paths = set(resp.get_json()["paths"].keys())
     assert "/bank/transactions" in paths
