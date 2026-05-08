@@ -11242,9 +11242,27 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     if created_user:  click.echo("   (User was created on this run.)")
 
 # ── Error handlers ───────────────────────────────────────────
+def _render_error(code, message, user):
+    """Pick the right error template. Logged-out visitors get the
+    standalone error_public.html — no sidebar/topbar so a typo
+    like /APP doesn't render the admin chrome and look like a
+    half-loaded dashboard. Logged-in visitors keep the in-app
+    error.html with their normal shell (so the "Back to Dashboard"
+    button routes correctly)."""
+    if user is None:
+        return render_template(
+            "error_public.html",
+            code=code, message=message,
+            request_path=request.path,
+        ), code
+    return render_template(
+        "error.html", user=user, code=code, message=message,
+    ), code
+
+
 @app.errorhandler(404)
 def not_found(e):
-    return render_template("error.html",user=current_user(),code=404,message="Page not found."),404
+    return _render_error(404, "Page not found.", current_user())
 
 @app.errorhandler(500)
 def server_error(e):
@@ -11254,8 +11272,7 @@ def server_error(e):
         u = current_user()
     except Exception:
         u = None
-    return render_template("error.html", user=u, code=500,
-        message="Something went wrong. Please try again."), 500
+    return _render_error(500, "Something went wrong. Please try again.", u)
 
 # ── Init ─────────────────────────────────────────────────────
 # Column additions applied to existing installs on boot. Each entry is
@@ -11911,27 +11928,6 @@ def _spa_index_html():
     # latest build.
     resp.headers["Cache-Control"] = "no-store, must-revalidate"
     return resp
-
-
-@app.before_request
-def _normalize_spa_path_case():
-    """Redirect any case variation of /app/* to lowercase /app/*.
-    Flask routing is case-sensitive, so /APP would otherwise fall
-    through to the 404 handler — which renders error.html wrapped
-    in base.html (the chrome-only "looks like an empty dashboard"
-    page a logged-out visitor saw on /APP). Normalizing the case
-    here means a typo just lands the user on the SPA shell."""
-    path = request.path
-    if (
-        len(path) >= 4
-        and path[:4].lower() == "/app"
-        and (len(path) == 4 or path[4] == "/")
-        and not path.startswith("/app")
-    ):
-        target = "/app" + path[4:]
-        if request.query_string:
-            target += "?" + request.query_string.decode("latin-1")
-        return redirect(target, code=301)
 
 
 @app.route("/app/")
