@@ -178,7 +178,7 @@ function PrimaryForm({
         </div>
         <button
           type="submit"
-          className="btn-login"
+          className={`btn-login${busy ? " is-busy" : ""}`}
           disabled={busy || !username || !password}
         >
           {busy ? "Signing in…" : "Sign in →"}
@@ -307,7 +307,7 @@ function SecondFactor({
         </div>
         <button
           type="submit"
-          className="btn-login"
+          className={`btn-login${busy ? " is-busy" : ""}`}
           disabled={busy || !code}
         >
           {busy ? "Verifying…" : "Verify →"}
@@ -480,7 +480,8 @@ const LOGIN_CSS = `
 .error-msg{background:rgba(255,77,109,.08);color:var(--db-negative);border:1px solid rgba(255,77,109,.3);border-radius:10px;padding:11px 14px;font-size:13px;margin-bottom:18px;font-family:var(--db-font-body)}
 .btn-login{width:100%;padding:14px;background:var(--db-neon);color:var(--db-neon-ink);border:none;border-radius:10px;font-size:14.5px;font-weight:600;cursor:pointer;font-family:var(--db-font-body);letter-spacing:-.01em;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s;margin-top:6px}
 .btn-login:hover:not(:disabled){background:var(--db-neon-bright)}
-.btn-login:disabled{opacity:.6;cursor:wait}
+.btn-login:disabled{opacity:.6;cursor:not-allowed}
+.btn-login.is-busy:disabled{cursor:wait}
 
 .employee-box{margin-top:28px;padding:16px 18px;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:12px}
 .employee-box-title{font-size:13px;font-weight:600;color:var(--db-gray-9);margin-bottom:4px}

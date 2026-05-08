@@ -11913,6 +11913,27 @@ def _spa_index_html():
     return resp
 
 
+@app.before_request
+def _normalize_spa_path_case():
+    """Redirect any case variation of /app/* to lowercase /app/*.
+    Flask routing is case-sensitive, so /APP would otherwise fall
+    through to the 404 handler — which renders error.html wrapped
+    in base.html (the chrome-only "looks like an empty dashboard"
+    page a logged-out visitor saw on /APP). Normalizing the case
+    here means a typo just lands the user on the SPA shell."""
+    path = request.path
+    if (
+        len(path) >= 4
+        and path[:4].lower() == "/app"
+        and (len(path) == 4 or path[4] == "/")
+        and not path.startswith("/app")
+    ):
+        target = "/app" + path[4:]
+        if request.query_string:
+            target += "?" + request.query_string.decode("latin-1")
+        return redirect(target, code=301)
+
+
 @app.route("/app/")
 @app.route("/app/<path:_subpath>")
 def spa_shell(_subpath: str = ""):  # noqa: ARG001 — path is for client routing
