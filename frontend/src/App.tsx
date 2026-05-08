@@ -8,6 +8,7 @@ import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
 import EditDailyBook from "./routes/EditDailyBook";
+import EditMonthly from "./routes/EditMonthly";
 import EditTransfer from "./routes/EditTransfer";
 import ForgotPassword from "./routes/ForgotPassword";
 import Home from "./routes/Home";
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />
         <Route path="monthly"          element={<Monthly />} />
+        <Route path="monthly/edit"     element={<EditMonthly />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />

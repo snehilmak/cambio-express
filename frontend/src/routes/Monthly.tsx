@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
@@ -114,28 +114,47 @@ export default function Monthly() {
               : "—"}
           </p>
         </div>
-        <select
-          value={year && month ? `${year}-${month}` : ""}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (!v) return;
-            const [y, m] = v.split("-").map(Number);
-            const params = new URLSearchParams(sp);
-            params.set("year", String(y));
-            params.set("month", String(m));
-            setSP(params, { replace: true });
-          }}
-          style={pickerStyle}
-        >
-          {(months.data?.months ?? []).map((m) => (
-            <option
-              key={`${m.year}-${m.month}`}
-              value={`${m.year}-${m.month}`}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <select
+            value={year && month ? `${year}-${month}` : ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) return;
+              const [y, m] = v.split("-").map(Number);
+              const params = new URLSearchParams(sp);
+              params.set("year", String(y));
+              params.set("month", String(m));
+              setSP(params, { replace: true });
+            }}
+            style={pickerStyle}
+          >
+            {(months.data?.months ?? []).map((m) => (
+              <option
+                key={`${m.year}-${m.month}`}
+                value={`${m.year}-${m.month}`}
+              >
+                {MONTH_NAMES[m.month - 1]} {m.year}
+              </option>
+            ))}
+          </select>
+          {year && month && (
+            <Link
+              to={`/monthly/edit?year=${year}&month=${month}`}
+              style={{
+                background: "var(--db-accent, #3fff00)",
+                color: "var(--db-on-accent, #0a0a0a)",
+                borderRadius: "0.5rem",
+                padding: "0.45rem 0.85rem",
+                fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                textDecoration: "none",
+              }}
             >
-              {MONTH_NAMES[m.month - 1]} {m.year}
-            </option>
-          ))}
-        </select>
+              Edit
+            </Link>
+          )}
+        </div>
       </header>
 
       {(months.data?.months.length ?? 0) === 0 && !months.isLoading && (

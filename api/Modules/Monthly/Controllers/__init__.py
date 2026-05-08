@@ -19,11 +19,13 @@ from api.Modules.Monthly.Requests import (
     MonthLogged,
     MonthlyResponse,
     MonthlyRow,
+    MonthlyUpdateRequest,
     MonthsLoggedResponse,
 )
 from api.Modules.Monthly.Services import (
     MonthlySummary,
     summarize_monthly,
+    update_monthly,
 )
 
 
@@ -91,5 +93,50 @@ def monthly_route(
         raise HTTPException(
             status_code=404,
             detail="No monthly P&L logged for this period",
+        )
+    return MonthlyResponse(report=_to_row(summary))
+
+
+@router.put(
+    "/{year}/{month}",
+    response_model=MonthlyResponse,
+)
+def update_monthly_route(
+    year: int = Path(..., ge=2000, le=2100),
+    month: int = Path(..., ge=1, le=12),
+    body: MonthlyUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MonthlyResponse:
+    """Save the editable monthly P&L fields. Server auto-derives
+    daily-summed + return-check-net + bank-charge fields and
+    overwrites client values for those — same locked-fields
+    contract as the legacy /monthly/<year>/<month> POST.
+
+    JWT-required. Principal's store_id MUST match the URL scope
+    (cross-store / superadmin → 403). Admin role required (the
+    legacy admin-side route is gated by admin_required).
+
+    Auto-creates the row when missing.
+    """
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can save monthly P&L.",
+        )
+    sid = _require_store_scope(claims)
+    payload = body.model_dump(exclude_unset=True)
+    notes = payload.pop("notes", "")
+    fields = {k: v for k, v in payload.items() if v is not None}
+    update_monthly(
+        db,
+        store_id=sid, year=int(year), month=int(month),
+        fields=fields, notes=notes,
+    )
+    db.commit()
+    summary = summarize_monthly(db, sid, int(year), int(month))
+    if summary is None:
+        raise HTTPException(
+            status_code=500, detail="Monthly disappeared after save",
         )
     return MonthlyResponse(report=_to_row(summary))

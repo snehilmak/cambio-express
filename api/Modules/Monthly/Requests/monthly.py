@@ -85,3 +85,48 @@ class MonthsLoggedResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     months: list[MonthLogged]
+
+
+class MonthlyUpdateRequest(BaseModel):
+    """PUT body for /monthly/{year}/{month}.
+
+    All numeric fields optional — the SPA can submit only what
+    the operator edited. Auto-derived fields (cash_purchases,
+    cash_expenses, return_check_gl, bank_charges_total when
+    bank-sync data exists, etc.) are NOT in this schema; the
+    server overwrites them from the daily ledger / bank
+    transactions / return-check workflow regardless of what the
+    client sends.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    taxable_sales:           float | None = None
+    non_taxable:             float | None = None
+    bill_payment_charge:     float | None = None
+    phone_recargas:          float | None = None
+    boost_mobile:            float | None = None
+    return_check_hold_fees:  float | None = None
+    rebates_commissions:     float | None = None
+    mt_commission_in_bank:   float | None = None
+    other_income_1:          float | None = None
+    other_income_2:          float | None = None
+    other_income_3:          float | None = None
+    bank_charges_total:      float | None = None
+    credit_card_fees:        float | None = None
+    money_order_rent:        float | None = None
+    emaginenet_tech:         float | None = None
+    irs_payroll_tax:         float | None = None
+    texas_workforce:         float | None = None
+    other_taxes:             float | None = None
+    accounting_charges:      float | None = None
+    other_expense_1:         float | None = None
+    other_expense_2:         float | None = None
+    other_expense_3:         float | None = None
+    other_expense_4:         float | None = None
+    other_expense_5:         float | None = None
+    over_short:              float | None = None
+    borrowed_money_return:   float | None = None
+    profit_distributed:      float | None = None
+    cash_carry_forward:      float | None = None
+    notes:                   str = ""

@@ -79,6 +79,47 @@ export interface MonthLogged {
   month: number;
 }
 
+export interface MonthlyUpdateBody {
+  taxable_sales?: number;
+  non_taxable?: number;
+  bill_payment_charge?: number;
+  phone_recargas?: number;
+  boost_mobile?: number;
+  return_check_hold_fees?: number;
+  rebates_commissions?: number;
+  mt_commission_in_bank?: number;
+  other_income_1?: number;
+  other_income_2?: number;
+  other_income_3?: number;
+  bank_charges_total?: number;
+  credit_card_fees?: number;
+  money_order_rent?: number;
+  emaginenet_tech?: number;
+  irs_payroll_tax?: number;
+  texas_workforce?: number;
+  other_taxes?: number;
+  accounting_charges?: number;
+  other_expense_1?: number;
+  other_expense_2?: number;
+  other_expense_3?: number;
+  other_expense_4?: number;
+  other_expense_5?: number;
+  over_short?: number;
+  borrowed_money_return?: number;
+  profit_distributed?: number;
+  cash_carry_forward?: number;
+  notes?: string;
+}
+
+export async function updateMonthly(
+  year: number, month: number, body: MonthlyUpdateBody,
+): Promise<{ report: MonthlyRow }> {
+  return api<{ report: MonthlyRow }>(
+    `/api/v2/monthly/${year}/${month}`,
+    { method: "PUT", json: body },
+  );
+}
+
 export function useLoggedMonths() {
   const identity = getCurrentIdentity();
   return useQuery<{ months: MonthLogged[] }>({

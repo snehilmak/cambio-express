@@ -106,3 +106,127 @@ def test_monthly_rejects_superadmin(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── PUT /monthly/{year}/{month} ─────────────────────────────
+
+
+def test_put_creates_when_missing(client, test_store_id):
+    """First save for a (year, month) auto-creates the row."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/monthly/2026/4",
+        json={
+            "taxable_sales":      1000.0,
+            "non_taxable":        500.0,
+            "rebates_commissions": 50.0,
+            "notes":              "april",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()["report"]
+    assert body["taxable_sales"]      == 1000.0
+    assert body["non_taxable"]        == 500.0
+    assert body["rebates_commissions"] == 50.0
+    assert body["notes"] == "april"
+
+
+def test_put_updates_existing(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_monthly(test_store_id, year=2026, month=5, taxable_sales=100)
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/monthly/2026/5",
+        json={"taxable_sales": 999.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["report"]["taxable_sales"] == 999.0
+
+
+def test_put_rejects_extra_fields(client, test_store_id):
+    """Schema is extra=forbid — auto-derived fields like
+    cash_purchases must NOT be writable here."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/monthly/2026/6",
+        json={
+            "taxable_sales":  100.0,
+            "cash_purchases": 500.0,  # auto-derived, not in schema
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_rejects_employee_role(client):
+    """Cashier role cannot save monthly P&L."""
+    from app import User, db, app as flask_app
+    with flask_app.app_context():
+        u = User(
+            store_id=None, username="emp_monthly_test",
+            role="employee", is_active=True,
+        )
+        u.set_password("emppass1234")
+        db.session.add(u); db.session.commit()
+    try:
+        login = client.post(
+            "/api/v2/auth/login",
+            json={
+                "username": "emp_monthly_test",
+                "password": "emppass1234",
+                "store_id": None,
+            },
+        )
+        token = login.get_json()["access_token"]
+        resp = client.put(
+            "/api/v2/monthly/2026/7",
+            json={"taxable_sales": 1.0},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+    finally:
+        with flask_app.app_context():
+            u2 = db.session.query(User).filter_by(
+                username="emp_monthly_test",
+            ).first()
+            if u2:
+                db.session.delete(u2); db.session.commit()
+
+
+def test_put_requires_jwt(client):
+    resp = client.put(
+        "/api/v2/monthly/2026/8",
+        json={"taxable_sales": 1.0},
+    )
+    assert resp.status_code == 401
+
+
+def test_put_rejects_bad_month(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/monthly/2026/13",
+        json={"taxable_sales": 1.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_rejects_superadmin(client):
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin",
+            "password": "super2025!",
+            "store_id": None,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.put(
+        "/api/v2/monthly/2026/9",
+        json={"taxable_sales": 1.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
