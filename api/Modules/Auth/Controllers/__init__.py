@@ -22,17 +22,24 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    SignupRequest,
+    SignupResponse,
 )
 from api.Modules.Auth.Services import (
     authenticate_password,
     authenticate_password_cross_store,
     change_password,
+    create_store_and_admin,
     decode_access_token,
+    issue_access_token,
+    permissions_for,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
     DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+    JWTIssuer,
 )
 from api.Modules.Auth.Services.login import AuthenticationError
+from api.Modules.Auth.Services.signup import SignupConflictError
 
 
 router = APIRouter()
@@ -175,3 +182,65 @@ def change_password_route(
         )
     db.commit()
     return {"status": "ok"}
+
+
+@router.post("/signup", response_model=SignupResponse, status_code=201)
+def signup_route(
+    body: SignupRequest, db: Session = Depends(get_db),
+) -> SignupResponse:
+    """Self-service signup. Creates a (Store, admin User) pair
+    and returns a JWT scoped to the new store, so the SPA can
+    drop the user straight onto the dashboard.
+
+    Mirrors the legacy /signup Flask form's contract:
+      • email + store_name normalised (stripped, email lowered)
+      • email collision returns 409
+      • trial defaults: 7-day trial + 4-day grace
+
+    Stripe / referral / TOTP set-up flows stay on Flask for now —
+    a later PR threads referral codes through here.
+    """
+    email = (body.email or "").strip().lower()
+    store_name = (body.store_name or "").strip()
+    if "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "email", "message": "Enter a valid email."},
+        )
+    try:
+        result = create_store_and_admin(
+            db,
+            store_name=store_name,
+            email=email,
+            password=body.password,
+            phone=(body.phone or "").strip(),
+        )
+    except SignupConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"field": "email", "message": str(exc)},
+        )
+    db.commit()
+
+    # Issue a JWT scoped to the new store. Same shape as login —
+    # the SPA stores it in localStorage and lands on /dashboard.
+    perms = permissions_for(result.admin.role)
+    issuer = JWTIssuer(
+        sub=result.admin.id,
+        role=result.admin.role,
+        store_id=result.store.id,
+        permissions=perms,
+        full_name=result.admin.full_name or "",
+        username=result.admin.username,
+    )
+    token = issue_access_token(issuer)
+    return SignupResponse(
+        access_token=token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.admin.id,
+        username=result.admin.username,
+        full_name=result.admin.full_name or "",
+        role=result.admin.role,
+        store_id=result.store.id,
+        permissions=perms,
+    )

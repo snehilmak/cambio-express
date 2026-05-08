@@ -432,3 +432,118 @@ def test_change_password_requires_jwt():
         },
     )
     assert resp.status_code == 401
+
+
+# ── POST /auth/signup ───────────────────────────────────────
+
+
+def test_signup_creates_store_and_returns_token(client):
+    """Self-service signup creates the (Store, admin User) pair
+    and returns a JWT scoped to the new store. The SPA can drop
+    straight onto the dashboard."""
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "New Cambio LLC",
+            "email":      "owner@new-cambio.com",
+            "password":   "newpass12345",
+            "phone":      "+1-555-1234",
+        },
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["access_token"]
+    assert body["role"] == "admin"
+    assert body["username"] == "owner@new-cambio.com"
+    assert body["store_id"] is not None
+    assert "store.admin" in body["permissions"]
+
+    # The JWT is immediately usable on /auth/me.
+    me = client.get(
+        "/api/v2/auth/me",
+        headers={"Authorization": f"Bearer {body['access_token']}"},
+    )
+    assert me.status_code == 200
+    assert me.get_json()["username"] == "owner@new-cambio.com"
+
+
+def test_signup_rejects_duplicate_email(client, test_store_id):  # noqa: ARG001
+    """Existing admin email triggers a 409 with field=email so
+    the SPA can highlight the input."""
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Another Store",
+            "email":      "admin@test.com",  # already seeded
+            "password":   "newpass12345",
+        },
+    )
+    assert resp.status_code == 409
+    body = resp.get_json()
+    assert body["detail"]["field"] == "email"
+
+
+def test_signup_rejects_short_password(client):
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Short PW Store",
+            "email":      "short@example.com",
+            "password":   "short",  # < 8 chars
+        },
+    )
+    assert resp.status_code == 422
+
+
+def test_signup_rejects_invalid_email(client):
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Bad Email Store",
+            "email":      "no-at-sign",  # invalid
+            "password":   "validpass12345",
+        },
+    )
+    assert resp.status_code == 422
+    body = resp.get_json()
+    assert body["detail"]["field"] == "email"
+
+
+def test_signup_normalizes_email(client):
+    """Email + store name get stripped + email lowered. A second
+    signup with mixed case on the same email collides."""
+    r1 = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "  Spaced Store  ",
+            "email":      "MixedCase@Example.COM",
+            "password":   "validpass12345",
+        },
+    )
+    assert r1.status_code == 201
+    assert r1.get_json()["username"] == "mixedcase@example.com"
+
+    # Same email re-cased → 409.
+    r2 = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Different Store",
+            "email":      "mixedcase@example.com",
+            "password":   "validpass12345",
+        },
+    )
+    assert r2.status_code == 409
+
+
+def test_signup_rejects_extra_fields(client):
+    """Schema is extra=forbid — slug / plan etc. must not be writable."""
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Extra",
+            "email":      "extra@example.com",
+            "password":   "validpass12345",
+            "plan":       "pro",  # not allowed
+        },
+    )
+    assert resp.status_code == 422

@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../lib/api";
 import { setAccessToken } from "../lib/auth";
@@ -168,13 +168,32 @@ export default function Login() {
         </form>
         <p
           style={{
-            margin: "1.5rem 0 0",
+            margin: "1.5rem 0 0.5rem",
             fontSize: "0.85rem",
             color: "var(--db-text-muted, #a3a3a3)",
             textAlign: "center",
           }}
         >
           Employees: please use your store's sign-in URL.
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: "0.85rem",
+            color: "var(--db-text-muted, #a3a3a3)",
+            textAlign: "center",
+          }}
+        >
+          New here?{" "}
+          <Link
+            to="/signup"
+            style={{
+              color: "var(--db-accent, #3fff00)",
+              textDecoration: "none",
+            }}
+          >
+            Create your store
+          </Link>
         </p>
       </div>
     </main>

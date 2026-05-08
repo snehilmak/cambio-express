@@ -13,6 +13,7 @@ import Login from "./routes/Login";
 import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
+import Signup from "./routes/Signup";
 import Reports from "./routes/Reports";
 import Settings from "./routes/Settings";
 import TransferDetail from "./routes/TransferDetail";
@@ -34,7 +35,8 @@ export default function App() {
   return (
     <Routes>
       <Route index element={<Home />} />
-      <Route path="login" element={<Login />} />
+      <Route path="login"  element={<Login />} />
+      <Route path="signup" element={<Signup />} />
       <Route element={<AuthedShell />}>
         <Route path="dashboard"        element={<Dashboard />} />
         <Route path="transfers"        element={<Transfers />} />
