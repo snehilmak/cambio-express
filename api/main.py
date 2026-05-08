@@ -90,6 +90,18 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Admin.Controllers import router as admin_router
     app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
+    # ReturnChecks — bounced-check workflow (list / detail /
+    # status transitions). Per-payment write endpoints ship in
+    # a follow-up PR.
+    from api.Modules.ReturnChecks.Controllers import (
+        router as return_checks_router,
+    )
+    app.include_router(
+        return_checks_router,
+        prefix="/return-checks",
+        tags=["return-checks"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
