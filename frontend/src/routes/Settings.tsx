@@ -5,8 +5,10 @@ import {
   changePassword,
   createTeamMember,
   deactivateTeamMember,
+  deletePasskey,
   updateStoreInfo,
   updateTeamMember,
+  usePasskeys,
   useStoreInfo,
   useTeam,
   type TeamMemberRow,
@@ -39,9 +41,134 @@ export default function Settings() {
       <SubscriptionCard />
       <TeamCard />
       <ChangePasswordCard />
+      <PasskeysCard />
     </main>
   );
 }
+
+function PasskeysCard() {
+  const queryClient = useQueryClient();
+  const identity = getCurrentIdentity();
+  const { data, isLoading, isError } = usePasskeys();
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  if (identity == null) return null;
+
+  function refresh() {
+    queryClient.invalidateQueries({ queryKey: ["account", "passkeys"] });
+  }
+
+  async function remove(id: number, label: string) {
+    if (!confirm(`Remove "${label || "this device"}"?`)) return;
+    setErr(null); setBusyId(id);
+    try {
+      await deletePasskey(id);
+      refresh();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not remove device.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <section style={cardStyle}>
+      <h2 style={sectionTitleStyle}>Passkeys</h2>
+      <p
+        style={{
+          margin: "0 0 1rem",
+          fontSize: "0.85rem",
+          color: "var(--db-text-muted, #a3a3a3)",
+        }}
+      >
+        Phishing-resistant sign-in for this account. Add new devices
+        from the legacy{" "}
+        <a href="/account/security" style={inlineLink}>
+          account security
+        </a>{" "}
+        page; remove them here.
+      </p>
+      {isLoading && (
+        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
+          Loading…
+        </p>
+      )}
+      {isError && (
+        <p style={{ margin: 0, color: "var(--db-negative, #ff3b30)" }}>
+          Could not load passkeys.
+        </p>
+      )}
+      {data && data.passkeys.length === 0 && !isLoading && (
+        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
+          No passkeys registered yet.
+        </p>
+      )}
+      {data && data.passkeys.length > 0 && (
+        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+          {data.passkeys.map((p) => (
+            <li
+              key={p.id}
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "center",
+                padding: "0.5rem 0",
+                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+              }}
+            >
+              <span style={{ flex: 1 }}>
+                <div style={{ fontWeight: 500 }}>
+                  {p.name || "Unnamed device"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "0.78rem",
+                    color: "var(--db-text-muted, #a3a3a3)",
+                    fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                  }}
+                >
+                  Added {p.created_at.slice(0, 10)}
+                  {p.last_used_at &&
+                    ` · last used ${p.last_used_at.slice(0, 10)}`}
+                </div>
+              </span>
+              <button
+                type="button"
+                onClick={() => remove(p.id, p.name)}
+                disabled={busyId === p.id}
+                style={{
+                  ...miniBtnStyle,
+                  opacity: busyId === p.id ? 0.5 : 1,
+                  cursor: busyId === p.id ? "wait" : "pointer",
+                }}
+              >
+                {busyId === p.id ? "Removing…" : "Remove"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {err && (
+        <p
+          role="alert"
+          style={{
+            margin: "0.5rem 0 0",
+            color: "var(--db-negative, #ff3b30)",
+            fontSize: "0.85rem",
+          }}
+        >
+          {err}
+        </p>
+      )}
+    </section>
+  );
+}
+
+const inlineLink: React.CSSProperties = {
+  color: "var(--db-accent, #3fff00)",
+  textDecoration: "none",
+};
 
 function SubscriptionCard() {
   const identity = getCurrentIdentity();
