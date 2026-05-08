@@ -31,6 +31,8 @@ interface NavItem {
 interface NavGroup {
   title: string;
   items: NavItem[];
+  /** Roles that should see this group. Omit for "everyone authed". */
+  roles?: string[];
 }
 
 const NAV: NavGroup[] = [
@@ -56,6 +58,13 @@ const NAV: NavGroup[] = [
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
+    ],
+  },
+  {
+    title: "Owner",
+    roles: ["owner", "superadmin"],
+    items: [
+      { to: "/owner/locations", label: "Locations", icon: iconOwner() },
     ],
   },
   {
@@ -93,6 +102,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function Sidebar() {
+  const identity = getCurrentIdentity();
+  const role = identity?.role ?? "";
+  const groups = NAV.filter(
+    (g) => !g.roles || g.roles.includes(role),
+  );
   return (
     <aside
       style={{
@@ -142,7 +156,7 @@ function Sidebar() {
         </span>
       </div>
 
-      {NAV.map((group) => (
+      {groups.map((group) => (
         <div key={group.title}>
           <p
             style={{
@@ -391,6 +405,17 @@ function iconMonthly() {
       <path d="M3 10h18" />
       <path d="M8 4v4" />
       <path d="M16 4v4" />
+    </svg>
+  );
+}
+function iconOwner() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <circle cx="9" cy="6" r="3" />
+      <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+      <path d="M16 3l2 2 4-4" />
     </svg>
   );
 }

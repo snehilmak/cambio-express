@@ -17,6 +17,7 @@ import Login from "./routes/Login";
 import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
+import OwnerLocations from "./routes/OwnerLocations";
 import Reports from "./routes/Reports";
 import ResetPassword from "./routes/ResetPassword";
 import ReturnCheckForm from "./routes/ReturnCheckForm";
@@ -65,6 +66,7 @@ export default function App() {
         <Route path="return-checks"          element={<ReturnChecks />} />
         <Route path="return-checks/new"      element={<ReturnCheckForm />} />
         <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
+        <Route path="owner/locations" element={<OwnerLocations />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
