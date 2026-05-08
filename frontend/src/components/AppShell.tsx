@@ -65,6 +65,7 @@ const NAV: NavGroup[] = [
     roles: ["owner", "superadmin"],
     items: [
       { to: "/owner/locations", label: "Locations", icon: iconOwner() },
+      { to: "/owner/pl-rollup", label: "P&L rollup", icon: iconRollup() },
     ],
   },
   {
@@ -424,6 +425,16 @@ function iconOwner() {
       <circle cx="9" cy="6" r="3" />
       <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
       <path d="M16 3l2 2 4-4" />
+    </svg>
+  );
+}
+function iconRollup() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M4 4v16h16" />
+      <path d="M8 16l3-4 3 2 4-6" />
     </svg>
   );
 }
