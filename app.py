@@ -2202,6 +2202,127 @@ def _backfill_uncategorized_rows(store_id):
     )
     return backfill_uncategorized_rows(db.session, store_id)
 
+
+# ── SPA cutover redirects ────────────────────────────────────
+# Move users onto the React SPA at `/app/*` for every route that
+# already has an SPA equivalent. Legacy routes still serve the
+# Jinja UI for areas that haven't been migrated (Stripe billing,
+# bank-sync write side, owner dashboard, superadmin controls,
+# TV display, 2FA enrollment, etc.) — those continue to work
+# unchanged. As more areas migrate the redirect map grows; once
+# everything is on SPA the legacy routes get retired.
+#
+# Set `SPA_CUTOVER_ENABLED=0` to flip this off in production for
+# emergency rollback. Default on per the cutover plan.
+#
+# Only GET is intercepted. POST/PUT/DELETE keep going to the
+# legacy handler so an in-flight form submit on a cached page
+# still completes correctly.
+
+SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "1") != "0"
+
+# Static path → SPA path. These are pages that have full SPA
+# parity today; everything else falls through to legacy Jinja.
+_SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
+    "/login":              "/app/login",
+    "/signup":             "/app/signup",
+    "/forgot-password":    "/app/forgot-password",
+    "/dashboard":          "/app/dashboard",
+    "/transfers":          "/app/transfers",
+    "/transfers/new":      "/app/transfers/new",
+    "/daily":              "/app/daily",
+    "/reports":            "/app/reports",
+    "/batches":            "/app/batches",
+    "/batches/new":        "/app/batches/new",
+    "/monthly":            "/app/monthly",
+    "/return-checks":      "/app/return-checks",
+    "/owner/locations":    "/app/owner/locations",
+    "/superadmin/stores":  "/app/superadmin/stores",
+    "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
+    "/admin/settings":     "/app/settings",
+    "/bank/transactions":  "/app/bank-transactions",
+}
+
+
+def _maybe_spa_redirect():
+    """Flask before_request hook: rewrite GETs of legacy pages to
+    their SPA equivalent. POST and other write methods are left
+    alone so legacy form submits still complete; the SPA forms POST
+    to `/api/v2/*` directly so the legacy POST handlers are dead
+    paths once the SPA owns the rendering."""
+    if not SPA_CUTOVER_ENABLED:
+        return None
+    if request.method != "GET":
+        return None
+    path = request.path
+    # Static, API, and the SPA itself never redirect.
+    if (
+        path.startswith("/static/")
+        or path.startswith("/api/")
+        or path.startswith("/app/")
+        or path.startswith("/webhooks/")
+    ):
+        return None
+
+    target = _SPA_REDIRECT_MAP_STATIC.get(path)
+    if target is None:
+        # Dynamic patterns that need regex matching go here.
+        # Reset-password: legacy is /reset-password/<token> path-param,
+        # SPA reads ?token=… query param.
+        if path.startswith("/reset-password/"):
+            tok = path[len("/reset-password/"):]
+            if tok and "/" not in tok:
+                # Preserve any extra query params the caller passed.
+                qs = request.query_string.decode("utf-8")
+                join = "&" if qs else ""
+                return redirect(f"/app/reset-password?token={tok}{join}{qs}")
+        # Transfers detail / edit: /transfers/<int>/<edit?>
+        if path.startswith("/transfers/"):
+            tail = path[len("/transfers/"):].rstrip("/")
+            parts = tail.split("/")
+            if parts and parts[0].isdigit():
+                tid = parts[0]
+                if len(parts) == 1:
+                    return _redirect_with_query(f"/app/transfers/{tid}")
+                if len(parts) == 2 and parts[1] == "edit":
+                    return _redirect_with_query(f"/app/transfers/{tid}/edit")
+        # Batches edit: /batches/<int>/edit
+        if path.startswith("/batches/"):
+            tail = path[len("/batches/"):].rstrip("/")
+            parts = tail.split("/")
+            if (
+                len(parts) == 2 and parts[0].isdigit() and parts[1] == "edit"
+            ):
+                return _redirect_with_query(f"/app/batches/{parts[0]}/edit")
+        # Daily edit: /daily/<date> — legacy uses ?date= now via
+        # /daily/edit; map every dated path to /app/daily/edit?date=...
+        if path.startswith("/daily/"):
+            tail = path[len("/daily/"):].rstrip("/")
+            if tail and "/" not in tail:
+                return redirect(f"/app/daily/edit?date={tail}")
+        # Monthly edit: /monthly/<year>/<month>
+        if path.startswith("/monthly/"):
+            parts = path[len("/monthly/"):].rstrip("/").split("/")
+            if (
+                len(parts) == 2 and parts[0].isdigit()
+                and parts[1].isdigit()
+            ):
+                return redirect(
+                    f"/app/monthly/edit?year={parts[0]}&month={parts[1]}"
+                )
+        return None
+
+    return _redirect_with_query(target)
+
+
+def _redirect_with_query(target: str):
+    qs = request.query_string.decode("utf-8")
+    return redirect(f"{target}?{qs}" if qs else target)
+
+
+app.before_request(_maybe_spa_redirect)
+
+
 # ── PWA ──────────────────────────────────────────────────────
 # Service worker must be served from root so its default scope covers
 # every path. The file lives in /static/ but is routed here.

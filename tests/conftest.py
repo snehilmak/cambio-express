@@ -6,6 +6,12 @@ os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake_key")
 os.environ.setdefault("STRIPE_BASIC_PRICE_ID", "price_basic_test")
 os.environ.setdefault("STRIPE_PRO_PRICE_ID", "price_pro_test")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
+# Default the SPA cutover redirects OFF in tests so the existing
+# legacy-route assertions keep working unchanged. Tests that want
+# to exercise the cutover layer opt in via the `cutover_on` /
+# `cutover_off` fixtures defined in tests/test_spa_cutover.py.
+# Production / CI deploy honours the real flag (default on).
+os.environ["SPA_CUTOVER_ENABLED"] = "0"
 
 import pytest
 from datetime import date, datetime, timedelta
