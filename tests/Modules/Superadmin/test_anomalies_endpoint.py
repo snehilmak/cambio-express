@@ -1,0 +1,82 @@
+"""HTTP integration tests for /api/v2/superadmin/anomalies.
+
+Backed by `compute_platform_anomalies()` (existing Service). The
+endpoint is read-only and superadmin-scoped.
+"""
+from datetime import date, timedelta
+
+
+def _login_admin(client, store_id):
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def _login_superadmin(client):
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={"username": "superadmin", "password": "super2025!",
+              "store_id": None},
+    )
+    return resp.get_json()["access_token"]
+
+
+def test_anomalies_requires_jwt(client):
+    resp = client.get("/api/v2/superadmin/anomalies")
+    assert resp.status_code == 401
+
+
+def test_anomalies_rejects_admin_role(client, test_store_id):
+    token = _login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/superadmin/anomalies",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_anomalies_returns_envelope(client):
+    """Empty platform → empty rows envelope."""
+    token = _login_superadmin(client)
+    resp = client.get(
+        "/api/v2/superadmin/anomalies",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert set(body.keys()) == {"rows", "total"}
+    assert isinstance(body["rows"], list)
+    assert body["total"] >= 0
+
+
+def test_anomalies_surfaces_big_over_short(client, test_store_id):
+    """A daily report with absolute over/short above the medium
+    threshold should appear in the anomalies feed."""
+    from app import DailyReport, app as flask_app, db
+    from api.Modules.Superadmin.Services.anomalies import (
+        ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
+    )
+    today = date.today()
+    with flask_app.app_context():
+        # Seed a daily report with a big over/short variance
+        r = DailyReport(
+            store_id=test_store_id,
+            report_date=today - timedelta(days=1),
+            over_short=ANOMALY_OVERSHORT_MEDIUM_THRESHOLD + 100.0,
+        )
+        db.session.add(r); db.session.commit()
+    token = _login_superadmin(client)
+    body = client.get(
+        "/api/v2/superadmin/anomalies",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    big_overs = [a for a in body["rows"] if a["kind"] == "big_over_short"]
+    assert len(big_overs) >= 1
+    assert big_overs[0]["store_id"] == test_store_id
+    assert big_overs[0]["severity"] in ("medium", "high")

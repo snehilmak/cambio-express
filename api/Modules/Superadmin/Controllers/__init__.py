@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Superadmin.Requests import (
+    SuperadminAnomalyListResponse,
+    SuperadminAnomalyRow,
     SuperadminAuditListResponse,
     SuperadminAuditRow,
     SuperadminStoreListResponse,
@@ -116,3 +118,33 @@ def list_audit_route(
         per_page=per_page,
         total_pages=max(1, ceil(total / per_page)),
     )
+
+
+@router.get("/anomalies", response_model=SuperadminAnomalyListResponse)
+def list_anomalies_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SuperadminAnomalyListResponse:
+    """Read-only feed of platform-wide anomalies (quiet stores,
+    big over/short variances) computed against today's date.
+
+    Backed by `compute_platform_anomalies()` — same Service the
+    legacy /superadmin/controls overview already runs on every
+    page load. Cheap to recompute on each call.
+    """
+    _require_superadmin(claims)
+    from api.Modules.Superadmin.Services import compute_platform_anomalies
+    raw = compute_platform_anomalies(db)
+    rows = [
+        SuperadminAnomalyRow(
+            kind=a["kind"],
+            severity=a["severity"],
+            store_id=a["store"].id,
+            store_name=a["store"].name or "",
+            store_slug=a["store"].slug or "",
+            description=a["description"],
+            href=a.get("href", ""),
+        )
+        for a in raw
+    ]
+    return SuperadminAnomalyListResponse(rows=rows, total=len(rows))

@@ -57,7 +57,34 @@ class SuperadminAuditListResponse(BaseModel):
     total_pages: int
 
 
+class SuperadminAnomalyRow(BaseModel):
+    """One platform anomaly row. `kind` is one of
+    `quiet_store` / `big_over_short`; `severity` is
+    `low` / `medium` / `high`. `description` is the human-readable
+    explanation the SPA renders verbatim. `href` is the legacy
+    drill-down URL — once those pages migrate it'll point to
+    /app/* equivalents."""
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str
+    severity: str
+    store_id: int
+    store_name: str
+    store_slug: str
+    description: str
+    href: str
+
+
+class SuperadminAnomalyListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[SuperadminAnomalyRow]
+    total: int
+
+
 __all__ = [
+    "SuperadminAnomalyListResponse",
+    "SuperadminAnomalyRow",
     "SuperadminAuditListResponse",
     "SuperadminAuditRow",
     "SuperadminStoreListResponse",
