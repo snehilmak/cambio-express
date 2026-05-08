@@ -2237,10 +2237,20 @@ _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
     "/monthly":            "/app/monthly",
     "/return-checks":      "/app/return-checks",
     "/owner/locations":    "/app/owner/locations",
+    "/owner/pl-rollup":    "/app/owner/pl-rollup",
     "/superadmin/stores":  "/app/superadmin/stores",
     "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
     "/admin/settings":     "/app/settings",
     "/bank/transactions":  "/app/bank-transactions",
+    # SPA-34: Stripe pricing page now on SPA. Note that
+    # /admin/subscription stays on legacy because it's a richer
+    # page (add-ons + retention info); the SPA settings page only
+    # exposes Subscribe + Manage-portal CTAs today.
+    "/subscribe":          "/app/subscribe",
+    # SPA-37: announcements live under the Platform nav group.
+    # The legacy /superadmin/controls?tab=announcements URL has a
+    # query param so the static-map can't catch it; that goes
+    # through the legacy Jinja for now.
 }
 
 

@@ -43,10 +43,12 @@ def cutover_off(monkeypatch):
     ("/monthly",              "/app/monthly"),
     ("/return-checks",        "/app/return-checks"),
     ("/owner/locations",      "/app/owner/locations"),
+    ("/owner/pl-rollup",      "/app/owner/pl-rollup"),
     ("/superadmin/stores",    "/app/superadmin/stores"),
     ("/superadmin/reports/audit-log", "/app/superadmin/audit-log"),
     ("/admin/settings",       "/app/settings"),
     ("/bank/transactions",    "/app/bank-transactions"),
+    ("/subscribe",            "/app/subscribe"),
 ])
 def test_legacy_get_redirects_to_spa(client, cutover_on, legacy, spa):
     resp = client.get(legacy, follow_redirects=False)
