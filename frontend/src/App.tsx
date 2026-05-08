@@ -18,6 +18,8 @@ import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import Reports from "./routes/Reports";
 import ResetPassword from "./routes/ResetPassword";
+import ReturnCheckForm from "./routes/ReturnCheckForm";
+import ReturnChecks from "./routes/ReturnChecks";
 import Settings from "./routes/Settings";
 import Signup from "./routes/Signup";
 import TransferDetail from "./routes/TransferDetail";
@@ -58,6 +60,9 @@ export default function App() {
         <Route path="batches/:id/edit" element={<BatchForm />} />
         <Route path="monthly"          element={<Monthly />} />
         <Route path="monthly/edit"     element={<EditMonthly />} />
+        <Route path="return-checks"          element={<ReturnChecks />} />
+        <Route path="return-checks/new"      element={<ReturnCheckForm />} />
+        <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
