@@ -49,10 +49,48 @@ class FeatureFlagResponse(BaseModel):
     flag: FeatureFlagRow
 
 
+class StoreOverrideRow(BaseModel):
+    """One per-store flag override row."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    store_slug: str
+    store_name: str
+    flag_key: str
+    enabled: bool
+    updated_at: str
+
+
+class StoreOverrideListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[StoreOverrideRow]
+    total: int
+
+
+class StoreOverrideRequest(BaseModel):
+    """PUT body for /feature-flags/{key}/stores/{store_id}.
+    Sets (or replaces) a per-store override. To clear it back to
+    the global default, DELETE the same path."""
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
+class StoreOverrideResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    override: StoreOverrideRow
+
+
 __all__ = [
     "FeatureFlagCreateRequest",
     "FeatureFlagListResponse",
     "FeatureFlagResponse",
     "FeatureFlagRow",
     "FeatureFlagToggleRequest",
+    "StoreOverrideListResponse",
+    "StoreOverrideRequest",
+    "StoreOverrideResponse",
+    "StoreOverrideRow",
 ]
