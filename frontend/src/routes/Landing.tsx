@@ -534,8 +534,11 @@ nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.82);backdr
 .nav-links{margin-left:auto;display:flex;align-items:center;gap:26px}
 .nav-links a{color:var(--db-gray-7);text-decoration:none;font-size:13px;font-weight:500;transition:color .12s}
 .nav-links a:hover{color:var(--db-gray-9)}
-.nav-cta{background:var(--db-neon);color:var(--db-neon-ink);padding:9px 18px;border-radius:10px;font-weight:600;font-size:13px;text-decoration:none;letter-spacing:-.01em}
-.nav-cta:hover{background:var(--db-neon-bright)}
+/* Specificity bumped to .nav-links a.nav-cta (0,2,1) so the dark
+   neon-ink wins over the gray inherited from .nav-links a (0,1,1).
+   Same fix is applied to :hover. */
+.nav-links a.nav-cta{background:var(--db-neon);color:var(--db-neon-ink);padding:9px 18px;border-radius:10px;font-weight:600;font-size:13px;text-decoration:none;letter-spacing:-.01em}
+.nav-links a.nav-cta:hover{background:var(--db-neon-bright);color:var(--db-neon-ink)}
 .nav-toggle{display:none;background:transparent;border:1px solid var(--db-gray-3);border-radius:8px;width:34px;height:34px;color:var(--db-gray-7);cursor:pointer;align-items:center;justify-content:center;margin-left:auto}
 
 .hero{position:relative;overflow:hidden;padding:80px 48px 96px;border-bottom:1px solid var(--db-gray-2)}

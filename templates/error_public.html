@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ code }} — DineroBook</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:var(--db-font-body);background:var(--db-bg);color:var(--db-gray-9);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;position:relative;overflow:hidden}
+.bg-grid{position:absolute;inset:0;background-image:linear-gradient(var(--db-gray-2) 1px,transparent 1px),linear-gradient(90deg,var(--db-gray-2) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);mask-image:radial-gradient(ellipse at center,black 30%,transparent 75%);opacity:.4;pointer-events:none}
+.bg-glow{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:560px;height:560px;background:radial-gradient(circle,var(--db-neon-glow-15),transparent 60%);pointer-events:none}
+.brand-row{position:relative;z-index:1;display:flex;align-items:center;gap:12px;margin-bottom:48px}
+.brand-row .mark{width:36px;height:36px;border-radius:10px;background:var(--db-neon);color:var(--db-neon-ink);display:inline-flex;align-items:center;justify-content:center;font-family:var(--db-font-display);font-weight:700;font-size:22px;box-shadow:0 0 24px var(--db-neon-glow-40)}
+.brand-row .wordmark{font-family:var(--db-font-display);font-weight:600;font-size:20px;letter-spacing:-.02em;color:var(--db-gray-9)}
+.card{position:relative;z-index:1;text-align:center;max-width:520px}
+.code-eyebrow{display:inline-flex;align-items:center;gap:10px;padding:5px 12px;border:1px solid var(--db-gray-3);border-radius:999px;background:var(--db-bg-elevated);font-family:var(--db-font-mono);font-size:11px;color:var(--db-gray-7);letter-spacing:2px;text-transform:uppercase;margin-bottom:24px;font-weight:500}
+.code-eyebrow .dot{width:6px;height:6px;border-radius:999px;background:var(--db-negative);box-shadow:0 0 8px rgba(255,77,109,.6)}
+h1{font-family:var(--db-font-display);font-size:80px;line-height:1;font-weight:700;letter-spacing:-.04em;color:var(--db-gray-9);margin-bottom:16px}
+.title{font-family:var(--db-font-display);font-size:30px;font-weight:600;letter-spacing:-.025em;color:var(--db-gray-9);margin-bottom:14px}
+.message{color:var(--db-gray-7);font-size:15px;line-height:1.6;margin-bottom:32px}
+.path{display:inline-block;padding:6px 12px;background:var(--db-bg-input);border:1px solid var(--db-gray-3);border-radius:8px;font-family:var(--db-font-mono);font-size:12px;color:var(--db-gray-8);margin-top:6px;word-break:break-all}
+.actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--db-neon);color:var(--db-neon-ink);padding:13px 26px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none;letter-spacing:-.01em;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
+.btn-primary:hover{background:var(--db-neon-bright)}
+.btn-ghost{background:transparent;color:var(--db-gray-9);border:1px solid var(--db-gray-4);padding:13px 22px;border-radius:10px;font-weight:500;font-size:14px;text-decoration:none;transition:border-color .12s,background .12s}
+.btn-ghost:hover{border-color:var(--db-gray-6);background:rgba(255,255,255,0.03)}
+.foot{position:relative;z-index:1;margin-top:40px;font-size:11.5px;color:var(--db-gray-6)}
+.foot a{color:var(--db-gray-7);text-decoration:none}
+@media (max-width:640px){
+  h1{font-size:64px}
+  .title{font-size:24px}
+}
+</style>
+</head>
+<body>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-glow" aria-hidden="true"></div>
+
+<div class="brand-row">
+  <span class="mark" aria-hidden="true">$</span>
+  <span class="wordmark">DineroBook</span>
+</div>
+
+<div class="card">
+  <div class="code-eyebrow"><span class="dot"></span>{{ code }} · {% if code == 404 %}NOT FOUND{% elif code == 500 %}SERVER ERROR{% else %}ERROR{% endif %}</div>
+  <h1>{{ code }}</h1>
+  <div class="title">{% if code == 404 %}Page not found{% elif code == 500 %}Something went wrong{% else %}Access denied{% endif %}</div>
+  <div class="message">
+    {{ message }}
+    {% if code == 404 and request_path %}
+      <br><span class="path">{{ request_path }}</span>
+    {% endif %}
+  </div>
+  <div class="actions">
+    <a href="/" class="btn-primary">Back to home</a>
+    <a href="/login" class="btn-ghost">Sign in</a>
+  </div>
+</div>
+
+<div class="foot">© 2026 DineroBook · <a href="/privacy">Privacy</a></div>
+</body>
+</html>

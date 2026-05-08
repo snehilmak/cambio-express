@@ -11242,9 +11242,27 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     if created_user:  click.echo("   (User was created on this run.)")
 
 # ── Error handlers ───────────────────────────────────────────
+def _render_error(code, message, user):
+    """Pick the right error template. Logged-out visitors get the
+    standalone error_public.html — no sidebar/topbar so a typo
+    like /APP doesn't render the admin chrome and look like a
+    half-loaded dashboard. Logged-in visitors keep the in-app
+    error.html with their normal shell (so the "Back to Dashboard"
+    button routes correctly)."""
+    if user is None:
+        return render_template(
+            "error_public.html",
+            code=code, message=message,
+            request_path=request.path,
+        ), code
+    return render_template(
+        "error.html", user=user, code=code, message=message,
+    ), code
+
+
 @app.errorhandler(404)
 def not_found(e):
-    return render_template("error.html",user=current_user(),code=404,message="Page not found."),404
+    return _render_error(404, "Page not found.", current_user())
 
 @app.errorhandler(500)
 def server_error(e):
@@ -11254,8 +11272,7 @@ def server_error(e):
         u = current_user()
     except Exception:
         u = None
-    return render_template("error.html", user=u, code=500,
-        message="Something went wrong. Please try again."), 500
+    return _render_error(500, "Something went wrong. Please try again.", u)
 
 # ── Init ─────────────────────────────────────────────────────
 # Column additions applied to existing installs on boot. Each entry is
