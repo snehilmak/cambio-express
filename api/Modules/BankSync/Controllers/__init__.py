@@ -1,20 +1,25 @@
 """BankSync module — Controllers (FastAPI router).
 
-Mounts at `/api/v2/bank/*`. PR 16 ships the read-side only:
+Mounts at `/api/v2/bank/*`. Read-side endpoints:
 
-  GET /bank/transactions → paginated list of BankTransaction rows.
+  GET /bank/transactions → paginated list of BankTransaction rows
+  GET /bank/rules        → operator-managed BankRule list
+  GET /bank/accounts     → connected Stripe FC accounts
 
-PR 17 will flip the legacy /bank/transactions route to call the same
-Service this Controller does. Write-side endpoints (rule CRUD,
-manual categorization, daily-book post) come in subsequent PRs.
+All three derive `store_id` from the JWT principal — pre-JWT
+versions accepted an explicit `store_ids` query param, but with
+auth in place we trust claims.store_id as the single source of
+truth. Owner-umbrella support (multi-store query) lives on the
+roadmap but ships with the owner portal migration, not here.
 
-Auth gating intentionally NOT here yet (auth migration is module 5
-of 6 in the ADR).
+Write-side endpoints (rule CRUD, manual categorization, daily-
+book post) come in subsequent PRs.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.BankSync.Models import StripeBankAccount
 from api.Modules.BankSync.Repositories import (
     BankTransactionFilters,
@@ -35,19 +40,14 @@ from api.Modules.BankSync.Services import list_transactions_page
 router = APIRouter()
 
 
-def _parse_store_ids(store_ids: str) -> list[int]:
-    try:
-        ids = [int(s.strip()) for s in store_ids.split(",") if s.strip()]
-    except ValueError as e:
+def _require_store_scope(claims: dict) -> int:
+    sid = claims.get("store_id")
+    if sid is None:
         raise HTTPException(
-            status_code=422,
-            detail=f"store_ids must be comma-separated integers: {e}",
+            status_code=403,
+            detail="JWT does not carry a store scope.",
         )
-    if not ids:
-        raise HTTPException(
-            status_code=422, detail="store_ids must include at least one ID",
-        )
-    return ids
+    return int(sid)
 
 
 def _account_labels(db: Session, ids: list[int]) -> dict[int, str]:
@@ -65,7 +65,6 @@ def _account_labels(db: Session, ids: list[int]) -> dict[int, str]:
 
 @router.get("/transactions", response_model=BankTransactionListResponse)
 def list_transactions_route(
-    store_ids: str = Query(...),
     posted_from: str = Query(""),
     posted_to: str = Query(""),
     account_id: str = Query(""),
@@ -76,8 +75,9 @@ def list_transactions_route(
     page: int = Query(1, ge=1),
     per_page: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
 ) -> BankTransactionListResponse:
-    ids = _parse_store_ids(store_ids)
+    sid = _require_store_scope(claims)
     filters = BankTransactionFilters.from_query({
         "posted_from": posted_from, "posted_to": posted_to,
         "account_id": account_id, "category_slug": category_slug,
@@ -85,7 +85,7 @@ def list_transactions_route(
         "uncategorized_only": "1" if uncategorized_only else "",
     })
     page_obj = list_transactions_page(
-        db, ids, filters, page=page, per_page=per_page,
+        db, [sid], filters, page=page, per_page=per_page,
     )
     labels = _account_labels(
         db, [r.stripe_bank_account_id for r in page_obj.rows],
@@ -118,17 +118,15 @@ def list_transactions_route(
 
 @router.get("/rules", response_model=BankRuleListResponse)
 def list_rules_route(
-    store_ids: str = Query(...),
     enabled_only: bool = Query(False),
     db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
 ) -> BankRuleListResponse:
     """Operator-managed BankRule list. Order matches the auto-
     categorize sync's evaluation order (priority asc, id tie-break)
     so the rules-manager UI shows what would actually fire first."""
-    ids = _parse_store_ids(store_ids)
-    rules = list_rules(db, ids, enabled_only=enabled_only)
-    # Decorate account_filter_id with the human-readable label so the
-    # UI doesn't have to follow the FK separately.
+    sid = _require_store_scope(claims)
+    rules = list_rules(db, [sid], enabled_only=enabled_only)
     account_filter_ids = [
         r.account_filter_id for r in rules if r.account_filter_id is not None
     ]
@@ -163,15 +161,15 @@ def list_rules_route(
 
 @router.get("/accounts", response_model=BankAccountListResponse)
 def list_accounts_route(
-    store_ids: str = Query(...),
     db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
 ) -> BankAccountListResponse:
     """All connected Stripe Financial Connections accounts for the
-    given stores. Includes both enabled + disconnected accounts so
-    the UI can show "previously connected" history; clients filter
+    principal's store. Includes both enabled + disconnected accounts
+    so the UI can show "previously connected" history; clients filter
     on `enabled` if they only want active ones."""
-    ids = _parse_store_ids(store_ids)
-    accounts = list_accounts(db, ids)
+    sid = _require_store_scope(claims)
+    accounts = list_accounts(db, [sid])
     rows = [
         BankAccountRow(
             id=a.id,
@@ -201,3 +199,4 @@ def list_accounts_route(
         for a in accounts
     ]
     return BankAccountListResponse(rows=rows, total=len(rows))
+
