@@ -21,12 +21,16 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Owners.Requests import (
+    OwnerConnectCodeListResponse,
+    OwnerConnectCodeResponse,
+    OwnerConnectCodeRow,
     OwnerLocationsResponse,
     OwnerPLRollupResponse,
     OwnerPLRollupRow,
     OwnerPLRollupTotals,
     OwnerStoreCompanyChip,
     OwnerStoreRow,
+    OwnerUnlinkRequest,
 )
 from api.Modules.Owners.Services import (
     owner_locations_payload,
@@ -189,3 +193,148 @@ def owner_pl_rollup_route(
         totals=OwnerPLRollupTotals(**totals),
         year_choices=sorted(year_choices_set, reverse=True),
     )
+
+
+# ── Owner connect codes (invite + revoke + unlink) ──────────
+
+
+def _adapt_code(c, *, store_name: str = "") -> "OwnerConnectCodeRow":
+    from datetime import datetime as _dt
+    is_redeemed = c.used_at is not None
+    is_revoked  = c.revoked_at is not None
+    is_expired  = (
+        not is_redeemed
+        and not is_revoked
+        and c.expires_at is not None
+        and c.expires_at < _dt.utcnow()
+    )
+    return OwnerConnectCodeRow(
+        id=c.id,
+        code=c.code,
+        created_at=c.created_at.isoformat() if c.created_at else "",
+        expires_at=c.expires_at.isoformat() if c.expires_at else "",
+        used_at=c.used_at.isoformat() if c.used_at else "",
+        used_by_store_name=store_name,
+        revoked_at=c.revoked_at.isoformat() if c.revoked_at else "",
+        is_redeemed=is_redeemed,
+        is_revoked=is_revoked,
+        is_expired=is_expired,
+    )
+
+
+@router.get("/connect-codes", response_model=OwnerConnectCodeListResponse)
+def owner_connect_codes_list_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> OwnerConnectCodeListResponse:
+    """Every code the owner has minted (active + redeemed +
+    revoked + expired). Newest first."""
+    user = _require_owner_principal(db, claims)
+    from app import OwnerConnectCode, Store
+    rows = (
+        db.query(OwnerConnectCode)
+          .filter(OwnerConnectCode.owner_id == user.id)
+          .order_by(OwnerConnectCode.created_at.desc())
+          .all()
+    )
+    sids = [r.used_by_store_id for r in rows if r.used_by_store_id]
+    stores = {
+        s.id: s.name for s in
+        db.query(Store).filter(Store.id.in_(sids)).all()
+    } if sids else {}
+    out = [
+        _adapt_code(r, store_name=stores.get(r.used_by_store_id, ""))
+        for r in rows
+    ]
+    return OwnerConnectCodeListResponse(rows=out, total=len(out))
+
+
+@router.post(
+    "/connect-codes",
+    response_model=OwnerConnectCodeResponse, status_code=201,
+)
+def owner_connect_codes_generate_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> OwnerConnectCodeResponse:
+    """Mint a new 8-character connect code with a 7-day TTL.
+    Owner shares the code with the store admin out of band; the
+    store admin redeems it on their settings page to link the
+    store to the owner's umbrella."""
+    import secrets
+    from datetime import datetime, timedelta
+    user = _require_owner_principal(db, claims)
+    from app import OwnerConnectCode
+    # 8 hex chars uppercased — collision-resistant + readable when
+    # the owner reads it aloud.
+    raw = secrets.token_hex(4).upper()
+    c = OwnerConnectCode(
+        owner_id=user.id,
+        code=raw,
+        expires_at=datetime.utcnow() + timedelta(days=7),
+    )
+    db.add(c); db.flush()
+    db.commit()
+    return OwnerConnectCodeResponse(code=_adapt_code(c))
+
+
+@router.post("/connect-codes/{code_id}/revoke",
+              response_model=OwnerConnectCodeResponse)
+def owner_connect_codes_revoke_route(
+    code_id: int,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> OwnerConnectCodeResponse:
+    """Revoke an unredeemed code so the recipient can't use it.
+    Already-redeemed codes can't be revoked — that disconnect
+    flow is /owner/unlink/{store_id} instead."""
+    from datetime import datetime
+    user = _require_owner_principal(db, claims)
+    from app import OwnerConnectCode
+    c = (
+        db.query(OwnerConnectCode)
+          .filter(
+              OwnerConnectCode.id == code_id,
+              OwnerConnectCode.owner_id == user.id,
+          )
+          .one_or_none()
+    )
+    if c is None:
+        raise HTTPException(status_code=404, detail="Connect code not found")
+    if c.used_at is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Already redeemed — use /owner/unlink/{store_id} to disconnect.",
+        )
+    if c.revoked_at is None:
+        c.revoked_at = datetime.utcnow()
+    db.commit()
+    return OwnerConnectCodeResponse(code=_adapt_code(c))
+
+
+@router.post("/unlink/{store_id}", status_code=204)
+def owner_unlink_store_route(
+    body: OwnerUnlinkRequest,
+    store_id: int,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Disconnect a store from the owner umbrella. Removes the
+    StoreOwnerLink row; the store keeps all its data (transfers,
+    P&L, etc.) but the owner can no longer see it."""
+    _ = body  # request body is empty today, schema kept for future
+    user = _require_owner_principal(db, claims)
+    from app import StoreOwnerLink
+    link = (
+        db.query(StoreOwnerLink)
+          .filter(
+              StoreOwnerLink.owner_id == user.id,
+              StoreOwnerLink.store_id == store_id,
+          )
+          .one_or_none()
+    )
+    if link is None:
+        raise HTTPException(status_code=404, detail="Store not in umbrella")
+    db.delete(link)
+    db.commit()
+    return None

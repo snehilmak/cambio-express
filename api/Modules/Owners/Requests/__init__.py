@@ -87,10 +87,51 @@ class OwnerPLRollupResponse(BaseModel):
 
 
 __all__ = [
+    "OwnerConnectCodeListResponse",
+    "OwnerConnectCodeResponse",
+    "OwnerConnectCodeRow",
     "OwnerLocationsResponse",
     "OwnerPLRollupResponse",
     "OwnerPLRollupRow",
     "OwnerPLRollupTotals",
     "OwnerStoreCompanyChip",
     "OwnerStoreRow",
+    "OwnerUnlinkRequest",
 ]
+
+
+class OwnerConnectCodeRow(BaseModel):
+    """One owner-generated connect code (the 8-char invite a store
+    admin redeems on /admin/settings to link their store)."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    code: str
+    created_at: str
+    expires_at: str
+    used_at: str
+    used_by_store_name: str
+    revoked_at: str
+    is_redeemed: bool
+    is_revoked: bool
+    is_expired: bool
+
+
+class OwnerConnectCodeListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[OwnerConnectCodeRow]
+    total: int
+
+
+class OwnerConnectCodeResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: OwnerConnectCodeRow
+
+
+class OwnerUnlinkRequest(BaseModel):
+    """POST body for /owner/unlink/{store_id}. Empty schema today
+    (the store_id is in the path), but `extra="forbid"` keeps it
+    explicit + future-extensible."""
+    model_config = ConfigDict(extra="forbid")
