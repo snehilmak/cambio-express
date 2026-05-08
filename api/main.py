@@ -146,6 +146,17 @@ def _register_routers(app: FastAPI) -> None:
         tags=["feature-flags"],
     )
 
+    # TVDisplay — read-only first slice for the rate-board admin
+    # landing (display config + countries + active pairing summary).
+    # Write-side (mint countries, edit rates, pair Fire TVs) stays
+    # on legacy Flask until the WSGI bridge retires.
+    from api.Modules.TVDisplay.Controllers import (
+        router as tv_display_router,
+    )
+    app.include_router(
+        tv_display_router, prefix="/tv-display", tags=["tv-display"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
