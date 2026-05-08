@@ -4,6 +4,71 @@ Tracked work we're deferring. Anything in **Before going live** must be
 closed out before public / paid launch; the other sections can happen on
 any cadence.
 
+## Architecture roadmap (priority-ordered)
+
+Honest review of the SPA migration architecture. Top of the list = highest
+impact ÷ effort. Numbers are an estimate.
+
+### P0 — do before public launch
+1. [ ] **Cookie-based JWT** (httpOnly + Secure + SameSite=Strict) instead
+       of localStorage. Closes the XSS-exfil risk and lets legacy Flask
+       + SPA share the same auth so users don't have to log in twice
+       during the transition. ~1 PR.
+2. [ ] **Refresh tokens.** Today access tokens are 30 min with no refresh
+       — users get bumped mid-workflow. Add `/auth/refresh` endpoint +
+       rotation; SPA fetches a new access token before the old one
+       expires. ~1 PR.
+3. [ ] **CI builds the SPA.** Add `npm ci && npm run build` (and ESLint)
+       to `.github/workflows/ci.yml`. A TypeScript regression sails
+       through today. ~1 PR.
+4. [ ] **Sentry + structured (JSON) logging.** Errors today go to stdout;
+       no aggregation, no alerting, no per-user breadcrumbs. ~1 PR each.
+
+### P1 — do before/during full SPA cutover
+5. [ ] **Coverage tracks `api/` too.** `--source=app` only covers `app.py`
+       — every new FastAPI module is invisible to the `--fail-under=60`
+       threshold. New code can ship at 0% coverage and CI is happy.
+       Change `--source=app` → `--source=app,api`. Trivial.
+6. [ ] **Generate TS types from FastAPI OpenAPI schema.**
+       `frontend/src/api/*.ts` has hand-written interfaces mirroring
+       `Requests/*.py` Pydantic — drift is inevitable. Add
+       `openapi-typescript` to the SPA build, single source of truth.
+       ~1 PR.
+7. [ ] **Retire the WSGI-wraps-ASGI bridge after cutover.**
+       `a2wsgi.ASGIMiddleware` runs FastAPI inside Flask's sync WSGI
+       worker — that's the actual source of the asyncio task leaks
+       (every request is sync→async→sync), forces Python 3.11 pin,
+       and prevents real async benefits. Once Jinja is retired, run
+       `uvicorn api.main:api_app` as its own Render service with
+       nginx routing `/api/v2/*` → FastAPI, `/app/*` → static SPA
+       build. Kills the leak class entirely. ~1 PR (multi-file but
+       mechanical).
+
+### P2 — quality of life as the codebase grows
+8. [ ] **Alembic for migrations.** `_ADDED_COLUMNS` is pragmatic for
+       solo work but can't drop, rename, backfill atomically, or roll
+       back. The cost shows up the first time you need to alter an
+       existing column. ~1 PR + ongoing.
+9. [ ] **Shared SPA component library.** Every route file re-declares
+       `cardStyle`, `inputStyle`, `pageStyle`, `pagerBtn`, etc. (~200
+       lines of token boilerplate per route). Extract `<Card>`,
+       `<Pill>`, `<EmptyState>`, `<Pager>`, `<Field>` into
+       `frontend/src/components/`. Big readability win, no behavior
+       change. ~1 PR.
+10. [ ] **`react-hook-form` + Zod for forms.** Hand-rolled `useState`
+       forms work for now; transfers has 10+ fields and the
+       validation/dirty/error mapping bugs will start. Zod schemas
+       can be generated from OpenAPI too — composes with #6. ~1 PR.
+
+### P3 — defer until traffic / scale
+11. [ ] **Postgres in dev** (docker-compose). SQLite hides FK constraint
+       differences, transaction-isolation differences, JSON op
+       differences, full-text search differences. Bites codebases like
+       this regularly. ~1 PR (compose file + dev README).
+12. [ ] **Code-split the SPA.** Bundle is 437kB / 113kB gzip already;
+       without `React.lazy` per-route splitting it'll grow past 1MB
+       once owner dashboard + superadmin controls + TV land. ~1 PR.
+
 ## Before going live (public / paid launch)
 - [ ] **SMTP configured** — set `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`
       (optionally `SMTP_PORT` / `SMTP_FROM`) on the hosting platform so

@@ -36,9 +36,84 @@ export default function Settings() {
       </header>
 
       <StoreInfoCard />
+      <SubscriptionCard />
       <TeamCard />
       <ChangePasswordCard />
     </main>
+  );
+}
+
+function SubscriptionCard() {
+  const identity = getCurrentIdentity();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const canManage =
+    identity?.role === "admin" ||
+    identity?.role === "owner" ||
+    identity?.role === "superadmin";
+  if (!canManage || identity?.store_id == null) return null;
+
+  async function openPortal() {
+    setErr(null);
+    setBusy(true);
+    try {
+      const { openBillingPortal } = await import("../api/billing");
+      const result = await openBillingPortal();
+      window.location.assign(result.url);
+    } catch (e) {
+      // 409 = no Stripe customer yet (trial store) — push to subscribe
+      if (e instanceof ApiError && e.status === 409) {
+        window.location.assign("/app/subscribe");
+        return;
+      }
+      setErr(e instanceof ApiError ? e.message : "Could not open billing portal.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section style={cardStyle}>
+      <h2 style={sectionTitleStyle}>Subscription</h2>
+      <p
+        style={{
+          margin: "0 0 1rem",
+          fontSize: "0.85rem",
+          color: "var(--db-text-muted, #a3a3a3)",
+        }}
+      >
+        Change plan, update payment method, or cancel — all on Stripe's
+        secure billing portal. Trial stores can pick a plan instead.
+      </p>
+      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <a href="/app/subscribe" style={primaryBtnLink}>
+          Choose / change plan
+        </a>
+        <button
+          type="button"
+          onClick={openPortal}
+          disabled={busy}
+          style={{
+            ...secondaryBtn,
+            opacity: busy ? 0.6 : 1,
+            cursor: busy ? "wait" : "pointer",
+          }}
+        >
+          {busy ? "Opening…" : "Manage on Stripe"}
+        </button>
+      </div>
+      {err && (
+        <p
+          role="alert"
+          style={{
+            margin: "0.5rem 0 0",
+            color: "var(--db-negative, #ff3b30)",
+            fontSize: "0.85rem",
+          }}
+        >
+          {err}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -627,4 +702,21 @@ const saveBtnStyle: React.CSSProperties = {
   fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
   fontSize: "0.95rem",
   fontWeight: 600,
+};
+
+const primaryBtnLink: React.CSSProperties = {
+  ...saveBtnStyle,
+  textDecoration: "none",
+  display: "inline-flex",
+  alignItems: "center",
+};
+
+const secondaryBtn: React.CSSProperties = {
+  background: "transparent",
+  color: "var(--db-text, #f5f5f5)",
+  border: "1px solid var(--db-border, #262626)",
+  borderRadius: "0.5rem",
+  padding: "0.7rem 1.25rem",
+  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontSize: "0.95rem",
 };
