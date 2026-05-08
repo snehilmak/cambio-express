@@ -162,3 +162,243 @@ def test_list_rejects_superadmin(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── GET /batches/{id} ───────────────────────────────────────
+
+
+def test_get_batch_returns_envelope(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        bid = _seed_batch(test_store_id, batch_ref="B-G1", ach_amount=500)
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/batches/{bid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["batch"]["batch_ref"] == "B-G1"
+
+
+def test_get_batch_404_for_cross_tenant(client, test_store_id):  # noqa: ARG001
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/batches/99999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+# ── POST /batches ───────────────────────────────────────────
+
+
+def test_create_batch_round_trip(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/batches",
+        json={
+            "ach_date":   "2026-03-15",
+            "company":    "Intermex",
+            "batch_ref":  "B-NEW1",
+            "ach_amount": 1500.0,
+            "status":     "Pending",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    row = resp.get_json()["batch"]
+    assert row["batch_ref"] == "B-NEW1"
+    assert row["ach_amount"] == 1500.0
+    assert row["transfers_total"] == 0.0  # no linked transfers
+    assert row["transfer_count"] == 0
+
+
+def test_create_batch_rejects_duplicate_ref(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_batch(test_store_id, batch_ref="B-DUP")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/batches",
+        json={
+            "ach_date":   "2026-03-15",
+            "company":    "Intermex",
+            "batch_ref":  "B-DUP",  # collision
+            "ach_amount": 100.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["detail"]["field"] == "batch_ref"
+
+
+def test_create_batch_rejects_bad_date(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/batches",
+        json={
+            "ach_date":   "not-a-date",
+            "company":    "Intermex",
+            "batch_ref":  "B-BAD",
+            "ach_amount": 100.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_create_batch_requires_admin_role(client):
+    """Cashier role can't create batches."""
+    from app import User, db, app as flask_app
+    with flask_app.app_context():
+        u = User(
+            store_id=None, username="emp_batch_test",
+            role="employee", is_active=True,
+        )
+        u.set_password("emppass1234")
+        db.session.add(u); db.session.commit()
+    try:
+        login = client.post(
+            "/api/v2/auth/login",
+            json={
+                "username": "emp_batch_test",
+                "password": "emppass1234",
+                "store_id": None,
+            },
+        )
+        token = login.get_json()["access_token"]
+        resp = client.post(
+            "/api/v2/batches",
+            json={
+                "ach_date":   "2026-03-15",
+                "company":    "Intermex",
+                "batch_ref":  "B-EMP",
+                "ach_amount": 100.0,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+    finally:
+        with flask_app.app_context():
+            u2 = db.session.query(User).filter_by(
+                username="emp_batch_test",
+            ).first()
+            if u2:
+                db.session.delete(u2); db.session.commit()
+
+
+# ── PUT /batches/{id} ───────────────────────────────────────
+
+
+def test_update_batch_round_trip(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        bid = _seed_batch(test_store_id, batch_ref="B-UPD", ach_amount=200)
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/batches/{bid}",
+        json={
+            "ach_date":   "2026-04-01",
+            "company":    "Maxi",
+            "batch_ref":  "B-UPD-RENAMED",
+            "ach_amount": 999.0,
+            "status":     "Cleared",
+            "reconciled": True,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    row = resp.get_json()["batch"]
+    assert row["batch_ref"] == "B-UPD-RENAMED"
+    assert row["company"] == "Maxi"
+    assert row["ach_amount"] == 999.0
+    assert row["reconciled"] is True
+
+
+def test_update_batch_404_for_cross_tenant(client, test_store_id):  # noqa: ARG001
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/batches/9999",
+        json={
+            "ach_date":   "2026-04-01",
+            "company":    "X",
+            "batch_ref":  "B-X",
+            "ach_amount": 1.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_update_batch_rejects_collision_with_other_ref(client, test_store_id):
+    """Renaming batch B to share C's ref → 422."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        b1 = _seed_batch(test_store_id, batch_ref="B-1", ach_amount=10)
+        _seed_batch(test_store_id, batch_ref="B-2", ach_amount=20)
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/batches/{b1}",
+        json={
+            "ach_date":   "2026-04-01",
+            "company":    "Intermex",
+            "batch_ref":  "B-2",  # collision
+            "ach_amount": 10.0,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+# ── GET /batches/{id}/transfers ─────────────────────────────
+
+
+def test_batch_transfers_round_trip(client, test_store_id):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_batch(test_store_id, batch_ref="B-TXNS", ach_amount=600)
+        _seed_transfer(test_store_id, batch_ref="B-TXNS",
+                       send_amount=400.0, federal_tax=4.0)
+        _seed_transfer(test_store_id, batch_ref="B-TXNS",
+                       send_amount=200.0, federal_tax=2.0)
+        bid = (
+            __import__("app").ACHBatch.query
+              .filter_by(store_id=test_store_id, batch_ref="B-TXNS")
+              .first().id
+        )
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/batches/{bid}/transfers",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    transfers = resp.get_json()["transfers"]
+    assert len(transfers) == 2
+
+
+def test_batch_transfers_404_when_missing(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/batches/99999/transfers",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_write_endpoints_require_jwt(client):
+    """All three write paths reject unauthed callers."""
+    g = client.get("/api/v2/batches/1")
+    p = client.post("/api/v2/batches", json={
+        "ach_date": "2026-01-01", "company": "X",
+        "batch_ref": "X", "ach_amount": 1.0,
+    })
+    u = client.put("/api/v2/batches/1", json={
+        "ach_date": "2026-01-01", "company": "X",
+        "batch_ref": "X", "ach_amount": 1.0,
+    })
+    t = client.get("/api/v2/batches/1/transfers")
+    assert g.status_code == 401
+    assert p.status_code == 401
+    assert u.status_code == 401
+    assert t.status_code == 401
