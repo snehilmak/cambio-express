@@ -108,6 +108,16 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Owners.Controllers import router as owners_router
     app.include_router(owners_router, prefix="/owner", tags=["owner"])
 
+    # Superadmin — platform-wide read-side. First slice ships the
+    # stores list; controls, anomalies, audit log, announcements,
+    # feature flags, and impersonation come in subsequent PRs.
+    from api.Modules.Superadmin.Controllers import (
+        router as superadmin_router,
+    )
+    app.include_router(
+        superadmin_router, prefix="/superadmin", tags=["superadmin"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
