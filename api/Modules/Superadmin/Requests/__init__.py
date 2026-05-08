@@ -31,7 +31,35 @@ class SuperadminStoreListResponse(BaseModel):
     total: int
 
 
+class SuperadminAuditRow(BaseModel):
+    """One row from the platform-wide superadmin_audit_log. Snapshot
+    fields (admin_name, action, target_type, target_id, details,
+    created_at) — enough to render the table without a JOIN."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    admin_id: int | None
+    admin_name: str
+    action: str
+    target_type: str
+    target_id: str
+    details: str
+    created_at: str
+
+
+class SuperadminAuditListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[SuperadminAuditRow]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+
 __all__ = [
+    "SuperadminAuditListResponse",
+    "SuperadminAuditRow",
     "SuperadminStoreListResponse",
     "SuperadminStoreRow",
 ]
