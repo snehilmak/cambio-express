@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
-
-import { getCurrentIdentity } from "../lib/auth";
+import { Link } from "react-router-dom";
 
 // Marketing landing page. Translated 1:1 from templates/landing.html
-// (the legacy Jinja version still served at `/`). When the user is
-// already signed in we bounce straight to the dashboard so a stray
-// /app/ visit doesn't waste a click.
+// (the legacy Jinja version still served at `/`). Always renders —
+// signed-in visitors see the same marketing copy and can click
+// "Sign in" to drop into their dashboard. Auto-redirecting based on
+// a localStorage token caused a bug: stale/expired tokens decoded
+// fine and bounced visitors to /dashboard, which then 401'd and
+// kicked them straight to /login.
 export default function Landing() {
-  const identity = getCurrentIdentity();
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
@@ -16,8 +16,6 @@ export default function Landing() {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, []);
-
-  if (identity) return <Navigate to="/dashboard" replace />;
 
   const closeNav = () => setNavOpen(false);
 
