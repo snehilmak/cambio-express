@@ -2219,7 +2219,16 @@ def _backfill_uncategorized_rows(store_id):
 # legacy handler so an in-flight form submit on a cached page
 # still completes correctly.
 
-SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "1") != "0"
+# Defaults to OFF — the strangler-fig migration is mid-flight,
+# and a deploy in May 2026 surfaced a real perf regression when
+# the redirect was on by default (the FastAPI-via-WSGI bridge
+# choked under prod traffic, slowing logins to "network error"
+# timeouts). With the flag off, legacy `/login`, `/dashboard`,
+# etc. keep serving the Jinja UI directly with no bridge hop.
+# Set `SPA_CUTOVER_ENABLED=1` on Render once the
+# WSGI-wraps-ASGI bottleneck is retired (BACKLOG.md P1 #7) or
+# once any one store has been pilot-flipped without regression.
+SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "0") == "1"
 
 # Static path → SPA path. These are pages that have full SPA
 # parity today; everything else falls through to legacy Jinja.

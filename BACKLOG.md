@@ -34,15 +34,23 @@ impact ÷ effort. Numbers are an estimate.
        `Requests/*.py` Pydantic — drift is inevitable. Add
        `openapi-typescript` to the SPA build, single source of truth.
        ~1 PR.
-7. [ ] **Retire the WSGI-wraps-ASGI bridge after cutover.**
+7. [ ] **Retire the WSGI-wraps-ASGI bridge — promoted to BLOCKER.**
        `a2wsgi.ASGIMiddleware` runs FastAPI inside Flask's sync WSGI
-       worker — that's the actual source of the asyncio task leaks
-       (every request is sync→async→sync), forces Python 3.11 pin,
-       and prevents real async benefits. Once Jinja is retired, run
-       `uvicorn api.main:api_app` as its own Render service with
-       nginx routing `/api/v2/*` → FastAPI, `/app/*` → static SPA
-       build. Kills the leak class entirely. ~1 PR (multi-file but
-       mechanical).
+       worker — every request goes sync→async→sync, every API call
+       creates an asyncio task that the WSGI worker can't cleanly
+       reap. **This isn't theoretical anymore**: a May 2026 deploy
+       turned the SPA-cutover redirect on by default and the site
+       went unusably slow + login-network-error timeouts under
+       prod traffic. The cutover flag is now default OFF (see
+       `SPA_CUTOVER_ENABLED` in app.py); the SPA stays available
+       at `/app/*` for opt-in. Until this bridge is retired, any
+       page that fans out multiple `/api/v2/*` calls (the SPA's
+       first paint typically does ~3) compounds the problem.
+       Fix: run `uvicorn api.main:api_app` as its own Render
+       service with nginx routing `/api/v2/*` → FastAPI,
+       `/app/*` → static SPA build, `/` → Flask. Multi-file but
+       mechanical. **Do this before the next attempt at flipping
+       SPA_CUTOVER_ENABLED on.**
 
 ### P2 — quality of life as the codebase grows
 8. [ ] **Alembic for migrations.** `_ADDED_COLUMNS` is pragmatic for
