@@ -1,4 +1,4 @@
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   useBatches,
@@ -58,18 +58,43 @@ export default function Batches() {
 
   return (
     <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>ACH batches</h1>
-        <p
+      <header
+        style={{
+          marginBottom: "1.5rem",
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1 style={titleStyle}>ACH batches</h1>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              color: "var(--db-text-muted, #a3a3a3)",
+            }}
+          >
+            {data
+              ? `${data.rows.length.toLocaleString()} batches`
+              : "—"}
+          </p>
+        </div>
+        <Link
+          to="/batches/new"
           style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
+            background: "var(--db-accent, #3fff00)",
+            color: "var(--db-on-accent, #0a0a0a)",
+            borderRadius: "0.5rem",
+            padding: "0.55rem 1rem",
+            fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+            fontSize: "0.9rem",
+            fontWeight: 600,
+            textDecoration: "none",
           }}
         >
-          {data
-            ? `${data.rows.length.toLocaleString()} batches`
-            : "—"}
-        </p>
+          + New batch
+        </Link>
       </header>
 
       <section style={cardStyle}>
@@ -145,13 +170,33 @@ function BatchesTable({
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.id}>
+            <tr
+              key={r.id}
+              style={{ transition: "background 120ms ease" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background =
+                  "var(--db-surface, #0a0a0a)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+              }}
+            >
               <td style={cellStyle}>
-                <span style={monoMuted}>{r.ach_date}</span>
+                <Link
+                  to={`/batches/${r.id}/edit`}
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  <span style={monoMuted}>{r.ach_date}</span>
+                </Link>
               </td>
               <td style={cellStyle}>{r.company}</td>
               <td style={cellStyle}>
-                <span style={mono}>{r.batch_ref}</span>
+                <Link
+                  to={`/batches/${r.id}/edit`}
+                  style={{ color: "inherit", textDecoration: "none" }}
+                >
+                  <span style={mono}>{r.batch_ref}</span>
+                </Link>
               </td>
               <td style={{ ...cellStyle, textAlign: "right" }}>
                 <span style={mono}>${r.ach_amount.toFixed(2)}</span>
