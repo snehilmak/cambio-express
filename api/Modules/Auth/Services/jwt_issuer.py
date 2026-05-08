@@ -77,5 +77,56 @@ def issue_access_token(
 def decode_access_token(token: str) -> dict[str, Any]:
     """Verify + decode a token. Raises `jwt.InvalidTokenError` (or a
     subclass: `ExpiredSignatureError`, `InvalidSignatureError`, etc.)
-    on failure — callers translate into 401."""
-    return jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    on failure — callers translate into 401.
+
+    Refuses tokens carrying a `purpose` claim — those are limited-
+    purpose tokens (e.g. the 2FA-pending hop), not full access
+    tokens. A pending token slipped into an Authorization header
+    must NOT authorise an authenticated request.
+    """
+    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    if claims.get("purpose"):
+        raise jwt.InvalidTokenError(
+            "Token has a purpose claim and cannot authorise access",
+        )
+    return claims
+
+
+# 5 minutes — long enough for the user to read their authenticator
+# app, short enough that a captured pending token can't be used to
+# resume a session hours later. Recovery codes use the same TTL.
+DEFAULT_PENDING_2FA_TTL_SECONDS = 5 * 60
+
+
+def issue_pending_2fa_token(
+    user_id: int,
+    *,
+    ttl_seconds: int = DEFAULT_PENDING_2FA_TTL_SECONDS,
+) -> str:
+    """Mint a short-lived JWT representing "this user has passed
+    password auth but still needs to clear the 2FA hop". The
+    `/auth/login/totp` and `/auth/login/recovery` endpoints exchange
+    this for a full access token after verifying the second factor.
+
+    Carries `purpose: "totp-pending"` so it can't be smuggled into
+    an Authorization header — `decode_access_token` rejects any
+    token with a purpose claim.
+    """
+    now = _now()
+    payload = {
+        "sub": str(user_id),
+        "purpose": "totp-pending",
+        "iat": int(now.timestamp()),
+        "exp": int((now + timedelta(seconds=ttl_seconds)).timestamp()),
+    }
+    return jwt.encode(payload, _secret(), algorithm=JWT_ALGORITHM)
+
+
+def decode_pending_2fa_token(token: str) -> dict[str, Any]:
+    """Verify + decode a 2FA-pending token. Raises
+    `jwt.InvalidTokenError` if the token is invalid, expired, or
+    isn't a pending token (wrong / missing purpose claim)."""
+    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    if claims.get("purpose") != "totp-pending":
+        raise jwt.InvalidTokenError("Not a 2FA-pending token")
+    return claims

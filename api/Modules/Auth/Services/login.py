@@ -1,13 +1,17 @@
 """Password-flow login Service.
 
 Authenticates `(store_id, username, password)` against the DB and
-returns a `LoginResult` carrying a JWT access token + minimal user
-metadata. Per the ADR JWT-claims model, the full permission set is
-embedded as a claim at issue time so subsequent requests don't have
-to re-fetch on every hit.
+returns either a `LoginResult` carrying a full JWT (no 2FA needed)
+or a `LoginPendingResult` carrying a short-lived "pending" token
+(2FA must be cleared via `/auth/login/totp` or
+`/auth/login/recovery` before the caller gets a real access token).
+
+Per the ADR JWT-claims model, the full permission set is embedded
+as a claim at issue time so subsequent requests don't have to
+re-fetch on every hit.
 
 What this Service deliberately does NOT do (yet):
-- TOTP / passkey verification (PR 20+).
+- Passkey verification (separate PR — needs WebAuthn challenge plumbing).
 - Refresh tokens / rotation (follow-up PR after the Controller lands).
 - Audit logging — the legacy login route handles that today; we'll
   port it once the Controller wraps the Service.
@@ -24,6 +28,11 @@ from api.Modules.Auth.Repositories import (
 from api.Modules.Auth.Services.jwt_issuer import (
     JWTIssuer,
     issue_access_token,
+    issue_pending_2fa_token,
+)
+from api.Modules.Auth.Services.totp import (
+    is_enrolled,
+    needs_totp,
 )
 
 
@@ -74,6 +83,18 @@ class LoginResult:
     permissions: list[str]
 
 
+@dataclass
+class LoginPendingResult:
+    """Returned in place of a `LoginResult` when password auth
+    succeeds but the user must clear a second factor before getting
+    a real access token. Carries a short-lived JWT (5min, purpose=
+    "totp-pending") that the SPA exchanges via `/auth/login/totp`
+    or `/auth/login/recovery`."""
+    pending_token: str
+    user_id: int
+    has_recovery_codes: bool
+
+
 class AuthenticationError(Exception):
     """Raised when credentials are invalid OR the user is disabled.
     Same exception type for both cases so the Controller can return
@@ -81,20 +102,14 @@ class AuthenticationError(Exception):
     "user exists but is disabled" via the response shape."""
 
 
-def authenticate_password(
-    db: Session, *, store_id: int | None, username: str, password: str,
-) -> LoginResult:
-    """Verify `(store_id, username, password)` and return a JWT-bearing
-    `LoginResult`. Raises `AuthenticationError` on any failure path.
+class TotpEnrollmentRequired(Exception):
+    """Raised when password auth succeeds but the user must enroll
+    a TOTP factor before logging in (e.g. fresh superadmin). The
+    SPA can't drive the QR-code enrollment flow yet; we tell the
+    user to complete enrollment via the legacy site."""
 
-    `store_id=None` is the superadmin scope (`User.store_id IS NULL`).
-    """
-    user = find_user_by_username_in_store(db, store_id, username)
-    if user is None or not user.check_password(password):
-        raise AuthenticationError("Invalid username or password")
-    if not user.is_active:
-        raise AuthenticationError("Invalid username or password")
 
+def _issue_full_login(user: User) -> LoginResult:
     perms = permissions_for(user.role)
     issuer = JWTIssuer(
         sub=user.id,
@@ -116,21 +131,80 @@ def authenticate_password(
     )
 
 
+def _maybe_pending_2fa(db: Session, user: User) -> LoginPendingResult | None:
+    """If `user` is in a TOTP-required role AND has actually enrolled,
+    gate the login behind the 2FA hop. Returns a pending result, or
+    None if no 2FA hop is needed (caller mints a full access token).
+
+    Users in a TOTP-required role who haven't enrolled yet fall
+    through to a full login. The legacy Flask flow handles
+    enrollment via the dedicated `/login/2fa/enroll` redirect, but
+    the SPA doesn't drive that flow yet — so the transitional
+    behavior is "issue token, expect enrollment via the legacy
+    site". Once SPA enrollment lands we'll flip this to
+    `TotpEnrollmentRequired`.
+    """
+    if not needs_totp(user) or not is_enrolled(user):
+        return None
+    from api.Modules.Auth.Models import RecoveryCode
+    has_recovery = (
+        db.query(RecoveryCode)
+          .filter_by(user_id=user.id, used_at=None)
+          .first()
+        is not None
+    )
+    return LoginPendingResult(
+        pending_token=issue_pending_2fa_token(user.id),
+        user_id=user.id,
+        has_recovery_codes=has_recovery,
+    )
+
+
+def authenticate_password(
+    db: Session, *, store_id: int | None, username: str, password: str,
+) -> LoginResult | LoginPendingResult:
+    """Verify `(store_id, username, password)`. Returns either:
+      - `LoginResult` carrying a full access token (no 2FA needed), OR
+      - `LoginPendingResult` carrying a 2FA-pending token (the caller
+        must clear the second factor via `/auth/login/totp` or
+        `/auth/login/recovery` to upgrade).
+
+    Raises `AuthenticationError` on bad credentials / disabled user,
+    or `TotpEnrollmentRequired` if the role requires TOTP but the
+    user hasn't enrolled yet.
+
+    `store_id=None` is the superadmin scope (`User.store_id IS NULL`).
+    """
+    user = find_user_by_username_in_store(db, store_id, username)
+    if user is None or not user.check_password(password):
+        raise AuthenticationError("Invalid username or password")
+    if not user.is_active:
+        raise AuthenticationError("Invalid username or password")
+
+    pending = _maybe_pending_2fa(db, user)
+    if pending is not None:
+        return pending
+    return _issue_full_login(user)
+
+
 def authenticate_password_cross_store(
     db: Session, *, username: str, password: str,
-) -> LoginResult:
+) -> LoginResult | LoginPendingResult:
     """Cross-store JWT login for the SPA. Same shape as
     `authenticate_password` but does NOT require `store_id` — the
     user's home store is looked up by username across all stores
     (first match wins, like the legacy `/login` POST).
 
-    Raises `AuthenticationError` on any failure path.
+    Returns either a full `LoginResult` or a `LoginPendingResult`
+    (when the user's role requires 2FA — see `authenticate_password`).
+
+    Raises `AuthenticationError` on bad credentials / disabled
+    user, or `TotpEnrollmentRequired` if 2FA is required but
+    enrollment is incomplete.
 
     Employees are intentionally rejected here because the legacy
     flow does the same: an employee on the cookieless landing
-    page is told to use their store's sign-in URL instead. Keeps
-    the SPA's UX consistent with the existing site during the
-    cutover.
+    page is told to use their store's slug-scoped page.
     """
     user = verify_password_cross_store(db, username, password)
     if user is None:
@@ -142,25 +216,66 @@ def authenticate_password_cross_store(
             "Please use your store's sign-in page",
         )
 
-    perms = permissions_for(user.role)
-    issuer = JWTIssuer(
-        sub=user.id,
-        role=user.role,
-        store_id=user.store_id,
-        permissions=perms,
-        full_name=user.full_name or "",
-        username=user.username,
-    )
-    token = issue_access_token(issuer)
-    return LoginResult(
-        access_token=token,
-        user_id=user.id,
-        role=user.role,
-        store_id=user.store_id,
-        username=user.username,
-        full_name=user.full_name or "",
-        permissions=perms,
-    )
+    pending = _maybe_pending_2fa(db, user)
+    if pending is not None:
+        return pending
+    return _issue_full_login(user)
+
+
+def finalize_2fa_with_totp(
+    db: Session, *, pending_token: str, code: str,
+) -> LoginResult:
+    """Exchange a 2FA-pending token + TOTP code for a full access
+    token. Raises `AuthenticationError` on a bad / expired pending
+    token, a missing user, or an invalid code.
+
+    Caller is responsible for committing — TOTP verify is a pure
+    read so we don't strictly need a commit, but the symmetric
+    `finalize_2fa_with_recovery_code` (below) needs one to mark
+    the recovery code consumed, and exposing both helpers with
+    the same call shape keeps the Controller path simple.
+    """
+    import jwt as _jwt  # local import to keep the type annotation clean
+    from api.Modules.Auth.Services.jwt_issuer import decode_pending_2fa_token
+    from api.Modules.Auth.Services.totp import verify_totp_token
+
+    try:
+        claims = decode_pending_2fa_token(pending_token)
+    except _jwt.InvalidTokenError as exc:
+        raise AuthenticationError(str(exc) or "Invalid pending token")
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None or not user.is_active:
+        raise AuthenticationError("Invalid or expired pending session")
+    if not verify_totp_token(user, code):
+        raise AuthenticationError("Invalid verification code")
+    return _issue_full_login(user)
+
+
+def finalize_2fa_with_recovery_code(
+    db: Session, *, pending_token: str, code: str,
+) -> LoginResult:
+    """Exchange a 2FA-pending token + single-use recovery code for
+    a full access token. Marks the recovery code consumed.
+    Raises `AuthenticationError` on a bad / expired pending token,
+    a missing user, or an unrecognized recovery code.
+
+    Caller commits — the recovery code's `used_at` flush isn't
+    durable until the session commits.
+    """
+    import jwt as _jwt
+    from api.Modules.Auth.Services.jwt_issuer import decode_pending_2fa_token
+    from api.Modules.Auth.Services.totp import consume_recovery_code
+
+    try:
+        claims = decode_pending_2fa_token(pending_token)
+    except _jwt.InvalidTokenError as exc:
+        raise AuthenticationError(str(exc) or "Invalid pending token")
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None or not user.is_active:
+        raise AuthenticationError("Invalid or expired pending session")
+    if not consume_recovery_code(db, user, code):
+        raise AuthenticationError("Invalid recovery code")
+    return _issue_full_login(user)
 
 
 def verify_password_cross_store(
