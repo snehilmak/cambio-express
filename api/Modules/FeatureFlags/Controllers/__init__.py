@@ -30,6 +30,10 @@ from api.Modules.FeatureFlags.Requests import (
     FeatureFlagResponse,
     FeatureFlagRow,
     FeatureFlagToggleRequest,
+    StoreOverrideListResponse,
+    StoreOverrideRequest,
+    StoreOverrideResponse,
+    StoreOverrideRow,
 )
 
 
@@ -167,6 +171,128 @@ def delete_route(
         db, user, "delete_feature_flag",
         target_id=key,
         details=(f.label or "")[:80],
+    )
+    db.commit()
+    return None
+
+
+# ── Per-store overrides ─────────────────────────────────────
+
+
+def _adapt_override(o, *, store) -> StoreOverrideRow:
+    return StoreOverrideRow(
+        store_id=o.store_id,
+        store_slug=store.slug or "" if store else "",
+        store_name=store.name or "" if store else "",
+        flag_key=o.flag_key,
+        enabled=bool(o.enabled),
+        updated_at=o.updated_at.isoformat() if o.updated_at else "",
+    )
+
+
+@router.get("/{key}/overrides", response_model=StoreOverrideListResponse)
+def list_overrides_route(
+    key: str = Path(..., min_length=1, max_length=60),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> StoreOverrideListResponse:
+    """Every store-level override for a given flag, ordered by
+    store name. Useful for the superadmin to see which customers
+    have a non-default value at a glance."""
+    _require_superadmin_user(db, claims)
+    from app import Store, StoreFeatureOverride
+    rows = (
+        db.query(StoreFeatureOverride)
+          .filter(StoreFeatureOverride.flag_key == key)
+          .all()
+    )
+    if not rows:
+        return StoreOverrideListResponse(rows=[], total=0)
+    sids = [r.store_id for r in rows]
+    stores = {
+        s.id: s for s in db.query(Store).filter(Store.id.in_(sids)).all()
+    }
+    out = sorted(
+        [_adapt_override(r, store=stores.get(r.store_id)) for r in rows],
+        key=lambda x: x.store_name.lower(),
+    )
+    return StoreOverrideListResponse(rows=out, total=len(out))
+
+
+@router.put(
+    "/{key}/stores/{store_id}", response_model=StoreOverrideResponse,
+)
+def upsert_override_route(
+    body: StoreOverrideRequest,
+    key: str = Path(..., min_length=1, max_length=60),
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> StoreOverrideResponse:
+    """Set (or update) a per-store override. The flag must exist
+    globally; the target store must exist. Idempotent."""
+    user = _require_superadmin_user(db, claims)
+    from datetime import datetime
+    from app import FeatureFlag, Store, StoreFeatureOverride
+    flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
+    if flag is None:
+        raise HTTPException(status_code=404, detail="Feature flag not found")
+    store = db.query(Store).filter(Store.id == store_id).one_or_none()
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    o = (
+        db.query(StoreFeatureOverride)
+          .filter(
+              StoreFeatureOverride.flag_key == key,
+              StoreFeatureOverride.store_id == store_id,
+          )
+          .one_or_none()
+    )
+    if o is None:
+        o = StoreFeatureOverride(
+            store_id=store_id, flag_key=key,
+            enabled=body.enabled, updated_by=user.id,
+        )
+        db.add(o); db.flush()
+    else:
+        o.enabled = body.enabled
+        o.updated_at = datetime.utcnow()
+        o.updated_by = user.id
+    _audit(
+        db, user, "set_feature_override",
+        target_id=f"{key}:{store_id}",
+        details=f"enabled={body.enabled}",
+    )
+    db.commit()
+    return StoreOverrideResponse(override=_adapt_override(o, store=store))
+
+
+@router.delete("/{key}/stores/{store_id}", status_code=204)
+def clear_override_route(
+    key: str = Path(..., min_length=1, max_length=60),
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Clear a per-store override — the store reverts to the
+    flag's global default. 404 only when no override exists, so
+    DELETE is idempotent for existing overrides."""
+    user = _require_superadmin_user(db, claims)
+    from app import StoreFeatureOverride
+    o = (
+        db.query(StoreFeatureOverride)
+          .filter(
+              StoreFeatureOverride.flag_key == key,
+              StoreFeatureOverride.store_id == store_id,
+          )
+          .one_or_none()
+    )
+    if o is None:
+        raise HTTPException(status_code=404, detail="Override not found")
+    db.delete(o)
+    _audit(
+        db, user, "clear_feature_override",
+        target_id=f"{key}:{store_id}",
     )
     db.commit()
     return None
