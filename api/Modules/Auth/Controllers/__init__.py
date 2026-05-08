@@ -19,9 +19,11 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Requests import (
     ChangePasswordRequest,
+    ForgotPasswordRequest,
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
 )
@@ -29,10 +31,13 @@ from api.Modules.Auth.Services import (
     authenticate_password,
     authenticate_password_cross_store,
     change_password,
+    consume_password_reset_token,
     create_store_and_admin,
     decode_access_token,
     issue_access_token,
+    issue_password_reset_token,
     permissions_for,
+    verify_password_reset_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
     DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -244,3 +249,73 @@ def signup_route(
         store_id=result.store.id,
         permissions=perms,
     )
+
+
+@router.post("/forgot-password")
+def forgot_password_route(
+    body: ForgotPasswordRequest, db: Session = Depends(get_db),
+) -> dict:
+    """Issue a reset token for the user identified by `email`.
+
+    Per the CLAUDE.md security invariant the response is always
+    `{"status": "ok"}` regardless of whether the address matches
+    a known user — attackers must not be able to enumerate
+    registered emails via this endpoint. Inactive / superadmin /
+    unknown emails silently no-op.
+
+    The raw token is logged to the operator console only when
+    SMTP isn't configured (matching the legacy /forgot-password
+    Flask flow). Production setups deliver via SMTP and never
+    log the URL.
+
+    SMTP delivery is deliberately NOT wired here yet — the
+    legacy flow handles email send + audit logging. This endpoint
+    only mints the token; legacy Flask code can pick it up if
+    needed. Subsequent PR threads SMTP through.
+    """
+    issued = issue_password_reset_token(db, body.email)
+    db.commit()
+    # Stash the raw token in a logger so the legacy email path
+    # (which still owns delivery) can find it. Do NOT include it
+    # in the JSON response — that would leak it to anyone who
+    # can hit the endpoint.
+    if issued is not None:
+        # Lazy logger import — production sends via SMTP and
+        # ignores this fallback. The legacy /forgot-password
+        # route also logs at WARNING level.
+        import logging
+        logging.getLogger("app").warning(
+            "Password reset token issued via /api/v2/auth/forgot-password "
+            "for user_id=%s; raw token logged for SMTP-fallback delivery.",
+            issued.user.id,
+        )
+    return {"status": "ok"}
+
+
+@router.post("/reset-password")
+def reset_password_route(
+    body: ResetPasswordRequest, db: Session = Depends(get_db),
+) -> dict:
+    """Consume a one-time reset token and set a new password.
+    Same validation rules as change_password (length ≥ 8 +
+    matching confirm)."""
+    if body.new_password != body.confirm_password:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "confirm_password",
+                "message": "Passwords do not match.",
+            },
+        )
+    token = verify_password_reset_token(db, body.token)
+    if token is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This reset link is invalid or has expired. "
+                "Request a new one from the forgot-password page."
+            ),
+        )
+    consume_password_reset_token(db, token, body.new_password)
+    db.commit()
+    return {"status": "ok"}

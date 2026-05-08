@@ -8,14 +8,16 @@ import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
 import EditDailyBook from "./routes/EditDailyBook";
 import EditTransfer from "./routes/EditTransfer";
+import ForgotPassword from "./routes/ForgotPassword";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
 import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
-import Signup from "./routes/Signup";
 import Reports from "./routes/Reports";
+import ResetPassword from "./routes/ResetPassword";
 import Settings from "./routes/Settings";
+import Signup from "./routes/Signup";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 
@@ -35,8 +37,10 @@ export default function App() {
   return (
     <Routes>
       <Route index element={<Home />} />
-      <Route path="login"  element={<Login />} />
-      <Route path="signup" element={<Signup />} />
+      <Route path="login"            element={<Login />} />
+      <Route path="signup"           element={<Signup />} />
+      <Route path="forgot-password"  element={<ForgotPassword />} />
+      <Route path="reset-password"   element={<ResetPassword />} />
       <Route element={<AuthedShell />}>
         <Route path="dashboard"        element={<Dashboard />} />
         <Route path="transfers"        element={<Transfers />} />

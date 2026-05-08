@@ -42,6 +42,28 @@ class ChangePasswordRequest(BaseModel):
     confirm_password: str = Field(..., min_length=1)
 
 
+class ForgotPasswordRequest(BaseModel):
+    """POST body for /auth/forgot-password. Always responds 200
+    regardless of whether the email exists — the legacy contract
+    is "Check your email" so attackers can't enumerate registered
+    addresses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(..., min_length=1, max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    """POST body for /auth/reset-password. Uses the raw
+    one-time token from the emailed reset link."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token:            str = Field(..., min_length=1, max_length=255)
+    new_password:     str = Field(..., min_length=8, max_length=200)
+    confirm_password: str = Field(..., min_length=8, max_length=200)
+
+
 class SignupRequest(BaseModel):
     """POST body for /auth/signup. Mirrors the legacy /signup
     Jinja form. Returns a JWT on success so the SPA can drop
