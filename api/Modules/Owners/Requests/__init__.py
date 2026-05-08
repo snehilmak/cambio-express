@@ -43,8 +43,54 @@ class OwnerLocationsResponse(BaseModel):
 OwnerStoreRow.model_rebuild()
 
 
+class OwnerPLRollupRow(BaseModel):
+    """One store's monthly P&L row for /owner/pl-rollup. `has_pl` is
+    False when there's no MonthlyFinancial row for the (store, year,
+    month) yet — UI can render a "—" placeholder instead of $0.00."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    store_name: str
+    store_slug: str
+    has_pl: bool
+    revenue: float
+    purchases: float
+    expenses: float
+    over_short: float
+    net: float
+
+
+class OwnerPLRollupTotals(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    revenue: float
+    purchases: float
+    expenses: float
+    over_short: float
+    net: float
+
+
+class OwnerPLRollupResponse(BaseModel):
+    """Side-by-side monthly P&L for every store in the owner umbrella.
+    Sorted by net income desc — strongest performers first. `year` /
+    `month` echo back so the SPA's pager knows what to navigate from.
+    `year_choices` is the set of years with at least one P&L row across
+    the umbrella, used to render a year-dropdown without an extra
+    request."""
+    model_config = ConfigDict(extra="forbid")
+
+    year: int
+    month: int
+    rows: list[OwnerPLRollupRow]
+    totals: OwnerPLRollupTotals
+    year_choices: list[int]
+
+
 __all__ = [
     "OwnerLocationsResponse",
+    "OwnerPLRollupResponse",
+    "OwnerPLRollupRow",
+    "OwnerPLRollupTotals",
     "OwnerStoreCompanyChip",
     "OwnerStoreRow",
 ]

@@ -52,3 +52,52 @@ export function useOwnerLocations(period: OwnerPeriod = "month", q = "") {
     placeholderData: (prev) => prev,
   });
 }
+
+
+export interface OwnerPLRollupRow {
+  store_id: number;
+  store_name: string;
+  store_slug: string;
+  has_pl: boolean;
+  revenue: number;
+  purchases: number;
+  expenses: number;
+  over_short: number;
+  net: number;
+}
+
+export interface OwnerPLRollupTotals {
+  revenue: number;
+  purchases: number;
+  expenses: number;
+  over_short: number;
+  net: number;
+}
+
+export interface OwnerPLRollupResponse {
+  year: number;
+  month: number;
+  rows: OwnerPLRollupRow[];
+  totals: OwnerPLRollupTotals;
+  year_choices: number[];
+}
+
+export function useOwnerPLRollup(year?: number, month?: number) {
+  const identity = getCurrentIdentity();
+  const enabled =
+    identity?.role === "owner" || identity?.role === "superadmin";
+  return useQuery<OwnerPLRollupResponse>({
+    enabled,
+    queryKey: ["owner", "pl-rollup", identity?.user_id, year, month],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (year)  p.set("year",  String(year));
+      if (month) p.set("month", String(month));
+      const qs = p.toString();
+      return api<OwnerPLRollupResponse>(
+        `/api/v2/owner/pl-rollup${qs ? `?${qs}` : ""}`,
+      );
+    },
+    placeholderData: (prev) => prev,
+  });
+}
