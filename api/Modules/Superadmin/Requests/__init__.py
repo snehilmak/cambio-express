@@ -1,6 +1,13 @@
 """Superadmin — Pydantic request/response schemas."""
 from pydantic import BaseModel, ConfigDict
 
+from api.Modules.Superadmin.Requests.discounts import (
+    DiscountCodeListResponse,
+    DiscountCodeResponse,
+    DiscountCodeRow,
+    DiscountCodeToggleRequest,
+)
+
 
 class SuperadminStoreRow(BaseModel):
     """One store on the platform-wide stores list. Fields chosen to
@@ -83,6 +90,10 @@ class SuperadminAnomalyListResponse(BaseModel):
 
 
 __all__ = [
+    "DiscountCodeListResponse",
+    "DiscountCodeResponse",
+    "DiscountCodeRow",
+    "DiscountCodeToggleRequest",
     "SuperadminAnomalyListResponse",
     "SuperadminAnomalyRow",
     "SuperadminAuditListResponse",
