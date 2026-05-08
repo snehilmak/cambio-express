@@ -379,3 +379,75 @@ def reset_password_route(
     consume_password_reset_token(db, token, body.new_password)
     db.commit()
     return {"status": "ok"}
+
+
+# ── Passkey management (list + delete) ──────────────────────
+#
+# Enrollment + login verification stay on the legacy /account/
+# passkeys/register/* and /login/passkey/* routes for now —
+# WebAuthn challenges need browser-side `navigator.credentials`
+# orchestration that's a separate migration. Read + delete are
+# pure server-side and ship here so the SPA's settings page can
+# show the user's registered devices without bouncing to legacy.
+
+
+@router.get("/passkeys")
+def list_passkeys_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """List the authenticated user's registered passkeys.
+    Returns only the metadata the SPA renders — never the raw
+    credential_id or public_key (those stay server-side)."""
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(status_code=401, detail="JWT missing sub claim")
+    from app import Passkey
+    rows = (
+        db.query(Passkey)
+          .filter(Passkey.user_id == int(sub))
+          .order_by(Passkey.created_at.desc())
+          .all()
+    )
+    return {
+        "passkeys": [
+            {
+                "id":            p.id,
+                "name":          p.name or "",
+                "aaguid":        p.aaguid or "",
+                "transports":    p.transports or "",
+                "created_at":    p.created_at.isoformat() if p.created_at else "",
+                "last_used_at":  p.last_used_at.isoformat() if p.last_used_at else "",
+            }
+            for p in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@router.delete("/passkeys/{passkey_id}", status_code=204)
+def delete_passkey_route(
+    passkey_id: int,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Remove one of the authenticated user's passkeys. 404 if it
+    doesn't belong to them — never confirms existence of a passkey
+    the caller doesn't own."""
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(status_code=401, detail="JWT missing sub claim")
+    from app import Passkey
+    p = (
+        db.query(Passkey)
+          .filter(
+              Passkey.id == passkey_id,
+              Passkey.user_id == int(sub),
+          )
+          .one_or_none()
+    )
+    if p is None:
+        raise HTTPException(status_code=404, detail="Passkey not found")
+    db.delete(p)
+    db.commit()
+    return None

@@ -151,3 +151,31 @@ export async function resetPassword(
     { method: "POST", json: body },
   );
 }
+
+
+export interface PasskeyRow {
+  id: number;
+  name: string;
+  aaguid: string;
+  transports: string;
+  created_at: string;
+  last_used_at: string;
+}
+
+export interface PasskeyListResponse {
+  passkeys: PasskeyRow[];
+  total: number;
+}
+
+export function usePasskeys() {
+  const identity = getCurrentIdentity();
+  return useQuery<PasskeyListResponse>({
+    enabled: identity != null,
+    queryKey: ["account", "passkeys", identity?.user_id],
+    queryFn: () => api<PasskeyListResponse>("/api/v2/auth/passkeys"),
+  });
+}
+
+export async function deletePasskey(id: number): Promise<void> {
+  await api<void>(`/api/v2/auth/passkeys/${id}`, { method: "DELETE" });
+}
