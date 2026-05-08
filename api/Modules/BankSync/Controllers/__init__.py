@@ -15,12 +15,12 @@ roadmap but ships with the owner portal migration, not here.
 Write-side endpoints (rule CRUD, manual categorization, daily-
 book post) come in subsequent PRs.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
-from api.Modules.BankSync.Models import StripeBankAccount
+from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 from api.Modules.BankSync.Repositories import (
     BankTransactionFilters,
     list_accounts,
@@ -33,8 +33,14 @@ from api.Modules.BankSync.Requests import (
     BankRuleRow,
     BankTransactionListResponse,
     BankTransactionRow,
+    CategorizeRequest,
+    CategorizeResponse,
 )
-from api.Modules.BankSync.Services import list_transactions_page
+from api.Modules.BankSync.Services import (
+    categorize_transaction,
+    list_transactions_page,
+    uncategorize_transaction,
+)
 
 
 router = APIRouter()
@@ -199,4 +205,91 @@ def list_accounts_route(
         for a in accounts
     ]
     return BankAccountListResponse(rows=rows, total=len(rows))
+
+
+def _adapt_txn(db: Session, txn: BankTransaction) -> BankTransactionRow:
+    """Build the response row for a single BankTransaction. Re-uses
+    `_account_labels` for the per-account nickname lookup."""
+    labels = _account_labels(db, [txn.stripe_bank_account_id])
+    return BankTransactionRow(
+        id=txn.id,
+        posted_at=txn.posted_at.isoformat() if txn.posted_at else "",
+        description=txn.description or "",
+        amount_cents=txn.amount_cents,
+        amount=txn.amount,
+        currency=txn.currency or "usd",
+        status=txn.status or "posted",
+        category_slug=txn.category_slug or "",
+        account_id=txn.stripe_bank_account_id,
+        account_label=labels.get(txn.stripe_bank_account_id, ""),
+    )
+
+
+def _find_owned_txn(db: Session, store_id: int, txn_id: int) -> BankTransaction:
+    txn = (
+        db.query(BankTransaction)
+          .filter(
+              BankTransaction.id == txn_id,
+              BankTransaction.store_id == store_id,
+          )
+          .one_or_none()
+    )
+    if txn is None:
+        raise HTTPException(
+            status_code=404, detail="Bank transaction not found",
+        )
+    return txn
+
+
+@router.post(
+    "/transactions/{txn_id}/categorize",
+    response_model=CategorizeResponse,
+)
+def categorize_route(
+    body: CategorizeRequest,
+    txn_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> CategorizeResponse:
+    """Tag a transaction with a category and (when the kind is a
+    daily-book line item) auto-create the matching DailyLineItem.
+
+    Idempotent: re-categorizing replaces any prior auto-created
+    DailyLineItem before adding the new one. `post_to_daily=False`
+    keeps the metadata-only path for operators who want a P&L tag
+    without a daily-book mirror.
+    """
+    sid = _require_store_scope(claims)
+    txn = _find_owned_txn(db, sid, txn_id)
+    # Reuse the legacy app.py predicate for "is this a daily-book
+    # kind?" — kind registry stays there until its own migration.
+    from app import _is_daily_book_kind
+    categorize_transaction(
+        db, txn, body.target_kind,
+        post_to_daily=body.post_to_daily,
+        is_daily_book_kind=_is_daily_book_kind,
+    )
+    db.commit()
+    db.refresh(txn)
+    return CategorizeResponse(transaction=_adapt_txn(db, txn))
+
+
+@router.post(
+    "/transactions/{txn_id}/uncategorize",
+    response_model=CategorizeResponse,
+)
+def uncategorize_route(
+    txn_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> CategorizeResponse:
+    """Clear a transaction's category and remove any auto-created
+    DailyLineItem. The row stays in the table — it just goes back
+    to "uncategorized" so it can be re-tagged."""
+    sid = _require_store_scope(claims)
+    txn = _find_owned_txn(db, sid, txn_id)
+    uncategorize_transaction(db, txn)
+    db.commit()
+    db.refresh(txn)
+    return CategorizeResponse(transaction=_adapt_txn(db, txn))
 

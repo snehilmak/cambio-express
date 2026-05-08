@@ -10,6 +10,8 @@ from api.Modules.BankSync.Requests.rules import (
 from api.Modules.BankSync.Requests.transactions import (
     BankTransactionListResponse,
     BankTransactionRow,
+    CategorizeRequest,
+    CategorizeResponse,
 )
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "BankRuleRow",
     "BankTransactionListResponse",
     "BankTransactionRow",
+    "CategorizeRequest",
+    "CategorizeResponse",
 ]

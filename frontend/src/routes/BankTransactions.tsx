@@ -1,20 +1,32 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 
 import {
+  BANK_CATEGORY_OPTIONS,
+  categorizeTransaction,
+  uncategorizeTransaction,
   useBankAccounts,
   useBankTransactions,
   type BankTransactionFilters,
   type BankTransactionRow,
 } from "../api/bankSync";
+import {
+  Card, Empty, Field, inputStyle, monoStyle, PageHeader, PageShell, Pager,
+  tokens,
+} from "../components/ui";
+import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
-// Read-only bank-transactions page at /app/bank-transactions.
-// Filters: account, sign, uncategorized-only, free-text search.
-// Categorize / uncategorize / move-date and rule CRUD still live
-// on the legacy /bank/* pages until subsequent PRs migrate the
-// write-side. The legacy /bank entry-point is still reachable
-// from the topbar's "open in legacy" link below.
+// Bank transactions at /app/bank-transactions. Filters: account,
+// sign, uncategorized-only, free-text search. Each row's category
+// cell is editable inline — pick a slug from the dropdown and the
+// SPA POSTs /bank/transactions/{id}/categorize, which (for daily-
+// book kinds) auto-creates the matching DailyLineItem.
+//
+// Connect / disconnect / sync still live on legacy /bank/* (Stripe
+// Financial Connections needs Stripe.js to drive the modal). Rule
+// CRUD ships in a follow-up.
 
 const PER_PAGE = 50;
 
@@ -41,7 +53,7 @@ export default function BankTransactions() {
     const next = new URLSearchParams(sp);
     if (value) next.set(key, value);
     else       next.delete(key);
-    next.delete("page");  // reset paging on any filter change
+    next.delete("page");
     setSP(next, { replace: true });
   }
 
@@ -54,12 +66,10 @@ export default function BankTransactions() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Bank transactions</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to view bank transactions.
-        </p>
-      </main>
+      <PageShell>
+        <PageHeader title="Bank transactions" />
+        <Empty>Sign in as a store admin to view bank transactions.</Empty>
+      </PageShell>
     );
   }
 
@@ -67,39 +77,30 @@ export default function BankTransactions() {
   const page       = txns.data?.page        ?? 1;
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Bank transactions</h1>
-          <p style={{ margin: "0.35rem 0 0", color: "var(--db-text-muted, #a3a3a3)" }}>
-            {txns.data
-              ? `${txns.data.total.toLocaleString()} txns · ` +
-                `${txns.data.uncategorized_count.toLocaleString()} uncategorized`
-              : "—"}
-          </p>
-        </div>
-        <a
-          href="/bank"
-          style={{
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontSize: "0.85rem",
-            textDecoration: "underline",
-          }}
-        >
-          Connect / sync (legacy) →
-        </a>
-      </header>
+    <PageShell maxWidth="82rem">
+      <PageHeader
+        title="Bank transactions"
+        subtitle={
+          txns.data
+            ? `${txns.data.total.toLocaleString()} txns · ` +
+              `${txns.data.uncategorized_count.toLocaleString()} uncategorized`
+            : "—"
+        }
+        actions={
+          <a
+            href="/bank"
+            style={{
+              color: tokens.textMuted,
+              fontSize: "0.85rem",
+              textDecoration: "underline",
+            }}
+          >
+            Connect / sync (legacy) →
+          </a>
+        }
+      />
 
-      <section style={cardStyle}>
+      <Card>
         <div
           style={{
             display: "grid",
@@ -132,9 +133,7 @@ export default function BankTransactions() {
             >
               <option value="">All accounts</option>
               {accounts.data?.rows.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}
-                </option>
+                <option key={a.id} value={a.id}>{a.label}</option>
               ))}
             </select>
           </Field>
@@ -205,24 +204,34 @@ export default function BankTransactions() {
               page={page}
               totalPages={totalPages}
               onPage={setPage}
-              pageTotalCents={txns.data.page_total_cents}
+              leading={
+                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
+                  Page total:{" "}
+                  <span style={monoStyle}>
+                    ${(txns.data.page_total_cents / 100).toFixed(2)}
+                  </span>
+                </span>
+              }
             />
           </>
         )}
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
 
 function Table({ rows }: { rows: BankTransactionRow[] }) {
+  const qc = useQueryClient();
+  const identity = getCurrentIdentity();
+  function refresh() {
+    qc.invalidateQueries({
+      queryKey: ["bank", "transactions", identity?.store_id],
+    });
+  }
   return (
     <div style={{ overflowX: "auto" }}>
       <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.92rem",
-        }}
+        style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}
       >
         <thead>
           <tr>
@@ -233,19 +242,7 @@ function Table({ rows }: { rows: BankTransactionRow[] }) {
               ["Category",    "left"],
               ["Amount",      "right"],
             ].map(([label, align], i) => (
-              <th
-                key={i}
-                style={{
-                  textAlign: align as "left" | "right",
-                  padding: "0.6rem 0.75rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
-                  fontWeight: 500,
-                  fontSize: "0.78rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--db-border, #262626)",
-                }}
-              >
+              <th key={i} style={{ ...thStyle, textAlign: align as "left" | "right" }}>
                 {label}
               </th>
             ))}
@@ -255,36 +252,24 @@ function Table({ rows }: { rows: BankTransactionRow[] }) {
           {rows.map((r) => (
             <tr key={r.id}>
               <td style={cellStyle}>
-                <span style={monoMuted}>{r.posted_at.slice(0, 10)}</span>
+                <span style={{ ...monoStyle, fontSize: "0.85rem", color: tokens.textMuted }}>
+                  {r.posted_at.slice(0, 10)}
+                </span>
               </td>
               <td style={cellStyle}>{r.description || "—"}</td>
               <td style={cellStyle}>
-                <span
-                  style={{
-                    color: "var(--db-text-muted, #a3a3a3)",
-                    fontSize: "0.85rem",
-                  }}
-                >
+                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
                   {r.account_label || `acct ${r.account_id}`}
                 </span>
               </td>
               <td style={cellStyle}>
-                {r.category_slug ? (
-                  <span style={categoryPill}>{r.category_slug}</span>
-                ) : (
-                  <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>
-                    uncategorized
-                  </span>
-                )}
+                <CategoryCell row={r} onChanged={refresh} />
               </td>
               <td style={{ ...cellStyle, textAlign: "right" }}>
                 <span
                   style={{
-                    ...mono,
-                    color:
-                      r.amount_cents > 0
-                        ? "var(--db-accent, #3fff00)"
-                        : "var(--db-text, #f5f5f5)",
+                    ...monoStyle,
+                    color: r.amount_cents > 0 ? tokens.accent : tokens.text,
                   }}
                 >
                   {r.amount_cents > 0 ? "+" : ""}${r.amount.toFixed(2)}
@@ -298,186 +283,79 @@ function Table({ rows }: { rows: BankTransactionRow[] }) {
   );
 }
 
-function Pager({
-  page, totalPages, onPage, pageTotalCents,
+function CategoryCell({
+  row, onChanged,
 }: {
-  page: number;
-  totalPages: number;
-  onPage: (p: number) => void;
-  pageTotalCents: number;
+  row: BankTransactionRow;
+  onChanged: () => void;
 }) {
-  if (totalPages <= 1 && pageTotalCents === 0) return null;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function pick(slug: string) {
+    setErr(null); setBusy(true);
+    try {
+      if (slug === "") {
+        await uncategorizeTransaction(row.id);
+      } else {
+        await categorizeTransaction(row.id, {
+          target_kind: slug,
+          // Default off — matches the legacy "tag the bank txn,
+          // don't double-post into daily book unless I tick the
+          // box". A future PR can add a per-row checkbox.
+          post_to_daily: false,
+        });
+      }
+      onChanged();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Could not update category.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginTop: "1rem",
-        gap: "1rem",
-      }}
-    >
-      <span style={{ color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem" }}>
-        Page total:{" "}
-        <span style={mono}>${(pageTotalCents / 100).toFixed(2)}</span>
-      </span>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <button
-          type="button"
-          onClick={() => onPage(page - 1)}
-          disabled={page <= 1}
-          style={{
-            ...pagerBtn,
-            opacity: page <= 1 ? 0.4 : 1,
-            cursor: page <= 1 ? "not-allowed" : "pointer",
-          }}
-        >
-          ← Prev
-        </button>
-        <span
-          style={{
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontSize: "0.85rem",
-            alignSelf: "center",
-          }}
-        >
-          {page} / {totalPages}
+    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+      <select
+        value={row.category_slug}
+        onChange={(e) => pick(e.target.value)}
+        disabled={busy}
+        style={{
+          ...inputStyle,
+          width: "auto",
+          minWidth: "10rem",
+          padding: "0.3rem 0.5rem",
+          fontSize: "0.85rem",
+          fontFamily: row.category_slug ? tokens.fontMono : undefined,
+        }}
+      >
+        <option value="">— uncategorized —</option>
+        {BANK_CATEGORY_OPTIONS.map((c) => (
+          <option key={c.slug} value={c.slug}>{c.label}</option>
+        ))}
+      </select>
+      {err && (
+        <span title={err} style={{ color: tokens.negative, fontSize: "0.8rem" }}>
+          ⚠
         </span>
-        <button
-          type="button"
-          onClick={() => onPage(page + 1)}
-          disabled={page >= totalPages}
-          style={{
-            ...pagerBtn,
-            opacity: page >= totalPages ? 0.4 : 1,
-            cursor: page >= totalPages ? "not-allowed" : "pointer",
-          }}
-        >
-          Next →
-        </button>
-      </div>
+      )}
     </div>
   );
 }
 
-function Field({
-  label, children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "82rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
+// ── Cell + header styles (table-specific, kept local) ──────────
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
-const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-};
-
-const monoMuted: React.CSSProperties = {
-  ...mono,
-  fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const categoryPill: React.CSSProperties = {
-  display: "inline-block",
-  background: "rgba(63,255,0,0.12)",
-  color: "var(--db-accent, #3fff00)",
-  borderRadius: "999px",
-  padding: "0.15rem 0.55rem",
+const thStyle: React.CSSProperties = {
+  padding: "0.6rem 0.75rem",
+  color: tokens.textMuted,
+  fontWeight: 500,
   fontSize: "0.78rem",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-};
-
-const pagerBtn: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.4rem 0.9rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.85rem",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  textTransform: "uppercase",
+  letterSpacing: "0.05em",
+  borderBottom: `1px solid ${tokens.border}`,
 };

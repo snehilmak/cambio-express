@@ -128,3 +128,41 @@ export function useBankTransactions(filters: BankTransactionFilters) {
     placeholderData: (prev) => prev,
   });
 }
+
+
+// Categories the operator can pick from when tagging a row. Mirrors
+// the legacy `/bank/transactions` template's dropdown — the slug is
+// what we POST, the label is what we render.
+export const BANK_CATEGORY_OPTIONS: Array<{ slug: string; label: string }> = [
+  { slug: "bank_charge_210",  label: "Bank charge — ••0210" },
+  { slug: "bank_charge_230",  label: "Bank charge — ••0230" },
+  { slug: "cash_deposit",     label: "Cash deposit"          },
+  { slug: "cash_expense",     label: "Cash expense"          },
+  { slug: "check_expense",    label: "Check expense"         },
+  { slug: "check_deposit",    label: "Check deposit"         },
+  { slug: "ach_deposit",      label: "ACH deposit"           },
+  { slug: "ach_withdrawal",   label: "ACH withdrawal"        },
+];
+
+export interface CategorizeBody {
+  target_kind: string;
+  post_to_daily?: boolean;
+}
+
+export async function categorizeTransaction(
+  txnId: number, body: CategorizeBody,
+): Promise<{ transaction: BankTransactionRow }> {
+  return api<{ transaction: BankTransactionRow }>(
+    `/api/v2/bank/transactions/${txnId}/categorize`,
+    { method: "POST", json: body },
+  );
+}
+
+export async function uncategorizeTransaction(
+  txnId: number,
+): Promise<{ transaction: BankTransactionRow }> {
+  return api<{ transaction: BankTransactionRow }>(
+    `/api/v2/bank/transactions/${txnId}/uncategorize`,
+    { method: "POST", json: {} },
+  );
+}
