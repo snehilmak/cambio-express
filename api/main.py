@@ -118,6 +118,12 @@ def _register_routers(app: FastAPI) -> None:
         superadmin_router, prefix="/superadmin", tags=["superadmin"],
     )
 
+    # Billing — Stripe Checkout Session + Billing Portal Session
+    # mints. The webhook (`/webhooks/stripe`) is what flips a store
+    # onto a new plan; these endpoints only initiate the redirect.
+    from api.Modules.Billing.Controllers import router as billing_router
+    app.include_router(billing_router, prefix="/billing", tags=["billing"])
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
