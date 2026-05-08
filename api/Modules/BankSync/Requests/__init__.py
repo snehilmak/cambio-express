@@ -5,7 +5,10 @@ from api.Modules.BankSync.Requests.accounts import (
 )
 from api.Modules.BankSync.Requests.rules import (
     BankRuleListResponse,
+    BankRuleResponse,
     BankRuleRow,
+    BankRuleToggleRequest,
+    BankRuleWriteRequest,
 )
 from api.Modules.BankSync.Requests.transactions import (
     BankTransactionListResponse,
@@ -18,7 +21,10 @@ __all__ = [
     "BankAccountListResponse",
     "BankAccountRow",
     "BankRuleListResponse",
+    "BankRuleResponse",
     "BankRuleRow",
+    "BankRuleToggleRequest",
+    "BankRuleWriteRequest",
     "BankTransactionListResponse",
     "BankTransactionRow",
     "CategorizeRequest",
