@@ -134,6 +134,62 @@ def ensure_daily_report(
     return report
 
 
+# Editable totals on the daily report. Subset of the legacy
+# `_DAILY_REPORT_FIELDS` constant in app.py — the SPA's first
+# write-side cut intentionally limits to top-level totals; line
+# items (drops, check deposits) and per-MT-company breakdowns
+# are derived from their own tables and migrate in follow-up PRs.
+EDITABLE_REPORT_FIELDS: tuple[str, ...] = (
+    "taxable_sales", "non_taxable", "sales_tax",
+    "bill_payment_charge", "phone_recargas", "boost_mobile",
+    "money_order", "check_cashing_fees", "return_check_hold_fees",
+    "forward_balance", "from_bank", "rebates_commissions",
+    "cash_deposit", "safe_balance", "payroll_expense", "over_short",
+)
+
+
+class DailyReportLockedError(Exception):
+    """Raised when a write touches a locked DailyReport. The
+    SPA shows this as a 403 with a clear "unlock first" message
+    — same UX as the legacy template's locked-banner."""
+
+
+def update_daily_report(
+    db: Session, *,
+    store_id: int, report_date: date,
+    fields: dict[str, float], notes: str = "",
+) -> DailyReport:
+    """Save the editable totals for one DailyReport.
+
+    Auto-creates the row when it doesn't exist (matches the legacy
+    `daily_report` route's POST behavior).
+
+    Refuses to save when `locked_at` is set — raises
+    `DailyReportLockedError`. Caller maps that to HTTP 403.
+
+    Only fields in `EDITABLE_REPORT_FIELDS` are written; the body
+    can carry only the subset the form actually edited.
+    Line-item-derived fields (cash_purchases, cash_expense, etc.)
+    are not in this set — they roll up from DailyLineItem rows
+    and stay on the legacy /daily-book write path until that
+    migration lands.
+
+    Caller commits.
+    """
+    report = ensure_daily_report(db, store_id, report_date)
+    if report.locked_at is not None:
+        raise DailyReportLockedError(
+            "Daily report is locked — unlock it before editing."
+        )
+    for field in EDITABLE_REPORT_FIELDS:
+        if field in fields:
+            setattr(report, field, float(fields[field] or 0))
+    report.notes = notes or ""
+    report.updated_at = datetime.utcnow()
+    db.flush()
+    return report
+
+
 def lock_report(
     db: Session, store_id: int, report_date: date,
     locked_by_user_id: int | None = None,

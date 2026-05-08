@@ -50,3 +50,74 @@ class PeriodSummaryResponse(BaseModel):
     total_disbursements: float
     net: float
     days_logged: int
+
+
+class LineItemRow(BaseModel):
+    """One DailyLineItem (drop, check deposit, cash expense,
+    return payback, etc.) on a daily report. The line-item
+    family is discriminated by `kind`; see LINE_ITEM_KINDS."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    kind: str
+    at_time: str  # HH:MM
+    amount: float
+    note: str = ""
+    # Non-null when the line item was auto-created by marking a
+    # ReturnCheck recovered. Manual deletes are blocked for these
+    # — the SPA disables the delete button when this is set so the
+    # cashier can't strip a payback that's mirrored from the
+    # Return Checks page.
+    return_check_id: int | None = None
+
+
+class LineItemListResponse(BaseModel):
+    """Wrapped list. Optional kind filter narrows the result;
+    omit to return every kind for the day."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[LineItemRow]
+
+
+class LineItemCreateRequest(BaseModel):
+    """POST body for /daily/{store}/{date}/line-items. Validates
+    against the same parsers the legacy form uses (`parse_at_time`,
+    `parse_amount`) so error messages match for cutover parity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str  # validated server-side against LINE_ITEM_KINDS
+    at_time: str  # HH:MM
+    amount: float  # > 0; the Service rejects ≤0
+    note: str = ""
+
+
+class DailyReportUpdateRequest(BaseModel):
+    """PUT body for /daily/{store_id}/{date}. Only the editable
+    top-level totals + notes — line-item-derived fields
+    (cash_purchases, drops, etc.) come from their own tables and
+    aren't writable here. Every numeric field is optional so the
+    SPA can submit a partial form (only what the cashier edited).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    taxable_sales:           float | None = None
+    non_taxable:             float | None = None
+    sales_tax:               float | None = None
+    bill_payment_charge:     float | None = None
+    phone_recargas:          float | None = None
+    boost_mobile:            float | None = None
+    money_order:             float | None = None
+    check_cashing_fees:      float | None = None
+    return_check_hold_fees:  float | None = None
+    forward_balance:         float | None = None
+    from_bank:               float | None = None
+    rebates_commissions:     float | None = None
+    cash_deposit:            float | None = None
+    safe_balance:            float | None = None
+    payroll_expense:         float | None = None
+    over_short:              float | None = None
+    notes:                   str = ""

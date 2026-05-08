@@ -21,17 +21,22 @@ from api.Modules.DailyBook.Services.locks import (
     is_locked as is_daily_report_locked,
 )
 from api.Modules.DailyBook.Services.reports import (
+    DailyReportLockedError,
     DailyReportSummary,
+    EDITABLE_REPORT_FIELDS,
     PeriodSummary,
     ensure_daily_report,
     lock_report,
     summarize_period,
     summarize_report,
     unlock_report,
+    update_daily_report,
 )
 
 __all__ = [
+    "DailyReportLockedError",
     "DailyReportSummary",
+    "EDITABLE_REPORT_FIELDS",
     "LINE_ITEM_KINDS",
     "LineItemValidationError",
     "PeriodSummary",
@@ -50,4 +55,5 @@ __all__ = [
     "summarize_period",
     "summarize_report",
     "unlock_report",
+    "update_daily_report",
 ]

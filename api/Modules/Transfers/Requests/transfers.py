@@ -57,3 +57,56 @@ class TransferResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     transfer: TransferRow
+
+
+class EmployeeRow(BaseModel):
+    """One active StoreEmployee for the "Processed by" dropdown.
+    The legacy admin page (Settings → Team) holds the canonical
+    list — this payload is just enough for the SPA's transfer form
+    to populate a roster <select>."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    name: str
+
+
+class RosterResponse(BaseModel):
+    """Wrapped roster. Same shape pattern as the rest of the
+    Transfers module's read-side payloads."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    employees: list[EmployeeRow]
+
+
+class CreateTransferRequest(BaseModel):
+    """POST body for /transfers. Mirrors the legacy `new_transfer`
+    Flask form fields. `federal_tax` is intentionally absent — the
+    server always recomputes from `(send_amount, service_type,
+    country, store)` so the client can't lie about the tax rate.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    send_date: str  # YYYY-MM-DD
+    company: str = Field(..., min_length=1, max_length=30)
+    service_type: str = Field("Money Transfer", max_length=30)
+    sender_name: str = Field(..., min_length=1, max_length=120)
+    send_amount: float = Field(..., ge=0)
+    fee: float = Field(0.0, ge=0)
+    commission: float = Field(0.0, ge=0)
+    recipient_name: str = Field("", max_length=120)
+    country: str = Field("", max_length=60)
+    recipient_phone: str = Field("", max_length=40)
+    sender_phone: str = Field("", max_length=40)
+    sender_phone_country: str = Field("+1", max_length=8)
+    sender_address: str = Field("", max_length=255)
+    sender_dob: str = Field("", max_length=10)  # YYYY-MM-DD or empty
+    confirm_number: str = Field("", max_length=60)
+    status: str = Field("Sent", max_length=30)
+    status_notes: str = Field("", max_length=255)
+    batch_id: str = Field("", max_length=60)
+    internal_notes: str = Field("", max_length=255)
+    employee_id: int | None = None
+    customer_id: int | None = None

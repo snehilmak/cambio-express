@@ -1,12 +1,20 @@
 """DailyBook — Pydantic schemas."""
 from api.Modules.DailyBook.Requests.reports import (
-    DailyReportRow,
     DailyReportResponse,
+    DailyReportRow,
+    DailyReportUpdateRequest,
+    LineItemCreateRequest,
+    LineItemListResponse,
+    LineItemRow,
     PeriodSummaryResponse,
 )
 
 __all__ = [
     "DailyReportResponse",
     "DailyReportRow",
+    "DailyReportUpdateRequest",
+    "LineItemCreateRequest",
+    "LineItemListResponse",
+    "LineItemRow",
     "PeriodSummaryResponse",
 ]

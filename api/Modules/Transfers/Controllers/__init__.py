@@ -28,16 +28,29 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Transfers.Repositories import (
     TransferFilters,
     get_by_id_in_stores,
 )
 from api.Modules.Transfers.Requests import (
+    CreateTransferRequest,
+    EmployeeRow,
+    RosterResponse,
     TransferListResponse,
     TransferResponse,
     TransferRow,
 )
-from api.Modules.Transfers.Services import list_transfers
+from api.Modules.Transfers.Services import (
+    CreateTransferInput,
+    TransferNotFoundError,
+    active_roster,
+    create_transfer,
+    list_transfers,
+    normalize_service_type,
+    parse_dob,
+    update_transfer,
+)
 
 
 router = APIRouter()
@@ -78,6 +91,34 @@ def _to_row(t) -> TransferRow:
         status=t.status or "Sent",
         batch_id=t.batch_id or "",
         employee_name=t.employee_name or "",
+    )
+
+
+@router.get("/employees", response_model=RosterResponse)
+def employees_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> RosterResponse:
+    """Active store-employee roster for the JWT principal's store.
+    Powers the "Processed by" dropdown on the SPA's create + edit
+    transfer forms. Inactive employees are filtered out so cashiers
+    can't credit new transfers to former employees.
+
+    Returns 403 when the JWT has no store scope (superadmin) — the
+    roster is store-specific.
+    """
+    store_id = claims.get("store_id")
+    if store_id is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a store "
+                "admin or owner to load the roster."
+            ),
+        )
+    rows = active_roster(db, int(store_id))
+    return RosterResponse(
+        employees=[EmployeeRow(id=r.id, name=r.name or "") for r in rows],
     )
 
 
@@ -128,6 +169,73 @@ def list_route(
     )
 
 
+@router.post("", response_model=TransferResponse, status_code=201)
+def create_route(
+    body: CreateTransferRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransferResponse:
+    """Create a transfer in the JWT principal's store. Server
+    recomputes federal_tax server-side from
+    `(send_amount, service_type, country, store)` so the client
+    can't lie about the rate. Audited in the same transaction
+    via `record_transfer_audit`.
+    """
+    store_id_claim = claims.get("store_id")
+    if store_id_claim is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner to create transfers."
+            ),
+        )
+    user_id = int(claims["sub"])
+
+    try:
+        send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="send_date must be YYYY-MM-DD",
+        )
+    sender_dob = parse_dob(body.sender_dob)
+
+    payload = CreateTransferInput(
+        store_id=int(store_id_claim),
+        created_by_user_id=user_id,
+        send_date=send_date,
+        company=body.company,
+        # Always pass through the same normalize_service_type the
+        # legacy form uses — anything unrecognized falls back to
+        # "Money Transfer" and the tax math runs on that.
+        service_type=normalize_service_type(body.service_type),
+        sender_name=body.sender_name,
+        send_amount=float(body.send_amount or 0),
+        fee=float(body.fee or 0),
+        commission=float(body.commission or 0),
+        recipient_name=body.recipient_name,
+        country=body.country,
+        recipient_phone=body.recipient_phone,
+        sender_phone=body.sender_phone,
+        sender_phone_country=body.sender_phone_country or "+1",
+        sender_address=body.sender_address,
+        sender_dob=sender_dob,
+        confirm_number=body.confirm_number,
+        status=body.status or "Sent",
+        status_notes=body.status_notes,
+        batch_id=body.batch_id,
+        internal_notes=body.internal_notes,
+        employee_id=body.employee_id,
+        customer_id=body.customer_id,
+    )
+    try:
+        transfer = create_transfer(db, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return TransferResponse(transfer=_to_row(transfer))
+
+
 @router.get("/{transfer_id}", response_model=TransferResponse)
 def get_route(
     transfer_id: int = Path(..., ge=1),
@@ -145,4 +253,76 @@ def get_route(
     transfer = get_by_id_in_stores(db, transfer_id, ids)
     if transfer is None:
         raise HTTPException(status_code=404, detail="Transfer not found")
+    return TransferResponse(transfer=_to_row(transfer))
+
+
+@router.put("/{transfer_id}", response_model=TransferResponse)
+def update_route(
+    transfer_id: int = Path(..., ge=1),
+    body: CreateTransferRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransferResponse:
+    """Update an existing transfer in the JWT principal's store.
+    Same body shape as POST /transfers — every field is replaceable
+    (no PATCH semantics). Server recomputes federal_tax just like
+    create. Audit log captures the diff via summarize_transfer_changes.
+    Cross-tenant updates return 404 to keep tenancy opaque.
+    """
+    store_id_claim = claims.get("store_id")
+    if store_id_claim is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner to edit transfers."
+            ),
+        )
+    user_id = int(claims["sub"])
+
+    try:
+        send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="send_date must be YYYY-MM-DD",
+        )
+    sender_dob = parse_dob(body.sender_dob)
+
+    payload = CreateTransferInput(
+        store_id=int(store_id_claim),
+        created_by_user_id=user_id,
+        send_date=send_date,
+        company=body.company,
+        service_type=normalize_service_type(body.service_type),
+        sender_name=body.sender_name,
+        send_amount=float(body.send_amount or 0),
+        fee=float(body.fee or 0),
+        commission=float(body.commission or 0),
+        recipient_name=body.recipient_name,
+        country=body.country,
+        recipient_phone=body.recipient_phone,
+        sender_phone=body.sender_phone,
+        sender_phone_country=body.sender_phone_country or "+1",
+        sender_address=body.sender_address,
+        sender_dob=sender_dob,
+        confirm_number=body.confirm_number,
+        status=body.status or "Sent",
+        status_notes=body.status_notes,
+        batch_id=body.batch_id,
+        internal_notes=body.internal_notes,
+        employee_id=body.employee_id,
+        customer_id=body.customer_id,
+    )
+    try:
+        transfer = update_transfer(
+            db,
+            transfer_id=transfer_id,
+            store_id=int(store_id_claim),
+            payload=payload,
+        )
+    except TransferNotFoundError:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
     return TransferResponse(transfer=_to_row(transfer))

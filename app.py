@@ -196,7 +196,17 @@ class User(db.Model):
     # bounce on this user's email. `_send_email()` skips suppressed
     # recipients.
     email_bounced_at    = db.Column(db.DateTime, nullable=True)
-    __table_args__ = (db.UniqueConstraint("store_id","username"),)
+    __table_args__ = (
+        db.UniqueConstraint("store_id", "username"),
+        # Cross-store username lookup. The unique constraint above
+        # leads with `store_id`, so it can't serve queries that
+        # filter on `username` alone — `verify_password_cross_store`
+        # (the generic `/login` POST), `find_user_by_username`
+        # (CLI password reset / superadmin recovery), and the
+        # signup duplicate-check (`User.username == email`) all
+        # scan the table without this index.
+        db.Index("ix_user_username", "username"),
+    )
     def set_password(self,pw): self.password_hash=generate_password_hash(pw)
     def check_password(self,pw): return check_password_hash(self.password_hash,pw)
 
@@ -220,6 +230,15 @@ class Customer(db.Model):
     __table_args__ = (
         db.UniqueConstraint("store_id", "phone_country", "phone_number",
                             name="uq_customer_store_phone"),
+        # Umbrella-upsert lookup: `find_by_phone_in_stores()` filters
+        # `store_id IN (sibling_ids) AND phone_country = ? AND
+        # phone_number = ?`. The unique constraint above leads with
+        # `store_id`, so it forces N index seeks for an N-store
+        # umbrella. Indexing on (phone_country, phone_number) lets
+        # the planner do a single seek and filter on store_id —
+        # cheaper for owner umbrellas with several stores, no worse
+        # for single-store admins.
+        db.Index("ix_customer_phone", "phone_country", "phone_number"),
     )
 
     def to_dict(self, current_store_id=None, home_names=None):
@@ -295,6 +314,19 @@ class Transfer(db.Model):
     updated_at     = db.Column(db.DateTime, default=datetime.utcnow)
     creator        = db.relationship("User", foreign_keys=[created_by])
     employee       = db.relationship("StoreEmployee", foreign_keys=[employee_id])
+    # Indexes for the hot-path queries:
+    # • (store_id, send_date)   the period filter every Reports aggregator uses
+    # • customer_id             the umbrella-customer + new-vs-returning lookup
+    # • created_by              the sales-by-employee + employee-activity reports
+    # • status                  the active-vs-cancelled filter on every list view
+    # • confirm_number          the transfers-list "look up by confirmation #" search
+    __table_args__ = (
+        db.Index("ix_transfer_store_send_date", "store_id", "send_date"),
+        db.Index("ix_transfer_customer_id",    "customer_id"),
+        db.Index("ix_transfer_created_by",     "created_by"),
+        db.Index("ix_transfer_status",         "status"),
+        db.Index("ix_transfer_confirm_number", "confirm_number"),
+    )
     @property
     def total_collected(self):
         """What the customer actually handed over: send amount + store fee + federal tax."""
@@ -310,7 +342,7 @@ class StoreEmployee(db.Model):
     """
     __tablename__ = "store_employee"
     id         = db.Column(db.Integer, primary_key=True)
-    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id   = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     name       = db.Column(db.String(120), nullable=False)
     is_active  = db.Column(db.Boolean, default=True, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -329,7 +361,7 @@ class OperatorAuditLog(db.Model):
     """
     __tablename__ = "operator_audit_log"
     id           = db.Column(db.Integer, primary_key=True)
-    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     user_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     user_name    = db.Column(db.String(120), default="")
     user_role    = db.Column(db.String(20),  default="")
@@ -354,7 +386,7 @@ class TransferAudit(db.Model):
     """
     __tablename__ = "transfer_audit"
     id             = db.Column(db.Integer, primary_key=True)
-    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id       = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     transfer_id    = db.Column(db.Integer, db.ForeignKey("transfer.id"), nullable=False)
     user_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     employee_id    = db.Column(db.Integer, db.ForeignKey("store_employee.id"), nullable=True)
@@ -455,7 +487,7 @@ class DailyDrop(db.Model):
     """
     __tablename__ = "daily_drop"
     id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date = db.Column(db.Date, nullable=False)
     drop_time   = db.Column(db.Time, nullable=False)
     amount      = db.Column(db.Float, nullable=False)
@@ -483,7 +515,7 @@ class CheckDeposit(db.Model):
     """
     __tablename__ = "check_deposit"
     id           = db.Column(db.Integer, primary_key=True)
-    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id     = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date  = db.Column(db.Date, nullable=False)
     deposit_time = db.Column(db.Time, nullable=False)
     amount       = db.Column(db.Float, nullable=False)
@@ -556,7 +588,7 @@ class ReturnCheck(db.Model):
     """
     __tablename__ = "return_check"
     id              = db.Column(db.Integer, primary_key=True)
-    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id        = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     bounced_on      = db.Column(db.Date, nullable=False)
     customer_name   = db.Column(db.String(120), nullable=False)
     check_number    = db.Column(db.String(40),  default="")
@@ -653,7 +685,7 @@ class DailyLineItem(db.Model):
     """
     __tablename__ = "daily_line_item"
     id          = db.Column(db.Integer, primary_key=True)
-    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id    = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     report_date = db.Column(db.Date, nullable=False)
     # One of the keys in _LINE_ITEM_KINDS. Not a DB enum so new kinds
     # can be introduced with zero migration.
@@ -776,7 +808,7 @@ class StripeBankAccount(db.Model):
     """
     __tablename__ = "stripe_bank_account"
     id                   = db.Column(db.Integer, primary_key=True)
-    store_id             = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id             = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     stripe_account_id    = db.Column(db.String(60), unique=True, nullable=False)
     institution_name     = db.Column(db.String(120), default="")
     display_name         = db.Column(db.String(120), default="")
@@ -898,7 +930,7 @@ class StoreOwnerLink(db.Model):
     __tablename__ = "store_owner_link"
     id        = db.Column(db.Integer, primary_key=True)
     owner_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    store_id  = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False)
+    store_id  = db.Column(db.Integer, db.ForeignKey("store.id"), nullable=False, index=True)
     linked_at = db.Column(db.DateTime, default=datetime.utcnow)
     __table_args__ = (db.UniqueConstraint("owner_id", "store_id"),)
 
@@ -1171,6 +1203,17 @@ class LoginEvent(db.Model):
     at      = db.Column(db.DateTime, default=datetime.utcnow,
                          nullable=False, index=True)
     method  = db.Column(db.String(20), default="")  # password / passkey / totp
+    # Covering composite for the DAU/MAU aggregator. The query is
+    # `WHERE at BETWEEN ? AND ? GROUP BY date(at)` with
+    # `count(distinct user_id)` — leading on `at` lets the planner
+    # do a range scan and have `user_id` already in-index for the
+    # distinct-count, no heap fetch per row. The standalone `at`
+    # and `user_id` indexes (declared above via `index=True`) stay
+    # — they cover other paths (FK joins, "logins for user X") and
+    # removing them would risk slow paths we haven't audited.
+    __table_args__ = (
+        db.Index("ix_login_event_at_user", "at", "user_id"),
+    )
 
 
 # ── TV display add-on ────────────────────────────────────────
@@ -11241,6 +11284,89 @@ def _ensure_added_columns():
         except Exception as e:
             app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
 
+# Indexes added after the table existed in production. Like
+# `_ADDED_COLUMNS`, this is the no-framework migration path:
+# `db.create_all()` only adds indexes when the table is being CREATED,
+# so any index added later to a model needs an explicit
+# `CREATE INDEX IF NOT EXISTS` to land on existing prod databases.
+#
+# Each entry is `(index_name, table, column_csv)`. Idempotent and
+# safe on every boot — `IF NOT EXISTS` is a no-op once the index is
+# in place, and the model declarations stay the source of truth so
+# fresh installs get the indexes via `db.create_all()`.
+_ADDED_INDEXES = [
+    # Transfer hot path (PR 104).
+    ("ix_transfer_store_send_date", "transfer", "store_id, send_date"),
+    ("ix_transfer_customer_id",     "transfer", "customer_id"),
+    ("ix_transfer_created_by",      "transfer", "created_by"),
+    ("ix_transfer_status",          "transfer", "status"),
+    ("ix_transfer_confirm_number",  "transfer", "confirm_number"),
+    # Customer umbrella-upsert lookup (PR 105). Non-unique on
+    # (phone_country, phone_number); the existing unique constraint
+    # on (store_id, phone_country, phone_number) stays put for
+    # duplicate prevention.
+    ("ix_customer_phone",           "customer", "phone_country, phone_number"),
+    # User cross-store username lookup (PR 106). Standalone index
+    # on `username`; the existing unique constraint on
+    # (store_id, username) stays put. `user` is a Postgres reserved
+    # word, but `_ensure_added_indexes()` already double-quotes the
+    # table name in the DDL — so the plain table name here is
+    # correct. Quoting it twice would produce `""user""`.
+    ("ix_user_username",            "user",     "username"),
+    # LoginEvent DAU/MAU covering composite (PR 107). The
+    # standalone `at` and `user_id` indexes from `index=True` stay
+    # untouched — this is purely additive.
+    ("ix_login_event_at_user",      "login_event", "at, user_id"),
+    # Missing FK indexes on `store_id` for cascade-delete + JOIN
+    # performance (PR 108). Postgres does not auto-index FKs, and
+    # the data-retention purge (`purge_expired_stores`) does
+    # `DELETE FROM <tbl> WHERE store_id = ?` on every per-store
+    # table — without these, each cascade is a full table scan.
+    # Names match SQLAlchemy's `index=True` auto-naming
+    # (`ix_<tbl>_store_id`) so fresh installs and existing-prod
+    # installs converge on the same name.
+    ("ix_store_employee_store_id",      "store_employee",      "store_id"),
+    ("ix_operator_audit_log_store_id",  "operator_audit_log",  "store_id"),
+    ("ix_transfer_audit_store_id",      "transfer_audit",      "store_id"),
+    ("ix_daily_drop_store_id",          "daily_drop",          "store_id"),
+    ("ix_check_deposit_store_id",       "check_deposit",       "store_id"),
+    ("ix_return_check_store_id",        "return_check",        "store_id"),
+    ("ix_daily_line_item_store_id",     "daily_line_item",     "store_id"),
+    ("ix_stripe_bank_account_store_id", "stripe_bank_account", "store_id"),
+    ("ix_store_owner_link_store_id",    "store_owner_link",    "store_id"),
+]
+
+
+def _ensure_added_indexes():
+    """Apply the _ADDED_INDEXES migrations. Idempotent and safe on
+    every boot.
+
+    Both sqlite and Postgres support `CREATE INDEX IF NOT EXISTS`,
+    so the same DDL works for both. Each statement runs in its own
+    transaction on Postgres so one failure doesn't poison the rest.
+    Failures log a warning instead of crashing boot — a missing
+    index slows queries but doesn't stop the app.
+    """
+    try:
+        dialect = db.engine.dialect.name
+    except Exception as e:
+        app.logger.warning(f"index migration skipped (no engine): {e}")
+        return
+    for name, table, cols in _ADDED_INDEXES:
+        ddl = f'CREATE INDEX IF NOT EXISTS {name} ON "{table}" ({cols})'
+        try:
+            if dialect == "sqlite":
+                with db.engine.connect() as conn:
+                    conn.exec_driver_sql(ddl)
+                    conn.commit()
+            else:
+                with db.engine.begin() as conn:
+                    conn.exec_driver_sql(ddl)
+        except Exception as e:
+            app.logger.warning(
+                f"{dialect} CREATE INDEX failed for {name}: {e}")
+
+
 # Legacy tables that have been removed from the model registry but may
 # still exist in production databases. DROP TABLE IF EXISTS is idempotent
 # on every restart — safe to leave forever.
@@ -11554,6 +11680,7 @@ def init_db():
     with app.app_context():
         db.create_all()
         _ensure_added_columns()
+        _ensure_added_indexes()
         _drop_legacy_tables()
         _rename_maxi_transfer_to_maxi()
         # One-time copy of legacy DailyDrop + CheckDeposit rows into
@@ -11595,6 +11722,91 @@ def init_db():
 init_db()
 
 # ── FastAPI strangler-fig dispatcher ─────────────────────────
+# ── SPA shell at /app/* ─────────────────────────────────────────
+#
+# The new React/Vite SPA is being built alongside the legacy Jinja
+# site. Flask serves its compiled bundle from `frontend/dist/`:
+#
+#   /app/                    → frontend/dist/index.html
+#   /app/<client-route>      → frontend/dist/index.html (SPA fallback)
+#   /app/assets/<file>       → frontend/dist/assets/<file>
+#
+# Any URL not under /app/ continues to hit the legacy Jinja routes
+# untouched. Once the SPA is feature-complete and the cutover is
+# done, Jinja routes get retired in a final cleanup PR.
+#
+# In local dev we typically run `cd frontend && npm run dev` (Vite
+# at :5173, proxies /api/v2 + /static back to Flask), and ignore
+# this block entirely. This block is what serves the SPA in
+# production after `npm run build` writes the dist/ directory.
+
+_SPA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "frontend", "dist")
+
+
+def _spa_index_html():
+    """Return the SPA shell or a helpful 503 if the build is missing.
+    Missing-build is a deploy-time misconfiguration (Node build step
+    didn't run) — we surface it loudly rather than 404 so the
+    operator knows what's wrong."""
+    index_path = os.path.join(_SPA_DIR, "index.html")
+    if not os.path.exists(index_path):
+        return (
+            "<!doctype html><meta charset=utf-8><title>SPA not built</title>"
+            "<body style='font-family:monospace;padding:2rem'>"
+            "<h1>SPA bundle missing</h1>"
+            "<p>Expected <code>frontend/dist/index.html</code> to exist.</p>"
+            "<p>For local dev: <code>cd frontend && npm run dev</code> "
+            "and visit <code>http://localhost:5173/app/</code>.</p>"
+            "<p>For prod: ensure the build step runs "
+            "<code>cd frontend && npm ci && npm run build</code>.</p>"
+            "</body>"
+        ), 503
+    with open(index_path, "rb") as fh:
+        body = fh.read()
+    resp = make_response(body)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    # Don't cache the shell — JS asset filenames are content-hashed
+    # so the browser always re-fetches index.html and picks up the
+    # latest build.
+    resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
+@app.route("/app/")
+@app.route("/app/<path:_subpath>")
+def spa_shell(_subpath: str = ""):  # noqa: ARG001 — path is for client routing
+    """Serve the SPA shell for any /app/* route. The SPA's React
+    Router takes over client-side; the path argument is ignored
+    server-side because every route renders the same index.html
+    bundle."""
+    return _spa_index_html()
+
+
+@app.route("/app")
+def spa_shell_no_slash():
+    """Redirect bare /app to /app/ so React Router's basename
+    (`/app`) resolves correctly. Without the trailing slash, asset
+    URLs in index.html (which use the /app/ base) get appended to
+    /app instead of /app/ and break."""
+    return redirect("/app/", code=301)
+
+
+@app.route("/app/assets/<path:filename>")
+def spa_asset(filename: str):
+    """Serve a content-hashed asset (JS/CSS/images) emitted by Vite.
+    Hashes change on every build, so cache aggressively."""
+    assets_dir = os.path.join(_SPA_DIR, "assets")
+    resp = send_from_directory(assets_dir, filename)
+    # Vite content-hashes filenames, so an immutable 1-year cache is
+    # safe — a new build emits a new filename and the old one falls
+    # out of use without a cache buster.
+    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return resp
+
+
+# ── FastAPI strangler-fig at /api/v2 ────────────────────────────
+#
 # The new modular FastAPI backend (under api/) is being built
 # alongside this Flask monolith per docs/architecture/MIGRATION_ADR.md.
 # Routes under /api/v2/* are forwarded into the FastAPI app via

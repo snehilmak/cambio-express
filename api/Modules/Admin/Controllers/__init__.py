@@ -1,0 +1,205 @@
+"""Admin module — Controllers (FastAPI router).
+
+Mounts at `/api/v2/admin/*`. Endpoints:
+
+  GET /admin/store-info → the JWT principal's store row
+  PUT /admin/store-info → update editable fields
+
+JWT-required, scoped to the principal's store. Superadmin (no
+store scope) → 403.
+"""
+from fastapi import APIRouter, Depends, HTTPException, Path
+from sqlalchemy.orm import Session
+
+from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Admin.Repositories import (
+    find_store,
+    find_team_member,
+    list_team,
+)
+from api.Modules.Admin.Requests import (
+    StoreInfoResponse,
+    StoreInfoRow,
+    StoreInfoUpdateRequest,
+    TeamListResponse,
+    TeamMemberCreateRequest,
+    TeamMemberRow,
+    TeamMemberUpdateRequest,
+)
+from api.Modules.Admin.Services import (
+    add_team_member,
+    deactivate_team_member,
+    update_store_info,
+    update_team_member,
+)
+
+
+router = APIRouter()
+
+
+def _require_store(claims: dict) -> int:
+    sid = claims.get("store_id")
+    if sid is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner to manage settings."
+            ),
+        )
+    return int(sid)
+
+
+def _to_row(s) -> StoreInfoRow:
+    return StoreInfoRow(
+        id=s.id,
+        name=s.name or "",
+        slug=s.slug or "",
+        email=s.email or "",
+        phone=s.phone or "",
+        address=s.address or "",
+        plan=s.plan or "trial",
+        federal_tax_rate=float(s.federal_tax_rate or 0),
+        is_active=bool(s.is_active),
+    )
+
+
+@router.get("/store-info", response_model=StoreInfoResponse)
+def get_store_info(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> StoreInfoResponse:
+    store_id = _require_store(claims)
+    store = find_store(db, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return StoreInfoResponse(store=_to_row(store))
+
+
+@router.put("/store-info", response_model=StoreInfoResponse)
+def update_store_info_route(
+    body: StoreInfoUpdateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> StoreInfoResponse:
+    """Update operator-editable store fields. Only the role
+    `admin` (or superadmin / owner) is allowed — the legacy
+    settings page is gated by `admin_required`. Cashiers
+    (role `employee`) hitting this endpoint return 403."""
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can update store info",
+        )
+    store_id = _require_store(claims)
+    store = find_store(db, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    fields = body.model_dump(exclude_unset=True)
+    try:
+        update_store_info(db, store, fields)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return StoreInfoResponse(store=_to_row(store))
+
+
+# ── Team roster ─────────────────────────────────────────────
+
+
+def _require_admin_role(claims: dict) -> None:
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can manage the team roster",
+        )
+
+
+def _team_row(e) -> TeamMemberRow:
+    return TeamMemberRow(
+        id=e.id, name=e.name or "", is_active=bool(e.is_active),
+    )
+
+
+@router.get("/team", response_model=TeamListResponse)
+def list_team_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TeamListResponse:
+    """All StoreEmployee rows for the JWT principal's store
+    (active + inactive). Inactive rows are surfaced so the
+    admin can reactivate them — the legacy "Processed by"
+    dropdown filters to active separately."""
+    store_id = _require_store(claims)
+    rows = list_team(db, store_id)
+    return TeamListResponse(members=[_team_row(r) for r in rows])
+
+
+@router.post(
+    "/team", response_model=TeamMemberRow, status_code=201,
+)
+def create_team_member_route(
+    body: TeamMemberCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TeamMemberRow:
+    """Create a new active StoreEmployee row. Admin role
+    required."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    try:
+        row = add_team_member(db, store_id, body.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return _team_row(row)
+
+
+@router.put(
+    "/team/{employee_id}", response_model=TeamMemberRow,
+)
+def update_team_member_route(
+    employee_id: int = Path(..., ge=1),
+    body: TeamMemberUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TeamMemberRow:
+    """Rename and/or toggle active. Cross-store IDs → 404
+    (opaque tenancy)."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    member = find_team_member(db, store_id, employee_id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    fields = body.model_dump(exclude_unset=True)
+    try:
+        update_team_member(
+            db, member,
+            name=fields.get("name"),
+            is_active=fields.get("is_active"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    return _team_row(member)
+
+
+@router.delete(
+    "/team/{employee_id}", status_code=204,
+)
+def deactivate_team_member_route(
+    employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Soft-delete: flips is_active=False. We never hard-delete
+    StoreEmployee rows so historical employee_name / employee_id
+    attribution on past Transfer rows survives."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    member = find_team_member(db, store_id, employee_id)
+    if member is None:
+        raise HTTPException(status_code=404, detail="Team member not found")
+    deactivate_team_member(db, member)
+    db.commit()

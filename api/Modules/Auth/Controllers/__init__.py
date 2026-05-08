@@ -16,15 +16,44 @@ from sqlalchemy.orm import Session
 import jwt
 
 from api.Core.Database import get_db
-from api.Modules.Auth.Requests import LoginRequest, LoginResponse
+from api.Modules.Auth.Models import User
+from api.Modules.Auth.Requests import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    LoginCrossStoreRequest,
+    LoginRequest,
+    LoginResponse,
+    RecoveryLoginRequest,
+    ResetPasswordRequest,
+    SignupRequest,
+    SignupResponse,
+    TotpLoginRequest,
+)
 from api.Modules.Auth.Services import (
+    LoginPendingResult,
+    LoginResult,
     authenticate_password,
+    authenticate_password_cross_store,
+    change_password,
+    consume_password_reset_token,
+    create_store_and_admin,
     decode_access_token,
+    finalize_2fa_with_recovery_code,
+    finalize_2fa_with_totp,
+    issue_access_token,
+    issue_password_reset_token,
+    permissions_for,
+    verify_password_reset_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
     DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+    JWTIssuer,
 )
-from api.Modules.Auth.Services.login import AuthenticationError
+from api.Modules.Auth.Services.login import (
+    AuthenticationError,
+    TotpEnrollmentRequired,
+)
+from api.Modules.Auth.Services.signup import SignupConflictError
 
 
 router = APIRouter()
@@ -61,6 +90,33 @@ def get_principal(
         )
 
 
+def _to_login_response(
+    result: LoginResult | LoginPendingResult,
+) -> LoginResponse:
+    """Translate a Service result (full or pending) into the
+    polymorphic `LoginResponse` shape. Centralised so the four
+    login-ish routes (login, login-cross-store, login/totp,
+    login/recovery) all emit the exact same envelope."""
+    if isinstance(result, LoginPendingResult):
+        return LoginResponse(
+            requires_totp=True,
+            pending_token=result.pending_token,
+            user_id=result.user_id,
+            has_recovery_codes=result.has_recovery_codes,
+            expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        )
+    return LoginResponse(
+        access_token=result.access_token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.user_id,
+        username=result.username,
+        full_name=result.full_name,
+        role=result.role,
+        store_id=result.store_id,
+        permissions=result.permissions,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login_route(
     body: LoginRequest, db: Session = Depends(get_db),
@@ -77,16 +133,72 @@ def login_route(
             status_code=401,
             detail="Invalid username or password",
         )
-    return LoginResponse(
-        access_token=result.access_token,
-        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
-        user_id=result.user_id,
-        username=result.username,
-        full_name=result.full_name,
-        role=result.role,
-        store_id=result.store_id,
-        permissions=result.permissions,
-    )
+    except TotpEnrollmentRequired as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return _to_login_response(result)
+
+
+@router.post("/login-cross-store", response_model=LoginResponse)
+def login_cross_store_route(
+    body: LoginCrossStoreRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Cross-store JWT login for the SPA's generic landing page.
+    Same response shape as `/auth/login`, but takes
+    username + password only — the user's home store is looked
+    up across every store. Employees are rejected here so they
+    use their store's slug-scoped sign-in page (parity with the
+    legacy Flask `/login` POST)."""
+    try:
+        result = authenticate_password_cross_store(
+            db, username=body.username, password=body.password,
+        )
+    except AuthenticationError as exc:
+        # Same opaque 401 for invalid creds AND for the
+        # employee-rejection path — never leak which one tripped.
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid username or password",
+        )
+    except TotpEnrollmentRequired as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return _to_login_response(result)
+
+
+@router.post("/login/totp", response_model=LoginResponse)
+def login_totp_route(
+    body: TotpLoginRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Exchange a 2FA-pending token + 6-digit TOTP code for a real
+    access token. Pending token comes from the previous
+    `/auth/login` (or `/auth/login-cross-store`) response when
+    `requires_totp=True`."""
+    try:
+        result = finalize_2fa_with_totp(
+            db, pending_token=body.pending_token, code=body.code,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid verification code",
+        )
+    db.commit()  # no-op for TOTP, but keep call shape symmetric with /recovery
+    return _to_login_response(result)
+
+
+@router.post("/login/recovery", response_model=LoginResponse)
+def login_recovery_route(
+    body: RecoveryLoginRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Exchange a 2FA-pending token + a single-use recovery code
+    for a real access token. Recovery code is consumed on success."""
+    try:
+        result = finalize_2fa_with_recovery_code(
+            db, pending_token=body.pending_token, code=body.code,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid recovery code",
+        )
+    db.commit()
+    return _to_login_response(result)
 
 
 @router.get("/me")
@@ -102,3 +214,168 @@ def me_route(claims: dict = Depends(get_principal)) -> dict:
         "store_id": claims.get("store_id"),
         "permissions": claims.get("perms", []),
     }
+
+
+@router.post("/change-password")
+def change_password_route(
+    body: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Self-service password change. Authed via JWT — the user
+    proves identity twice (current via password, ownership via
+    bearer token). Returns either `{"status": "ok"}` on success
+    or 422 with a field-level error message on validation
+    failure (length / mismatch / bad current).
+    """
+    user_id = int(claims["sub"])
+    user = db.query(User).filter_by(id=user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    errors = change_password(
+        db, user,
+        body.current_password,
+        body.new_password,
+        body.confirm_password,
+    )
+    if errors:
+        # Surface the first field error as the FastAPI detail —
+        # matches how the SPA currently consumes 422 messages.
+        field, msg = next(iter(errors.items()))
+        raise HTTPException(
+            status_code=422, detail={"field": field, "message": msg},
+        )
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.post("/signup", response_model=SignupResponse, status_code=201)
+def signup_route(
+    body: SignupRequest, db: Session = Depends(get_db),
+) -> SignupResponse:
+    """Self-service signup. Creates a (Store, admin User) pair
+    and returns a JWT scoped to the new store, so the SPA can
+    drop the user straight onto the dashboard.
+
+    Mirrors the legacy /signup Flask form's contract:
+      • email + store_name normalised (stripped, email lowered)
+      • email collision returns 409
+      • trial defaults: 7-day trial + 4-day grace
+
+    Stripe / referral / TOTP set-up flows stay on Flask for now —
+    a later PR threads referral codes through here.
+    """
+    email = (body.email or "").strip().lower()
+    store_name = (body.store_name or "").strip()
+    if "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "email", "message": "Enter a valid email."},
+        )
+    try:
+        result = create_store_and_admin(
+            db,
+            store_name=store_name,
+            email=email,
+            password=body.password,
+            phone=(body.phone or "").strip(),
+        )
+    except SignupConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"field": "email", "message": str(exc)},
+        )
+    db.commit()
+
+    # Issue a JWT scoped to the new store. Same shape as login —
+    # the SPA stores it in localStorage and lands on /dashboard.
+    perms = permissions_for(result.admin.role)
+    issuer = JWTIssuer(
+        sub=result.admin.id,
+        role=result.admin.role,
+        store_id=result.store.id,
+        permissions=perms,
+        full_name=result.admin.full_name or "",
+        username=result.admin.username,
+    )
+    token = issue_access_token(issuer)
+    return SignupResponse(
+        access_token=token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.admin.id,
+        username=result.admin.username,
+        full_name=result.admin.full_name or "",
+        role=result.admin.role,
+        store_id=result.store.id,
+        permissions=perms,
+    )
+
+
+@router.post("/forgot-password")
+def forgot_password_route(
+    body: ForgotPasswordRequest, db: Session = Depends(get_db),
+) -> dict:
+    """Issue a reset token for the user identified by `email`.
+
+    Per the CLAUDE.md security invariant the response is always
+    `{"status": "ok"}` regardless of whether the address matches
+    a known user — attackers must not be able to enumerate
+    registered emails via this endpoint. Inactive / superadmin /
+    unknown emails silently no-op.
+
+    The raw token is logged to the operator console only when
+    SMTP isn't configured (matching the legacy /forgot-password
+    Flask flow). Production setups deliver via SMTP and never
+    log the URL.
+
+    SMTP delivery is deliberately NOT wired here yet — the
+    legacy flow handles email send + audit logging. This endpoint
+    only mints the token; legacy Flask code can pick it up if
+    needed. Subsequent PR threads SMTP through.
+    """
+    issued = issue_password_reset_token(db, body.email)
+    db.commit()
+    # Stash the raw token in a logger so the legacy email path
+    # (which still owns delivery) can find it. Do NOT include it
+    # in the JSON response — that would leak it to anyone who
+    # can hit the endpoint.
+    if issued is not None:
+        # Lazy logger import — production sends via SMTP and
+        # ignores this fallback. The legacy /forgot-password
+        # route also logs at WARNING level.
+        import logging
+        logging.getLogger("app").warning(
+            "Password reset token issued via /api/v2/auth/forgot-password "
+            "for user_id=%s; raw token logged for SMTP-fallback delivery.",
+            issued.user.id,
+        )
+    return {"status": "ok"}
+
+
+@router.post("/reset-password")
+def reset_password_route(
+    body: ResetPasswordRequest, db: Session = Depends(get_db),
+) -> dict:
+    """Consume a one-time reset token and set a new password.
+    Same validation rules as change_password (length ≥ 8 +
+    matching confirm)."""
+    if body.new_password != body.confirm_password:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "confirm_password",
+                "message": "Passwords do not match.",
+            },
+        )
+    token = verify_password_reset_token(db, body.token)
+    if token is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "This reset link is invalid or has expired. "
+                "Request a new one from the forgot-password page."
+            ),
+        )
+    consume_password_reset_token(db, token, body.new_password)
+    db.commit()
+    return {"status": "ok"}

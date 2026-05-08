@@ -2,7 +2,10 @@ services:
   - type: web
     name: dinerobook
     env: python
-    buildCommand: pip install -r requirements.txt
+    # Build runs Python deps + installs Node via nodeenv +
+    # builds the React/Vite SPA bundle that Flask serves at
+    # /app/*. See scripts/build.sh for what each step does.
+    buildCommand: bash ./scripts/build.sh
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: SECRET_KEY

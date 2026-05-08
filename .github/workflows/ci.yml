@@ -16,7 +16,20 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          # Pinned to 3.11 because Python 3.12's stricter asyncio
+          # task lifecycle interacts badly with coverage's tracer
+          # over our 2,300-test suite — leaked "Task was destroyed
+          # but it is pending!" messages corrupt the SQLAlchemy
+          # session state for subsequent tests, manifesting as a
+          # flaky `test_unlock_404_when_no_report` SETUP failure
+          # (the seeded test-store row goes missing). Even with
+          # coverage's `--concurrency=thread` flag the leak is
+          # only reduced, not eliminated, because the underlying
+          # cause is bare FastAPI TestClient instances spread
+          # across many test files (~189 call sites).
+          # Refactoring those is a separate cleanup PR; in the
+          # meantime 3.11 keeps CI green.
+          python-version: "3.11"
           cache: pip
 
       - name: Install dependencies
@@ -44,6 +57,9 @@ jobs:
         # a ~5pt margin so new code is incentivized to carry its own tests.
         # tests/smoke/ excluded here — that layer needs Playwright + a
         # real browser and runs in the dedicated step below.
+        # --tb=short -rfE surfaces the first failing test name + short
+        # traceback in the GitHub Actions log so we can debug without
+        # downloading raw artifacts.
         env:
           DATABASE_URL: "sqlite:///:memory:"
           SECRET_KEY: "ci-secret"
@@ -52,7 +68,7 @@ jobs:
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: |
-          coverage run --source=app -m pytest -q --ignore=tests/smoke
+          coverage run --source=app -m pytest --tb=short -rfE --ignore=tests/smoke
           coverage report --fail-under=60
 
       # ── Browser smoke layer ───────────────────────────────────

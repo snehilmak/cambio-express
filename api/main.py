@@ -71,6 +71,53 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.DailyBook.Controllers import router as dailybook_router
     app.include_router(dailybook_router, prefix="/daily", tags=["daily"])
 
+    # Batches — ACH batch read-side, added during the SPA
+    # cutover migration. Write-side (create/edit/link transfers)
+    # still on Flask until subsequent PRs.
+    from api.Modules.Batches.Controllers import router as batches_router
+    app.include_router(batches_router, prefix="/batches", tags=["batches"])
+
+    # Monthly — per-store, per-month P&L read-side. Write-side
+    # (the auto-derived bank-charges + line-item totals plus
+    # operator-editable fields) stays on Flask until subsequent
+    # PRs.
+    from api.Modules.Monthly.Controllers import router as monthly_router
+    app.include_router(monthly_router, prefix="/monthly", tags=["monthly"])
+
+    # Admin — store-info / team / owner-access endpoints for
+    # the SPA's settings page. Mirrors the legacy
+    # /admin/settings tabbed page in scope.
+    from api.Modules.Admin.Controllers import router as admin_router
+    app.include_router(admin_router, prefix="/admin", tags=["admin"])
+
+    # ReturnChecks — bounced-check workflow (list / detail /
+    # status transitions). Per-payment write endpoints ship in
+    # a follow-up PR.
+    from api.Modules.ReturnChecks.Controllers import (
+        router as return_checks_router,
+    )
+    app.include_router(
+        return_checks_router,
+        prefix="/return-checks",
+        tags=["return-checks"],
+    )
+
+    # Owners — multi-store owner umbrella read-side. First slice
+    # ships /owner/locations; dashboard, P&L rollup, store drill-
+    # down, and connect/unlink invitation flow follow.
+    from api.Modules.Owners.Controllers import router as owners_router
+    app.include_router(owners_router, prefix="/owner", tags=["owner"])
+
+    # Superadmin — platform-wide read-side. First slice ships the
+    # stores list; controls, anomalies, audit log, announcements,
+    # feature flags, and impersonation come in subsequent PRs.
+    from api.Modules.Superadmin.Controllers import (
+        router as superadmin_router,
+    )
+    app.include_router(
+        superadmin_router, prefix="/superadmin", tags=["superadmin"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
