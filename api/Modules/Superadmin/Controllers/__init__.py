@@ -19,6 +19,10 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Superadmin.Requests import (
+    DiscountCodeListResponse,
+    DiscountCodeResponse,
+    DiscountCodeRow,
+    DiscountCodeToggleRequest,
     SuperadminAnomalyListResponse,
     SuperadminAnomalyRow,
     SuperadminAuditListResponse,
@@ -148,3 +152,83 @@ def list_anomalies_route(
         for a in raw
     ]
     return SuperadminAnomalyListResponse(rows=rows, total=len(rows))
+
+
+# ── Discount codes (list + toggle) ──────────────────────────
+
+
+def _adapt_discount(d) -> DiscountCodeRow:
+    from datetime import datetime as _dt
+    expired = (
+        d.expires_at is not None and d.expires_at < _dt.utcnow()
+    )
+    capped = (
+        d.max_redemptions is not None
+        and (d.redeemed_count or 0) >= d.max_redemptions
+    )
+    return DiscountCodeRow(
+        id=d.id,
+        code=d.code,
+        label=d.label or "",
+        percent_off=d.percent_off,
+        amount_off_cents=d.amount_off_cents,
+        value_label=d.value_label,
+        duration=d.duration or "once",
+        duration_in_months=d.duration_in_months,
+        max_redemptions=d.max_redemptions,
+        redeemed_count=d.redeemed_count or 0,
+        expires_at=_iso(d.expires_at),
+        is_active=bool(d.is_active),
+        is_redeemable=bool(d.is_active) and not expired and not capped,
+        stripe_coupon_id=d.stripe_coupon_id or "",
+        stripe_promotion_code_id=d.stripe_promotion_code_id or "",
+        created_at=_iso(d.created_at),
+    )
+
+
+@router.get("/discounts", response_model=DiscountCodeListResponse)
+def list_discounts_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> DiscountCodeListResponse:
+    """List every minted promo code (newest first). Read-only by
+    design — Stripe coupon mint + new-code generation stays on the
+    legacy site for now (those need careful Stripe error handling).
+    This endpoint only renders + toggles; it never makes Stripe
+    API calls."""
+    _require_superadmin(claims)
+    from app import DiscountCode
+    rows = (
+        db.query(DiscountCode)
+          .order_by(DiscountCode.created_at.desc())
+          .all()
+    )
+    return DiscountCodeListResponse(
+        rows=[_adapt_discount(d) for d in rows], total=len(rows),
+    )
+
+
+@router.post(
+    "/discounts/{discount_id}/toggle",
+    response_model=DiscountCodeResponse,
+)
+def toggle_discount_route(
+    body: DiscountCodeToggleRequest,
+    discount_id: int,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> DiscountCodeResponse:
+    """Flip a discount's `is_active` flag without touching Stripe.
+    Inactive codes still exist in the DB + Stripe (so historical
+    invoices keep their references) but new Checkout sessions
+    that try to apply them are rejected by `is_redeemable`."""
+    _require_superadmin(claims)
+    from app import DiscountCode
+    d = db.query(DiscountCode).filter(
+        DiscountCode.id == discount_id,
+    ).one_or_none()
+    if d is None:
+        raise HTTPException(status_code=404, detail="Discount code not found")
+    d.is_active = body.is_active
+    db.commit()
+    return DiscountCodeResponse(discount=_adapt_discount(d))
