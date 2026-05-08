@@ -23,17 +23,23 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    RecoveryLoginRequest,
     ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
+    TotpLoginRequest,
 )
 from api.Modules.Auth.Services import (
+    LoginPendingResult,
+    LoginResult,
     authenticate_password,
     authenticate_password_cross_store,
     change_password,
     consume_password_reset_token,
     create_store_and_admin,
     decode_access_token,
+    finalize_2fa_with_recovery_code,
+    finalize_2fa_with_totp,
     issue_access_token,
     issue_password_reset_token,
     permissions_for,
@@ -43,7 +49,10 @@ from api.Modules.Auth.Services.jwt_issuer import (
     DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
     JWTIssuer,
 )
-from api.Modules.Auth.Services.login import AuthenticationError
+from api.Modules.Auth.Services.login import (
+    AuthenticationError,
+    TotpEnrollmentRequired,
+)
 from api.Modules.Auth.Services.signup import SignupConflictError
 
 
@@ -81,6 +90,33 @@ def get_principal(
         )
 
 
+def _to_login_response(
+    result: LoginResult | LoginPendingResult,
+) -> LoginResponse:
+    """Translate a Service result (full or pending) into the
+    polymorphic `LoginResponse` shape. Centralised so the four
+    login-ish routes (login, login-cross-store, login/totp,
+    login/recovery) all emit the exact same envelope."""
+    if isinstance(result, LoginPendingResult):
+        return LoginResponse(
+            requires_totp=True,
+            pending_token=result.pending_token,
+            user_id=result.user_id,
+            has_recovery_codes=result.has_recovery_codes,
+            expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        )
+    return LoginResponse(
+        access_token=result.access_token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.user_id,
+        username=result.username,
+        full_name=result.full_name,
+        role=result.role,
+        store_id=result.store_id,
+        permissions=result.permissions,
+    )
+
+
 @router.post("/login", response_model=LoginResponse)
 def login_route(
     body: LoginRequest, db: Session = Depends(get_db),
@@ -97,16 +133,9 @@ def login_route(
             status_code=401,
             detail="Invalid username or password",
         )
-    return LoginResponse(
-        access_token=result.access_token,
-        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
-        user_id=result.user_id,
-        username=result.username,
-        full_name=result.full_name,
-        role=result.role,
-        store_id=result.store_id,
-        permissions=result.permissions,
-    )
+    except TotpEnrollmentRequired as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return _to_login_response(result)
 
 
 @router.post("/login-cross-store", response_model=LoginResponse)
@@ -129,16 +158,47 @@ def login_cross_store_route(
         raise HTTPException(
             status_code=401, detail=str(exc) or "Invalid username or password",
         )
-    return LoginResponse(
-        access_token=result.access_token,
-        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
-        user_id=result.user_id,
-        username=result.username,
-        full_name=result.full_name,
-        role=result.role,
-        store_id=result.store_id,
-        permissions=result.permissions,
-    )
+    except TotpEnrollmentRequired as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return _to_login_response(result)
+
+
+@router.post("/login/totp", response_model=LoginResponse)
+def login_totp_route(
+    body: TotpLoginRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Exchange a 2FA-pending token + 6-digit TOTP code for a real
+    access token. Pending token comes from the previous
+    `/auth/login` (or `/auth/login-cross-store`) response when
+    `requires_totp=True`."""
+    try:
+        result = finalize_2fa_with_totp(
+            db, pending_token=body.pending_token, code=body.code,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid verification code",
+        )
+    db.commit()  # no-op for TOTP, but keep call shape symmetric with /recovery
+    return _to_login_response(result)
+
+
+@router.post("/login/recovery", response_model=LoginResponse)
+def login_recovery_route(
+    body: RecoveryLoginRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Exchange a 2FA-pending token + a single-use recovery code
+    for a real access token. Recovery code is consumed on success."""
+    try:
+        result = finalize_2fa_with_recovery_code(
+            db, pending_token=body.pending_token, code=body.code,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid recovery code",
+        )
+    db.commit()
+    return _to_login_response(result)
 
 
 @router.get("/me")

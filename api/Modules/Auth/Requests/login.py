@@ -96,20 +96,53 @@ class SignupResponse(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    """Successful-login response. `access_token` is the bearer JWT
-    the client must send as `Authorization: Bearer <token>` on
-    subsequent calls. `expires_in` is seconds until the token's
-    `exp` claim — clients refresh before then to avoid an
-    in-flight 401."""
+    """Login response. Two shapes:
+
+    - **Full success**: `access_token` is the bearer JWT the client
+      must send as `Authorization: Bearer <token>` on subsequent
+      calls. `requires_totp` is False, `pending_token` is None.
+
+    - **2FA pending**: `requires_totp=True` and `pending_token` is a
+      short-lived JWT (5min) the SPA exchanges via
+      `/auth/login/totp` or `/auth/login/recovery` for a real
+      `access_token`. In this shape `access_token` is empty.
+
+    Clients should branch on `requires_totp` first.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    access_token: str
+    access_token: str = ""
     token_type: str = "Bearer"
     expires_in: int = 30 * 60
     user_id: int
-    username: str
+    username: str = ""
     full_name: str = ""
-    role: str
-    store_id: int | None
-    permissions: list[str]
+    role: str = ""
+    store_id: int | None = None
+    permissions: list[str] = []
+    # 2FA-pending fields. None / False on the full-success path.
+    requires_totp: bool = False
+    pending_token: str | None = None
+    has_recovery_codes: bool = False
+
+
+class TotpLoginRequest(BaseModel):
+    """POST body for /auth/login/totp. Exchange the 2FA-pending
+    token + the user's 6-digit TOTP code for a real access token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str = Field(..., min_length=1)
+    code:          str = Field(..., min_length=1, max_length=10)
+
+
+class RecoveryLoginRequest(BaseModel):
+    """POST body for /auth/login/recovery. Exchange the 2FA-pending
+    token + a single-use recovery code for a real access token.
+    The recovery code is consumed on success."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str = Field(..., min_length=1)
+    code:          str = Field(..., min_length=1, max_length=40)

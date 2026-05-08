@@ -5,9 +5,11 @@ from api.Modules.Auth.Requests.login import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    RecoveryLoginRequest,
     ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
+    TotpLoginRequest,
 )
 
 __all__ = [
@@ -16,7 +18,9 @@ __all__ = [
     "LoginCrossStoreRequest",
     "LoginRequest",
     "LoginResponse",
+    "RecoveryLoginRequest",
     "ResetPasswordRequest",
     "SignupRequest",
     "SignupResponse",
+    "TotpLoginRequest",
 ]
