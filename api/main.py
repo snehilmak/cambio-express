@@ -124,6 +124,17 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Billing.Controllers import router as billing_router
     app.include_router(billing_router, prefix="/billing", tags=["billing"])
 
+    # Announcements — global banner CRUD for the superadmin. The
+    # read-side `active_announcements()` is consumed everywhere
+    # via the Service helper; this Controller exposes the admin
+    # CRUD surface to the SPA.
+    from api.Modules.Announcements.Controllers import (
+        router as announcements_router,
+    )
+    app.include_router(
+        announcements_router, prefix="/announcements", tags=["announcements"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.
