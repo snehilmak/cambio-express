@@ -11,6 +11,15 @@
       both the legacy Jinja site and the new SPA without duplication.
     -->
     <link rel="stylesheet" href="/static/design-tokens.css" />
+    <!--
+      JetBrains Mono is referenced by `--db-font-mono` but the
+      shared design-tokens.css only imports Space Grotesk + Inter.
+      The legacy landing.html loads it inline; mirror that here so
+      SPA pages that use the mono token render correctly.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" />
     <title>DineroBook</title>
   </head>
   <body>

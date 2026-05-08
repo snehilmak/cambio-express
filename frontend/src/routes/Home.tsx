@@ -1,11 +1,8 @@
-import { Navigate } from "react-router-dom";
+import Landing from "./Landing";
 
-import { getCurrentIdentity } from "../lib/auth";
-
-// Bare /app/ landing — bounces to either the dashboard (when
-// signed in) or the login page (when not). Avoids showing an
-// orphan placeholder that doesn't reflect the user's auth state.
+// /app/ root: signed-out visitors see the marketing landing; signed-in
+// visitors get bounced to their dashboard. The bounce lives inside
+// Landing so the redirect happens before any markup mounts.
 export default function Home() {
-  const identity = getCurrentIdentity();
-  return <Navigate to={identity ? "/dashboard" : "/login"} replace />;
+  return <Landing />;
 }
