@@ -20,7 +20,9 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
-from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
+from api.Modules.BankSync.Models import (
+    BankRule, BankTransaction, StripeBankAccount,
+)
 from api.Modules.BankSync.Repositories import (
     BankTransactionFilters,
     list_accounts,
@@ -30,7 +32,10 @@ from api.Modules.BankSync.Requests import (
     BankAccountListResponse,
     BankAccountRow,
     BankRuleListResponse,
+    BankRuleResponse,
     BankRuleRow,
+    BankRuleToggleRequest,
+    BankRuleWriteRequest,
     BankTransactionListResponse,
     BankTransactionRow,
     CategorizeRequest,
@@ -292,4 +297,176 @@ def uncategorize_route(
     db.commit()
     db.refresh(txn)
     return CategorizeResponse(transaction=_adapt_txn(db, txn))
+
+
+# ── Rule CRUD ────────────────────────────────────────────────
+
+
+def _adapt_rule(db: Session, r: BankRule) -> BankRuleRow:
+    label = ""
+    if r.account_filter_id is not None:
+        labels = _account_labels(db, [r.account_filter_id])
+        label = labels.get(r.account_filter_id, "")
+    return BankRuleRow(
+        id=r.id,
+        enabled=bool(r.enabled),
+        priority=r.priority,
+        desc_match_type=r.desc_match_type or "",
+        desc_match_value=r.desc_match_value or "",
+        sign_filter=r.sign_filter or "",
+        amount_min_cents=r.amount_min_cents,
+        amount_max_cents=r.amount_max_cents,
+        account_filter_id=r.account_filter_id,
+        account_filter_label=label,
+        target_kind=r.target_kind,
+        auto_post=bool(r.auto_post),
+        description=r.description or "",
+        match_count=r.match_count or 0,
+        last_matched_at=r.last_matched_at.isoformat() if r.last_matched_at else "",
+    )
+
+
+def _validate_rule_body(body: BankRuleWriteRequest) -> None:
+    """Cross-field invariants that Pydantic Field() can't express
+    on its own. Raises 422 with a `field` hint so the SPA can
+    highlight the offending input."""
+    # If desc_match_type is set, desc_match_value must be non-empty.
+    if body.desc_match_type and not body.desc_match_value.strip():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "desc_match_value",
+                "message": "Description match value is required when "
+                           "match type is set.",
+            },
+        )
+    # amount_min must be ≤ amount_max if both set.
+    if (
+        body.amount_min_cents is not None
+        and body.amount_max_cents is not None
+        and body.amount_min_cents > body.amount_max_cents
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "amount_max_cents",
+                "message": "Max amount must be ≥ min amount.",
+            },
+        )
+
+
+def _find_owned_rule(db: Session, store_id: int, rule_id: int) -> BankRule:
+    r = (
+        db.query(BankRule)
+          .filter(BankRule.id == rule_id, BankRule.store_id == store_id)
+          .one_or_none()
+    )
+    if r is None:
+        raise HTTPException(status_code=404, detail="Bank rule not found")
+    return r
+
+
+def _validate_account_owned(db: Session, store_id: int, account_id: int | None):
+    """Cross-tenant safety: refuse to attach a rule to an account
+    that belongs to a different store. Returns silently if the FK
+    is None (rule applies to all accounts)."""
+    if account_id is None:
+        return
+    a = (
+        db.query(StripeBankAccount)
+          .filter(
+              StripeBankAccount.id == account_id,
+              StripeBankAccount.store_id == store_id,
+          )
+          .one_or_none()
+    )
+    if a is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "account_filter_id",
+                "message": "Account does not belong to this store.",
+            },
+        )
+
+
+@router.post("/rules", response_model=BankRuleResponse, status_code=201)
+def create_rule_route(
+    body: BankRuleWriteRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> BankRuleResponse:
+    sid = _require_store_scope(claims)
+    _validate_rule_body(body)
+    _validate_account_owned(db, sid, body.account_filter_id)
+    r = BankRule(
+        store_id=sid,
+        enabled=body.enabled,
+        priority=body.priority,
+        desc_match_type=body.desc_match_type,
+        desc_match_value=body.desc_match_value.strip(),
+        sign_filter=body.sign_filter,
+        amount_min_cents=body.amount_min_cents,
+        amount_max_cents=body.amount_max_cents,
+        account_filter_id=body.account_filter_id,
+        target_kind=body.target_kind,
+        auto_post=body.auto_post,
+        description=body.description.strip(),
+    )
+    db.add(r); db.flush()
+    db.commit()
+    return BankRuleResponse(rule=_adapt_rule(db, r))
+
+
+@router.put("/rules/{rule_id}", response_model=BankRuleResponse)
+def update_rule_route(
+    body: BankRuleWriteRequest,
+    rule_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> BankRuleResponse:
+    sid = _require_store_scope(claims)
+    _validate_rule_body(body)
+    _validate_account_owned(db, sid, body.account_filter_id)
+    r = _find_owned_rule(db, sid, rule_id)
+    r.enabled = body.enabled
+    r.priority = body.priority
+    r.desc_match_type = body.desc_match_type
+    r.desc_match_value = body.desc_match_value.strip()
+    r.sign_filter = body.sign_filter
+    r.amount_min_cents = body.amount_min_cents
+    r.amount_max_cents = body.amount_max_cents
+    r.account_filter_id = body.account_filter_id
+    r.target_kind = body.target_kind
+    r.auto_post = body.auto_post
+    r.description = body.description.strip()
+    db.commit()
+    return BankRuleResponse(rule=_adapt_rule(db, r))
+
+
+@router.post("/rules/{rule_id}/toggle", response_model=BankRuleResponse)
+def toggle_rule_route(
+    body: BankRuleToggleRequest,
+    rule_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> BankRuleResponse:
+    sid = _require_store_scope(claims)
+    r = _find_owned_rule(db, sid, rule_id)
+    r.enabled = body.enabled
+    db.commit()
+    return BankRuleResponse(rule=_adapt_rule(db, r))
+
+
+@router.delete("/rules/{rule_id}", status_code=204)
+def delete_rule_route(
+    rule_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    sid = _require_store_scope(claims)
+    r = _find_owned_rule(db, sid, rule_id)
+    db.delete(r)
+    db.commit()
+    return None
 
