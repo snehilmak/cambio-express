@@ -42,6 +42,37 @@ class ChangePasswordRequest(BaseModel):
     confirm_password: str = Field(..., min_length=1)
 
 
+class SignupRequest(BaseModel):
+    """POST body for /auth/signup. Mirrors the legacy /signup
+    Jinja form. Returns a JWT on success so the SPA can drop
+    the new admin straight onto the dashboard without a second
+    login round-trip."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_name: str = Field(..., min_length=1, max_length=120)
+    email:      str = Field(..., min_length=3, max_length=255)
+    password:   str = Field(..., min_length=8, max_length=200)
+    phone:      str = Field("", max_length=40)
+
+
+class SignupResponse(BaseModel):
+    """Same shape as LoginResponse — the SPA uses identical code
+    paths to handle both flows."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int = 30 * 60
+    user_id: int
+    username: str
+    full_name: str = ""
+    role: str
+    store_id: int | None
+    permissions: list[str]
+
+
 class LoginResponse(BaseModel):
     """Successful-login response. `access_token` is the bearer JWT
     the client must send as `Authorization: Bearer <token>` on

@@ -21,6 +21,32 @@ export async function changePassword(
   );
 }
 
+export interface SignupBody {
+  store_name: string;
+  email: string;
+  password: string;
+  phone?: string;
+}
+
+export interface SignupResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user_id: number;
+  username: string;
+  full_name: string;
+  role: string;
+  store_id: number | null;
+  permissions: string[];
+}
+
+export async function signup(body: SignupBody): Promise<SignupResponse> {
+  return api<SignupResponse>(
+    "/api/v2/auth/signup",
+    { method: "POST", json: body },
+  );
+}
+
 export interface StoreInfoRow {
   id: number;
   name: string;
