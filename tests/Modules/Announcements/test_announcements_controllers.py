@@ -29,7 +29,12 @@ def _login_superadmin(client):
             "store_id": None,
         },
     )
-    return resp.get_json()["access_token"]
+    body = resp.get_json()
+    # Diagnostic on CI-only failure: surface what the response actually is
+    # when access_token is missing so we can fix the upstream issue.
+    assert isinstance(body, dict) and "access_token" in body, \
+        f"login response missing access_token: status={resp.status_code} body={body!r}"
+    return body["access_token"]
 
 
 def _seed(message="Heads up", level="info", is_active=True,
