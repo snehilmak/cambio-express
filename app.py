@@ -9311,8 +9311,13 @@ def admin_redeem_owner_code():
 @app.route("/superadmin/stores")
 @superadmin_required
 def superadmin_stores():
-    user=current_user(); stores=Store.query.order_by(Store.created_at.desc()).all()
-    return render_template("superadmin_stores.html",user=user,stores=stores)
+    """301 → /app/superadmin/stores. The React page reads via
+    /api/v2/superadmin/stores (paginated, filterable). Stub keeps
+    url_for('superadmin_stores') working for sidebar nav + bounces
+    old bookmarks. The /superadmin/stores/new + /<id>/edit form
+    routes below stay alive (their SPA equivalents aren't built
+    yet)."""
+    return redirect("/app/superadmin/stores", code=301)
 
 @app.route("/superadmin/stores/new",methods=["GET","POST"])
 @superadmin_required
