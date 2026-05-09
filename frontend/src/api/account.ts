@@ -168,6 +168,42 @@ export interface StoreInfoUpdateBody {
   federal_tax_rate?: number;
 }
 
+export interface ProfileResponse {
+  user_id:           number;
+  username:          string;
+  role:              string;
+  full_name:         string;
+  email:             string;
+  phone:             string;
+  timezone:          string;
+  created_at:        string;
+  last_login_at:     string;
+  timezone_choices:  string[];
+}
+
+export interface ProfileUpdateBody {
+  full_name?: string;
+  email?:     string;
+  phone?:     string;
+  timezone?:  string;
+}
+
+export function useProfile() {
+  return useQuery<ProfileResponse>({
+    queryKey: ["account", "profile"],
+    queryFn: () => api<ProfileResponse>("/api/v2/auth/profile"),
+  });
+}
+
+export async function updateProfile(
+  body: ProfileUpdateBody,
+): Promise<ProfileResponse> {
+  return api<ProfileResponse>("/api/v2/auth/profile", {
+    method: "PUT", json: body,
+  });
+}
+
+
 export function useStoreInfo() {
   const identity = getCurrentIdentity();
   return useQuery<{ store: StoreInfoRow }>({

@@ -20,6 +20,10 @@ from api.Modules.Auth.Requests.login import (
     TotpEnrollStartResponse,
     TotpLoginRequest,
 )
+from api.Modules.Auth.Requests.profile import (
+    ProfileResponse,
+    ProfileUpdateRequest,
+)
 
 __all__ = [
     "ChangePasswordRequest",
@@ -29,6 +33,8 @@ __all__ = [
     "LoginResponse",
     "OwnerSignupRequest",
     "OwnerSignupResponse",
+    "ProfileResponse",
+    "ProfileUpdateRequest",
     "RecoveryLoginRequest",
     "ReferralPreviewResponse",
     "ResetPasswordRequest",

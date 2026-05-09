@@ -3060,30 +3060,14 @@ def account_security():
 @app.route("/account/profile", methods=["GET", "POST"])
 @login_required
 def account_profile():
-    """Personal profile — display name, email, phone, timezone. Same
-    accessibility model as /account/security: every logged-in role can
-    reach it, none of these fields cascade into store-scoped data, and
-    the form is single-POST with no `_action` since there's only one
-    action (save the whole form)."""
-    user = current_user()
-    errors = {}
-    if request.method == "POST":
-        errors = _update_user_profile(
-            user,
-            request.form.get("full_name", ""),
-            request.form.get("email", ""),
-            request.form.get("phone", ""),
-            request.form.get("timezone", ""),
-        )
-        if not errors:
-            db.session.commit()
-            flash("Profile updated.", "success")
-            return redirect(url_for("account_profile"))
-
-    return render_template("account_profile.html",
-        user=user, errors=errors,
-        timezone_choices=PROFILE_TIMEZONES,
-    )
+    """301 → /app/account/profile. Personal profile editor moved
+    to React. Validation + persistence now live behind
+    GET/PUT /api/v2/auth/profile; the SPA renders inline
+    field_errors on 422 so the user sees the same messages the
+    legacy Jinja form did. The legacy Appearance theme picker is
+    intentionally not ported — CLAUDE.md invariant #1 fixes the
+    SPA to dark-only."""
+    return redirect("/app/account/profile", code=301)
 
 @app.route("/admin/settings/security", methods=["GET"])
 @login_required
