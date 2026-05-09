@@ -65,9 +65,27 @@ def seed_test_data():
 @pytest.fixture(autouse=True)
 def clean_db():
     with flask_app.app_context():
+        # Defensive cleanup: bare FastAPI TestClient instances in many
+        # tests leak pending asyncio tasks ("Task was destroyed but it
+        # is pending!") that hold references to SQLAlchemy sessions
+        # and silently rollback this test's seed. See the comment in
+        # .github/workflows/ci.yml for the full backstory. Until the
+        # 189 TestClient call sites are refactored to use `with`
+        # blocks, force a session.remove() at start so any leaked
+        # session is detached before we drop+create+seed.
+        db.session.remove()
         db.drop_all()
         db.create_all()
         seed_test_data()
+        # Verify seed actually persisted — if a leaked async task
+        # rolled back the seed transaction, the row is gone before
+        # the test even starts. Retry once to make CI deterministic.
+        from app import Store
+        if Store.query.filter_by(slug="test-store").first() is None:
+            db.session.remove()
+            db.drop_all()
+            db.create_all()
+            seed_test_data()
         yield
         db.session.remove()
 

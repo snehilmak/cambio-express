@@ -26,6 +26,7 @@ from api.Modules.Auth.Requests import (
     OwnerSignupRequest,
     OwnerSignupResponse,
     RecoveryLoginRequest,
+    ReferralPreviewResponse,
     ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
@@ -349,8 +350,10 @@ def signup_route(
       • email collision returns 409
       • trial defaults: 7-day trial + 4-day grace
 
-    Stripe / referral / TOTP set-up flows stay on Flask for now —
-    a later PR threads referral codes through here.
+    Referral codes are honoured the same way the legacy /signup
+    handler does it: a code that doesn't resolve is silently
+    dropped (it's a nice-to-have, not a hard requirement). Stripe
+    / TOTP set-up flows still belong on Flask.
 
     Honors the SIGNUP_CLOSED env var: when "1" we 503 every
     request before touching the DB, so an attacker hitting the
@@ -370,6 +373,13 @@ def signup_route(
             status_code=422,
             detail={"field": "email", "message": "Enter a valid email."},
         )
+    referred_by_code_id: int | None = None
+    ref_raw = (body.ref_code or "").strip().upper()
+    if ref_raw:
+        from app import lookup_referral_code
+        ref = lookup_referral_code(ref_raw)
+        if ref is not None:
+            referred_by_code_id = ref.id
     try:
         result = create_store_and_admin(
             db,
@@ -377,6 +387,7 @@ def signup_route(
             email=email,
             password=body.password,
             phone=(body.phone or "").strip(),
+            referred_by_code_id=referred_by_code_id,
         )
     except SignupConflictError as exc:
         raise HTTPException(
@@ -474,6 +485,25 @@ def signup_owner_route(
         role=result.owner.role,
         store_id=None,
         permissions=perms,
+    )
+
+
+@router.get("/referral/{code}", response_model=ReferralPreviewResponse)
+def referral_preview_route(
+    code: str, db: Session = Depends(get_db),  # noqa: ARG001
+) -> ReferralPreviewResponse:
+    """Resolve a referral code so the SPA's /signup page can show
+    the green '$X off your first paid month' banner. Returns 404
+    when the code isn't recognised — matches the legacy Jinja
+    behaviour where an unknown code silently dropped without a
+    banner. The actual application-of-credit happens at signup
+    time inside `create_store_and_admin`."""
+    from app import lookup_referral_code
+    ref = lookup_referral_code((code or "").strip().upper())
+    if ref is None:
+        raise HTTPException(status_code=404, detail="Referral code not found")
+    return ReferralPreviewResponse(
+        code=ref.code, reward_referee_cents=ref.reward_referee_cents,
     )
 
 

@@ -76,6 +76,7 @@ class SignupRequest(BaseModel):
     email:      str = Field(..., min_length=3, max_length=255)
     password:   str = Field(..., min_length=8, max_length=200)
     phone:      str = Field("", max_length=40)
+    ref_code:   str = Field("", max_length=64)
 
 
 class SignupResponse(BaseModel):
@@ -93,6 +94,17 @@ class SignupResponse(BaseModel):
     role: str
     store_id: int | None
     permissions: list[str]
+
+
+class ReferralPreviewResponse(BaseModel):
+    """GET /auth/referral/{code} return shape. Powers the green
+    'You'll get $X off' banner that shows up on /signup when the
+    code resolves to an active ReferralCode row."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    reward_referee_cents: int
 
 
 class LoginResponse(BaseModel):
