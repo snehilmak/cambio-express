@@ -3548,35 +3548,13 @@ def owner_store_detail(store_id):
 @app.route("/owner/connect", methods=["GET"])
 @owner_required
 def owner_connect():
-    """Page where the owner mints invite codes to give to store admins.
-
-    Shows: a generate button, the active (unused, unexpired) code if
-    any, and a small history of recently-redeemed codes so the owner
-    can audit who claimed which one. The code is given out of band
-    (phone, email) — DineroBook doesn't deliver it because we don't
-    know which store yet.
-    """
-    u = current_user()
-    now = datetime.utcnow()
-    active = (OwnerConnectCode.query
-              .filter(OwnerConnectCode.owner_id == u.id,
-                      OwnerConnectCode.used_at.is_(None),
-                      OwnerConnectCode.revoked_at.is_(None),
-                      OwnerConnectCode.expires_at > now)
-              .order_by(OwnerConnectCode.created_at.desc())
-              .first())
-    redeemed = (OwnerConnectCode.query
-                .filter(OwnerConnectCode.owner_id == u.id,
-                        OwnerConnectCode.used_at.isnot(None))
-                .order_by(OwnerConnectCode.used_at.desc())
-                .limit(10).all())
-    redeemed_with_stores = []
-    for c in redeemed:
-        st = (db.session.get(Store, c.used_by_store_id)
-              if c.used_by_store_id else None)
-        redeemed_with_stores.append((c, st))
-    return render_template("owner_connect.html",
-        user=u, active=active, redeemed=redeemed_with_stores)
+    """301 → /app/owner/connect. Page rendering moved to React.
+    Mint / revoke / list now run through
+    /api/v2/owner/connect-codes (GET + POST + POST .../revoke).
+    The legacy POST handlers below stay alive briefly so the
+    in-flight Jinja form submissions don't break for any user
+    mid-flow; they redirect through the SPA on next visit."""
+    return redirect("/app/owner/connect", code=301)
 
 
 @app.route("/owner/connect/generate", methods=["POST"])

@@ -23,6 +23,7 @@ import LoginStore from "./routes/LoginStore";
 import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
+import OwnerConnect from "./routes/OwnerConnect";
 import OwnerLocations from "./routes/OwnerLocations";
 import OwnerPLRollup from "./routes/OwnerPLRollup";
 import Privacy from "./routes/Privacy";
@@ -89,6 +90,7 @@ export default function App() {
         <Route path="return-checks"          element={<ReturnChecks />} />
         <Route path="return-checks/new"      element={<ReturnCheckForm />} />
         <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
+        <Route path="owner/connect"   element={<OwnerConnect />} />
         <Route path="owner/locations" element={<OwnerLocations />} />
         <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
         <Route path="superadmin/stores"        element={<SuperadminStores />} />

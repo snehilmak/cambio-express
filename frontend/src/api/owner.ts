@@ -82,6 +82,53 @@ export interface OwnerPLRollupResponse {
   year_choices: number[];
 }
 
+export interface OwnerConnectCodeRow {
+  id:                  number;
+  code:                string;
+  created_at:          string;
+  expires_at:          string;
+  used_at:             string;
+  used_by_store_name:  string;
+  revoked_at:          string;
+  is_redeemed:         boolean;
+  is_revoked:          boolean;
+  is_expired:          boolean;
+}
+
+export interface OwnerConnectCodeListResponse {
+  rows:  OwnerConnectCodeRow[];
+  total: number;
+}
+
+export function useOwnerConnectCodes() {
+  const identity = getCurrentIdentity();
+  return useQuery<OwnerConnectCodeListResponse>({
+    enabled: identity?.role === "owner",
+    queryKey: ["owner", "connect-codes", identity?.user_id],
+    queryFn: () =>
+      api<OwnerConnectCodeListResponse>("/api/v2/owner/connect-codes"),
+  });
+}
+
+export async function generateOwnerConnectCode(): Promise<OwnerConnectCodeRow> {
+  const r = await api<{ code: OwnerConnectCodeRow }>(
+    "/api/v2/owner/connect-codes",
+    { method: "POST" },
+  );
+  return r.code;
+}
+
+export async function revokeOwnerConnectCode(
+  code_id: number,
+): Promise<OwnerConnectCodeRow> {
+  const r = await api<{ code: OwnerConnectCodeRow }>(
+    `/api/v2/owner/connect-codes/${code_id}/revoke`,
+    { method: "POST" },
+  );
+  return r.code;
+}
+
+
 export function useOwnerPLRollup(year?: number, month?: number) {
   const identity = getCurrentIdentity();
   const enabled =
