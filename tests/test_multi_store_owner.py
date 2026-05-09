@@ -430,11 +430,14 @@ def test_owner_link_route_is_gone(owner_client):
 # ── Owner-side code generation + revoke ─────────────────────────
 
 
-def test_owner_connect_page_renders(owner_client):
-    rv = owner_client.get("/owner/connect")
-    assert rv.status_code == 200
-    body = rv.data.lower()
-    assert b"invite code" in body or b"generate" in body
+def test_owner_connect_page_redirects_to_app(owner_client):
+    """Page rendering moved to React (/app/owner/connect). The
+    Flask GET handler is now a 301; mint/revoke logic runs through
+    /api/v2/owner/connect-codes (covered in
+    tests/Modules/Owners/test_connect_codes_endpoint.py)."""
+    rv = owner_client.get("/owner/connect", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/owner/connect"
 
 
 def test_owner_generate_creates_active_code(owner_client):
