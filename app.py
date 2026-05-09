@@ -9086,100 +9086,16 @@ def admin_users():
 @app.route("/admin/audit-log")
 @admin_required
 def admin_audit_log():
-    """Unified operator audit log. Combines OperatorAuditLog rows
-    (transfer deletes, batch creates/updates, daily-report locks /
-    unlocks) with TransferAudit rows (transfer creates / edits /
-    status changes) into a single chronological feed.
+    """301 → /app/admin/audit-log. The unified operator audit log
+    moved to React. Filter + pagination logic now lives behind
+    /api/v2/admin/audit-log (target, action, user, page query
+    params preserved through the redirect). Stub keeps
+    url_for('admin_audit_log') working for sidebar nav + bounces
+    old bookmarks."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/admin/audit-log" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
-    Filters:
-        ?target=transfer | daily_report | batch
-        ?user=<id>
-        ?action=create | update | delete | lock | unlock | status_changed
-    """
-    user = current_user()
-    sid = session["store_id"]
-    target_filter = request.args.get("target", "").strip()
-    user_filter   = request.args.get("user",   "").strip()
-    action_filter = request.args.get("action", "").strip()
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except ValueError:
-        page = 1
-    PER_PAGE = 50
-
-    # Pull both feeds, normalize to a common shape, merge, sort.
-    op_q = OperatorAuditLog.query.filter_by(store_id=sid)
-    tx_q = TransferAudit.query.filter_by(store_id=sid)
-    if target_filter:
-        op_q = op_q.filter_by(target_type=target_filter)
-        if target_filter != "transfer":
-            tx_q = tx_q.filter(db.text("1=0"))  # transfer-only feed; suppress when filtered out
-    if user_filter:
-        try:
-            uid = int(user_filter)
-            op_q = op_q.filter_by(user_id=uid)
-            tx_q = tx_q.filter_by(user_id=uid)
-        except ValueError:
-            pass
-    if action_filter:
-        op_q = op_q.filter_by(action=action_filter)
-        tx_q = tx_q.filter_by(action=action_filter)
-
-    op_rows = (op_q.order_by(OperatorAuditLog.created_at.desc())
-               .limit(500).all())
-    tx_rows = (tx_q.order_by(TransferAudit.created_at.desc())
-               .limit(500).all())
-
-    user_ids = ({r.user_id for r in op_rows if r.user_id}
-                | {r.user_id for r in tx_rows if r.user_id})
-    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-
-    merged = []
-    for r in op_rows:
-        merged.append({
-            "ts":            r.created_at,
-            "user_name":     r.user_name or (users.get(r.user_id).username if r.user_id and users.get(r.user_id) else ""),
-            "user_role":     r.user_role,
-            "action":        r.action,
-            "target_type":   r.target_type,
-            "target_id":     r.target_id,
-            "target_label":  r.target_label,
-            "summary":       r.summary,
-            "source":        "operator",
-        })
-    for r in tx_rows:
-        u = users.get(r.user_id) if r.user_id else None
-        merged.append({
-            "ts":            r.created_at,
-            "user_name":     (u.full_name or u.username) if u else r.employee_name or "",
-            "user_role":     u.role if u else "",
-            "action":        r.action,
-            "target_type":   "transfer",
-            "target_id":     str(r.transfer_id),
-            "target_label":  r.summary[:80] if r.summary else f"Transfer #{r.transfer_id}",
-            "summary":       r.summary,
-            "source":        "transfer",
-        })
-    merged.sort(key=lambda x: x["ts"], reverse=True)
-
-    total = len(merged)
-    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
-    page = min(page, total_pages)
-    start = (page - 1) * PER_PAGE
-    page_rows = merged[start:start + PER_PAGE]
-
-    # Roster of users on the store for the filter dropdown.
-    store_users = (User.query.filter_by(store_id=sid)
-                   .order_by(User.full_name, User.username).all())
-
-    return render_template("admin_audit_log.html",
-        user=user,
-        rows=page_rows,
-        total=total, page=page, total_pages=total_pages,
-        target_filter=target_filter, user_filter=user_filter,
-        action_filter=action_filter,
-        store_users=store_users)
 
 @app.route("/admin/users/new",methods=["GET","POST"])
 @admin_required

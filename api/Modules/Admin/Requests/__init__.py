@@ -4,6 +4,11 @@ from api.Modules.Admin.Requests.addons import (
     AddonRow,
     AddonToggleResponse,
 )
+from api.Modules.Admin.Requests.audit_log import (
+    AdminAuditLogResponse,
+    AdminAuditRow,
+    AdminAuditUserOption,
+)
 from api.Modules.Admin.Requests.store_info import (
     StoreInfoResponse,
     StoreInfoRow,
@@ -23,6 +28,9 @@ __all__ = [
     "AddonListResponse",
     "AddonRow",
     "AddonToggleResponse",
+    "AdminAuditLogResponse",
+    "AdminAuditRow",
+    "AdminAuditUserOption",
     "StoreInfoResponse",
     "StoreInfoRow",
     "StoreInfoUpdateRequest",

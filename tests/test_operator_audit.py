@@ -121,41 +121,32 @@ def test_delete_transfer_writes_audit(client, test_store_id):
 
 
 # ── /admin/audit-log page ────────────────────────────────────
+#
+# The page itself moved to React (/app/admin/audit-log). Filter +
+# pagination behavior is exercised against the API endpoint in
+# tests/Modules/Admin/test_audit_log_endpoint.py. What's left here
+# is the legacy 301 redirect contract.
 
 
-def test_audit_log_page_renders(client, test_store_id):
+def test_audit_log_page_redirects_to_app(client, test_store_id):
     _admin_login(client, test_store_id)
-    today = date.today().isoformat()
-    client.post(f"/daily/{today}/lock")
-    resp = client.get("/admin/audit-log")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Activity Log" in body
-    # The lock event we just generated should be visible.
-    assert "lock" in body.lower()
-    assert today in body
+    resp = client.get("/admin/audit-log", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"].startswith("/app/admin/audit-log")
 
 
-def test_audit_log_filters_by_target(client, test_store_id):
+def test_audit_log_query_string_preserved_on_redirect(
+    client, test_store_id,
+):
     _admin_login(client, test_store_id)
-    # Seed two events of different target types.
-    client.post(f"/daily/{date.today().isoformat()}/lock")
-    client.post("/batches/new", data={
-        "ach_date":   date.today().isoformat(),
-        "company":    "Barri",
-        "batch_ref":  "FILTER-TEST",
-        "ach_amount": "100.00",
-        "status":     "Pending",
-    })
-    # Filter to just batches.
-    resp = client.get("/admin/audit-log?target=batch")
-    body = resp.get_data(as_text=True)
-    assert "FILTER-TEST" in body
-    # Daily-report event shouldn't render in the batch-only view.
-    # (We check the absence of the lock badge near the daily-report target.)
-    # Pragmatic: just look for the daily-report target label.
-    daily_label = f"Daily {date.today().isoformat()}"
-    assert daily_label not in body
+    resp = client.get(
+        "/admin/audit-log?target=batch&action=create",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    location = resp.headers["Location"]
+    assert "target=batch" in location
+    assert "action=create" in location
 
 
 def test_audit_log_employee_role_blocked(client, test_store_id):
