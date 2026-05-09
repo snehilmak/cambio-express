@@ -38,16 +38,16 @@ def _seed_transfer(store_id, *, send_date, amount=500.0, fee=5.0,
         db.session.add(t); db.session.commit()
 
 
-def test_tax_export_landing_renders(client, test_store_id):
+def test_tax_export_landing_redirects_to_app(client, test_store_id):
+    """The landing page moved to React (/app/admin/tax-export) — the
+    Flask route is now a 301 redirect that preserves the query
+    string. Page rendering coverage moved to
+    tests/Modules/Admin/test_tax_export_endpoints.py against the
+    /api/v2/admin/tax-export/years endpoint that powers the SPA."""
     _admin_login(client, test_store_id)
-    resp = client.get("/admin/tax-export")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Tax Export Pack" in body
-    assert "Download" in body
-    # Year picker should default to last year.
-    last_year = date.today().year - 1
-    assert str(last_year) in body
+    resp = client.get("/admin/tax-export", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"].startswith("/app/admin/tax-export")
 
 
 def test_tax_export_zip_returns_valid_archive(client, test_store_id):

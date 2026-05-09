@@ -2,6 +2,7 @@ import { Outlet, Route, Routes } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
+import AdminTaxExport from "./routes/AdminTaxExport";
 import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
@@ -89,6 +90,7 @@ export default function App() {
         <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
         <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
         <Route path="subscribe"             element={<Subscribe />} />
+        <Route path="admin/tax-export"      element={<AdminTaxExport />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />

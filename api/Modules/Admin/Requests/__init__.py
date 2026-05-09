@@ -9,6 +9,9 @@ from api.Modules.Admin.Requests.store_info import (
     StoreInfoRow,
     StoreInfoUpdateRequest,
 )
+from api.Modules.Admin.Requests.tax_export import (
+    TaxExportYearsResponse,
+)
 from api.Modules.Admin.Requests.team import (
     TeamListResponse,
     TeamMemberCreateRequest,
@@ -23,6 +26,7 @@ __all__ = [
     "StoreInfoResponse",
     "StoreInfoRow",
     "StoreInfoUpdateRequest",
+    "TaxExportYearsResponse",
     "TeamListResponse",
     "TeamMemberCreateRequest",
     "TeamMemberRow",

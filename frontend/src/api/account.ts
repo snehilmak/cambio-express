@@ -135,6 +135,19 @@ export async function lookupStoreBySlug(
   }
 }
 
+
+export interface TaxExportYears {
+  years:        number[];
+  default_year: number;
+}
+
+export function useTaxExportYears() {
+  return useQuery<TaxExportYears>({
+    queryKey: ["admin", "tax-export", "years"],
+    queryFn: () => api<TaxExportYears>("/api/v2/admin/tax-export/years"),
+  });
+}
+
 export interface StoreInfoRow {
   id: number;
   name: string;
