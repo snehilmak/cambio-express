@@ -204,6 +204,34 @@ export async function updateProfile(
 }
 
 
+export interface NotificationsResponse {
+  notify_trial_reminders:    boolean;
+  notify_announcement_email: boolean;
+  trial_toggle_applies:      boolean;
+  role:                      string;
+}
+
+export interface NotificationsUpdateBody {
+  notify_trial_reminders?:    boolean;
+  notify_announcement_email?: boolean;
+}
+
+export function useNotifications() {
+  return useQuery<NotificationsResponse>({
+    queryKey: ["account", "notifications"],
+    queryFn: () => api<NotificationsResponse>("/api/v2/auth/notifications"),
+  });
+}
+
+export async function updateNotifications(
+  body: NotificationsUpdateBody,
+): Promise<NotificationsResponse> {
+  return api<NotificationsResponse>("/api/v2/auth/notifications", {
+    method: "PUT", json: body,
+  });
+}
+
+
 export function useStoreInfo() {
   const identity = getCurrentIdentity();
   return useQuery<{ store: StoreInfoRow }>({

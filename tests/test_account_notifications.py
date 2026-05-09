@@ -41,45 +41,49 @@ def _make_user(app, role, store_id, *, username, email="", password="x",
         return u.id
 
 
-# ── Access + render ────────────────────────────────────────────
+# ── Flask redirect ─────────────────────────────────────────────
+#
+# Page rendering + form-POST coverage moved to React + the new
+# GET/PUT /api/v2/auth/notifications endpoints. SPA-side coverage
+# lives in tests/Modules/Auth/test_notifications_endpoint.py.
+# What's left here: the legacy URL still 301s for any role, and
+# the trial-reminder sender + dedup logic continues to work.
+
 
 def test_anonymous_redirected(client):
-    resp = client.get("/account/notifications")
-    assert resp.status_code in (302, 401)
+    resp = client.get("/account/notifications", follow_redirects=False)
+    # login_required redirects anonymous users to /login before the
+    # 301 to /app/account/notifications fires, so 301/302/401 are
+    # all acceptable here.
+    assert resp.status_code in (301, 302, 401)
 
 
-def test_admin_page_renders(logged_in_client):
-    resp = logged_in_client.get("/account/notifications")
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    for token in ("Your preferences", "Trial-ending reminder",
-                  "What DineroBook sends you", "Password reset",
-                  "Save preferences"):
-        assert token in body, f"missing: {token}"
+def test_admin_legacy_url_redirects_to_app(logged_in_client):
+    resp = logged_in_client.get(
+        "/account/notifications", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/account/notifications"
 
 
-def test_employee_page_renders_with_toggle_disabled(client, test_store_id):
-    """Employees see the same catalog, but the trial toggle is
-    non-applicable (they don't own a trial) so it renders `disabled`."""
+def test_employee_legacy_url_redirects_to_app(client, test_store_id):
     emp = _client_for(client.application,
                       _make_user(client.application, "employee", test_store_id,
                                  username="emp-notif@test.com"),
                       "employee", test_store_id)
-    resp = emp.get("/account/notifications")
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    assert 'id="ntr"' in body
-    assert "disabled" in body  # toggle is disabled for employees
+    resp = emp.get("/account/notifications", follow_redirects=False)
+    assert resp.status_code == 301
 
 
-def test_superadmin_page_renders(client):
+def test_superadmin_legacy_url_redirects_to_app(client):
     with client.application.app_context():
         sa_id = User.query.filter_by(username="superadmin").first().id
     sa = _client_for(client.application, sa_id, "superadmin", None)
-    assert sa.get("/account/notifications").status_code == 200
+    resp = sa.get("/account/notifications", follow_redirects=False)
+    assert resp.status_code == 301
 
 
-def test_owner_page_renders(client):
+def test_owner_legacy_url_redirects_to_app(client):
     with client.application.app_context():
         s = Store(name="ON", slug="on-notif", plan="basic")
         db.session.add(s); db.session.flush()
@@ -88,27 +92,8 @@ def test_owner_page_renders(client):
                       _make_user(client.application, "owner", sid,
                                  username="own-notif@test.com"),
                       "owner", sid)
-    assert own.get("/account/notifications").status_code == 200
-
-
-# ── Preference persistence ─────────────────────────────────────
-
-def test_toggle_off_persists(logged_in_client, test_admin_id):
-    # Checkbox absent → field missing from POST body → stored as False.
-    resp = logged_in_client.post("/account/notifications", data={},
-                                 follow_redirects=True)
-    assert resp.status_code == 200
-    with logged_in_client.application.app_context():
-        assert db.session.get(User, test_admin_id).notify_trial_reminders is False
-
-
-def test_toggle_on_persists(logged_in_client, test_admin_id):
-    # First turn off, then on, to exercise the True path explicitly.
-    logged_in_client.post("/account/notifications", data={})
-    logged_in_client.post("/account/notifications",
-                          data={"notify_trial_reminders": "1"})
-    with logged_in_client.application.app_context():
-        assert db.session.get(User, test_admin_id).notify_trial_reminders is True
+    resp = own.get("/account/notifications", follow_redirects=False)
+    assert resp.status_code == 301
 
 
 # ── send_trial_reminders sender ────────────────────────────────

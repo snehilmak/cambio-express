@@ -3103,39 +3103,12 @@ def account_theme():
 @app.route("/account/notifications", methods=["GET", "POST"])
 @login_required
 def account_notifications():
-    """Per-user notification preferences. v1 ships a single real
-    toggle — trial-reminder emails — because that's the only sender
-    (beyond password reset) we actually have today. The rest of the
-    page is an honest catalog: what DineroBook sends you, and what
-    you can control.
-
-    Checkbox semantics: unchecked checkboxes don't appear in the POST
-    body at all, so we always default the "trial reminder" pref to
-    False on POST and flip it True only if the checkbox is present.
-    """
-    user = current_user()
-    store = current_store()
-    if request.method == "POST":
-        user.notify_trial_reminders = bool(request.form.get("notify_trial_reminders"))
-        user.notify_announcement_email = bool(request.form.get("notify_announcement_email"))
-        db.session.commit()
-        flash("Notification preferences saved.", "success")
-        return redirect(url_for("account_notifications"))
-
-    # "Does the trial-reminder toggle apply to me?" — only for
-    # admins/owners of a store that's actually trialing today. For
-    # employees + superadmin + paid stores the toggle is shown as
-    # informational (greyed out with a note) rather than hidden, so
-    # users understand the full preferences surface.
-    trial_toggle_applies = bool(
-        user.role in ("admin", "owner")
-        and store is not None
-        and get_trial_status(store) in ("active", "expiring_soon", "grace")
-    )
-    return render_template("account_notifications.html",
-        user=user, store=store,
-        trial_toggle_applies=trial_toggle_applies,
-    )
+    """301 → /app/account/notifications. Toggle UI moved to React;
+    GET/PUT /api/v2/auth/notifications drives persistence. The
+    trial-toggle gating logic (admin/owner of a trialing store)
+    moved into the api.Modules.Auth.Services.notifications module
+    so SPA + Flask see the same `applies` state."""
+    return redirect("/app/account/notifications", code=301)
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():

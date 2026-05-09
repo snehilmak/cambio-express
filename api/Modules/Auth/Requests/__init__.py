@@ -20,6 +20,10 @@ from api.Modules.Auth.Requests.login import (
     TotpEnrollStartResponse,
     TotpLoginRequest,
 )
+from api.Modules.Auth.Requests.notifications import (
+    NotificationsResponse,
+    NotificationsUpdateRequest,
+)
 from api.Modules.Auth.Requests.profile import (
     ProfileResponse,
     ProfileUpdateRequest,
@@ -31,6 +35,8 @@ __all__ = [
     "LoginCrossStoreRequest",
     "LoginRequest",
     "LoginResponse",
+    "NotificationsResponse",
+    "NotificationsUpdateRequest",
     "OwnerSignupRequest",
     "OwnerSignupResponse",
     "ProfileResponse",

@@ -23,6 +23,8 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    NotificationsResponse,
+    NotificationsUpdateRequest,
     OwnerSignupRequest,
     OwnerSignupResponse,
     ProfileResponse,
@@ -55,11 +57,13 @@ from api.Modules.Auth.Services import (
     finalize_2fa_with_recovery_code,
     finalize_2fa_with_totp,
     finish_totp_enrollment,
+    get_notifications_payload,
     get_profile_payload,
     issue_access_token,
     issue_password_reset_token,
     permissions_for,
     start_totp_enrollment,
+    update_notifications,
     update_profile,
     verify_password_reset_token,
 )
@@ -418,6 +422,42 @@ def update_profile_route(
         )
     db.commit()
     return ProfileResponse(**get_profile_payload(user))
+
+
+@router.get("/notifications", response_model=NotificationsResponse)
+def get_notifications_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> NotificationsResponse:
+    """Per-user notification preferences. Powers
+    /app/account/notifications. `trial_toggle_applies` tells the
+    SPA whether the Trial-ending toggle should render as
+    interactive or as a greyed-out informational row."""
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return NotificationsResponse(**get_notifications_payload(db, user))
+
+
+@router.put("/notifications", response_model=NotificationsResponse)
+def update_notifications_route(
+    body: NotificationsUpdateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> NotificationsResponse:
+    """Apply notification preference changes. Both fields
+    optional — None means 'don't touch'. Returns the canonical
+    state after the update."""
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    update_notifications(
+        db, user,
+        notify_trial_reminders=body.notify_trial_reminders,
+        notify_announcement_email=body.notify_announcement_email,
+    )
+    db.commit()
+    return NotificationsResponse(**get_notifications_payload(db, user))
 
 
 @router.post("/change-password")

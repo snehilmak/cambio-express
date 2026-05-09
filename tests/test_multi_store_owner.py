@@ -773,11 +773,13 @@ def test_owner_account_security_uses_owner_shell(owner_client):
     assert b'href="/transfers"' not in rv.data
 
 
-def test_owner_account_notifications_uses_owner_shell(owner_client):
-    rv = owner_client.get("/account/notifications")
-    assert rv.status_code == 200
-    assert b'href="/owner/locations"' in rv.data
-    assert b'href="/transfers"' not in rv.data
+def test_owner_account_notifications_redirects_to_app(owner_client):
+    """Page rendering moved to React (/app/account/notifications);
+    chrome-mismatch coverage moved to the SPA's role gating. Here
+    we just confirm the legacy URL 301s for owners too."""
+    rv = owner_client.get("/account/notifications", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/account/notifications"
 
 
 def test_owner_store_detail_renders_recent_transfers(owner_client):
