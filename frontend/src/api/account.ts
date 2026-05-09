@@ -3,7 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "./../lib/api";
+import { api, ApiError } from "./../lib/api";
 import { getCurrentIdentity } from "./../lib/auth";
 
 export interface ChangePasswordBody {
@@ -60,6 +60,25 @@ export async function signupOwner(
     "/api/v2/auth/signup/owner",
     { method: "POST", json: body },
   );
+}
+
+export interface StoreLookup {
+  store_id: number;
+  name: string;
+  slug: string;
+}
+
+export async function lookupStoreBySlug(
+  slug: string,
+): Promise<StoreLookup | null> {
+  try {
+    return await api<StoreLookup>(
+      `/api/v2/auth/store-by-slug/${encodeURIComponent(slug)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 export interface StoreInfoRow {

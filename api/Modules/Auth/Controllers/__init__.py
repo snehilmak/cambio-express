@@ -10,7 +10,7 @@ share.
   GET  /auth/me   → returns the verified principal from the bearer
                      token (no DB roundtrip — claims-only).
 """
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.orm import Session
 
 import jwt
@@ -29,6 +29,7 @@ from api.Modules.Auth.Requests import (
     ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
+    StoreLookupResponse,
     TotpLoginRequest,
 )
 from api.Modules.Auth.Services import (
@@ -120,9 +121,51 @@ def _to_login_response(
     )
 
 
+# Cookie name + lifetime preserved from the legacy /login/<slug>
+# Flask handler so behaviour stays identical: an installed-PWA
+# employee who lands on `/` (or any chrome-only legacy page)
+# still gets bounced to their store's sign-in URL via the
+# `_active_store_from_cookie` helper. Set on every per-store
+# login here too.
+_LAST_STORE_SLUG_COOKIE = "ds_last_store"
+_LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
+
+
+def _set_last_store_slug_cookie(response: Response, slug: str) -> None:
+    """Mirror app._set_last_store_slug_cookie. Used by the
+    per-store login flow so the SPA's `/app/login/{slug}` page
+    sets the same cookie the legacy Flask route did."""
+    response.set_cookie(
+        key=_LAST_STORE_SLUG_COOKIE,
+        value=slug,
+        max_age=_LAST_STORE_SLUG_MAX_AGE,
+        httponly=True,
+        samesite="lax",
+    )
+
+
+def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
+    """Append a LoginEvent + bump User.last_login_at. Called by every
+    SPA-side login path so the DAU/MAU report stays accurate. Mirrors
+    `app._record_login`, but uses the FastAPI request-scoped session
+    rather than Flask's. Caller is responsible for committing."""
+    from datetime import datetime
+    from app import LoginEvent, User
+    u = db.query(User).filter(User.id == user_id).first()
+    if u is None:
+        return
+    u.last_login_at = datetime.utcnow()
+    db.add(LoginEvent(
+        user_id=u.id, role=u.role or "",
+        method=method, at=datetime.utcnow(),
+    ))
+
+
 @router.post("/login", response_model=LoginResponse)
 def login_route(
-    body: LoginRequest, db: Session = Depends(get_db),
+    body: LoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> LoginResponse:
     try:
         result = authenticate_password(
@@ -138,7 +181,48 @@ def login_route(
         )
     except TotpEnrollmentRequired as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    # Record the LoginEvent so DAU/MAU stays accurate. Legacy Flask
+    # /login routes did this via app._record_login; the SPA path
+    # mirrors it here so the report doesn't go dark on migrated users.
+    _record_login_event(db, result.user_id, method="password")
+    # If we authed against a specific store (per-store login flow),
+    # remember it in the cookie so legacy /-route fallbacks redirect
+    # the user to their store's URL on next visit.
+    if body.store_id is not None:
+        from app import Store
+        store = db.query(Store).filter(Store.id == body.store_id).first()
+        if store is not None and store.slug:
+            _set_last_store_slug_cookie(response, store.slug)
+    db.commit()
     return _to_login_response(result)
+
+
+@router.get(
+    "/store-by-slug/{slug}", response_model=StoreLookupResponse,
+)
+def store_by_slug_route(
+    slug: str, db: Session = Depends(get_db),  # noqa: ARG001
+) -> StoreLookupResponse:
+    """Public store lookup for the SPA's per-store login page.
+    Mirrors the legacy `/login/<slug>` route's "store must exist
+    + be active" guard — inactive / unknown slugs return 404 so
+    the SPA shows the same opaque-not-found shell.
+
+    Returns just the public-safe fields (id, name, slug). No
+    private detail (Stripe IDs, plan, retention dates) is exposed
+    here — that lives behind the JWT-protected /admin/store-info
+    endpoint."""
+    from app import Store
+    s = (
+        db.query(Store)
+          .filter(Store.slug == (slug or "").strip().lower())
+          .first()
+    )
+    if s is None or not s.is_active:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return StoreLookupResponse(
+        store_id=s.id, name=s.name or "", slug=s.slug or "",
+    )
 
 
 @router.post("/login-cross-store", response_model=LoginResponse)

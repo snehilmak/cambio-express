@@ -14,6 +14,7 @@ import EditTransfer from "./routes/EditTransfer";
 import ForgotPassword from "./routes/ForgotPassword";
 import Home from "./routes/Home";
 import Login from "./routes/Login";
+import LoginStore from "./routes/LoginStore";
 import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
@@ -50,6 +51,7 @@ export default function App() {
     <Routes>
       <Route index element={<Home />} />
       <Route path="login"            element={<Login />} />
+      <Route path="login/:slug"      element={<LoginStore />} />
       <Route path="signup"           element={<Signup />} />
       <Route path="signup/owner"     element={<SignupOwner />} />
       <Route path="forgot-password"  element={<ForgotPassword />} />
