@@ -914,3 +914,207 @@ def test_reset_password_consumed_token_cannot_be_reused(client, test_store_id): 
         },
     )
     assert r2.status_code == 400
+
+
+# ── GET /auth/referral/{code} + signup ref_code resolution ──
+#
+# The referral preview endpoint powers the green "$X off your
+# first paid month" banner on the SPA's /signup page (see
+# CLAUDE.md invariant #12). Signup itself takes an optional
+# ref_code field — valid codes are resolved into a
+# referred_by_code_id; unknown codes are silently dropped to
+# match the legacy Jinja behavior.
+
+
+def _seed_referral_code(*, owner_store_id, code="ABCD1234",
+                        reward_referee_cents=5000):
+    """Mint a ReferralCode row directly. Use a uniqueness-friendly
+    code per test so parallel runs don't collide on the
+    `code` unique index."""
+    from app import ReferralCode, db
+    rc = ReferralCode(
+        owner_store_id=owner_store_id, code=code,
+        reward_self_cents=10000,
+        reward_referee_cents=reward_referee_cents,
+        is_active=True,
+    )
+    db.session.add(rc); db.session.commit()
+    return rc
+
+
+def test_referral_preview_returns_code_and_reward(
+    client, test_store_id,
+):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="GOOD1234",
+            reward_referee_cents=7500,
+        )
+    resp = client.get("/api/v2/auth/referral/GOOD1234")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["code"] == "GOOD1234"
+    assert body["reward_referee_cents"] == 7500
+
+
+def test_referral_preview_404_for_unknown_code(client):
+    resp = client.get("/api/v2/auth/referral/NEVERMINTED")
+    assert resp.status_code == 404
+
+
+def test_referral_preview_normalizes_lowercase(
+    client, test_store_id,
+):
+    """Codes are stored uppercase; the SPA shouldn't have to
+    pre-normalize. Lowercase lookup must still resolve."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="MIXED999",
+        )
+    resp = client.get("/api/v2/auth/referral/mixed999")
+    assert resp.status_code == 200
+    assert resp.get_json()["code"] == "MIXED999"
+
+
+def test_referral_preview_strips_whitespace(client, test_store_id):
+    """Pasted codes often pick up trailing whitespace; the
+    endpoint must tolerate it."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="WHITES12",
+        )
+    resp = client.get("/api/v2/auth/referral/   whites12  ")
+    assert resp.status_code == 200
+
+
+def test_referral_preview_404_for_blank_code(client):
+    """A non-empty path segment is required by FastAPI's router,
+    but a whitespace-only segment should still 404 (lookup
+    returns None)."""
+    resp = client.get("/api/v2/auth/referral/%20")
+    assert resp.status_code == 404
+
+
+def test_signup_with_valid_ref_code_records_referrer(
+    client, test_store_id,
+):
+    """When a signup carries a recognized ref_code, the new store's
+    referred_by_code_id must point at the referrer's
+    ReferralCode.id."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="REFER123",
+        )
+        rc_id = rc.id
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Referee Cambio",
+            "email":      "referee@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "REFER123",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id == rc_id
+
+
+def test_signup_with_unknown_ref_code_silently_drops(client):
+    """Unknown ref_codes don't fail the signup — they just don't
+    record referred_by_code_id. Mirrors legacy Jinja behavior."""
+    from app import Store, app as flask_app, db
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "No-Ref Cambio",
+            "email":      "no-ref@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "DOESNOTEXIST",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+def test_signup_normalizes_ref_code_case_and_whitespace(
+    client, test_store_id,
+):
+    """Ref codes get .strip().upper() before lookup — pasted
+    'refer123 ' or 'Refer123' both resolve."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="NORMRF99",
+        )
+        rc_id = rc.id
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Norm Cambio",
+            "email":      "norm@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "  normrf99  ",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id == rc_id
+
+
+def test_signup_with_no_ref_code_omits_referrer(client):
+    """Absence of ref_code means referred_by_code_id stays null."""
+    from app import Store, app as flask_app, db
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Solo Cambio",
+            "email":      "solo@example.com",
+            "password":   "validpass12345",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+def test_signup_with_inactive_ref_code_silently_drops(
+    client, test_store_id,
+):
+    """An is_active=False referral code shouldn't credit the
+    referrer — lookup_referral_code filters on is_active so the
+    signup falls through to the no-referrer branch."""
+    from app import ReferralCode, Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="INACT123",
+        )
+        rc.is_active = False
+        db.session.commit()
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Inactive Ref Cambio",
+            "email":      "inactive-ref@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "INACT123",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
