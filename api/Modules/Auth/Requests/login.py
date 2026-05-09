@@ -146,3 +146,33 @@ class RecoveryLoginRequest(BaseModel):
 
     pending_token: str = Field(..., min_length=1)
     code:          str = Field(..., min_length=1, max_length=40)
+
+
+class OwnerSignupRequest(BaseModel):
+    """POST body for /auth/signup/owner. Mirrors the legacy
+    /signup/owner Jinja form. Returns a JWT on success so the SPA
+    drops the new owner straight onto /owner/dashboard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: str = Field(..., min_length=1, max_length=120)
+    email:     str = Field(..., min_length=3, max_length=255)
+    password:  str = Field(..., min_length=8, max_length=200)
+
+
+class OwnerSignupResponse(BaseModel):
+    """Same shape as LoginResponse — the SPA reuses the standard
+    auth handoff (set token, then navigate). `store_id` is always
+    None for owners (they manage many stores via invite codes)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int = 30 * 60
+    user_id: int
+    username: str
+    full_name: str = ""
+    role: str
+    store_id: int | None
+    permissions: list[str]

@@ -25,6 +25,7 @@ import ReturnCheckForm from "./routes/ReturnCheckForm";
 import ReturnChecks from "./routes/ReturnChecks";
 import Settings from "./routes/Settings";
 import Signup from "./routes/Signup";
+import SignupOwner from "./routes/SignupOwner";
 import Subscribe from "./routes/Subscribe";
 import SuperadminAnnouncements from "./routes/SuperadminAnnouncements";
 import SuperadminAuditLog from "./routes/SuperadminAuditLog";
@@ -50,6 +51,7 @@ export default function App() {
       <Route index element={<Home />} />
       <Route path="login"            element={<Login />} />
       <Route path="signup"           element={<Signup />} />
+      <Route path="signup/owner"     element={<SignupOwner />} />
       <Route path="forgot-password"  element={<ForgotPassword />} />
       <Route path="reset-password"   element={<ResetPassword />} />
       <Route element={<AuthedShell />}>

@@ -96,77 +96,81 @@ def test_login_already_logged_in_owner_redirects_to_owner_dashboard(client):
 
 
 def test_owner_signup_success(client):
-    rv = client.post("/signup/owner", data={
+    """Owner signup creates a User with role='owner', store_id=None,
+    and returns a JWT — the SPA stores it and lands on /dashboard.
+    Form moved to React; the endpoint is /api/v2/auth/signup/owner."""
+    rv = client.post("/api/v2/auth/signup/owner", json={
         "full_name": "Jane Owner",
         "email": "jane@example.com",
         "password": "password123",
     })
-    assert rv.status_code == 302
-    assert "owner/dashboard" in rv.headers["Location"]
+    assert rv.status_code == 201, rv.get_data(as_text=True)
+    body = rv.get_json()
+    assert body["role"] == "owner"
+    assert body["store_id"] is None
+    assert body["username"] == "jane@example.com"
+    assert body["access_token"]
     with flask_app.app_context():
         from app import User
         u = User.query.filter_by(username="jane@example.com", store_id=None).first()
         assert u is not None
         assert u.role == "owner"
-        assert u.store_id is None
         assert u.full_name == "Jane Owner"
 
 
-def test_owner_signup_sets_session(client):
-    rv = client.post("/signup/owner", data={
-        "full_name": "Jane Owner",
-        "email": "jane@example.com",
-        "password": "password123",
-    })
-    with client.session_transaction() as sess:
-        assert sess["role"] == "owner"
-        assert sess.get("store_id") is None
+def test_owner_signup_get_legacy_route_redirects_to_spa(client):
+    """The legacy /signup/owner GET form is gone — now a 301 to
+    /app/signup/owner so url_for() in still-Jinja templates and old
+    bookmarks keep working."""
+    rv = client.get("/signup/owner", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/signup/owner"
 
 
 def test_owner_signup_duplicate_email_rejected(client):
-    """Duplicate email is rejected even for second signup attempt."""
+    """Duplicate email returns 409 with field=email so the SPA can
+    highlight the input."""
     with flask_app.app_context():
         from app import User
         existing = User(username="jane@example.com", full_name="Jane Owner", role="owner", store_id=None)
         existing.set_password("password123")
         db.session.add(existing)
         db.session.commit()
-    rv = client.post("/signup/owner", data={
+    rv = client.post("/api/v2/auth/signup/owner", json={
         "full_name": "Jane 2", "email": "jane@example.com", "password": "password123",
     })
-    assert rv.status_code == 200
-    assert b"already exists" in rv.data
+    assert rv.status_code == 409
+    body = rv.get_json()
+    assert body["detail"]["field"] == "email"
 
 
 def test_owner_signup_short_password_rejected(client):
-    rv = client.post("/signup/owner", data={
+    """Pydantic min_length=8 → 422."""
+    rv = client.post("/api/v2/auth/signup/owner", json={
         "full_name": "Jane Owner", "email": "jane@example.com", "password": "short",
     })
-    assert rv.status_code == 200
-    assert b"8 characters" in rv.data
+    assert rv.status_code == 422
 
 
 def test_owner_signup_invalid_email_rejected(client):
-    rv = client.post("/signup/owner", data={
+    """Email shape check at the controller layer → 422 with field=email."""
+    rv = client.post("/api/v2/auth/signup/owner", json={
         "full_name": "Jane Owner", "email": "notanemail", "password": "password123",
     })
-    assert rv.status_code == 200
-    assert b"valid email" in rv.data
+    assert rv.status_code == 422
+    body = rv.get_json()
+    assert body["detail"]["field"] == "email"
 
 
 def test_owner_signup_blocks_admin_email(client):
-    """Existing store admin email cannot be reused as an owner."""
-    rv = client.post("/signup/owner", data={
+    """Existing store admin email cannot be reused as an owner —
+    ambiguous which login it should accept."""
+    rv = client.post("/api/v2/auth/signup/owner", json={
         "full_name": "Jane Owner", "email": "admin@test.com", "password": "password123",
     })
-    assert rv.status_code == 200
-    assert b"already exists" in rv.data
-
-
-def test_owner_signup_get_renders_form(client):
-    rv = client.get("/signup/owner")
-    assert rv.status_code == 200
-    assert b"Create owner account" in rv.data
+    assert rv.status_code == 409
+    body = rv.get_json()
+    assert body["detail"]["field"] == "email"
 
 
 @pytest.fixture

@@ -44,8 +44,10 @@ from api.Modules.Auth.Services.password_reset import (
 from api.Modules.Auth.Services.signup import (
     DEFAULT_GRACE_DAYS,
     DEFAULT_TRIAL_DAYS,
+    OwnerSignupResult,
     SignupConflictError,
     SignupResult,
+    create_owner,
     create_store_and_admin,
 )
 from api.Modules.Auth.Services.totp import (
@@ -69,6 +71,7 @@ __all__ = [
     "LoginPendingResult",
     "LoginResult",
     "MIN_PASSWORD_LENGTH",
+    "OwnerSignupResult",
     "PASSKEY_RP_NAME",
     "RECOVERY_CODES_PER_USER",
     "SignupConflictError",
@@ -81,6 +84,7 @@ __all__ = [
     "change_password",
     "consume_password_reset_token",
     "consume_recovery_code",
+    "create_owner",
     "create_store_and_admin",
     "decode_access_token",
     "decode_pending_2fa_token",
