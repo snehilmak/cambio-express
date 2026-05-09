@@ -33,6 +33,33 @@ from app import app as flask_app, db
 flask_app.config["TESTING"] = True
 
 
+# Stable TOTP secret for the seeded superadmin so test helpers can
+# compute current codes deterministically via `pyotp.TOTP().now()`.
+# Picked once at module import; never rotated within a session.
+import pyotp as _pyotp
+SUPERADMIN_TOTP_SECRET = _pyotp.random_base32()
+
+
+def login_superadmin(client) -> str:
+    """Log in as the seeded superadmin and return the access token.
+    Wraps the two-step SPA flow (password → TOTP exchange) so tests
+    don't have to repeat the `pyotp.TOTP(secret).now()` boilerplate.
+    Returns the bearer JWT ready for `Authorization: Bearer <…>`."""
+    pending = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin",
+            "password": "super2025!",
+            "store_id": None,
+        },
+    ).get_json()["pending_token"]
+    code = _pyotp.TOTP(SUPERADMIN_TOTP_SECRET).now()
+    return client.post(
+        "/api/v2/auth/login/totp",
+        json={"pending_token": pending, "code": code},
+    ).get_json()["access_token"]
+
+
 def seed_test_data():
     from app import User, Store, _seed_tv_catalogs
     # TV-display catalogs (companies + banks) are seeded by init_db
@@ -41,8 +68,17 @@ def seed_test_data():
     # see the same canonical 12 + 34 entries production does.
     _seed_tv_catalogs()
     if not User.query.filter_by(username="superadmin", store_id=None).first():
+        # Pre-enrol the seeded superadmin so SPA login returns a real
+        # access_token directly via the TOTP exchange step. The flow
+        # is: POST /auth/login with creds → pending_token → POST
+        # /auth/login/totp with `pyotp.TOTP(SUPERADMIN_TOTP_SECRET).now()`
+        # → access_token. Tests use the `login_superadmin(client)`
+        # helper below to wrap that two-step exchange. See CLAUDE.md
+        # invariant #13 — production superadmins MUST be enrolled.
         sa = User(username="superadmin", full_name="Platform Owner",
-                  role="superadmin", store_id=None)
+                  role="superadmin", store_id=None,
+                  totp_secret=SUPERADMIN_TOTP_SECRET,
+                  totp_enrolled_at=datetime.utcnow())
         sa.set_password("super2025!")
         db.session.add(sa)
     if not Store.query.filter_by(slug="test-store").first():

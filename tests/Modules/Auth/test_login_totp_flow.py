@@ -88,11 +88,21 @@ def test_login_unenrolled_superadmin_returns_enroll_required(client):
     """An unenrolled superadmin now gets a 2FA-pending response with
     `enroll_required=True`, so the SPA can route them to the
     /app/login/2fa/enroll page and drive enrollment via the
-    /auth/login/totp/enroll/* set."""
+    /auth/login/totp/enroll/* set. We create a fresh User here
+    rather than mutate the seeded `superadmin` (which is pre-
+    enrolled in conftest)."""
+    from app import app as flask_app, User, db
+    with flask_app.app_context():
+        u = User(
+            store_id=None, username="ne@super",
+            full_name="Not Enrolled", role="superadmin",
+        )
+        u.set_password("ne2025!")
+        db.session.add(u); db.session.commit()
     resp = client.post(
         "/api/v2/auth/login",
         json={
-            "username": "superadmin", "password": "super2025!",
+            "username": "ne@super", "password": "ne2025!",
             "store_id": None,
         },
     )

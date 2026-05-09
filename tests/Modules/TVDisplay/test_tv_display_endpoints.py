@@ -20,12 +20,11 @@ def _login_admin(client, store_id):
 
 
 def _login_superadmin(client):
-    resp = client.post(
-        "/api/v2/auth/login",
-        json={"username": "superadmin", "password": "super2025!",
-              "store_id": None},
-    )
-    return resp.get_json()["access_token"]
+    """Wraps the SPA two-step login (password → TOTP exchange)
+    using the seeded superadmin's pre-enrolled TOTP secret. See
+    tests/conftest.py for the secret + helper definition."""
+    from tests.conftest import login_superadmin
+    return login_superadmin(client)
 
 
 def _enable_tv_addon(store_id):

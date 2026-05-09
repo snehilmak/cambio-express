@@ -56,11 +56,13 @@ def test_login_returns_401_on_unknown_user(test_store_id):
 
 
 def test_login_finds_superadmin_with_null_store_id():
-    """The seeded superadmin has no TOTP enrolled so they hit the
-    enroll-required pending shape (requires_totp=True,
-    enroll_required=True, pending_token issued). Pre-enrolling
-    here would make the assertion shape brittle; the pending shape
-    is the real contract for a fresh superadmin."""
+    """The seeded superadmin is pre-enrolled in TOTP (see
+    tests/conftest.py's seed_test_data) so login returns a 2FA
+    pending response, not a full token. enroll_required must be
+    False — they're already enrolled — and the SPA exchanges the
+    pending_token via /auth/login/totp to get the access token.
+    Tests that need a real bearer token use the
+    `login_superadmin(client)` helper from conftest."""
     resp = _client().post(
         "/auth/login",
         json={
@@ -72,7 +74,7 @@ def test_login_finds_superadmin_with_null_store_id():
     assert resp.status_code == 200
     body = resp.json()
     assert body["requires_totp"] is True
-    assert body["enroll_required"] is True
+    assert body["enroll_required"] is False
     assert body["pending_token"]
     assert body["user_id"]
 
