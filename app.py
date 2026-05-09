@@ -3743,35 +3743,14 @@ def subscribe_success():
 @app.route("/account/referrals")
 @admin_required
 def admin_referrals():
-    """Self-service view of the admin's own referral code + stats.
-
-    Paid plans only — the crown in the topbar is hidden on trial and the
-    webhook mints the code at the paid transition. If somehow a paid
-    admin arrives here without a code (e.g. they subscribed before this
-    feature shipped), lazily mint on the fly.
-    """
-    user  = current_user()
-    store = current_store()
-    if not store_has_paid_plan(store):
-        flash("Referrals unlock when your subscription is active.", "error")
-        return redirect(url_for("admin_subscription"))
-    rc = ensure_referral_code(store)
-    db.session.commit()
-    # Stats: total redemptions + total credits earned (from the history).
-    redemptions = (ReferralRedemption.query
-                   .filter_by(referral_code_id=rc.id)
-                   .order_by(ReferralRedemption.redeemed_at.desc())
-                   .all())
-    credits_earned_cents = sum(
-        rc.reward_self_cents for r in redemptions if r.self_credit_applied_at
-    )
-    share_url = url_for("signup", ref=rc.code, _external=True)
-    return render_template("admin_referrals.html",
-        user=user, store=store,
-        referral=rc, redemptions=redemptions,
-        credits_earned_cents=credits_earned_cents,
-        share_url=share_url,
-    )
+    """301 → /app/account/referrals. Self-service code + stats
+    moved to React. The lazy-mint-on-first-paid-visit and the
+    trial-blocked behavior live behind /api/v2/admin/referrals
+    now (returns 409 for trial admins; the SPA renders an
+    upsell card pointing at /app/subscribe). Stub keeps
+    url_for('admin_referrals') working for the topbar crown +
+    bounces old bookmarks."""
+    return redirect("/app/account/referrals", code=301)
 
 # ── Subscription management ──────────────────────────────────
 @app.route("/admin/subscription")

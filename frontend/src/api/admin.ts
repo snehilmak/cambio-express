@@ -3,8 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 
 // Per-store admin endpoints — distinct from `account.ts` (store-info,
-// team, passkeys) and `superadmin.ts` (platform-wide). Today: the
-// merged operator audit log. New admin Controllers belong here too.
+// team, passkeys) and `superadmin.ts` (platform-wide). New admin
+// Controllers belong here too.
 
 export interface AdminAuditRow {
   ts:           string;
@@ -51,5 +51,32 @@ export function useAdminAuditLog(
         `/api/v2/admin/audit-log?${p.toString()}`,
       );
     },
+  });
+}
+
+
+export interface ReferralRedemptionRow {
+  redeemed_at:            string;
+  referee_store_id:       number;
+  self_credit_applied:    boolean;
+  referee_credit_applied: boolean;
+  stripe_self_txn_id:     string;
+}
+
+export interface ReferralCodeResponse {
+  code:                  string;
+  is_active:             boolean;
+  reward_self_cents:     number;
+  reward_referee_cents:  number;
+  redeemed_count:        number;
+  credits_earned_cents:  number;
+  share_url:             string;
+  redemptions:           ReferralRedemptionRow[];
+}
+
+export function useReferralCode() {
+  return useQuery<ReferralCodeResponse>({
+    queryKey: ["admin", "referrals"],
+    queryFn: () => api<ReferralCodeResponse>("/api/v2/admin/referrals"),
   });
 }
