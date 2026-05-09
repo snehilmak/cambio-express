@@ -99,7 +99,16 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = {"pool_pre_ping": True}
+_engine_opts: dict = {"pool_pre_ping": True}
+# SQLite :memory: gets its own DB per connection by default, which
+# breaks the test suite — the seeded fixture row is invisible to the
+# request-handling connection. StaticPool keeps a single shared
+# connection so seed data is visible to every code path.
+if ":memory:" in DATABASE_URL:
+    from sqlalchemy.pool import StaticPool
+    _engine_opts["poolclass"] = StaticPool
+    _engine_opts["connect_args"] = {"check_same_thread": False}
+app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = _engine_opts
 db = SQLAlchemy(app)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
