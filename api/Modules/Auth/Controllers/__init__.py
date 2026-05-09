@@ -264,7 +264,18 @@ def signup_route(
 
     Stripe / referral / TOTP set-up flows stay on Flask for now —
     a later PR threads referral codes through here.
+
+    Honors the SIGNUP_CLOSED env var: when "1" we 503 every
+    request before touching the DB, so an attacker hitting the
+    API directly can't bypass the legacy /signup HTML guard.
     """
+    from app import SIGNUP_CLOSED
+    if SIGNUP_CLOSED:
+        raise HTTPException(
+            status_code=503,
+            detail="Signups are temporarily closed. "
+                   "Existing customers can still sign in.",
+        )
     email = (body.email or "").strip().lower()
     store_name = (body.store_name or "").strip()
     if "@" not in email or "." not in email:

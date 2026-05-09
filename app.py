@@ -2230,6 +2230,16 @@ def _backfill_uncategorized_rows(store_id):
 # once any one store has been pilot-flipped without regression.
 SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "0") == "1"
 
+# Self-service signup gate. With SIGNUP_CLOSED=1 the /signup and
+# /signup/owner pages render a "Signups closed" notice instead of
+# the form, the FastAPI signup endpoints return 503, and the
+# marketing landing's "Get Started" CTA is suppressed. Existing
+# customers still log in normally — only NEW account creation is
+# blocked. Flip via Render env var; default is "0" so dev + tests
+# work unchanged. CLAUDE.md note: re-enable once pilot review is
+# complete and we're ready to take real customers.
+SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
+
 # Static path → SPA path. These are pages that have full SPA
 # parity today; everything else falls through to legacy Jinja.
 _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
@@ -3387,6 +3397,11 @@ def reset_password(token):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    if SIGNUP_CLOSED:
+        # Closed-signup state: render the same chrome but with a
+        # "we're invite-only right now" notice instead of the form.
+        # Existing customers can still sign in via the link below.
+        return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
     if "user_id" in session and request.method == "GET":
         return redirect(url_for("dashboard"))
     errors = {}
@@ -3450,6 +3465,8 @@ def signup():
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():
+    if SIGNUP_CLOSED:
+        return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
     if "user_id" in session:
         u = current_user()
         if u and u.role == "owner":
