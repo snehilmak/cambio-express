@@ -3735,9 +3735,12 @@ def subscribe_checkout():
 @app.route("/subscribe/success")
 @login_required
 def subscribe_success():
-    user = current_user()
-    store = current_store()
-    return render_template("subscribe_success.html", user=user, store=store)
+    """301 → /app/subscribe/success. Stripe Checkout's success_url
+    points at this URL — the redirect chain (Stripe → here → /app)
+    is opaque to the user. The SPA polls /api/v2/admin/store-info
+    every 2s for ~30s so the page flips from "Payment received"
+    to "You're on Basic/Pro" without a manual refresh."""
+    return redirect("/app/subscribe/success", code=301)
 
 # ── Referrals (store-admin to new-store share + earn) ───────
 @app.route("/account/referrals")

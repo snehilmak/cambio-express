@@ -32,6 +32,7 @@ import Settings from "./routes/Settings";
 import Signup from "./routes/Signup";
 import SignupOwner from "./routes/SignupOwner";
 import Subscribe from "./routes/Subscribe";
+import SubscribeSuccess from "./routes/SubscribeSuccess";
 import {
   TwoFactorEnroll, TwoFactorRecover, TwoFactorVerify,
 } from "./routes/TwoFactor";
@@ -92,6 +93,7 @@ export default function App() {
         <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
         <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
         <Route path="subscribe"             element={<Subscribe />} />
+        <Route path="subscribe/success"     element={<SubscribeSuccess />} />
         <Route path="admin/tax-export"      element={<AdminTaxExport />} />
         <Route path="admin/audit-log"       element={<AdminAuditLog />} />
         <Route path="account/referrals"     element={<AdminReferrals />} />
