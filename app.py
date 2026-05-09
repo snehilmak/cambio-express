@@ -3301,99 +3301,22 @@ def smtp_health_check():
 
 @app.route("/forgot-password", methods=["GET", "POST"])
 def forgot_password():
-    """Step 1 of the reset flow — generate a token for the supplied email.
+    """301 to the React /app/forgot-password page. The legacy Jinja
+    form + POST handler are gone — the SPA submits directly to
+    /api/v2/auth/forgot-password, which now also handles SMTP
+    delivery. This stub keeps `url_for('forgot_password')` working
+    in still-Jinja templates and bounces old bookmarks."""
+    return redirect("/app/forgot-password", code=301)
 
-    The response is deliberately the same whether the account exists or not,
-    so attackers can't probe for registered emails. Employees aren't supported
-    here; they should ask their store admin (admin_reset_employee_password).
-    Superadmin is excluded — recovery via `flask reset-superadmin` (CLAUDE.md
-    invariant #10).
-
-    Token issuance + same-user invalidation delegate to
-    api.Modules.Auth.Services.issue_password_reset_token (PR 37). Email
-    rendering + SMTP delivery + the warning log line stay in Flask
-    since they're cross-cutting infrastructure concerns.
-    """
-    from api.Modules.Auth.Services import issue_password_reset_token
-    sent = False
-    if request.method == "POST":
-        username = request.form.get("username", "").strip().lower()
-        sent = True
-        result = issue_password_reset_token(
-            db.session, username, ttl_hours=PASSWORD_RESET_TTL_HOURS,
-        )
-        if result is not None:
-            db.session.commit()
-            u = result.user
-            reset_url = url_for(
-                "reset_password", token=result.raw_token, _external=True,
-            )
-            body = (
-                "Hi,\n\n"
-                "Someone (hopefully you) requested a password reset for your DineroBook "
-                "account. Follow this link within the next hour to set a new password:\n\n"
-                f"  {reset_url}\n\n"
-                "If you didn't request this you can safely ignore this email — your "
-                "current password will keep working.\n"
-            )
-            html = render_template(
-                "emails/password_reset.html",
-                preheader="Reset your DineroBook password — link expires in 1 hour.",
-                name=u.full_name or "",
-                reset_url=reset_url,
-                year=datetime.utcnow().year,
-                base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
-            )
-            # Prefer the explicit email field (landed with /account/profile)
-            # over the username. Username doubles as email for most admins
-            # today, but owners often have a display username that isn't
-            # an address — without this fallback their reset mail bounces.
-            to_addr = (u.email or u.username).strip()
-            delivered = _send_email(to_addr, "Reset your DineroBook password", body, html=html)
-            if not delivered:
-                # No SMTP configured (or send failed): log the URL so the
-                # superadmin can retrieve it from the server logs and
-                # relay it to the user manually.
-                app.logger.warning(
-                    f"[password-reset] email send skipped for {u.username}; "
-                    f"reset URL: {reset_url}"
-                )
-    return render_template("forgot_password.html", sent=sent)
 
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
 def reset_password(token):
-    """Step 2 of the reset flow — verify the token and set the new password.
-
-    Tokens are one-time-use and expire after PASSWORD_RESET_TTL_HOURS.
-    Token verification + password apply delegate to
-    api.Modules.Auth.Services (PR 37). Inline form-validation + flash
-    rendering stay in Flask since they're presentation concerns.
-    """
-    from api.Modules.Auth.Services import (
-        consume_password_reset_token, verify_password_reset_token,
-    )
-    row = verify_password_reset_token(db.session, token)
-    invalid = row is None
-    error = None
-    if request.method == "POST" and not invalid:
-        pw1 = request.form.get("password", "")
-        pw2 = request.form.get("confirm_password", "")
-        if len(pw1) < 8:
-            error = "Password must be at least 8 characters."
-        elif pw1 != pw2:
-            error = "Passwords do not match."
-        else:
-            try:
-                consume_password_reset_token(db.session, row, pw1)
-                db.session.commit()
-                flash(
-                    "Password updated. You can now sign in with your new password.",
-                    "success",
-                )
-                return redirect(url_for("login"))
-            except LookupError:
-                error = "Account no longer exists."
-    return render_template("reset_password.html", invalid=invalid, error=error, token=token)
+    """301 to the React /app/reset-password?token=… page. Old reset
+    emails still in users' inboxes link to /reset-password/<token>;
+    the SPA reads the token from `?token=` so we hand it off via
+    the query string. Form-validation + token consumption now live
+    on /api/v2/auth/reset-password."""
+    return redirect(f"/app/reset-password?token={token}", code=301)
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
@@ -3465,45 +3388,14 @@ def signup():
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():
+    """301 to the React /app/signup/owner page when signups are
+    open. With SIGNUP_CLOSED=1 we render the "invite-only" notice
+    directly so the user doesn't briefly see the SPA form before
+    it 503s. Stub keeps url_for('signup_owner') working in
+    still-Jinja templates."""
     if SIGNUP_CLOSED:
         return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
-    if "user_id" in session:
-        u = current_user()
-        if u and u.role == "owner":
-            return redirect(url_for("owner_dashboard"))
-        return redirect(url_for("dashboard"))
-    errors = {}
-    form = {}
-    if request.method == "POST":
-        full_name = request.form.get("full_name", "").strip()
-        email     = request.form.get("email", "").strip().lower()
-        password  = request.form.get("password", "")
-        form = {"full_name": full_name, "email": email}
-        if not full_name:
-            errors["full_name"] = "Full name is required."
-        if not email:
-            errors["email"] = "Email is required."
-        elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            errors["email"] = "Enter a valid email address."
-        if not password:
-            errors["password"] = "Password is required."
-        elif len(password) < 8:
-            errors["password"] = "Password must be at least 8 characters."
-        if not errors:
-            taken_null  = User.query.filter(User.username == email, User.store_id.is_(None)).first()
-            taken_admin = User.query.filter(User.username == email, User.role == "admin").first()
-            if taken_null or taken_admin:
-                errors["email"] = "An account with this email already exists."
-        if not errors:
-            u = User(store_id=None, username=email, full_name=full_name, role="owner")
-            u.set_password(password)
-            db.session.add(u)
-            db.session.commit()
-            session["user_id"]  = u.id
-            session["role"]     = "owner"
-            session["store_id"] = None
-            return redirect(url_for("owner_dashboard"))
-    return render_template("signup_owner.html", errors=errors, form=form)
+    return redirect("/app/signup/owner", code=301)
 
 @app.route("/logout")
 def logout():

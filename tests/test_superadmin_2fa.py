@@ -191,10 +191,15 @@ def test_recovery_code_accepts_lowercase_and_stripped(client):
 # ── password-reset gate ──────────────────────────────────────
 
 def test_forgot_password_ignores_superadmin(client):
-    """Superadmin is deliberately excluded from the email-reset flow."""
+    """Superadmin is deliberately excluded from the email-reset flow.
+    The SPA submits to /api/v2/auth/forgot-password — endpoint
+    always responds 200 (no enumeration leak) but no token is
+    minted for the superadmin role."""
     from app import PasswordResetToken
-    # Same friendly "check your email" page, no token minted.
-    resp = client.post("/forgot-password", data={"username": "superadmin"})
+    resp = client.post(
+        "/api/v2/auth/forgot-password",
+        json={"email": "superadmin"},
+    )
     assert resp.status_code == 200
     with client.application.app_context():
         assert PasswordResetToken.query.count() == 0
@@ -202,7 +207,8 @@ def test_forgot_password_ignores_superadmin(client):
 
 def test_reset_password_refuses_superadmin_token(client):
     """Belt-and-suspenders: even a direct DB-inserted token is rejected
-    for a superadmin target."""
+    for a superadmin target. The SPA reset endpoint returns 400 for
+    any invalid/superadmin-targeted token."""
     import hashlib
     from app import db, PasswordResetToken
     with client.application.app_context():
@@ -215,10 +221,19 @@ def test_reset_password_refuses_superadmin_token(client):
         )
         db.session.add(tok)
         db.session.commit()
-    resp = client.get(f"/reset-password/{raw}")
-    assert resp.status_code == 200
-    # Template renders the invalid-token branch.
-    assert b"invalid" in resp.data.lower() or b"expired" in resp.data.lower()
+    resp = client.post(
+        "/api/v2/auth/reset-password",
+        json={
+            "token": raw,
+            "new_password": "newpass123!",
+            "confirm_password": "newpass123!",
+        },
+    )
+    assert resp.status_code == 400
+    # The detail message confirms the token was rejected.
+    body = resp.get_json()
+    assert "invalid" in str(body.get("detail", "")).lower() \
+        or "expired" in str(body.get("detail", "")).lower()
 
 
 # ── hardening: employee/owner/admin still skip 2FA ───────────

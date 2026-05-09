@@ -23,6 +23,8 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    OwnerSignupRequest,
+    OwnerSignupResponse,
     RecoveryLoginRequest,
     ResetPasswordRequest,
     SignupRequest,
@@ -36,6 +38,7 @@ from api.Modules.Auth.Services import (
     authenticate_password_cross_store,
     change_password,
     consume_password_reset_token,
+    create_owner,
     create_store_and_admin,
     decode_access_token,
     finalize_2fa_with_recovery_code,
@@ -322,6 +325,74 @@ def signup_route(
     )
 
 
+@router.post(
+    "/signup/owner", response_model=OwnerSignupResponse, status_code=201,
+)
+def signup_owner_route(
+    body: OwnerSignupRequest, db: Session = Depends(get_db),
+) -> OwnerSignupResponse:
+    """Self-service signup for a multi-store owner. Creates a User
+    with `role="owner"` and `store_id=None`. Owners then connect to
+    individual stores via invite codes from /owner/locations.
+
+    Mirrors the legacy /signup/owner Flask form's contract:
+      • full_name, email normalised (stripped, email lowered)
+      • email collision (any null-store user OR any per-store admin)
+        returns 409 with the same friendly message
+      • returns a JWT scoped to the owner so the SPA drops the user
+        straight onto /owner/dashboard
+
+    Honors the SIGNUP_CLOSED env var: when "1" we 503 every
+    request so an attacker hitting the API directly can't bypass
+    the legacy /signup/owner HTML guard.
+    """
+    from app import SIGNUP_CLOSED
+    if SIGNUP_CLOSED:
+        raise HTTPException(
+            status_code=503,
+            detail="Signups are temporarily closed. "
+                   "Existing customers can still sign in.",
+        )
+    email = (body.email or "").strip().lower()
+    full_name = (body.full_name or "").strip()
+    if "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "email", "message": "Enter a valid email."},
+        )
+    try:
+        result = create_owner(
+            db, full_name=full_name, email=email, password=body.password,
+        )
+    except SignupConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"field": "email", "message": str(exc)},
+        )
+    db.commit()
+
+    perms = permissions_for(result.owner.role)
+    issuer = JWTIssuer(
+        sub=result.owner.id,
+        role=result.owner.role,
+        store_id=None,
+        permissions=perms,
+        full_name=result.owner.full_name or "",
+        username=result.owner.username,
+    )
+    token = issue_access_token(issuer)
+    return OwnerSignupResponse(
+        access_token=token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.owner.id,
+        username=result.owner.username,
+        full_name=result.owner.full_name or "",
+        role=result.owner.role,
+        store_id=None,
+        permissions=perms,
+    )
+
+
 @router.post("/forgot-password")
 def forgot_password_route(
     body: ForgotPasswordRequest, db: Session = Depends(get_db),
@@ -337,30 +408,64 @@ def forgot_password_route(
     The raw token is logged to the operator console only when
     SMTP isn't configured (matching the legacy /forgot-password
     Flask flow). Production setups deliver via SMTP and never
-    log the URL.
-
-    SMTP delivery is deliberately NOT wired here yet — the
-    legacy flow handles email send + audit logging. This endpoint
-    only mints the token; legacy Flask code can pick it up if
-    needed. Subsequent PR threads SMTP through.
+    log the URL — the SMTP send happens inline below, lifted from
+    the now-retired legacy Flask handler.
     """
     issued = issue_password_reset_token(db, body.email)
     db.commit()
-    # Stash the raw token in a logger so the legacy email path
-    # (which still owns delivery) can find it. Do NOT include it
-    # in the JSON response — that would leak it to anyone who
-    # can hit the endpoint.
     if issued is not None:
-        # Lazy logger import — production sends via SMTP and
-        # ignores this fallback. The legacy /forgot-password
-        # route also logs at WARNING level.
-        import logging
-        logging.getLogger("app").warning(
-            "Password reset token issued via /api/v2/auth/forgot-password "
-            "for user_id=%s; raw token logged for SMTP-fallback delivery.",
-            issued.user.id,
-        )
+        _deliver_password_reset_email(issued)
     return {"status": "ok"}
+
+
+def _deliver_password_reset_email(issued) -> None:
+    """Send the password-reset email. Lifted verbatim from the
+    legacy /forgot-password Flask handler — same body copy, same
+    HTML template, same SMTP-fallback log line — so the SPA's
+    /app/forgot-password gives users an identical email."""
+    import os
+    from datetime import datetime
+    from flask import render_template, url_for
+    from app import _send_email, app as flask_app
+    u = issued.user
+    with flask_app.test_request_context():
+        # url_for(_external=True) needs a request context; in
+        # production the dispatcher already sets one, but for a
+        # FastAPI-only call (no Flask request frame) we synthesise
+        # one. Routes resolved here are still the canonical Flask
+        # ones; the SPA equivalent path /app/reset-password?token=
+        # is what the email actually sends — see below.
+        base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+        reset_url = f"{base_url}/app/reset-password?token={issued.raw_token}"
+        body = (
+            "Hi,\n\n"
+            "Someone (hopefully you) requested a password reset for your "
+            "DineroBook account. Follow this link within the next hour to "
+            "set a new password:\n\n"
+            f"  {reset_url}\n\n"
+            "If you didn't request this you can safely ignore this email "
+            "— your current password will keep working.\n"
+        )
+        try:
+            html = render_template(
+                "emails/password_reset.html",
+                preheader="Reset your DineroBook password — link expires in 1 hour.",
+                name=u.full_name or "",
+                reset_url=reset_url,
+                year=datetime.utcnow().year,
+                base_url=base_url,
+            )
+        except Exception:
+            html = None
+    to_addr = (u.email or u.username).strip()
+    delivered = _send_email(
+        to_addr, "Reset your DineroBook password", body, html=html,
+    )
+    if not delivered:
+        flask_app.logger.warning(
+            f"[password-reset] email send skipped for {u.username}; "
+            f"reset URL: {reset_url}"
+        )
 
 
 @router.post("/reset-password")

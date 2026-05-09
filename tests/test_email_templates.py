@@ -202,7 +202,10 @@ def test_forgot_password_sends_multipart_alternative(client):
     start, stop, messages = _captured_smtp_messages()
     try:
         start()
-        client.post("/forgot-password", data={"username": "admin@test.com"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "admin@test.com"},
+        )
     finally:
         stop()
     assert len(messages) == 1
@@ -219,15 +222,22 @@ def test_forgot_password_html_part_has_reset_link_and_brand(client):
     start, stop, messages = _captured_smtp_messages()
     try:
         start()
-        client.post("/forgot-password", data={"username": "admin@test.com"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "admin@test.com"},
+        )
     finally:
         stop()
     html = next(p for p in messages[0].iter_parts()
                 if p.get_content_type() == "text/html").get_content()
     assert "DineroBook" in html
     assert "Reset your password" in html
-    # The reset-URL token is randomized; we match the route prefix.
-    assert re.search(r'/reset-password/[A-Za-z0-9_\-]+', html), \
+    # The reset-URL token is randomized; we match the SPA route +
+    # query param (?token=…). The path-param form
+    # `/reset-password/<token>` was retired with the legacy Jinja
+    # form, but old emails in inboxes still link to it — see
+    # tests/test_password_reset.py for the 301 hand-off coverage.
+    assert re.search(r'/app/reset-password\?token=[A-Za-z0-9_\-]+', html), \
         "reset URL missing from HTML body"
 
 
@@ -293,7 +303,10 @@ def test_plaintext_part_of_multipart_is_independently_readable(client):
     start, stop, messages = _captured_smtp_messages()
     try:
         start()
-        client.post("/forgot-password", data={"username": "admin@test.com"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "admin@test.com"},
+        )
     finally:
         stop()
     text = next(p for p in messages[0].iter_parts()

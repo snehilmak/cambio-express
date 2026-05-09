@@ -47,6 +47,21 @@ export async function signup(body: SignupBody): Promise<SignupResponse> {
   );
 }
 
+export interface OwnerSignupBody {
+  full_name: string;
+  email: string;
+  password: string;
+}
+
+export async function signupOwner(
+  body: OwnerSignupBody,
+): Promise<SignupResponse> {
+  return api<SignupResponse>(
+    "/api/v2/auth/signup/owner",
+    { method: "POST", json: body },
+  );
+}
+
 export interface StoreInfoRow {
   id: number;
   name: string;

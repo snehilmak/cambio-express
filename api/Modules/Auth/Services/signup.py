@@ -49,6 +49,53 @@ def _allocate_unique_slug(db: Session, store_name: str) -> str:
     return slug
 
 
+@dataclass
+class OwnerSignupResult:
+    owner: User
+
+
+def create_owner(
+    db: Session, *, full_name: str, email: str, password: str,
+) -> OwnerSignupResult:
+    """Create a multi-store owner user. Mirrors the legacy
+    /signup/owner Flask route — no Store row, just a User with
+    `role="owner"` and `store_id=None`. Owners then connect to
+    individual stores via invite codes from /owner/locations.
+
+    `email` and `full_name` should already be stripped + email
+    lowered before calling. Raises `SignupConflictError` when a
+    pre-existing User would clash:
+      - any User with `store_id IS NULL` (other owners + superadmin)
+      - any per-store admin with the same email (they'd be confused
+        about which login goes where)
+    Same predicate the legacy Flask route used.
+    """
+    taken_null = (
+        db.query(User)
+          .filter(User.username == email)
+          .filter(User.store_id.is_(None))
+          .first()
+    )
+    taken_admin = (
+        db.query(User)
+          .filter(User.username == email)
+          .filter(User.role == "admin")
+          .first()
+    )
+    if taken_null is not None or taken_admin is not None:
+        raise SignupConflictError(
+            "An account with this email already exists.",
+        )
+    owner = User(
+        store_id=None, username=email,
+        full_name=full_name, role="owner",
+    )
+    owner.set_password(password)
+    db.add(owner)
+    db.flush()
+    return OwnerSignupResult(owner=owner)
+
+
 def create_store_and_admin(
     db: Session,
     *,

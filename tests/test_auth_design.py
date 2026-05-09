@@ -82,30 +82,18 @@ def test_signup_has_all_required_fields(client):
         assert field in body, f"signup missing field: {field!r}"
 
 
-def test_signup_owner_loads_design_tokens(client):
-    resp = client.get("/signup/owner")
-    assert resp.status_code == 200
-    assert b"design-tokens.css" in resp.data
-
-
-def test_signup_owner_renders_neon_accent(client):
-    resp = client.get("/signup/owner")
-    # The neon enters the page as either an inline hex (#3fff00, used
-    # in the isometric SVG) or as a `var(--db-neon)` token reference.
-    body = resp.data
-    assert b"#3fff00" in body or b"--db-neon" in body
-
-
-def test_signup_owner_has_all_required_fields(client):
-    resp = client.get("/signup/owner")
-    body = resp.data
-    for field in (b'name="full_name"', b'name="email"', b'name="password"'):
-        assert field in body, f"signup_owner missing field: {field!r}"
+# /signup/owner design tests are gone: the page migrated to React
+# (frontend/src/routes/SignupOwner.tsx). The legacy /signup/owner
+# Flask route is now a 301 to /app/signup/owner — see
+# tests/test_multi_store_owner.py for the redirect coverage.
 
 
 def test_auth_pages_link_fonts(client):
-    """All three auth pages pull the new Space Grotesk + Inter stack."""
-    for path in ("/login", "/signup", "/signup/owner"):
+    """Auth pages still on Jinja pull the new Space Grotesk + Inter
+    stack. /signup and /signup/owner migrated to React — their font
+    loading is tested via the SPA build, not this template
+    assertion."""
+    for path in ("/login",):
         resp = client.get(path)
         body = resp.data
         assert b"Space+Grotesk" in body, f"{path} missing Space Grotesk"
