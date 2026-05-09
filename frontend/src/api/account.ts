@@ -87,6 +87,41 @@ export interface StoreLookup {
   slug: string;
 }
 
+export interface TotpEnrollStartResponse {
+  qr_svg:        string;
+  secret:        string;
+  secret_chunks: string;
+  username:      string;
+  issuer:        string;
+}
+
+export async function totpEnrollStart(
+  pending_token: string,
+): Promise<TotpEnrollStartResponse> {
+  return api<TotpEnrollStartResponse>(
+    "/api/v2/auth/login/totp/enroll/start",
+    { method: "POST", json: { pending_token } },
+  );
+}
+
+export async function totpEnrollFinish(
+  pending_token: string, code: string,
+): Promise<{ recovery_codes: string[] }> {
+  return api<{ recovery_codes: string[] }>(
+    "/api/v2/auth/login/totp/enroll/finish",
+    { method: "POST", json: { pending_token, code } },
+  );
+}
+
+export async function totpEnrollConfirm(
+  pending_token: string,
+): Promise<{ access_token: string; role: string; store_id: number | null }> {
+  return api<{ access_token: string; role: string; store_id: number | null }>(
+    "/api/v2/auth/login/totp/enroll/confirm",
+    { method: "POST", json: { pending_token } },
+  );
+}
+
 export async function lookupStoreBySlug(
   slug: string,
 ): Promise<StoreLookup | null> {

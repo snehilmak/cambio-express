@@ -104,17 +104,27 @@ def test_authenticate_password_rejects_disabled_user(test_store_id):
 
 def test_authenticate_password_finds_superadmin_with_none_store_id():
     """`store_id=None` is the superadmin scope. The seeded fixture
-    creates `superadmin / super2025!` at store_id=None."""
+    creates `superadmin / super2025!` at store_id=None and pre-
+    enrols TOTP so SPA logins can exchange the pending token for a
+    real access token without a manual enrolment hop. The
+    authenticate_password call therefore returns a pending result
+    with `enroll_required=False`."""
     from app import app as flask_app, db
-    from api.Modules.Auth.Services import authenticate_password
+    from api.Modules.Auth.Services import (
+        LoginPendingResult, authenticate_password,
+    )
+    from api.Modules.Auth.Services.jwt_issuer import (
+        decode_pending_2fa_token,
+    )
     with flask_app.app_context():
         result = authenticate_password(
             db.session, store_id=None,
             username="superadmin", password="super2025!",
         )
-    assert result.role == "superadmin"
-    assert result.store_id is None
-    assert "platform.admin" in result.permissions
+    assert isinstance(result, LoginPendingResult)
+    assert result.enroll_required is False
+    claims = decode_pending_2fa_token(result.pending_token)
+    assert int(claims["sub"]) == result.user_id
 
 
 def test_authenticate_password_token_carries_role_and_perms_claims(test_store_id):

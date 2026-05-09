@@ -17,6 +17,7 @@ interface LoginResponse {
   requires_totp: boolean;
   pending_token: string | null;
   has_recovery_codes: boolean;
+  enroll_required?: boolean;
 }
 
 interface LocationState {
@@ -70,6 +71,16 @@ export default function Login() {
         json: { username: username.trim(), password },
       });
       if (result.requires_totp && result.pending_token) {
+        if (result.enroll_required) {
+          // Fresh user in a 2FA-required role — drive them through
+          // the dedicated enrollment page rather than the inline
+          // verify-code form.
+          navigate("/login/2fa/enroll", {
+            state: { pending_token: result.pending_token },
+            replace: true,
+          });
+          return;
+        }
         setPending({
           pending_token: result.pending_token,
           has_recovery_codes: result.has_recovery_codes,

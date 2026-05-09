@@ -31,6 +31,11 @@ from api.Modules.Auth.Requests import (
     SignupRequest,
     SignupResponse,
     StoreLookupResponse,
+    TotpEnrollConfirmRequest,
+    TotpEnrollFinishRequest,
+    TotpEnrollFinishResponse,
+    TotpEnrollStartRequest,
+    TotpEnrollStartResponse,
     TotpLoginRequest,
 )
 from api.Modules.Auth.Services import (
@@ -39,15 +44,18 @@ from api.Modules.Auth.Services import (
     authenticate_password,
     authenticate_password_cross_store,
     change_password,
+    confirm_recovery_codes_saved,
     consume_password_reset_token,
     create_owner,
     create_store_and_admin,
     decode_access_token,
     finalize_2fa_with_recovery_code,
     finalize_2fa_with_totp,
+    finish_totp_enrollment,
     issue_access_token,
     issue_password_reset_token,
     permissions_for,
+    start_totp_enrollment,
     verify_password_reset_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
@@ -108,6 +116,7 @@ def _to_login_response(
             pending_token=result.pending_token,
             user_id=result.user_id,
             has_recovery_codes=result.has_recovery_codes,
+            enroll_required=result.enroll_required,
             expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
         )
     return LoginResponse(
@@ -285,6 +294,64 @@ def login_recovery_route(
         raise HTTPException(
             status_code=401, detail=str(exc) or "Invalid recovery code",
         )
+    db.commit()
+    return _to_login_response(result)
+
+
+@router.post(
+    "/login/totp/enroll/start", response_model=TotpEnrollStartResponse,
+)
+def login_totp_enroll_start_route(
+    body: TotpEnrollStartRequest, db: Session = Depends(get_db),
+) -> TotpEnrollStartResponse:
+    """Mint a TOTP secret for the still-pending user and return the
+    QR SVG + secret + chunks the SPA renders. Idempotent — refreshes
+    return the same secret so a half-scanned QR stays valid."""
+    try:
+        payload = start_totp_enrollment(db, pending_token=body.pending_token)
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc) or "Invalid pending token")
+    db.commit()
+    return TotpEnrollStartResponse(**payload)
+
+
+@router.post(
+    "/login/totp/enroll/finish", response_model=TotpEnrollFinishResponse,
+)
+def login_totp_enroll_finish_route(
+    body: TotpEnrollFinishRequest, db: Session = Depends(get_db),
+) -> TotpEnrollFinishResponse:
+    """Verify the user's first 6-digit code, mark enrollment
+    complete, and return one-shot recovery codes. The SPA holds
+    these in component state and shows them once — they are not
+    retrievable later."""
+    try:
+        codes = finish_totp_enrollment(
+            db, pending_token=body.pending_token, code=body.code,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=401, detail=str(exc) or "Invalid verification code",
+        )
+    db.commit()
+    return TotpEnrollFinishResponse(recovery_codes=codes)
+
+
+@router.post(
+    "/login/totp/enroll/confirm", response_model=LoginResponse,
+)
+def login_totp_enroll_confirm_route(
+    body: TotpEnrollConfirmRequest, db: Session = Depends(get_db),
+) -> LoginResponse:
+    """User has saved their recovery codes. Exchange the still-valid
+    pending token for a real access token. Symmetric with
+    /login/totp and /login/recovery — same envelope shape."""
+    try:
+        result = confirm_recovery_codes_saved(
+            db, pending_token=body.pending_token,
+        )
+    except AuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc) or "Invalid pending token")
     db.commit()
     return _to_login_response(result)
 

@@ -271,15 +271,8 @@ def test_endpoints_require_jwt(client):
 
 
 def test_list_rejects_superadmin(client):
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin",
-            "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.get(
         "/api/v2/return-checks",
         headers={"Authorization": f"Bearer {token}"},

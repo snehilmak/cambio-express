@@ -29,6 +29,9 @@ import Settings from "./routes/Settings";
 import Signup from "./routes/Signup";
 import SignupOwner from "./routes/SignupOwner";
 import Subscribe from "./routes/Subscribe";
+import {
+  TwoFactorEnroll, TwoFactorRecover, TwoFactorVerify,
+} from "./routes/TwoFactor";
 import SuperadminAnnouncements from "./routes/SuperadminAnnouncements";
 import SuperadminAuditLog from "./routes/SuperadminAuditLog";
 import SuperadminStores from "./routes/SuperadminStores";
@@ -51,8 +54,11 @@ export default function App() {
   return (
     <Routes>
       <Route index element={<Home />} />
-      <Route path="login"            element={<Login />} />
-      <Route path="login/:slug"      element={<LoginStore />} />
+      <Route path="login"               element={<Login />} />
+      <Route path="login/2fa"           element={<TwoFactorVerify />} />
+      <Route path="login/2fa/enroll"    element={<TwoFactorEnroll />} />
+      <Route path="login/2fa/recover"   element={<TwoFactorRecover />} />
+      <Route path="login/:slug"         element={<LoginStore />} />
       <Route path="signup"           element={<Signup />} />
       <Route path="signup/owner"     element={<SignupOwner />} />
       <Route path="forgot-password"  element={<ForgotPassword />} />

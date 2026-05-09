@@ -2857,76 +2857,38 @@ def login():
 
 @app.route("/login/2fa", methods=["GET", "POST"])
 def login_totp():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    if not _totp_is_enrolled(u):
-        return redirect(url_for("login_totp_enroll"))
-    error = None
-    if request.method == "POST":
-        if _verify_totp(u, request.form.get("code", "")):
-            _finalize_2fa_login(u)
-            return redirect(url_for("dashboard"))
-        error = "That code didn't match. Check the 6 digits in your authenticator app, or use a recovery code."
-    return render_template("login_totp.html", error=error)
+    """301 → /app/login. The legacy Jinja form is retired; the SPA
+    drives the verify hop inline from /app/login (it holds the
+    pending_token in component state and POSTs to
+    /api/v2/auth/login/totp). This stub keeps url_for('login_totp')
+    + old bookmarks working — they just bounce to the SPA login,
+    which prompts the user to sign in again."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/recover", methods=["GET", "POST"])
 def login_totp_recover():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    error = None
-    if request.method == "POST":
-        if _consume_recovery_code(u, request.form.get("code", "")):
-            _finalize_2fa_login(u)
-            flash("Recovery code used. Consider regenerating your recovery codes from Security settings.", "success")
-            return redirect(url_for("dashboard"))
-        error = "Recovery code not recognized, or already used."
-    return render_template("login_totp_recover.html", error=error)
+    """301 → /app/login. SPA equivalent is /app/login/2fa/recover,
+    but reaching it requires the in-flight pending_token (held in
+    React Router state). Direct visits here have no pending token,
+    so we bounce to /app/login and let the user start fresh."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/enroll", methods=["GET", "POST"])
 def login_totp_enroll():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    if _totp_is_enrolled(u):
-        return redirect(url_for("login_totp"))
-    # First hit: mint a secret if none pending. Refreshes reuse the pending
-    # secret so the user's already-scanned QR stays valid.
-    if not u.totp_secret:
-        u.totp_secret = pyotp.random_base32()
-        db.session.commit()
-    error = None
-    if request.method == "POST":
-        if _verify_totp(u, request.form.get("code", "")):
-            u.totp_enrolled_at = datetime.utcnow()
-            codes = _generate_recovery_codes(u)
-            session["totp_enrollment_codes"] = codes
-            return redirect(url_for("login_totp_recovery_codes"))
-        error = "That code didn't match. Make sure the clock on your phone is accurate, then try the next code your app shows."
-    qr_svg = _totp_qr_svg(u.totp_secret, u.username)
-    # Group the secret into 4-char chunks for easier manual entry.
-    secret_chunks = " ".join(u.totp_secret[i:i+4] for i in range(0, len(u.totp_secret), 4))
-    return render_template("login_totp_enroll.html",
-                           qr_svg=qr_svg, secret=u.totp_secret,
-                           secret_chunks=secret_chunks, username=u.username,
-                           issuer=TOTP_ISSUER, error=error)
+    """301 → /app/login. The SPA enrollment page lives at
+    /app/login/2fa/enroll, but it needs a pending_token from a
+    fresh /api/v2/auth/login response. Direct hits to the legacy
+    URL don't carry that state, so we bounce to /app/login."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/recovery-codes", methods=["GET", "POST"])
 def login_totp_recovery_codes():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    codes = session.get("totp_enrollment_codes")
-    if not codes:
-        # No fresh enrollment batch in session — enrollment either already
-        # finalized or expired. Send them back to the code prompt.
-        return redirect(url_for("login_totp"))
-    if request.method == "POST" and request.form.get("saved") == "1":
-        _finalize_2fa_login(u)
-        flash("2FA is now active on your account. Keep those recovery codes somewhere safe.", "success")
-        return redirect(url_for("dashboard"))
-    return render_template("login_totp_recovery_codes.html", codes=codes)
+    """301 → /app/login. Recovery codes are shown exactly once
+    inline on the SPA enrollment page; there is no standalone SPA
+    URL for re-displaying them (the codes are not retrievable
+    after the enrollment session ends). Direct visits to this
+    legacy URL bounce to /app/login."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/<slug>", methods=["GET", "POST"])
 def login_store(slug):

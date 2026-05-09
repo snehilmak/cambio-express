@@ -43,15 +43,8 @@ def test_get_store_info_requires_jwt(client):
 
 
 def test_get_store_info_rejects_superadmin(client):
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin",
-            "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.get(
         "/api/v2/admin/store-info",
         headers={"Authorization": f"Bearer {token}"},
