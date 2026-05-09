@@ -25,6 +25,7 @@ from api.Modules.Admin.Requests import (
     StoreInfoResponse,
     StoreInfoRow,
     StoreInfoUpdateRequest,
+    TaxExportYearsResponse,
     TeamListResponse,
     TeamMemberCreateRequest,
     TeamMemberRow,
@@ -33,6 +34,8 @@ from api.Modules.Admin.Requests import (
 from api.Modules.Admin.Services import (
     add_team_member,
     deactivate_team_member,
+    tax_export_default_year,
+    tax_export_year_choices,
     update_store_info,
     update_team_member,
 )
@@ -293,4 +296,21 @@ def toggle_addon_route(
     db.commit()
     return AddonToggleResponse(
         addon=_adapt_addon(addon_key, addon, is_active=(addon_key in keys)),
+    )
+
+
+@router.get("/tax-export/years", response_model=TaxExportYearsResponse)
+def list_tax_export_years_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TaxExportYearsResponse:
+    """Years offered in the tax-pack year picker, plus the default
+    selection (last calendar year). Powers the /app/admin/tax-export
+    React page. The actual ZIP download still comes from the legacy
+    Flask route /admin/tax-export.zip — that streams a multi-MB file
+    via Flask's send_file path and is left intact for now."""
+    store_id = _require_store(claims)
+    years = tax_export_year_choices(db, store_id)
+    return TaxExportYearsResponse(
+        years=years, default_year=tax_export_default_year(years),
     )

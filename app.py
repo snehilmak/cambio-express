@@ -7930,17 +7930,18 @@ def _build_tax_pack_zip(store, year):
 @app.route("/admin/tax-export")
 @admin_required
 def admin_tax_export():
-    user = current_user(); store = current_store()
-    today = date.today()
-    selected = request.args.get("year", "").strip()
-    try:
-        selected_year = int(selected) if selected else today.year - 1
-    except ValueError:
-        selected_year = today.year - 1
-    return render_template("admin_tax_export.html",
-        user=user, store=store,
-        year_choices=_tax_pack_year_choices(),
-        selected_year=selected_year)
+    """301 → /app/admin/tax-export. The year-picker page moved to
+    React; year choices come from /api/v2/admin/tax-export/years.
+    The actual ZIP build still lives below at /admin/tax-export.zip
+    — that streams a multi-MB file via Flask's send_file path and
+    composes a swathe of `_tax_pack_*_csv` helpers we don't need
+    to ship through the SPA yet. Stub keeps url_for(... ) working
+    in still-Jinja chrome (sidebar nav) and bounces old bookmarks.
+    The query string (?year=) is preserved so a deep link from
+    elsewhere lands on the right year."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/admin/tax-export" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/admin/tax-export.zip")
