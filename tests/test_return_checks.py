@@ -217,55 +217,28 @@ def test_return_checks_blocks_employee(client, test_store_id):
     assert "/return-checks" not in rv.headers["Location"]
 
 
-def test_return_checks_admin_page_loads_empty(logged_in_client):
-    rv = logged_in_client.get("/return-checks")
-    assert rv.status_code == 200
-    assert b"Return Checks" in rv.data
-    assert b"Pending balance" in rv.data
-    assert b"No return checks match" in rv.data
+def test_return_checks_admin_page_redirects_to_app(logged_in_client):
+    """Page rendering moved to React (/app/return-checks); the
+    Flask handler is now a 301. Live-search + filtering are now
+    covered by the SPA route + /api/v2/return-checks endpoints
+    (tests in tests/Modules/ReturnChecks/test_return_checks_controllers.py)."""
+    rv = logged_in_client.get("/return-checks", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"].startswith("/app/return-checks")
 
 
-def test_return_checks_lists_seeded_rows(logged_in_client, test_store_id):
-    _seed_rc(test_store_id, customer="Alice Q", amount=250.0,
-             check_number="9001")
-    rv = logged_in_client.get("/return-checks")
-    assert rv.status_code == 200
-    assert b"Alice Q" in rv.data
-    assert b"9001" in rv.data
-
-
-def test_return_checks_status_filter(logged_in_client, test_store_id):
-    today = date.today()
-    _seed_rc(test_store_id, customer="Pendy", status="pending", amount=100.0)
-    rec_id = _seed_rc(test_store_id, customer="Recvy", status="recovered",
-                      status_changed_on=today, amount=200.0)
-    _seed_payment(rec_id, amount=200.0, paid_on=today)
-    rv = logged_in_client.get("/return-checks?status=pending")
-    assert b"Pendy" in rv.data
-    assert b"Recvy" not in rv.data
-    rv = logged_in_client.get("/return-checks?status=recovered")
-    assert b"Pendy" not in rv.data
-    assert b"Recvy" in rv.data
-
-
-def test_return_checks_search_filters_by_customer(logged_in_client, test_store_id):
-    _seed_rc(test_store_id, customer="Alice Q", amount=100.0)
-    _seed_rc(test_store_id, customer="Bob Smith", amount=200.0)
-    rv = logged_in_client.get("/return-checks?status=all&q=alice")
-    assert b"Alice Q" in rv.data
-    assert b"Bob Smith" not in rv.data
-
-
-def test_return_checks_partial_returns_json(logged_in_client, test_store_id):
-    """?partial=1 returns JSON for the live-search swap."""
-    _seed_rc(test_store_id, customer="Live Search Target", amount=99.0)
-    rv = logged_in_client.get("/return-checks?partial=1&status=all&q=live")
-    assert rv.status_code == 200
-    assert rv.headers["Content-Type"].startswith("application/json")
-    payload = rv.get_json()
-    assert payload["matched"] == 1
-    assert "Live Search Target" in payload["html"]
-    assert "pending_balance" in payload
+def test_return_checks_admin_query_string_preserved(logged_in_client):
+    """A bookmarked URL like /return-checks?status=recovered must
+    carry the query string through to /app/return-checks so the
+    SPA preselects the same filter."""
+    rv = logged_in_client.get(
+        "/return-checks?status=recovered&q=alice",
+        follow_redirects=False,
+    )
+    assert rv.status_code == 301
+    location = rv.headers["Location"]
+    assert "status=recovered" in location
+    assert "q=alice" in location
 
 
 # ── Routes: create + status transitions ─────────────────────────

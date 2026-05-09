@@ -8010,44 +8010,18 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
 @app.route("/return-checks")
 @admin_required
 def return_checks():
-    """Searchable list of return checks for the current store, with a
-    pending-balance KPI strip and inline status filter (Pending /
-    Recovered / Loss / Fraud / All).
-
-    Same `?partial=1` JSON contract as /transfers and /owner/locations
-    so the live-search swap works without a full page reload.
-    """
-    user = current_user()
-    sid  = session["store_id"]
-    today_d = date.today()
-    status = (request.args.get("status") or "pending").lower()
-    if status not in ("pending", "recovered", "loss", "fraud", "closed", "all"):
-        status = "pending"
-    query = (request.args.get("q") or "").strip()
-    date_from = request.args.get("from") or ""
-    date_to   = request.args.get("to") or ""
-
-    rows = _return_check_list_payload(sid, status, query, date_from, date_to)
-
-    # Month-to-date aggregates for the KPI strip.
-    month_start = date(today_d.year, today_d.month, 1)
-    mtd = _return_check_period_aggregates([sid], month_start, today_d)
-    aging = _return_check_aging_buckets([sid], today=today_d)
-
-    if request.args.get("partial") == "1":
-        html = render_template("_return_checks_table.html",
-                               rows=rows, today=today_d)
-        return jsonify({"html": html, "matched": len(rows),
-                        "status": status, "query": query,
-                        "pending_balance": round(mtd["pending"], 2),
-                        "pending_count":   mtd["pending_count"]})
-
-    return render_template("return_checks.html",
-        user=user, today=today_d, rows=rows,
-        status=status, query=query,
-        date_from=date_from, date_to=date_to,
-        mtd=mtd, aging=aging,
-    )
+    """301 → /app/return-checks. Page rendering + live-search
+    moved to React; both the GET-page path and the legacy
+    `?partial=1` JSON contract are gone since no SPA code uses
+    them. The mutation routes below
+    (/return-checks/new, /payment, /loss, etc.) stay alive
+    intentionally so any in-flight Jinja form-submit during
+    rollout still works; the SPA hits /api/v2/return-checks
+    instead. Stub keeps url_for('return_checks') working for
+    sidebar nav + bounces old bookmarks."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/return-checks" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/return-checks/new", methods=["POST"])
