@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signups closed — DineroBook</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="{{ url_for('static', filename='design-tokens.css') }}" rel="stylesheet">
+<meta name="theme-color" content="#0b0d12">
+<link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{font-family:var(--db-font-body);background:var(--db-bg);color:var(--db-gray-9);min-height:100vh;min-height:100dvh;-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column}
+
+nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 40px;height:60px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--db-gray-2)}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.nav-brand .mark{width:28px;height:28px;border-radius:8px;box-shadow:0 0 12px rgba(63,255,0,0.40);display:block}
+.nav-brand .name{font-family:var(--db-font-display);color:var(--db-gray-9);font-size:17px;font-weight:600;letter-spacing:-.02em}
+.nav-login{color:var(--db-gray-7);font-size:13px;text-decoration:none;font-weight:500}
+.nav-login:hover{color:var(--db-gray-9)}
+
+.page{flex:1;display:flex;align-items:center;justify-content:center;padding:48px 24px;position:relative;overflow:hidden}
+.page-glow{position:absolute;inset:0;background:radial-gradient(ellipse 50% 40% at 50% 30%,var(--db-neon-glow-15),transparent 70%);pointer-events:none}
+.page-grid{position:absolute;inset:0;background-image:linear-gradient(var(--db-gray-2) 1px,transparent 1px),linear-gradient(90deg,var(--db-gray-2) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 50% 40%,black 20%,transparent 60%);mask-image:radial-gradient(ellipse at 50% 40%,black 20%,transparent 60%);opacity:.4;pointer-events:none}
+
+.card{position:relative;background:var(--db-bg-elevated);border:1px solid var(--db-gray-3);border-radius:16px;padding:40px 44px;width:100%;max-width:520px;box-shadow:0 24px 80px rgba(0,0,0,0.5);text-align:center}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border:1px solid var(--db-gray-3);border-radius:999px;background:var(--db-bg-input);font-family:var(--db-font-mono);font-size:10.5px;color:var(--db-gray-7);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:24px;font-weight:500}
+.pill .dot{width:6px;height:6px;border-radius:999px;background:var(--db-warning);box-shadow:0 0 8px rgba(255,176,32,.55)}
+.card-title{font-family:var(--db-font-display);font-size:32px;color:var(--db-gray-9);font-weight:600;letter-spacing:-.025em;margin-bottom:14px}
+.card-sub{font-size:15px;color:var(--db-gray-7);margin-bottom:28px;line-height:1.65}
+.actions{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:var(--db-neon);color:var(--db-neon-ink);padding:13px 26px;border-radius:10px;font-weight:600;font-size:14px;text-decoration:none;letter-spacing:-.01em;box-shadow:0 0 0 1px var(--db-neon),0 0 28px var(--db-neon-glow-40);transition:background .12s}
+.btn-primary:hover{background:var(--db-neon-bright)}
+.btn-ghost{background:transparent;color:var(--db-gray-9);border:1px solid var(--db-gray-4);padding:13px 22px;border-radius:10px;font-weight:500;font-size:14px;text-decoration:none;transition:border-color .12s,background .12s}
+.btn-ghost:hover{border-color:var(--db-gray-6);background:rgba(255,255,255,0.03)}
+
+@media (max-width:600px){
+  nav.site{padding:0 16px;height:56px}
+  .nav-brand .name{font-size:16px}
+  .nav-login{font-size:12px}
+  .page{padding:24px 14px}
+  .card{padding:32px 26px;border-radius:14px}
+  .card-title{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<nav class="site">
+  <a href="/" class="nav-brand">
+    <img class="mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
+    <span class="name">DineroBook</span>
+  </a>
+  <a href="{{ url_for('login') }}" class="nav-login">Sign in</a>
+</nav>
+
+<div class="page">
+  <div class="page-grid" aria-hidden="true"></div>
+  <div class="page-glow" aria-hidden="true"></div>
+  <div class="card">
+    <div class="pill"><span class="dot"></span>Invite-only · Closed beta</div>
+    <div class="card-title">New signups are paused</div>
+    <div class="card-sub">
+      We're polishing the product before opening it back up. If you're an
+      existing customer, sign in below — your account is unaffected. If
+      you'd like to be notified when signups re-open, drop us a note.
+    </div>
+    <div class="actions">
+      <a href="{{ url_for('login') }}" class="btn-primary">Sign in →</a>
+      <a href="/" class="btn-ghost">Back to home</a>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
