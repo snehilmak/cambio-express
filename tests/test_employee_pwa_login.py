@@ -63,26 +63,9 @@ def test_root_redirects_to_store_login_when_cookie_set(client):
 
 
 def test_login_redirects_to_store_login_when_cookie_set(client):
-    # Diagnostic: query DB state BEFORE and AFTER the request to see
-    # whether seed worked at all and whether the request cleared it.
-    from app import Store
-    with flask_app.app_context():
-        before = [(s.id, s.slug, s.is_active) for s in Store.query.all()]
     _set_cookie(client, COOKIE, "test-store")
     resp = client.get("/login", follow_redirects=False)
-    if resp.status_code != 302:
-        with flask_app.app_context():
-            after = [(s.id, s.slug, s.is_active) for s in Store.query.all()]
-        cookies = [(c.name, c.value)
-                   for c in getattr(client, "cookie_jar", [])]
-        raise AssertionError(
-            f"expected 302, got {resp.status_code}; "
-            f"location={resp.headers.get('Location')!r}; "
-            f"stores_before={before!r}; "
-            f"stores_after={after!r}; "
-            f"cookies_on_client={cookies!r}; "
-            f"body_first_400={resp.data[:400]!r}"
-        )
+    assert resp.status_code == 302
     assert "/login/test-store" in resp.headers["Location"]
 
 
