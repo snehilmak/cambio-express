@@ -199,6 +199,81 @@ def test_openapi_includes_auth_paths():
     assert "/auth/login-cross-store" in paths
 
 
+# ── GET /auth/store-by-slug/{slug} ──────────────────────────
+
+
+def test_store_by_slug_returns_public_fields(client, test_store_id):  # noqa: ARG001
+    """Public lookup so the SPA's per-store login page can render
+    the store name in its branding pane before the user signs in."""
+    resp = client.get("/api/v2/auth/store-by-slug/test-store")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    # extra="forbid" — only public fields, no plan / Stripe IDs.
+    assert set(body.keys()) == {"store_id", "name", "slug"}
+    assert body["name"] == "Test Store"
+    assert body["slug"] == "test-store"
+
+
+def test_store_by_slug_404_unknown(client):
+    resp = client.get("/api/v2/auth/store-by-slug/no-such-store")
+    assert resp.status_code == 404
+
+
+def test_store_by_slug_404_inactive(client, test_store_id):
+    """Inactive stores return 404 — no leak that the slug exists."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        s = db.session.get(Store, test_store_id)
+        s.is_active = False
+        db.session.commit()
+    resp = client.get("/api/v2/auth/store-by-slug/test-store")
+    assert resp.status_code == 404
+
+
+def test_store_by_slug_lowercases_input(client, test_store_id):  # noqa: ARG001
+    """Lookup is case-insensitive on the input slug — uppercase
+    URL still resolves so we don't 404 PWA users typing the
+    address-bar form of their store."""
+    resp = client.get("/api/v2/auth/store-by-slug/TEST-STORE")
+    assert resp.status_code == 200
+
+
+# ── POST /auth/login (per-store cookie + LoginEvent) ────────
+
+
+def test_login_with_store_id_sets_last_store_cookie(client, test_store_id):
+    """When the body carries a store_id we set the legacy
+    `ds_last_store` cookie so the installed-PWA bounce path on
+    `/` still works after migration."""
+    resp = client.post("/api/v2/auth/login", json={
+        "username": "admin@test.com",
+        "password": "testpass123!",
+        "store_id": test_store_id,
+    })
+    assert resp.status_code == 200
+    # Flask test client surfaces Set-Cookie via headers + cookies dict.
+    cookies = resp.headers.getlist("Set-Cookie")
+    assert any("ds_last_store=test-store" in c for c in cookies), \
+        f"expected ds_last_store cookie, got {cookies!r}"
+
+
+def test_login_records_login_event(client, test_store_id, test_admin_id):
+    """SPA logins record a LoginEvent so DAU/MAU stays accurate
+    after the migration (legacy /login Flask route did this via
+    `_record_login`; the FastAPI port mirrors it)."""
+    from app import LoginEvent, app as flask_app
+    with flask_app.app_context():
+        before = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+    client.post("/api/v2/auth/login", json={
+        "username": "admin@test.com",
+        "password": "testpass123!",
+        "store_id": test_store_id,
+    })
+    with flask_app.app_context():
+        after = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+    assert after == before + 1
+
+
 # ── POST /auth/login-cross-store ────────────────────────────
 #
 # The SPA's generic landing page doesn't know which store a user

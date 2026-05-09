@@ -176,3 +176,16 @@ class OwnerSignupResponse(BaseModel):
     role: str
     store_id: int | None
     permissions: list[str]
+
+
+class StoreLookupResponse(BaseModel):
+    """GET /auth/store-by-slug/{slug} — public lookup so the SPA's
+    per-store login page can render the store name in its branding
+    pane before the user authenticates. Inactive / unknown slugs
+    return 404."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    name: str
+    slug: str

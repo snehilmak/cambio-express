@@ -43,8 +43,13 @@ def _set_cookie(client, name, value):
 # ── Cookie is set on the store login page ────────────────────
 
 def test_store_login_get_sets_last_store_cookie(client):
-    resp = client.get("/login/test-store")
-    assert resp.status_code == 200
+    """The legacy /login/<slug> form is now a 301 to /app/login/<slug>
+    (React route). We still set the `ds_last_store` cookie on the
+    redirect so the installed-PWA bounce path on `/` and `/login`
+    keeps working unchanged."""
+    resp = client.get("/login/test-store", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/login/test-store"
     assert _get_cookie(client, COOKIE) == "test-store"
 
 

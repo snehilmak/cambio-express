@@ -2918,39 +2918,23 @@ def login_totp_recovery_codes():
 
 @app.route("/login/<slug>", methods=["GET", "POST"])
 def login_store(slug):
-    store = Store.query.filter_by(slug=slug).first_or_404()
-    if not store.is_active:
-        abort(404)
-    if "user_id" in session:
-        return redirect(url_for("dashboard"))
-    error = None
-    if request.method == "POST":
-        from api.Modules.Auth.Services import authenticate_password
-        from api.Modules.Auth.Services.login import AuthenticationError
-        username = request.form.get("username", "").strip()
-        try:
-            # Validate password + is_active via the Service layer.
-            # Per-store-scoped lookup (store.id is known here) — this
-            # is the correct path for the per-store sign-in page.
-            authenticate_password(
-                db.session, store_id=store.id, username=username,
-                password=request.form.get("password", ""),
-            )
-            u = User.query.filter_by(
-                username=username, store_id=store.id,
-            ).first()
-        except AuthenticationError:
-            u = None
-        if u is not None:
-            session["user_id"] = u.id
-            session["role"] = u.role
-            session["store_id"] = u.store_id
-            _record_login(u); db.session.commit()
-            resp = redirect(url_for("dashboard"))
-            return _set_last_store_slug_cookie(resp, store.slug)
-        error = "Invalid username or password."
-    resp = make_response(render_template("login_store.html", store=store, error=error))
-    return _set_last_store_slug_cookie(resp, store.slug)
+    """301 to the React /app/login/<slug> page. The legacy Jinja
+    form + POST handler are gone — the SPA submits directly to
+    /api/v2/auth/login (which sets the same `ds_last_store`
+    cookie when a store_id is provided, mirroring the legacy
+    behavior). This stub keeps url_for('login_store') working
+    in still-Jinja templates and bounces old bookmarks +
+    installed-PWA shortcuts that point at /login/<slug>.
+
+    We also set the `ds_last_store` cookie on the redirect when
+    the slug resolves to an active store, so an installed-PWA
+    employee whose session expired keeps getting bounced back to
+    their store on the legacy fallback paths (`/`, `/login`)."""
+    resp = redirect(f"/app/login/{slug}", code=301)
+    store = Store.query.filter_by(slug=slug).first()
+    if store is not None and store.is_active:
+        _set_last_store_slug_cookie(resp, store.slug)
+    return resp
 
 @app.route("/employee-login", methods=["POST"])
 def employee_login_redirect():
