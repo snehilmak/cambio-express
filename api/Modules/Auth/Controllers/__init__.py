@@ -326,30 +326,64 @@ def forgot_password_route(
     The raw token is logged to the operator console only when
     SMTP isn't configured (matching the legacy /forgot-password
     Flask flow). Production setups deliver via SMTP and never
-    log the URL.
-
-    SMTP delivery is deliberately NOT wired here yet — the
-    legacy flow handles email send + audit logging. This endpoint
-    only mints the token; legacy Flask code can pick it up if
-    needed. Subsequent PR threads SMTP through.
+    log the URL — the SMTP send happens inline below, lifted from
+    the now-retired legacy Flask handler.
     """
     issued = issue_password_reset_token(db, body.email)
     db.commit()
-    # Stash the raw token in a logger so the legacy email path
-    # (which still owns delivery) can find it. Do NOT include it
-    # in the JSON response — that would leak it to anyone who
-    # can hit the endpoint.
     if issued is not None:
-        # Lazy logger import — production sends via SMTP and
-        # ignores this fallback. The legacy /forgot-password
-        # route also logs at WARNING level.
-        import logging
-        logging.getLogger("app").warning(
-            "Password reset token issued via /api/v2/auth/forgot-password "
-            "for user_id=%s; raw token logged for SMTP-fallback delivery.",
-            issued.user.id,
-        )
+        _deliver_password_reset_email(issued)
     return {"status": "ok"}
+
+
+def _deliver_password_reset_email(issued) -> None:
+    """Send the password-reset email. Lifted verbatim from the
+    legacy /forgot-password Flask handler — same body copy, same
+    HTML template, same SMTP-fallback log line — so the SPA's
+    /app/forgot-password gives users an identical email."""
+    import os
+    from datetime import datetime
+    from flask import render_template, url_for
+    from app import _send_email, app as flask_app
+    u = issued.user
+    with flask_app.test_request_context():
+        # url_for(_external=True) needs a request context; in
+        # production the dispatcher already sets one, but for a
+        # FastAPI-only call (no Flask request frame) we synthesise
+        # one. Routes resolved here are still the canonical Flask
+        # ones; the SPA equivalent path /app/reset-password?token=
+        # is what the email actually sends — see below.
+        base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+        reset_url = f"{base_url}/app/reset-password?token={issued.raw_token}"
+        body = (
+            "Hi,\n\n"
+            "Someone (hopefully you) requested a password reset for your "
+            "DineroBook account. Follow this link within the next hour to "
+            "set a new password:\n\n"
+            f"  {reset_url}\n\n"
+            "If you didn't request this you can safely ignore this email "
+            "— your current password will keep working.\n"
+        )
+        try:
+            html = render_template(
+                "emails/password_reset.html",
+                preheader="Reset your DineroBook password — link expires in 1 hour.",
+                name=u.full_name or "",
+                reset_url=reset_url,
+                year=datetime.utcnow().year,
+                base_url=base_url,
+            )
+        except Exception:
+            html = None
+    to_addr = (u.email or u.username).strip()
+    delivered = _send_email(
+        to_addr, "Reset your DineroBook password", body, html=html,
+    )
+    if not delivered:
+        flask_app.logger.warning(
+            f"[password-reset] email send skipped for {u.username}; "
+            f"reset URL: {reset_url}"
+        )
 
 
 @router.post("/reset-password")

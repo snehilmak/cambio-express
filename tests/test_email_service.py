@@ -240,7 +240,10 @@ def test_forgot_password_uses_user_email_when_set(client):
         db.session.commit()
     with patch("app.smtplib.SMTP") as smtp:
         smtp.return_value.__enter__.return_value.send_message.return_value = {}
-        client.post("/forgot-password", data={"username": "admin@test.com"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "admin@test.com"},
+        )
     h = smtp_health_check()
     assert h["last_to_domain"] == "different.example", \
         f"expected reset to go to the User.email domain, got {h['last_to_domain']!r}"
@@ -258,7 +261,10 @@ def test_forgot_password_falls_back_to_username_when_email_blank(client):
         db.session.commit()
     with patch("app.smtplib.SMTP") as smtp:
         smtp.return_value.__enter__.return_value.send_message.return_value = {}
-        client.post("/forgot-password", data={"username": "admin@test.com"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "admin@test.com"},
+        )
     h = smtp_health_check()
     assert h["last_to_domain"] == "test.com", \
         f"expected fallback to username domain, got {h['last_to_domain']!r}"
@@ -278,7 +284,10 @@ def test_forgot_password_superadmin_still_excluded(client):
         db.session.commit()
     with patch("app.smtplib.SMTP") as smtp:
         smtp.return_value.__enter__.return_value.send_message.return_value = {}
-        client.post("/forgot-password", data={"username": "superadmin"})
+        client.post(
+            "/api/v2/auth/forgot-password",
+            json={"email": "superadmin"},
+        )
     h = smtp_health_check()
     # No send was attempted — cache stays at 'unknown'. This is the
     # exact signal the health card would show for "no activity yet".
