@@ -357,40 +357,35 @@ def test_template_preserves_newlines_in_message(client):
 
 
 # ── /account/notifications toggle ──────────────────────────────
+#
+# Page rendering + form-POST coverage moved to React + the new
+# GET/PUT /api/v2/auth/notifications endpoints. Toggle persistence
+# is exercised at the API level in
+# tests/Modules/Auth/test_notifications_endpoint.py. The catalog
+# row + toggle UI (`Announcement emails`, `Platform announcements`)
+# live in frontend/src/routes/AccountNotifications.tsx.
 
-def test_notifications_page_shows_announcement_toggle(logged_in_client):
-    body = logged_in_client.get("/account/notifications").data.decode()
-    assert 'id="nae"' in body
-    assert "Announcement emails" in body
-    assert "notify_announcement_email" in body
 
-
-def test_notifications_toggle_on_persists(logged_in_client, test_admin_id):
-    logged_in_client.post("/account/notifications", data={
-        "notify_trial_reminders": "1",
-        "notify_announcement_email": "1",
-    })
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
+def test_notifications_announcement_toggle_via_api(client, test_store_id):
+    """The announcement toggle persists via PUT
+    /api/v2/auth/notifications, confirming the field is wired
+    end-to-end into the model column the broadcast sender reads."""
+    from app import User, app as flask_app
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.put(
+        "/api/v2/auth/notifications",
+        json={"notify_announcement_email": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    with flask_app.app_context():
+        u = User.query.filter_by(username="admin@test.com").first()
         assert u.notify_announcement_email is True
-
-
-def test_notifications_toggle_off_persists(logged_in_client, test_admin_id):
-    # Set true first, then toggle off.
-    logged_in_client.post("/account/notifications", data={
-        "notify_trial_reminders": "1",
-        "notify_announcement_email": "1",
-    })
-    logged_in_client.post("/account/notifications", data={
-        "notify_trial_reminders": "1",
-    })  # no announcement flag -> False
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        assert u.notify_announcement_email is False
-
-
-def test_catalog_row_for_announcements_visible(logged_in_client):
-    """The 'What DineroBook sends you' table has a new row for
-    announcement emails, pointing at the toggle above."""
-    body = logged_in_client.get("/account/notifications").data.decode()
-    assert "Platform announcements" in body

@@ -37,6 +37,11 @@ from api.Modules.Auth.Services.passkey import (
     rp_id as passkey_rp_id,
     rp_name as passkey_rp_name,
 )
+from api.Modules.Auth.Services.notifications import (
+    get_notifications_payload,
+    trial_toggle_applies,
+    update_notifications,
+)
 from api.Modules.Auth.Services.password_reset import (
     IssuedToken,
     consume_password_reset_token,
@@ -105,6 +110,7 @@ __all__ = [
     "finish_totp_enrollment",
     "format_recovery_code",
     "generate_recovery_codes",
+    "get_notifications_payload",
     "get_profile_payload",
     "hash_recovery_code",
     "hash_token",
@@ -120,6 +126,8 @@ __all__ = [
     "passkey_rp_id",
     "passkey_rp_name",
     "permissions_for",
+    "trial_toggle_applies",
+    "update_notifications",
     "update_profile",
     "verify_password_cross_store",
     "verify_password_reset_token",
