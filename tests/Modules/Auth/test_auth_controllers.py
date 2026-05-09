@@ -720,6 +720,107 @@ def test_owner_signup_token_works_on_me_endpoint(client):
     assert me.get_json()["role"] == "owner"
 
 
+# ── POST /auth/signup (referral codes) ─────────────────────
+
+
+def _seed_referral_code(test_store_id, *, code="WELCOME50", referee_cents=5000):
+    """Insert a ReferralCode owned by the seeded test store. Used by
+    the signup-with-ref tests below + the referral-preview tests."""
+    from app import ReferralCode, app as flask_app, db
+    with flask_app.app_context():
+        rc = ReferralCode(
+            code=code, owner_store_id=test_store_id,
+            reward_referee_cents=referee_cents,
+        )
+        db.session.add(rc); db.session.commit()
+        return rc.id
+
+
+def test_signup_honors_valid_ref_code(client, test_store_id):
+    """Valid ref_code links the new store to the owner's
+    ReferralCode via Store.referred_by_code_id (the redemption
+    happens later, on the referee's first paid checkout)."""
+    rc_id = _seed_referral_code(test_store_id, code="WELCOME50")
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Referred Store",
+            "email":      "referred@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "welcome50",  # mixed case, gets uppercased
+        },
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    new_store_id = resp.get_json()["store_id"]
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id == rc_id
+
+
+def test_signup_drops_unknown_ref_code(client):
+    """Unknown ref_code does NOT block signup — same UX as the
+    legacy form. Store is created with no referral linkage."""
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Bad Ref",
+            "email":      "noref@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "DOESNOTEXIST",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+def test_signup_empty_ref_code_no_lookup(client):
+    """Empty ref_code is the default. No referral lookup runs and
+    the new store has no referred_by_code_id."""
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "No Ref",
+            "email":      "blank@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "",
+        },
+    )
+    assert resp.status_code == 201
+    sid = resp.get_json()["store_id"]
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        assert db.session.get(Store, sid).referred_by_code_id is None
+
+
+# ── GET /auth/referral/{code} (preview) ────────────────────
+
+
+def test_referral_preview_returns_payload(client, test_store_id):
+    _seed_referral_code(test_store_id, code="PREVIEW1", referee_cents=7500)
+    resp = client.get("/api/v2/auth/referral/PREVIEW1")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body == {"code": "PREVIEW1", "reward_referee_cents": 7500}
+
+
+def test_referral_preview_uppercase_match(client, test_store_id):
+    """The endpoint normalises the input to uppercase before lookup
+    so URLs with mixed-case codes still resolve."""
+    _seed_referral_code(test_store_id, code="UPPERONLY")
+    resp = client.get("/api/v2/auth/referral/upperonly")
+    assert resp.status_code == 200
+
+
+def test_referral_preview_404_unknown(client):
+    resp = client.get("/api/v2/auth/referral/NOPE")
+    assert resp.status_code == 404
+
+
 # ── POST /auth/forgot-password ─ /auth/reset-password ──────
 
 

@@ -3307,71 +3307,19 @@ def reset_password(token):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    """301 to the React /app/signup page when signups are open.
+    With SIGNUP_CLOSED=1 we render the "invite-only" notice
+    directly so the user doesn't briefly see the SPA form before
+    it 503s. The legacy Jinja form + POST handler are retired —
+    the SPA submits directly to /api/v2/auth/signup. Stub keeps
+    `url_for('signup')` working in still-Jinja templates and
+    bounces old bookmarks. Query string (?ref=, ?plan=) is
+    preserved."""
     if SIGNUP_CLOSED:
-        # Closed-signup state: render the same chrome but with a
-        # "we're invite-only right now" notice instead of the form.
-        # Existing customers can still sign in via the link below.
         return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
-    if "user_id" in session and request.method == "GET":
-        return redirect(url_for("dashboard"))
-    errors = {}
-    form = {}
-    # Support both ?ref=CODE on GET (shared link) and a form field on POST
-    # so the code survives if the page is reloaded after a validation error.
-    ref_raw = (request.form.get("ref_code")
-               or request.args.get("ref", "")).strip().upper()
-    ref = lookup_referral_code(ref_raw) if ref_raw else None
-    if request.method == "POST":
-        store_name = request.form.get("store_name", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-        phone = request.form.get("phone", "").strip()
-        form = {"store_name": store_name, "email": email, "phone": phone,
-                "ref_code": ref_raw}
-
-        if not store_name:
-            errors["store_name"] = "Store name is required."
-        if not email:
-            errors["email"] = "Email is required."
-        if not password:
-            errors["password"] = "Password is required."
-        elif len(password) < 8:
-            errors["password"] = "Password must be at least 8 characters."
-        # A code that was typed / pasted but doesn't match any active one:
-        # don't hard-fail — that's a bad UX for a nice-to-have. We silently
-        # drop it and continue. The warning surface is the template's green
-        # banner only appearing when the code resolved.
-        if ref_raw and not ref:
-            app.logger.info(f"signup: invalid ref code '{ref_raw}' ignored")
-
-        if not errors:
-            from api.Modules.Auth.Services import (
-                SignupConflictError, create_store_and_admin,
-            )
-            try:
-                result = create_store_and_admin(
-                    db.session,
-                    store_name=store_name, email=email,
-                    password=password, phone=phone,
-                    referred_by_code_id=(ref.id if ref else None),
-                )
-            except SignupConflictError as e:
-                errors["email"] = str(e)
-            else:
-                db.session.commit()
-                u = result.admin
-                session["user_id"] = u.id
-                session["role"] = u.role
-                session["store_id"] = result.store.id
-                if ref:
-                    flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
-                          "off your first paid month when you subscribe.", "success")
-                else:
-                    flash("Welcome! Your 7-day free trial has started.", "success")
-                return redirect(url_for("dashboard"))
-
-    return render_template("signup.html", errors=errors, form=form,
-                           referral=ref, ref_code_raw=ref_raw)
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/signup" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():

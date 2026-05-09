@@ -159,13 +159,16 @@ def test_settings_store_info_rejects_blank_name(logged_in_client):
 
 
 def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
-    # Create a second store with a different admin email
-    client.post("/signup", data={
+    # Create a second store with a different admin email. The legacy
+    # /signup form was retired (redirects to /app/signup); we use the
+    # FastAPI signup endpoint instead, same one the SPA submits to.
+    r = client.post("/api/v2/auth/signup", json={
         "store_name": "Other Store",
         "email": "other@example.com",
         "password": "securepass1!",
-        "phone": ""
+        "phone": "",
     })
+    assert r.status_code == 201, r.get_data(as_text=True)
     resp = logged_in_client.post("/admin/settings", data={
         "_tab": "store",
         "store_name": "Test Store",
@@ -269,13 +272,15 @@ def test_team_reset_employee_password(logged_in_client):
 
 
 def test_team_reset_scoped_to_store(logged_in_client, client):
-    # Create a second store and its employee
-    client.post("/signup", data={
+    # Create a second store and its employee. Legacy /signup is now
+    # a redirect; use the FastAPI signup endpoint instead.
+    r = client.post("/api/v2/auth/signup", json={
         "store_name": "Other Store",
         "email": "other2@example.com",
         "password": "securepass1!",
-        "phone": ""
+        "phone": "",
     })
+    assert r.status_code == 201, r.get_data(as_text=True)
     with flask_app.app_context():
         from app import Store, User
         other_store = Store.query.filter_by(email="other2@example.com").first()
