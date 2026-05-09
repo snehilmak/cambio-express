@@ -58,28 +58,10 @@ def test_login_error_renders_in_negative_style(client):
     assert resp.status_code in (200, 400, 401)
 
 
-def test_signup_loads_design_tokens(client):
-    resp = client.get("/signup")
-    assert resp.status_code == 200
-    assert b"design-tokens.css" in resp.data
-
-
-def test_signup_renders_neon_accent(client):
-    resp = client.get("/signup")
-    # The neon enters the page as either an inline hex (#3fff00, used
-    # in the isometric SVG) or as a `var(--db-neon)` token reference.
-    body = resp.data
-    assert b"#3fff00" in body or b"--db-neon" in body
-
-
-def test_signup_has_all_required_fields(client):
-    """Redesign must keep every field the backend reads, otherwise
-    POST /signup validation flows break."""
-    resp = client.get("/signup")
-    body = resp.data
-    for field in (b'name="store_name"', b'name="email"', b'name="password"',
-                  b'name="phone"', b'name="ref_code"'):
-        assert field in body, f"signup missing field: {field!r}"
+# /signup design tests are gone: the page migrated to React
+# (frontend/src/routes/Signup.tsx). The legacy /signup Flask route
+# is now a 301 to /app/signup — see tests/test_signup.py for the
+# redirect tests.
 
 
 # /signup/owner design tests are gone: the page migrated to React

@@ -79,8 +79,11 @@ def test_api_signup_returns_503_when_flag_on(client, signup_closed):  # noqa: AR
 
 
 def test_signup_open_by_default(client):
-    """Default (no flag flipped) → signups work — GET returns the form."""
-    resp = client.get("/signup")
-    assert resp.status_code == 200
-    assert b'name="store_name"' in resp.data
+    """Default (no flag flipped) → signups work — /signup 301s to
+    the React /app/signup page (the legacy Jinja form was retired
+    in the SPA migration). The "signups are paused" notice does NOT
+    render."""
+    resp = client.get("/signup", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"].startswith("/app/signup")
     assert b"signups are paused" not in resp.data.lower()

@@ -26,6 +26,25 @@ export interface SignupBody {
   email: string;
   password: string;
   phone?: string;
+  ref_code?: string;
+}
+
+export interface ReferralPreview {
+  code: string;
+  reward_referee_cents: number;
+}
+
+export async function previewReferral(
+  code: string,
+): Promise<ReferralPreview | null> {
+  try {
+    return await api<ReferralPreview>(
+      `/api/v2/auth/referral/${encodeURIComponent(code)}`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 export interface SignupResponse {
