@@ -33,6 +33,67 @@ from app import app as flask_app, db
 flask_app.config["TESTING"] = True
 
 
+# ─────────────────────────────────────────────────────────────
+# FastAPI TestClient leak plug
+#
+# Bare `TestClient(api_app)` instances (~189 call sites across
+# ~11 test files) skip the recommended context-manager form, so
+# FastAPI's lifespan + httpx Session never get cleanly shut
+# down. The leftover asyncio coroutines hang on as "Task pending"
+# warnings and — when GC'd mid-test — rollback the SQLAlchemy
+# session of whatever test happens to be running. That used to
+# produce 50/50 flakes on tests like
+# test_webhook_persists_event_on_valid_request.
+#
+# Fix: monkey-patch TestClient to register every instance for
+# teardown. The autouse `_close_fastapi_clients` fixture below
+# closes them all between tests, draining the pending tasks
+# before they can interfere with the next test.
+#
+# This eliminates the need to refactor the 189 call sites
+# individually — they keep working unchanged. Removing this
+# block is safe once those sites all use `with TestClient(...)
+# as c:` form.
+import fastapi.testclient as _fastapi_testclient
+_OrigTestClient = _fastapi_testclient.TestClient
+_open_fastapi_clients: list = []
+
+
+class _AutoCloseTestClient(_OrigTestClient):
+    """Drop-in TestClient that registers itself with the autouse
+    fixture for guaranteed teardown after each test."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _open_fastapi_clients.append(self)
+
+
+_fastapi_testclient.TestClient = _AutoCloseTestClient
+# Also re-export under fastapi.testclient module attr so re-imports
+# pick up the patched version even after fastapi/starlette internal
+# caching.
+import sys as _sys
+if "fastapi.testclient" in _sys.modules:
+    _sys.modules["fastapi.testclient"].TestClient = _AutoCloseTestClient
+
+
+@pytest.fixture(autouse=True)
+def _close_fastapi_clients():
+    """After each test, walk the list of TestClient instances
+    created during the test and exit them properly. Each `__exit__`
+    closes httpx + drains FastAPI's lifespan tasks so the next
+    test starts with a clean asyncio state."""
+    yield
+    while _open_fastapi_clients:
+        c = _open_fastapi_clients.pop()
+        try:
+            c.__exit__(None, None, None)
+        except Exception:
+            # Don't let a single client teardown failure mask the
+            # actual test result; keep popping.
+            pass
+
+
 # Stable TOTP secret for the seeded superadmin so test helpers can
 # compute current codes deterministically via `pyotp.TOTP().now()`.
 # Picked once at module import; never rotated within a session.
