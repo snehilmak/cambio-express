@@ -8,7 +8,7 @@ Mounts at `/api/v2/admin/*`. Endpoints:
 JWT-required, scoped to the principal's store. Superadmin (no
 store scope) → 403.
 """
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -22,6 +22,9 @@ from api.Modules.Admin.Requests import (
     AddonListResponse,
     AddonRow,
     AddonToggleResponse,
+    AdminAuditLogResponse,
+    AdminAuditRow,
+    AdminAuditUserOption,
     StoreInfoResponse,
     StoreInfoRow,
     StoreInfoUpdateRequest,
@@ -34,6 +37,7 @@ from api.Modules.Admin.Requests import (
 from api.Modules.Admin.Services import (
     add_team_member,
     deactivate_team_member,
+    list_audit_rows,
     tax_export_default_year,
     tax_export_year_choices,
     update_store_info,
@@ -313,4 +317,44 @@ def list_tax_export_years_route(
     years = tax_export_year_choices(db, store_id)
     return TaxExportYearsResponse(
         years=years, default_year=tax_export_default_year(years),
+    )
+
+
+# ── Operator audit log ──────────────────────────────────────
+
+
+@router.get("/audit-log", response_model=AdminAuditLogResponse)
+def get_admin_audit_log_route(
+    target: str = Query("", max_length=40),
+    action: str = Query("", max_length=40),
+    user:   str = Query("", max_length=20),
+    page:   int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminAuditLogResponse:
+    """Merged operator + transfer audit feed for the principal's
+    store. Powers /app/admin/audit-log. Filters mirror the legacy
+    Flask page exactly: target=transfer|daily_report|batch,
+    action=create|update|delete|lock|unlock|status_changed,
+    user=<id>. `page` is 1-based; per-page is the legacy 50."""
+    store_id = _require_store(claims)
+    payload = list_audit_rows(
+        db, store_id=store_id,
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+        user_filter=user.strip(),
+        page=page,
+    )
+    return AdminAuditLogResponse(
+        rows=[AdminAuditRow(**r) for r in payload["rows"]],
+        total=payload["total"],
+        page=payload["page"],
+        per_page=payload["per_page"],
+        total_pages=payload["total_pages"],
+        store_users=[
+            AdminAuditUserOption(**u) for u in payload["store_users"]
+        ],
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+        user_filter=user.strip(),
     )
