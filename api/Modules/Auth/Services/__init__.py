@@ -44,6 +44,12 @@ from api.Modules.Auth.Services.password_reset import (
     issue_password_reset_token,
     verify_password_reset_token,
 )
+from api.Modules.Auth.Services.profile import (
+    TIMEZONE_CHOICES as PROFILE_TIMEZONE_CHOICES,
+    ProfileValidationError,
+    get_profile_payload,
+    update_profile,
+)
 from api.Modules.Auth.Services.signup import (
     DEFAULT_GRACE_DAYS,
     DEFAULT_TRIAL_DAYS,
@@ -76,6 +82,8 @@ __all__ = [
     "MIN_PASSWORD_LENGTH",
     "OwnerSignupResult",
     "PASSKEY_RP_NAME",
+    "PROFILE_TIMEZONE_CHOICES",
+    "ProfileValidationError",
     "RECOVERY_CODES_PER_USER",
     "SignupConflictError",
     "SignupResult",
@@ -97,6 +105,7 @@ __all__ = [
     "finish_totp_enrollment",
     "format_recovery_code",
     "generate_recovery_codes",
+    "get_profile_payload",
     "hash_recovery_code",
     "hash_token",
     "is_enrolled",
@@ -111,6 +120,7 @@ __all__ = [
     "passkey_rp_id",
     "passkey_rp_name",
     "permissions_for",
+    "update_profile",
     "verify_password_cross_store",
     "verify_password_reset_token",
     "verify_totp_token",

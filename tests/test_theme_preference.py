@@ -131,35 +131,11 @@ def test_account_theme_blocks_unauthenticated(client):
     assert "/login" in rv.headers["Location"]
 
 
-def test_account_profile_renders_appearance_card(logged_in_client):
-    """The profile page surfaces the chooser with both options visible
-    so users can find the toggle without searching."""
-    rv = logged_in_client.get("/account/profile")
-    assert rv.status_code == 200
-    body = rv.data
-    assert b"Appearance" in body
-    assert b'name="theme"' in body
-    assert b'value="dark"' in body
-    assert b'value="light"' in body
-
-
-def test_account_profile_active_choice_marks_current_theme(logged_in_client, test_admin_id):
-    """The radio matching the user's current preference is `checked`."""
-    with flask_app.app_context():
-        from app import User
-        u = db.session.get(User, test_admin_id)
-        u.theme_preference = "light"
-        db.session.commit()
-    rv = logged_in_client.get("/account/profile")
-    assert rv.status_code == 200
-    # Light radio is checked, dark is not.
-    body = rv.data.decode()
-    # Find the light radio input markup and confirm `checked`.
-    assert 'value="light"' in body
-    light_idx = body.find('value="light"')
-    # Look at a small slice around the input to confirm `checked` is on it.
-    near_light = body[max(0, light_idx - 100):light_idx + 100]
-    assert "checked" in near_light
+# The Appearance/theme picker on /account/profile was retired
+# when the page moved to React. Per CLAUDE.md invariant #1, the
+# SPA is dark-only — no user-facing toggle. The /account/theme
+# POST endpoint still exists for Jinja chrome (tested below) but
+# the picker UI itself is gone.
 
 
 def test_owner_dashboard_carries_theme_attr(client):

@@ -753,23 +753,17 @@ def test_owner_get_admin_dashboard_redirects_to_owner_dashboard(owner_client):
     assert "/owner/dashboard" in rv.headers["Location"]
 
 
-def test_owner_account_profile_uses_owner_shell(owner_client):
-    """REGRESSION: account_profile/security/notifications all extended
-    base.html unconditionally, so owners viewing their profile saw the
-    admin sidebar (Dashboard / Transfers / etc.) — links they don't
-    have access to. They should see base_owner.html chrome instead.
-
-    We assert presence of the owner-only Locations nav link AND the
-    OWNER topbar badge, plus absence of the admin Transfers nav link.
-    """
-    rv = owner_client.get("/account/profile")
-    assert rv.status_code == 200
-    body = rv.data.decode()
-    assert 'href="/owner/locations"' in body, "owner sidebar should appear"
-    assert ">OWNER<" in body, "owner topbar badge should appear"
-    # Admin sidebar's Transfers link is `href="/transfers"` inside a
-    # nav-link <a>; for owner shell that link doesn't exist at all.
-    assert 'href="/transfers"' not in body, "admin Transfers nav must not appear"
+def test_owner_account_profile_redirects_to_app(owner_client):
+    """The legacy chrome split (admin sidebar vs owner sidebar on
+    /account/profile) is moot now that the page lives in React —
+    the SPA's AppShell renders the right nav based on JWT role
+    rather than the template's `extends` choice. Page-rendering
+    chrome coverage moved to the SPA's own role gating; here we
+    just confirm the legacy URL 301s and the owner can reach the
+    redirect target."""
+    rv = owner_client.get("/account/profile", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/account/profile"
 
 
 def test_owner_account_security_uses_owner_shell(owner_client):

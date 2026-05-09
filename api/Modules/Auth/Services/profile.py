@@ -1,0 +1,131 @@
+"""Account profile Service.
+
+Mirrors the legacy app._update_user_profile validation 1:1 so
+SPA-driven and Flask-driven edits accept the same inputs and
+produce the same `errors` dict. Caller commits.
+"""
+import re
+from typing import Optional
+
+from sqlalchemy.orm import Session
+
+from api.Modules.Auth.Models import User
+
+
+# Mirrors app._EMAIL_RE / _PHONE_DIGITS_RE so the SPA's API does
+# the same validation as the legacy form.
+_EMAIL_RE        = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
+_PHONE_STRIP_RE  = re.compile(r"[\s\-\(\)]")
+
+
+# Curated timezone list — same set as app.PROFILE_TIMEZONES.
+# Kept in sync with the legacy module so the dropdown shows the
+# same options on either flow.
+TIMEZONE_CHOICES: list[str] = [
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Phoenix",
+    "America/Los_Angeles",
+    "America/Anchorage",
+    "Pacific/Honolulu",
+    "America/Mexico_City",
+    "America/Bogota",
+    "America/Lima",
+    "America/Santiago",
+    "America/Buenos_Aires",
+    "America/Sao_Paulo",
+    "Europe/London",
+    "Europe/Madrid",
+    "Asia/Manila",
+    "Asia/Karachi",
+    "UTC",
+]
+
+
+class ProfileValidationError(Exception):
+    """Raised when one or more profile fields fail validation.
+    Carries a `field_errors` dict keyed by field name so the
+    Controller can pass them straight back to the SPA — same
+    shape the legacy Jinja template renders inline."""
+
+    def __init__(self, field_errors: dict[str, str]):
+        super().__init__("Profile validation failed")
+        self.field_errors = field_errors
+
+
+def get_profile_payload(user: User) -> dict:
+    """Pure read — no DB access beyond what's already on `user`.
+    Returns the payload for the Profile React page."""
+    return {
+        "user_id":          user.id,
+        "username":         user.username or "",
+        "role":             user.role or "",
+        "full_name":        user.full_name or "",
+        "email":            user.email or "",
+        "phone":            user.phone or "",
+        "timezone":         user.timezone or "",
+        "created_at":       user.created_at.isoformat() if user.created_at else "",
+        "last_login_at":    user.last_login_at.isoformat() if user.last_login_at else "",
+        "timezone_choices": TIMEZONE_CHOICES,
+    }
+
+
+def update_profile(
+    db: Session, user: User, *,
+    full_name: Optional[str] = None,
+    email:     Optional[str] = None,
+    phone:     Optional[str] = None,
+    timezone:  Optional[str] = None,
+) -> None:
+    """Validate + apply changes to `user`. Raises
+    ProfileValidationError on bad input. Caller commits.
+
+    Each field is set only when the caller passed it (None means
+    'don't touch'). Empty string (after strip) explicitly clears
+    the field — matches legacy behavior where a user could blank
+    out their phone or email."""
+    errors: dict[str, str] = {}
+
+    if full_name is not None:
+        name = full_name.strip()
+        if not name:
+            errors["full_name"] = "Display name cannot be empty."
+        elif len(name) > 120:
+            errors["full_name"] = (
+                "Display name is too long (max 120 characters)."
+            )
+
+    if email is not None:
+        normalized_email = email.strip().lower()
+        if normalized_email and not _EMAIL_RE.match(normalized_email):
+            errors["email"] = "Enter a valid email address."
+        elif len(normalized_email) > 255:
+            errors["email"] = "Email is too long (max 255 characters)."
+
+    if phone is not None:
+        phone_clean = _PHONE_STRIP_RE.sub("", phone or "")
+        if phone_clean and not _PHONE_DIGITS_RE.match(phone_clean):
+            errors["phone"] = (
+                "Enter a valid phone number "
+                "(7–20 digits, optional leading +)."
+            )
+
+    if timezone is not None:
+        tz = timezone.strip()
+        if tz and tz not in TIMEZONE_CHOICES:
+            errors["timezone"] = "Pick a timezone from the list."
+
+    if errors:
+        raise ProfileValidationError(errors)
+
+    if full_name is not None:
+        user.full_name = full_name.strip()
+    if email is not None:
+        user.email = email.strip().lower()
+    if phone is not None:
+        user.phone = _PHONE_STRIP_RE.sub("", phone or "")
+    if timezone is not None:
+        user.timezone = timezone.strip()
+    db.flush()

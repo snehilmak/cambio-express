@@ -25,6 +25,8 @@ from api.Modules.Auth.Requests import (
     LoginResponse,
     OwnerSignupRequest,
     OwnerSignupResponse,
+    ProfileResponse,
+    ProfileUpdateRequest,
     RecoveryLoginRequest,
     ReferralPreviewResponse,
     ResetPasswordRequest,
@@ -41,6 +43,7 @@ from api.Modules.Auth.Requests import (
 from api.Modules.Auth.Services import (
     LoginPendingResult,
     LoginResult,
+    ProfileValidationError,
     authenticate_password,
     authenticate_password_cross_store,
     change_password,
@@ -52,10 +55,12 @@ from api.Modules.Auth.Services import (
     finalize_2fa_with_recovery_code,
     finalize_2fa_with_totp,
     finish_totp_enrollment,
+    get_profile_payload,
     issue_access_token,
     issue_password_reset_token,
     permissions_for,
     start_totp_enrollment,
+    update_profile,
     verify_password_reset_token,
 )
 from api.Modules.Auth.Services.jwt_issuer import (
@@ -369,6 +374,50 @@ def me_route(claims: dict = Depends(get_principal)) -> dict:
         "store_id": claims.get("store_id"),
         "permissions": claims.get("perms", []),
     }
+
+
+@router.get("/profile", response_model=ProfileResponse)
+def get_profile_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ProfileResponse:
+    """Full Profile-page payload for the authed user. Includes
+    editable fields (full_name, email, phone, timezone), read-only
+    metadata (role, created_at, last_login_at), and the timezone
+    dropdown options. Powers /app/account/profile."""
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return ProfileResponse(**get_profile_payload(user))
+
+
+@router.put("/profile", response_model=ProfileResponse)
+def update_profile_route(
+    body: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ProfileResponse:
+    """Update one or more profile fields. Field-level validation
+    errors come back as 422 with a `field_errors` dict the SPA
+    renders inline (same shape the legacy Jinja form used)."""
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        update_profile(
+            db, user,
+            full_name=body.full_name,
+            email=body.email,
+            phone=body.phone,
+            timezone=body.timezone,
+        )
+    except ProfileValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"field_errors": exc.field_errors},
+        )
+    db.commit()
+    return ProfileResponse(**get_profile_payload(user))
 
 
 @router.post("/change-password")

@@ -2,9 +2,18 @@
 timezone for any logged-in user, plus the read-only `last_login_at`
 field that the login routes stamp on every successful sign-in.
 
-Mirrors the cross-role coverage of test_account_security.py. The
-helper logic (_update_user_profile) is exercised through the route so
-the validation messages we assert here are the same strings users see.
+Page rendering + form validation moved to React + the
+`GET/PUT /api/v2/auth/profile` endpoints. SPA-side coverage lives
+in tests/Modules/Auth/test_profile_endpoint.py. What's left here:
+
+  - Legacy Flask /account/profile is now a 301 redirect, so
+    every authed role can still link to it from chrome
+  - Pure-function `_update_user_profile` validation still ships
+    in app.py for the legacy /login fall-through and is exercised
+    here as a smoke test
+  - last_login_at stamping (login flow + helper)
+  - Security page banner showing last sign-in
+  - Topbar dropdown links + Security regression
 """
 from datetime import datetime, timedelta
 from app import db, User, Store, _update_user_profile, _record_login
@@ -27,30 +36,35 @@ def _client_for(app, user_id, role, store_id):
     return c
 
 
-# ── Access control ─────────────────────────────────────────────
+# ── Flask redirect ─────────────────────────────────────────────
+
 
 def test_anonymous_redirected(client):
-    resp = client.get("/account/profile")
-    assert resp.status_code in (302, 401)
+    resp = client.get("/account/profile", follow_redirects=False)
+    # Anonymous users get sent to /login by the login_required
+    # decorator before the redirect to /app/account/profile fires.
+    assert resp.status_code in (301, 302, 401)
 
 
-def test_admin_can_open_profile(logged_in_client):
-    resp = logged_in_client.get("/account/profile")
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    for token in ("Personal info", "Display name", "Email", "Phone",
-                  "Timezone", "Member since", "Last sign-in"):
-        assert token in body, f"missing field: {token}"
+def test_admin_legacy_url_redirects_to_app(logged_in_client):
+    resp = logged_in_client.get(
+        "/account/profile", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/account/profile"
 
 
-def test_superadmin_can_open_profile(client):
+def test_superadmin_legacy_url_redirects_to_app(client):
+    """Every authed role gets the same 301 — profile is per-user,
+    not per-role."""
     with client.application.app_context():
         sa_id = User.query.filter_by(username="superadmin").first().id
     sa = _client_for(client.application, sa_id, "superadmin", None)
-    assert sa.get("/account/profile").status_code == 200
+    resp = sa.get("/account/profile", follow_redirects=False)
+    assert resp.status_code == 301
 
 
-def test_owner_can_open_profile(client):
+def test_owner_legacy_url_redirects_to_app(client):
     with client.application.app_context():
         s = Store(name="OS", slug="os-prof", plan="basic")
         db.session.add(s); db.session.flush()
@@ -59,95 +73,26 @@ def test_owner_can_open_profile(client):
                       _make_user(client.application, "owner", sid,
                                  username="own-prof@x.com"),
                       "owner", sid)
-    assert own.get("/account/profile").status_code == 200
+    resp = own.get("/account/profile", follow_redirects=False)
+    assert resp.status_code == 301
 
 
-def test_employee_can_open_profile(client, test_store_id):
+def test_employee_legacy_url_redirects_to_app(client, test_store_id):
     emp = _client_for(client.application,
                       _make_user(client.application, "employee", test_store_id,
                                  username="emp-prof@test.com"),
                       "employee", test_store_id)
-    assert emp.get("/account/profile").status_code == 200
+    resp = emp.get("/account/profile", follow_redirects=False)
+    assert resp.status_code == 301
 
 
-# ── Save round-trip ────────────────────────────────────────────
-
-def test_full_profile_save_round_trip(logged_in_client, test_admin_id):
-    """All four fields populated; phone gets normalized (whitespace +
-    parens + hyphens stripped); email gets lowercased; timezone is
-    stored verbatim. Server side persists what we sent."""
-    resp = logged_in_client.post("/account/profile", data={
-        "full_name": "New Name",
-        "email":     "Mixed.Case@EXAMPLE.com",
-        "phone":     "+1 (555) 987-6543",
-        "timezone":  "America/Chicago",
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        assert u.full_name == "New Name"
-        assert u.email == "mixed.case@example.com"
-        assert u.phone == "+15559876543"
-        assert u.timezone == "America/Chicago"
-
-
-def test_optional_fields_can_be_cleared(logged_in_client, test_admin_id):
-    """Email / phone / timezone are nullable — submitting blanks
-    clears them. Display name remains required."""
-    # Set them first
-    logged_in_client.post("/account/profile", data={
-        "full_name": "X", "email": "x@y.com", "phone": "+15550000000",
-        "timezone": "UTC",
-    })
-    # Clear them
-    logged_in_client.post("/account/profile", data={
-        "full_name": "X", "email": "", "phone": "", "timezone": "",
-    })
-    with logged_in_client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        assert u.email == ""
-        assert u.phone == ""
-        assert u.timezone == ""
-
-
-# ── Validation ─────────────────────────────────────────────────
-
-def test_blank_display_name_rejected(logged_in_client):
-    resp = logged_in_client.post("/account/profile", data={
-        "full_name": "  ", "email": "", "phone": "", "timezone": "",
-    })
-    assert resp.status_code == 200
-    assert b"cannot be empty" in resp.data.lower()
-
-
-def test_invalid_email_rejected(logged_in_client):
-    resp = logged_in_client.post("/account/profile", data={
-        "full_name": "X", "email": "not-an-email", "phone": "", "timezone": "",
-    })
-    assert resp.status_code == 200
-    assert b"valid email" in resp.data.lower()
-
-
-def test_invalid_phone_rejected(logged_in_client):
-    resp = logged_in_client.post("/account/profile", data={
-        "full_name": "X", "email": "", "phone": "abc-def", "timezone": "",
-    })
-    assert resp.status_code == 200
-    assert b"valid phone" in resp.data.lower()
-
-
-def test_unknown_timezone_rejected(logged_in_client):
-    """Curated zone list — anything off the list is rejected so we
-    don't end up with random IANA strings nobody renders correctly."""
-    resp = logged_in_client.post("/account/profile", data={
-        "full_name": "X", "email": "", "phone": "", "timezone": "Mars/Phobos",
-    })
-    assert resp.status_code == 200
-    assert b"pick a timezone" in resp.data.lower()
+# ── Pure-function validator (still shipped in app.py) ─────────
 
 
 def test_helper_returns_field_errors_directly():
-    """Pure-function smoke: no DB, no session, just the validator."""
+    """Pure-function smoke: no DB, no session, just the validator.
+    The legacy /login path still imports this helper, and the
+    new SPA endpoint shares the same field-error contract."""
     class U: pass
     errs = _update_user_profile(U(), "", "x", "", "")
     assert "full_name" in errs
@@ -160,6 +105,7 @@ def test_helper_returns_field_errors_directly():
 
 
 # ── last_login_at stamping ─────────────────────────────────────
+
 
 def test_password_login_stamps_last_login_at(client, test_admin_id):
     """Password sign-in via /login → last_login_at is set + commits.
@@ -211,6 +157,7 @@ def test_security_page_shows_last_sign_in_banner(client, test_admin_id):
 
 # ── Topbar dropdown wiring ─────────────────────────────────────
 
+
 def test_topbar_dropdown_links_profile_for_admin_chrome(logged_in_client):
     body = logged_in_client.get("/admin/settings?tab=store").data.decode()
     assert "/account/profile" in body
@@ -230,6 +177,7 @@ def test_topbar_dropdown_links_profile_for_owner_chrome(client):
 
 
 # ── Negative regression ────────────────────────────────────────
+
 
 def test_security_page_no_longer_owns_display_name(logged_in_client):
     """Display name moved off Security to Profile — make sure the
