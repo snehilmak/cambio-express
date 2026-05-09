@@ -20,6 +20,7 @@ import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import OwnerLocations from "./routes/OwnerLocations";
 import OwnerPLRollup from "./routes/OwnerPLRollup";
+import Privacy from "./routes/Privacy";
 import Reports from "./routes/Reports";
 import ResetPassword from "./routes/ResetPassword";
 import ReturnCheckForm from "./routes/ReturnCheckForm";
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="signup/owner"     element={<SignupOwner />} />
       <Route path="forgot-password"  element={<ForgotPassword />} />
       <Route path="reset-password"   element={<ResetPassword />} />
+      <Route path="privacy"          element={<Privacy />} />
       <Route element={<AuthedShell />}>
         <Route path="dashboard"        element={<Dashboard />} />
         <Route path="transfers"        element={<Transfers />} />

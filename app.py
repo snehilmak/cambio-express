@@ -2246,6 +2246,7 @@ _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
     "/login":              "/app/login",
     "/signup":             "/app/signup",
     "/forgot-password":    "/app/forgot-password",
+    "/privacy":            "/app/privacy",
     "/dashboard":          "/app/dashboard",
     "/transfers":          "/app/transfers",
     "/transfers/new":      "/app/transfers/new",
@@ -2550,10 +2551,12 @@ def landing():
 
 @app.route("/privacy")
 def privacy():
-    """Public privacy policy page. Used as the privacy URL on Stripe
-    (Financial Connections and Checkout require it). No auth — any
-    visitor, logged in or not, can read it."""
-    return render_template("privacy.html")
+    """301 to the React /app/privacy page. The legacy Jinja template
+    is gone — the SPA owns the public privacy policy now. This stub
+    keeps `url_for('privacy')` working in still-Jinja templates and
+    bounces old bookmarks (plus the Stripe-side privacy URL on
+    Financial Connections + Checkout, which both link here)."""
+    return redirect("/app/privacy", code=301)
 
 # ── 2FA (TOTP) helpers ───────────────────────────────────────
 # Mandatory for superadmin; other roles opt out entirely today.

@@ -33,6 +33,7 @@ def cutover_off(monkeypatch):
     ("/login",                "/app/login"),
     ("/signup",               "/app/signup"),
     ("/forgot-password",      "/app/forgot-password"),
+    ("/privacy",              "/app/privacy"),
     ("/dashboard",            "/app/dashboard"),
     ("/transfers",            "/app/transfers"),
     ("/transfers/new",        "/app/transfers/new"),
@@ -133,13 +134,19 @@ def test_app_paths_not_redirected(client, cutover_on):
 
 
 def test_unmigrated_legacy_route_keeps_serving(client, cutover_on):
-    """A legacy page that has no SPA equivalent today (Stripe
-    subscribe, owner dashboard, TV display, superadmin controls,
-    etc.) must NOT redirect — it keeps serving Jinja so the
-    feature stays reachable until SPA parity ships."""
-    # /privacy is a public page on legacy with no SPA twin.
-    resp = client.get("/privacy", follow_redirects=False)
-    assert resp.status_code != 302
+    """A legacy page that has no SPA equivalent today (TV display,
+    superadmin controls, etc.) must NOT bounce through the cutover
+    layer — it keeps serving Jinja so the feature stays reachable
+    until SPA parity ships.
+
+    Uses /owner/dashboard as the canary: it's still on legacy but
+    requires owner auth, so an unauthed GET returns a 302 *to the
+    Flask login* — never to /app/*. /privacy used to live here, but
+    it migrated and now bounces to /app/privacy (see test_privacy.py
+    for the dedicated coverage)."""
+    resp = client.get("/owner/dashboard", follow_redirects=False)
+    if resp.status_code == 302:
+        assert not resp.headers["Location"].startswith("/app/")
 
 
 def test_post_does_not_redirect(client, cutover_on):
