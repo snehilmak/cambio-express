@@ -56,6 +56,11 @@ def test_login_returns_401_on_unknown_user(test_store_id):
 
 
 def test_login_finds_superadmin_with_null_store_id():
+    """The seeded superadmin has no TOTP enrolled so they hit the
+    enroll-required pending shape (requires_totp=True,
+    enroll_required=True, pending_token issued). Pre-enrolling
+    here would make the assertion shape brittle; the pending shape
+    is the real contract for a fresh superadmin."""
     resp = _client().post(
         "/auth/login",
         json={
@@ -66,9 +71,10 @@ def test_login_finds_superadmin_with_null_store_id():
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["role"] == "superadmin"
-    assert body["store_id"] is None
-    assert "platform.admin" in body["permissions"]
+    assert body["requires_totp"] is True
+    assert body["enroll_required"] is True
+    assert body["pending_token"]
+    assert body["user_id"]
 
 
 def test_login_rejects_extra_fields(test_store_id):

@@ -13,6 +13,11 @@ from api.Modules.Auth.Requests.login import (
     SignupRequest,
     SignupResponse,
     StoreLookupResponse,
+    TotpEnrollConfirmRequest,
+    TotpEnrollFinishRequest,
+    TotpEnrollFinishResponse,
+    TotpEnrollStartRequest,
+    TotpEnrollStartResponse,
     TotpLoginRequest,
 )
 
@@ -30,5 +35,10 @@ __all__ = [
     "SignupRequest",
     "SignupResponse",
     "StoreLookupResponse",
+    "TotpEnrollConfirmRequest",
+    "TotpEnrollFinishRequest",
+    "TotpEnrollFinishResponse",
+    "TotpEnrollStartRequest",
+    "TotpEnrollStartResponse",
     "TotpLoginRequest",
 ]

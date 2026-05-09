@@ -88,11 +88,13 @@ class LoginPendingResult:
     """Returned in place of a `LoginResult` when password auth
     succeeds but the user must clear a second factor before getting
     a real access token. Carries a short-lived JWT (5min, purpose=
-    "totp-pending") that the SPA exchanges via `/auth/login/totp`
-    or `/auth/login/recovery`."""
+    "totp-pending") that the SPA exchanges via `/auth/login/totp`,
+    `/auth/login/recovery`, or — when `enroll_required=True` — the
+    `/auth/login/totp/enroll/*` set."""
     pending_token: str
     user_id: int
     has_recovery_codes: bool
+    enroll_required: bool = False
 
 
 class AuthenticationError(Exception):
@@ -132,21 +134,26 @@ def _issue_full_login(user: User) -> LoginResult:
 
 
 def _maybe_pending_2fa(db: Session, user: User) -> LoginPendingResult | None:
-    """If `user` is in a TOTP-required role AND has actually enrolled,
-    gate the login behind the 2FA hop. Returns a pending result, or
-    None if no 2FA hop is needed (caller mints a full access token).
+    """If `user` is in a TOTP-required role, gate the login behind
+    the 2FA hop. Returns a pending result, or None if no 2FA hop is
+    needed (caller mints a full access token).
 
-    Users in a TOTP-required role who haven't enrolled yet fall
-    through to a full login. The legacy Flask flow handles
-    enrollment via the dedicated `/login/2fa/enroll` redirect, but
-    the SPA doesn't drive that flow yet — so the transitional
-    behavior is "issue token, expect enrollment via the legacy
-    site". Once SPA enrollment lands we'll flip this to
-    `TotpEnrollmentRequired`.
+    Two pending shapes:
+    - `enroll_required=False` (already enrolled) — SPA goes to
+      /app/login/2fa to enter a code or recovery code.
+    - `enroll_required=True` (role requires TOTP, no secret yet) —
+      SPA goes to /app/login/2fa/enroll to mint a secret + scan QR.
     """
-    if not needs_totp(user) or not is_enrolled(user):
+    if not needs_totp(user):
         return None
     from api.Modules.Auth.Models import RecoveryCode
+    if not is_enrolled(user):
+        return LoginPendingResult(
+            pending_token=issue_pending_2fa_token(user.id),
+            user_id=user.id,
+            has_recovery_codes=False,
+            enroll_required=True,
+        )
     has_recovery = (
         db.query(RecoveryCode)
           .filter_by(user_id=user.id, used_at=None)
@@ -248,6 +255,112 @@ def finalize_2fa_with_totp(
         raise AuthenticationError("Invalid or expired pending session")
     if not verify_totp_token(user, code):
         raise AuthenticationError("Invalid verification code")
+    return _issue_full_login(user)
+
+
+def _user_for_pending(db: Session, pending_token: str) -> User:
+    """Resolve a pending-2FA token to its User. Raises
+    `AuthenticationError` on bad/expired tokens or missing/disabled
+    users. Used by both the verify path (TOTP / recovery) and the
+    enrollment path so token semantics stay consistent."""
+    import jwt as _jwt
+    from api.Modules.Auth.Services.jwt_issuer import decode_pending_2fa_token
+
+    try:
+        claims = decode_pending_2fa_token(pending_token)
+    except _jwt.InvalidTokenError as exc:
+        raise AuthenticationError(str(exc) or "Invalid pending token")
+    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    if user is None or not user.is_active:
+        raise AuthenticationError("Invalid or expired pending session")
+    return user
+
+
+def start_totp_enrollment(
+    db: Session, *, pending_token: str,
+) -> dict:
+    """Mint a TOTP secret for `user` (if none pending) and return the
+    payload the SPA renders on its enrollment page: QR SVG, raw
+    secret, secret split into 4-char chunks, username, issuer.
+
+    Refreshes reuse the pending secret so a user who already scanned
+    the QR doesn't have to start over. Caller commits.
+    """
+    import io
+    import pyotp
+    import qrcode
+    import qrcode.image.svg
+    from api.Modules.Auth.Services.totp import needs_totp
+
+    user = _user_for_pending(db, pending_token)
+    if not needs_totp(user):
+        raise AuthenticationError("This account doesn't use 2FA")
+    if not user.totp_secret:
+        user.totp_secret = pyotp.random_base32()
+        db.flush()
+    issuer = "DineroBook"
+    uri = pyotp.totp.TOTP(user.totp_secret).provisioning_uri(
+        name=user.username, issuer_name=issuer,
+    )
+    img = qrcode.make(
+        uri, image_factory=qrcode.image.svg.SvgPathImage,
+        box_size=8, border=2,
+    )
+    buf = io.BytesIO()
+    img.save(buf)
+    qr_svg = buf.getvalue().decode("utf-8")
+    chunks = " ".join(
+        user.totp_secret[i:i + 4]
+        for i in range(0, len(user.totp_secret), 4)
+    )
+    return {
+        "qr_svg": qr_svg, "secret": user.totp_secret,
+        "secret_chunks": chunks, "username": user.username,
+        "issuer": issuer,
+    }
+
+
+def finish_totp_enrollment(
+    db: Session, *, pending_token: str, code: str,
+) -> list[str]:
+    """Verify the user's first 6-digit code, mark enrollment
+    complete (`totp_enrolled_at`), generate one-shot recovery codes
+    and return them in plaintext. The caller MUST hold the codes
+    in component state — they are not retrievable later. Raises
+    `AuthenticationError` on bad/expired tokens or invalid codes.
+    Caller commits.
+    """
+    from datetime import datetime
+    from api.Modules.Auth.Services.totp import (
+        generate_recovery_codes, verify_totp_token,
+    )
+
+    user = _user_for_pending(db, pending_token)
+    if not user.totp_secret:
+        raise AuthenticationError(
+            "Enrollment hasn't started — call /enroll/start first.",
+        )
+    if not verify_totp_token(user, code):
+        raise AuthenticationError("Invalid verification code")
+    user.totp_enrolled_at = datetime.utcnow()
+    return generate_recovery_codes(db, user)
+
+
+def confirm_recovery_codes_saved(
+    db: Session, *, pending_token: str,
+) -> LoginResult:
+    """Finalise the post-enrollment login. The user has confirmed
+    they saved their recovery codes; we exchange the still-valid
+    pending token for a real access token. Raises
+    `AuthenticationError` on a bad/expired pending token, or when
+    the user hasn't actually completed enrollment yet."""
+    from api.Modules.Auth.Services.totp import is_enrolled
+
+    user = _user_for_pending(db, pending_token)
+    if not is_enrolled(user):
+        raise AuthenticationError(
+            "Enrollment is not complete — verify a code first.",
+        )
     return _issue_full_login(user)
 
 

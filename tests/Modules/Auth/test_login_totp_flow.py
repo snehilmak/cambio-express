@@ -84,11 +84,11 @@ def test_login_with_recovery_code_flag(client):
     assert body["has_recovery_codes"] is True
 
 
-def test_login_unenrolled_superadmin_falls_through(client):
-    """Until SPA enrollment ships, an unenrolled superadmin gets a
-    full token. (Production superadmins should always be enrolled
-    via the legacy /login/2fa/enroll flow before they hit the
-    SPA.)"""
+def test_login_unenrolled_superadmin_returns_enroll_required(client):
+    """An unenrolled superadmin now gets a 2FA-pending response with
+    `enroll_required=True`, so the SPA can route them to the
+    /app/login/2fa/enroll page and drive enrollment via the
+    /auth/login/totp/enroll/* set."""
     resp = client.post(
         "/api/v2/auth/login",
         json={
@@ -97,8 +97,12 @@ def test_login_unenrolled_superadmin_falls_through(client):
         },
     )
     body = resp.get_json()
-    assert body["requires_totp"] is False
-    assert body["access_token"]
+    assert body["requires_totp"] is True
+    assert body["enroll_required"] is True
+    assert body["pending_token"]
+    assert body["access_token"] == ""
+    # No recovery codes exist for an unenrolled user.
+    assert body["has_recovery_codes"] is False
 
 
 def test_admin_login_unaffected_by_2fa_flow(client, test_store_id):
@@ -284,5 +288,140 @@ def test_pending_token_rejected_by_authed_endpoint(client):
     resp = client.get(
         "/api/v2/auth/me",
         headers={"Authorization": f"Bearer {pending}"},
+    )
+    assert resp.status_code == 401
+
+
+# ── /auth/login/totp/enroll/* — SPA-driven enrollment ───────
+
+
+def _make_unenrolled_superadmin(*, slug="tsne"):
+    """Brand-new superadmin with no TOTP secret yet. Returns
+    (username, password). The /login response will carry
+    `requires_totp=True, enroll_required=True`."""
+    from app import User, db
+    username = f"{slug}@superadmin"
+    user = User(
+        store_id=None, username=username,
+        full_name="Fresh Super", role="superadmin",
+    )
+    user.set_password("super2025!")
+    db.session.add(user); db.session.commit()
+    return username, "super2025!"
+
+
+def _start_enroll_for(client, slug):
+    """Helper: log in, get pending token, call enroll/start.
+    Returns (pending_token, start_response_dict)."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        username, password = _make_unenrolled_superadmin(slug=slug)
+    pending = client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": password, "store_id": None},
+    ).get_json()["pending_token"]
+    start = client.post(
+        "/api/v2/auth/login/totp/enroll/start",
+        json={"pending_token": pending},
+    )
+    return pending, start.get_json()
+
+
+def test_enroll_start_returns_qr_secret_and_chunks(client):
+    pending, body = _start_enroll_for(client, "te1")
+    assert body["secret"]
+    # Base32 secret is 32 chars from pyotp.random_base32()
+    assert len(body["secret"]) == 32
+    # Chunks join the secret in 4-char pieces with spaces
+    assert body["secret_chunks"].replace(" ", "") == body["secret"]
+    # QR is a stand-alone SVG document (qrcode.image.svg returns an
+    # XML wrapper plus the embedded svg root)
+    assert "<svg" in body["qr_svg"]
+    assert body["issuer"] == "DineroBook"
+    assert body["username"].endswith("@superadmin")
+
+
+def test_enroll_start_is_idempotent_returns_same_secret(client):
+    """Calling enroll/start twice with the same pending token must
+    return the same secret so a half-scanned QR stays valid."""
+    pending, body1 = _start_enroll_for(client, "te2")
+    body2 = client.post(
+        "/api/v2/auth/login/totp/enroll/start",
+        json={"pending_token": pending},
+    ).get_json()
+    assert body1["secret"] == body2["secret"]
+
+
+def test_enroll_start_rejects_bad_pending_token(client):
+    resp = client.post(
+        "/api/v2/auth/login/totp/enroll/start",
+        json={"pending_token": "not-a-real-token"},
+    )
+    assert resp.status_code == 401
+
+
+def test_enroll_finish_verifies_code_and_returns_recovery_codes(client):
+    pending, start = _start_enroll_for(client, "te3")
+    code = pyotp.TOTP(start["secret"]).now()
+    resp = client.post(
+        "/api/v2/auth/login/totp/enroll/finish",
+        json={"pending_token": pending, "code": code},
+    )
+    assert resp.status_code == 200
+    codes = resp.get_json()["recovery_codes"]
+    assert len(codes) == 10
+    # Codes are formatted as ABCD-EFGH (8 hex + hyphen)
+    assert all(len(c) == 9 and c[4] == "-" for c in codes)
+
+
+def test_enroll_finish_rejects_bad_code(client):
+    pending, _ = _start_enroll_for(client, "te4")
+    resp = client.post(
+        "/api/v2/auth/login/totp/enroll/finish",
+        json={"pending_token": pending, "code": "000000"},
+    )
+    assert resp.status_code == 401
+
+
+def test_enroll_finish_marks_user_enrolled(client):
+    from app import User, app as flask_app
+    pending, start = _start_enroll_for(client, "te5")
+    code = pyotp.TOTP(start["secret"]).now()
+    client.post(
+        "/api/v2/auth/login/totp/enroll/finish",
+        json={"pending_token": pending, "code": code},
+    )
+    with flask_app.app_context():
+        u = User.query.filter_by(username="te5@superadmin").first()
+        assert u.totp_secret == start["secret"]
+        assert u.totp_enrolled_at is not None
+
+
+def test_enroll_confirm_issues_full_access_token(client):
+    pending, start = _start_enroll_for(client, "te6")
+    code = pyotp.TOTP(start["secret"]).now()
+    client.post(
+        "/api/v2/auth/login/totp/enroll/finish",
+        json={"pending_token": pending, "code": code},
+    )
+    resp = client.post(
+        "/api/v2/auth/login/totp/enroll/confirm",
+        json={"pending_token": pending},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["access_token"]
+    assert body["requires_totp"] is False
+    assert body["role"] == "superadmin"
+    assert body["store_id"] is None
+
+
+def test_enroll_confirm_rejected_before_finish(client):
+    """Calling confirm before finish (no totp_enrolled_at yet) must
+    return 401 — there's no actual enrollment to confirm."""
+    pending, _start = _start_enroll_for(client, "te7")
+    resp = client.post(
+        "/api/v2/auth/login/totp/enroll/confirm",
+        json={"pending_token": pending},
     )
     assert resp.status_code == 401
