@@ -549,6 +549,102 @@ def test_signup_rejects_extra_fields(client):
     assert resp.status_code == 422
 
 
+# ── POST /auth/signup/owner ────────────────────────────────
+
+
+def test_owner_signup_creates_owner_and_returns_token(client):
+    """Self-service owner signup creates a User with role='owner'
+    and store_id=None. Returns a JWT scoped to the owner so the
+    SPA drops them straight onto /owner/dashboard."""
+    resp = client.post(
+        "/api/v2/auth/signup/owner",
+        json={
+            "full_name": "Jane Owner",
+            "email":     "jane@owners.com",
+            "password":  "ownerpass123",
+        },
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["role"] == "owner"
+    assert body["store_id"] is None
+    assert body["username"] == "jane@owners.com"
+    assert body["full_name"] == "Jane Owner"
+    assert body["access_token"]
+
+
+def test_owner_signup_email_collision_with_existing_owner(client):
+    """A pre-existing User with store_id=None (another owner or
+    superadmin) blocks the signup with a 409."""
+    # Seed via the endpoint itself.
+    client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "First Owner", "email": "shared@example.com",
+        "password": "ownerpass123",
+    })
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Second Owner", "email": "shared@example.com",
+        "password": "anotherpass123",
+    })
+    assert resp.status_code == 409
+    assert resp.get_json()["detail"]["field"] == "email"
+
+
+def test_owner_signup_email_collision_with_store_admin(client, test_store_id):  # noqa: ARG001
+    """An admin email already in use can't be reused as an owner —
+    the legacy /signup/owner check did this, and the FastAPI port
+    keeps the same predicate so login routing stays unambiguous."""
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Owner",
+        "email":     "admin@test.com",  # seeded admin from conftest
+        "password":  "ownerpass123",
+    })
+    assert resp.status_code == 409
+    assert resp.get_json()["detail"]["field"] == "email"
+
+
+def test_owner_signup_invalid_email_rejected(client):
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Owner", "email": "notanemail",
+        "password": "ownerpass123",
+    })
+    assert resp.status_code == 422
+    assert resp.get_json()["detail"]["field"] == "email"
+
+
+def test_owner_signup_short_password_rejected(client):
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Owner", "email": "owner@short.com",
+        "password": "tiny",  # < 8 chars → Pydantic 422
+    })
+    assert resp.status_code == 422
+
+
+def test_owner_signup_rejects_extra_fields(client):
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Owner", "email": "owner@extra.com",
+        "password": "ownerpass123",
+        "store_id":  42,  # extra=forbid
+    })
+    assert resp.status_code == 422
+
+
+def test_owner_signup_token_works_on_me_endpoint(client):
+    """The JWT issued at signup is immediately usable — covers the
+    end-to-end SPA flow."""
+    resp = client.post("/api/v2/auth/signup/owner", json={
+        "full_name": "Jane",
+        "email":     "jane@usable.com",
+        "password":  "ownerpass123",
+    })
+    token = resp.get_json()["access_token"]
+    me = client.get(
+        "/api/v2/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert me.status_code == 200
+    assert me.get_json()["role"] == "owner"
+
+
 # ── POST /auth/forgot-password ─ /auth/reset-password ──────
 
 

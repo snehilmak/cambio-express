@@ -23,6 +23,8 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    OwnerSignupRequest,
+    OwnerSignupResponse,
     RecoveryLoginRequest,
     ResetPasswordRequest,
     SignupRequest,
@@ -36,6 +38,7 @@ from api.Modules.Auth.Services import (
     authenticate_password_cross_store,
     change_password,
     consume_password_reset_token,
+    create_owner,
     create_store_and_admin,
     decode_access_token,
     finalize_2fa_with_recovery_code,
@@ -318,6 +321,74 @@ def signup_route(
         full_name=result.admin.full_name or "",
         role=result.admin.role,
         store_id=result.store.id,
+        permissions=perms,
+    )
+
+
+@router.post(
+    "/signup/owner", response_model=OwnerSignupResponse, status_code=201,
+)
+def signup_owner_route(
+    body: OwnerSignupRequest, db: Session = Depends(get_db),
+) -> OwnerSignupResponse:
+    """Self-service signup for a multi-store owner. Creates a User
+    with `role="owner"` and `store_id=None`. Owners then connect to
+    individual stores via invite codes from /owner/locations.
+
+    Mirrors the legacy /signup/owner Flask form's contract:
+      • full_name, email normalised (stripped, email lowered)
+      • email collision (any null-store user OR any per-store admin)
+        returns 409 with the same friendly message
+      • returns a JWT scoped to the owner so the SPA drops the user
+        straight onto /owner/dashboard
+
+    Honors the SIGNUP_CLOSED env var: when "1" we 503 every
+    request so an attacker hitting the API directly can't bypass
+    the legacy /signup/owner HTML guard.
+    """
+    from app import SIGNUP_CLOSED
+    if SIGNUP_CLOSED:
+        raise HTTPException(
+            status_code=503,
+            detail="Signups are temporarily closed. "
+                   "Existing customers can still sign in.",
+        )
+    email = (body.email or "").strip().lower()
+    full_name = (body.full_name or "").strip()
+    if "@" not in email or "." not in email:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "email", "message": "Enter a valid email."},
+        )
+    try:
+        result = create_owner(
+            db, full_name=full_name, email=email, password=body.password,
+        )
+    except SignupConflictError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"field": "email", "message": str(exc)},
+        )
+    db.commit()
+
+    perms = permissions_for(result.owner.role)
+    issuer = JWTIssuer(
+        sub=result.owner.id,
+        role=result.owner.role,
+        store_id=None,
+        permissions=perms,
+        full_name=result.owner.full_name or "",
+        username=result.owner.username,
+    )
+    token = issue_access_token(issuer)
+    return OwnerSignupResponse(
+        access_token=token,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=result.owner.id,
+        username=result.owner.username,
+        full_name=result.owner.full_name or "",
+        role=result.owner.role,
+        store_id=None,
         permissions=perms,
     )
 
