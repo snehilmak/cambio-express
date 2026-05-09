@@ -5930,14 +5930,12 @@ def superadmin_reports():
 @app.route("/superadmin/reports/audit-log")
 @superadmin_required
 def superadmin_audit_log():
-    """Migrated out of /superadmin/controls?tab=audit. Pure read-only
-    view that fits the Report Center umbrella better than the
-    controls tab nav."""
-    audit = (SuperadminAuditLog.query
-             .order_by(SuperadminAuditLog.created_at.desc())
-             .limit(100).all())
-    return render_template("superadmin_audit_log.html",
-        user=current_user(), audit=audit)
+    """301 → /app/superadmin/audit-log. The React page reads the
+    feed via /api/v2/superadmin/audit-log (paginated + filterable
+    — wider than the legacy 100-row limit). Stub keeps
+    url_for('superadmin_audit_log') working in still-Jinja chrome
+    + bounces old bookmarks."""
+    return redirect("/app/superadmin/audit-log", code=301)
 
 
 # ── Superadmin reports: shared route helpers ─────────────────
