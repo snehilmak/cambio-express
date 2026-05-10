@@ -577,17 +577,56 @@
   </form>
 
   {# Delete-country lives in its own form so it can't fire by accident
-     while editing the grid. #}
+     while editing the grid. The country-delete endpoint moved to the
+     JSON API in C-5a (DELETE /api/v2/tv-display/countries/<id>); this
+     button calls it via fetch and bounces back to the SPA admin
+     landing on success. The legacy form-POST contract is gone, so an
+     inline script is the simplest bridge while the editor itself is
+     still on Flask. #}
   <div class="ce-delete-row">
-    <form method="POST"
-          action="{{ url_for('tv_display_country_delete', country_id=country.id) }}"
-          onsubmit="return confirm('Remove this country section? All banks and rates inside it will be deleted too.');">
-      <button type="submit" class="btn btn-outline btn-sm"
-              style="border-color:#ff4f6e;color:#ff4f6e;">
-        Delete this country section
-      </button>
-    </form>
+    <button type="button" class="btn btn-outline btn-sm"
+            id="ce-delete-country-btn"
+            data-country-id="{{ country.id }}"
+            style="border-color:#ff4f6e;color:#ff4f6e;">
+      Delete this country section
+    </button>
   </div>
+  <script>
+  (function () {
+    var btn = document.getElementById('ce-delete-country-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async function () {
+      if (!confirm('Remove this country section? All banks and rates inside it will be deleted too.')) return;
+      var token = (function () {
+        try { return window.localStorage.getItem('db.access_token'); }
+        catch (e) { return null; }
+      })();
+      if (!token) {
+        // No SPA session in localStorage means the operator is on
+        // a fresh tab that hasn't logged into /app yet. Send them
+        // there to authenticate; the country survives.
+        window.location.assign('/app/login?next=' +
+          encodeURIComponent('/app/tv-display'));
+        return;
+      }
+      btn.disabled = true;
+      try {
+        var resp = await fetch('/api/v2/tv-display/countries/' + btn.dataset.countryId, {
+          method: 'DELETE',
+          headers: {'Authorization': 'Bearer ' + token},
+        });
+        if (resp.ok) {
+          window.location.assign('/app/tv-display');
+          return;
+        }
+        alert('Could not remove this country (HTTP ' + resp.status + '). Try refreshing the page.');
+      } catch (e) {
+        alert('Network error removing country. Try again.');
+      }
+      btn.disabled = false;
+    });
+  })();
+  </script>
 
 </div>
 
