@@ -33,3 +33,7 @@ env/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+
+# Claude Code parallel-agent worktrees (local-only — each
+# subagent runs in its own checkout under here).
+.claude/worktrees/
