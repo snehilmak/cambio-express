@@ -50,66 +50,29 @@ def owner_client():
     return c
 
 
-def test_pl_rollup_renders_with_no_data(owner_client):
-    """Empty umbrella month — page should still render with zeroed
-    totals and per-store rows tagged 'No P&L yet'."""
+def test_pl_rollup_redirects_to_spa(owner_client):
+    """Page-render moved to React; the legacy URL 301s to the SPA
+    page that reads /api/v2/owner/pl-rollup. Query string (year +
+    month) is preserved so a deep-link to a specific month still
+    lands on the right page."""
     today = date.today()
-    resp = owner_client.get(f"/owner/pl-rollup?year={today.year}&month={today.month}")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Multi-store P&amp;L Rollup" in body or "Multi-store P&L" in body
-    assert "Shop A" in body
-    assert "Shop B" in body
-    assert "No P&L yet" in body
-
-
-def test_pl_rollup_aggregates_per_store(owner_client):
-    s1, s2 = flask_app.config["_TEST_ROLLUP_STORES"]
-    today = date.today()
-    with flask_app.app_context():
-        _make_pl(s1, today.year, today.month, taxable=5000.0,
-                  expenses_cash=300.0)
-        _make_pl(s2, today.year, today.month, taxable=2000.0,
-                  expenses_cash=100.0)
-    resp = owner_client.get(f"/owner/pl-rollup?year={today.year}&month={today.month}")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Total revenue across the two stores = 5000 + 2000 = 7000.
-    assert "$7,000.00" in body
-    # Per-store revenue figures are visible.
-    assert "$5,000.00" in body
-    assert "$2,000.00" in body
-
-
-def test_pl_rollup_sorts_by_net_income_desc(owner_client):
-    """Strongest performer floats to the top. Shop B has higher net
-    income than Shop A here, so it should appear first in the rendered
-    table even though Shop A is alphabetically before."""
-    s1, s2 = flask_app.config["_TEST_ROLLUP_STORES"]
-    today = date.today()
-    with flask_app.app_context():
-        _make_pl(s1, today.year, today.month, taxable=1000.0,
-                  expenses_cash=900.0)   # net ~ +100
-        _make_pl(s2, today.year, today.month, taxable=10000.0,
-                  expenses_cash=200.0)   # net ~ +9800
-    resp = owner_client.get(f"/owner/pl-rollup?year={today.year}&month={today.month}")
-    body = resp.get_data(as_text=True)
-    pos_a = body.find("Shop A")
-    pos_b = body.find("Shop B")
-    assert pos_b < pos_a, "Shop B (higher net) should render before Shop A"
-
-
-def test_pl_rollup_invalid_month_falls_back_to_current(owner_client):
-    """A nonsense ?month= query string shouldn't 500 — fall back to the
-    current month silently."""
-    resp = owner_client.get("/owner/pl-rollup?month=99")
-    assert resp.status_code == 200
+    resp = owner_client.get(
+        f"/owner/pl-rollup?year={today.year}&month={today.month}",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert loc.startswith("/app/owner/pl-rollup")
+    assert f"year={today.year}" in loc
+    assert f"month={today.month}" in loc
 
 
 def test_pl_rollup_admin_role_blocked(client, test_store_id):
     """Admin (non-owner) shouldn't be able to hit the owner-scoped
-    rollup page — the @owner_required decorator gates the route."""
-    from app import User, db
+    rollup page — the @owner_required decorator gates the route
+    BEFORE the 301 redirect runs, so the bounce target is /login (or
+    a 403), never the SPA page."""
+    from app import User, db  # noqa: F401
     with client.application.app_context():
         u = User.query.filter_by(store_id=test_store_id, role="admin").first()
         uid = u.id
@@ -119,5 +82,7 @@ def test_pl_rollup_admin_role_blocked(client, test_store_id):
         sess["store_id"] = test_store_id
 
     resp = client.get("/owner/pl-rollup", follow_redirects=False)
-    # @owner_required either 302s back or 403s — anything not 200.
+    # @owner_required bounces non-owners — anything but the SPA 301.
     assert resp.status_code != 200
+    if resp.status_code in (301, 302, 303):
+        assert "/app/owner/pl-rollup" not in resp.headers.get("Location", "")
