@@ -1,10 +1,11 @@
 """TV Display — Pydantic request/response schemas.
 
-Read-only first pass: list the per-store TV display config + its
-country sections (with bank/rate counts) so the SPA can render the
-admin landing. Write-side (mint/edit countries, rates, pairings)
-stays on the legacy Flask routes for now."""
-from pydantic import BaseModel, ConfigDict
+Covers the SPA admin landing: read overview + per-country drill-down,
+plus the write actions the landing page exposes (settings save, token
+rotation, Fire TV claim/revoke, country create/delete). The country
+editor's bank/rate matrix POST stays on legacy Flask until the next
+migration slice."""
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TVDisplayCountryStat(BaseModel):
@@ -79,10 +80,68 @@ class TVDisplayCountryDetailResponse(BaseModel):
     banks: list[TVDisplayBankRow]
 
 
+class TVDisplaySettingsUpdateRequest(BaseModel):
+    """Settings the admin landing page can save in one form: title,
+    optional subtitle, orientation (auto/landscape/portrait), board
+    theme (light/dark). Mirrors the legacy form contract — same
+    server-side defaults + bounded length truncation."""
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(default="", max_length=120)
+    subtitle: str = Field(default="", max_length=120)
+    orientation: str = Field(default="auto")
+    theme: str = Field(default="light")
+
+
+class TVDisplayRegenerateTokenResponse(BaseModel):
+    """Result of rotating the public_token. The SPA refreshes its
+    overview state from this, since the URL the operator has to hand
+    out changed."""
+    model_config = ConfigDict(extra="forbid")
+
+    public_token: str
+    public_url: str
+
+
+class TVDisplayClaimRequest(BaseModel):
+    """The 6-char code the operator typed in from a Fire TV showing
+    the pairing screen. Server normalises (strips non-alnum, uppercases)
+    before lookup; client may send it raw."""
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=20)
+
+
+class TVDisplayCountryCreateRequest(BaseModel):
+    """Add a new country section. Country picker on the landing page
+    submits the ISO-2 plus the human-readable name; mt_companies is
+    optional (can be filled in later from the country editor)."""
+    model_config = ConfigDict(extra="forbid")
+
+    country_name: str = Field(min_length=1, max_length=80)
+    country_code: str = Field(default="", max_length=4)
+    mt_companies: str = Field(default="", max_length=500)
+
+
+class TVDisplayCountryCreateResponse(BaseModel):
+    """The new country row — caller redirects into the editor for
+    that country_id to fill in banks + rates."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    country_name: str
+    country_code: str
+
+
 __all__ = [
     "TVDisplayBankRow",
+    "TVDisplayClaimRequest",
+    "TVDisplayCountryCreateRequest",
+    "TVDisplayCountryCreateResponse",
     "TVDisplayCountryDetailResponse",
     "TVDisplayCountryStat",
     "TVDisplayOverviewResponse",
+    "TVDisplayRegenerateTokenResponse",
+    "TVDisplaySettingsUpdateRequest",
     "TVPairingSummary",
 ]

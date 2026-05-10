@@ -34,27 +34,69 @@ def _activate_addon(client, store_id):
         db.session.commit()
 
 
-def _make_display(client, store_id):
+def _admin_jwt(client, store_id, *, username="admin@test.com",
+               password="testpass123!"):
+    """Issue a Bearer JWT for the seeded admin so /api/v2/tv-display
+    write endpoints (which require `get_principal`) accept the call.
+    Mirrors the helper in tests/Modules/TVDisplay/test_tv_display_endpoints.py
+    — kept local here so this test file stays self-contained."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": username, "password": password,
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def _employee_jwt(client, employee_username, store_id):
+    """JWT for a freshly-minted employee. `make_employee_client` sets
+    a known password ("x") so we reuse it here."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={"username": employee_username, "password": "x",
+              "store_id": store_id},
+    )
+    return resp.get_json()["access_token"]
+
+
+def _api_post(client, path, store_id, json_body=None):
+    token = _admin_jwt(client, store_id)
+    return client.post(
+        path, json=(json_body if json_body is not None else {}),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+def _make_display(logged_client, store_id):
     """Set up a country with one bank and one rate so the public
-    render has something to draw."""
-    _activate_addon(client, store_id)
-    client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico",
-        "country_code": "mx",
-        "mt_companies": "Maxi, Cibao, Vigo",
-    })
-    with client.application.app_context():
-        country = TVDisplayCountry.query.first()
-        country_id = country.id
-    client.post(f"/tv-display/countries/{country_id}", data={
+    render has something to draw. Hybrid path: the country header
+    is created via the new JSON endpoint (the legacy form-POST is
+    retired); banks + rates still flow through the legacy country-
+    editor POST until that page migrates too. `logged_client` must
+    be a Flask test client with a logged-in admin session — the
+    Flask form-POSTs to /tv-display/countries/<id> need it; the
+    JSON-endpoint call does its own JWT login independently."""
+    _activate_addon(logged_client, store_id)
+    token = _admin_jwt(logged_client, store_id)
+    create = logged_client.post(
+        "/api/v2/tv-display/countries",
+        json={"country_name": "Mexico", "country_code": "MX",
+              "mt_companies": "Maxi, Cibao, Vigo"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    country_id = create.get_json()["id"]
+    # Country editor still on Flask — uses the form-POST contract.
+    logged_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
         "mt_companies": "Maxi, Cibao, Vigo",
         "new_bank_name": "Bancomer",
     })
-    with client.application.app_context():
+    with logged_client.application.app_context():
         bank = TVDisplayPayoutBank.query.first()
         bank_id = bank.id
-    client.post(f"/tv-display/countries/{country_id}", data={
+    logged_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
         "mt_companies": "Maxi, Cibao, Vigo",
         f"bank-{bank_id}-name": "Bancomer",
@@ -63,9 +105,9 @@ def _make_display(client, store_id):
         f"rate-{bank_id}-1": "18.07",
         f"rate-{bank_id}-2": "18.51",
     })
-    with client.application.app_context():
-        token = TVDisplay.query.first().public_token
-    return {"country_id": country_id, "bank_id": bank_id, "token": token}
+    with logged_client.application.app_context():
+        public_token = TVDisplay.query.first().public_token
+    return {"country_id": country_id, "bank_id": bank_id, "token": public_token}
 
 
 def _superadmin_client(application):
@@ -111,33 +153,30 @@ def test_store_has_addon_helper(client, test_store_id):
 
 # ── 2. Admin CRUD ──────────────────────────────────────────────
 
-def test_admin_blocked_when_addon_off(logged_in_client):
-    """Without the add-on active, /tv-display 302s to subscription
-    so the operator knows where to turn it on."""
+def test_admin_landing_redirects_to_spa(logged_in_client):
+    """/tv-display moved to React. The legacy URL bounces to
+    /app/tv-display unconditionally — the addon-not-active state
+    now renders inside the SPA from the 409 the overview endpoint
+    returns. See tests/Modules/TVDisplay/test_tv_display_endpoints.py
+    for the API-side gate (test_overview_409_when_addon_inactive)."""
     resp = logged_in_client.get("/tv-display")
-    assert resp.status_code == 302
-    assert "/admin/subscription" in resp.headers["Location"]
-
-
-def test_admin_landing_renders_when_addon_on(logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    body = logged_in_client.get("/tv-display").data.decode()
-    assert "Public display URL" in body
-    assert "Display settings" in body
-    assert "Country sections" in body
-    # Public token is auto-generated on first visit.
-    assert "/tv/" in body
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/tv-display"
 
 
 def test_creating_a_country_persists_with_uppercased_code(logged_in_client, test_store_id):
+    """The new JSON endpoint matches the legacy form-POST contract:
+    country_code is uppercased + capped, mt_companies CSV preserved."""
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")  # ensure display exists
-    resp = logged_in_client.post("/tv-display/countries/new", data={
+    resp = _api_post(logged_in_client, "/api/v2/tv-display/countries",
+                     test_store_id, {
         "country_name": "Guatemala",
         "country_code": "gt",
         "mt_companies": "Maxi, Vigo",
     })
-    assert resp.status_code == 302
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["country_code"] == "GT"
     with logged_in_client.application.app_context():
         c = TVDisplayCountry.query.filter_by(country_name="Guatemala").first()
         assert c is not None
@@ -207,7 +246,12 @@ def test_bank_delete_checkbox_cascades_rates(logged_in_client, test_store_id):
 
 def test_country_delete_cascades_banks_and_rates(logged_in_client, test_store_id):
     setup = _make_display(logged_in_client, test_store_id)
-    logged_in_client.post(f"/tv-display/countries/{setup['country_id']}/delete")
+    token = _admin_jwt(logged_in_client, test_store_id)
+    resp = logged_in_client.delete(
+        f"/api/v2/tv-display/countries/{setup['country_id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
     with logged_in_client.application.app_context():
         assert TVDisplayCountry.query.filter_by(id=setup["country_id"]).first() is None
         assert TVDisplayPayoutBank.query.filter_by(country_id=setup["country_id"]).count() == 0
@@ -216,13 +260,13 @@ def test_country_delete_cascades_banks_and_rates(logged_in_client, test_store_id
 
 def test_settings_save_persists_orientation_and_theme(logged_in_client, test_store_id):
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/settings", data={
+    resp = _api_post(logged_in_client, "/api/v2/tv-display/settings", test_store_id, {
         "title": "Custom Header",
         "subtitle": "ES sub",
         "orientation": "portrait",
         "theme": "dark",
     })
+    assert resp.status_code == 204
     with logged_in_client.application.app_context():
         d = TVDisplay.query.first()
         assert d.title == "Custom Header"
@@ -233,8 +277,7 @@ def test_settings_save_persists_orientation_and_theme(logged_in_client, test_sto
 
 def test_settings_rejects_invalid_orientation(logged_in_client, test_store_id):
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/settings", data={
+    _api_post(logged_in_client, "/api/v2/tv-display/settings", test_store_id, {
         "title": "X", "orientation": "diagonal", "theme": "neon",
     })
     with logged_in_client.application.app_context():
@@ -250,9 +293,9 @@ def test_token_regenerate_invalidates_old_url(client, logged_in_client, test_sto
     old_token = setup["token"]
     # Old URL works.
     assert client.get(f"/tv/{old_token}").status_code == 200
-    logged_in_client.post("/tv-display/regenerate-token")
-    with logged_in_client.application.app_context():
-        new_token = TVDisplay.query.first().public_token
+    resp = _api_post(logged_in_client, "/api/v2/tv-display/regenerate-token", test_store_id)
+    assert resp.status_code == 200
+    new_token = resp.get_json()["public_token"]
     assert new_token != old_token
     assert client.get(f"/tv/{old_token}").status_code == 404
     assert client.get(f"/tv/{new_token}").status_code == 200
@@ -260,28 +303,28 @@ def test_token_regenerate_invalidates_old_url(client, logged_in_client, test_sto
 
 # ── 3. Employee access ─────────────────────────────────────────
 
-def test_employee_can_manage_rates(client, test_store_id):
-    """v1 explicitly grants employees /tv-display access — rate
-    management is a daily-operations job, not a back-office one."""
-    _activate_addon(client, test_store_id)
+def test_employee_can_create_country_via_api(logged_in_client, test_store_id):
+    """v1 explicitly grants employees TV-display rate management —
+    daily-operations job, not a back-office one. Same JWT-flavoured
+    `get_principal` dependency the admin endpoint uses."""
+    _activate_addon(logged_in_client, test_store_id)
     from tests.conftest import make_employee_client
-    emp = make_employee_client(test_store_id)
-    resp = emp.get("/tv-display")
-    assert resp.status_code == 200
-
-
-def test_employee_can_save_rates(client, test_store_id):
-    """Defense-in-depth — the URL is reachable and POSTs persist."""
-    _activate_addon(client, test_store_id)
-    from tests.conftest import make_employee_client
-    emp = make_employee_client(test_store_id)
-    emp.get("/tv-display")
-    resp = emp.post("/tv-display/countries/new", data={
-        "country_name": "Honduras", "country_code": "HN",
-        "mt_companies": "Maxi, Vigo",
-    })
-    assert resp.status_code == 302
-    with client.application.app_context():
+    emp_client = make_employee_client(test_store_id)
+    # Pull the employee's username out of the session so we can mint
+    # a JWT for it (make_employee_client only sets a Flask session).
+    with emp_client.session_transaction() as sess:
+        emp_uid = sess["user_id"]
+    with logged_in_client.application.app_context():
+        emp_username = User.query.filter_by(id=emp_uid).one().username
+    token = _employee_jwt(logged_in_client, emp_username, test_store_id)
+    resp = logged_in_client.post(
+        "/api/v2/tv-display/countries",
+        json={"country_name": "Honduras", "country_code": "HN",
+              "mt_companies": "Maxi, Vigo"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    with logged_in_client.application.app_context():
         assert TVDisplayCountry.query.filter_by(country_name="Honduras").first() is not None
 
 
@@ -326,9 +369,10 @@ def test_public_render_carries_orientation_attribute(client, logged_in_client, t
     # Default
     body = client.get(f"/tv/{setup['token']}").data.decode()
     assert 'data-orientation="auto"' in body
-    # Force portrait
-    logged_in_client.post("/tv-display/settings", data={
-        "title": "X", "orientation": "portrait", "theme": "light",
+    # Force portrait via the new JSON endpoint.
+    _api_post(logged_in_client, "/api/v2/tv-display/settings", test_store_id, {
+        "title": "X", "subtitle": "",
+        "orientation": "portrait", "theme": "light",
     })
     body = client.get(f"/tv/{setup['token']}").data.decode()
     assert 'data-orientation="portrait"' in body
@@ -346,9 +390,10 @@ def test_public_render_carries_theme_attribute_independent_of_user(client, logge
     body = client.get(f"/tv/{setup['token']}").data.decode()
     assert 'data-theme="light"' in body, \
         "TV theme must follow display.theme, not user.theme_preference"
-    # Now flip the BOARD's theme.
-    logged_in_client.post("/tv-display/settings", data={
-        "title": "X", "orientation": "auto", "theme": "dark",
+    # Now flip the BOARD's theme via the new JSON endpoint.
+    _api_post(logged_in_client, "/api/v2/tv-display/settings", test_store_id, {
+        "title": "X", "subtitle": "",
+        "orientation": "auto", "theme": "dark",
     })
     body = client.get(f"/tv/{setup['token']}").data.decode()
     assert 'data-theme="dark"' in body
@@ -485,10 +530,15 @@ def test_purge_cascades_through_tv_display_chain(client):
 # ── 8. _ensure_tv_display idempotency ──────────────────────────
 
 def test_ensure_tv_display_creates_once_with_unique_token(logged_in_client, test_store_id):
-    """Hitting /tv-display twice should not create two display rows;
-    the GET is idempotent."""
+    """Hitting the overview endpoint twice should not create two
+    display rows; first call lazy-creates, second call reuses. The
+    legacy /tv-display GET used to do this; in the SPA world the
+    admin landing's first XHR (`/api/v2/tv-display/overview`) carries
+    the same idempotency contract."""
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.get("/tv-display")
+    token = _admin_jwt(logged_in_client, test_store_id)
+    headers = {"Authorization": f"Bearer {token}"}
+    logged_in_client.get("/api/v2/tv-display/overview", headers=headers)
+    logged_in_client.get("/api/v2/tv-display/overview", headers=headers)
     with logged_in_client.application.app_context():
         assert TVDisplay.query.filter_by(store_id=test_store_id).count() == 1

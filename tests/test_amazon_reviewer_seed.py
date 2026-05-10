@@ -224,29 +224,42 @@ def test_keep_data_flag_preserves_existing_grid(client):
 def test_seeded_account_can_actually_claim_a_pair_code(client):
     """End-to-end: the whole point of this CLI. Sign in as the
     reviewer, simulate a Fire TV calling /api/tv-pair/init, then
-    have the reviewer claim the code via /tv-display/claim. If this
-    test fails, the reviewer can't pair the test Fire TV and our
-    Amazon submission gets rejected."""
-    _run(client)
+    have the reviewer claim the code via the new JSON endpoint
+    /api/v2/tv-display/claim. If this test fails, the reviewer
+    can't pair the test Fire TV and our Amazon submission gets
+    rejected."""
+    # Pin a known password so the test can sign in via the SPA login
+    # endpoint. The CLI accepts --password to override its random
+    # default; production runs without it for actual reviewer use.
+    KNOWN_PW = "amazon-reviewer-test-pw-12chars"
+    _run(client, "--password", KNOWN_PW)
     with client.application.app_context():
-        user = User.query.filter_by(username=REVIEWER_USERNAME).first()
         store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
-        uid, sid = user.id, store.id
+        sid = store.id
 
     # 1. Simulate the Fire TV opening the app — public, no auth.
     body = client.post("/api/tv-pair/init", json={}).get_json()
     assert "code" in body and "device_token" in body
 
-    # 2. Sign in as the reviewer (role employee, store_id pinned).
-    c = client.application.test_client()
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = sid
+    # 2. Sign in as the reviewer via /api/v2/auth/login.
+    login = client.post(
+        "/api/v2/auth/login",
+        json={"username": REVIEWER_USERNAME,
+              "password": KNOWN_PW,
+              "store_id": sid},
+    )
+    assert login.status_code == 200, \
+        f"reviewer couldn't sign in via /api/v2/auth/login: {login.status_code}"
+    jwt = login.get_json()["access_token"]
 
-    # 3. Reviewer types the code on /tv-display.
-    resp = c.post("/tv-display/claim", data={"code": body["code"]})
-    assert resp.status_code == 302, \
+    # 3. Reviewer types the code on /tv-display (now React, calls
+    #    /api/v2/tv-display/claim).
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": body["code"]},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 204, \
         f"reviewer couldn't claim pair code: {resp.status_code}"
 
     # 4. The Fire TV's next /status poll flips to "claimed".

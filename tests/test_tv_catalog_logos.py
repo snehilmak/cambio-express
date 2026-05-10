@@ -16,6 +16,7 @@ from app import (
     db, User, Store, TVDisplay, TVDisplayCountry, TVDisplayPayoutBank,
     TVCompanyCatalog, TVBankCatalog, TVCatalogLogo,
 )
+from tests._tv_display_helpers import create_country
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -215,13 +216,10 @@ def test_editor_chip_renders_logo_when_uploaded(logged_in_client, test_store_id)
     _upload(sa, "company", "maxi")
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-    })
-    with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi",
+    )
 
     body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
     assert "ce-chip-logo" in body
@@ -232,13 +230,10 @@ def test_editor_chip_falls_back_to_text_without_logo(logged_in_client, test_stor
     """Catalog entries without an uploaded logo render text-only —
     no broken-image icons, no placeholders."""
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-    })
-    with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi",
+    )
     body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
     assert "Maxi" in body  # display_name still rendered
     # No chip-logo wrapper since no upload happened.
@@ -250,13 +245,10 @@ def test_editor_bank_row_renders_logo_thumbnail(logged_in_client, test_store_id)
     _upload(sa, "bank", "mx_bbva_bancomer")
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-    })
-    with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi",
+    )
     logged_in_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
         "mt_companies": "maxi",
@@ -274,13 +266,11 @@ def test_public_board_renders_company_logos(client, logged_in_client, test_store
     _upload(sa, "company", "maxi")
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-    })
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi",
+    )
     with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
         token = TVDisplay.query.first().public_token
     logged_in_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
@@ -298,13 +288,11 @@ def test_public_board_renders_bank_logos(client, logged_in_client, test_store_id
     _upload(sa, "bank", "mx_bbva_bancomer")
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-    })
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi",
+    )
     with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
         token = TVDisplay.query.first().public_token
     logged_in_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
@@ -326,11 +314,10 @@ def test_public_board_falls_back_to_text_for_logoless_entries(
     # Vigo intentionally not uploaded.
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi,vigo",
-    })
+    create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="maxi,vigo",
+    )
     with logged_in_client.application.app_context():
         token = TVDisplay.query.first().public_token
 
@@ -350,13 +337,10 @@ def test_logo_url_includes_cache_bust_query(logged_in_client, test_store_id):
     _upload(sa, "company", "intermex")
 
     _activate_addon(logged_in_client, test_store_id)
-    logged_in_client.get("/tv-display")
-    logged_in_client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "intermex",
-    })
-    with logged_in_client.application.app_context():
-        country_id = TVDisplayCountry.query.first().id
+    country_id = create_country(
+        logged_in_client, test_store_id,
+        country_name="Mexico", country_code="MX", mt_companies="intermex",
+    )
     body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
     # ?v= is non-empty; the exact unix timestamp varies per run.
     import re
