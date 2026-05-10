@@ -7217,96 +7217,40 @@ def daily_report_unlock(ds):
 @app.route("/monthly")
 @admin_required
 def monthly_list():
-    user=current_user(); sid=session["store_id"]
-    reports=MonthlyFinancial.query.filter_by(store_id=sid).order_by(
-        MonthlyFinancial.year.desc(),MonthlyFinancial.month.desc()).all()
-    return render_template("monthly_list.html",user=user,reports=reports,today=date.today())
+    """301 → /app/monthly. The list of monthly P&L reports moved
+    to React; the SPA reads /api/v2/monthly/months for the index
+    and /api/v2/monthly/<y>/<m> for each entry. Stub keeps
+    url_for('monthly_list') working in still-Jinja chrome (sidebar
+    nav) and bounces old bookmarks."""
+    return redirect("/app/monthly", code=301)
 
-@app.route("/monthly/<int:year>/<int:month>",methods=["GET","POST"])
+
+@app.route("/monthly/<int:year>/<int:month>", methods=["GET", "POST"])
 @admin_required
-def monthly_report(year,month):
-    user=current_user(); sid=session["store_id"]
-    report=MonthlyFinancial.query.filter_by(store_id=sid,year=year,month=month).first()
-    month_start=date(year,month,1); month_end=date(year,month,monthrange(year,month)[1])
-    daily_rows=DailyReport.query.filter(DailyReport.store_id==sid,
-        DailyReport.report_date>=month_start,DailyReport.report_date<=month_end).all()
-    auto={"taxable_sales":sum(r.taxable_sales for r in daily_rows),
-          "non_taxable":sum(r.non_taxable for r in daily_rows),
-          "bill_payment_charge":sum(r.bill_payment_charge for r in daily_rows),
-          "phone_recargas":sum(r.phone_recargas for r in daily_rows),
-          "boost_mobile":sum(r.boost_mobile for r in daily_rows),
-          "check_cashing_fees":sum(r.check_cashing_fees for r in daily_rows),
-          "return_check_hold_fees":sum(r.return_check_hold_fees for r in daily_rows),
-          "rebates_commissions":sum(r.rebates_commissions for r in daily_rows),
-          "cash_purchases":sum(r.cash_purchases for r in daily_rows),
-          "check_purchases":sum(r.check_purchases for r in daily_rows),
-          "cash_expenses":sum(r.cash_expense for r in daily_rows),
-          "check_expenses":sum(r.check_expense for r in daily_rows),
-          "cash_payroll":sum(r.payroll_expense for r in daily_rows),
-          "over_short":sum(r.over_short for r in daily_rows),
-          # Net G/L for the month from the ReturnCheck workflow
-          # (recoveries minus losses+fraud, by status_changed_on).
-          # Stored as the signed P&L amount; the monthly_report
-          # template renders it as a locked, editable-looking field.
-          "return_check_gl":_return_check_monthly_pl(sid, year, month)}
-    # Bank-charge slugs feed the consolidated bank_charges_total
-    # column. Use a prefix match so any per-account slug
-    # (bank_charge_<last4>, plus the legacy bank_charge / 210 / 230)
-    # rolls up automatically without the operator having to register
-    # each new last4 they encounter.
-    auto["bank_charges_total"] = _bank_charges_for_month(
-        sid, year, month, prefix="bank_charge")
-    # Two-level breakdown for the expandable bank-charge view: groups
-    # transactions by description, each group expandable to its rows.
-    auto["bank_charges_breakdown"] = _bank_charges_breakdown_for_month(
-        sid, year, month)
-    if request.method=="POST":
-        if not report: report=MonthlyFinancial(store_id=sid,year=year,month=month); db.session.add(report)
-        def fv(k): return float(request.form.get(k) or 0)
-        # Fields that are sums of the store's daily books for this month.
-        # The template shows them as readonly, and the server forces them
-        # to the auto sum here — so a tampered POST (or a stale form
-        # submission after a daily-book edit) can't override the truth.
-        LOCKED_FIELDS = {
-            "cash_purchases", "check_purchases",
-            "cash_expenses", "check_expenses", "cash_payroll",
-            # Check Cashing Fees is the per-day fee receipts column on
-            # DailyReport — adding it here means the monthly P&L always
-            # mirrors what the cashier logged daily and a stale or
-            # tampered POST can't override the truth.
-            "check_cashing_fees",
-            # Net G/L from the ReturnCheck workflow (recoveries minus
-            # losses+fraud, by status_changed_on within the month).
-            # See _return_check_monthly_pl().
-            "return_check_gl",
-        }
-        # Bank-charge column locks conditionally — only when there's
-        # at least one tagged transaction in the month. Stores without
-        # bank sync (or with no charges in this month) keep manual entry.
-        if auto.get("bank_charges_total", 0) > 0:
-            LOCKED_FIELDS.add("bank_charges_total")
-        for f in ["taxable_sales","non_taxable","bill_payment_charge","phone_recargas","boost_mobile",
-            "check_cashing_fees","return_check_hold_fees","rebates_commissions","mt_commission_in_bank",
-            "other_income_1","other_income_2","other_income_3","cash_purchases","check_purchases",
-            "cash_expenses","check_expenses","cash_payroll","bank_charges_total",
-            "credit_card_fees","money_order_rent","emaginenet_tech","irs_payroll_tax","texas_workforce",
-            "other_taxes","accounting_charges","return_check_gl","other_expense_1","other_expense_2",
-            "other_expense_3","other_expense_4","other_expense_5","over_short",
-            "borrowed_money_return","profit_distributed","cash_carry_forward"]:
-            if f in LOCKED_FIELDS:
-                setattr(report, f, float(auto.get(f, 0)))
-            else:
-                setattr(report, f, fv(f))
-        report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
-        db.session.commit(); flash(f"P&L for {month_name[month]} {year} saved.","success")
-        return redirect(url_for("monthly_list"))
-    return render_template("monthly_report.html",user=user,year=year,month=month,
-        month_name=month_name[month],report=report,auto=auto)
+def monthly_report(year, month):
+    """301 → /app/monthly/edit?year=&month=. The P&L editor moved
+    to React; the SPA PUTs to /api/v2/monthly/<y>/<m> with the same
+    locked-fields contract — server still auto-derives + overwrites
+    daily-summed + return-check-net + bank-charge fields. Both
+    verbs redirect: GET for direct links, POST for any in-flight
+    Jinja form submission (canonical path is the SPA now)."""
+    return redirect(
+        f"/app/monthly/edit?year={year}&month={month}", code=301,
+    )
+
 
 @app.route("/monthly/new")
 @admin_required
 def monthly_new():
-    today=date.today(); return redirect(url_for("monthly_report",year=today.year,month=today.month))
+    """301 → /app/monthly/edit?year=<this year>&month=<this month>.
+    The legacy /monthly/new just redirected to /monthly/<y>/<m>
+    for the current month — same contract, just bouncing into the
+    SPA editor instead."""
+    today = date.today()
+    return redirect(
+        f"/app/monthly/edit?year={today.year}&month={today.month}",
+        code=301,
+    )
 
 
 # ── Tax export pack ─────────────────────────────────────────

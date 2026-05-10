@@ -659,10 +659,38 @@ def test_bank_charges_for_month_zero_when_no_matches(client, test_store_id):
 # ── monthly_report end-to-end ────────────────────────────────
 
 
-def test_monthly_report_renders_locked_bank_charge_amount(client, test_store_id):
-    """The single consolidated bank-charges field must show the
-    auto-computed dollars from tagged transactions."""
-    from app import BankTransaction, db
+# Helpers for the API-driven monthly tests below.
+
+def _admin_jwt_for(client, store_id):
+    """Mint a Bearer JWT for the seeded admin so /api/v2/monthly/*
+    accepts the call. The Flask session-based _admin_login above
+    still applies for legacy routes; these helpers are for the
+    SPA's API-side path."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": store_id},
+    )
+    return resp.get_json()["access_token"]
+
+
+def _put_monthly(client, store_id, year, month, body):
+    token = _admin_jwt_for(client, store_id)
+    return client.put(
+        f"/api/v2/monthly/{year}/{month}",
+        json=body,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+
+def test_monthly_locked_bank_charge_auto_populates(client, test_store_id):
+    """The single consolidated `bank_charges_total` field gets the
+    auto-computed dollars from tagged BankTransaction rows. The
+    /monthly editor moved to React in PR #402; this test exercises
+    the same auto-derive contract through the API path the SPA
+    uses."""
+    from app import BankTransaction, MonthlyFinancial, db
     _admin_login(client, test_store_id)
     app = client.application
     aid = _make_account(app, test_store_id, last4="0230")
@@ -675,17 +703,20 @@ def test_monthly_report_renders_locked_bank_charge_amount(client, test_store_id)
             status="posted", category_slug="bank_charge_230",
         ))
         db.session.commit()
-    body = client.get("/monthly/2026/5").data.decode()
-    # Single consolidated field; both 210/230-tagged transactions
-    # roll into bank_charges_total.
-    assert 'name="bank_charges_total"' in body
-    assert 'value="2.10"' in body
-    assert "Locked · bank sync" in body
+    # PUT a notes-only payload — server auto-populates bank_charges_total.
+    resp = _put_monthly(client, test_store_id, 2026, 5, {"notes": ""})
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    with app.app_context():
+        row = MonthlyFinancial.query.filter_by(
+            store_id=test_store_id, year=2026, month=5).first()
+        assert abs(row.bank_charges_total - 2.10) < 0.01
 
 
-def test_monthly_report_post_persists_locked_bank_charge(client, test_store_id):
-    """Saving the form forces the locked auto value into bank_charges_total
-    even when the form payload sends 0 or anything else."""
+def test_monthly_locked_bank_charge_overrides_user_value(client, test_store_id):
+    """When tagged transactions exist for the month, the server's
+    auto value MUST win over a client-supplied bank_charges_total
+    (lock semantics). With the API path, the schema accepts the
+    field but the Service layer overrides it on save."""
     from app import BankTransaction, MonthlyFinancial, db
     _admin_login(client, test_store_id)
     app = client.application
@@ -699,30 +730,29 @@ def test_monthly_report_post_persists_locked_bank_charge(client, test_store_id):
             status="posted", category_slug="bank_charge_230",
         ))
         db.session.commit()
-    client.post("/monthly/2026/6", data={
-        "bank_charges_total": "999.99",
-    }, follow_redirects=True)
+    resp = _put_monthly(client, test_store_id, 2026, 6, {
+        "bank_charges_total": 999.99,
+    })
+    assert resp.status_code == 200
     with app.app_context():
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=6).first()
-        assert row.bank_charges_total == 3.00
+        assert abs(row.bank_charges_total - 3.00) < 0.01
 
 
-def test_monthly_report_leaves_field_editable_when_no_charges(client, test_store_id):
-    """No tagged transactions → field rendered editable, manual entry
-    preserved on POST. Backward-compat for stores without bank sync."""
-    from app import MonthlyFinancial, db
+def test_monthly_bank_charge_editable_when_no_tagged_transactions(client, test_store_id):
+    """No tagged transactions → manual entry preserved. Backward-
+    compat for stores without bank sync."""
+    from app import MonthlyFinancial
     _admin_login(client, test_store_id)
-    body = client.get("/monthly/2026/7").data.decode()
-    assert 'name="bank_charges_total"' in body
-    assert "Locked · bank sync" not in body
-    client.post("/monthly/2026/7", data={
-        "bank_charges_total": "42.50",
-    }, follow_redirects=True)
+    resp = _put_monthly(client, test_store_id, 2026, 7, {
+        "bank_charges_total": 42.50,
+    })
+    assert resp.status_code == 200
     with client.application.app_context():
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=7).first()
-        assert row.bank_charges_total == 42.50
+        assert abs(row.bank_charges_total - 42.50) < 0.01
 
 
 # ── Registry-driven generic auto-feed ────────────────────────
@@ -734,7 +764,10 @@ def test_registry_drives_monthly_auto_for_every_mapped_category(
     mapped column on the monthly P&L. Multiple slugs may share one
     column (current state: bank_charge / bank_charge_210 /
     bank_charge_230 all feed bank_charges_total) — the per-slug sums
-    must add together on the column."""
+    must add together on the column.
+
+    Exercised against the /api/v2/monthly PUT path that the SPA uses;
+    the legacy /monthly form-render is gone (PR #402)."""
     from app import (BankTransaction, MonthlyFinancial,
                      _BANK_CATEGORY_PL_FIELD, db)
     _admin_login(client, test_store_id)
@@ -744,7 +777,6 @@ def test_registry_drives_monthly_auto_for_every_mapped_category(
     # Seed one tagged transaction per registry entry, distinct amount.
     # When multiple slugs share a column, the column's expected total
     # is the sum of all their per-slug amounts.
-    per_slug = {}
     expected = {}
     with app.app_context():
         for i, (slug, field) in enumerate(_BANK_CATEGORY_PL_FIELD.items()):
@@ -760,24 +792,19 @@ def test_registry_drives_monthly_auto_for_every_mapped_category(
                 category_slug=slug,
             ))
             dollars = abs(cents) / 100.0
-            per_slug[slug] = dollars
             expected[field] = expected.get(field, 0.0) + dollars
         db.session.commit()
 
-    body = client.get("/monthly/2026/8").data.decode()
-    for field, dollars in expected.items():
-        assert f'name="{field}"' in body
-        assert f'value="{dollars:.2f}"' in body, (
-            f"{field}: expected value=\"{dollars:.2f}\" in rendered P&L")
-
-    # POST should also force the locked auto value over any payload.
-    payload = {field: "999.99" for field in expected}
-    client.post("/monthly/2026/8", data=payload, follow_redirects=True)
+    # PUT a tampered payload — server's auto value must win for every
+    # mapped column.
+    payload = {field: 999.99 for field in expected}
+    resp = _put_monthly(client, test_store_id, 2026, 8, payload)
+    assert resp.status_code == 200, resp.get_data(as_text=True)
     with app.app_context():
         row = MonthlyFinancial.query.filter_by(
             store_id=test_store_id, year=2026, month=8).first()
         for field, dollars in expected.items():
-            assert getattr(row, field) == dollars, (
+            assert abs(getattr(row, field) - dollars) < 0.01, (
                 f"{field}: server should have forced auto value, "
                 f"got {getattr(row, field)} instead of {dollars}")
 
