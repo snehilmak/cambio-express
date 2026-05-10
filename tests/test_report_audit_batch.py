@@ -146,30 +146,6 @@ def _make_bank_txn(client, store_id, acct_id, *, when, amount_cents,
         return t.id
 
 
-def test_bank_rule_audit_groups_by_rule(client, test_store_id):
-    _admin_login(client, test_store_id)
-    aid = _make_bank_account(client, test_store_id)
-    rid = _make_bank_rule(client, test_store_id,
-                            desc_match_value="WATER")
-    when = datetime.combine(date.today(), time(9, 0))
-    _make_bank_txn(client, test_store_id, aid, when=when,
-                    amount_cents=-500, matched_rule_id=rid,
-                    desc="WATER BILL", txn_id="ar1")
-    _make_bank_txn(client, test_store_id, aid, when=when,
-                    amount_cents=-300, matched_rule_id=rid,
-                    desc="WATER MAIN BREAK", txn_id="ar2")
-    # Manually-categorised txn (no matched_rule_id) should NOT appear.
-    _make_bank_txn(client, test_store_id, aid, when=when,
-                    amount_cents=-100, category_slug="ignore",
-                    txn_id="manual")
-    resp = client.get("/reports/bank-rule-audit")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "WATER" in body
-    # Rule-1 had 2 matches, total $8.00.
-    assert "$8.00" in body
-    # Manual txn ($1.00) shouldn't show.
-    assert "$1.00" not in body
 
 
 def test_bank_rule_audit_csv(client, test_store_id):

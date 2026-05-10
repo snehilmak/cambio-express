@@ -4537,6 +4537,13 @@ _MIGRATED_REPORT_DRILLDOWNS: set[str] = {
     "high-value-transfers",
     "cancelled-transfers",
     "ach-volume",
+    "returned-check-status",
+    "bank-transactions-breakdown",
+    "daily-drops",
+    "check-deposits",
+    "bank-rule-audit",
+    "bank-charges-by-account",
+    "period-comparison",
 }
 
 

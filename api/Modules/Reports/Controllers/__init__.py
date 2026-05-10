@@ -290,6 +290,107 @@ def ach_volume_route(
     return {"rows": rows, "totals": totals}
 
 
+# ── Batch-4 drilldowns (audit + banking) ───────────────────
+
+
+@router.get("/returned-check-status")
+def returned_check_status_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import returned_check_status
+    d_from, d_to = period
+    rows, totals = returned_check_status(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/bank-transactions-breakdown")
+def bank_txn_breakdown_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import bank_txn_breakdown
+    d_from, d_to = period
+    rows, totals = bank_txn_breakdown(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/daily-drops")
+def daily_drops_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import daily_drops
+    d_from, d_to = period
+    rows, totals = daily_drops(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/check-deposits")
+def check_deposits_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import check_deposits
+    d_from, d_to = period
+    rows, totals = check_deposits(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/bank-rule-audit")
+def bank_rule_audit_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import bank_rule_audit
+    d_from, d_to = period
+    rows, totals = bank_rule_audit(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/bank-charges-by-account")
+def bank_charges_by_account_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import bank_charges_by_account
+    d_from, d_to = period
+    rows, totals = bank_charges_by_account(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/period-comparison")
+def period_comparison_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    compare_from: str | None = Query(None),
+    compare_to: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    from datetime import datetime
+    from api.Modules.Reports.Services import period_comparison
+    d_from, d_to = period
+    cf = (
+        datetime.strptime(compare_from, "%Y-%m-%d").date()
+        if compare_from else None
+    )
+    ct = (
+        datetime.strptime(compare_to, "%Y-%m-%d").date()
+        if compare_to else None
+    )
+    rows, totals = period_comparison(
+        db, store_ids, d_from, d_to,
+        compare_from=cf, compare_to=ct,
+    )
+    return {"rows": rows, "totals": totals}
+
+
 # ── Report-center index ─────────────────────────────────────
 
 

@@ -16,12 +16,19 @@ import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
 import AchVolume from "./routes/reports/AchVolume";
+import BankChargesByAccount from "./routes/reports/BankChargesByAccount";
+import BankRuleAudit from "./routes/reports/BankRuleAudit";
+import BankTxnBreakdown from "./routes/reports/BankTxnBreakdown";
 import ByDestinationCountry from "./routes/reports/ByDestinationCountry";
 import CancelledTransfers from "./routes/reports/CancelledTransfers";
 import CashierProductivity from "./routes/reports/CashierProductivity";
+import CheckDeposits from "./routes/reports/CheckDeposits";
+import DailyDrops from "./routes/reports/DailyDrops";
 import FeesVsTax from "./routes/reports/FeesVsTax";
 import HighValueTransfers from "./routes/reports/HighValueTransfers";
 import NewVsReturning from "./routes/reports/NewVsReturning";
+import PeriodComparison from "./routes/reports/PeriodComparison";
+import ReturnedCheckStatus from "./routes/reports/ReturnedCheckStatus";
 import SalesByCompany from "./routes/reports/SalesByCompany";
 import SalesByEmployee from "./routes/reports/SalesByEmployee";
 import SalesByService from "./routes/reports/SalesByService";
@@ -120,6 +127,13 @@ export default function App() {
         <Route path="reports/high-value-transfers"   element={<HighValueTransfers />} />
         <Route path="reports/cancelled-transfers"    element={<CancelledTransfers />} />
         <Route path="reports/ach-volume"             element={<AchVolume />} />
+        <Route path="reports/returned-check-status"       element={<ReturnedCheckStatus />} />
+        <Route path="reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
+        <Route path="reports/daily-drops"                 element={<DailyDrops />} />
+        <Route path="reports/check-deposits"              element={<CheckDeposits />} />
+        <Route path="reports/bank-rule-audit"             element={<BankRuleAudit />} />
+        <Route path="reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
+        <Route path="reports/period-comparison"           element={<PeriodComparison />} />
         <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
         <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
         <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
@@ -133,6 +147,13 @@ export default function App() {
         <Route path="owner/reports/high-value-transfers"   element={<HighValueTransfers />} />
         <Route path="owner/reports/cancelled-transfers"    element={<CancelledTransfers />} />
         <Route path="owner/reports/ach-volume"             element={<AchVolume />} />
+        <Route path="owner/reports/returned-check-status"       element={<ReturnedCheckStatus />} />
+        <Route path="owner/reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
+        <Route path="owner/reports/daily-drops"                 element={<DailyDrops />} />
+        <Route path="owner/reports/check-deposits"              element={<CheckDeposits />} />
+        <Route path="owner/reports/bank-rule-audit"             element={<BankRuleAudit />} />
+        <Route path="owner/reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
+        <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />

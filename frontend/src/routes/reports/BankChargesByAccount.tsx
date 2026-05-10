@@ -1,0 +1,30 @@
+import { useLocation } from "react-router-dom";
+
+import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+
+export default function BankChargesByAccount() {
+  const isOwner = useLocation().pathname.startsWith("/owner/");
+  const baseRoute = isOwner ? "/owner/reports" : "/reports";
+  return (
+    <ReportDrilldown
+      apiSlug="bank-charges-by-account"
+      title="Bank Charges by Account"
+      resultUnit={["account", "accounts"]}
+      backTo={baseRoute}
+      csvUrl={`${baseRoute}/bank-charges-by-account.csv`}
+      kpis={[
+        { label: "Total Charges", tone: "primary",
+          value: t => fmtMoney(Number(t.amount ?? 0)) },
+        { label: "Charge Count",  tone: "neon",
+          value: t => Number(t.count ?? 0).toLocaleString() },
+      ]}
+      columns={[
+        { label: "Account", field: r =>
+          `${r.account}${r.last4 ? ` ••${r.last4}` : ""}` },
+        { label: "Count",   field: r => Number(r.count).toLocaleString(), align: "right", mono: true },
+        { label: "Amount",  field: r => fmtMoney(Number(r.amount)),       align: "right", mono: true },
+        { label: "Avg",     field: r => fmtMoney(Number(r.avg)),          align: "right", mono: true },
+      ]}
+    />
+  );
+}

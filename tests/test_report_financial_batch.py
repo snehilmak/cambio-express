@@ -154,37 +154,6 @@ def _make_bank_txn(client, store_id, acct_id, *, when, amount_cents,
         return t.id
 
 
-def test_bank_charges_by_account_groups_by_account(client, test_store_id):
-    _admin_login(client, test_store_id)
-    a210 = _make_bank_account(client, test_store_id, last4="0210",
-                                slug="fca_210")
-    a230 = _make_bank_account(client, test_store_id, last4="0230",
-                                slug="fca_230")
-    when = datetime.combine(date.today(), time(9, 0))
-    _make_bank_txn(client, test_store_id, a210, when=when,
-                    amount_cents=-500, category_slug="bank_charge_210",
-                    txn_id="bc210_1")
-    _make_bank_txn(client, test_store_id, a210, when=when,
-                    amount_cents=-300, category_slug="bank_charge_210",
-                    txn_id="bc210_2")
-    _make_bank_txn(client, test_store_id, a230, when=when,
-                    amount_cents=-1000, category_slug="bank_charge_230",
-                    txn_id="bc230_1")
-    # Non-bank-charge txn should not appear.
-    _make_bank_txn(client, test_store_id, a210, when=when,
-                    amount_cents=-200, category_slug="ignore",
-                    txn_id="ign1")
-    resp = client.get("/reports/bank-charges-by-account")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "0210" in body
-    assert "0230" in body
-    # Total Charges KPI = 5+3+10 = 18.00.
-    assert "$18.00" in body
-    # 0230 alone = 10.00.
-    assert "$10.00" in body
-    # Non-bank-charge ($2.00) not included.
-    assert "$2.00" not in body
 
 
 def test_bank_charges_by_account_csv(client, test_store_id):
@@ -203,24 +172,6 @@ def test_bank_charges_by_account_csv(client, test_store_id):
 # ── Period Comparison ────────────────────────────────────────
 
 
-def test_period_comparison_compares_to_prior_period(client, test_store_id):
-    _admin_login(client, test_store_id)
-    # Current period: May 1-31. Prior: April 1-30.
-    _make_transfer(client, test_store_id, send_date=date(2026, 5, 5),
-                   amount=300, fee=10, confirm="C1")
-    _make_transfer(client, test_store_id, send_date=date(2026, 4, 10),
-                   amount=200, fee=5, confirm="P1")
-    resp = client.get("/reports/period-comparison?from=2026-05-01&to=2026-05-31")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Both period labels appear (current = May, prior = same-length
-    # window ending the day before — Mar 31 – Apr 30 for May 1-31).
-    assert "May 01" in body
-    assert "Apr 30" in body
-    # Each metric row.
-    assert "Transfers" in body
-    assert "Total Sent" in body
-    assert "Net Income" in body
 
 
 def test_period_comparison_csv(client, test_store_id):
