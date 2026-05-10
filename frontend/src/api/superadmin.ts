@@ -9,6 +9,58 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
+// Detail row used by the create/edit form. Superset of the list-
+// view row: includes address + federal_tax_rate which the table
+// doesn't show but the form binds against.
+export interface SuperadminStoreDetail {
+  store_id: number;
+  name: string;
+  slug: string;
+  email: string;
+  phone: string;
+  address: string;
+  plan: string;
+  billing_cycle: string;
+  is_active: boolean;
+  federal_tax_rate: number;
+  created_at: string;
+  trial_ends_at: string;
+  grace_ends_at: string;
+  data_retention_until: string;
+  stripe_customer_id: string;
+  stripe_subscription_id: string;
+}
+
+export interface SuperadminStoreDetailResponse {
+  store: SuperadminStoreDetail;
+}
+
+// POST body — mirrors the legacy form. `plan` defaults to "trial"
+// server-side if omitted, but we always send it to avoid relying
+// on the default.
+export interface SuperadminStoreCreateBody {
+  name: string;
+  slug: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  plan?: string;
+  admin_username?: string;
+  admin_name?: string;
+  admin_password: string;
+}
+
+// PATCH body — every field optional. Only keys present are applied.
+export interface SuperadminStoreUpdateBody {
+  name?: string;
+  slug?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  plan?: string;
+  federal_tax_rate?: number;
+}
+
 export interface SuperadminStoreRow {
   store_id: number;
   name: string;
@@ -60,6 +112,43 @@ export interface SuperadminAuditListResponse {
   per_page: number;
   total_pages: number;
 }
+
+// Single-store detail (used by the edit-form prefill). Disabled
+// when storeId is null/undefined so the create-form path skips
+// the fetch entirely.
+export function useSuperadminStore(storeId: number | null | undefined) {
+  const identity = getCurrentIdentity();
+  return useQuery<SuperadminStoreDetailResponse>({
+    enabled:
+      identity?.role === "superadmin" &&
+      storeId !== null && storeId !== undefined &&
+      Number.isFinite(storeId),
+    queryKey: ["superadmin", "store", storeId, identity?.user_id],
+    queryFn: () =>
+      api<SuperadminStoreDetailResponse>(
+        `/api/v2/superadmin/stores/${storeId}`,
+      ),
+  });
+}
+
+export async function createSuperadminStore(
+  body: SuperadminStoreCreateBody,
+): Promise<SuperadminStoreDetailResponse> {
+  return api<SuperadminStoreDetailResponse>(
+    "/api/v2/superadmin/stores",
+    { method: "POST", json: body },
+  );
+}
+
+export async function updateSuperadminStore(
+  storeId: number, body: SuperadminStoreUpdateBody,
+): Promise<SuperadminStoreDetailResponse> {
+  return api<SuperadminStoreDetailResponse>(
+    `/api/v2/superadmin/stores/${storeId}`,
+    { method: "PATCH", json: body },
+  );
+}
+
 
 export function useSuperadminAuditLog(
   page = 1, action = "", perPage = 50,

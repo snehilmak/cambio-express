@@ -13,11 +13,13 @@ announcements/feature-flag CRUD, and impersonation.
 """
 from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Models import User
 from api.Modules.Superadmin.Requests import (
     DiscountCodeListResponse,
     DiscountCodeResponse,
@@ -27,8 +29,12 @@ from api.Modules.Superadmin.Requests import (
     SuperadminAnomalyRow,
     SuperadminAuditListResponse,
     SuperadminAuditRow,
+    SuperadminStoreCreateRequest,
+    SuperadminStoreDetailResponse,
+    SuperadminStoreDetailRow,
     SuperadminStoreListResponse,
     SuperadminStoreRow,
+    SuperadminStoreUpdateRequest,
 )
 
 
@@ -43,8 +49,75 @@ def _require_superadmin(claims: dict) -> None:
         )
 
 
+def _require_superadmin_user(db: Session, claims: dict) -> User:
+    """Resolve JWT → User and gate on role=superadmin. Returns the
+    User row so the audit trail can stamp admin_id + admin_name from
+    canonical DB values (not whatever the JWT claims happen to carry).
+    Used by the mutation endpoints; the read-only endpoints continue
+    to call the cheaper `_require_superadmin(claims)` since they
+    don't audit."""
+    _require_superadmin(claims)
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    if user is None:
+        raise HTTPException(
+            status_code=401, detail="JWT subject does not resolve to a user.",
+        )
+    return user
+
+
+def _audit_store(db: Session, user: User, action: str,
+                 *, target_id: str = "", details: str = "") -> None:
+    """Thin wrapper that goes straight to the Service so we don't need
+    Flask's request context (the legacy `record_audit` reads
+    `current_user()` from Flask session, which isn't set inside a
+    FastAPI route through the dispatcher). Per CLAUDE.md invariant
+    #7: every superadmin mutation MUST call record_audit."""
+    record_superadmin_action(
+        db,
+        admin_id=user.id,
+        admin_name=user.full_name or user.username or "",
+        action=action,
+        target_type="store",
+        target_id=target_id,
+        details=details,
+    )
+
+
 def _iso(dt) -> str:
     return dt.isoformat() if dt else ""
+
+
+def _normalize_slug(raw: str) -> str:
+    """Mirrors the legacy `superadmin_new_store` slug normalization:
+    strip + lowercase + spaces-to-dashes. Centralized here so the
+    create + patch paths agree on what 'the same slug' means."""
+    return (raw or "").strip().lower().replace(" ", "-")
+
+
+def _adapt_detail(s) -> SuperadminStoreDetailRow:
+    return SuperadminStoreDetailRow(
+        store_id=s.id,
+        name=s.name or "",
+        slug=s.slug or "",
+        email=s.email or "",
+        phone=s.phone or "",
+        address=s.address or "",
+        plan=s.plan or "trial",
+        billing_cycle=s.billing_cycle or "",
+        is_active=bool(s.is_active),
+        federal_tax_rate=float(s.federal_tax_rate or 0.0),
+        created_at=_iso(s.created_at),
+        trial_ends_at=_iso(s.trial_ends_at),
+        grace_ends_at=_iso(s.grace_ends_at),
+        data_retention_until=_iso(s.data_retention_until),
+        stripe_customer_id=s.stripe_customer_id or "",
+        stripe_subscription_id=s.stripe_subscription_id or "",
+    )
 
 
 @router.get("/stores", response_model=SuperadminStoreListResponse)
@@ -75,6 +148,176 @@ def list_stores_route(
         for s in stores
     ]
     return SuperadminStoreListResponse(rows=rows, total=len(rows))
+
+
+@router.get("/stores/{store_id}", response_model=SuperadminStoreDetailResponse)
+def get_store_route(
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SuperadminStoreDetailResponse:
+    """Single-store payload for the SPA edit form.
+
+    Read-only — feeds `/app/superadmin/stores/:id/edit`. Returns
+    every field the edit form binds against (identity + plan +
+    federal_tax_rate). 404 when the row doesn't exist."""
+    _require_superadmin(claims)
+    from app import Store
+    s = db.query(Store).filter(Store.id == store_id).one_or_none()
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    return SuperadminStoreDetailResponse(store=_adapt_detail(s))
+
+
+@router.post(
+    "/stores",
+    response_model=SuperadminStoreDetailResponse,
+    status_code=201,
+)
+def create_store_route(
+    body: SuperadminStoreCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SuperadminStoreDetailResponse:
+    """Mint a new store + its initial admin user in one transaction.
+
+    Mirrors the legacy `superadmin_new_store` POST handler: builds a
+    `Store` row, attaches the operator-supplied admin User, and
+    records a `create_store` audit entry. The transaction is atomic
+    — if the admin User insert fails the Store row rolls back.
+
+    Slug normalization (lowercase + dashes) matches the legacy
+    handler. Duplicate slugs return 409 with `field=slug` so the SPA
+    can render the field-level error inline."""
+    user = _require_superadmin_user(db, claims)
+    from app import Store
+    slug = _normalize_slug(body.slug)
+    if not slug:
+        raise HTTPException(
+            status_code=422,
+            detail={"field": "slug", "message": "Slug cannot be empty."},
+        )
+    if db.query(Store).filter(Store.slug == slug).one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "field": "slug",
+                "message": f"Slug '{slug}' is already taken.",
+            },
+        )
+    s = Store(
+        name=body.name.strip(),
+        slug=slug,
+        email=body.email.strip(),
+        phone=body.phone.strip(),
+        address=body.address.strip(),
+        plan=body.plan,
+    )
+    db.add(s)
+    db.flush()
+    a = User(
+        store_id=s.id,
+        username=body.admin_username.strip(),
+        full_name=body.admin_name.strip(),
+        role="admin",
+    )
+    a.set_password(body.admin_password)
+    db.add(a)
+    _audit_store(
+        db, user, "create_store",
+        target_id=str(s.id),
+        details=s.slug,
+    )
+    db.commit()
+    return SuperadminStoreDetailResponse(store=_adapt_detail(s))
+
+
+@router.patch(
+    "/stores/{store_id}",
+    response_model=SuperadminStoreDetailResponse,
+)
+def update_store_route(
+    body: SuperadminStoreUpdateRequest,
+    store_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SuperadminStoreDetailResponse:
+    """Update an existing store's identity / plan fields.
+
+    Every field is optional — only the keys present in the body get
+    applied. Slug uniqueness is re-validated on rename (a duplicate
+    returns 409 with `field=slug`). The audit row's `details` lists
+    the keys that changed so the audit log shows what was touched
+    even when the values are sensitive (email).
+
+    Out of scope (use the dedicated endpoints):
+      - Trial extension → POST /superadmin/stores/{id}/extend-trial
+      - Toggle active   → POST /superadmin/stores/{id}/toggle-active
+      - Comp plan       → POST /superadmin/stores/{id}/comp-plan
+      - Add-on toggle   → POST /superadmin/stores/{id}/addons/...
+    Those flows ship separately because they have their own audit
+    actions + side effects (cancel-related state cleanup, retention
+    timer reset, etc.)."""
+    user = _require_superadmin_user(db, claims)
+    from app import Store
+    s = db.query(Store).filter(Store.id == store_id).one_or_none()
+    if s is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    changed: list[str] = []
+    if body.slug is not None:
+        new_slug = _normalize_slug(body.slug)
+        if not new_slug:
+            raise HTTPException(
+                status_code=422,
+                detail={"field": "slug", "message": "Slug cannot be empty."},
+            )
+        if new_slug != s.slug:
+            dup = (
+                db.query(Store)
+                  .filter(Store.slug == new_slug, Store.id != s.id)
+                  .one_or_none()
+            )
+            if dup is not None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "field": "slug",
+                        "message": f"Slug '{new_slug}' is already taken.",
+                    },
+                )
+            s.slug = new_slug
+            changed.append("slug")
+    if body.name is not None and body.name.strip() != (s.name or ""):
+        s.name = body.name.strip()
+        changed.append("name")
+    if body.email is not None and body.email.strip() != (s.email or ""):
+        s.email = body.email.strip()
+        changed.append("email")
+    if body.phone is not None and body.phone.strip() != (s.phone or ""):
+        s.phone = body.phone.strip()
+        changed.append("phone")
+    if body.address is not None and body.address.strip() != (s.address or ""):
+        s.address = body.address.strip()
+        changed.append("address")
+    if body.plan is not None and body.plan != (s.plan or ""):
+        s.plan = body.plan
+        changed.append("plan")
+    if (
+        body.federal_tax_rate is not None
+        and float(body.federal_tax_rate) != float(s.federal_tax_rate or 0.0)
+    ):
+        s.federal_tax_rate = float(body.federal_tax_rate)
+        changed.append("federal_tax_rate")
+
+    if changed:
+        _audit_store(
+            db, user, "update_store",
+            target_id=str(s.id),
+            details=",".join(changed),
+        )
+    db.commit()
+    return SuperadminStoreDetailResponse(store=_adapt_detail(s))
 
 
 @router.get("/audit-log", response_model=SuperadminAuditListResponse)
