@@ -444,28 +444,41 @@ def test_each_installment_lands_on_its_own_day(logged_in_client, test_store_id):
         ]
 
 
-def test_manual_return_payback_creation_blocked(logged_in_client, test_store_id):
-    """The /daily/<ds>/line-items/return_payback/new endpoint is
-    blocked at the route level — return-check paybacks come ONLY
-    from the Return Checks page. Stops a hand-crafted POST from
-    bypassing the source-of-truth boundary."""
+def test_manual_return_payback_creation_blocked(client, test_store_id):
+    """Manual creation of a return-payback line item is blocked at
+    the API layer — return-check paybacks come ONLY from the Return
+    Checks page (POST /return-checks/<id>/payment, which calls the
+    daily-book Service directly). The legacy /daily/<ds>/line-items
+    form-POST is gone (PR #403); the SPA POSTs to /api/v2/daily/...,
+    where the controller rejects kind='return_payback' with 403."""
     today_iso = date.today().isoformat()
-    rv = logged_in_client.post(
-        f"/daily/{today_iso}/line-items/return_payback/new",
-        data={"at_time": "12:00", "amount": "100.00", "note": "manual"},
+    login = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": test_store_id},
     )
-    # Either 403 JSON or a redirect+flash — both are acceptable.
-    assert rv.status_code in (302, 403)
+    token = login.get_json()["access_token"]
+    rv = client.post(
+        f"/api/v2/daily/{test_store_id}/{today_iso}/line-items",
+        json={"kind": "return_payback", "at_time": "12:00",
+              "amount": 100.00, "note": "manual"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert rv.status_code == 403
     from app import DailyLineItem
     with flask_app.app_context():
         assert DailyLineItem.query.filter_by(
             store_id=test_store_id, kind="return_payback").count() == 0
 
 
-def test_manual_delete_of_synced_payback_blocked(logged_in_client, test_store_id):
-    """The daily-book line-item delete endpoint refuses to delete
+def test_manual_delete_of_synced_payback_blocked(logged_in_client, client, test_store_id):
+    """The daily-book line-item DELETE endpoint refuses to delete
     rows whose return_check_id is set. Defense in depth — front-end
-    hides the Remove button, but a tampered POST should still fail."""
+    hides the Remove button, but a hand-crafted DELETE must fail.
+
+    Exercised against the API path (the legacy Flask form-POST
+    /daily/<ds>/line-items/.../delete is gone)."""
     rc_id = _seed_rc(test_store_id, amount=500.0)
     logged_in_client.post(f"/return-checks/{rc_id}/payment", data={
         "amount": "100.00", "paid_on": "2026-04-15",
@@ -475,9 +488,20 @@ def test_manual_delete_of_synced_payback_blocked(logged_in_client, test_store_id
         li = DailyLineItem.query.filter_by(
             return_check_id=rc_id, kind="return_payback").first()
         li_id = li.id
-    rv = logged_in_client.post(
-        f"/daily/2026-04-15/line-items/return_payback/{li_id}/delete")
-    assert rv.status_code in (302, 403)
+    login = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    token = login.get_json()["access_token"]
+    rv = client.delete(
+        f"/api/v2/daily/{test_store_id}/line-items/{li_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # The Service rejects with LineItemValidationError → Controller
+    # surfaces it as 409 (return_check_id is set; can't delete here).
+    assert rv.status_code == 409
     with flask_app.app_context():
         # Row still there.
         assert db.session.get(DailyLineItem, li_id) is not None

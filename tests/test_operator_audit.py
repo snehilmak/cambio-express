@@ -26,12 +26,32 @@ def _admin_login(client, store_id):
 # ── Audit hooks fire ─────────────────────────────────────────
 
 
+def _admin_jwt_early(client, test_store_id):
+    """Mint a Bearer JWT for the admin (used by daily-lock + batch
+    audit tests below). Defined here so the daily-lock tests can
+    use it without forward-reference."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    return resp.get_json()["access_token"]
+
+
 def test_daily_report_lock_writes_audit(client, test_store_id):
+    """The legacy /daily/<ds>/lock POST is gone (PR #403); the SPA
+    POSTs to /api/v2/daily/<store>/<date>/lock. Audit-log invariant
+    moved with it — every state transition (was-not-locked → locked)
+    still appends an OperatorAuditLog row."""
     _admin_login(client, test_store_id)
+    token = _admin_jwt_early(client, test_store_id)
     today = date.today().isoformat()
-    resp = client.post(f"/daily/{today}/lock", follow_redirects=False)
-    # 302 to the daily report page is success.
-    assert resp.status_code in (200, 302)
+    resp = client.post(
+        f"/api/v2/daily/{test_store_id}/{today}/lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
     from app import OperatorAuditLog, app as flask_app
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
@@ -42,10 +62,14 @@ def test_daily_report_lock_writes_audit(client, test_store_id):
 
 
 def test_daily_report_unlock_writes_audit(client, test_store_id):
+    """Same migration as lock: SPA POSTs to /api/v2/daily/.../unlock,
+    audit row lands on that side."""
     _admin_login(client, test_store_id)
+    token = _admin_jwt_early(client, test_store_id)
     today = date.today().isoformat()
-    client.post(f"/daily/{today}/lock")
-    client.post(f"/daily/{today}/unlock")
+    headers = {"Authorization": f"Bearer {token}"}
+    client.post(f"/api/v2/daily/{test_store_id}/{today}/lock", headers=headers)
+    client.post(f"/api/v2/daily/{test_store_id}/{today}/unlock", headers=headers)
     from app import OperatorAuditLog, app as flask_app
     with flask_app.app_context():
         actions = [r.action for r in OperatorAuditLog.query.filter_by(

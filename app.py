@@ -6785,34 +6785,16 @@ from api.Modules.Transfers.Services import (
 @app.route("/daily")
 @admin_required
 def daily_list():
-    """Calendar view of one month's DailyReport rows. Read-side
-    delegates to api.Modules.DailyBook.Repositories so the same
-    "give me reports in [d_from, d_to]" query lives in one place."""
-    from api.Modules.DailyBook.Repositories import list_reports_in_period
-    user = current_user(); sid = session["store_id"]; today = date.today()
-    month = int(request.args.get("month", today.month))
-    year = int(request.args.get("year", today.year))
-    days_in_month = monthrange(year, month)[1]
-    d_from = date(year, month, 1)
-    d_to = date(year, month, days_in_month)
-    reports = {
-        r.report_date.day: r
-        for r in list_reports_in_period(db.session, [sid], d_from, d_to)
-    }
-    month_report = MonthlyFinancial.query.filter_by(
-        store_id=sid, year=year, month=month,
-    ).first()
-    prev_month = month - 1 if month > 1 else 12
-    prev_year = year if month > 1 else year - 1
-    next_month = month + 1 if month < 12 else 1
-    next_year = year if month < 12 else year + 1
-    return render_template(
-        "daily_list.html", user=user, year=year, month=month,
-        days=days_in_month, reports=reports, month_report=month_report,
-        today=today, month_name=month_name[month],
-        prev_month=prev_month, prev_year=prev_year,
-        next_month=next_month, next_year=next_year,
-    )
+    """301 → /app/daily. The calendar view of monthly daily-reports
+    moved to React; the SPA reads /api/v2/daily/period?from=&to= for
+    the same in-period rows. Stub keeps url_for('daily_list')
+    working in still-Jinja chrome (sidebar nav + monthly-list back-
+    link) and bounces old bookmarks. Query string (year + month)
+    preserved so a deep-link to a specific month lands on the right
+    calendar."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/daily" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 def _ensure_daily_report(store_id, report_date):
     """Return the DailyReport for (store, date), creating an empty one
@@ -6956,94 +6938,15 @@ _DAILY_REPORT_FIELDS = [
     "cash_deposit","safe_balance","payroll_expense","over_short",
 ]
 
-@app.route("/daily/<string:ds>",methods=["GET","POST"])
+@app.route("/daily/<string:ds>", methods=["GET", "POST"])
 @admin_required
 def daily_report(ds):
-    user=current_user(); sid=session["store_id"]
-    store = current_store()
-    try: report_date=datetime.strptime(ds,"%Y-%m-%d").date()
-    except ValueError: flash("Invalid date.","error"); return redirect(url_for("daily_list"))
-    report=DailyReport.query.filter_by(store_id=sid,report_date=report_date).first()
-    mt_rows={r.company:r for r in MoneyTransferSummary.query.filter_by(store_id=sid,report_date=report_date).all()}
-    companies = store_mt_companies(store)
-    # Auto-sum the per-transfer ledger for every company configured on the
-    # store — not just the old hardcoded trio. Includes federal_tax now.
-    auto_mt={}
-    for co in companies:
-        rows = Transfer.query.filter(
-            Transfer.store_id == sid, Transfer.company == co,
-            Transfer.send_date == report_date,
-            Transfer.status.notin_(["Canceled", "Rejected"]),
-        ).all()
-        auto_mt[co] = {
-            "amount":     sum(r.send_amount   for r in rows),
-            "fees":       sum(r.fee           for r in rows),
-            "commission": sum(r.commission    for r in rows),
-            "federal_tax":sum((r.federal_tax or 0) for r in rows),
-            "count":      len(rows),
-        }
-    # Drops + Check Deposits used to live in their own DailyDrop /
-    # CheckDeposit tables. They're now `kind='drop'` and
-    # `kind='check_deposit'` rows in DailyLineItem, picked up by the
-    # generic loader below. Legacy data is migrated at boot via
-    # _migrate_legacy_line_item_tables().
-    # Load + total every generic line-item kind in a single query, then
-    # bucket in Python — cheaper than five separate SELECTs for a page
-    # that usually has a handful of rows per kind.
-    line_item_rows = (DailyLineItem.query
-                      .filter_by(store_id=sid, report_date=report_date)
-                      .order_by(DailyLineItem.kind, DailyLineItem.at_time).all())
-    line_items = {k: [] for k in _LINE_ITEM_KINDS}
-    for row in line_item_rows:
-        if row.kind in line_items:
-            line_items[row.kind].append(row)
-    line_items_total = {k: sum(r.amount for r in rows) for k, rows in line_items.items()}
-    if request.method=="POST":
-        # Locked reports reject every write. We re-query to avoid TOCTOU with
-        # the view-render read above (the user could lock from another tab).
-        blocked = _reject_if_locked(sid, report_date, ds)
-        if blocked is not None:
-            return blocked
-        if not report: report=DailyReport(store_id=sid,report_date=report_date); db.session.add(report)
-        def fv(k): return float(request.form.get(k) or 0)
-        for field in _DAILY_REPORT_FIELDS:
-            setattr(report,field,fv(field))
-        # Every DailyReport field backed by a generic line-item kind
-        # is derived — pull from the line-item totals so a stale form
-        # submission can't overwrite the truth. (Includes drops and
-        # check deposits, which are now just two more kinds.)
-        for kind, (field, _, _) in _LINE_ITEM_KINDS.items():
-            setattr(report, field, float(line_items_total[kind]))
-        report.notes=request.form.get("notes",""); report.updated_at=datetime.utcnow()
-        # money_transfer is derived — the spreadsheet treats this line as a
-        # subtotal of the MT table below. Compute from the submitted MT row
-        # values so tampering with the read-only field in the UI can't
-        # affect the saved total.
-        mt_grand_total = 0.0
-        for co in companies:
-            key=co.lower().replace(" ","_").replace(".","")
-            ex=mt_rows.get(co) or MoneyTransferSummary(store_id=sid,report_date=report_date,company=co)
-            ex.amount       = fv(f"mt_amount_{key}")
-            ex.fees         = fv(f"mt_fees_{key}")
-            ex.commission   = fv(f"mt_commission_{key}")
-            ex.federal_tax  = fv(f"mt_tax_{key}")
-            mt_grand_total += (ex.amount or 0) + (ex.fees or 0) + (ex.commission or 0) + (ex.federal_tax or 0)
-            db.session.add(ex)
-        report.money_transfer = round(mt_grand_total, 2)
-        db.session.commit()
-        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} saved.","success")
-        return redirect(url_for("daily_list",month=report_date.month,year=report_date.year))
-    # Resolve the lock actor's display name here so the template doesn't
-    # have to join on User.
-    locked_by_name = ""
-    if report and report.locked_by:
-        actor = db.session.get(User, report.locked_by)
-        if actor:
-            locked_by_name = actor.full_name or actor.username or ""
-    return render_template("daily_report.html",user=user,report_date=report_date,
-        report=report,mt_rows=mt_rows,companies=companies,auto_mt=auto_mt,
-        line_items=line_items, line_items_total=line_items_total,
-        locked_by_name=locked_by_name)
+    """301 → /app/daily/edit?date=<ds>. The per-day editor (with the
+    full daily-book + MT-summary spreadsheet) moved to React; the
+    SPA PUTs to /api/v2/daily/<store>/<date> with the same locked-
+    fields contract (server still derives line-item totals + the MT
+    grand total + bounces locked-day writes). Both verbs redirect."""
+    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
 def _wants_json():
     """Client explicitly asked for JSON (AJAX from the drops widget).
@@ -7066,152 +6969,40 @@ def _line_items_json_payload(kind, store_id, report_date):
 @app.route("/daily/<string:ds>/line-items/<string:kind>/new", methods=["POST"])
 @admin_required
 def daily_line_item_new(ds, kind):
-    """Append a single line item of the given kind for this report date.
+    """301 → /app/daily/edit?date=<ds>. The legacy AJAX endpoint
+    (drops / check-deposits widget) moved to React; the SPA POSTs
+    to /api/v2/daily/<store>/<date>/line-items with the same locked-
+    day + return-payback gates enforced server-side. Anyone still
+    holding the old form URL lands on the SPA editor."""
+    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
-    Kind must be one of _LINE_ITEM_KINDS; unknown kinds 404 so a
-    malformed URL can't silently create an orphan row.
-
-    Validation + INSERT delegate to api.Modules.DailyBook.Services
-    (PR 32). The Flask route handles request parsing, locked-day
-    rejection, the return-payback UX gate, and the post-insert
-    DailyReport total recompute."""
-    from api.Modules.DailyBook.Services import (
-        LineItemValidationError, add_line_item,
-        parse_amount, parse_at_time,
-    )
-    _, label, _ = _line_item_kind_or_404(kind)
-    sid = session["store_id"]
-    # Return-check paybacks come exclusively from the Return Checks
-    # page (via /return-checks/<id>/payment). Blocking the manual
-    # path here keeps the daily book in sync with that single source
-    # of truth and matches the read-only UI the cashier sees.
-    if kind == "return_payback":
-        msg = ("Log return-check paybacks via Books → Return Checks "
-               "(Add Payment). The daily-book line auto-populates.")
-        if _wants_json():
-            return jsonify({"ok": False, "error": msg}), 403
-        flash(msg, "error")
-        return redirect(url_for("daily_report", ds=ds))
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    try:
-        at_time = parse_at_time(request.form.get("at_time", "").strip())
-        amount = parse_amount(request.form.get("amount", "").strip())
-    except LineItemValidationError as e:
-        msg = str(e)
-        if _wants_json(): return jsonify({"ok": False, "error": msg}), 400
-        flash(msg, "error"); return redirect(url_for("daily_report", ds=ds))
-    add_line_item(
-        db.session,
-        store_id=sid, report_date=report_date, kind=kind,
-        at_time=at_time, amount=amount,
-        note=request.form.get("note", ""),
-        created_by=current_user().id,
-    )
-    _recompute_line_items_total(kind, sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_line_items_json_payload(kind, sid, report_date))
-    flash(f"{label.capitalize()} of ${amount:,.2f} at {at_time.strftime('%H:%M')} added.", "success")
-    return redirect(url_for("daily_report", ds=ds))
 
 @app.route("/daily/<string:ds>/line-items/<string:kind>/<int:item_id>/delete", methods=["POST"])
 @admin_required
 def daily_line_item_delete(ds, kind, item_id):
-    """Delete a single line item and refresh the rolled-up total.
+    """301 → /app/daily/edit?date=<ds>. Delete moved to the SPA
+    (DELETE /api/v2/daily/<store>/<date>/line-items/<id>). The
+    return-check-linkage guard lives in the Service so the SPA-
+    side and Return-Checks-side delete paths can't drift."""
+    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
-    Validation + DELETE delegate to api.Modules.DailyBook.Services
-    (PR 32). The return-check linkage check lives in the Service so
-    the cashier-side and Return-Checks-side delete paths can't drift."""
-    from api.Modules.DailyBook.Services import (
-        LineItemValidationError, delete_line_item,
-    )
-    _, label, _ = _line_item_kind_or_404(kind)
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        if _wants_json(): return jsonify({"ok": False, "error": "Invalid date."}), 400
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    blocked = _reject_if_locked(sid, report_date, ds)
-    if blocked is not None: return blocked
-    row = (DailyLineItem.query
-           .filter_by(id=item_id, store_id=sid,
-                      report_date=report_date, kind=kind)
-           .first_or_404())
-    try:
-        delete_line_item(db.session, row)
-    except LineItemValidationError as e:
-        msg = str(e)
-        if _wants_json():
-            return jsonify({"ok": False, "error": msg}), 403
-        flash(msg, "error")
-        return redirect(url_for("daily_report", ds=ds))
-    _recompute_line_items_total(kind, sid, report_date)
-    db.session.commit()
-    if _wants_json():
-        return jsonify(_line_items_json_payload(kind, sid, report_date))
-    flash(f"{label.capitalize()} deleted.", "success")
-    return redirect(url_for("daily_report", ds=ds))
 
 @app.route("/daily/<string:ds>/lock", methods=["POST"])
 @admin_required
 def daily_report_lock(ds):
-    """Lock a daily report so it stops accepting writes. Intended signal:
-    'this day's books are closed.' Creates the DailyReport row if it
-    doesn't exist yet so the user can lock an empty day on purpose.
+    """301 → /app/daily/edit?date=<ds>. Lock moved to the SPA (POST
+    /api/v2/daily/<store>/<date>/lock). Audit-log row writing moved
+    with it — see api/Modules/DailyBook/Controllers `_audit_daily_lock_action`."""
+    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
-    Lock-state mutation delegates to api.Modules.DailyBook.Services
-    (PR 34). The cross-route operator-audit-log entry stays in Flask
-    since `record_op_audit` is a Flask-side helper."""
-    from api.Modules.DailyBook.Services import lock_report
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt_before_lock_was_set = (
-        DailyReport.query.filter_by(
-            store_id=sid, report_date=report_date,
-        ).first()
-    )
-    was_locked = bool(
-        rpt_before_lock_was_set and rpt_before_lock_was_set.locked_at,
-    )
-    rpt = lock_report(
-        db.session, sid, report_date,
-        locked_by_user_id=current_user().id,
-    )
-    if not was_locked:
-        record_op_audit("lock", "daily_report", rpt.id,
-                         label=f"Daily {report_date.isoformat()}")
-        db.session.commit()
-        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} locked.", "success")
-    return redirect(url_for("daily_report", ds=ds))
 
 @app.route("/daily/<string:ds>/unlock", methods=["POST"])
 @admin_required
 def daily_report_unlock(ds):
-    """Unlock a daily report. Admin-only; same gate as locking so an
-    employee on shift can't undo a close."""
-    from api.Modules.DailyBook.Services import unlock_report
-    sid = session["store_id"]
-    try: report_date = datetime.strptime(ds, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Invalid date.", "error"); return redirect(url_for("daily_list"))
-    rpt_before = DailyReport.query.filter_by(
-        store_id=sid, report_date=report_date,
-    ).first()
-    was_locked = bool(rpt_before and rpt_before.locked_at)
-    rpt = unlock_report(db.session, sid, report_date)
-    if was_locked and rpt is not None:
-        record_op_audit("unlock", "daily_report", rpt.id,
-                         label=f"Daily {report_date.isoformat()}")
-        db.session.commit()
-        flash(f"Daily report for {report_date.strftime('%B %d, %Y')} unlocked.", "success")
-    return redirect(url_for("daily_report", ds=ds))
+    """301 → /app/daily/edit?date=<ds>. Same migration as lock — the
+    SPA POSTs to /api/v2/daily/<store>/<date>/unlock and the audit
+    row lands on that side."""
+    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
 # ── Monthly P&L ──────────────────────────────────────────────
 @app.route("/monthly")
