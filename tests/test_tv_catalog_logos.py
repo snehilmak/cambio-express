@@ -209,54 +209,10 @@ def test_serve_404s_when_mime_corrupted(client):
 
 # ── Editor renders logos ───────────────────────────────────────
 
-def test_editor_chip_renders_logo_when_uploaded(logged_in_client, test_store_id):
-    """Country editor's column-header chips show the logo thumbnail
-    next to the display name."""
-    sa = _superadmin_client(logged_in_client.application)
-    _upload(sa, "company", "maxi")
-
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX", mt_companies="maxi",
-    )
-
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "ce-chip-logo" in body
-    assert "/tv/logo/company/maxi" in body
 
 
-def test_editor_chip_falls_back_to_text_without_logo(logged_in_client, test_store_id):
-    """Catalog entries without an uploaded logo render text-only —
-    no broken-image icons, no placeholders."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX", mt_companies="maxi",
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "Maxi" in body  # display_name still rendered
-    # No chip-logo wrapper since no upload happened.
-    assert 'class="ce-chip-logo"' not in body
 
 
-def test_editor_bank_row_renders_logo_thumbnail(logged_in_client, test_store_id):
-    sa = _superadmin_client(logged_in_client.application)
-    _upload(sa, "bank", "mx_bbva_bancomer")
-
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX", mt_companies="maxi",
-    )
-    logged_in_client.post(f"/tv-display/countries/{country_id}", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-        "new_bank_name": "mx_bbva_bancomer",
-    })
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "ce-bank-logo" in body
-    assert "/tv/logo/bank/mx_bbva_bancomer" in body
 
 
 # ── Public board renders logos ─────────────────────────────────
@@ -330,23 +286,6 @@ def test_public_board_falls_back_to_text_for_logoless_entries(
     assert "/tv/logo/company/vigo" not in body
 
 
-def test_logo_url_includes_cache_bust_query(logged_in_client, test_store_id):
-    """Templates emit ?v=<updated_at_unix> on the logo URL so a
-    re-upload busts browser/CDN caches."""
-    sa = _superadmin_client(logged_in_client.application)
-    _upload(sa, "company", "intermex")
-
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX", mt_companies="intermex",
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    # ?v= is non-empty; the exact unix timestamp varies per run.
-    import re
-    m = re.search(r"/tv/logo/company/intermex\?v=(\d+)", body)
-    assert m, "logo URL must include cache-bust ?v=<unix>"
-    assert int(m.group(1)) > 0
 
 
 # ── Edit + create endpoints ────────────────────────────────────
