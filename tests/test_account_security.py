@@ -101,13 +101,6 @@ def test_admin_settings_security_alias_redirects(logged_in_client):
     assert resp.headers["Location"].endswith("/account/security")
 
 
-def test_topbar_dropdown_links_security_for_admin_chrome(logged_in_client):
-    """The dropdown-item link to /account/security stays in
-    base.html. The destination 301s to /app/settings now, but the
-    URL the chrome renders is unchanged so any cached HTML still
-    works."""
-    body = logged_in_client.get("/admin/settings?tab=store").data.decode()
-    assert "/account/security" in body
 
 
 

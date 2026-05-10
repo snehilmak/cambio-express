@@ -8017,18 +8017,32 @@ def admin_edit_user(uid):
 @app.route("/admin/settings", methods=["GET", "POST"])
 @admin_required
 def admin_settings():
-    """Tabbed admin settings (store info / security / team / owner access).
+    """Tabbed admin settings (store info / security / team / owner /
+    companies). The GET 301s to /app/settings (Settings.tsx covers
+    store info + team + change password + passkeys + subscription
+    redirect). The POST handler stays live for the legacy
+    `_tab=store|companies` form-submit paths used by
+    /admin/settings/roster/* and /admin/settings/owner/redeem so a
+    direct POST still mutates state.
 
-    The active tab comes from ?tab=… on GET and from the hidden _tab field on
-    POST. Each tab handles its own validation and stays put on errors.
+    Companies-tab and owner-access-tab UI haven't been ported to
+    Settings.tsx yet — the mutation endpoints
+    (/admin/settings POST with _tab=companies, plus
+    /admin/settings/owner/redeem and /admin/settings/owner/...
+    routes) remain reachable for direct callers; SPA cards land
+    in a follow-up PR.
     """
+    if request.method == "GET":
+        active_tab = request.args.get("tab", "store")
+        # The Security tab graduated to /account/security long ago.
+        if active_tab == "security":
+            return redirect(url_for("account_security"), code=301)
+        return redirect("/app/settings", code=301)
+
+    # POST falls through to the legacy multi-tab handler below.
     user = current_user()
     store = current_store()
     active_tab = request.args.get("tab", "store")
-    # The Security tab graduated to /account/security (a per-user page
-    # reachable from every role's chrome). Old bookmarks land here.
-    if active_tab == "security" and request.method == "GET":
-        return redirect(url_for("account_security"), code=301)
     errors = {}
 
     if request.method == "POST":

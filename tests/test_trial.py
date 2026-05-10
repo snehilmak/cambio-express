@@ -99,8 +99,13 @@ def test_expired_store_redirected_to_subscribe(client):
 
 
 def test_active_trial_reaches_dashboard(logged_in_client):
-    resp = logged_in_client.get("/admin/settings")
-    assert resp.status_code == 200
+    """Active-trial admin can reach the SPA — /admin/settings 301s
+    to /app/settings (which the React shell renders post-login).
+    The pre-redirect login_required gate is what proves the trial
+    isn't being treated as expired."""
+    resp = logged_in_client.get("/admin/settings", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/settings"
 
 
 def test_subscribe_is_accessible_when_expired(client):

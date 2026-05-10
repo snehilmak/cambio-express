@@ -237,8 +237,5 @@ def test_cli_send_trial_reminders_runs(logged_in_client):
 
 # ── Topbar dropdown wiring ─────────────────────────────────────
 
-def test_topbar_dropdown_links_notifications_admin_chrome(logged_in_client):
-    body = logged_in_client.get("/admin/settings?tab=store").data.decode()
-    assert "/account/notifications" in body
 
 

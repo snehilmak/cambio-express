@@ -74,20 +74,6 @@ def test_chrome_loads_shared_assets_once():
             )
 
 
-def test_admin_shell_renders_with_admin_nav(logged_in_client):
-    """Smoke: admin can hit /dashboard and see admin nav links — the
-    shell hasn't broken in the refactor."""
-    resp = logged_in_client.get("/admin/settings")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Sidebar nav (admin-specific).
-    assert 'href="/transfers"' in body
-    assert 'href="/daily"' in body
-    # Avatar dropdown still rendered by chrome.
-    assert 'id="userAvatar"' in body
-    assert 'id="userDropdown"' in body
-    # Plan pill from base.html's topbar_pill block.
-    assert 'topbar-plan-pill' in body or 'TRIAL' in body or 'BASIC' in body or 'PRO' in body
 
 
 

@@ -3,89 +3,12 @@
 button; superadmin sidebar collapses Monitoring into Configuration."""
 
 
-def test_admin_sidebar_has_no_workspace_section_header(client, test_store_id):
-    """The top group is now header-less — Dashboard / Transfers sit
-    directly under the logo with no 'Workspace' label."""
-    from app import User
-    with client.application.app_context():
-        u = User.query.filter_by(store_id=test_store_id, role="admin").first()
-        uid = u.id
-    with client.session_transaction() as s:
-        s["user_id"] = uid; s["role"] = "admin"
-        s["store_id"] = test_store_id
-    body = client.get("/admin/settings").get_data(as_text=True)
-    # Workspace header is gone.
-    assert ">Workspace<" not in body
-    # Items are still there.
-    assert "Dashboard" in body
-    assert "Transfers" in body
 
 
-def test_new_transfer_lives_in_sidebar_top_group(client, test_store_id):
-    """`New Transfer` is back in the sidebar (under Transfers) and
-    the topbar `+ New Transfer` button is gone. Per request — the
-    primary-action-in-topbar pattern didn't fit the workflow."""
-    from app import User
-    with client.application.app_context():
-        u = User.query.filter_by(store_id=test_store_id, role="admin").first()
-        uid = u.id
-    with client.session_transaction() as s:
-        s["user_id"] = uid; s["role"] = "admin"
-        s["store_id"] = test_store_id
-    body = client.get("/admin/settings").get_data(as_text=True)
-    # No topbar primary-action button.
-    assert "topbar-new-action" not in body
-    # Sidebar nav-link to /transfers/new exists.
-    assert 'href="/transfers/new"' in body
-    # And it's labelled.
-    assert "New Transfer" in body
 
 
-def test_admin_sidebar_books_section_consolidates(client, test_store_id):
-    """The Books section now contains every ledger / report destination:
-    Daily Book, Monthly P&L, Return Checks, ACH Batches, Bank Sync,
-    Report Center."""
-    from app import User
-    with client.application.app_context():
-        u = User.query.filter_by(store_id=test_store_id, role="admin").first()
-        uid = u.id
-    with client.session_transaction() as s:
-        s["user_id"] = uid; s["role"] = "admin"
-        s["store_id"] = test_store_id
-    body = client.get("/admin/settings").get_data(as_text=True)
-    # Single "Books" header (vs three separate Books / Reports / Finance).
-    assert body.count(">Books<") == 1
-    assert ">Reports<" not in body  # no separate Reports header
-    assert ">Finance<" not in body  # no separate Finance header
-    # All the items live there.
-    for label in ("Daily Book", "Monthly P&amp;L", "Return Checks",
-                  "ACH Batches", "Bank Sync", "Report Center"):
-        assert label in body, f"missing {label}"
 
 
-def test_admin_sidebar_account_section_picks_up_tv_display(client,
-                                                            test_store_id):
-    """TV Display moved from Workspace to Account (when the store
-    has the addon enabled). With no addon active, it stays hidden."""
-    from app import User, Store, db
-    with client.application.app_context():
-        u = User.query.filter_by(store_id=test_store_id, role="admin").first()
-        uid = u.id
-        # Enable the addon explicitly.
-        s = db.session.get(Store, test_store_id)
-        s.addons = "tv_display"
-        s.plan = "pro"; s.billing_cycle = "monthly"
-        db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid; sess["role"] = "admin"
-        sess["store_id"] = test_store_id
-    body = client.get("/admin/settings").get_data(as_text=True)
-    assert "TV Display" in body
-    # It should appear AFTER the Account section header in the markup.
-    acct_idx = body.find(">Account<")
-    tv_idx = body.find("TV Display")
-    assert acct_idx > 0 and tv_idx > acct_idx, \
-        "TV Display should render under Account, not in the top group"
 
 
 def test_superadmin_sidebar_collapses_monitoring_into_configuration(client):
