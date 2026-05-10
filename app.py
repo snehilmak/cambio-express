@@ -8383,145 +8383,21 @@ STORES_PER_PAGE = 20
 @app.route("/superadmin/controls")
 @superadmin_required
 def superadmin_controls():
-    """Tabbed superadmin hub: overview, stores, discounts, feature flags, announcements."""
-    user = current_user()
-    active_tab = request.args.get("tab", "overview")
-    # The Audit Log moved to the Report Center; preserve any
-    # bookmark / linkback that still hits ?tab=audit.
-    if active_tab == "audit":
+    """301 → /app/superadmin/controls. The platform-controls hub
+    moved to React; the SPA reads /api/v2/dashboard/summary,
+    /api/v2/superadmin/{stores,discounts,reports}, and
+    /api/v2/feature-flags. The legacy Audit Log link
+    (?tab=audit) still bounces to /superadmin/audit-log so old
+    bookmarks keep working.
+
+    All POST mutation endpoints (extend-trial, toggle-active,
+    discounts CRUD, feature-flags CRUD, etc.) stay live as
+    direct callers."""
+    if request.args.get("tab") == "audit":
         return redirect(url_for("superadmin_audit_log"))
-
-    # Aggregate metrics — cheap, compute once for the overview + sidebar snapshot.
-    # Split BASIC and PRO into monthly + yearly so the overview shows the full
-    # revenue picture. A store that hasn't been touched since the billing_cycle
-    # column shipped lands in the monthly bucket (empty string falls to the
-    # default case in the else branch).
-    plan_rows = db.session.query(
-        Store.plan, Store.billing_cycle, db.func.count(Store.id)
-    ).group_by(Store.plan, Store.billing_cycle).all()
-
-    basic_monthly = basic_yearly = pro_monthly = pro_yearly = 0
-    trial_count = inactive_count = 0
-    for p, cycle, n in plan_rows:
-        if p == "basic":
-            if cycle == "yearly": basic_yearly += n
-            else:                 basic_monthly += n
-        elif p == "pro":
-            if cycle == "yearly": pro_yearly += n
-            else:                 pro_monthly += n
-        elif p == "trial":
-            trial_count += n
-        elif p == "inactive":
-            inactive_count += n
-
-    basic_count    = basic_monthly + basic_yearly
-    pro_count      = pro_monthly + pro_yearly
-    total_stores   = Store.query.count()
-
-    retention_queue = Store.query.filter(
-        Store.plan == "inactive",
-        Store.data_retention_until.isnot(None),
-    ).count()
-
-    (basic_monthly_mrr, basic_yearly_mrr,
-     pro_monthly_mrr,   pro_yearly_mrr,
-     estimated_mrr) = _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly)
-
-    # Stripe health only hit on the overview tab (API call costs one round trip).
-    stripe_health = stripe_health_check() if active_tab == "overview" else None
-    # SMTP health is free (reads _last_smtp_attempt in-process, no network).
-    smtp_health = smtp_health_check() if active_tab == "overview" else None
-    # Anomaly detector runs two GROUP BYs over indexed columns — cheap,
-    # but skip on non-overview tabs to keep the Stores tab snappy.
-    anomalies = _compute_platform_anomalies() if active_tab == "overview" else []
-
-    # ── Stores tab: search, filters, pagination ──
-    q_text        = request.args.get("q", "").strip()
-    plan_filter   = request.args.get("plan", "").strip()
-    status_filter = request.args.get("status", "").strip()
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except ValueError:
-        page = 1
-
-    stores_q = Store.query
-    if q_text:
-        like = f"%{q_text}%"
-        stores_q = stores_q.filter(db.or_(
-            Store.name.ilike(like),
-            Store.slug.ilike(like),
-            Store.email.ilike(like),
-        ))
-    if plan_filter in ("trial", "basic", "pro", "inactive"):
-        stores_q = stores_q.filter(Store.plan == plan_filter)
-    if status_filter == "active":
-        stores_q = stores_q.filter(Store.is_active.is_(True))
-    elif status_filter == "disabled":
-        stores_q = stores_q.filter(Store.is_active.is_(False))
-
-    stores_matching = stores_q.count()
-    total_pages = max(1, (stores_matching + STORES_PER_PAGE - 1) // STORES_PER_PAGE)
-    page = min(page, total_pages)
-    stores = (stores_q.order_by(Store.created_at.desc())
-              .offset((page - 1) * STORES_PER_PAGE)
-              .limit(STORES_PER_PAGE).all())
-
-    discounts = DiscountCode.query.order_by(DiscountCode.created_at.desc()).all()
-    flags = FeatureFlag.query.order_by(FeatureFlag.key).all()
-    # TV display catalogs (Phase 2 of the logo rollout). Companies
-    # are global; banks group by country_code in the template. Both
-    # tables include inactive entries here so the curation UI can
-    # reactivate / soft-delete; the operator-side picker filters
-    # them out at render time.
-    tv_companies = (TVCompanyCatalog.query
-                     .order_by(TVCompanyCatalog.sort_order,
-                               TVCompanyCatalog.display_name).all())
-    tv_banks = (TVBankCatalog.query
-                 .order_by(TVBankCatalog.country_code,
-                           TVBankCatalog.sort_order,
-                           TVBankCatalog.display_name).all())
-    # Map (catalog_type, slug) → updated_at unix so the template can
-    # cache-bust ?v=<unix> on the logo URLs without an extra query
-    # per row.
-    tv_logo_versions = {}
-    for row in TVCatalogLogo.query.all():
-        tv_logo_versions[(row.catalog_type, row.slug)] = int(
-            row.updated_at.timestamp())
-    # Feature-flag overrides are keyed by (store_id, flag_key); fetch only for visible stores.
-    visible_ids = [s.id for s in stores]
-    override_rows = (StoreFeatureOverride.query.filter(StoreFeatureOverride.store_id.in_(visible_ids)).all()
-                     if visible_ids else [])
-    overrides = {(o.store_id, o.flag_key): o.enabled for o in override_rows}
-    announcements = Announcement.query.order_by(Announcement.created_at.desc()).all()
-
-    return render_template("superadmin_controls.html",
-        user=user, active_tab=active_tab,
-        stores=stores, discounts=discounts, flags=flags,
-        overrides=overrides, announcements=announcements,
-        basic_count=basic_count, pro_count=pro_count,
-        basic_monthly=basic_monthly, basic_yearly=basic_yearly,
-        pro_monthly=pro_monthly, pro_yearly=pro_yearly,
-        basic_monthly_mrr=basic_monthly_mrr, basic_yearly_mrr=basic_yearly_mrr,
-        pro_monthly_mrr=pro_monthly_mrr, pro_yearly_mrr=pro_yearly_mrr,
-        trial_count=trial_count, inactive_count=inactive_count,
-        retention_queue=retention_queue, estimated_mrr=estimated_mrr,
-        total_stores=total_stores,
-        stripe_health=stripe_health,
-        smtp_health=smtp_health,
-        anomalies=anomalies,
-        # Add-on catalog so the per-store override row can iterate
-        # every add-on the platform supports (not just the ones a
-        # given store currently has).
-        addons_catalog=ADDONS_CATALOG,
-        # TV display catalog admin (curation tab).
-        tv_companies=tv_companies,
-        tv_banks=tv_banks,
-        tv_logo_versions=tv_logo_versions,
-        # Pagination + filter state for the Stores tab.
-        q=q_text, plan_filter=plan_filter, status_filter=status_filter,
-        page=page, total_pages=total_pages, stores_matching=stores_matching,
-        stores_per_page=STORES_PER_PAGE,
-    )
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/superadmin/controls" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 # ── Email delivery test (superadmin) ─────────────────────────
 @app.route("/superadmin/send-test-email", methods=["POST"])

@@ -454,11 +454,19 @@ def test_superadmin_toggle_off(client, test_store_id):
 
 
 def test_superadmin_toggle_unknown_addon_flashes_and_redirects(client, test_store_id):
+    """Unknown addon keys short-circuit. The legacy flash text moved
+    to React; assert the row stays unchanged."""
+    from app import Store
+    with client.application.app_context():
+        s = db.session.get(Store, test_store_id)
+        before = s.addons or ""
     sa = _superadmin_client(client.application)
     resp = sa.post(f"/superadmin/stores/{test_store_id}/addons/wat/toggle",
-                    follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"Unknown add-on" in resp.data
+                    follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with client.application.app_context():
+        s = db.session.get(Store, test_store_id)
+        assert (s.addons or "") == before
 
 
 def test_superadmin_toggle_writes_audit(client, test_store_id):
