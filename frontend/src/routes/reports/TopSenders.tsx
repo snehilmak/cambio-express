@@ -16,9 +16,9 @@ export default function TopSenders() {
       csvUrl={`${baseRoute}/top-senders.csv`}
       extraParams={{ sort_by: "count" }}
       kpis={[
-        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(t.sent) },
-        { label: "Transfer Count", tone: "neon",    value: t => t.count.toLocaleString() },
-        { label: "Total Fees",     tone: "muted",   value: t => fmtMoney(t.fees) },
+        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
+        { label: "Transfer Count", tone: "neon",    value: t => Number(t.count ?? 0).toLocaleString() },
+        { label: "Total Fees",     tone: "muted",   value: t => fmtMoney(Number(t.fees ?? 0)) },
       ]}
       columns={[
         { label: "Customer",    field: "customer" },

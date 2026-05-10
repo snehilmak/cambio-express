@@ -14,10 +14,10 @@ export default function SalesByService() {
       backTo={baseRoute}
       csvUrl={`${baseRoute}/sales-by-service-type.csv`}
       kpis={[
-        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(t.sent) },
-        { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(t.fees) },
-        { label: "Total Fed Tax",  tone: "muted",   value: t => fmtMoney(t.tax) },
-        { label: "Transfer Count", tone: "muted",   value: t => t.count.toLocaleString() },
+        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
+        { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },
+        { label: "Total Fed Tax",  tone: "muted",   value: t => fmtMoney(Number(t.tax ?? 0)) },
+        { label: "Transfer Count", tone: "muted",   value: t => Number(t.count ?? 0).toLocaleString() },
       ]}
       columns={[
         { label: "Service Type", field: "service_type" },

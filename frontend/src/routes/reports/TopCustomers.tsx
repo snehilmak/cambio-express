@@ -13,9 +13,9 @@ export default function TopCustomers() {
       backTo={baseRoute}
       csvUrl={`${baseRoute}/top-customers.csv`}
       kpis={[
-        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(t.sent) },
-        { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(t.fees) },
-        { label: "Transfer Count", tone: "muted",   value: t => t.count.toLocaleString() },
+        { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
+        { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },
+        { label: "Transfer Count", tone: "muted",   value: t => Number(t.count ?? 0).toLocaleString() },
       ]}
       columns={[
         { label: "Customer",    field: "customer" },

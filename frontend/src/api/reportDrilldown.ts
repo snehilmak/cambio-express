@@ -9,10 +9,17 @@ import { api } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
 export interface AggregatedTotals {
-  count: number;
-  sent: number;
-  fees: number;
-  tax: number;
+  // Most reports use these four keys. New batches (e.g. new-vs-returning,
+  // fees-vs-tax) ship totals with custom keys — the SPA narrows the
+  // type at the call site for those.
+  count?: number;
+  sent?: number;
+  fees?: number;
+  tax?: number;
+  // Bag of arbitrary extras (e.g. `ratio`, `customers`, `new_count`,
+  // `amount`, `threshold`). Each report's TSX wrapper reads what it
+  // needs through `as` casts.
+  [key: string]: number | string | undefined;
 }
 
 export interface AggregatedRow {

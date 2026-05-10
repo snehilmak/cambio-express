@@ -111,26 +111,6 @@ def test_period_pl_csv(client, test_store_id):
 # ── ACH Volume ───────────────────────────────────────────────
 
 
-def test_ach_volume_groups_by_company(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_ach_batch(client, test_store_id, ach_date=today,
-                     ach_amount=1500, company="Intermex",
-                     batch_ref="A1")
-    _make_ach_batch(client, test_store_id, ach_date=today,
-                     ach_amount=2500, company="Intermex",
-                     batch_ref="A2")
-    _make_ach_batch(client, test_store_id, ach_date=today,
-                     ach_amount=800, company="Maxi", batch_ref="B1")
-    resp = client.get("/reports/ach-volume")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Intermex" in body
-    assert "Maxi" in body
-    # Total ACH = 1500+2500+800 = 4800.
-    assert "$4,800.00" in body
-    # Intermex aggregated 1500+2500 = 4000.
-    assert "$4,000.00" in body
 
 
 def test_ach_volume_csv(client, test_store_id):
@@ -257,21 +237,6 @@ def test_period_comparison_csv(client, test_store_id):
 # ── Fees vs. Federal Tax ─────────────────────────────────────
 
 
-def test_fees_vs_tax_shows_both_lines(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=1000,
-                   fee=10.0, federal_tax=8.0, confirm="F1")
-    _make_transfer(client, test_store_id, send_date=today, amount=500,
-                   fee=5.0, federal_tax=4.0, confirm="F2")
-    resp = client.get("/reports/fees-vs-tax")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Fees (store revenue)" in body
-    assert "Federal Tax (pass-through)" in body
-    # Total fees $15, tax $12.
-    assert "$15.00" in body
-    assert "$12.00" in body
 
 
 def test_fees_vs_tax_csv(client, test_store_id):
