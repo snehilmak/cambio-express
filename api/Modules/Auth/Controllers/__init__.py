@@ -10,7 +10,7 @@ share.
   GET  /auth/me   → returns the verified principal from the bearer
                      token (no DB roundtrip — claims-only).
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
 import jwt
@@ -767,11 +767,166 @@ def reset_password_route(
     return {"status": "ok"}
 
 
+# ── Passkey management (list + register + delete) ───────────
+#
+# Login verification still lives on the legacy /login/passkey/*
+# routes (it's tied to the Flask session promotion path the SPA
+# doesn't drive yet). Registration moved here so the SPA's
+# Settings page can run the full enrollment dance — the
+# WebAuthn challenge bridges between begin and finish via a
+# short-lived signed JWT (`purpose: passkey-register`) since
+# FastAPI doesn't share Flask's `session` dict.
+
+@router.post("/passkeys/register/begin")
+def passkey_register_begin_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Mint a WebAuthn registration challenge for the authed
+    user. Returns the challenge-options JSON that the SPA passes
+    to `navigator.credentials.create()`, plus a `register_token`
+    the SPA echoes back on `/passkeys/register/finish` so the
+    server can verify the credential against the same challenge.
+    """
+    from app import User
+    from webauthn import generate_registration_options, options_to_json
+    from webauthn.helpers import bytes_to_base64url
+    from webauthn.helpers.structs import (
+        AuthenticatorSelectionCriteria,
+        ResidentKeyRequirement,
+        UserVerificationRequirement,
+    )
+    from api.Modules.Auth.Services import (
+        is_enrolled, issue_passkey_register_token, needs_totp,
+        passkey_exclude_credentials, passkey_is_eligible,
+        passkey_rp_id, passkey_rp_name,
+    )
+
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(status_code=401, detail="JWT missing sub claim")
+    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    if user is None or not passkey_is_eligible(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Passkeys aren't enabled for this account.",
+        )
+    # Mirrors legacy `_passkey_eligible`: superadmin must be 2FA-
+    # enrolled before adding a passkey, since a passkey skips TOTP.
+    if needs_totp(user) and not is_enrolled(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Enroll TOTP before adding a passkey.",
+        )
+
+    host = request.url.netloc
+    options = generate_registration_options(
+        rp_id=passkey_rp_id(host),
+        rp_name=passkey_rp_name(),
+        user_id=str(user.id).encode("utf-8"),
+        user_name=user.username,
+        user_display_name=user.full_name or user.username,
+        exclude_credentials=passkey_exclude_credentials(db, user),
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            resident_key=ResidentKeyRequirement.REQUIRED,
+            user_verification=UserVerificationRequirement.PREFERRED,
+        ),
+    )
+    challenge_b64 = bytes_to_base64url(options.challenge)
+    return {
+        "options_json":   options_to_json(options),
+        "register_token": issue_passkey_register_token(
+            user.id, challenge_b64,
+        ),
+    }
+
+
+@router.post("/passkeys/register/finish")
+def passkey_register_finish_route(
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Verify the credential the browser produced + the still-valid
+    register_token, then persist the new Passkey row. Returns the
+    new passkey's metadata (matches the GET /passkeys row shape so
+    the SPA can append it client-side without a refetch)."""
+    import jwt as _jwt
+    from app import Passkey, User
+    from webauthn import verify_registration_response
+    from webauthn.helpers import base64url_to_bytes
+    from api.Modules.Auth.Services import (
+        decode_passkey_register_token,
+        passkey_is_eligible, passkey_origin, passkey_rp_id,
+    )
+
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(status_code=401, detail="JWT missing sub claim")
+    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    if user is None or not passkey_is_eligible(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Passkeys aren't enabled for this account.",
+        )
+
+    register_token = (body or {}).get("register_token") or ""
+    credential = (body or {}).get("credential")
+    name = ((body or {}).get("name") or "").strip()[:120] or "Passkey"
+    if not register_token or credential is None:
+        raise HTTPException(status_code=400, detail="Missing register_token or credential.")
+    try:
+        reg_claims = decode_passkey_register_token(register_token)
+    except _jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc) or "register_token invalid or expired",
+        )
+    # Belt + suspenders: token MUST belong to the authed user.
+    if int(reg_claims.get("sub") or 0) != user.id:
+        raise HTTPException(status_code=400, detail="register_token does not match this user.")
+
+    host = request.url.netloc
+    try:
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=base64url_to_bytes(reg_claims["challenge"]),
+            expected_origin=passkey_origin(request.url.scheme, host),
+            expected_rp_id=passkey_rp_id(host),
+            require_user_verification=False,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Passkey could not be verified ({type(exc).__name__}).",
+        )
+
+    p = Passkey(
+        user_id=user.id,
+        credential_id=verification.credential_id,
+        public_key=verification.credential_public_key,
+        sign_count=verification.sign_count,
+        name=name,
+        aaguid=str(verification.aaguid or ""),
+    )
+    db.add(p); db.commit(); db.refresh(p)
+    return {
+        "passkey": {
+            "id":            p.id,
+            "name":          p.name or "",
+            "created_at":    p.created_at.isoformat() if p.created_at else "",
+            "last_used_at":  p.last_used_at.isoformat() if p.last_used_at else "",
+        }
+    }
+
+
 # ── Passkey management (list + delete) ──────────────────────
 #
-# Enrollment + login verification stay on the legacy /account/
-# passkeys/register/* and /login/passkey/* routes for now —
-# WebAuthn challenges need browser-side `navigator.credentials`
+# Login verification (the assertion flow on
+# /login/passkey/*) stays on Flask for now — it's tied to the
+# session promotion path the SPA doesn't yet drive end-to-end.
 # orchestration that's a separate migration. Read + delete are
 # pure server-side and ship here so the SPA's settings page can
 # show the user's registered devices without bouncing to legacy.

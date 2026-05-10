@@ -6,6 +6,8 @@ import {
   createTeamMember,
   deactivateTeamMember,
   deletePasskey,
+  passkeysSupported,
+  registerPasskey,
   updateStoreInfo,
   updateTeamMember,
   usePasskeys,
@@ -52,6 +54,10 @@ function PasskeysCard() {
   const { data, isLoading, isError } = usePasskeys();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addBusy, setAddBusy] = useState(false);
+  const [newName, setNewName] = useState("");
+  const supported = passkeysSupported();
 
   if (identity == null) return null;
 
@@ -72,9 +78,42 @@ function PasskeysCard() {
     }
   }
 
+  async function add() {
+    setErr(null); setAddBusy(true);
+    try {
+      await registerPasskey(newName.trim());
+      setAdding(false);
+      setNewName("");
+      refresh();
+    } catch (e) {
+      // navigator.credentials.create() rejects on cancel / wrong
+      // device / etc. with browser-specific messages — surface
+      // them as-is so users see the actual reason.
+      const msg = e instanceof ApiError
+        ? e.message
+        : (e instanceof Error ? e.message : "Could not create passkey.");
+      setErr(msg);
+    } finally {
+      setAddBusy(false);
+    }
+  }
+
   return (
     <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>Passkeys</h2>
+      <div style={{
+        display: "flex", alignItems: "center", gap: "0.75rem",
+        marginBottom: "0.6rem",
+      }}>
+        <h2 style={{ ...sectionTitleStyle, flex: 1, margin: 0 }}>Passkeys</h2>
+        {supported && !adding && (
+          <button
+            type="button" onClick={() => { setAdding(true); setErr(null); }}
+            style={miniBtnStyle}
+          >
+            + Add a passkey
+          </button>
+        )}
+      </div>
       <p
         style={{
           margin: "0 0 1rem",
@@ -82,13 +121,77 @@ function PasskeysCard() {
           color: "var(--db-text-muted, #a3a3a3)",
         }}
       >
-        Phishing-resistant sign-in for this account. Add new devices
-        from the legacy{" "}
-        <a href="/account/security" style={inlineLink}>
-          account security
-        </a>{" "}
-        page; remove them here.
+        Sign in with your device (Touch ID, Face ID, Windows Hello,
+        or a hardware key) instead of a password. Passkeys are
+        phishing-resistant and count as two-factor auth, so a passkey
+        login skips the verification-code step.
       </p>
+      {!supported && (
+        <p style={{
+          margin: "0 0 1rem", padding: "0.55rem 0.85rem",
+          background: "rgba(94,169,255,0.08)",
+          border: "1px solid rgba(94,169,255,0.3)",
+          borderRadius: "0.5rem",
+          color: "var(--db-info, #5ea9ff)",
+          fontSize: "0.85rem",
+        }}>
+          This browser doesn't expose the WebAuthn API, so passkeys
+          aren't available here. Use a modern Chrome, Safari, Firefox,
+          or Edge build.
+        </p>
+      )}
+      {adding && (
+        <div style={{
+          marginBottom: "1rem", padding: "0.85rem",
+          background: "var(--db-bg-input, #0d0d0d)",
+          border: "1px solid var(--db-border, #262626)",
+          borderRadius: "0.5rem",
+        }}>
+          <label style={{
+            display: "block", marginBottom: "0.4rem",
+            fontSize: "0.78rem", letterSpacing: "0.05em",
+            textTransform: "uppercase", fontWeight: 600,
+            color: "var(--db-text-muted, #a3a3a3)",
+          }}>
+            Nickname for this passkey
+          </label>
+          <input
+            type="text" value={newName} maxLength={120}
+            onChange={(e) => setNewName(e.target.value)}
+            placeholder="e.g. MacBook Touch ID"
+            autoFocus disabled={addBusy}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "0.55rem 0.7rem",
+              background: "var(--db-surface-2, #141414)",
+              color: "var(--db-text, #e5e5e5)",
+              border: "1px solid var(--db-border, #262626)",
+              borderRadius: "0.4rem", fontSize: "0.9rem",
+              marginBottom: "0.6rem",
+            }}
+          />
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button" onClick={add} disabled={addBusy}
+              style={{
+                ...miniBtnStyle,
+                background: "var(--db-neon, #3fff00)",
+                color: "var(--db-neon-ink, #001a0f)",
+                fontWeight: 600,
+              }}
+            >
+              {addBusy ? "Creating…" : "Create passkey"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setAdding(false); setNewName(""); setErr(null); }}
+              disabled={addBusy} style={miniBtnStyle}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {isLoading && (
         <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
           Loading…
@@ -164,11 +267,6 @@ function PasskeysCard() {
     </section>
   );
 }
-
-const inlineLink: React.CSSProperties = {
-  color: "var(--db-accent, #3fff00)",
-  textDecoration: "none",
-};
 
 function SubscriptionCard() {
   const identity = getCurrentIdentity();

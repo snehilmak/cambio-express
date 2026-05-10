@@ -3031,31 +3031,14 @@ def passkey_delete(pk_id):
 @app.route("/account/security", methods=["GET", "POST"])
 @login_required
 def account_security():
-    user = current_user()
-    errors = {}
-    if request.method == "POST":
-        action = (request.form.get("_action") or "").strip()
-        if action == "password":
-            errors = _update_user_password(
-                user,
-                request.form.get("current_password", ""),
-                request.form.get("new_password", ""),
-                request.form.get("confirm_password", ""),
-            )
-            if not errors:
-                db.session.commit()
-                flash("Password updated.", "success")
-                return redirect(url_for("account_security"))
-        else:
-            abort(400)
-
-    passkeys = (Passkey.query.filter_by(user_id=user.id)
-                .order_by(Passkey.created_at.desc()).all())
-    return render_template("account_security.html",
-        user=user, errors=errors,
-        passkeys=passkeys,
-        passkeys_eligible=_passkey_eligible(user),
-    )
+    """301 → /app/settings. Password change + passkey list/delete
+    were already on the SPA Settings page; passkey enrollment
+    moved there too in this PR (FastAPI register/begin+finish
+    routes bridge the WebAuthn challenge via a signed JWT since
+    we can't share Flask's session). The legacy POST handlers
+    /account/passkeys/register/begin+finish stay alive for any
+    in-flight Jinja request mid-rollout."""
+    return redirect("/app/settings", code=301)
 
 @app.route("/account/profile", methods=["GET", "POST"])
 @login_required

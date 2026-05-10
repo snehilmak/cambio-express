@@ -1118,3 +1118,127 @@ def test_signup_with_inactive_ref_code_silently_drops(
     with flask_app.app_context():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id is None
+
+
+# ── /auth/passkeys/register/begin + /finish ────────────────
+#
+# WebAuthn enrollment ported from the legacy Flask routes
+# (/account/passkeys/register/{begin,finish}) so the SPA's
+# Settings PasskeysCard can run the full registration dance.
+# The challenge bridges between begin and finish via a signed
+# JWT with `purpose: passkey-register` since FastAPI doesn't
+# share Flask's `session` dict.
+
+
+def _login_admin_token(client, store_id):
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def test_passkey_register_begin_requires_jwt(client):
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/begin", json={},
+    )
+    assert resp.status_code == 401
+
+
+def test_passkey_register_begin_returns_options_and_token(
+    client, test_store_id,
+):
+    """Happy-path begin: returns the WebAuthn options JSON the
+    SPA passes to navigator.credentials.create() + a register_token
+    the SPA echoes back to /finish so the server can verify against
+    the same challenge."""
+    import json
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/begin",
+        json={}, headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "register_token" in body
+    assert body["register_token"]
+    options = json.loads(body["options_json"])
+    # Must include the user object + challenge so the browser
+    # can build the public-key credential request.
+    assert "challenge" in options
+    assert "user" in options
+    assert options["user"]["name"] == "admin@test.com"
+    assert "rp" in options
+    assert "pubKeyCredParams" in options
+
+
+def test_passkey_register_finish_rejects_bad_token(
+    client, test_store_id,
+):
+    """A garbage register_token must 400 — never succeed."""
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={
+            "register_token": "garbage.not.a.jwt",
+            "credential": {
+                "id": "x", "rawId": "x", "type": "public-key",
+                "response": {"clientDataJSON": "x",
+                             "attestationObject": "x"},
+            },
+            "name": "Test",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+
+
+def test_passkey_register_finish_rejects_missing_fields(
+    client, test_store_id,
+):
+    """The /finish endpoint requires both register_token AND
+    credential — neither defaults silently."""
+    token = _login_admin_token(client, test_store_id)
+    r1 = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={"register_token": "anything"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 400
+    r2 = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={"credential": {}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r2.status_code == 400
+
+
+def test_passkey_register_finish_rejects_token_for_wrong_user(
+    client, test_store_id,
+):
+    """Belt-and-suspenders: a register_token issued for user A
+    can't be used by user B even if both have valid JWTs.
+    The token's `sub` claim must match the authed user."""
+    from api.Modules.Auth.Services import issue_passkey_register_token
+    # Token issued for a different user_id (9999 — doesn't exist)
+    foreign_token = issue_passkey_register_token(9999, "fakechallenge")
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={
+            "register_token": foreign_token,
+            "credential": {
+                "id": "x", "rawId": "x", "type": "public-key",
+                "response": {"clientDataJSON": "x",
+                             "attestationObject": "x"},
+            },
+            "name": "Test",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+    assert "match" in resp.get_json()["detail"].lower()

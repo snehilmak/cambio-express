@@ -240,28 +240,42 @@ def test_passkey_eligible_helper():
     assert _passkey_eligible(None) is False
 
 
-def test_account_security_page_shows_passkey_card(logged_in_client):
-    """The Passkeys card moved off /admin/settings's Security tab and
-    onto the shared /account/security page. Same markup contract."""
-    resp = logged_in_client.get("/account/security")
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    assert 'id="passkeys-card"' in body
-    assert "Add a passkey" in body
-    assert "passkeys.js" in body
-    assert "No passkeys registered yet" in body
+def test_account_security_redirects_to_app_settings(logged_in_client):
+    """Passkey card moved to /app/settings (the React Settings
+    page) where the WebAuthn enrollment dance now runs against
+    /api/v2/auth/passkeys/register/{begin,finish}. The legacy
+    /account/security URL 301s straight there."""
+    resp = logged_in_client.get("/account/security", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/settings"
 
 
-def test_account_security_page_lists_registered_passkeys(logged_in_client, test_admin_id):
+def test_passkey_list_endpoint_returns_registered_passkey(
+    logged_in_client, test_admin_id, test_store_id,
+):
+    """Passkey listing moved off the legacy /account/security page
+    onto /app/settings, which fetches via /api/v2/auth/passkeys.
+    Markup-level coverage is gone; this asserts the API surface
+    that the React PasskeysCard reads."""
     _make_passkey(logged_in_client.application, test_admin_id,
                   credential_id=b"one-key", name="iPhone")
-    body = logged_in_client.get("/account/security").data.decode()
-    assert "iPhone" in body
-    import re
-    m = re.search(r'<tfoot id="pk-empty"([^>]*)>', body)
-    assert m, "tfoot pk-empty missing"
-    assert "hidden" in m.group(1), \
-        f"tfoot should be hidden when passkeys exist; got: {m.group(1)!r}"
+    login = logged_in_client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = logged_in_client.get(
+        "/api/v2/auth/passkeys",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    names = [p["name"] for p in body["passkeys"]]
+    assert "iPhone" in names
 
 
 def test_login_page_ships_passkey_button(client):

@@ -3,11 +3,14 @@ password-flow business logic. The Controller layer (PR 20+) wires
 these to HTTP routes.
 """
 from api.Modules.Auth.Services.jwt_issuer import (
+    DEFAULT_PASSKEY_REGISTER_TTL_SECONDS,
     DEFAULT_PENDING_2FA_TTL_SECONDS,
     JWTIssuer,
     decode_access_token,
+    decode_passkey_register_token,
     decode_pending_2fa_token,
     issue_access_token,
+    issue_passkey_register_token,
     issue_pending_2fa_token,
 )
 from api.Modules.Auth.Services.login import (
@@ -78,6 +81,7 @@ from api.Modules.Auth.Services.totp import (
 
 __all__ = [
     "DEFAULT_GRACE_DAYS",
+    "DEFAULT_PASSKEY_REGISTER_TTL_SECONDS",
     "DEFAULT_TRIAL_DAYS",
     "IssuedToken",
     "DEFAULT_PENDING_2FA_TTL_SECONDS",
@@ -104,6 +108,7 @@ __all__ = [
     "create_owner",
     "create_store_and_admin",
     "decode_access_token",
+    "decode_passkey_register_token",
     "decode_pending_2fa_token",
     "finalize_2fa_with_recovery_code",
     "finalize_2fa_with_totp",
@@ -116,6 +121,7 @@ __all__ = [
     "hash_token",
     "is_enrolled",
     "issue_access_token",
+    "issue_passkey_register_token",
     "issue_password_reset_token",
     "issue_pending_2fa_token",
     "needs_totp",
