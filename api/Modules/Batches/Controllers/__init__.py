@@ -120,6 +120,51 @@ def _require_admin_scope(claims: dict) -> int:
     return int(sid)
 
 
+def _audit_batch(db, claims, action, batch, *, summary):
+    """Operator-audit helper. Mirrors the legacy
+    `record_op_audit('create'/'update', 'batch', ...)` calls that
+    the Flask form-POST handlers used to make. With the SPA POSTing
+    here directly, the audit row needs to land on this side or it
+    silently disappears from the operator audit log.
+
+    Actor identity comes from the JWT claims (no DB roundtrip);
+    `record_operator_action` is the per-store audit Service that
+    backs both surfaces.
+    """
+    from api.Modules.Audit.Services import record_operator_action
+    sid = int(claims["store_id"])
+    record_operator_action(
+        db,
+        store_id=sid,
+        user_id=int(claims["sub"]),
+        user_name=claims.get("name") or claims.get("username") or "",
+        user_role=claims.get("role") or "",
+        target_type="batch",
+        target_id=batch.id,
+        target_label=f"{batch.company or ''} {batch.batch_ref or ''}".strip(),
+        action=action,
+        summary=summary,
+    )
+
+
+def _diff_summary(before: dict, after: dict) -> str:
+    """Format a `field old→new; field old→new` summary string for
+    the operator audit log, matching the legacy /batches/<id>/edit
+    handler's output. Only fields that actually changed appear."""
+    diffs = []
+    if before["ach_amount"] != after["ach_amount"]:
+        diffs.append(
+            f"amount {before['ach_amount']:,.2f}→{after['ach_amount']:,.2f}"
+        )
+    if before["status"] != after["status"]:
+        diffs.append(f"status {before['status']}→{after['status']}")
+    if before["reconciled"] != after["reconciled"]:
+        diffs.append(
+            f"reconciled {before['reconciled']}→{after['reconciled']}"
+        )
+    return "; ".join(diffs) if diffs else "no field changes"
+
+
 def _parse_payload(body: BatchWriteRequest) -> BatchWriteInput:
     try:
         ach_date = datetime.strptime(body.ach_date, "%Y-%m-%d").date()
@@ -194,7 +239,12 @@ def create_batch_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> BatchResponse:
-    """Create an ACH batch. Admin role + store scope required."""
+    """Create an ACH batch. Admin role + store scope required.
+
+    Writes an `OperatorAuditLog` row (`action='create',
+    target_type='batch'`) so the audit trail mirrors what the legacy
+    /batches/new Flask handler used to record. Without this, SPA
+    creates would silently bypass the audit log."""
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
     try:
@@ -204,6 +254,12 @@ def create_batch_route(
             status_code=422,
             detail={"field": "batch_ref", "message": str(exc)},
         )
+    summary = (
+        f"ach_amount=${float(row.ach_amount or 0):,.2f} "
+        f"date={row.ach_date.isoformat() if row.ach_date else ''} "
+        f"status={row.status or ''}"
+    )
+    _audit_batch(db, claims, "create", row, summary=summary)
     db.commit()
     return BatchResponse(batch=_row_with_totals(db, sid, row))
 
@@ -216,9 +272,23 @@ def update_batch_route(
     claims: dict = Depends(get_principal),
 ) -> BatchResponse:
     """Update an ACH batch. Admin role + store scope required.
-    Cross-tenant updates → 404."""
+    Cross-tenant updates → 404. Writes an `OperatorAuditLog` row
+    summarising before→after diffs on the fields the legacy form
+    tracked (amount, status, reconciled) so the operator-side audit
+    trail stays consistent with the SPA cutover."""
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
+    # Snapshot the fields that the legacy edit handler diffed before
+    # we mutate them. The Service mutates in-place, so we have to
+    # capture this here in the Controller.
+    existing = find_batch(db, sid, batch_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    before = {
+        "ach_amount": float(existing.ach_amount or 0),
+        "status": existing.status or "",
+        "reconciled": bool(existing.reconciled),
+    }
     try:
         row = update_batch(
             db, batch_id=batch_id, store_id=sid, payload=payload,
@@ -230,6 +300,14 @@ def update_batch_route(
             status_code=422,
             detail={"field": "batch_ref", "message": str(exc)},
         )
+    after = {
+        "ach_amount": float(row.ach_amount or 0),
+        "status": row.status or "",
+        "reconciled": bool(row.reconciled),
+    }
+    _audit_batch(
+        db, claims, "update", row, summary=_diff_summary(before, after),
+    )
     db.commit()
     return BatchResponse(batch=_row_with_totals(db, sid, row))
 

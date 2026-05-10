@@ -8089,87 +8089,45 @@ _BATCH_SORT_COLUMNS = {
 @app.route("/batches")
 @admin_required
 def batches():
-    user=current_user(); sid=session["store_id"]
-    sort_slug = request.args.get("sort", "").strip()
-    sort_dir  = request.args.get("dir",  "desc").strip().lower()
-    if sort_dir not in ("asc", "desc"):
-        sort_dir = "desc"
-    sort_col = _BATCH_SORT_COLUMNS.get(sort_slug)
-    q = ACHBatch.query.filter_by(store_id=sid)
-    if sort_col is not None:
-        q = q.order_by(sort_col.asc() if sort_dir == "asc" else sort_col.desc(),
-                       ACHBatch.id.desc())
-    else:
-        q = q.order_by(ACHBatch.ach_date.desc(), ACHBatch.id.desc())
-        sort_slug = ""
-        sort_dir  = "desc"
-    rows = q.all()
-    return render_template("batches.html", user=user, batches=rows,
-                            sort=sort_slug, dir=sort_dir)
+    """301 → /app/batches. The ACH batch list moved to React; the SPA
+    reads /api/v2/batches and handles sorting client-side.
+    Stub keeps url_for('batches') working in still-Jinja chrome and
+    bounces old bookmarks. Query string (sort + dir) preserved so a
+    deep-link like ?sort=ach_date&dir=asc lands the SPA in the same
+    sort state."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/batches" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
-@app.route("/batches/new",methods=["GET","POST"])
+
+@app.route("/batches/new", methods=["GET", "POST"])
 @admin_required
 def new_batch():
-    user=current_user(); sid=session["store_id"]
-    if request.method=="POST":
-        b=ACHBatch(store_id=sid,
-            ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date(),
-            company=request.form["company"],batch_ref=request.form["batch_ref"],
-            ach_amount=float(request.form.get("ach_amount") or 0),
-            transfer_dates=request.form.get("transfer_dates",""),
-            status=request.form.get("status","Pending"),
-            reconciled=request.form.get("reconciled")=="on",
-            notes=request.form.get("notes",""))
-        db.session.add(b); db.session.flush()
-        record_op_audit("create", "batch", b.id,
-                         label=f"{b.company} {b.batch_ref}",
-                         summary=f"ach_amount=${b.ach_amount:,.2f} "
-                                  f"date={b.ach_date.isoformat()} "
-                                  f"status={b.status}")
-        db.session.commit()
-        flash("ACH batch logged.","success"); return redirect(url_for("batches"))
-    return render_template("batch_form.html",user=user,batch=None,today=date.today().isoformat())
+    """301 → /app/batches/new. The batch-create form moved to React;
+    the SPA POSTs to /api/v2/batches directly. Both verbs redirect
+    so any in-flight Jinja form submission lands the user on the SPA
+    create page (their data is lost, but the SPA forms have been the
+    canonical path for weeks — no real users hit the legacy POST)."""
+    return redirect("/app/batches/new", code=301)
 
-@app.route("/batches/<int:bid>/edit",methods=["GET","POST"])
+
+@app.route("/batches/<int:bid>/edit", methods=["GET", "POST"])
 @admin_required
 def edit_batch(bid):
-    user=current_user(); sid=session["store_id"]
-    b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
-    if request.method=="POST":
-        # Snapshot the fields likely to change so the audit summary
-        # can show before→after values without dumping the whole row.
-        before = {
-            "ach_amount": float(b.ach_amount or 0),
-            "status":     b.status or "",
-            "reconciled": bool(b.reconciled),
-        }
-        b.ach_date=datetime.strptime(request.form["ach_date"],"%Y-%m-%d").date()
-        b.company=request.form["company"]; b.batch_ref=request.form["batch_ref"]
-        b.ach_amount=float(request.form.get("ach_amount") or 0)
-        b.transfer_dates=request.form.get("transfer_dates","")
-        b.status=request.form.get("status","Pending")
-        b.reconciled=request.form.get("reconciled")=="on"
-        b.notes=request.form.get("notes","")
-        diffs = []
-        if before["ach_amount"] != float(b.ach_amount or 0):
-            diffs.append(f"amount {before['ach_amount']:,.2f}→{b.ach_amount:,.2f}")
-        if before["status"] != (b.status or ""):
-            diffs.append(f"status {before['status']}→{b.status}")
-        if before["reconciled"] != bool(b.reconciled):
-            diffs.append(f"reconciled {before['reconciled']}→{bool(b.reconciled)}")
-        record_op_audit("update", "batch", b.id,
-                         label=f"{b.company} {b.batch_ref}",
-                         summary="; ".join(diffs) if diffs else "no field changes")
-        db.session.commit(); flash("Batch updated.","success"); return redirect(url_for("batches"))
-    return render_template("batch_form.html",user=user,batch=b,today=date.today().isoformat())
+    """301 → /app/batches/<bid>/edit. Same pattern as new_batch —
+    GET + POST both bounce. The SPA's BatchForm.tsx PATCHes
+    /api/v2/batches/<id>; the legacy form is dead code."""
+    return redirect(f"/app/batches/{bid}/edit", code=301)
+
 
 @app.route("/batches/<int:bid>/transfers")
 @admin_required
 def batch_transfers(bid):
-    user=current_user(); sid=session["store_id"]
-    b=ACHBatch.query.filter_by(id=bid,store_id=sid).first_or_404()
-    rows=Transfer.query.filter_by(store_id=sid,batch_id=b.batch_ref).all()
-    return render_template("batch_detail.html",user=user,batch=b,transfers=rows)
+    """301 → /app/batches/<bid>/edit. The legacy "batch detail"
+    template was a separate page; the SPA's BatchForm.tsx renders
+    the linked-transfers list inline alongside the form. One URL,
+    one page."""
+    return redirect(f"/app/batches/{bid}/edit", code=301)
 
 # ── Bank (Stripe Financial Connections) ─────────────────────────
 @app.route("/bank")
