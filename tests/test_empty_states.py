@@ -1,38 +1,19 @@
-"""Tests for the shared `_empty_table_row.html` partial.
+"""Tests for the shared `_empty_table_row.html` partial (still in
+use by the Jinja /dashboard for the recent-transfers + recent-
+batches columns).
 
-The partial replaces the legacy `<tr><td colspan>No X found</td>` rows
-with a richer empty state (icon + title + body + optional CTA). These
-tests pin the expected markup so a future refactor can't quietly
-regress the structure or the per-page copy.
+The /transfers + /batches lists themselves moved to React in PRs
+#401 + #404; their empty-state UI lives in the SPA components now.
 """
-import json
 
 
-def test_transfers_empty_state_shows_cta(logged_in_client):
-    """A fresh store with zero transfers should render the empty-row
-    partial with the +New Transfer CTA on the main /transfers page."""
-    resp = logged_in_client.get("/transfers")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert 'class="empty-row"' in body
-    assert "No transfers yet" in body
-    # CTA points at /transfers/new — both the href and the button label.
-    assert "/transfers/new" in body
-    assert "+ New Transfer" in body
-
-
-def test_transfers_partial_filtered_empty_state(logged_in_client):
-    """When the user has filters on but no rows match, show the
-    'no results match these filters' variant (search icon, no CTA)."""
-    resp = logged_in_client.get("/transfers?sender=zzz_no_such_sender&partial=1")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    html = payload["html"]
-    assert 'class="empty-row"' in html
-    assert "No transfers match these filters" in html
-    # No "+ New Transfer" CTA on the filtered variant — clearing the
-    # filter is the right action, not creating a transfer.
-    assert "+ New Transfer" not in html
+def test_transfers_legacy_url_redirects_to_spa(logged_in_client):
+    """The /transfers list moved to React in PR #404. The empty
+    state ("No transfers yet") moved with it into Transfers.tsx;
+    pinning the redirect contract here is enough."""
+    resp = logged_in_client.get("/transfers", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/transfers"
 
 
 def test_batches_legacy_url_redirects_to_spa(logged_in_client):

@@ -160,6 +160,10 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
 
 
 def test_delete_transfer_writes_audit(client, test_store_id):
+    """The legacy /transfers/<tid>/delete POST is gone (PR #404); the
+    SPA DELETEs /api/v2/transfers/<id>. Audit-log invariant moved
+    with it: every delete still appends an OperatorAuditLog row
+    with the same label format."""
     _admin_login(client, test_store_id)
     from app import Transfer, db, app as flask_app
     with flask_app.app_context():
@@ -172,7 +176,12 @@ def test_delete_transfer_writes_audit(client, test_store_id):
         )
         db.session.add(t); db.session.commit()
         tid = t.id
-    client.post(f"/transfers/{tid}/delete", follow_redirects=False)
+    token = _admin_jwt(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/transfers/{tid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204, resp.get_data(as_text=True)
     from app import OperatorAuditLog
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(

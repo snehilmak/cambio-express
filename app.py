@@ -6409,59 +6409,31 @@ def api_customer_recent_recipients(cid):
 @app.route("/transfers")
 @login_required
 def transfers():
-    """Per-store transfer ledger — list view with filters, sort, and
-    paginated/live-search rendering. Employees and admins see the same
-    store-scoped list (the earlier `created_by=self` clamp hid transfers
-    that returning customers needed). Aggregate totals that reveal
-    business-level info are gated separately on the employee dashboard.
-
-    Filtering, sorting, pagination, and the page-total math live in
-    `api.Modules.Transfers.Services.list_transfers` — this route only
-    handles request parsing and response rendering."""
-    from api.Modules.Transfers.Repositories import TransferFilters
-    from api.Modules.Transfers.Services import list_transfers
-    user = current_user(); sid = session.get("store_id")
-    if not sid:
+    """301 → /app/transfers. The transfer ledger moved to React;
+    the SPA reads /api/v2/transfers (paginated + filtered + sorted)
+    and does its own debounced live-search fetch. Stub keeps
+    url_for('transfers') working in still-Jinja chrome (sidebar
+    nav + post-create redirects from legacy mutators) and bounces
+    old bookmarks. Query string (filters, sort, pagination)
+    preserved so a deep-link to a filtered + sorted view lands the
+    SPA in the same state — minus `?partial=1`, which was the
+    legacy AJAX-only marker the SPA never sends."""
+    if not session.get("store_id"):
+        # Guard preserved from the legacy route — without a store
+        # context the SPA would also blow up trying to request
+        # /api/v2/transfers, so bounce back to /dashboard for the
+        # no-store error path. (Owners hitting this URL get caught
+        # by the dashboard redirect chain to /owner/dashboard.)
         flash("Select a store first.", "error")
         return redirect(url_for("dashboard"))
-
-    filters = TransferFilters.from_query(request.args)
-    PER_PAGE = 50
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except (TypeError, ValueError):
-        page = 1
-    page_obj = list_transfers(
-        db.session, [sid], filters, page=page, per_page=PER_PAGE,
-    )
-
-    ctx = dict(
-        user=user, transfers=page_obj.rows,
-        company=filters.company, status=filters.status,
-        date_from=request.args.get("date_from", ""),
-        date_to=request.args.get("date_to", ""),
-        sender=filters.sender, recipient=filters.recipient,
-        country=filters.country, confirm=filters.confirm,
-        batch=filters.batch, q=filters.q,
-        page=page_obj.page, total=page_obj.total,
-        total_pages=page_obj.total_pages,
-        per_page=page_obj.per_page,
-        sort=filters.sort_slug, dir=filters.sort_dir,
-        page_amount=page_obj.page_amount,
-    )
-
-    # Live-search AJAX path — called from templates/transfers.html's JS.
-    # Returns the table+pager HTML plus meta so the client can update
-    # the card header without refetching the whole chrome.
-    if request.args.get("partial") == "1":
-        return jsonify({
-            "html":        render_template("_transfers_table.html", **ctx),
-            "total":       page_obj.total,
-            "page":        page_obj.page,
-            "total_pages": page_obj.total_pages,
-            "page_amount": page_obj.page_amount,
-        })
-    return render_template("transfers.html", **ctx)
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    if qs:
+        # Drop the legacy `partial=1` marker — it was an AJAX-only
+        # contract for the deleted Jinja live-search; the SPA never
+        # sends it.
+        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
+    target = "/app/transfers" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 def _parse_dob(raw):
     """Parse a YYYY-MM-DD date string from the form, or None when
@@ -6576,192 +6548,42 @@ def _transfer_form_ctx(store):
         federal_tax_rate=(store.federal_tax_rate or 0),
     )
 
-@app.route("/transfers/new",methods=["GET","POST"])
+@app.route("/transfers/new", methods=["GET", "POST"])
 @login_required
 def new_transfer():
-    user=current_user(); sid=session.get("store_id")
-    if not sid:
-        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
-    if request.method=="POST":
-        # "Processed by" is required so every transfer has an auditable owner.
-        emp, emp_name = _pick_employee(sid, request.form.get("employee_id"))
-        if not emp:
-            flash("Pick who processed this transfer before saving.", "error")
-            return redirect(url_for("new_transfer"))
-        sender_name     = request.form["sender_name"]
-        sender_phone_cc = (request.form.get("sender_phone_country") or "+1").strip()
-        sender_phone    = request.form.get("sender_phone","").strip()
-        sender_address  = request.form.get("sender_address","").strip()
-        sender_dob      = _parse_dob(request.form.get("sender_dob"))
-        # Upsert the Customer first so the transfer can link to a stable FK.
-        cust = find_or_upsert_customer(
-            store_id=sid, full_name=sender_name,
-            phone_country=sender_phone_cc, phone_number=sender_phone,
-            address=sender_address, dob=sender_dob,
-            customer_id=request.form.get("customer_id", type=int),
-        )
-        send_amount_v = float(request.form.get("send_amount") or 0)
-        service_type_v = _normalize_service_type(request.form.get("service_type"))
-        country_v = (request.form.get("country","") or "").strip()
-        t=Transfer(store_id=sid,created_by=user.id,customer_id=cust.id,
-            send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date(),
-            company=request.form["company"],
-            service_type=service_type_v,
-            sender_name=sender_name,
-            send_amount=send_amount_v,
-            fee=float(request.form.get("fee") or 0),
-            # Federal tax is server-computed via _federal_tax_for — the rule
-            # (Money Transfer = taxed, but domestic / non-MT exempt) lives
-            # in one place so the form, edit, and recompute paths can't
-            # drift apart.
-            federal_tax=_federal_tax_for(send_amount_v, service_type_v,
-                                         current_store(), country=country_v),
-            commission=float(request.form.get("commission") or 0),
-            recipient_name=request.form.get("recipient_name",""),
-            country=country_v,
-            recipient_phone=request.form.get("recipient_phone",""),
-            sender_phone=sender_phone,
-            sender_phone_country=sender_phone_cc,
-            sender_address=sender_address,
-            sender_dob=sender_dob,
-            confirm_number=request.form.get("confirm_number",""),
-            status=request.form.get("status","Sent"),
-            status_notes=request.form.get("status_notes",""),
-            batch_id=request.form.get("batch_id",""),
-            internal_notes=request.form.get("internal_notes",""),
-            employee_id=emp.id,
-            employee_name=emp_name)
-        db.session.add(t); db.session.flush()
-        _record_transfer_audit(t, user, "created", emp.id, emp_name,
-            f"Logged by {emp_name}.")
-        db.session.commit()
-        flash("Transfer logged successfully.","success"); return redirect(url_for("transfers"))
-    return render_template("transfer_form.html", user=user, transfer=None,
-        roster=_active_roster(sid), audit_entries=[],
-        **_transfer_form_ctx(current_store()))
+    """301 → /app/transfers/new. The transfer-create form moved to
+    React; the SPA POSTs to /api/v2/transfers directly. Both verbs
+    redirect — any in-flight Jinja form submission lands the user
+    on the SPA create page (their data is lost, but the SPA forms
+    have been the canonical path for weeks)."""
+    return redirect("/app/transfers/new", code=301)
 
-@app.route("/transfers/<int:tid>/edit",methods=["GET","POST"])
+
+@app.route("/transfers/<int:tid>/edit", methods=["GET", "POST"])
 @login_required
 def edit_transfer(tid):
-    """Edit any transfer belonging to the current store.
+    """301 → /app/transfers/<tid>/edit. The transfer-edit form moved
+    to React; the SPA PUTs to /api/v2/transfers/<id> directly with
+    the same federal-tax recompute, customer-upsert, and TransferAudit
+    behaviour the legacy POST handled. Both verbs redirect."""
+    return redirect(f"/app/transfers/{tid}/edit", code=301)
 
-    Employees share a login, so anyone logged in at the store can edit any
-    of the store's transfers. The "Processed by" dropdown (required) +
-    audit log are what give the admin visibility into who actually did
-    what. Employees at other stores are still blocked by `store_id`.
-    """
-    user=current_user(); sid=session.get("store_id")
-    if not sid:
-        flash("Select a store first.","error"); return redirect(url_for("dashboard"))
-    t=Transfer.query.filter_by(id=tid,store_id=sid).first_or_404()
-    if request.method=="POST":
-        emp, emp_name = _pick_employee(sid, request.form.get("employee_id"))
-        if not emp:
-            flash("Pick who made this edit before saving.", "error")
-            return redirect(url_for("edit_transfer", tid=t.id))
-        before = _transfer_snapshot(t)
-        t.send_date=datetime.strptime(request.form["send_date"],"%Y-%m-%d").date()
-        t.company=request.form["company"]; t.sender_name=request.form["sender_name"]
-        t.service_type=_normalize_service_type(request.form.get("service_type"))
-        t.send_amount=float(request.form.get("send_amount") or 0)
-        t.fee=float(request.form.get("fee") or 0)
-        t.commission=float(request.form.get("commission") or 0)
-        t.recipient_name=request.form.get("recipient_name","")
-        # Set country FIRST so the federal_tax recompute below sees the
-        # newly-chosen country (domestic transfers skip tax).
-        t.country=(request.form.get("country","") or "").strip()
-        # Always recompute federal_tax server-side via _federal_tax_for so
-        # changing the send amount OR the service type OR the country
-        # all flip the tax.
-        t.federal_tax=_federal_tax_for(t.send_amount, t.service_type,
-                                       current_store(), country=t.country)
-        t.recipient_phone=request.form.get("recipient_phone","")
-        t.sender_phone=request.form.get("sender_phone","").strip()
-        t.sender_phone_country=(request.form.get("sender_phone_country") or "+1").strip()
-        t.sender_address=request.form.get("sender_address","").strip()
-        t.sender_dob=_parse_dob(request.form.get("sender_dob"))
-        t.confirm_number=request.form.get("confirm_number","")
-        t.status=request.form.get("status","Sent")
-        t.status_notes=request.form.get("status_notes","")
-        t.batch_id=request.form.get("batch_id","")
-        t.internal_notes=request.form.get("internal_notes","")
-        t.employee_id=emp.id
-        t.employee_name=emp_name
-        t.updated_at=datetime.utcnow()
-        # Keep the customer directory in sync with the edited snapshot.
-        cust = find_or_upsert_customer(
-            store_id=sid, full_name=t.sender_name,
-            phone_country=t.sender_phone_country, phone_number=t.sender_phone,
-            address=t.sender_address, dob=t.sender_dob,
-            customer_id=request.form.get("customer_id", type=int) or t.customer_id,
-        )
-        t.customer_id = cust.id
-        after = _transfer_snapshot(t)
-        summary = _summarize_transfer_changes(before, after) or "No field changes."
-        # Flag pure status changes as a distinct audit action so the admin
-        # view can highlight them — status transitions are the most common
-        # reason an edit happens after the initial save.
-        changed_fields = {
-            f for f, _ in _TRANSFER_AUDIT_FIELDS
-            if (before.get(f) or None) != (after.get(f) or None)
-        }
-        action = "status_changed" if changed_fields == {"status"} else "updated"
-        _record_transfer_audit(t, user, action, emp.id, emp_name, summary)
-        db.session.commit(); flash("Transfer updated.","success")
-        return redirect(url_for("edit_transfer", tid=t.id))
-    # The preselected "Processed by" is the original roster row if it still
-    # exists (even if deactivated); historical names with no matching row
-    # fall through to a read-only hint line in the form.
-    audit_entries = TransferAudit.query.filter_by(
-        store_id=sid, transfer_id=t.id
-    ).order_by(TransferAudit.created_at.desc()).limit(50).all()
-    roster = _active_roster(sid)
-    # If the transfer's current employee was deactivated, surface them in the
-    # dropdown as a selectable (but italicized) fallback so editing doesn't
-    # silently blank the attribution.
-    if t.employee_id and not any(r.id == t.employee_id for r in roster):
-        legacy = db.session.get(StoreEmployee, t.employee_id)
-        if legacy and legacy.store_id == sid:
-            roster = [legacy] + roster
-    return render_template("transfer_form.html", user=user, transfer=t,
-        roster=roster, audit_entries=audit_entries,
-        **_transfer_form_ctx(current_store()))
+# NOTE: The legacy edit_transfer body lived here. Replaced by the
+# 301-stub above (PR #404). The full create/edit/audit logic now
+# lives in api/Modules/Transfers/Controllers + Services and is
+# exercised by the SPA at /app/transfers/<id>/edit.
 
 
 @app.route("/transfers/<int:tid>/delete", methods=["POST"])
 @admin_required
 def delete_transfer(tid):
-    """Hard-delete a transfer. Store admins only; employees get blocked
-    by @admin_required at the route level, so hiding the button in the
-    template is defense-in-depth, not the actual gate.
-
-    Audit-history cascade + the row delete delegate to
-    api.Modules.Transfers.Services.delete_transfer (PR 33). The
-    cross-route operator-audit log entry stays in Flask since
-    record_op_audit is a Flask-side concern.
-    """
-    from api.Modules.Transfers.Services import (
-        TransferNotFoundError, delete_transfer as _svc_delete_transfer,
-    )
-    sid = session.get("store_id")
-    if not sid:
-        flash("Select a store first.", "error")
-        return redirect(url_for("dashboard"))
-    try:
-        t = _svc_delete_transfer(db.session, tid, sid)
-    except TransferNotFoundError:
-        abort(404)
-    # Capture a recognizable label BEFORE the commit so the audit row
-    # makes sense without needing to look up the (gone) transfer id.
-    label = (f"{t.sender_name or '?'} → {t.recipient_name or '?'}"
-             f" — ${t.send_amount or 0:,.2f}")
-    record_op_audit("delete", "transfer", t.id, label=label,
-                    summary=f"confirm={t.confirm_number or ''} "
-                            f"company={t.company or ''} "
-                            f"status={t.status or ''}")
-    db.session.commit()
-    flash("Transfer deleted.", "success")
-    return redirect(url_for("transfers"))
+    """301 → /app/transfers. The Flask form-POST delete handler moved
+    to React; the SPA DELETEs /api/v2/transfers/<id> with the same
+    admin-role guard + audit-log row + cross-store 404. Audit-log
+    invariant (`action='delete', target_type='transfer'`) is preserved
+    on the API side — see api/Modules/Transfers/Controllers
+    `delete_transfer_route`."""
+    return redirect("/app/transfers", code=301)
 
 
 # ── Daily Book ───────────────────────────────────────────────
