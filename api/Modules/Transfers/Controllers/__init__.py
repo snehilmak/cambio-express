@@ -46,6 +46,7 @@ from api.Modules.Transfers.Services import (
     TransferNotFoundError,
     active_roster,
     create_transfer,
+    delete_transfer,
     list_transfers,
     normalize_service_type,
     parse_dob,
@@ -326,3 +327,63 @@ def update_route(
         raise HTTPException(status_code=422, detail=str(exc))
     db.commit()
     return TransferResponse(transfer=_to_row(transfer))
+
+
+@router.delete("/{transfer_id}", status_code=204)
+def delete_transfer_route(
+    transfer_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Hard-delete a transfer + cascade its TransferAudit history.
+
+    Mirrors the legacy /transfers/<tid>/delete POST: admin role +
+    store scope required, cross-store IDs return 404 (opaque
+    tenancy), and an OperatorAuditLog row gets appended on the way
+    out so the activity log keeps the same trail it had before
+    the SPA cutover (PR #404). Audit fields mirror the legacy
+    label / summary format ("sender → recipient — $amount" /
+    "confirm=… company=… status=…").
+    """
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can delete transfers.",
+        )
+    sid = claims.get("store_id")
+    if sid is None:
+        raise HTTPException(
+            status_code=403,
+            detail="JWT does not carry a store scope.",
+        )
+    try:
+        transfer = delete_transfer(db, transfer_id, int(sid))
+    except TransferNotFoundError:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    # Snapshot identity-bearing fields BEFORE commit — once delete
+    # commits, the row is gone and the audit row would have to
+    # rebuild this from the void.
+    label = (
+        f"{transfer.sender_name or '?'} → "
+        f"{transfer.recipient_name or '?'}"
+        f" — ${(transfer.send_amount or 0):,.2f}"
+    )
+    summary = (
+        f"confirm={transfer.confirm_number or ''} "
+        f"company={transfer.company or ''} "
+        f"status={transfer.status or ''}"
+    )
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=int(sid),
+        user_id=int(claims["sub"]),
+        user_name=claims.get("name") or claims.get("username") or "",
+        user_role=claims.get("role") or "",
+        target_type="transfer",
+        target_id=transfer.id,
+        target_label=label,
+        action="delete",
+        summary=summary,
+    )
+    db.commit()

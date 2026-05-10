@@ -42,77 +42,39 @@ def _make_batch(store_id, *, ach_date, ref, amount=500.0, company="Intermex"):
 # ── Transfers ────────────────────────────────────────────────
 
 
-def test_transfers_default_sort_unchanged(client, test_store_id):
-    """No ?sort= param should preserve the historical default
-    (newest send_date first)."""
+def test_transfers_legacy_url_redirects_to_spa(client, test_store_id):
+    """The legacy /transfers list moved to React in PR #404. The
+    Flask page used to do server-side sorting + an AJAX `?partial=1`
+    live-search; the SPA does both client-side against
+    /api/v2/transfers. The 301 preserves sort + dir params so a
+    deep-link to a sorted view still lands the SPA in the same
+    state. Sort-correctness is exercised on the API in
+    tests/Modules/Transfers/test_transfers_controllers.py."""
     _admin_login(client, test_store_id)
-    from app import app as flask_app
-    with flask_app.app_context():
-        _make_transfer(test_store_id,
-                        send_date=date.today() - timedelta(days=1),
-                        sender="Yesterday")
-        _make_transfer(test_store_id,
-                        send_date=date.today(),
-                        sender="Today")
-    resp = client.get("/transfers?partial=1")
-    assert resp.status_code == 200
-    payload = json.loads(resp.data)
-    html = payload["html"]
-    pos_today = html.find("Today")
-    pos_yesterday = html.find("Yesterday")
-    assert pos_today < pos_yesterday, "Today should render before Yesterday"
+    resp = client.get(
+        "/transfers?sort=amount&dir=desc", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert loc.startswith("/app/transfers")
+    assert "sort=amount" in loc
+    assert "dir=desc" in loc
 
 
-def test_transfers_sort_by_amount_asc(client, test_store_id):
+def test_transfers_partial_marker_stripped_on_redirect(client, test_store_id):
+    """The legacy `?partial=1` AJAX-only flag is stripped from the
+    redirect target so a stale browser cache isn't forwarded a
+    no-op param the SPA would just ignore."""
     _admin_login(client, test_store_id)
-    from app import app as flask_app
-    with flask_app.app_context():
-        _make_transfer(test_store_id, send_date=date.today(),
-                        sender="Big",   amount=5000.0)
-        _make_transfer(test_store_id, send_date=date.today(),
-                        sender="Small", amount=10.0)
-    resp = client.get("/transfers?partial=1&sort=amount&dir=asc")
-    payload = json.loads(resp.data)
-    html = payload["html"]
-    assert html.find("Small") < html.find("Big")
-
-
-def test_transfers_sort_by_amount_desc(client, test_store_id):
-    _admin_login(client, test_store_id)
-    from app import app as flask_app
-    with flask_app.app_context():
-        _make_transfer(test_store_id, send_date=date.today(),
-                        sender="Big",   amount=5000.0)
-        _make_transfer(test_store_id, send_date=date.today(),
-                        sender="Small", amount=10.0)
-    resp = client.get("/transfers?partial=1&sort=amount&dir=desc")
-    payload = json.loads(resp.data)
-    html = payload["html"]
-    assert html.find("Big") < html.find("Small")
-
-
-def test_transfers_unknown_sort_falls_back_to_default(client, test_store_id):
-    _admin_login(client, test_store_id)
-    resp = client.get("/transfers?partial=1&sort=hahanopwn&dir=desc")
-    assert resp.status_code == 200
-    # Doesn't 500 — falls back silently.
-
-
-def test_transfers_invalid_dir_falls_back_to_desc(client, test_store_id):
-    _admin_login(client, test_store_id)
-    resp = client.get("/transfers?partial=1&sort=amount&dir=evil")
-    assert resp.status_code == 200
-
-
-def test_transfers_page_renders_sortable_th_headers(client, test_store_id):
-    _admin_login(client, test_store_id)
-    resp = client.get("/transfers?sort=amount&dir=desc")
-    body = resp.get_data(as_text=True)
-    assert "th-sortable" in body
-    # Active class on the active column.
-    assert "th-sortable--active" in body
-    # Arrow indicator for desc.
-    assert "▼" in body or "th-sort-arrow" in body
+    resp = client.get(
+        "/transfers?partial=1&sort=amount&dir=asc",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert "partial=1" not in loc
+    assert "sort=amount" in loc
+    assert "dir=asc" in loc
 
 
 # ── Batches ──────────────────────────────────────────────────
