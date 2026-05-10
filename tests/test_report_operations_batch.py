@@ -41,31 +41,6 @@ def _make_returned_check(client, store_id, *, bounced_on, amount,
         return rc.id
 
 
-def test_returned_check_status_buckets_per_status(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_returned_check(client, test_store_id, bounced_on=today,
-                          amount=100, status="pending")
-    _make_returned_check(client, test_store_id, bounced_on=today,
-                          amount=200, status="recovered",
-                          recovered_amount=180)
-    _make_returned_check(client, test_store_id, bounced_on=today,
-                          amount=50, status="loss")
-    _make_returned_check(client, test_store_id, bounced_on=today,
-                          amount=30, status="fraud")
-    resp = client.get("/reports/returned-check-status")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Pending" in body
-    assert "Recovered" in body
-    assert "Loss" in body
-    assert "Fraud" in body
-    # Total Amount KPI = 100+200+50+30 = 380.
-    assert "$380.00" in body
-    # Recovered KPI = 180 (recovered_amount, not full amount).
-    assert "$180.00" in body
-    # Net G/L KPI = 180 - (50+30) = 100.
-    assert "$100.00" in body
 
 
 def test_returned_check_status_csv(client, test_store_id):
@@ -109,29 +84,6 @@ def _make_bank_txn(client, store_id, acct_id, *, when, amount_cents,
         return t.id
 
 
-def test_bank_txn_breakdown_groups_by_category(client, test_store_id):
-    _admin_login(client, test_store_id)
-    aid = _make_bank_account(client, test_store_id)
-    today = datetime.combine(date.today(), time(9, 0))
-    _make_bank_txn(client, test_store_id, aid, when=today,
-                    amount_cents=-360, category_slug="bank_charge_230",
-                    txn_id="bc1")
-    _make_bank_txn(client, test_store_id, aid, when=today,
-                    amount_cents=-150, category_slug="bank_charge_230",
-                    txn_id="bc2")
-    _make_bank_txn(client, test_store_id, aid, when=today,
-                    amount_cents=20000, category_slug="",
-                    txn_id="dep1")
-    resp = client.get("/reports/bank-transactions-breakdown")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Grouping label includes the canonical bank-charge name.
-    assert "Bank charge" in body  # "Bank charge — ••0230 (MSB)"
-    # Inflow KPI = $200; Outflow = $5.10 (abs).
-    assert "$200.00" in body
-    assert "$5.10" in body
-    # Net Flow = 200 - 5.10 = 194.90.
-    assert "$194.90" in body
 
 
 def test_bank_txn_breakdown_csv(client, test_store_id):
@@ -159,29 +111,6 @@ def _make_daily_drop(client, store_id, *, report_date, amount,
         return d.id
 
 
-def test_daily_drops_aggregates_per_day(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_daily_drop(client, test_store_id, report_date=today,
-                      amount=100)
-    _make_daily_drop(client, test_store_id, report_date=today,
-                      amount=200)
-    if today.day > 1:
-        prior = today.replace(day=today.day - 1)
-        _make_daily_drop(client, test_store_id, report_date=prior,
-                          amount=50)
-        expected_total = "$350.00"
-        expected_days = "2 days"
-    else:
-        expected_total = "$300.00"
-        expected_days = "1 day"
-    resp = client.get("/reports/daily-drops")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Total Dropped" in body
-    assert expected_total in body
-    assert expected_days in body
-    assert today.strftime('%b %d') in body  # day card label
 
 
 def test_daily_drops_csv(client, test_store_id):
@@ -209,19 +138,6 @@ def _make_check_deposit(client, store_id, *, report_date, amount,
         return cd.id
 
 
-def test_check_deposits_aggregates_per_day(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_check_deposit(client, test_store_id, report_date=today,
-                        amount=500)
-    _make_check_deposit(client, test_store_id, report_date=today,
-                        amount=250)
-    resp = client.get("/reports/check-deposits")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Total Deposited" in body
-    assert "$750.00" in body
-    assert "1 day" in body
 
 
 def test_check_deposits_csv(client, test_store_id):

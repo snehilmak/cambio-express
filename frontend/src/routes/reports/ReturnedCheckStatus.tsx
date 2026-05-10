@@ -1,0 +1,33 @@
+import { useLocation } from "react-router-dom";
+
+import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+
+export default function ReturnedCheckStatus() {
+  const isOwner = useLocation().pathname.startsWith("/owner/");
+  const baseRoute = isOwner ? "/owner/reports" : "/reports";
+  return (
+    <ReportDrilldown
+      apiSlug="returned-check-status"
+      title="Returned Check Status"
+      resultUnit={["status", "statuses"]}
+      backTo={baseRoute}
+      csvUrl={`${baseRoute}/returned-check-status.csv`}
+      kpis={[
+        { label: "Total Bounces", tone: "primary",
+          value: t => Number(t.count ?? 0).toLocaleString() },
+        { label: "Total Amount",  tone: "neon",
+          value: t => fmtMoney(Number(t.amount ?? 0)) },
+        { label: "Recovered",     tone: "muted",
+          value: t => fmtMoney(Number(t.recovered ?? 0)) },
+        { label: "Net G/L",       tone: "muted",
+          value: t => fmtMoney(Number(t.net_gl ?? 0)) },
+      ]}
+      columns={[
+        { label: "Status",    field: "status" },
+        { label: "Count",     field: r => Number(r.count).toLocaleString(),     align: "right", mono: true },
+        { label: "Amount",    field: r => fmtMoney(Number(r.amount)),           align: "right", mono: true },
+        { label: "Recovered", field: r => fmtMoney(Number(r.recovered)),        align: "right", mono: true },
+      ]}
+    />
+  );
+}
