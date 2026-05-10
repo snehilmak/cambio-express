@@ -94,6 +94,50 @@ def _close_fastapi_clients():
             pass
 
 
+# ─────────────────────────────────────────────────────────────
+# a2wsgi.ASGIMiddleware leak pin
+#
+# The Flask test_client → DispatcherMiddleware → ASGIMiddleware →
+# FastAPI dispatch path is wired up at app import time. Unlike
+# TestClient, a2wsgi reuses a single shared event-loop thread for
+# every request and creates an asyncio.Task per call via
+# ``loop.create_task(self.app(...))``. When a request finishes,
+# the task is `done()`, but its done-callback chain (through
+# ASGIResponder) holds the task object weakly — under coverage's
+# C-tracer the GC walks the call graph more aggressively and the
+# Task's ``__del__`` fires while still flagged "pending" (the
+# CancelledError -> Task done-callback path doesn't synchronously
+# clear the pending flag). Python emits "Task was destroyed but
+# it is pending!" and starlette/anyio rolls back the SQLAlchemy
+# session of whatever test happens to be running next.
+#
+# Manifestation: ``test_monthly_locked_bank_charge_overrides_user_value``
+# (and friends) in test_bank_charges_pl.py fails 500 Internal Server
+# Error on /api/v2/monthly PUT — the route handler blows up because
+# its DB session was rolled back by a Task's __del__ deep in the
+# stack.
+#
+# Fix: monkey-patch a2wsgi's ASGIResponder so every Task it spawns
+# is ALSO appended to a process-global strong-ref list. The list
+# never shrinks within a test process, so Python GC can never
+# reclaim them mid-test. Memory cost is bounded by total request
+# count over a single test run — small (a few KB per task).
+# Compared to per-test loop draining this is O(1) overhead per
+# request; no scheduling cost between tests.
+import a2wsgi.asgi as _a2wsgi_asgi
+_LEAKED_TASK_REFS: list = []
+_orig_start_asgi_app = _a2wsgi_asgi.ASGIResponder.start_asgi_app
+
+
+async def _start_asgi_app_pinning_task(self, environ):
+    task = await _orig_start_asgi_app(self, environ)
+    _LEAKED_TASK_REFS.append(task)
+    return task
+
+
+_a2wsgi_asgi.ASGIResponder.start_asgi_app = _start_asgi_app_pinning_task
+
+
 # Stable TOTP secret for the seeded superadmin so test helpers can
 # compute current codes deterministically via `pyotp.TOTP().now()`.
 # Picked once at module import; never rotated within a session.

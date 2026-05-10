@@ -81,46 +81,12 @@ def test_owner_avatar_dropdown_opens_on_click(owner_page, smoke_server):
     assert not owner_page.js_errors
 
 
-# ── Return-check +Payment button (regression for PR #198) ───────
-
-
-def test_return_check_payment_modal_opens(admin_page, smoke_server):
-    """PR #198 fix: search.js was loaded `defer` while inline scripts
-    in /return-checks called attachSearchDebounce synchronously,
-    crashing the IIFE before bindRowActions ever ran. Result:
-    +Payment button was a no-op. This test creates a return check,
-    clicks the button, and asserts the modal opens — failing if the
-    button's click handler isn't bound."""
-    # Seed a pending return check directly via the API surface so
-    # we don't depend on the new-RC modal also working.
-    from datetime import date
-    from app import app as flask_app, db, ReturnCheck, Store
-    with flask_app.app_context():
-        sid = Store.query.filter_by(slug="test-store").first().id
-        rc = ReturnCheck(
-            store_id=sid,
-            customer_name="Smoke Sender",
-            check_number="9999",
-            amount=250.00,
-            payer_bank="Test Bank",
-            bounced_on=date.today(),
-        )
-        db.session.add(rc); db.session.commit()
-
-    admin_page.goto(smoke_server + "/return-checks")
-    admin_page.wait_for_load_state("networkidle")
-    # The +Payment button only renders for pending status.
-    payment_btn = admin_page.locator(".rc-act-payment").first
-    payment_btn.wait_for(state="visible", timeout=2000)
-    payment_btn.click()
-    # Modal opens via class toggle — wait for `.open` to appear.
-    modal = admin_page.locator("#rcPaymentModal")
-    admin_page.wait_for_function(
-        "document.getElementById('rcPaymentModal').classList.contains('open')",
-        timeout=2000,
-    )
-    assert modal.locator("h3", has_text="Add payment").is_visible()
-    assert not admin_page.js_errors
+# Note: the legacy /return-checks +Payment inline modal smoke test was
+# retired when /return-checks 301'd to the SPA (PR #392). The SPA's
+# return-check edit page surfaces existing payments read-only today;
+# the per-payment write UI ships in a follow-up. Once it lands, add
+# a smoke test that drives the new SPA flow (button → form → POST →
+# row appears) instead of resurrecting the old modal selectors.
 
 
 # ── Critical buttons exist and are reachable ────────────────────
