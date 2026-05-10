@@ -4528,6 +4528,9 @@ _MIGRATED_REPORT_DRILLDOWNS: set[str] = {
     "sales-by-service-type",
     "sales-by-employee",
     "cashier-productivity",
+    "top-customers",
+    "top-senders",
+    "top-recipients",
 }
 
 
