@@ -8106,68 +8106,20 @@ def bank_stripe_sync_transactions():
 @app.route("/bank/transactions")
 @pro_required
 def bank_transactions():
-    """Paginated list of pulled bank transactions. Live-search per
-    CLAUDE.md invariant #14: ?partial=1 returns JSON, full GET returns
-    the page chrome.
-
-    Filtering, sorting, and pagination live in
-    `api.Modules.BankSync.Services.list_transactions_page` — this
-    route only handles request parsing and response rendering.
-    """
-    from api.Modules.BankSync.Repositories import BankTransactionFilters
-    from api.Modules.BankSync.Services import list_transactions_page
-    store = current_store()
-    sid = store.id
-    is_partial = request.args.get("partial") == "1"
-    page = max(1, request.args.get("page", default=1, type=int))
-    per_page = 50
-    q          = (request.args.get("q") or "").strip()
-    account_id = request.args.get("account", type=int)
-    date_from  = (request.args.get("date_from") or "").strip()
-    date_to    = (request.args.get("date_to") or "").strip()
-
-    # Map the legacy "account" param onto the Service's "account_id".
-    # Skip the description filter when the query is shorter than 2
-    # chars (legacy parity — the live-search debouncer also clamps).
-    filters = BankTransactionFilters.from_query({
-        "posted_from": date_from,
-        "posted_to": date_to,
-        "account_id": str(account_id) if account_id else "",
-        "q": q if len(q) >= 2 else "",
-    })
-    page_obj = list_transactions_page(
-        db.session, [sid], filters, page=page, per_page=per_page,
-    )
-    rows = page_obj.rows
-    total = page_obj.total
-    total_pages = page_obj.total_pages
-    page = page_obj.page
-
-    accounts = (StripeBankAccount.query
-                 .filter_by(store_id=sid, enabled=True)
-                 .order_by(StripeBankAccount.connected_at.desc()).all())
-    # Pre-fetch any linked DailyLineItems so the row template can show
-    # the current report_date in the per-row date picker without an
-    # N+1 lookup. Map by id; rows without a link get None.
-    linked_ids = [r.daily_line_item_id for r in rows if r.daily_line_item_id]
-    line_by_id = {}
-    if linked_ids:
-        for line in DailyLineItem.query.filter(
-                DailyLineItem.id.in_(linked_ids)).all():
-            line_by_id[line.id] = line
-    ctx = dict(rows=rows, total=total, page=page, total_pages=total_pages,
-               accounts=accounts, q=q, account_id=account_id,
-               date_from=date_from, date_to=date_to,
-               category_groups=_bank_category_groups(sid),
-               category_label=_bank_category_label,
-               line_by_id=line_by_id)
-    if is_partial:
-        return jsonify({
-            "html": render_template("_bank_transactions_table.html", **ctx),
-            "total": total, "page": page, "total_pages": total_pages,
-        })
-    return render_template("bank_transactions.html",
-        user=current_user(), **ctx)
+    """301 → /app/bank-transactions. The bank-transactions ledger
+    moved to React; the SPA reads /api/v2/bank-sync/transactions
+    (paginated + filtered) and does its own debounced live-search.
+    Stub keeps url_for('bank_transactions') working in still-Jinja
+    chrome (the /bank summary page still links here) and bounces
+    old bookmarks. Query string (account / date / q / page)
+    preserved so a deep-link to a filtered view lands the SPA in
+    the same state — minus `?partial=1`, the legacy AJAX-only
+    marker the SPA never sends."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    if qs:
+        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
+    target = "/app/bank-transactions" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 # ── Reconcile actions ───────────────────────────────────────
 @app.route("/bank/transactions/<int:txn_id>/categorize", methods=["POST"])

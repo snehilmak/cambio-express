@@ -101,54 +101,39 @@ def test_record_bank_sync_bumps_counters(client, test_store_id):
         assert store.bank_sync_count_date == datetime.utcnow().date()
 
 
-# ── /bank/transactions route ─────────────────────────────────
+# ── /bank/transactions route (legacy 301 contract) ──────────
 
 
-def test_bank_transactions_route_renders_empty(client, test_store_id):
+def test_bank_transactions_legacy_url_redirects_to_spa(
+        client, test_store_id):
+    """The /bank/transactions ledger moved to React in PR #405.
+    The Flask page used to do server-side filtering + AJAX
+    `?partial=1` live-search; the SPA does both client-side
+    against /api/v2/bank-sync/transactions. Pinning the redirect
+    contract is enough — the data shape is exercised in
+    tests/Modules/BankSync/test_banksync_controllers.py."""
     _admin_login(client, test_store_id)
-    resp = client.get("/bank/transactions")
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    assert "All Bank Transactions" in body
-    assert "No transactions yet" in body
+    resp = client.get("/bank/transactions", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/bank-transactions"
 
 
-def test_bank_transactions_partial_returns_json(client, test_store_id):
+def test_bank_transactions_preserves_query_string_and_strips_partial(
+        client, test_store_id):
+    """Filters (q + account + date range) survive the 301; the
+    legacy `?partial=1` AJAX-only marker is stripped because the
+    SPA never sends it."""
     _admin_login(client, test_store_id)
-    resp = client.get("/bank/transactions?partial=1")
-    assert resp.status_code == 200
-    payload = resp.get_json()
-    assert payload is not None
-    assert "html" in payload
-    assert "total" in payload
-    assert payload["total"] == 0
-
-
-def test_bank_transactions_filters_by_search(client, test_store_id):
-    """Insert a few rows directly and confirm the q filter narrows them."""
-    from app import db, BankTransaction, StripeBankAccount
-    _admin_login(client, test_store_id)
-    with client.application.app_context():
-        acct = StripeBankAccount(
-            store_id=test_store_id, stripe_account_id="fca_test_1",
-            display_name="Checking", last4="1234",
-        )
-        db.session.add(acct); db.session.flush()
-        for i, desc in enumerate(["MAXISEND CO ENTRY", "WAL-MART POS", "INTERMEX ACH"]):
-            db.session.add(BankTransaction(
-                store_id=test_store_id, stripe_bank_account_id=acct.id,
-                stripe_transaction_id=f"fctxn_{i}",
-                amount_cents=1000 * (i + 1),
-                description=desc,
-                posted_at=datetime.utcnow() - timedelta(hours=i),
-            ))
-        db.session.commit()
-
-    resp = client.get("/bank/transactions?partial=1&q=maxi")
-    payload = resp.get_json()
-    assert payload["total"] == 1
-    assert "MAXISEND" in payload["html"]
-    assert "WAL-MART" not in payload["html"]
+    resp = client.get(
+        "/bank/transactions?partial=1&q=maxi&date_from=2026-01-01",
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert loc.startswith("/app/bank-transactions")
+    assert "partial=1" not in loc
+    assert "q=maxi" in loc
+    assert "date_from=2026-01-01" in loc
 
 
 # ── /bank/stripe/sync-transactions route ─────────────────────
