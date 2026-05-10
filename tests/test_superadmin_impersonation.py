@@ -144,9 +144,3 @@ def test_stop_impersonation_with_tampered_impersonator_id_clears_session():
 
 
 
-def test_banner_hidden_for_plain_superadmin():
-    c, _ = _logged_in_superadmin()
-    resp = c.get("/superadmin/controls")
-    assert resp.status_code == 200
-    html = resp.data.decode()
-    assert "Impersonating" not in html

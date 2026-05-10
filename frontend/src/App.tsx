@@ -49,6 +49,7 @@ import {
 } from "./routes/TwoFactor";
 import SuperadminAnnouncements from "./routes/SuperadminAnnouncements";
 import SuperadminAuditLog from "./routes/SuperadminAuditLog";
+import SuperadminControls from "./routes/SuperadminControls";
 import SuperadminReports from "./routes/SuperadminReports";
 import SuperadminStoreForm from "./routes/SuperadminStoreForm";
 import SuperadminStores from "./routes/SuperadminStores";
@@ -115,6 +116,7 @@ export default function App() {
         <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
         <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
         <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
+        <Route path="superadmin/controls"      element={<SuperadminControls />} />
         <Route path="superadmin/reports"       element={<SuperadminReports />} />
         <Route path="subscribe"             element={<Subscribe />} />
         <Route path="subscribe/success"     element={<SubscribeSuccess />} />

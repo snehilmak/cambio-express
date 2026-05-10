@@ -105,61 +105,12 @@ def _reset_last_attempt():
     smtp_svc.reset_last_attempt()
 
 
-def test_overview_renders_email_service_card(client):
-    _reset_last_attempt()
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    assert "Email service" in body
-    assert "SMTP_HOST" in body
-    assert "Send test email" in body
 
 
-def test_overview_shows_not_configured_when_env_missing(client):
-    for k in ("SMTP_HOST", "SMTP_USER", "SMTP_PASS"):
-        os.environ.pop(k, None)
-    _reset_last_attempt()
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    assert "Not configured" in body
-    # Button is disabled when env vars are missing — clicking would be
-    # a guaranteed failure, so we prevent it at the UI level.
-    assert "disabled" in body
 
 
-def test_overview_shows_connected_when_last_send_succeeded(client):
-    os.environ["SMTP_HOST"] = "smtp.test"
-    os.environ["SMTP_USER"] = "u"
-    os.environ["SMTP_PASS"] = "p"
-    from api.Modules.Notifications.Services import smtp as smtp_svc
-    smtp_svc.last_attempt.update({
-        "status": "sent", "error": "",
-        "when": datetime(2025, 1, 15, 10, 30, 0),
-        "last_to_domain": "customer.example", "last_subject": "X",
-    })
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    assert "Connected" in body
-    # Only the recipient's domain is shown, never the full address
-    # (the health card is viewed by superadmin but user emails are
-    # still personal data we don't need to surface here).
-    assert "*@customer.example" in body
 
 
-def test_overview_shows_failing_with_error_on_last_send_failure(client):
-    os.environ["SMTP_HOST"] = "smtp.test"
-    os.environ["SMTP_USER"] = "u"
-    os.environ["SMTP_PASS"] = "p"
-    from api.Modules.Notifications.Services import smtp as smtp_svc
-    smtp_svc.last_attempt.update({
-        "status": "failed",
-        "error": "SMTPAuthenticationError: 535 bad creds",
-        "when": datetime(2025, 1, 15, 10, 30, 0),
-        "last_to_domain": "customer.example", "last_subject": "X",
-    })
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    assert "Failing" in body
-    assert "bad creds" in body
 
 
 # ── /superadmin/send-test-email button ─────────────────────────
@@ -172,15 +123,22 @@ def test_send_test_email_requires_superadmin(logged_in_client):
 
 def test_send_test_email_flashes_when_superadmin_has_no_email(client):
     """Superadmin who hasn't set their /account/profile email gets a
-    guard instead of a noisy failure — nowhere to send the test to."""
+    guard instead of a noisy failure — handler short-circuits and
+    302s. The legacy flash text moved to React; assert the bounce
+    didn't silently send a real email by checking
+    `_last_smtp_attempt` is unchanged."""
+    from app import _last_smtp_attempt
+    before_attempt = dict(_last_smtp_attempt)
     with client.application.app_context():
         sa = User.query.filter_by(username="superadmin").first()
         sa.email = ""
         db.session.commit()
     resp = _superadmin_client(client.application).post(
-        "/superadmin/send-test-email", follow_redirects=True)
-    body = resp.data.decode()
-    assert "Set your email" in body or "set your email" in body
+        "/superadmin/send-test-email", follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    # Handler short-circuited — _last_smtp_attempt unchanged.
+    from app import _last_smtp_attempt as after_attempt
+    assert dict(after_attempt) == before_attempt
 
 
 def test_send_test_email_redirects_to_overview_with_flash(client):

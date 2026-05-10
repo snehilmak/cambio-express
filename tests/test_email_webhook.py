@@ -294,38 +294,8 @@ def _superadmin_client(app):
     return c
 
 
-def test_overview_shows_webhook_secret_env_state(client):
-    """New SMTP_* row: RESEND_WEBHOOK_SECRET. Shown as set/missing
-    the same way the other env vars are."""
-    os.environ.pop("RESEND_WEBHOOK_SECRET", None)
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    assert "RESEND_WEBHOOK_SECRET" in body
-    assert "delivery events not tracked" in body
 
 
-def test_overview_shows_delivery_counts_when_events_present(client, test_admin_id):
-    """Populate EmailEvent rows, then confirm the 7-day roll-up shows
-    delivered / bounced / complained counts on the Overview."""
-    with client.application.app_context():
-        for (kind, n) in (("email.delivered", 5), ("email.bounced", 1),
-                           ("email.complained", 1), ("email.opened", 3)):
-            for _ in range(n):
-                db.session.add(EmailEvent(
-                    message_id="m", to_addr="x@y.z",
-                    event_type=kind, bounce_type="",
-                    payload=""))
-        db.session.commit()
-    body = _superadmin_client(client.application).get(
-        "/superadmin/controls?tab=overview").data.decode()
-    # Section header visible
-    assert "Delivery events" in body
-    # Each count rendered (look for the row label — numbers can shift
-    # depending on rendering whitespace).
-    assert "Delivered" in body
-    assert "Bounced" in body
-    assert "Complained" in body
-    assert "Suppressed addresses" in body
 
 
 # ── Purge FK safety ────────────────────────────────────────────
