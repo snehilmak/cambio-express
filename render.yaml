@@ -6,7 +6,17 @@ services:
     # builds the React/Vite SPA bundle that Flask serves at
     # /app/*. See scripts/build.sh for what each step does.
     buildCommand: bash ./scripts/build.sh
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    # ASGI entrypoint via gunicorn's UvicornWorker. asgi.py routes
+    # /api/v2/* directly to the FastAPI app at the ASGI layer,
+    # bypassing the inner a2wsgi.ASGIMiddleware that the legacy
+    # Flask DispatcherMiddleware chain set up. That bridge was
+    # leaking asyncio tasks in its background thread, eventually
+    # hanging the gunicorn worker on /api/v2/auth/login-cross-store
+    # (incident: WORKER TIMEOUT → SIGKILL → "Network error" in the
+    # SPA login screen). With the bypass, /api/v2 is served as
+    # native ASGI and the leaky background loop is no longer in
+    # the request path.
+    startCommand: gunicorn asgi:asgi_app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: SECRET_KEY
         generateValue: true
