@@ -3865,100 +3865,15 @@ def _csv_split(s):
 @app.route("/tv-display")
 @login_required
 def admin_tv_display():
-    """Landing page for the TV display add-on. Lists country sections,
-    surfaces the public-display link + token-rotate action, and
-    deep-links into the per-country edit page."""
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    user, store = guard
-    display = _ensure_tv_display(store)
-    countries = (TVDisplayCountry.query
-                  .filter_by(display_id=display.id)
-                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
-    # Quick stats per country so the index is useful at a glance.
-    country_stats = {}
-    for c in countries:
-        bank_count = TVDisplayPayoutBank.query.filter_by(country_id=c.id).count()
-        rate_count = (db.session.query(TVDisplayRate)
-                       .join(TVDisplayPayoutBank,
-                             TVDisplayRate.bank_id == TVDisplayPayoutBank.id)
-                       .filter(TVDisplayPayoutBank.country_id == c.id).count())
-        country_stats[c.id] = {"banks": bank_count, "rates": rate_count}
-    public_url = url_for("tv_public_display", token=display.public_token,
-                          _external=True)
-    # Active Fire TV pairing for the "Currently paired" pill on the
-    # admin landing. None when no Fire TV has paired (or all prior
-    # pairings have been revoked / superseded).
-    active_pairing = (TVPairing.query
-                       .filter_by(display_id=display.id, revoked_at=None)
-                       .order_by(TVPairing.paired_at.desc())
-                       .first())
-    return render_template("tv_display_admin.html",
-                            user=user, store=store, display=display,
-                            countries=countries, country_stats=country_stats,
-                            public_url=public_url,
-                            active_pairing=active_pairing,
-                            country_picker=_TV_COUNTRY_PICKER)
+    """301 → /app/tv-display. The admin landing moved to React; the
+    SPA reads from /api/v2/tv-display/overview and POSTs to the JSON
+    write endpoints under that prefix. Stub keeps
+    url_for('admin_tv_display') working in still-Jinja chrome (the
+    sidebar nav link) and bounces old bookmarks. The addon-not-active
+    error renders inside the SPA from the 409 the overview endpoint
+    returns — no server-side gate here."""
+    return redirect("/app/tv-display", code=301)
 
-@app.route("/tv-display/pairings/<int:pairing_id>/revoke", methods=["POST"])
-@login_required
-def tv_display_revoke_pairing(pairing_id):
-    """Manually revoke a paired Fire TV (e.g. operator replaced it,
-    lost it, decommissioned it). Sets revoked_at = now; the device's
-    URL 404s on next refresh."""
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    pairing = TVPairing.query.filter_by(
-        id=pairing_id, display_id=display.id).first_or_404()
-    if pairing.revoked_at is None:
-        pairing.revoked_at = datetime.utcnow()
-        db.session.commit()
-        flash("Fire TV unpaired. The device will stop showing the board on its next refresh.",
-              "success")
-    return redirect(url_for("admin_tv_display"))
-
-@app.route("/tv-display/settings", methods=["POST"])
-@login_required
-def tv_display_save_settings():
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    display.title = (request.form.get("title") or "").strip()[:120] or "Cheapest Money Transfer"
-    display.subtitle = (request.form.get("subtitle") or "").strip()[:120]
-    orient = (request.form.get("orientation") or "auto").strip()
-    if orient not in ("auto", "landscape", "portrait"):
-        orient = "auto"
-    display.orientation = orient
-    theme = (request.form.get("theme") or "light").strip()
-    if theme not in ("light", "dark"):
-        theme = "light"
-    display.theme = theme
-    display.last_updated_at = datetime.utcnow()
-    db.session.commit()
-    flash("Display settings saved.", "success")
-    return redirect(url_for("admin_tv_display"))
-
-@app.route("/tv-display/regenerate-token", methods=["POST"])
-@login_required
-def tv_display_regenerate_token():
-    """Rotate the public token. Anyone holding the old URL stops
-    seeing the board on the next page load."""
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    display.public_token = secrets.token_urlsafe(24)
-    db.session.commit()
-    flash("Display URL regenerated. Update any TV pointing at the old link.",
-          "success")
-    return redirect(url_for("admin_tv_display"))
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
 #
@@ -4117,95 +4032,6 @@ def tv_pair_status():
         "code":         pending.code,
         "ttl_seconds":  max(0, ttl),
     }), 200
-
-@app.route("/tv-display/claim", methods=["POST"])
-@login_required
-def tv_display_claim():
-    """Admin enters a 6-char code from a Fire TV showing the pairing
-    screen. Server validates the code is live and not yet claimed,
-    revokes any prior active TVPairing on this store's display, then
-    creates a fresh TVPairing reusing the device_token from the
-    pending row.
-
-    Failure modes (all flash + redirect, none reveal whether the
-    code exists):
-      - missing/short code              → "Enter the 6-character code…"
-      - unknown code                    → "Code not found or expired."
-      - expired code                    → "Code not found or expired."
-      - already claimed                 → "Code not found or expired."
-    """
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-
-    raw = (request.form.get("code") or "").strip().upper()
-    code = "".join(c for c in raw if c in _PAIR_CODE_ALPHABET)
-    if len(code) != 6:
-        flash("Enter the 6-character code shown on your Fire TV.", "error")
-        return redirect(url_for("admin_tv_display"))
-
-    pending = TVPendingPair.query.filter_by(code=code).first()
-    if (not pending
-            or pending.claimed_at is not None
-            or pending.expires_at < datetime.utcnow()):
-        flash("Code not found or expired. Generate a fresh code on the Fire TV and try again.",
-              "error")
-        return redirect(url_for("admin_tv_display"))
-
-    # Revoke any prior active pairing on this display. One Fire TV
-    # at a time per subscription.
-    now = datetime.utcnow()
-    TVPairing.query.filter(
-        TVPairing.display_id == display.id,
-        TVPairing.revoked_at.is_(None),
-    ).update({"revoked_at": now}, synchronize_session=False)
-
-    # Create the new pairing, reusing the device_token the Fire TV
-    # already holds — fewer moving parts on the client.
-    pairing = TVPairing(
-        display_id=display.id,
-        device_token=pending.device_token,
-        device_label=pending.device_label,
-        paired_at=now,
-        last_seen_at=now,
-    )
-    db.session.add(pairing)
-    db.session.flush()  # need pairing.id before linking the pending row
-
-    pending.claimed_at = now
-    pending.claimed_pairing_id = pairing.id
-    display.last_updated_at = now
-    db.session.commit()
-
-    flash("Fire TV paired. The screen will switch to the rate board within a few seconds.",
-          "success")
-    return redirect(url_for("admin_tv_display"))
-
-@app.route("/tv-display/countries/new", methods=["POST"])
-@login_required
-def tv_display_country_new():
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    name = (request.form.get("country_name") or "").strip()[:80]
-    code = (request.form.get("country_code") or "").strip().upper()[:4]
-    if not name:
-        flash("Country name is required.", "error")
-        return redirect(url_for("admin_tv_display"))
-    # Default sort_order = max + 10 so manual reordering has room.
-    last = (db.session.query(db.func.max(TVDisplayCountry.sort_order))
-             .filter_by(display_id=display.id).scalar() or 0)
-    c = TVDisplayCountry(display_id=display.id, country_code=code,
-                          country_name=name, sort_order=last + 10,
-                          mt_companies=(request.form.get("mt_companies") or "").strip()[:500])
-    db.session.add(c); db.session.commit()
-    display.last_updated_at = datetime.utcnow(); db.session.commit()
-    flash(f"Added {name}. Now add payout banks and rates.", "success")
-    return redirect(url_for("tv_display_country_edit", country_id=c.id))
 
 @app.route("/tv-display/countries/<int:country_id>", methods=["GET", "POST"])
 @login_required
@@ -4379,30 +4205,6 @@ def tv_display_country_edit(country_id):
                             bank_name_by_slug=bank_name_by_slug,
                             country_picker=_TV_COUNTRY_PICKER,
                             country_picker_codes=[c[0] for c in _TV_COUNTRY_PICKER])
-
-@app.route("/tv-display/countries/<int:country_id>/delete", methods=["POST"])
-@login_required
-def tv_display_country_delete(country_id):
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    country = TVDisplayCountry.query.filter_by(
-        id=country_id, display_id=display.id).first_or_404()
-    # Manual cascade — same pattern as the retention purge.
-    bank_ids = [b.id for b in TVDisplayPayoutBank.query.filter_by(
-        country_id=country.id).all()]
-    if bank_ids:
-        TVDisplayRate.query.filter(TVDisplayRate.bank_id.in_(bank_ids)).delete(
-            synchronize_session=False)
-    TVDisplayPayoutBank.query.filter_by(country_id=country.id).delete(
-        synchronize_session=False)
-    db.session.delete(country)
-    display.last_updated_at = datetime.utcnow()
-    db.session.commit()
-    flash(f"Removed {country.country_name}.", "success")
-    return redirect(url_for("admin_tv_display"))
 
 def _render_tv_board(display, store):
     """Build the section payload + render the public TV template.

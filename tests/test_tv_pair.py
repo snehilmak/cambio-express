@@ -2,9 +2,9 @@
 
 The Fire TV companion app calls POST /api/tv-pair/init on launch and
 displays the returned 6-char code. The operator types that code into
-/tv-display, which POSTs to /tv-display/claim. The Fire TV polls
-GET /api/tv-pair/status to discover the claim and load its per-
-device URL.
+the React /app/tv-display, which POSTs to /api/v2/tv-display/claim.
+The Fire TV polls GET /api/tv-pair/status to discover the claim and
+load its per-device URL.
 
 These tests pin the security-relevant invariants:
   - codes are single-use (a claimed code can never be claimed again),
@@ -33,11 +33,27 @@ def _activate_addon(client, store_id):
         db.session.commit()
 
 
-def _ensure_display(client):
-    """Land on /tv-display once so _ensure_tv_display creates the row."""
-    client.get("/tv-display")
+def _admin_jwt(client, store_id, *, username="admin@test.com",
+               password="testpass123!"):
+    """Mint a Bearer JWT for an admin/employee via the SPA login. The
+    /api/v2/tv-display/* write endpoints all require this dependency."""
+    return client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": password,
+              "store_id": store_id},
+    ).get_json()["access_token"]
+
+
+def _ensure_display(client, store_id, jwt):
+    """Land on the overview endpoint once so _ensure_display creates
+    the TVDisplay row. Mirrors the legacy `_ensure_tv_display` lazy-
+    create that the deleted /tv-display GET used to do."""
+    client.get(
+        "/api/v2/tv-display/overview",
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
     with client.application.app_context():
-        return TVDisplay.query.first()
+        return TVDisplay.query.filter_by(store_id=store_id).first()
 
 
 def _init(client, **payload):
@@ -45,10 +61,15 @@ def _init(client, **payload):
     return client.post("/api/tv-pair/init", json=payload).get_json()
 
 
-def _claim(client, code, follow_redirects=False):
-    """Admin-side claim. Form POST, returns the response."""
-    return client.post("/tv-display/claim", data={"code": code},
-                        follow_redirects=follow_redirects)
+def _claim(client, code, jwt):
+    """Admin-side claim via the new JSON endpoint. Returns the response.
+    Caller passes a JWT minted from the same store the TV display
+    belongs to."""
+    return client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
 
 
 # ── /api/tv-pair/init ──────────────────────────────────────────
@@ -127,16 +148,15 @@ def test_status_expired_when_pending_row_aged_out(client):
     assert resp.get_json()["status"] == "expired"
 
 
-def test_status_claimed_after_admin_claims_the_code(client, logged_in_client, test_store_id):
+def test_status_claimed_after_admin_claims_the_code(client, test_store_id):
     """End-to-end happy path: TV initiates, admin claims, TV's poll
     flips to "claimed" and gets a /tv/device/<token> URL."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    # Admin claims it.
-    resp = _claim(logged_in_client, body["code"])
-    assert resp.status_code == 302  # flash + redirect
-    # TV's next poll sees "claimed".
+    resp = _claim(client, body["code"], jwt)
+    assert resp.status_code == 204
     poll = client.get("/api/tv-pair/status",
                        query_string={"token": body["device_token"]}).get_json()
     assert poll["status"] == "claimed"
@@ -145,157 +165,177 @@ def test_status_claimed_after_admin_claims_the_code(client, logged_in_client, te
     assert "title" in poll
 
 
-# ── /tv-display/claim (admin side) ─────────────────────────────
+# ── /api/v2/tv-display/claim (admin side, JSON) ───────────────
 
-def test_claim_blocked_when_addon_off(logged_in_client, client):
-    """Claim requires the addon — same gate as the rest of /tv-display."""
+def test_claim_blocked_when_addon_off(client, test_store_id):
+    """Claim requires the addon — the JSON endpoint returns 409 (the
+    same code the legacy form-POST flagged via flash + redirect)."""
     body = _init(client)
-    resp = logged_in_client.post("/tv-display/claim",
-                                   data={"code": body["code"]})
-    assert resp.status_code == 302
-    assert "/admin/subscription" in resp.headers["Location"]
-    # Pending row still unclaimed.
-    with logged_in_client.application.app_context():
+    jwt = _admin_jwt(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": body["code"]},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 409
+    with client.application.app_context():
         p = TVPendingPair.query.filter_by(code=body["code"]).first()
         assert p.claimed_at is None
 
 
-def test_claim_creates_tvpairing_reusing_device_token(client, logged_in_client, test_store_id):
+def test_claim_creates_tvpairing_reusing_device_token(client, test_store_id):
     """The device_token from the pending row is COPIED into the new
     TVPairing — the Fire TV stores its token once at /init time and
     never sees a rotation."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    _claim(logged_in_client, body["code"])
+    _claim(client, body["code"], jwt)
     with client.application.app_context():
         pairing = TVPairing.query.filter_by(
             device_token=body["device_token"]).first()
         assert pairing is not None
         assert pairing.revoked_at is None
-        # Pending row is marked claimed and links back to the pairing.
         pending = TVPendingPair.query.filter_by(code=body["code"]).first()
         assert pending.claimed_at is not None
         assert pending.claimed_pairing_id == pairing.id
 
 
-def test_claim_strips_whitespace_and_lowercase(client, logged_in_client, test_store_id):
+def test_claim_strips_whitespace_and_lowercase(client, test_store_id):
     """Operator pastes 'abc - 234' from a Fire TV that renders the
     code with spacing — server normalizes the same way the client
     JS does."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
     munged = body["code"][:3].lower() + " - " + body["code"][3:].lower()
-    resp = _claim(logged_in_client, munged)
-    assert resp.status_code == 302
+    resp = _claim(client, munged, jwt)
+    assert resp.status_code == 204
     with client.application.app_context():
         assert TVPairing.query.filter_by(
             device_token=body["device_token"]).first() is not None
 
 
-def test_claim_is_single_use(client, logged_in_client, test_store_id):
+def test_claim_is_single_use(client, test_store_id):
     """*** Anti-misuse rule: a code claimed once cannot be claimed
     again. *** Even by the same admin. The pending row stays around
     for audit but its claimed_at is non-NULL forever after."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    first = _claim(logged_in_client, body["code"], follow_redirects=True)
-    second = _claim(logged_in_client, body["code"], follow_redirects=True)
-    assert first.status_code == 200  # 302 → 200 after follow
-    assert second.status_code == 200
-    # Second claim's flash carries the friendly error.
+    first = _claim(client, body["code"], jwt)
+    second = _claim(client, body["code"], jwt)
+    assert first.status_code == 204
+    assert second.status_code == 400
     assert b"Code not found or expired" in second.data
 
 
-def test_claim_404s_message_for_unknown_code(logged_in_client, test_store_id):
-    """All failure modes flash the same vague message so brute-force
+def test_claim_400_for_unknown_code(client, test_store_id):
+    """All failure modes return the same opaque 400 so brute-force
     probes can't tell unknown vs expired vs already-claimed apart."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
-    resp = logged_in_client.post("/tv-display/claim",
-                                   data={"code": "ZZZZZZ"},
-                                   follow_redirects=True)
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": "ZZZZZZ"},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 400
     assert b"Code not found or expired" in resp.data
 
 
-def test_claim_rejects_short_code(logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
-    resp = logged_in_client.post("/tv-display/claim",
-                                   data={"code": "AB"},
-                                   follow_redirects=True)
-    assert b"6-character code" in resp.data
+def test_claim_rejects_short_code(client, test_store_id):
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": "AB"},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    # Same opaque 400 as unknown — short codes can't be enumerated
+    # any more than wrong-but-legal-length ones.
+    assert resp.status_code == 400
 
 
-def test_claim_revokes_prior_pairing(client, logged_in_client, test_store_id):
+def test_claim_revokes_prior_pairing(client, test_store_id):
     """*** Operator concern: pairing a NEW Fire TV must immediately
     disable the OLD one. *** Single-active-pairing per display
     enforces "one $5 sub = one Fire TV at a time."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
-    # Pair Fire TV #1.
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     a = _init(client)
-    _claim(logged_in_client, a["code"])
-    # Old TV's URL is live.
+    _claim(client, a["code"], jwt)
     assert client.get("/tv/device/" + a["device_token"]).status_code == 200
-    # Pair Fire TV #2 (separate /init = separate pending row + token).
     b = _init(client)
-    _claim(logged_in_client, b["code"])
+    _claim(client, b["code"], jwt)
     with client.application.app_context():
         old = TVPairing.query.filter_by(device_token=a["device_token"]).first()
         new = TVPairing.query.filter_by(device_token=b["device_token"]).first()
         assert old.revoked_at is not None
         assert new.revoked_at is None
-    # Old TV's URL now 404s; new TV's URL works.
     assert client.get("/tv/device/" + a["device_token"]).status_code == 404
     assert client.get("/tv/device/" + b["device_token"]).status_code == 200
-    # And the OLD TV's status poll now shows "expired" (its pending
-    # row long since claimed; its pairing revoked).
     poll = client.get("/api/tv-pair/status",
                        query_string={"token": a["device_token"]}).get_json()
     assert poll["status"] == "expired"
 
 
-def test_claim_404s_when_pending_already_claimed(client, logged_in_client, test_store_id):
+def test_claim_400_when_pending_already_claimed(client, test_store_id):
     """Two admins racing to claim the same code (e.g. shared
     superadmin shoulder-surfing): only one wins, the other gets the
-    same vague error."""
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+    same vague 400."""
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    _claim(logged_in_client, body["code"])
-    # Re-claim — already-claimed lands as the same error as unknown.
-    resp = logged_in_client.post("/tv-display/claim",
-                                   data={"code": body["code"]},
-                                   follow_redirects=True)
+    _claim(client, body["code"], jwt)
+    resp = _claim(client, body["code"], jwt)
+    assert resp.status_code == 400
     assert b"Code not found or expired" in resp.data
 
 
 # ── /tv/device/<device_token> render path ──────────────────────
 
-def _populate_one_country(client, store_id):
+def _populate_one_country(client, store_id, jwt):
+    """Set up a country with one bank for the public-render tests.
+    Country header via JSON; the bank gets added through the legacy
+    Flask country-editor POST until that page's migration lands.
+    The country-editor POST needs a Flask session — we mint a one-shot
+    test client with the seeded admin's session here."""
     _activate_addon(client, store_id)
-    client.get("/tv-display")
-    client.post("/tv-display/countries/new", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "Maxi, Vigo",
-    })
-    with client.application.app_context():
-        from app import TVDisplayCountry
-        country_id = TVDisplayCountry.query.first().id
-    client.post(f"/tv-display/countries/{country_id}", data={
+    create = client.post(
+        "/api/v2/tv-display/countries",
+        json={"country_name": "Mexico", "country_code": "MX",
+              "mt_companies": "Maxi, Vigo"},
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    country_id = create.get_json()["id"]
+    from app import User, app as flask_app
+    with flask_app.app_context():
+        admin_id = User.query.filter_by(username="admin@test.com").one().id
+    sess_client = flask_app.test_client()
+    with sess_client.session_transaction() as sess:
+        sess["user_id"] = admin_id
+        sess["role"] = "admin"
+        sess["store_id"] = store_id
+    sess_client.post(f"/tv-display/countries/{country_id}", data={
         "country_name": "Mexico", "country_code": "MX",
         "mt_companies": "Maxi, Vigo",
         "new_bank_name": "Bancomer",
     })
 
 
-def test_device_url_renders_full_board(client, logged_in_client, test_store_id):
-    _populate_one_country(logged_in_client, test_store_id)
+def test_device_url_renders_full_board(client, test_store_id):
+    jwt = _admin_jwt(client, test_store_id)
+    _populate_one_country(client, test_store_id, jwt)
     body = _init(client)
-    _claim(logged_in_client, body["code"])
+    _claim(client, body["code"], jwt)
     resp = client.get("/tv/device/" + body["device_token"])
     assert resp.status_code == 200
     html = resp.data.decode()
@@ -304,33 +344,35 @@ def test_device_url_renders_full_board(client, logged_in_client, test_store_id):
     assert "design-tokens.css" in html
 
 
-def test_device_url_404s_after_being_superseded(client, logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+def test_device_url_404s_after_being_superseded(client, test_store_id):
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     a = _init(client)
-    _claim(logged_in_client, a["code"])
+    _claim(client, a["code"], jwt)
     b = _init(client)
-    _claim(logged_in_client, b["code"])
+    _claim(client, b["code"], jwt)
     assert client.get("/tv/device/" + a["device_token"]).status_code == 404
 
 
-def test_device_url_404s_when_addon_revoked(client, logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+def test_device_url_404s_when_addon_revoked(client, test_store_id):
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    _claim(logged_in_client, body["code"])
-    # Yank the addon.
-    with logged_in_client.application.app_context():
+    _claim(client, body["code"], jwt)
+    with client.application.app_context():
         s = db.session.get(Store, test_store_id)
         s.addons = ""; db.session.commit()
     assert client.get("/tv/device/" + body["device_token"]).status_code == 404
 
 
-def test_device_url_bumps_last_seen_at(client, logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    _ensure_display(logged_in_client)
+def test_device_url_bumps_last_seen_at(client, test_store_id):
+    _activate_addon(client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _ensure_display(client, test_store_id, jwt)
     body = _init(client)
-    _claim(logged_in_client, body["code"])
+    _claim(client, body["code"], jwt)
     with client.application.app_context():
         TVPairing.query.filter_by(
             device_token=body["device_token"]
@@ -343,34 +385,43 @@ def test_device_url_bumps_last_seen_at(client, logged_in_client, test_store_id):
         assert after > (datetime.utcnow() - timedelta(minutes=1))
 
 
-def test_legacy_public_url_still_works_for_tablets(client, logged_in_client, test_store_id):
+def test_legacy_public_url_still_works_for_tablets(client, test_store_id):
     """The user explicitly asked to keep /tv/<public_token> working
     for operators running tablets/Chromecasts. Verify the inverted
     pair flow doesn't break that path."""
-    _populate_one_country(logged_in_client, test_store_id)
+    jwt = _admin_jwt(client, test_store_id)
+    _populate_one_country(client, test_store_id, jwt)
     with client.application.app_context():
         token = TVDisplay.query.first().public_token
     assert client.get("/tv/" + token).status_code == 200
-    # And that a paired-then-revoked Fire TV doesn't affect it.
     a = _init(client)
-    _claim(logged_in_client, a["code"])
+    _claim(client, a["code"], jwt)
     b = _init(client)
-    _claim(logged_in_client, b["code"])  # supersede
+    _claim(client, b["code"], jwt)  # supersede
     assert client.get("/tv/" + token).status_code == 200
 
 
 # ── Employee access ────────────────────────────────────────────
 
 def test_employee_can_claim_a_code(client, test_store_id):
-    """v1 grants employees /tv-display access — pairing is daily-
-    operations work, not back-office."""
+    """v1 grants employees TV-display access — pairing is daily-
+    operations work, not back-office. Employee mints their own JWT
+    via /api/v2/auth/login."""
     _activate_addon(client, test_store_id)
     from tests.conftest import make_employee_client
     emp = make_employee_client(test_store_id)
-    emp.get("/tv-display")  # ensure display
+    with emp.session_transaction() as sess:
+        emp_uid = sess["user_id"]
+    with client.application.app_context():
+        emp_username = User.query.filter_by(id=emp_uid).one().username
+    emp_jwt = _admin_jwt(
+        client, test_store_id,
+        username=emp_username, password="x",
+    )
+    _ensure_display(client, test_store_id, emp_jwt)
     body = _init(client)
-    resp = emp.post("/tv-display/claim", data={"code": body["code"]})
-    assert resp.status_code == 302
+    resp = _claim(client, body["code"], emp_jwt)
+    assert resp.status_code == 204
     with client.application.app_context():
         assert TVPairing.query.filter_by(
             device_token=body["device_token"]).first() is not None

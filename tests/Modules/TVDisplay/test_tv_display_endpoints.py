@@ -297,3 +297,273 @@ def test_country_detail_employee_role_allowed(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
+
+
+# ── write-side: settings ─────────────────────────────────────
+
+
+def test_settings_requires_jwt(client):
+    resp = client.post("/api/v2/tv-display/settings", json={})
+    assert resp.status_code == 401
+
+
+def test_settings_409_when_addon_inactive(client, test_store_id):
+    """Mirrors the overview-side gate. Saves are blocked at the same
+    layer so a curl client without the SPA can't mutate config on a
+    store whose subscription doesn't include the add-on."""
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/settings",
+        json={"title": "Hi", "subtitle": "", "orientation": "auto", "theme": "light"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+
+
+def test_settings_persists_full_payload(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/settings",
+        json={"title": "Hello", "subtitle": "World",
+              "orientation": "portrait", "theme": "dark"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    from app import TVDisplay, app as flask_app
+    with flask_app.app_context():
+        d = TVDisplay.query.first()
+        assert d.title == "Hello"
+        assert d.subtitle == "World"
+        assert d.orientation == "portrait"
+        assert d.theme == "dark"
+
+
+def test_settings_invalid_orientation_falls_back(client, test_store_id):
+    """Same forgiving behaviour as the legacy form: garbage
+    orientation/theme silently snaps to the safe default rather than
+    422-ing the whole save (preserves operator UX from v1)."""
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    client.post(
+        "/api/v2/tv-display/settings",
+        json={"title": "X", "subtitle": "",
+              "orientation": "diagonal", "theme": "neon"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    from app import TVDisplay, app as flask_app
+    with flask_app.app_context():
+        d = TVDisplay.query.first()
+        assert d.orientation == "auto"
+        assert d.theme == "light"
+
+
+# ── write-side: regenerate-token ─────────────────────────────
+
+
+def test_regenerate_token_rotates_value(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    headers = {"Authorization": f"Bearer {token}"}
+    overview = client.get("/api/v2/tv-display/overview", headers=headers).get_json()
+    old = overview["public_token"]
+    resp = client.post(
+        "/api/v2/tv-display/regenerate-token", json={}, headers=headers,
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["public_token"] != old
+    assert body["public_url"] == f"/tv/{body['public_token']}"
+
+
+# ── write-side: claim ────────────────────────────────────────
+
+
+def test_claim_400_when_no_pending_code(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": "ABCDEF"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+
+
+def test_claim_400_when_code_too_short(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": "AB"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+
+
+def test_claim_pairs_fire_tv_with_valid_code(client, test_store_id):
+    """End-to-end: Fire TV initiates pairing → admin claims via JSON.
+    Result: a TVPairing row whose device_token equals the pending row's,
+    and the pending row is marked claimed."""
+    from app import TVPairing, TVPendingPair, app as flask_app, db
+    _enable_tv_addon(test_store_id)
+    init = client.post("/api/tv-pair/init", json={"device_label": "Counter"})
+    assert init.status_code == 200
+    payload = init.get_json()
+    code = payload["code"]
+    device_token = payload["device_token"]
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/claim",
+        json={"code": code},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    with flask_app.app_context():
+        pending = db.session.query(TVPendingPair).filter_by(code=code).one()
+        assert pending.claimed_at is not None
+        pairing = (
+            db.session.query(TVPairing)
+              .filter(TVPairing.device_token == device_token)
+              .one()
+        )
+        assert pairing.revoked_at is None
+
+
+# ── write-side: revoke pairing ───────────────────────────────
+
+
+def test_revoke_pairing_404_for_other_store(client, test_store_id):
+    """Pairings on a sibling store's display must 404, not 403 — opaque
+    tenancy. Mirrors the overview's 404-everything posture."""
+    from app import Store, TVDisplay, TVPairing, app as flask_app, db
+    from datetime import datetime
+    import secrets
+    _enable_tv_addon(test_store_id)
+    with flask_app.app_context():
+        sibling = Store(name="Other", slug="other", email="o@e.com",
+                        plan="basic", addons="tv_display")
+        db.session.add(sibling); db.session.flush()
+        d = TVDisplay(store_id=sibling.id,
+                      public_token=secrets.token_urlsafe(24))
+        db.session.add(d); db.session.flush()
+        p = TVPairing(display_id=d.id, device_token="t",
+                      device_label="x", paired_at=datetime.utcnow(),
+                      last_seen_at=datetime.utcnow())
+        db.session.add(p); db.session.commit()
+        sibling_pairing_id = p.id
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/tv-display/pairings/{sibling_pairing_id}/revoke",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_revoke_pairing_marks_revoked_at(client, test_store_id):
+    from app import TVDisplay, TVPairing, app as flask_app, db
+    from datetime import datetime
+    import secrets
+    _enable_tv_addon(test_store_id)
+    with flask_app.app_context():
+        d = TVDisplay(store_id=test_store_id,
+                      public_token=secrets.token_urlsafe(24))
+        db.session.add(d); db.session.flush()
+        p = TVPairing(display_id=d.id, device_token="ttt",
+                      device_label="Counter",
+                      paired_at=datetime.utcnow(),
+                      last_seen_at=datetime.utcnow())
+        db.session.add(p); db.session.commit()
+        pairing_id = p.id
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/tv-display/pairings/{pairing_id}/revoke",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    with flask_app.app_context():
+        p = db.session.get(TVPairing, pairing_id)
+        assert p.revoked_at is not None
+
+
+# ── write-side: country create + delete ──────────────────────
+
+
+def test_create_country_uppercases_code_and_returns_201(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/countries",
+        json={"country_name": "Guatemala", "country_code": "gt",
+              "mt_companies": "Maxi, Vigo"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["country_code"] == "GT"
+    assert body["country_name"] == "Guatemala"
+    from app import TVDisplayCountry, app as flask_app
+    with flask_app.app_context():
+        c = TVDisplayCountry.query.filter_by(country_name="Guatemala").one()
+        assert c.country_code == "GT"
+
+
+def test_create_country_rejects_blank_name(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/tv-display/countries",
+        json={"country_name": "   ", "country_code": "MX",
+              "mt_companies": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # 422 from the explicit validator (after strip()) — distinguishes
+    # the post-trim empty case from raw-empty payloads (which Pydantic
+    # itself catches via min_length=1).
+    assert resp.status_code == 422
+
+
+def test_delete_country_cascades_banks_and_rates(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    _, country_id = _seed_country(test_store_id, mt_companies="Maxi,Vigo")
+    _seed_bank_with_rates(country_id, "Bancomer", {"Maxi": 18.5})
+    token = _login_admin(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/tv-display/countries/{country_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    from app import (
+        TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate,
+        app as flask_app,
+    )
+    with flask_app.app_context():
+        assert TVDisplayCountry.query.filter_by(id=country_id).first() is None
+        assert TVDisplayPayoutBank.query.filter_by(country_id=country_id).count() == 0
+        assert TVDisplayRate.query.count() == 0
+
+
+def test_delete_country_404_for_other_store(client, test_store_id):
+    _enable_tv_addon(test_store_id)
+    from app import Store, TVDisplay, TVDisplayCountry, app as flask_app, db
+    import secrets
+    with flask_app.app_context():
+        sibling = Store(name="Sibling", slug="sib", email="s@e.com",
+                        plan="basic", addons="tv_display")
+        db.session.add(sibling); db.session.flush()
+        d = TVDisplay(store_id=sibling.id,
+                      public_token=secrets.token_urlsafe(24))
+        db.session.add(d); db.session.flush()
+        c = TVDisplayCountry(display_id=d.id, country_name="Honduras",
+                              country_code="HN", sort_order=0,
+                              mt_companies="")
+        db.session.add(c); db.session.commit()
+        sibling_country_id = c.id
+    token = _login_admin(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/tv-display/countries/{sibling_country_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
