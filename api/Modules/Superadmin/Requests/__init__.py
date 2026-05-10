@@ -95,6 +95,41 @@ class SuperadminAnomalyListResponse(BaseModel):
     total: int
 
 
+class SuperadminReportRow(BaseModel):
+    """One report card on the report-center index. `url` is the
+    Flask drilldown path (still on Flask until each report
+    individually migrates); `status` is `ready` when an endpoint
+    backs the report or `coming_soon` when only a placeholder is
+    declared. The SPA renders the `View` button on `ready` rows
+    and a disabled `Coming soon` pill on the rest."""
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    description: str
+    url: str | None
+    status: str
+
+
+class SuperadminReportCategory(BaseModel):
+    """Group of related reports — Platform Health / Revenue /
+    Stripe / Trial Funnel / Feature Adoption / Support. The
+    `icon` is an inline stroke SVG matching the rest of the
+    sidebar/nav iconography (CLAUDE.md design system)."""
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    icon: str
+    reports: list[SuperadminReportRow]
+
+
+class SuperadminReportListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    categories: list[SuperadminReportCategory]
+
+
 __all__ = [
     "DiscountCodeListResponse",
     "DiscountCodeResponse",
@@ -104,6 +139,9 @@ __all__ = [
     "SuperadminAnomalyRow",
     "SuperadminAuditListResponse",
     "SuperadminAuditRow",
+    "SuperadminReportCategory",
+    "SuperadminReportListResponse",
+    "SuperadminReportRow",
     "SuperadminStoreCreateRequest",
     "SuperadminStoreDetailResponse",
     "SuperadminStoreDetailRow",
