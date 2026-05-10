@@ -157,6 +157,17 @@ def _register_routers(app: FastAPI) -> None:
         tv_display_router, prefix="/tv-display", tags=["tv-display"],
     )
 
+    # Dashboard — role-shaped landing payload for /app/dashboard.
+    # No new aggregation logic; reads from the same models the
+    # legacy /dashboard view used and delegates the superadmin
+    # branch to the existing platform-BI service.
+    from api.Modules.Dashboard.Controllers import (
+        router as dashboard_router,
+    )
+    app.include_router(
+        dashboard_router, prefix="/dashboard", tags=["dashboard"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.

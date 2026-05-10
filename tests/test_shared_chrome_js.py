@@ -25,7 +25,7 @@ def _shell_js_contents():
 
 
 def test_admin_shell_loads_shell_js(logged_in_client):
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert "shell.js" in body

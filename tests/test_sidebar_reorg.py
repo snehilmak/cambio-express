@@ -13,7 +13,7 @@ def test_admin_sidebar_has_no_workspace_section_header(client, test_store_id):
     with client.session_transaction() as s:
         s["user_id"] = uid; s["role"] = "admin"
         s["store_id"] = test_store_id
-    body = client.get("/dashboard").get_data(as_text=True)
+    body = client.get("/admin/settings").get_data(as_text=True)
     # Workspace header is gone.
     assert ">Workspace<" not in body
     # Items are still there.
@@ -32,7 +32,7 @@ def test_new_transfer_lives_in_sidebar_top_group(client, test_store_id):
     with client.session_transaction() as s:
         s["user_id"] = uid; s["role"] = "admin"
         s["store_id"] = test_store_id
-    body = client.get("/dashboard").get_data(as_text=True)
+    body = client.get("/admin/settings").get_data(as_text=True)
     # No topbar primary-action button.
     assert "topbar-new-action" not in body
     # Sidebar nav-link to /transfers/new exists.
@@ -52,7 +52,7 @@ def test_admin_sidebar_books_section_consolidates(client, test_store_id):
     with client.session_transaction() as s:
         s["user_id"] = uid; s["role"] = "admin"
         s["store_id"] = test_store_id
-    body = client.get("/dashboard").get_data(as_text=True)
+    body = client.get("/admin/settings").get_data(as_text=True)
     # Single "Books" header (vs three separate Books / Reports / Finance).
     assert body.count(">Books<") == 1
     assert ">Reports<" not in body  # no separate Reports header
@@ -79,7 +79,7 @@ def test_admin_sidebar_account_section_picks_up_tv_display(client,
     with client.session_transaction() as sess:
         sess["user_id"] = uid; sess["role"] = "admin"
         sess["store_id"] = test_store_id
-    body = client.get("/dashboard").get_data(as_text=True)
+    body = client.get("/admin/settings").get_data(as_text=True)
     assert "TV Display" in body
     # It should appear AFTER the Account section header in the markup.
     acct_idx = body.find(">Account<")

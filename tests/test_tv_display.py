@@ -483,7 +483,7 @@ def test_non_superadmin_cannot_hit_override_endpoint(logged_in_client, test_stor
 
 def test_sidebar_shows_tv_display_link_when_addon_active(logged_in_client, test_store_id):
     _activate_addon(logged_in_client, test_store_id)
-    body = logged_in_client.get("/dashboard").data.decode()
+    body = logged_in_client.get("/admin/settings").data.decode()
     assert "/tv-display" in body
     assert "TV Display" in body
 
@@ -492,7 +492,7 @@ def test_sidebar_hides_tv_display_link_when_addon_off(logged_in_client):
     """Default fixture state has the addon off; nav link must not
     appear so we don't tease users with a feature they haven't
     purchased."""
-    body = logged_in_client.get("/dashboard").data.decode()
+    body = logged_in_client.get("/admin/settings").data.decode()
     assert ">TV Display</a>" not in body
 
 
