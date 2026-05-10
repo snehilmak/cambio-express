@@ -51,50 +51,10 @@ def test_picker_list_has_no_duplicates():
 
 # ── Country editor's section header ────────────────────────────
 
-def test_editor_header_renders_picker_with_current_selected(
-        logged_in_client, test_store_id):
-    """Editing an MX country: the picker is pre-selected on the
-    Mexico entry and the big topbar flag renders the MX SVG."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX",
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert 'id="ce-country-picker"' in body
-    assert 'js-country-picker' in body
-    # MX option is present and selected.
-    assert 'value="MX" data-name="Mexico"' in body
-    assert 'selected' in body
-    # Big topbar flag rendered as flag-icons SVG (mx in the class).
-    assert 'class="fi fi-mx"' in body
 
 
-def test_editor_header_preserves_legacy_freetext_country(
-        logged_in_client, test_store_id):
-    """A country saved with an ISO-2 NOT in the curated picker
-    (e.g. legacy data) renders as '(custom) <name>' so the
-    operator's data isn't silently lost."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Atlantis", country_code="ZZ",  # not in the picker
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "(custom) Atlantis" in body
 
 
-def test_editor_header_preserves_legacy_no_iso_country(
-        logged_in_client, test_store_id):
-    """Pre-picker era: countries could be saved with country_name
-    but no country_code at all. Render as a pre-selected custom
-    option so the section is still editable without losing data."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id, country_name="Sealand",
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "(custom) Sealand" in body
 
 
 # ── Save flow on the country editor ────────────────────────────

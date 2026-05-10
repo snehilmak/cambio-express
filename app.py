@@ -3866,6 +3866,14 @@ def tv_display_country_edit(country_id):
     country = TVDisplayCountry.query.filter_by(
         id=country_id, display_id=display.id).first_or_404()
 
+    if request.method == "GET":
+        # 301 → /app/tv-display/countries/<id>. The country editor
+        # moved to React; the SPA reads /api/v2/tv-display/countries/<id>
+        # for the bank list + rate matrix and submits the rest of the
+        # form back to this same URL via POST (handler below stays
+        # live as the canonical mutation surface).
+        return redirect(f"/app/tv-display/countries/{country_id}", code=301)
+
     if request.method == "POST":
         # Single big form holds:
         #   - country header fields (name, code, mt_companies CSV)

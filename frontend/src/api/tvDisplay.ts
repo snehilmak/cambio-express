@@ -136,3 +136,33 @@ export function useDeleteTVDisplayCountry() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tv-display"] }),
   });
 }
+
+
+// ── Country detail (banks + rate matrix) ───────────────────
+
+export interface TVDisplayBankRow {
+  id: number;
+  bank_name: string;
+  sort_order: number;
+  rates: Record<string, number>;
+}
+
+export interface TVDisplayCountryDetailResponse {
+  id: number;
+  country_code: string;
+  country_name: string;
+  sort_order: number;
+  mt_companies: string[];
+  banks: TVDisplayBankRow[];
+}
+
+export function useTVDisplayCountryDetail(countryId: number) {
+  return useQuery<TVDisplayCountryDetailResponse>({
+    queryKey: ["tv-display", "country", countryId],
+    queryFn: () =>
+      api<TVDisplayCountryDetailResponse>(
+        `/api/v2/tv-display/countries/${countryId}`,
+      ),
+    enabled: countryId > 0,
+  });
+}

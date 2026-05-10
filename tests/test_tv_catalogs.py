@@ -85,62 +85,10 @@ def test_bank_catalog_country_codes_are_uppercase_iso2(client):
 
 # ── Editor route exposes the catalog ───────────────────────────
 
-def test_editor_route_passes_company_catalog_to_template(logged_in_client, test_store_id):
-    _activate_addon(logged_in_client, test_store_id)
-    # Create a Mexico section to drill into.
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX",
-    )
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    # Picker dropdown is present with active companies.
-    assert 'id="ce-add-col"' in body
-    assert 'value="intermex"' in body
-    assert 'value="maxi"' in body
-    assert "Intermex" in body  # display_name surfaced
 
 
-def test_editor_route_scopes_bank_picker_to_country(logged_in_client, test_store_id):
-    """Mexican country editor sees Mexican banks only — not Guatemalan
-    ones — so the dropdown stays scannable instead of dumping every
-    catalog entry across LATAM."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX",
-    )
-    # Add a bank row so the JSON catalog blob gets emitted.
-    logged_in_client.post(f"/tv-display/countries/{country_id}", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-        "new_bank_name": "mx_bbva_bancomer",
-    })
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    # Mexico-scoped banks are present.
-    assert "BBVA Bancomer" in body
-    assert "Banorte" in body
-    # Guatemala-scoped banks are NOT present in the picker. (The
-    # display_name "Banco Industrial" is GT-only in the seed.)
-    assert "Banco Industrial" not in body
 
 
-def test_editor_route_includes_legacy_freetext_as_custom_option(logged_in_client, test_store_id):
-    """If a store imported / typed a bank name that doesn't match any
-    catalog slug, the picker preserves it as a (custom) option so
-    operators don't lose data when the catalog rolls out."""
-    _activate_addon(logged_in_client, test_store_id)
-    country_id = create_country(
-        logged_in_client, test_store_id,
-        country_name="Mexico", country_code="MX",
-    )
-    # Save a bank with a name that's NOT a catalog slug.
-    logged_in_client.post(f"/tv-display/countries/{country_id}", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "maxi",
-        "new_bank_name": "Some Random Bank",
-    })
-    body = logged_in_client.get(f"/tv-display/countries/{country_id}").data.decode()
-    assert "(custom) Some Random Bank" in body
 
 
 # ── Slug-based form submissions persist ────────────────────────

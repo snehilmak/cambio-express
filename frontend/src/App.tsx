@@ -55,6 +55,7 @@ import SuperadminStores from "./routes/SuperadminStores";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
 import TVDisplayAdmin from "./routes/TVDisplayAdmin";
+import TVDisplayCountry from "./routes/TVDisplayCountry";
 
 // Top-level routing for the SPA.
 //
@@ -127,6 +128,7 @@ export default function App() {
         <Route path="account/profile"       element={<AccountProfile />} />
         <Route path="account/notifications" element={<AccountNotifications />} />
         <Route path="tv-display"            element={<TVDisplayAdmin />} />
+        <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
         <Route path="settings"         element={<Settings />} />
       </Route>
       <Route path="*" element={<NotFound />} />
