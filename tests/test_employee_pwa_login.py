@@ -70,10 +70,15 @@ def test_login_redirects_to_store_login_when_cookie_set(client):
 
 
 def test_root_ignores_cookie_for_unknown_slug(client):
+    """An unknown / inactive slug in the cookie falls through —
+    `/` 301s to /app/ instead of bouncing to a non-existent
+    /app/login/<slug> page. The landing page itself moved to
+    React (frontend/src/routes/Landing.tsx); the Flask `/`
+    handler is now a redirect."""
     _set_cookie(client, COOKIE, "does-not-exist")
     resp = client.get("/", follow_redirects=False)
-    # No redirect — the landing page still renders.
-    assert resp.status_code == 200
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/"
 
 
 # ── Employee POST on /login leaves a cookie breadcrumb ───────

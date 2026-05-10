@@ -2551,12 +2551,21 @@ def _active_store_from_cookie():
 
 @app.route("/")
 def landing():
-    if "user_id" in session:
-        return redirect(url_for("dashboard"))
+    """301 → /app/. The React SPA owns the marketing landing
+    (frontend/src/routes/Landing.tsx) and the dashboard bounce.
+
+    PWA preservation: when an installed-PWA employee opens their
+    shortcut (which points at `/`), we honor the `ds_last_store`
+    cookie and bounce straight to /app/login/<slug> so they land
+    on their store's sign-in page rather than the marketing pitch.
+    Without this an employee on a chromeless PWA install would have
+    no way to type the URL back to their store. Cookie's set in
+    /app/login/<slug> after a successful per-store sign-in, so
+    only returning employees hit this branch."""
     store = _active_store_from_cookie()
     if store:
-        return redirect(url_for("login_store", slug=store.slug))
-    return render_template("landing.html")
+        return redirect(f"/app/login/{store.slug}", code=302)
+    return redirect("/app/", code=301)
 
 @app.route("/privacy")
 def privacy():
