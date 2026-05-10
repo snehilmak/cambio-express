@@ -241,10 +241,24 @@ def test_stripe_webhook_logs_signature_failures(client):
 
 
 def test_superadmin_report_center_shows_wired_count(client):
-    """The Report Center landing should now show ≥ 16 wired reports
-    (14 from earlier + DAU/MAU + Webhook Health from this batch +
-    Audit Log)."""
+    """Report-center landing moved to React (PR #398). The wired-count
+    contract — every superadmin report has a non-null Flask drilldown
+    URL — moved with it: now exercised against the JSON envelope at
+    /api/v2/superadmin/reports rather than the rendered HTML."""
     _superadmin_login(client)
-    resp = client.get("/superadmin/reports")
-    body = resp.get_data(as_text=True)
-    assert body.count(">View<") >= 16
+    # Mint a superadmin JWT for the new JSON endpoint.
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
+    resp = client.get(
+        "/api/v2/superadmin/reports",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    wired = sum(
+        1
+        for cat in body["categories"]
+        for r in cat["reports"]
+        if r["status"] == "ready" and r["url"]
+    )
+    assert wired >= 16
