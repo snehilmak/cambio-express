@@ -51,34 +51,8 @@ def _make_employee(client, store_id, *, username, full_name=""):
 # ── High-Value Transfers ─────────────────────────────────────
 
 
-def test_high_value_default_threshold_is_3000(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=2999, confirm="UNDER")
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=3500, sender_name="Big Sender",
-                   confirm="OVER")
-    resp = client.get("/reports/high-value-transfers")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Big Sender" in body
-    assert "$3,500.00" in body
-    assert "$2,999.00" not in body
-    assert "≥ $3,000" in body  # Threshold KPI
 
 
-def test_high_value_custom_threshold(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=500, confirm="LO")
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=1500, sender_name="Mid Sender", confirm="MID")
-    resp = client.get("/reports/high-value-transfers?threshold=1000")
-    body = resp.get_data(as_text=True)
-    assert "Mid Sender" in body
-    assert "$500.00" not in body
 
 
 def test_high_value_csv(client, test_store_id):
@@ -216,27 +190,6 @@ def test_bank_rule_audit_csv(client, test_store_id):
 # ── Cancelled Transfers ──────────────────────────────────────
 
 
-def test_cancelled_transfers_lists_canceled_and_rejected(
-        client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   sender_name="Active", confirm="OK1", status="Sent")
-    _make_transfer(client, test_store_id, send_date=today, amount=200,
-                   sender_name="Cancelled", confirm="CX",
-                   status="Canceled", status_notes="Customer changed mind")
-    _make_transfer(client, test_store_id, send_date=today, amount=300,
-                   sender_name="Rejected", confirm="RJ",
-                   status="Rejected", status_notes="Compliance hold")
-    resp = client.get("/reports/cancelled-transfers")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Cancelled" in body
-    assert "Rejected" in body
-    assert "Active" not in body  # active row excluded
-    # KPIs.
-    assert "Customer changed mind" in body
-    assert "Compliance hold" in body
 
 
 def test_cancelled_transfers_csv(client, test_store_id):

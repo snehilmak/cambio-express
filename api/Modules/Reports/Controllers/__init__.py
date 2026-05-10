@@ -217,6 +217,79 @@ def cashier_productivity_route(
     return CashierProductivityResponse(rows=rows, totals=totals)
 
 
+# ── Batch-3 drilldowns ──────────────────────────────────────
+#
+# These five reports return `{rows, totals}` from their existing
+# Service functions. Pydantic schemas would add boilerplate without
+# value — the SPA already accepts a generic `{rows, totals}` envelope
+# (see `ReportDrilldownResponse` in frontend/src/api/reportDrilldown.ts).
+# `response_model=None` skips schema generation but the JSON shape is
+# stable: the SPA treats each row's identity field as a known string.
+
+
+@router.get("/new-vs-returning")
+def new_vs_returning_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import new_vs_returning
+    d_from, d_to = period
+    rows, totals = new_vs_returning(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/fees-vs-tax")
+def fees_vs_tax_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import fees_vs_tax
+    d_from, d_to = period
+    rows, totals = fees_vs_tax(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/high-value-transfers")
+def high_value_transfers_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    threshold: float = Query(1000.0, ge=0),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import high_value_transfers
+    d_from, d_to = period
+    rows, totals = high_value_transfers(
+        db, store_ids, d_from, d_to, threshold=threshold,
+    )
+    return {"rows": rows, "totals": totals, "threshold": threshold}
+
+
+@router.get("/cancelled-transfers")
+def cancelled_transfers_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import cancelled_transfers
+    d_from, d_to = period
+    rows, totals = cancelled_transfers(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/ach-volume")
+def ach_volume_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import ach_volume
+    d_from, d_to = period
+    rows, totals = ach_volume(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
 # ── Report-center index ─────────────────────────────────────
 
 

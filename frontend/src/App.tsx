@@ -15,7 +15,13 @@ import BankRules from "./routes/BankRules";
 import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
+import AchVolume from "./routes/reports/AchVolume";
+import ByDestinationCountry from "./routes/reports/ByDestinationCountry";
+import CancelledTransfers from "./routes/reports/CancelledTransfers";
 import CashierProductivity from "./routes/reports/CashierProductivity";
+import FeesVsTax from "./routes/reports/FeesVsTax";
+import HighValueTransfers from "./routes/reports/HighValueTransfers";
+import NewVsReturning from "./routes/reports/NewVsReturning";
 import SalesByCompany from "./routes/reports/SalesByCompany";
 import SalesByEmployee from "./routes/reports/SalesByEmployee";
 import SalesByService from "./routes/reports/SalesByService";
@@ -108,13 +114,25 @@ export default function App() {
         <Route path="reports/top-customers"   element={<TopCustomers />} />
         <Route path="reports/top-senders"     element={<TopSenders />} />
         <Route path="reports/top-recipients"  element={<TopRecipients />} />
+        <Route path="reports/new-vs-returning"       element={<NewVsReturning />} />
+        <Route path="reports/by-destination-country" element={<ByDestinationCountry />} />
+        <Route path="reports/fees-vs-tax"            element={<FeesVsTax />} />
+        <Route path="reports/high-value-transfers"   element={<HighValueTransfers />} />
+        <Route path="reports/cancelled-transfers"    element={<CancelledTransfers />} />
+        <Route path="reports/ach-volume"             element={<AchVolume />} />
         <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
         <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
         <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
         <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
         <Route path="owner/reports/top-customers"  element={<TopCustomers />} />
         <Route path="owner/reports/top-senders"    element={<TopSenders />} />
-        <Route path="owner/reports/top-recipients" element={<TopRecipients />} />
+        <Route path="owner/reports/top-recipients"        element={<TopRecipients />} />
+        <Route path="owner/reports/new-vs-returning"       element={<NewVsReturning />} />
+        <Route path="owner/reports/by-destination-country" element={<ByDestinationCountry />} />
+        <Route path="owner/reports/fees-vs-tax"            element={<FeesVsTax />} />
+        <Route path="owner/reports/high-value-transfers"   element={<HighValueTransfers />} />
+        <Route path="owner/reports/cancelled-transfers"    element={<CancelledTransfers />} />
+        <Route path="owner/reports/ach-volume"             element={<AchVolume />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />

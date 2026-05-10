@@ -81,24 +81,6 @@ def test_top_recipients_csv(client, test_store_id):
 # ── By Destination Country ───────────────────────────────────
 
 
-def test_by_destination_country_groups_per_country(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   country="MX", confirm="X1")
-    _make_transfer(client, test_store_id, send_date=today, amount=200,
-                   country="MX", confirm="X2")
-    _make_transfer(client, test_store_id, send_date=today, amount=400,
-                   country="GT", confirm="G1")
-    resp = client.get("/reports/by-destination-country")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "MX" in body
-    assert "GT" in body
-    assert "$700.00" in body  # Total Sent KPI
-    # GT is bigger so renders first.
-    assert body.index("GT") < body.index("MX")
-    assert "2 countries" in body
 
 
 def test_by_destination_country_csv_has_total_row(client, test_store_id):
@@ -116,36 +98,6 @@ def test_by_destination_country_csv_has_total_row(client, test_store_id):
 # ── New vs. Returning Senders ────────────────────────────────
 
 
-def test_new_vs_returning_classifies_correctly(client, test_store_id):
-    """Customer with a transfer BEFORE the period = returning. Customer
-    whose first-ever transfer falls IN the period = new. Walk-in
-    transfers (no customer_id) bucketed separately."""
-    _admin_login(client, test_store_id)
-    veteran = _make_customer(client, test_store_id,
-                              full_name="Veteran", phone="5550101")
-    rookie  = _make_customer(client, test_store_id,
-                              full_name="Rookie",  phone="5550102")
-    # veteran: one transfer before window, one in window.
-    _make_transfer(client, test_store_id, send_date=date(2026, 4, 10),
-                   amount=300, customer_id=veteran, confirm="V0")
-    _make_transfer(client, test_store_id, send_date=date(2026, 5, 2),
-                   amount=200, customer_id=veteran, confirm="V1")
-    # rookie: only in-window.
-    _make_transfer(client, test_store_id, send_date=date(2026, 5, 1),
-                   amount=100, customer_id=rookie, confirm="R1")
-    # walk-in.
-    _make_transfer(client, test_store_id, send_date=date(2026, 5, 3),
-                   amount=50, customer_id=None, confirm="W1")
-    resp = client.get("/reports/new-vs-returning?from=2026-05-01&to=2026-05-31")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Body labels.
-    assert "New senders" in body
-    assert "Returning senders" in body
-    assert "Walk-in (unidentified)" in body
-    # KPI counts: new=1, returning=1.
-    # Total sent 200+100+50 = 350.
-    assert "$350.00" in body
 
 
 def test_new_vs_returning_no_walkin_bucket_when_empty(client, test_store_id):

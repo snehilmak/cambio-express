@@ -4531,6 +4531,12 @@ _MIGRATED_REPORT_DRILLDOWNS: set[str] = {
     "top-customers",
     "top-senders",
     "top-recipients",
+    "new-vs-returning",
+    "by-destination-country",
+    "fees-vs-tax",
+    "high-value-transfers",
+    "cancelled-transfers",
+    "ach-volume",
 }
 
 
