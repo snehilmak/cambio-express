@@ -245,6 +245,79 @@ def _adapt_addon(key: str, addon: dict, *, is_active: bool) -> "AddonRow":
     )
 
 
+@router.get("/subscription")
+def subscription_summary_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+):
+    """Subscription page header data: current plan, trial status,
+    retention countdown, account-snapshot fields, and the add-on
+    catalog with each entry's `is_active` flag.
+
+    Mirrors the legacy /admin/subscription Jinja context so the
+    SPA can render the page without a second round-trip.
+    """
+    sid = _require_store(claims)
+    store = find_store(db, sid)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found")
+    from app import (
+        ADDONS_CATALOG, DATA_RETENTION_DAYS, data_retention_days_left,
+        get_trial_status, store_addon_keys, store_feature_enabled,
+        store_has_paid_plan,
+    )
+    plan_labels = {
+        "trial": "Free Trial", "basic": "Basic", "pro": "Pro",
+        "inactive": "Inactive",
+    }
+    plan_prices = {"basic": "$35 / month", "pro": "$45 / month"}
+    active_keys = store_addon_keys(store)
+    addon_rows = []
+    for key, addon in ADDONS_CATALOG.items():
+        if not store_feature_enabled(store, f"addon_{key}"):
+            continue
+        addon_rows.append({
+            "key": key,
+            "name": addon.get("name", key),
+            "price_label": addon.get("price_label", ""),
+            "tagline": addon.get("tagline", ""),
+            "description": addon.get("description", ""),
+            "status": addon.get("status", "live"),
+            "is_active": key in active_keys,
+        })
+    trial_status = (
+        get_trial_status(store) if store.plan == "trial" else None
+    )
+    trial_days_left = None
+    if store.plan == "trial" and store.trial_ends_at is not None:
+        from datetime import datetime
+        delta = store.trial_ends_at - datetime.utcnow()
+        trial_days_left = max(0, delta.days)
+    return {
+        "store": {
+            "id": store.id,
+            "name": store.name,
+            "email": store.email,
+            "plan": store.plan,
+            "stripe_customer_id": store.stripe_customer_id,
+            "stripe_subscription_id": store.stripe_subscription_id,
+            "data_retention_until": (
+                store.data_retention_until.isoformat()
+                if store.data_retention_until else None
+            ),
+        },
+        "plan_label": plan_labels.get(store.plan or "", "Unknown"),
+        "plan_price": plan_prices.get(store.plan or "", ""),
+        "has_paid_plan": store_has_paid_plan(store),
+        "trial_status": trial_status,
+        "trial_days_left": trial_days_left,
+        "retention_days_left": data_retention_days_left(store),
+        "retention_total_days": DATA_RETENTION_DAYS,
+        "addons": addon_rows,
+        "active_addon_count": len(active_keys),
+    }
+
+
 @router.get("/addons", response_model=AddonListResponse)
 def list_addons_route(
     db: Session = Depends(get_db),

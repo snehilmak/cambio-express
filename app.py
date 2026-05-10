@@ -3534,15 +3534,12 @@ def owner_unlink_store(store_id):
 @app.route("/subscribe")
 @login_required
 def subscribe():
-    user = current_user()
-    store = current_store()
-    # Yearly buttons show up on the pricing page only if their price ID
-    # is configured in the environment — otherwise a user clicking them
-    # would just get bounced back with "Invalid plan selected."
-    prices = _stripe_price_ids()
-    return render_template("subscribe.html", user=user, store=store,
-        basic_yearly_enabled=bool(prices["basic_yearly"]),
-        pro_yearly_enabled=bool(prices["pro_yearly"]))
+    """301 → /app/subscribe. The plan picker moved to React;
+    the SPA reads /api/v2/admin/store-info for the current plan
+    and POSTs to /api/v2/billing/checkout to mint a Stripe
+    Checkout Session. Stub keeps url_for('subscribe') working
+    in still-Jinja chrome."""
+    return redirect("/app/subscribe", code=301)
 
 @app.route("/subscribe/checkout", methods=["POST"])
 @login_required
@@ -3603,32 +3600,13 @@ def admin_referrals():
 @app.route("/admin/subscription")
 @admin_required
 def admin_subscription():
-    user = current_user()
-    store = current_store()
-    active_addons = store_addon_keys(store)
-    # Each add-on can be gated behind a feature flag keyed "addon_<key>".
-    # If no flag has been declared the add-on shows normally (fail-open).
-    visible_addons = {
-        k: v for k, v in ADDONS_CATALOG.items()
-        if store_feature_enabled(store, f"addon_{k}")
-    }
-    plan_labels = {
-        "trial":    "Free Trial",
-        "basic":    "Basic",
-        "pro":      "Pro",
-        "inactive": "Inactive",
-    }
-    plan_prices = {"basic": "$35 / month", "pro": "$45 / month"}
-    return render_template("admin_subscription.html",
-        user=user, store=store,
-        addons_catalog=visible_addons,
-        active_addons=active_addons,
-        has_paid_plan=store_has_paid_plan(store),
-        plan_label=plan_labels.get(store.plan if store else "", "Unknown"),
-        plan_price=plan_prices.get(store.plan if store else "", ""),
-        retention_days_left=data_retention_days_left(store),
-        retention_total_days=DATA_RETENTION_DAYS,
-    )
+    """301 → /app/admin/subscription. Subscription / add-ons
+    page moved to React; the SPA reads /api/v2/admin/subscription
+    for plan + add-on state. Stub keeps url_for('admin_subscription')
+    working in still-Jinja chrome and the legacy POST handlers
+    below (cancel, billing portal, addon toggle) which still
+    redirect via url_for('admin_subscription')."""
+    return redirect("/app/admin/subscription", code=301)
 
 def _open_billing_portal(store, error_msg, log_label="billing portal"):
     """Flask-side adapter for the billing-portal Service. On success
