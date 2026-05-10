@@ -125,7 +125,6 @@ def _close_fastapi_clients():
 # Production behaviour is unaffected — the asgi.py entrypoint
 # already bypasses a2wsgi for /api/v2/* and is verified by the
 # WORKER TIMEOUT incident hotfix (PR #399).
-from fastapi.testclient import TestClient as _StarletteTestClient
 from werkzeug.middleware.dispatcher import DispatcherMiddleware as _DM
 from a2wsgi import ASGIMiddleware as _A2W
 
@@ -142,10 +141,13 @@ def _swap_in_testclient_bridge() -> None:
         return
     fastapi_app = asgi_mw.app
     # Single TestClient — entered once at module init, reused for
-    # every request through the dispatcher. anyio's portal stays
-    # alive so each request is dispatched on a stable, short-lived
-    # subtask that completes before send_response returns.
-    tc = _StarletteTestClient(fastapi_app)
+    # every request through the dispatcher. Uses ``_OrigTestClient``
+    # (the unpatched starlette class) — the patched
+    # ``_AutoCloseTestClient`` registers instances for autouse
+    # close-between-tests, which would tear our bridge down after
+    # the first test and cause every subsequent /api/v2 call to
+    # fail. We want the bridge alive for the full session.
+    tc = _OrigTestClient(fastapi_app)
     tc.__enter__()  # spin up the portal + lifespan task
 
     def _wsgi_handler(environ, start_response):
