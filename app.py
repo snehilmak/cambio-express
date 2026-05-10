@@ -99,7 +99,16 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = {"pool_pre_ping": True}
+_engine_opts: dict = {"pool_pre_ping": True}
+# SQLite :memory: gets its own DB per connection by default, which
+# breaks the test suite — the seeded fixture row is invisible to the
+# request-handling connection. StaticPool keeps a single shared
+# connection so seed data is visible to every code path.
+if ":memory:" in DATABASE_URL:
+    from sqlalchemy.pool import StaticPool
+    _engine_opts["poolclass"] = StaticPool
+    _engine_opts["connect_args"] = {"check_same_thread": False}
+app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = _engine_opts
 db = SQLAlchemy(app)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
@@ -2246,6 +2255,7 @@ _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
     "/login":              "/app/login",
     "/signup":             "/app/signup",
     "/forgot-password":    "/app/forgot-password",
+    "/privacy":            "/app/privacy",
     "/dashboard":          "/app/dashboard",
     "/transfers":          "/app/transfers",
     "/transfers/new":      "/app/transfers/new",
@@ -2541,19 +2551,30 @@ def _active_store_from_cookie():
 
 @app.route("/")
 def landing():
-    if "user_id" in session:
-        return redirect(url_for("dashboard"))
+    """301 → /app/. The React SPA owns the marketing landing
+    (frontend/src/routes/Landing.tsx) and the dashboard bounce.
+
+    PWA preservation: when an installed-PWA employee opens their
+    shortcut (which points at `/`), we honor the `ds_last_store`
+    cookie and bounce straight to /app/login/<slug> so they land
+    on their store's sign-in page rather than the marketing pitch.
+    Without this an employee on a chromeless PWA install would have
+    no way to type the URL back to their store. Cookie's set in
+    /app/login/<slug> after a successful per-store sign-in, so
+    only returning employees hit this branch."""
     store = _active_store_from_cookie()
     if store:
-        return redirect(url_for("login_store", slug=store.slug))
-    return render_template("landing.html")
+        return redirect(f"/app/login/{store.slug}", code=302)
+    return redirect("/app/", code=301)
 
 @app.route("/privacy")
 def privacy():
-    """Public privacy policy page. Used as the privacy URL on Stripe
-    (Financial Connections and Checkout require it). No auth — any
-    visitor, logged in or not, can read it."""
-    return render_template("privacy.html")
+    """301 to the React /app/privacy page. The legacy Jinja template
+    is gone — the SPA owns the public privacy policy now. This stub
+    keeps `url_for('privacy')` working in still-Jinja templates and
+    bounces old bookmarks (plus the Stripe-side privacy URL on
+    Financial Connections + Checkout, which both link here)."""
+    return redirect("/app/privacy", code=301)
 
 # ── 2FA (TOTP) helpers ───────────────────────────────────────
 # Mandatory for superadmin; other roles opt out entirely today.
@@ -2845,112 +2866,58 @@ def login():
 
 @app.route("/login/2fa", methods=["GET", "POST"])
 def login_totp():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    if not _totp_is_enrolled(u):
-        return redirect(url_for("login_totp_enroll"))
-    error = None
-    if request.method == "POST":
-        if _verify_totp(u, request.form.get("code", "")):
-            _finalize_2fa_login(u)
-            return redirect(url_for("dashboard"))
-        error = "That code didn't match. Check the 6 digits in your authenticator app, or use a recovery code."
-    return render_template("login_totp.html", error=error)
+    """301 → /app/login. The legacy Jinja form is retired; the SPA
+    drives the verify hop inline from /app/login (it holds the
+    pending_token in component state and POSTs to
+    /api/v2/auth/login/totp). This stub keeps url_for('login_totp')
+    + old bookmarks working — they just bounce to the SPA login,
+    which prompts the user to sign in again."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/recover", methods=["GET", "POST"])
 def login_totp_recover():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    error = None
-    if request.method == "POST":
-        if _consume_recovery_code(u, request.form.get("code", "")):
-            _finalize_2fa_login(u)
-            flash("Recovery code used. Consider regenerating your recovery codes from Security settings.", "success")
-            return redirect(url_for("dashboard"))
-        error = "Recovery code not recognized, or already used."
-    return render_template("login_totp_recover.html", error=error)
+    """301 → /app/login. SPA equivalent is /app/login/2fa/recover,
+    but reaching it requires the in-flight pending_token (held in
+    React Router state). Direct visits here have no pending token,
+    so we bounce to /app/login and let the user start fresh."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/enroll", methods=["GET", "POST"])
 def login_totp_enroll():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    if _totp_is_enrolled(u):
-        return redirect(url_for("login_totp"))
-    # First hit: mint a secret if none pending. Refreshes reuse the pending
-    # secret so the user's already-scanned QR stays valid.
-    if not u.totp_secret:
-        u.totp_secret = pyotp.random_base32()
-        db.session.commit()
-    error = None
-    if request.method == "POST":
-        if _verify_totp(u, request.form.get("code", "")):
-            u.totp_enrolled_at = datetime.utcnow()
-            codes = _generate_recovery_codes(u)
-            session["totp_enrollment_codes"] = codes
-            return redirect(url_for("login_totp_recovery_codes"))
-        error = "That code didn't match. Make sure the clock on your phone is accurate, then try the next code your app shows."
-    qr_svg = _totp_qr_svg(u.totp_secret, u.username)
-    # Group the secret into 4-char chunks for easier manual entry.
-    secret_chunks = " ".join(u.totp_secret[i:i+4] for i in range(0, len(u.totp_secret), 4))
-    return render_template("login_totp_enroll.html",
-                           qr_svg=qr_svg, secret=u.totp_secret,
-                           secret_chunks=secret_chunks, username=u.username,
-                           issuer=TOTP_ISSUER, error=error)
+    """301 → /app/login. The SPA enrollment page lives at
+    /app/login/2fa/enroll, but it needs a pending_token from a
+    fresh /api/v2/auth/login response. Direct hits to the legacy
+    URL don't carry that state, so we bounce to /app/login."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/2fa/recovery-codes", methods=["GET", "POST"])
 def login_totp_recovery_codes():
-    u = _require_pending_auth()
-    if not u:
-        return redirect(url_for("login"))
-    codes = session.get("totp_enrollment_codes")
-    if not codes:
-        # No fresh enrollment batch in session — enrollment either already
-        # finalized or expired. Send them back to the code prompt.
-        return redirect(url_for("login_totp"))
-    if request.method == "POST" and request.form.get("saved") == "1":
-        _finalize_2fa_login(u)
-        flash("2FA is now active on your account. Keep those recovery codes somewhere safe.", "success")
-        return redirect(url_for("dashboard"))
-    return render_template("login_totp_recovery_codes.html", codes=codes)
+    """301 → /app/login. Recovery codes are shown exactly once
+    inline on the SPA enrollment page; there is no standalone SPA
+    URL for re-displaying them (the codes are not retrievable
+    after the enrollment session ends). Direct visits to this
+    legacy URL bounce to /app/login."""
+    return redirect("/app/login", code=301)
 
 @app.route("/login/<slug>", methods=["GET", "POST"])
 def login_store(slug):
-    store = Store.query.filter_by(slug=slug).first_or_404()
-    if not store.is_active:
-        abort(404)
-    if "user_id" in session:
-        return redirect(url_for("dashboard"))
-    error = None
-    if request.method == "POST":
-        from api.Modules.Auth.Services import authenticate_password
-        from api.Modules.Auth.Services.login import AuthenticationError
-        username = request.form.get("username", "").strip()
-        try:
-            # Validate password + is_active via the Service layer.
-            # Per-store-scoped lookup (store.id is known here) — this
-            # is the correct path for the per-store sign-in page.
-            authenticate_password(
-                db.session, store_id=store.id, username=username,
-                password=request.form.get("password", ""),
-            )
-            u = User.query.filter_by(
-                username=username, store_id=store.id,
-            ).first()
-        except AuthenticationError:
-            u = None
-        if u is not None:
-            session["user_id"] = u.id
-            session["role"] = u.role
-            session["store_id"] = u.store_id
-            _record_login(u); db.session.commit()
-            resp = redirect(url_for("dashboard"))
-            return _set_last_store_slug_cookie(resp, store.slug)
-        error = "Invalid username or password."
-    resp = make_response(render_template("login_store.html", store=store, error=error))
-    return _set_last_store_slug_cookie(resp, store.slug)
+    """301 to the React /app/login/<slug> page. The legacy Jinja
+    form + POST handler are gone — the SPA submits directly to
+    /api/v2/auth/login (which sets the same `ds_last_store`
+    cookie when a store_id is provided, mirroring the legacy
+    behavior). This stub keeps url_for('login_store') working
+    in still-Jinja templates and bounces old bookmarks +
+    installed-PWA shortcuts that point at /login/<slug>.
+
+    We also set the `ds_last_store` cookie on the redirect when
+    the slug resolves to an active store, so an installed-PWA
+    employee whose session expired keeps getting bounced back to
+    their store on the legacy fallback paths (`/`, `/login`)."""
+    resp = redirect(f"/app/login/{slug}", code=301)
+    store = Store.query.filter_by(slug=slug).first()
+    if store is not None and store.is_active:
+        _set_last_store_slug_cookie(resp, store.slug)
+    return resp
 
 @app.route("/employee-login", methods=["POST"])
 def employee_login_redirect():
@@ -3073,59 +3040,26 @@ def passkey_delete(pk_id):
 @app.route("/account/security", methods=["GET", "POST"])
 @login_required
 def account_security():
-    user = current_user()
-    errors = {}
-    if request.method == "POST":
-        action = (request.form.get("_action") or "").strip()
-        if action == "password":
-            errors = _update_user_password(
-                user,
-                request.form.get("current_password", ""),
-                request.form.get("new_password", ""),
-                request.form.get("confirm_password", ""),
-            )
-            if not errors:
-                db.session.commit()
-                flash("Password updated.", "success")
-                return redirect(url_for("account_security"))
-        else:
-            abort(400)
-
-    passkeys = (Passkey.query.filter_by(user_id=user.id)
-                .order_by(Passkey.created_at.desc()).all())
-    return render_template("account_security.html",
-        user=user, errors=errors,
-        passkeys=passkeys,
-        passkeys_eligible=_passkey_eligible(user),
-    )
+    """301 → /app/settings. Password change + passkey list/delete
+    were already on the SPA Settings page; passkey enrollment
+    moved there too in this PR (FastAPI register/begin+finish
+    routes bridge the WebAuthn challenge via a signed JWT since
+    we can't share Flask's session). The legacy POST handlers
+    /account/passkeys/register/begin+finish stay alive for any
+    in-flight Jinja request mid-rollout."""
+    return redirect("/app/settings", code=301)
 
 @app.route("/account/profile", methods=["GET", "POST"])
 @login_required
 def account_profile():
-    """Personal profile — display name, email, phone, timezone. Same
-    accessibility model as /account/security: every logged-in role can
-    reach it, none of these fields cascade into store-scoped data, and
-    the form is single-POST with no `_action` since there's only one
-    action (save the whole form)."""
-    user = current_user()
-    errors = {}
-    if request.method == "POST":
-        errors = _update_user_profile(
-            user,
-            request.form.get("full_name", ""),
-            request.form.get("email", ""),
-            request.form.get("phone", ""),
-            request.form.get("timezone", ""),
-        )
-        if not errors:
-            db.session.commit()
-            flash("Profile updated.", "success")
-            return redirect(url_for("account_profile"))
-
-    return render_template("account_profile.html",
-        user=user, errors=errors,
-        timezone_choices=PROFILE_TIMEZONES,
-    )
+    """301 → /app/account/profile. Personal profile editor moved
+    to React. Validation + persistence now live behind
+    GET/PUT /api/v2/auth/profile; the SPA renders inline
+    field_errors on 422 so the user sees the same messages the
+    legacy Jinja form did. The legacy Appearance theme picker is
+    intentionally not ported — CLAUDE.md invariant #1 fixes the
+    SPA to dark-only."""
+    return redirect("/app/account/profile", code=301)
 
 @app.route("/admin/settings/security", methods=["GET"])
 @login_required
@@ -3161,39 +3095,12 @@ def account_theme():
 @app.route("/account/notifications", methods=["GET", "POST"])
 @login_required
 def account_notifications():
-    """Per-user notification preferences. v1 ships a single real
-    toggle — trial-reminder emails — because that's the only sender
-    (beyond password reset) we actually have today. The rest of the
-    page is an honest catalog: what DineroBook sends you, and what
-    you can control.
-
-    Checkbox semantics: unchecked checkboxes don't appear in the POST
-    body at all, so we always default the "trial reminder" pref to
-    False on POST and flip it True only if the checkbox is present.
-    """
-    user = current_user()
-    store = current_store()
-    if request.method == "POST":
-        user.notify_trial_reminders = bool(request.form.get("notify_trial_reminders"))
-        user.notify_announcement_email = bool(request.form.get("notify_announcement_email"))
-        db.session.commit()
-        flash("Notification preferences saved.", "success")
-        return redirect(url_for("account_notifications"))
-
-    # "Does the trial-reminder toggle apply to me?" — only for
-    # admins/owners of a store that's actually trialing today. For
-    # employees + superadmin + paid stores the toggle is shown as
-    # informational (greyed out with a note) rather than hidden, so
-    # users understand the full preferences surface.
-    trial_toggle_applies = bool(
-        user.role in ("admin", "owner")
-        and store is not None
-        and get_trial_status(store) in ("active", "expiring_soon", "grace")
-    )
-    return render_template("account_notifications.html",
-        user=user, store=store,
-        trial_toggle_applies=trial_toggle_applies,
-    )
+    """301 → /app/account/notifications. Toggle UI moved to React;
+    GET/PUT /api/v2/auth/notifications drives persistence. The
+    trial-toggle gating logic (admin/owner of a trialing store)
+    moved into the api.Modules.Auth.Services.notifications module
+    so SPA + Flask see the same `applies` state."""
+    return redirect("/app/account/notifications", code=301)
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():
@@ -3320,71 +3227,19 @@ def reset_password(token):
 
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
+    """301 to the React /app/signup page when signups are open.
+    With SIGNUP_CLOSED=1 we render the "invite-only" notice
+    directly so the user doesn't briefly see the SPA form before
+    it 503s. The legacy Jinja form + POST handler are retired —
+    the SPA submits directly to /api/v2/auth/signup. Stub keeps
+    `url_for('signup')` working in still-Jinja templates and
+    bounces old bookmarks. Query string (?ref=, ?plan=) is
+    preserved."""
     if SIGNUP_CLOSED:
-        # Closed-signup state: render the same chrome but with a
-        # "we're invite-only right now" notice instead of the form.
-        # Existing customers can still sign in via the link below.
         return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
-    if "user_id" in session and request.method == "GET":
-        return redirect(url_for("dashboard"))
-    errors = {}
-    form = {}
-    # Support both ?ref=CODE on GET (shared link) and a form field on POST
-    # so the code survives if the page is reloaded after a validation error.
-    ref_raw = (request.form.get("ref_code")
-               or request.args.get("ref", "")).strip().upper()
-    ref = lookup_referral_code(ref_raw) if ref_raw else None
-    if request.method == "POST":
-        store_name = request.form.get("store_name", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-        phone = request.form.get("phone", "").strip()
-        form = {"store_name": store_name, "email": email, "phone": phone,
-                "ref_code": ref_raw}
-
-        if not store_name:
-            errors["store_name"] = "Store name is required."
-        if not email:
-            errors["email"] = "Email is required."
-        if not password:
-            errors["password"] = "Password is required."
-        elif len(password) < 8:
-            errors["password"] = "Password must be at least 8 characters."
-        # A code that was typed / pasted but doesn't match any active one:
-        # don't hard-fail — that's a bad UX for a nice-to-have. We silently
-        # drop it and continue. The warning surface is the template's green
-        # banner only appearing when the code resolved.
-        if ref_raw and not ref:
-            app.logger.info(f"signup: invalid ref code '{ref_raw}' ignored")
-
-        if not errors:
-            from api.Modules.Auth.Services import (
-                SignupConflictError, create_store_and_admin,
-            )
-            try:
-                result = create_store_and_admin(
-                    db.session,
-                    store_name=store_name, email=email,
-                    password=password, phone=phone,
-                    referred_by_code_id=(ref.id if ref else None),
-                )
-            except SignupConflictError as e:
-                errors["email"] = str(e)
-            else:
-                db.session.commit()
-                u = result.admin
-                session["user_id"] = u.id
-                session["role"] = u.role
-                session["store_id"] = result.store.id
-                if ref:
-                    flash(f"Welcome! You'll get ${ref.reward_referee_cents/100:.0f} "
-                          "off your first paid month when you subscribe.", "success")
-                else:
-                    flash("Welcome! Your 7-day free trial has started.", "success")
-                return redirect(url_for("dashboard"))
-
-    return render_template("signup.html", errors=errors, form=form,
-                           referral=ref, ref_code_raw=ref_raw)
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/signup" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 @app.route("/signup/owner", methods=["GET", "POST"])
 def signup_owner():
@@ -3685,35 +3540,13 @@ def owner_store_detail(store_id):
 @app.route("/owner/connect", methods=["GET"])
 @owner_required
 def owner_connect():
-    """Page where the owner mints invite codes to give to store admins.
-
-    Shows: a generate button, the active (unused, unexpired) code if
-    any, and a small history of recently-redeemed codes so the owner
-    can audit who claimed which one. The code is given out of band
-    (phone, email) — DineroBook doesn't deliver it because we don't
-    know which store yet.
-    """
-    u = current_user()
-    now = datetime.utcnow()
-    active = (OwnerConnectCode.query
-              .filter(OwnerConnectCode.owner_id == u.id,
-                      OwnerConnectCode.used_at.is_(None),
-                      OwnerConnectCode.revoked_at.is_(None),
-                      OwnerConnectCode.expires_at > now)
-              .order_by(OwnerConnectCode.created_at.desc())
-              .first())
-    redeemed = (OwnerConnectCode.query
-                .filter(OwnerConnectCode.owner_id == u.id,
-                        OwnerConnectCode.used_at.isnot(None))
-                .order_by(OwnerConnectCode.used_at.desc())
-                .limit(10).all())
-    redeemed_with_stores = []
-    for c in redeemed:
-        st = (db.session.get(Store, c.used_by_store_id)
-              if c.used_by_store_id else None)
-        redeemed_with_stores.append((c, st))
-    return render_template("owner_connect.html",
-        user=u, active=active, redeemed=redeemed_with_stores)
+    """301 → /app/owner/connect. Page rendering moved to React.
+    Mint / revoke / list now run through
+    /api/v2/owner/connect-codes (GET + POST + POST .../revoke).
+    The legacy POST handlers below stay alive briefly so the
+    in-flight Jinja form submissions don't break for any user
+    mid-flow; they redirect through the SPA on next visit."""
+    return redirect("/app/owner/connect", code=301)
 
 
 @app.route("/owner/connect/generate", methods=["POST"])
@@ -3829,43 +3662,25 @@ def subscribe_checkout():
 @app.route("/subscribe/success")
 @login_required
 def subscribe_success():
-    user = current_user()
-    store = current_store()
-    return render_template("subscribe_success.html", user=user, store=store)
+    """301 → /app/subscribe/success. Stripe Checkout's success_url
+    points at this URL — the redirect chain (Stripe → here → /app)
+    is opaque to the user. The SPA polls /api/v2/admin/store-info
+    every 2s for ~30s so the page flips from "Payment received"
+    to "You're on Basic/Pro" without a manual refresh."""
+    return redirect("/app/subscribe/success", code=301)
 
 # ── Referrals (store-admin to new-store share + earn) ───────
 @app.route("/account/referrals")
 @admin_required
 def admin_referrals():
-    """Self-service view of the admin's own referral code + stats.
-
-    Paid plans only — the crown in the topbar is hidden on trial and the
-    webhook mints the code at the paid transition. If somehow a paid
-    admin arrives here without a code (e.g. they subscribed before this
-    feature shipped), lazily mint on the fly.
-    """
-    user  = current_user()
-    store = current_store()
-    if not store_has_paid_plan(store):
-        flash("Referrals unlock when your subscription is active.", "error")
-        return redirect(url_for("admin_subscription"))
-    rc = ensure_referral_code(store)
-    db.session.commit()
-    # Stats: total redemptions + total credits earned (from the history).
-    redemptions = (ReferralRedemption.query
-                   .filter_by(referral_code_id=rc.id)
-                   .order_by(ReferralRedemption.redeemed_at.desc())
-                   .all())
-    credits_earned_cents = sum(
-        rc.reward_self_cents for r in redemptions if r.self_credit_applied_at
-    )
-    share_url = url_for("signup", ref=rc.code, _external=True)
-    return render_template("admin_referrals.html",
-        user=user, store=store,
-        referral=rc, redemptions=redemptions,
-        credits_earned_cents=credits_earned_cents,
-        share_url=share_url,
-    )
+    """301 → /app/account/referrals. Self-service code + stats
+    moved to React. The lazy-mint-on-first-paid-visit and the
+    trial-blocked behavior live behind /api/v2/admin/referrals
+    now (returns 409 for trial admins; the SPA renders an
+    upsell card pointing at /app/subscribe). Stub keeps
+    url_for('admin_referrals') working for the topbar crown +
+    bounces old bookmarks."""
+    return redirect("/app/account/referrals", code=301)
 
 # ── Subscription management ──────────────────────────────────
 @app.route("/admin/subscription")
@@ -6107,14 +5922,12 @@ def superadmin_reports():
 @app.route("/superadmin/reports/audit-log")
 @superadmin_required
 def superadmin_audit_log():
-    """Migrated out of /superadmin/controls?tab=audit. Pure read-only
-    view that fits the Report Center umbrella better than the
-    controls tab nav."""
-    audit = (SuperadminAuditLog.query
-             .order_by(SuperadminAuditLog.created_at.desc())
-             .limit(100).all())
-    return render_template("superadmin_audit_log.html",
-        user=current_user(), audit=audit)
+    """301 → /app/superadmin/audit-log. The React page reads the
+    feed via /api/v2/superadmin/audit-log (paginated + filterable
+    — wider than the legacy 100-row limit). Stub keeps
+    url_for('superadmin_audit_log') working in still-Jinja chrome
+    + bounces old bookmarks."""
+    return redirect("/app/superadmin/audit-log", code=301)
 
 
 # ── Superadmin reports: shared route helpers ─────────────────
@@ -8024,17 +7837,18 @@ def _build_tax_pack_zip(store, year):
 @app.route("/admin/tax-export")
 @admin_required
 def admin_tax_export():
-    user = current_user(); store = current_store()
-    today = date.today()
-    selected = request.args.get("year", "").strip()
-    try:
-        selected_year = int(selected) if selected else today.year - 1
-    except ValueError:
-        selected_year = today.year - 1
-    return render_template("admin_tax_export.html",
-        user=user, store=store,
-        year_choices=_tax_pack_year_choices(),
-        selected_year=selected_year)
+    """301 → /app/admin/tax-export. The year-picker page moved to
+    React; year choices come from /api/v2/admin/tax-export/years.
+    The actual ZIP build still lives below at /admin/tax-export.zip
+    — that streams a multi-MB file via Flask's send_file path and
+    composes a swathe of `_tax_pack_*_csv` helpers we don't need
+    to ship through the SPA yet. Stub keeps url_for(... ) working
+    in still-Jinja chrome (sidebar nav) and bounces old bookmarks.
+    The query string (?year=) is preserved so a deep link from
+    elsewhere lands on the right year."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/admin/tax-export" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/admin/tax-export.zip")
@@ -8186,44 +8000,18 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
 @app.route("/return-checks")
 @admin_required
 def return_checks():
-    """Searchable list of return checks for the current store, with a
-    pending-balance KPI strip and inline status filter (Pending /
-    Recovered / Loss / Fraud / All).
-
-    Same `?partial=1` JSON contract as /transfers and /owner/locations
-    so the live-search swap works without a full page reload.
-    """
-    user = current_user()
-    sid  = session["store_id"]
-    today_d = date.today()
-    status = (request.args.get("status") or "pending").lower()
-    if status not in ("pending", "recovered", "loss", "fraud", "closed", "all"):
-        status = "pending"
-    query = (request.args.get("q") or "").strip()
-    date_from = request.args.get("from") or ""
-    date_to   = request.args.get("to") or ""
-
-    rows = _return_check_list_payload(sid, status, query, date_from, date_to)
-
-    # Month-to-date aggregates for the KPI strip.
-    month_start = date(today_d.year, today_d.month, 1)
-    mtd = _return_check_period_aggregates([sid], month_start, today_d)
-    aging = _return_check_aging_buckets([sid], today=today_d)
-
-    if request.args.get("partial") == "1":
-        html = render_template("_return_checks_table.html",
-                               rows=rows, today=today_d)
-        return jsonify({"html": html, "matched": len(rows),
-                        "status": status, "query": query,
-                        "pending_balance": round(mtd["pending"], 2),
-                        "pending_count":   mtd["pending_count"]})
-
-    return render_template("return_checks.html",
-        user=user, today=today_d, rows=rows,
-        status=status, query=query,
-        date_from=date_from, date_to=date_to,
-        mtd=mtd, aging=aging,
-    )
+    """301 → /app/return-checks. Page rendering + live-search
+    moved to React; both the GET-page path and the legacy
+    `?partial=1` JSON contract are gone since no SPA code uses
+    them. The mutation routes below
+    (/return-checks/new, /payment, /loss, etc.) stay alive
+    intentionally so any in-flight Jinja form-submit during
+    rollout still works; the SPA hits /api/v2/return-checks
+    instead. Stub keeps url_for('return_checks') working for
+    sidebar nav + bounces old bookmarks."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/return-checks" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/return-checks/new", methods=["POST"])
@@ -9179,100 +8967,16 @@ def admin_users():
 @app.route("/admin/audit-log")
 @admin_required
 def admin_audit_log():
-    """Unified operator audit log. Combines OperatorAuditLog rows
-    (transfer deletes, batch creates/updates, daily-report locks /
-    unlocks) with TransferAudit rows (transfer creates / edits /
-    status changes) into a single chronological feed.
+    """301 → /app/admin/audit-log. The unified operator audit log
+    moved to React. Filter + pagination logic now lives behind
+    /api/v2/admin/audit-log (target, action, user, page query
+    params preserved through the redirect). Stub keeps
+    url_for('admin_audit_log') working for sidebar nav + bounces
+    old bookmarks."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/admin/audit-log" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
-    Filters:
-        ?target=transfer | daily_report | batch
-        ?user=<id>
-        ?action=create | update | delete | lock | unlock | status_changed
-    """
-    user = current_user()
-    sid = session["store_id"]
-    target_filter = request.args.get("target", "").strip()
-    user_filter   = request.args.get("user",   "").strip()
-    action_filter = request.args.get("action", "").strip()
-    try:
-        page = max(1, int(request.args.get("page", 1)))
-    except ValueError:
-        page = 1
-    PER_PAGE = 50
-
-    # Pull both feeds, normalize to a common shape, merge, sort.
-    op_q = OperatorAuditLog.query.filter_by(store_id=sid)
-    tx_q = TransferAudit.query.filter_by(store_id=sid)
-    if target_filter:
-        op_q = op_q.filter_by(target_type=target_filter)
-        if target_filter != "transfer":
-            tx_q = tx_q.filter(db.text("1=0"))  # transfer-only feed; suppress when filtered out
-    if user_filter:
-        try:
-            uid = int(user_filter)
-            op_q = op_q.filter_by(user_id=uid)
-            tx_q = tx_q.filter_by(user_id=uid)
-        except ValueError:
-            pass
-    if action_filter:
-        op_q = op_q.filter_by(action=action_filter)
-        tx_q = tx_q.filter_by(action=action_filter)
-
-    op_rows = (op_q.order_by(OperatorAuditLog.created_at.desc())
-               .limit(500).all())
-    tx_rows = (tx_q.order_by(TransferAudit.created_at.desc())
-               .limit(500).all())
-
-    user_ids = ({r.user_id for r in op_rows if r.user_id}
-                | {r.user_id for r in tx_rows if r.user_id})
-    users = ({u.id: u for u in User.query.filter(User.id.in_(user_ids)).all()}
-             if user_ids else {})
-
-    merged = []
-    for r in op_rows:
-        merged.append({
-            "ts":            r.created_at,
-            "user_name":     r.user_name or (users.get(r.user_id).username if r.user_id and users.get(r.user_id) else ""),
-            "user_role":     r.user_role,
-            "action":        r.action,
-            "target_type":   r.target_type,
-            "target_id":     r.target_id,
-            "target_label":  r.target_label,
-            "summary":       r.summary,
-            "source":        "operator",
-        })
-    for r in tx_rows:
-        u = users.get(r.user_id) if r.user_id else None
-        merged.append({
-            "ts":            r.created_at,
-            "user_name":     (u.full_name or u.username) if u else r.employee_name or "",
-            "user_role":     u.role if u else "",
-            "action":        r.action,
-            "target_type":   "transfer",
-            "target_id":     str(r.transfer_id),
-            "target_label":  r.summary[:80] if r.summary else f"Transfer #{r.transfer_id}",
-            "summary":       r.summary,
-            "source":        "transfer",
-        })
-    merged.sort(key=lambda x: x["ts"], reverse=True)
-
-    total = len(merged)
-    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
-    page = min(page, total_pages)
-    start = (page - 1) * PER_PAGE
-    page_rows = merged[start:start + PER_PAGE]
-
-    # Roster of users on the store for the filter dropdown.
-    store_users = (User.query.filter_by(store_id=sid)
-                   .order_by(User.full_name, User.username).all())
-
-    return render_template("admin_audit_log.html",
-        user=user,
-        rows=page_rows,
-        total=total, page=page, total_pages=total_pages,
-        target_filter=target_filter, user_filter=user_filter,
-        action_filter=action_filter,
-        store_users=store_users)
 
 @app.route("/admin/users/new",methods=["GET","POST"])
 @admin_required
@@ -9571,8 +9275,13 @@ def admin_redeem_owner_code():
 @app.route("/superadmin/stores")
 @superadmin_required
 def superadmin_stores():
-    user=current_user(); stores=Store.query.order_by(Store.created_at.desc()).all()
-    return render_template("superadmin_stores.html",user=user,stores=stores)
+    """301 → /app/superadmin/stores. The React page reads via
+    /api/v2/superadmin/stores (paginated, filterable). Stub keeps
+    url_for('superadmin_stores') working for sidebar nav + bounces
+    old bookmarks. The /superadmin/stores/new + /<id>/edit form
+    routes below stay alive (their SPA equivalents aren't built
+    yet)."""
+    return redirect("/app/superadmin/stores", code=301)
 
 @app.route("/superadmin/stores/new",methods=["GET","POST"])
 @superadmin_required

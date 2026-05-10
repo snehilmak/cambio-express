@@ -56,6 +56,13 @@ def test_login_returns_401_on_unknown_user(test_store_id):
 
 
 def test_login_finds_superadmin_with_null_store_id():
+    """The seeded superadmin is pre-enrolled in TOTP (see
+    tests/conftest.py's seed_test_data) so login returns a 2FA
+    pending response, not a full token. enroll_required must be
+    False — they're already enrolled — and the SPA exchanges the
+    pending_token via /auth/login/totp to get the access token.
+    Tests that need a real bearer token use the
+    `login_superadmin(client)` helper from conftest."""
     resp = _client().post(
         "/auth/login",
         json={
@@ -66,9 +73,10 @@ def test_login_finds_superadmin_with_null_store_id():
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["role"] == "superadmin"
-    assert body["store_id"] is None
-    assert "platform.admin" in body["permissions"]
+    assert body["requires_totp"] is True
+    assert body["enroll_required"] is False
+    assert body["pending_token"]
+    assert body["user_id"]
 
 
 def test_login_rejects_extra_fields(test_store_id):
@@ -197,6 +205,81 @@ def test_openapi_includes_auth_paths():
     assert "/auth/login" in paths
     assert "/auth/me" in paths
     assert "/auth/login-cross-store" in paths
+
+
+# ── GET /auth/store-by-slug/{slug} ──────────────────────────
+
+
+def test_store_by_slug_returns_public_fields(client, test_store_id):  # noqa: ARG001
+    """Public lookup so the SPA's per-store login page can render
+    the store name in its branding pane before the user signs in."""
+    resp = client.get("/api/v2/auth/store-by-slug/test-store")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    # extra="forbid" — only public fields, no plan / Stripe IDs.
+    assert set(body.keys()) == {"store_id", "name", "slug"}
+    assert body["name"] == "Test Store"
+    assert body["slug"] == "test-store"
+
+
+def test_store_by_slug_404_unknown(client):
+    resp = client.get("/api/v2/auth/store-by-slug/no-such-store")
+    assert resp.status_code == 404
+
+
+def test_store_by_slug_404_inactive(client, test_store_id):
+    """Inactive stores return 404 — no leak that the slug exists."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        s = db.session.get(Store, test_store_id)
+        s.is_active = False
+        db.session.commit()
+    resp = client.get("/api/v2/auth/store-by-slug/test-store")
+    assert resp.status_code == 404
+
+
+def test_store_by_slug_lowercases_input(client, test_store_id):  # noqa: ARG001
+    """Lookup is case-insensitive on the input slug — uppercase
+    URL still resolves so we don't 404 PWA users typing the
+    address-bar form of their store."""
+    resp = client.get("/api/v2/auth/store-by-slug/TEST-STORE")
+    assert resp.status_code == 200
+
+
+# ── POST /auth/login (per-store cookie + LoginEvent) ────────
+
+
+def test_login_with_store_id_sets_last_store_cookie(client, test_store_id):
+    """When the body carries a store_id we set the legacy
+    `ds_last_store` cookie so the installed-PWA bounce path on
+    `/` still works after migration."""
+    resp = client.post("/api/v2/auth/login", json={
+        "username": "admin@test.com",
+        "password": "testpass123!",
+        "store_id": test_store_id,
+    })
+    assert resp.status_code == 200
+    # Flask test client surfaces Set-Cookie via headers + cookies dict.
+    cookies = resp.headers.getlist("Set-Cookie")
+    assert any("ds_last_store=test-store" in c for c in cookies), \
+        f"expected ds_last_store cookie, got {cookies!r}"
+
+
+def test_login_records_login_event(client, test_store_id, test_admin_id):
+    """SPA logins record a LoginEvent so DAU/MAU stays accurate
+    after the migration (legacy /login Flask route did this via
+    `_record_login`; the FastAPI port mirrors it)."""
+    from app import LoginEvent, app as flask_app
+    with flask_app.app_context():
+        before = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+    client.post("/api/v2/auth/login", json={
+        "username": "admin@test.com",
+        "password": "testpass123!",
+        "store_id": test_store_id,
+    })
+    with flask_app.app_context():
+        after = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+    assert after == before + 1
 
 
 # ── POST /auth/login-cross-store ────────────────────────────
@@ -831,3 +914,331 @@ def test_reset_password_consumed_token_cannot_be_reused(client, test_store_id): 
         },
     )
     assert r2.status_code == 400
+
+
+# ── GET /auth/referral/{code} + signup ref_code resolution ──
+#
+# The referral preview endpoint powers the green "$X off your
+# first paid month" banner on the SPA's /signup page (see
+# CLAUDE.md invariant #12). Signup itself takes an optional
+# ref_code field — valid codes are resolved into a
+# referred_by_code_id; unknown codes are silently dropped to
+# match the legacy Jinja behavior.
+
+
+def _seed_referral_code(*, owner_store_id, code="ABCD1234",
+                        reward_referee_cents=5000):
+    """Mint a ReferralCode row directly. Use a uniqueness-friendly
+    code per test so parallel runs don't collide on the
+    `code` unique index."""
+    from app import ReferralCode, db
+    rc = ReferralCode(
+        owner_store_id=owner_store_id, code=code,
+        reward_self_cents=10000,
+        reward_referee_cents=reward_referee_cents,
+        is_active=True,
+    )
+    db.session.add(rc); db.session.commit()
+    return rc
+
+
+def test_referral_preview_returns_code_and_reward(
+    client, test_store_id,
+):
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="GOOD1234",
+            reward_referee_cents=7500,
+        )
+    resp = client.get("/api/v2/auth/referral/GOOD1234")
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["code"] == "GOOD1234"
+    assert body["reward_referee_cents"] == 7500
+
+
+def test_referral_preview_404_for_unknown_code(client):
+    resp = client.get("/api/v2/auth/referral/NEVERMINTED")
+    assert resp.status_code == 404
+
+
+def test_referral_preview_normalizes_lowercase(
+    client, test_store_id,
+):
+    """Codes are stored uppercase; the SPA shouldn't have to
+    pre-normalize. Lowercase lookup must still resolve."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="MIXED999",
+        )
+    resp = client.get("/api/v2/auth/referral/mixed999")
+    assert resp.status_code == 200
+    assert resp.get_json()["code"] == "MIXED999"
+
+
+def test_referral_preview_strips_whitespace(client, test_store_id):
+    """Pasted codes often pick up trailing whitespace; the
+    endpoint must tolerate it."""
+    from app import app as flask_app
+    with flask_app.app_context():
+        _seed_referral_code(
+            owner_store_id=test_store_id, code="WHITES12",
+        )
+    resp = client.get("/api/v2/auth/referral/   whites12  ")
+    assert resp.status_code == 200
+
+
+def test_referral_preview_404_for_blank_code(client):
+    """A non-empty path segment is required by FastAPI's router,
+    but a whitespace-only segment should still 404 (lookup
+    returns None)."""
+    resp = client.get("/api/v2/auth/referral/%20")
+    assert resp.status_code == 404
+
+
+def test_signup_with_valid_ref_code_records_referrer(
+    client, test_store_id,
+):
+    """When a signup carries a recognized ref_code, the new store's
+    referred_by_code_id must point at the referrer's
+    ReferralCode.id."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="REFER123",
+        )
+        rc_id = rc.id
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Referee Cambio",
+            "email":      "referee@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "REFER123",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id == rc_id
+
+
+def test_signup_with_unknown_ref_code_silently_drops(client):
+    """Unknown ref_codes don't fail the signup — they just don't
+    record referred_by_code_id. Mirrors legacy Jinja behavior."""
+    from app import Store, app as flask_app, db
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "No-Ref Cambio",
+            "email":      "no-ref@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "DOESNOTEXIST",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+def test_signup_normalizes_ref_code_case_and_whitespace(
+    client, test_store_id,
+):
+    """Ref codes get .strip().upper() before lookup — pasted
+    'refer123 ' or 'Refer123' both resolve."""
+    from app import Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="NORMRF99",
+        )
+        rc_id = rc.id
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Norm Cambio",
+            "email":      "norm@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "  normrf99  ",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id == rc_id
+
+
+def test_signup_with_no_ref_code_omits_referrer(client):
+    """Absence of ref_code means referred_by_code_id stays null."""
+    from app import Store, app as flask_app, db
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Solo Cambio",
+            "email":      "solo@example.com",
+            "password":   "validpass12345",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+def test_signup_with_inactive_ref_code_silently_drops(
+    client, test_store_id,
+):
+    """An is_active=False referral code shouldn't credit the
+    referrer — lookup_referral_code filters on is_active so the
+    signup falls through to the no-referrer branch."""
+    from app import ReferralCode, Store, app as flask_app, db
+    with flask_app.app_context():
+        rc = _seed_referral_code(
+            owner_store_id=test_store_id, code="INACT123",
+        )
+        rc.is_active = False
+        db.session.commit()
+    resp = client.post(
+        "/api/v2/auth/signup",
+        json={
+            "store_name": "Inactive Ref Cambio",
+            "email":      "inactive-ref@example.com",
+            "password":   "validpass12345",
+            "ref_code":   "INACT123",
+        },
+    )
+    assert resp.status_code == 201
+    new_store_id = resp.get_json()["store_id"]
+    with flask_app.app_context():
+        s = db.session.get(Store, new_store_id)
+        assert s.referred_by_code_id is None
+
+
+# ── /auth/passkeys/register/begin + /finish ────────────────
+#
+# WebAuthn enrollment ported from the legacy Flask routes
+# (/account/passkeys/register/{begin,finish}) so the SPA's
+# Settings PasskeysCard can run the full registration dance.
+# The challenge bridges between begin and finish via a signed
+# JWT with `purpose: passkey-register` since FastAPI doesn't
+# share Flask's `session` dict.
+
+
+def _login_admin_token(client, store_id):
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def test_passkey_register_begin_requires_jwt(client):
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/begin", json={},
+    )
+    assert resp.status_code == 401
+
+
+def test_passkey_register_begin_returns_options_and_token(
+    client, test_store_id,
+):
+    """Happy-path begin: returns the WebAuthn options JSON the
+    SPA passes to navigator.credentials.create() + a register_token
+    the SPA echoes back to /finish so the server can verify against
+    the same challenge."""
+    import json
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/begin",
+        json={}, headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert "register_token" in body
+    assert body["register_token"]
+    options = json.loads(body["options_json"])
+    # Must include the user object + challenge so the browser
+    # can build the public-key credential request.
+    assert "challenge" in options
+    assert "user" in options
+    assert options["user"]["name"] == "admin@test.com"
+    assert "rp" in options
+    assert "pubKeyCredParams" in options
+
+
+def test_passkey_register_finish_rejects_bad_token(
+    client, test_store_id,
+):
+    """A garbage register_token must 400 — never succeed."""
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={
+            "register_token": "garbage.not.a.jwt",
+            "credential": {
+                "id": "x", "rawId": "x", "type": "public-key",
+                "response": {"clientDataJSON": "x",
+                             "attestationObject": "x"},
+            },
+            "name": "Test",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+
+
+def test_passkey_register_finish_rejects_missing_fields(
+    client, test_store_id,
+):
+    """The /finish endpoint requires both register_token AND
+    credential — neither defaults silently."""
+    token = _login_admin_token(client, test_store_id)
+    r1 = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={"register_token": "anything"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r1.status_code == 400
+    r2 = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={"credential": {}},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert r2.status_code == 400
+
+
+def test_passkey_register_finish_rejects_token_for_wrong_user(
+    client, test_store_id,
+):
+    """Belt-and-suspenders: a register_token issued for user A
+    can't be used by user B even if both have valid JWTs.
+    The token's `sub` claim must match the authed user."""
+    from api.Modules.Auth.Services import issue_passkey_register_token
+    # Token issued for a different user_id (9999 — doesn't exist)
+    foreign_token = issue_passkey_register_token(9999, "fakechallenge")
+    token = _login_admin_token(client, test_store_id)
+    resp = client.post(
+        "/api/v2/auth/passkeys/register/finish",
+        json={
+            "register_token": foreign_token,
+            "credential": {
+                "id": "x", "rawId": "x", "type": "public-key",
+                "response": {"clientDataJSON": "x",
+                             "attestationObject": "x"},
+            },
+            "name": "Test",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+    assert "match" in resp.get_json()["detail"].lower()

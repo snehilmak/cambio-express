@@ -19,17 +19,11 @@ def _login_admin(client, store_id):
 
 
 def _login_superadmin(client):
-    """Seeded superadmin uses store_id=None and has no TOTP enrolled,
-    so the SPA-31 2FA gate falls through to a real access token."""
-    resp = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin",
-            "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    return resp.get_json()["access_token"]
+    """Wraps the SPA two-step login (password → TOTP exchange)
+    using the seeded superadmin's pre-enrolled TOTP secret. See
+    tests/conftest.py for the secret + helper definition."""
+    from tests.conftest import login_superadmin
+    return login_superadmin(client)
 
 
 def _seed(message="Heads up", level="info", is_active=True,

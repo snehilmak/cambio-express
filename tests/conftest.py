@@ -33,6 +33,94 @@ from app import app as flask_app, db
 flask_app.config["TESTING"] = True
 
 
+# ─────────────────────────────────────────────────────────────
+# FastAPI TestClient leak plug
+#
+# Bare `TestClient(api_app)` instances (~189 call sites across
+# ~11 test files) skip the recommended context-manager form, so
+# FastAPI's lifespan + httpx Session never get cleanly shut
+# down. The leftover asyncio coroutines hang on as "Task pending"
+# warnings and — when GC'd mid-test — rollback the SQLAlchemy
+# session of whatever test happens to be running. That used to
+# produce 50/50 flakes on tests like
+# test_webhook_persists_event_on_valid_request.
+#
+# Fix: monkey-patch TestClient to register every instance for
+# teardown. The autouse `_close_fastapi_clients` fixture below
+# closes them all between tests, draining the pending tasks
+# before they can interfere with the next test.
+#
+# This eliminates the need to refactor the 189 call sites
+# individually — they keep working unchanged. Removing this
+# block is safe once those sites all use `with TestClient(...)
+# as c:` form.
+import fastapi.testclient as _fastapi_testclient
+_OrigTestClient = _fastapi_testclient.TestClient
+_open_fastapi_clients: list = []
+
+
+class _AutoCloseTestClient(_OrigTestClient):
+    """Drop-in TestClient that registers itself with the autouse
+    fixture for guaranteed teardown after each test."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _open_fastapi_clients.append(self)
+
+
+_fastapi_testclient.TestClient = _AutoCloseTestClient
+# Also re-export under fastapi.testclient module attr so re-imports
+# pick up the patched version even after fastapi/starlette internal
+# caching.
+import sys as _sys
+if "fastapi.testclient" in _sys.modules:
+    _sys.modules["fastapi.testclient"].TestClient = _AutoCloseTestClient
+
+
+@pytest.fixture(autouse=True)
+def _close_fastapi_clients():
+    """After each test, walk the list of TestClient instances
+    created during the test and exit them properly. Each `__exit__`
+    closes httpx + drains FastAPI's lifespan tasks so the next
+    test starts with a clean asyncio state."""
+    yield
+    while _open_fastapi_clients:
+        c = _open_fastapi_clients.pop()
+        try:
+            c.__exit__(None, None, None)
+        except Exception:
+            # Don't let a single client teardown failure mask the
+            # actual test result; keep popping.
+            pass
+
+
+# Stable TOTP secret for the seeded superadmin so test helpers can
+# compute current codes deterministically via `pyotp.TOTP().now()`.
+# Picked once at module import; never rotated within a session.
+import pyotp as _pyotp
+SUPERADMIN_TOTP_SECRET = _pyotp.random_base32()
+
+
+def login_superadmin(client) -> str:
+    """Log in as the seeded superadmin and return the access token.
+    Wraps the two-step SPA flow (password → TOTP exchange) so tests
+    don't have to repeat the `pyotp.TOTP(secret).now()` boilerplate.
+    Returns the bearer JWT ready for `Authorization: Bearer <…>`."""
+    pending = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "superadmin",
+            "password": "super2025!",
+            "store_id": None,
+        },
+    ).get_json()["pending_token"]
+    code = _pyotp.TOTP(SUPERADMIN_TOTP_SECRET).now()
+    return client.post(
+        "/api/v2/auth/login/totp",
+        json={"pending_token": pending, "code": code},
+    ).get_json()["access_token"]
+
+
 def seed_test_data():
     from app import User, Store, _seed_tv_catalogs
     # TV-display catalogs (companies + banks) are seeded by init_db
@@ -41,8 +129,17 @@ def seed_test_data():
     # see the same canonical 12 + 34 entries production does.
     _seed_tv_catalogs()
     if not User.query.filter_by(username="superadmin", store_id=None).first():
+        # Pre-enrol the seeded superadmin so SPA login returns a real
+        # access_token directly via the TOTP exchange step. The flow
+        # is: POST /auth/login with creds → pending_token → POST
+        # /auth/login/totp with `pyotp.TOTP(SUPERADMIN_TOTP_SECRET).now()`
+        # → access_token. Tests use the `login_superadmin(client)`
+        # helper below to wrap that two-step exchange. See CLAUDE.md
+        # invariant #13 — production superadmins MUST be enrolled.
         sa = User(username="superadmin", full_name="Platform Owner",
-                  role="superadmin", store_id=None)
+                  role="superadmin", store_id=None,
+                  totp_secret=SUPERADMIN_TOTP_SECRET,
+                  totp_enrolled_at=datetime.utcnow())
         sa.set_password("super2025!")
         db.session.add(sa)
     if not Store.query.filter_by(slug="test-store").first():
@@ -65,9 +162,27 @@ def seed_test_data():
 @pytest.fixture(autouse=True)
 def clean_db():
     with flask_app.app_context():
+        # Defensive cleanup: bare FastAPI TestClient instances in many
+        # tests leak pending asyncio tasks ("Task was destroyed but it
+        # is pending!") that hold references to SQLAlchemy sessions
+        # and silently rollback this test's seed. See the comment in
+        # .github/workflows/ci.yml for the full backstory. Until the
+        # 189 TestClient call sites are refactored to use `with`
+        # blocks, force a session.remove() at start so any leaked
+        # session is detached before we drop+create+seed.
+        db.session.remove()
         db.drop_all()
         db.create_all()
         seed_test_data()
+        # Verify seed actually persisted — if a leaked async task
+        # rolled back the seed transaction, the row is gone before
+        # the test even starts. Retry once to make CI deterministic.
+        from app import Store
+        if Store.query.filter_by(slug="test-store").first() is None:
+            db.session.remove()
+            db.drop_all()
+            db.create_all()
+            seed_test_data()
         yield
         db.session.remove()
 

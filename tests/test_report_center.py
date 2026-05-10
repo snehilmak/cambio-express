@@ -90,14 +90,17 @@ def test_superadmin_reports_page_renders(client):
     assert ">View<" in body
 
 
-def test_superadmin_audit_log_page_renders(client):
+def test_superadmin_audit_log_page_redirects_to_app(client):
+    """Page rendering moved to React (/app/superadmin/audit-log).
+    The Flask handler is now a 301; the SPA reads the feed via
+    /api/v2/superadmin/audit-log (paginated + filterable, wider
+    than the legacy 100-row limit)."""
     _superadmin_login(client)
-    resp = client.get("/superadmin/reports/audit-log")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Superadmin Audit Log" in body
-    # Back-link to the Report Center index.
-    assert "Reports" in body
+    resp = client.get(
+        "/superadmin/reports/audit-log", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/superadmin/audit-log"
 
 
 def test_legacy_audit_tab_redirects_to_audit_log_route(client):

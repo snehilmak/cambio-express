@@ -76,23 +76,18 @@ def test_owner_shell_uses_image_brand_mark():
 
 
 def test_login_chrome_uses_image_brand_mark():
-    """Login chrome (the big-logo screen on /login) shouldn't paint
-    the mark in CSS either — same SVG file. Other uses of --db-neon
-    in the file (button backgrounds, ::selection, etc.) are fine —
-    those are CTAs/state surfaces that should flip with the theme.
-    Only the brand mark must be static, and that's now an <img>."""
-    src = _read("templates/_login_chrome.html")
+    """The 2FA login chrome (the big-logo screen on /app/login/2fa*)
+    shouldn't paint the mark in CSS either — same SVG file. The
+    legacy templates/_login_chrome.html partial moved to
+    frontend/src/routes/TwoFactor.tsx (inline `TWO_FACTOR_CSS`)
+    when /login/2fa* migrated to React. Same brand-mark contract:
+    .brand-mark must be a sized <img> with no background fill."""
+    src = _read("frontend/src/routes/TwoFactor.tsx")
     assert "brand-mark.svg" in src
-    # Find the .brand-mark CSS rule and assert no background-color in it.
     idx = src.find(".brand-mark {")
-    if idx == -1:
-        idx = src.find(".brand-mark{")
-    assert idx != -1, ".brand-mark rule missing"
-    # Read up to the closing brace of THIS rule.
+    assert idx != -1, ".brand-mark rule missing in TwoFactor.tsx"
     end = src.find("}", idx)
     rule = src[idx:end]
-    # `background:` with the colon = a real declaration. The comment
-    # in the rule mentions "background" as docs and shouldn't trip this.
     decl_lines = [
         ln.strip() for ln in rule.splitlines()
         if ln.strip() and not ln.strip().startswith(("/*", "*"))
@@ -100,7 +95,7 @@ def test_login_chrome_uses_image_brand_mark():
     has_bg = any("background:" in ln and "/*" not in ln for ln in decl_lines)
     assert not has_bg, (
         f"login-chrome .brand-mark must not paint a background — "
-        f"the brand identity comes from brand-mark.svg now. Rule body:\n{rule}"
+        f"the brand identity comes from brand-mark.svg. Rule body:\n{rule}"
     )
 
 

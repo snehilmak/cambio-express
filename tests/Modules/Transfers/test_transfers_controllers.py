@@ -421,15 +421,8 @@ def test_create_rejects_bad_send_date(client, test_store_id):
 def test_create_jwt_without_store_returns_403(client):
     """Superadmin JWT (store_id=null) cannot create transfers via
     this endpoint — it doesn't carry a store scope."""
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin", "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    assert login.status_code == 200
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.post(
         "/api/v2/transfers",
         json={
@@ -606,14 +599,8 @@ def test_employees_requires_jwt():
 def test_employees_rejects_superadmin(client):
     """Superadmin tokens have no store scope — the endpoint can't
     pick a roster, so it 403s."""
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin", "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.get(
         "/api/v2/transfers/employees",
         headers={"Authorization": f"Bearer {token}"},

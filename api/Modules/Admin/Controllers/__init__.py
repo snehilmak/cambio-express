@@ -8,7 +8,7 @@ Mounts at `/api/v2/admin/*`. Endpoints:
 JWT-required, scoped to the principal's store. Superadmin (no
 store scope) → 403.
 """
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -18,21 +18,33 @@ from api.Modules.Admin.Repositories import (
     find_team_member,
     list_team,
 )
+
 from api.Modules.Admin.Requests import (
     AddonListResponse,
     AddonRow,
     AddonToggleResponse,
+    AdminAuditLogResponse,
+    AdminAuditRow,
+    AdminAuditUserOption,
+    ReferralCodeResponse,
+    ReferralRedemptionRow,
     StoreInfoResponse,
     StoreInfoRow,
     StoreInfoUpdateRequest,
+    TaxExportYearsResponse,
     TeamListResponse,
     TeamMemberCreateRequest,
     TeamMemberRow,
     TeamMemberUpdateRequest,
 )
 from api.Modules.Admin.Services import (
+    TrialPlanError,
     add_team_member,
     deactivate_team_member,
+    get_referral_payload,
+    list_audit_rows,
+    tax_export_default_year,
+    tax_export_year_choices,
     update_store_info,
     update_team_member,
 )
@@ -293,4 +305,104 @@ def toggle_addon_route(
     db.commit()
     return AddonToggleResponse(
         addon=_adapt_addon(addon_key, addon, is_active=(addon_key in keys)),
+    )
+
+
+@router.get("/tax-export/years", response_model=TaxExportYearsResponse)
+def list_tax_export_years_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TaxExportYearsResponse:
+    """Years offered in the tax-pack year picker, plus the default
+    selection (last calendar year). Powers the /app/admin/tax-export
+    React page. The actual ZIP download still comes from the legacy
+    Flask route /admin/tax-export.zip — that streams a multi-MB file
+    via Flask's send_file path and is left intact for now."""
+    store_id = _require_store(claims)
+    years = tax_export_year_choices(db, store_id)
+    return TaxExportYearsResponse(
+        years=years, default_year=tax_export_default_year(years),
+    )
+
+
+# ── Operator audit log ──────────────────────────────────────
+
+
+@router.get("/audit-log", response_model=AdminAuditLogResponse)
+def get_admin_audit_log_route(
+    target: str = Query("", max_length=40),
+    action: str = Query("", max_length=40),
+    user:   str = Query("", max_length=20),
+    page:   int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminAuditLogResponse:
+    """Merged operator + transfer audit feed for the principal's
+    store. Powers /app/admin/audit-log. Filters mirror the legacy
+    Flask page exactly: target=transfer|daily_report|batch,
+    action=create|update|delete|lock|unlock|status_changed,
+    user=<id>. `page` is 1-based; per-page is the legacy 50."""
+    store_id = _require_store(claims)
+    payload = list_audit_rows(
+        db, store_id=store_id,
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+        user_filter=user.strip(),
+        page=page,
+    )
+    return AdminAuditLogResponse(
+        rows=[AdminAuditRow(**r) for r in payload["rows"]],
+        total=payload["total"],
+        page=payload["page"],
+        per_page=payload["per_page"],
+        total_pages=payload["total_pages"],
+        store_users=[
+            AdminAuditUserOption(**u) for u in payload["store_users"]
+        ],
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+        user_filter=user.strip(),
+    )
+
+
+# ── Referrals (paid-plan self-service share + earn) ─────────
+
+
+@router.get("/referrals", response_model=ReferralCodeResponse)
+def get_admin_referrals_route(
+    request: Request,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ReferralCodeResponse:
+    """Self-service referral payload for the principal's store.
+    Lazily mints a ReferralCode if missing (per CLAUDE.md
+    invariant #12 — paid plans only; trial → 409). Powers
+    /app/account/referrals."""
+    store_id = _require_store(claims)
+    # Build the share URL on the canonical host so the SPA copy
+    # button always offers a public-facing link, even when the
+    # admin is using a custom domain or Render preview URL.
+    host_origin = (
+        f"{request.url.scheme}://{request.url.netloc}"
+    )
+    try:
+        payload = get_referral_payload(
+            db, store_id=store_id, host_origin=host_origin,
+        )
+    except TrialPlanError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    db.commit()
+    return ReferralCodeResponse(
+        code=payload["code"],
+        is_active=payload["is_active"],
+        reward_self_cents=payload["reward_self_cents"],
+        reward_referee_cents=payload["reward_referee_cents"],
+        redeemed_count=payload["redeemed_count"],
+        credits_earned_cents=payload["credits_earned_cents"],
+        share_url=payload["share_url"],
+        redemptions=[
+            ReferralRedemptionRow(**r) for r in payload["redemptions"]
+        ],
     )

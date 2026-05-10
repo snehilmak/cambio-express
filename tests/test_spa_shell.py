@@ -131,17 +131,18 @@ def test_spa_asset_404_for_missing_file(client, stub_spa_build):
     assert r.status_code == 404
 
 
-def test_legacy_landing_page_still_served(client):
+def test_legacy_root_redirects_to_app(client):
     """Regression guard: mounting the SPA at /app must not affect
-    the existing Jinja routes. `/` continues to render the legacy
-    landing template."""
-    r = client.get("/")
-    # Could be 200 (anonymous landing) or 302 (redirect to a store
-    # login or dashboard, depending on session). Either is fine —
-    # what matters is it's NOT 404 (which is what would happen if
-    # the SPA accidentally shadowed it).
-    assert r.status_code in (200, 302), (
-        f"GET / should still hit Jinja routes; got {r.status_code}"
+    the legacy `/` route — which is now a 301 to /app/. The Jinja
+    landing template was retired alongside this redirect; what
+    matters here is that / still resolves (not 404, which would
+    indicate the SPA mount accidentally shadowed it)."""
+    r = client.get("/", follow_redirects=False)
+    assert r.status_code in (301, 302), (
+        f"GET / should redirect; got {r.status_code}"
+    )
+    assert r.headers["Location"].startswith("/app"), (
+        f"GET / should redirect to /app/...; got {r.headers['Location']!r}"
     )
 
 

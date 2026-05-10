@@ -92,15 +92,8 @@ def test_monthly_requires_jwt():
 
 
 def test_monthly_rejects_superadmin(client):
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin",
-            "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.get(
         "/api/v2/monthly/2026/1",
         headers={"Authorization": f"Bearer {token}"},
@@ -215,15 +208,8 @@ def test_put_rejects_bad_month(client, test_store_id):
 
 
 def test_put_rejects_superadmin(client):
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin",
-            "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.put(
         "/api/v2/monthly/2026/9",
         json={"taxable_sales": 1.0},

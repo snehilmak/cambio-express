@@ -8,10 +8,25 @@ from api.Modules.Auth.Requests.login import (
     OwnerSignupRequest,
     OwnerSignupResponse,
     RecoveryLoginRequest,
+    ReferralPreviewResponse,
     ResetPasswordRequest,
     SignupRequest,
     SignupResponse,
+    StoreLookupResponse,
+    TotpEnrollConfirmRequest,
+    TotpEnrollFinishRequest,
+    TotpEnrollFinishResponse,
+    TotpEnrollStartRequest,
+    TotpEnrollStartResponse,
     TotpLoginRequest,
+)
+from api.Modules.Auth.Requests.notifications import (
+    NotificationsResponse,
+    NotificationsUpdateRequest,
+)
+from api.Modules.Auth.Requests.profile import (
+    ProfileResponse,
+    ProfileUpdateRequest,
 )
 
 __all__ = [
@@ -20,11 +35,22 @@ __all__ = [
     "LoginCrossStoreRequest",
     "LoginRequest",
     "LoginResponse",
+    "NotificationsResponse",
+    "NotificationsUpdateRequest",
     "OwnerSignupRequest",
     "OwnerSignupResponse",
+    "ProfileResponse",
+    "ProfileUpdateRequest",
     "RecoveryLoginRequest",
+    "ReferralPreviewResponse",
     "ResetPasswordRequest",
     "SignupRequest",
     "SignupResponse",
+    "StoreLookupResponse",
+    "TotpEnrollConfirmRequest",
+    "TotpEnrollFinishRequest",
+    "TotpEnrollFinishResponse",
+    "TotpEnrollStartRequest",
+    "TotpEnrollStartResponse",
     "TotpLoginRequest",
 ]

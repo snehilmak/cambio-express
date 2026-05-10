@@ -76,6 +76,7 @@ class SignupRequest(BaseModel):
     email:      str = Field(..., min_length=3, max_length=255)
     password:   str = Field(..., min_length=8, max_length=200)
     phone:      str = Field("", max_length=40)
+    ref_code:   str = Field("", max_length=64)
 
 
 class SignupResponse(BaseModel):
@@ -93,6 +94,17 @@ class SignupResponse(BaseModel):
     role: str
     store_id: int | None
     permissions: list[str]
+
+
+class ReferralPreviewResponse(BaseModel):
+    """GET /auth/referral/{code} return shape. Powers the green
+    'You'll get $X off' banner that shows up on /signup when the
+    code resolves to an active ReferralCode row."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    reward_referee_cents: int
 
 
 class LoginResponse(BaseModel):
@@ -125,6 +137,10 @@ class LoginResponse(BaseModel):
     requires_totp: bool = False
     pending_token: str | None = None
     has_recovery_codes: bool = False
+    # Set when `requires_totp=True` AND the user hasn't enrolled yet,
+    # so the SPA routes to /app/login/2fa/enroll instead of
+    # /app/login/2fa. False on every other shape.
+    enroll_required: bool = False
 
 
 class TotpLoginRequest(BaseModel):
@@ -146,6 +162,62 @@ class RecoveryLoginRequest(BaseModel):
 
     pending_token: str = Field(..., min_length=1)
     code:          str = Field(..., min_length=1, max_length=40)
+
+
+class TotpEnrollStartRequest(BaseModel):
+    """POST body for /auth/login/totp/enroll/start. Given a 2FA-pending
+    token from a successful password login, mint or reuse a TOTP
+    secret and return the QR/secret payload the SPA renders."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str = Field(..., min_length=1)
+
+
+class TotpEnrollStartResponse(BaseModel):
+    """Payload the SPA renders on the enrollment page: the QR SVG
+    string, the manual-entry secret split into 4-char chunks, and
+    the username + issuer for users keying secrets manually."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    qr_svg:         str
+    secret:         str
+    secret_chunks:  str
+    username:       str
+    issuer:         str
+
+
+class TotpEnrollFinishRequest(BaseModel):
+    """POST body for /auth/login/totp/enroll/finish. Given the
+    pending token + the 6-digit code from the user's authenticator
+    app, mark enrollment complete and return the freshly-minted
+    one-shot recovery codes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str = Field(..., min_length=1)
+    code:          str = Field(..., min_length=1, max_length=10)
+
+
+class TotpEnrollFinishResponse(BaseModel):
+    """Recovery codes returned on successful enrollment. The SPA
+    holds these in component state and shows them once — there is
+    no GET endpoint to re-fetch them."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    recovery_codes: list[str]
+
+
+class TotpEnrollConfirmRequest(BaseModel):
+    """POST body for /auth/login/totp/enroll/confirm. Finalises the
+    login after the user has confirmed they saved their recovery
+    codes. Returns a full LoginResponse with access_token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pending_token: str = Field(..., min_length=1)
 
 
 class OwnerSignupRequest(BaseModel):
@@ -176,3 +248,16 @@ class OwnerSignupResponse(BaseModel):
     role: str
     store_id: int | None
     permissions: list[str]
+
+
+class StoreLookupResponse(BaseModel):
+    """GET /auth/store-by-slug/{slug} — public lookup so the SPA's
+    per-store login page can render the store name in its branding
+    pane before the user authenticates. Inactive / unknown slugs
+    return 404."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    name: str
+    slug: str

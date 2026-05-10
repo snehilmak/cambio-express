@@ -23,36 +23,60 @@ def get_store_id(slug="test-store"):
 # ── Task 1: /login/<slug> ─────────────────────────────────────
 
 def test_employee_login_with_valid_credentials(client):
+    """Employee login moved to /api/v2/auth/login (the SPA submits
+    there scoped by store_id). The legacy /login/<slug> Flask form
+    is now a 301 redirect — see test_legacy_login_slug_redirects."""
     sid = get_store_id()
     make_employee(client, sid)
-    resp = client.post("/login/test-store", data={
+    resp = client.post("/api/v2/auth/login", json={
         "username": "cashier",
-        "password": "emppass123!"
-    }, follow_redirects=False)
-    assert resp.status_code == 302
-    assert "dashboard" in resp.headers["Location"]
+        "password": "emppass123!",
+        "store_id": sid,
+    })
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["access_token"]
+    assert body["role"] == "employee"
+    assert body["store_id"] == sid
 
 
 def test_employee_login_wrong_password(client):
     sid = get_store_id()
     make_employee(client, sid)
-    resp = client.post("/login/test-store", data={
+    resp = client.post("/api/v2/auth/login", json={
         "username": "cashier",
-        "password": "wrongpassword"
+        "password": "wrongpassword",
+        "store_id": sid,
     })
-    assert resp.status_code == 200
-    assert b"Invalid username or password" in resp.data
+    assert resp.status_code == 401
+    body = resp.get_json()
+    assert "invalid" in str(body.get("detail", "")).lower()
 
 
 def test_employee_login_unknown_slug_returns_404(client):
-    resp = client.get("/login/no-such-store")
+    """The slug lookup endpoint 404s for unknown slugs so the SPA
+    can render an opaque "store not found" state."""
+    resp = client.get("/api/v2/auth/store-by-slug/no-such-store")
     assert resp.status_code == 404
 
 
 def test_employee_login_get_page_shows_store_context(client):
-    resp = client.get("/login/test-store")
+    """Slug lookup returns the store's display name so the SPA's
+    branding pane reads correctly."""
+    resp = client.get("/api/v2/auth/store-by-slug/test-store")
     assert resp.status_code == 200
-    assert b"Test Store" in resp.data or b"test-store" in resp.data
+    body = resp.get_json()
+    assert body["name"] == "Test Store"
+    assert body["slug"] == "test-store"
+
+
+def test_legacy_login_slug_redirects_to_spa(client):
+    """The legacy /login/<slug> URL stays live as a 301 to the
+    React /app/login/<slug> page. Old PWAs / bookmarks keep
+    working without a forced reset."""
+    resp = client.get("/login/test-store", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/login/test-store"
 
 
 # ── Task 2: main /login restricted to admin/superadmin ───────
@@ -135,13 +159,16 @@ def test_settings_store_info_rejects_blank_name(logged_in_client):
 
 
 def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
-    # Create a second store with a different admin email
-    client.post("/signup", data={
+    # Create a second store with a different admin email. The legacy
+    # /signup form was retired (redirects to /app/signup); we use the
+    # FastAPI signup endpoint instead, same one the SPA submits to.
+    r = client.post("/api/v2/auth/signup", json={
         "store_name": "Other Store",
         "email": "other@example.com",
         "password": "securepass1!",
-        "phone": ""
+        "phone": "",
     })
+    assert r.status_code == 201, r.get_data(as_text=True)
     resp = logged_in_client.post("/admin/settings", data={
         "_tab": "store",
         "store_name": "Test Store",
@@ -156,60 +183,12 @@ def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
         assert s.email == "admin@test.com"  # unchanged
 
 
-# ── Task 4: Password change (now lives on /account/security) ─
-
-def test_security_wrong_current_password(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "wrongpassword",
-        "new_password": "newpassword123!",
-        "confirm_password": "newpassword123!"
-    })
-    assert resp.status_code == 200
-    assert b"incorrect" in resp.data.lower()
-    # verify old password still works
-    with flask_app.app_context():
-        from app import User
-        u = User.query.filter_by(username="admin@test.com").first()
-        assert u.check_password("testpass123!")
-
-
-def test_security_new_password_too_short(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "short",
-        "confirm_password": "short"
-    })
-    assert resp.status_code == 200
-    assert b"8" in resp.data
-
-
-def test_security_passwords_do_not_match(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "newpassword123!",
-        "confirm_password": "differentpassword!"
-    })
-    assert resp.status_code == 200
-    assert b"match" in resp.data.lower()
-
-
-def test_security_valid_password_change(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "brandnew123!",
-        "confirm_password": "brandnew123!"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"updated" in resp.data.lower()
-    with flask_app.app_context():
-        from app import User
-        u = User.query.filter_by(username="admin@test.com").first()
-        assert u.check_password("brandnew123!")
-        assert not u.check_password("testpass123!")
+# ── Task 4: Password change ─────────────────────────────────
+#
+# Form-based POST tests removed — /account/security now 301s to
+# /app/settings, which submits to /api/v2/auth/change-password.
+# The corresponding 4 validation tests + happy-path are exercised
+# at the API level in tests/Modules/Auth/test_auth_controllers.py.
 
 
 # ── Task 5: Team tab + employee password reset ───────────────
@@ -245,13 +224,15 @@ def test_team_reset_employee_password(logged_in_client):
 
 
 def test_team_reset_scoped_to_store(logged_in_client, client):
-    # Create a second store and its employee
-    client.post("/signup", data={
+    # Create a second store and its employee. Legacy /signup is now
+    # a redirect; use the FastAPI signup endpoint instead.
+    r = client.post("/api/v2/auth/signup", json={
         "store_name": "Other Store",
         "email": "other2@example.com",
         "password": "securepass1!",
-        "phone": ""
+        "phone": "",
     })
+    assert r.status_code == 201, r.get_data(as_text=True)
     with flask_app.app_context():
         from app import Store, User
         other_store = Store.query.filter_by(email="other2@example.com").first()

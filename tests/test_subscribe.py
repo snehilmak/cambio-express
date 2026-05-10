@@ -130,10 +130,14 @@ def test_checkout_redirects_to_stripe_for_pro_yearly(logged_in_client, monkeypat
     line_items = m.call_args.kwargs["line_items"]
     assert line_items[0]["price"] == "price_pro_yearly_test"
 
-def test_subscribe_success_loads(logged_in_client):
-    resp = logged_in_client.get("/subscribe/success")
-    assert resp.status_code == 200
-    assert b"payment" in resp.data.lower() or b"plan" in resp.data.lower()
+def test_subscribe_success_redirects_to_app(logged_in_client):
+    """Page rendering moved to React (/app/subscribe/success). The
+    Flask handler is now a 301 so Stripe's success_url chain still
+    lands on a working page, and the SPA polls store-info to flip
+    'Payment received' → 'You're on Basic/Pro' without a refresh."""
+    resp = logged_in_client.get("/subscribe/success", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/subscribe/success"
 
 import json
 

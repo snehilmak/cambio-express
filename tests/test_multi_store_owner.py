@@ -430,11 +430,14 @@ def test_owner_link_route_is_gone(owner_client):
 # ── Owner-side code generation + revoke ─────────────────────────
 
 
-def test_owner_connect_page_renders(owner_client):
-    rv = owner_client.get("/owner/connect")
-    assert rv.status_code == 200
-    body = rv.data.lower()
-    assert b"invite code" in body or b"generate" in body
+def test_owner_connect_page_redirects_to_app(owner_client):
+    """Page rendering moved to React (/app/owner/connect). The
+    Flask GET handler is now a 301; mint/revoke logic runs through
+    /api/v2/owner/connect-codes (covered in
+    tests/Modules/Owners/test_connect_codes_endpoint.py)."""
+    rv = owner_client.get("/owner/connect", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/owner/connect"
 
 
 def test_owner_generate_creates_active_code(owner_client):
@@ -753,37 +756,35 @@ def test_owner_get_admin_dashboard_redirects_to_owner_dashboard(owner_client):
     assert "/owner/dashboard" in rv.headers["Location"]
 
 
-def test_owner_account_profile_uses_owner_shell(owner_client):
-    """REGRESSION: account_profile/security/notifications all extended
-    base.html unconditionally, so owners viewing their profile saw the
-    admin sidebar (Dashboard / Transfers / etc.) — links they don't
-    have access to. They should see base_owner.html chrome instead.
-
-    We assert presence of the owner-only Locations nav link AND the
-    OWNER topbar badge, plus absence of the admin Transfers nav link.
-    """
-    rv = owner_client.get("/account/profile")
-    assert rv.status_code == 200
-    body = rv.data.decode()
-    assert 'href="/owner/locations"' in body, "owner sidebar should appear"
-    assert ">OWNER<" in body, "owner topbar badge should appear"
-    # Admin sidebar's Transfers link is `href="/transfers"` inside a
-    # nav-link <a>; for owner shell that link doesn't exist at all.
-    assert 'href="/transfers"' not in body, "admin Transfers nav must not appear"
+def test_owner_account_profile_redirects_to_app(owner_client):
+    """The legacy chrome split (admin sidebar vs owner sidebar on
+    /account/profile) is moot now that the page lives in React —
+    the SPA's AppShell renders the right nav based on JWT role
+    rather than the template's `extends` choice. Page-rendering
+    chrome coverage moved to the SPA's own role gating; here we
+    just confirm the legacy URL 301s and the owner can reach the
+    redirect target."""
+    rv = owner_client.get("/account/profile", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/account/profile"
 
 
-def test_owner_account_security_uses_owner_shell(owner_client):
-    rv = owner_client.get("/account/security")
-    assert rv.status_code == 200
-    assert b'href="/owner/locations"' in rv.data
-    assert b'href="/transfers"' not in rv.data
+def test_owner_account_security_redirects_to_app(owner_client):
+    """Page rendering moved to React (/app/settings). Chrome-
+    mismatch coverage moved to the SPA's role gating. Here we
+    just confirm the legacy URL 301s for owners too."""
+    rv = owner_client.get("/account/security", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/settings"
 
 
-def test_owner_account_notifications_uses_owner_shell(owner_client):
-    rv = owner_client.get("/account/notifications")
-    assert rv.status_code == 200
-    assert b'href="/owner/locations"' in rv.data
-    assert b'href="/transfers"' not in rv.data
+def test_owner_account_notifications_redirects_to_app(owner_client):
+    """Page rendering moved to React (/app/account/notifications);
+    chrome-mismatch coverage moved to the SPA's role gating. Here
+    we just confirm the legacy URL 301s for owners too."""
+    rv = owner_client.get("/account/notifications", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/account/notifications"
 
 
 def test_owner_store_detail_renders_recent_transfers(owner_client):

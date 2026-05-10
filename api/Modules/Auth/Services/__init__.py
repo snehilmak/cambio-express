@@ -3,11 +3,14 @@ password-flow business logic. The Controller layer (PR 20+) wires
 these to HTTP routes.
 """
 from api.Modules.Auth.Services.jwt_issuer import (
+    DEFAULT_PASSKEY_REGISTER_TTL_SECONDS,
     DEFAULT_PENDING_2FA_TTL_SECONDS,
     JWTIssuer,
     decode_access_token,
+    decode_passkey_register_token,
     decode_pending_2fa_token,
     issue_access_token,
+    issue_passkey_register_token,
     issue_pending_2fa_token,
 )
 from api.Modules.Auth.Services.login import (
@@ -16,9 +19,12 @@ from api.Modules.Auth.Services.login import (
     TotpEnrollmentRequired,
     authenticate_password,
     authenticate_password_cross_store,
+    confirm_recovery_codes_saved,
     finalize_2fa_with_recovery_code,
     finalize_2fa_with_totp,
+    finish_totp_enrollment,
     permissions_for,
+    start_totp_enrollment,
     verify_password_cross_store,
 )
 from api.Modules.Auth.Services.password_change import (
@@ -34,12 +40,23 @@ from api.Modules.Auth.Services.passkey import (
     rp_id as passkey_rp_id,
     rp_name as passkey_rp_name,
 )
+from api.Modules.Auth.Services.notifications import (
+    get_notifications_payload,
+    trial_toggle_applies,
+    update_notifications,
+)
 from api.Modules.Auth.Services.password_reset import (
     IssuedToken,
     consume_password_reset_token,
     hash_token,
     issue_password_reset_token,
     verify_password_reset_token,
+)
+from api.Modules.Auth.Services.profile import (
+    TIMEZONE_CHOICES as PROFILE_TIMEZONE_CHOICES,
+    ProfileValidationError,
+    get_profile_payload,
+    update_profile,
 )
 from api.Modules.Auth.Services.signup import (
     DEFAULT_GRACE_DAYS,
@@ -64,6 +81,7 @@ from api.Modules.Auth.Services.totp import (
 
 __all__ = [
     "DEFAULT_GRACE_DAYS",
+    "DEFAULT_PASSKEY_REGISTER_TTL_SECONDS",
     "DEFAULT_TRIAL_DAYS",
     "IssuedToken",
     "DEFAULT_PENDING_2FA_TTL_SECONDS",
@@ -73,6 +91,8 @@ __all__ = [
     "MIN_PASSWORD_LENGTH",
     "OwnerSignupResult",
     "PASSKEY_RP_NAME",
+    "PROFILE_TIMEZONE_CHOICES",
+    "ProfileValidationError",
     "RECOVERY_CODES_PER_USER",
     "SignupConflictError",
     "SignupResult",
@@ -82,29 +102,39 @@ __all__ = [
     "authenticate_password",
     "authenticate_password_cross_store",
     "change_password",
+    "confirm_recovery_codes_saved",
     "consume_password_reset_token",
     "consume_recovery_code",
     "create_owner",
     "create_store_and_admin",
     "decode_access_token",
+    "decode_passkey_register_token",
     "decode_pending_2fa_token",
     "finalize_2fa_with_recovery_code",
     "finalize_2fa_with_totp",
+    "finish_totp_enrollment",
     "format_recovery_code",
     "generate_recovery_codes",
+    "get_notifications_payload",
+    "get_profile_payload",
     "hash_recovery_code",
     "hash_token",
     "is_enrolled",
     "issue_access_token",
+    "issue_passkey_register_token",
     "issue_password_reset_token",
     "issue_pending_2fa_token",
     "needs_totp",
+    "start_totp_enrollment",
     "passkey_exclude_credentials",
     "passkey_is_eligible",
     "passkey_origin",
     "passkey_rp_id",
     "passkey_rp_name",
     "permissions_for",
+    "trial_toggle_applies",
+    "update_notifications",
+    "update_profile",
     "verify_password_cross_store",
     "verify_password_reset_token",
     "verify_totp_token",

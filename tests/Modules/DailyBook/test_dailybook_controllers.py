@@ -222,14 +222,8 @@ def test_put_rejects_cross_store_jwt(client, test_store_id):
     """Superadmin JWT (no store scope) cannot edit a store's
     daily book — same opaque 403 as a wrong-store JWT."""
     today = date.today().isoformat()
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin", "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     resp = client.put(
         f"/api/v2/daily/{test_store_id}/{today}",
         json={"taxable_sales": 99.0},
@@ -326,14 +320,8 @@ def test_unlock_404_when_no_report(client, test_store_id):
 def test_lock_unlock_reject_cross_store_jwt(client, test_store_id):
     """Superadmin / wrong-store JWT can't lock or unlock."""
     today_iso = date.today().isoformat()
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin", "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     r1 = client.post(
         f"/api/v2/daily/{test_store_id}/{today_iso}/lock",
         headers={"Authorization": f"Bearer {token}"},
@@ -476,14 +464,8 @@ def test_line_items_delete_404_when_missing(client, test_store_id):
 
 def test_line_items_reject_cross_store_jwt(client, test_store_id):
     today_iso = date.today().isoformat()
-    login = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": "superadmin", "password": "super2025!",
-            "store_id": None,
-        },
-    )
-    token = login.get_json()["access_token"]
+    from tests.conftest import login_superadmin
+    token = login_superadmin(client)
     g = client.get(
         f"/api/v2/daily/{test_store_id}/{today_iso}/line-items",
         headers={"Authorization": f"Bearer {token}"},

@@ -65,17 +65,7 @@ def test_owner_shell_loads_search_js_without_defer():
         )
 
 
-def test_return_checks_page_carries_intact_inline_iife(logged_in_client):
-    """The page-specific IIFE must not crash before binding row
-    handlers. We can't run JS in the test, but we can pin a marker
-    that the bindRowActions call is reached at the bottom of the
-    IIFE (it won't be reached if the script has already errored)."""
-    resp = logged_in_client.get("/return-checks")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # The bottom-of-IIFE bindRowActions() call must be present.
-    assert "bindRowActions();" in body, (
-        "page must call bindRowActions() at the bottom of its IIFE — "
-        "if removed, the +Payment button stops opening the modal"
-    )
-    assert "rc-act-payment" in body  # the class the JS binds against
+# /return-checks page rendering moved to React. The legacy Jinja
+# IIFE that bound the +Payment row action is gone; the SPA
+# (frontend/src/routes/ReturnChecks.tsx) owns row interactions
+# now. Test deleted — was pinning Jinja-specific markers.
