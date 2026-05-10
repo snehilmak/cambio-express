@@ -177,13 +177,43 @@ def test_owner_csv_export_returns_umbrella_data(client):
 
 
 def test_owner_report_center_link_resolves_to_owner_endpoints(client):
-    """The owner Report Center should render View buttons that link
-    to /owner/reports/* paths, not the admin paths."""
-    c, *_ = _owner_with_two_stores(client)
-    resp = c.get("/owner/reports")
-    body = resp.get_data(as_text=True)
-    assert 'href="/owner/reports/sales-by-company"' in body
-    assert 'href="/reports/sales-by-company"' not in body
+    """The owner Report Center moved to React in PR #406. The
+    invariant — owner-side report cards link to /owner/reports/*,
+    not the admin /reports/* — is now an API contract on
+    /api/v2/owner/reports."""
+    from app import User, Store, StoreOwnerLink, db
+    with client.application.app_context():
+        s = Store(name="Owner Mirror", slug="reports-owner-mirror",
+                  plan="pro", billing_cycle="monthly")
+        db.session.add(s); db.session.commit()
+        sid = s.id
+        o = User(username="reports-owner-mirror@x.com",
+                 full_name="Reports Owner",
+                 role="owner", store_id=None)
+        o.set_password("ownerpass123")
+        db.session.add(o); db.session.commit()
+        oid = o.id
+        db.session.add(StoreOwnerLink(owner_id=oid, store_id=sid))
+        db.session.commit()
+    jwt = client.post(
+        "/api/v2/auth/login",
+        json={"username": "reports-owner-mirror@x.com",
+              "password": "ownerpass123",
+              "store_id": None},
+    ).get_json()["access_token"]
+    resp = client.get(
+        "/api/v2/owner/reports",
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    rows = [r for cat in resp.get_json()["categories"] for r in cat["reports"]]
+    sales = next((r for r in rows if r["key"] == "sales_by_company"), None)
+    assert sales is not None
+    assert sales["url"] == "/owner/reports/sales-by-company"
+    # No admin-side paths leak through the owner-prefix lookup.
+    for r in rows:
+        if r.get("url"):
+            assert not r["url"].startswith("/reports/"), r
 
 
 def test_admin_reports_still_store_scoped(client, test_store_id):
