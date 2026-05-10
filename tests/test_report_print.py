@@ -20,16 +20,6 @@ def _admin_login(client, store_id):
 
 
 
-def test_print_button_on_superadmin_reports(client):
-    from app import User
-    with client.application.app_context():
-        sa = User.query.filter_by(role="superadmin").first()
-        sa_id = sa.id
-    with client.session_transaction() as s:
-        s["user_id"] = sa_id; s["role"] = "superadmin"; s["store_id"] = None
-    body = client.get(
-        "/superadmin/reports/active-stores-by-plan").get_data(as_text=True)
-    assert "Print / PDF" in body
 
 
 def test_print_css_rules_present():

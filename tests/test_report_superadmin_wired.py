@@ -46,18 +46,6 @@ def _superadmin_login(client):
         s["store_id"] = None
 
 
-def test_every_wired_report_renders(client):
-    """Smoke test — each wired superadmin report loads with HTTP 200
-    and shows the Report Center back-link + the report title."""
-    _superadmin_login(client)
-    for slug in _WIRED:
-        resp = client.get(f"/superadmin/reports/{slug}")
-        assert resp.status_code == 200, f"{slug} returned {resp.status_code}"
-        body = resp.get_data(as_text=True)
-        # Back-link to /superadmin/reports.
-        assert 'href="/superadmin/reports"' in body, f"{slug} missing back link"
-        # CSV export anchor.
-        assert f'/superadmin/reports/{slug}.csv' in body, f"{slug} missing CSV link"
 
 
 def test_every_wired_csv_returns_text_csv(client):
@@ -68,90 +56,18 @@ def test_every_wired_csv_returns_text_csv(client):
         assert resp.mimetype == "text/csv", f"{slug}.csv wrong mimetype"
 
 
-def test_active_stores_by_plan_counts_existing_stores(client):
-    """The platform always has a seed store from conftest. The
-    report should surface it under 'Trial' (the seeded plan)."""
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/active-stores-by-plan")
-    body = resp.get_data(as_text=True)
-    assert "Trial" in body
 
 
-def test_passkey_adoption_zero_when_none_registered(client):
-    """No passkeys in the test DB → empty rows + adoption KPI = 0."""
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/passkey-adoption")
-    body = resp.get_data(as_text=True)
-    # Adoption KPI is "0.0%" when there are no passkey users.
-    assert "0.0%" in body
 
 
-def test_retention_queue_empty_by_default(client):
-    """No store has data_retention_until set in the test DB."""
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/retention-queue")
-    body = resp.get_data(as_text=True)
-    assert "Retention queue is empty." in body
 
 
-def test_mrr_arr_renders_with_paid_stores(client):
-    """Seed a paid store and verify MRR shows up."""
-    from app import Store, db
-    with client.application.app_context():
-        s = Store(name="Paid Store", slug="sa-paid",
-                  plan="basic", billing_cycle="monthly")
-        db.session.add(s); db.session.commit()
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/mrr-arr")
-    body = resp.get_data(as_text=True)
-    # Basic monthly = $49.00 MRR per store.
-    assert "$49.00" in body
 
 
-def test_owner_adoption_lists_multi_store_owners(client):
-    """An owner with 2+ linked stores appears in the report."""
-    from app import Store, User, StoreOwnerLink, db
-    with client.application.app_context():
-        a = Store(name="A", slug="oa-a", plan="trial")
-        b = Store(name="B", slug="oa-b", plan="trial")
-        db.session.add_all([a, b]); db.session.commit()
-        a_id, b_id = a.id, b.id
-        o = User(username="oa@x.com", full_name="Owner A",
-                 role="owner", store_id=None)
-        o.set_password("pw")
-        db.session.add(o); db.session.commit()
-        oid = o.id
-        db.session.add(StoreOwnerLink(owner_id=oid, store_id=a_id))
-        db.session.add(StoreOwnerLink(owner_id=oid, store_id=b_id))
-        db.session.commit()
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/owner-adoption")
-    body = resp.get_data(as_text=True)
-    assert "Owner A" in body
-    assert "2" in body  # store count
 
 
-def test_conversion_rate_handles_empty_cohort(client):
-    """No signups in the period → empty-state and 0% rate."""
-    _superadmin_login(client)
-    # Pick a long-past period with no signups.
-    resp = client.get(
-        "/superadmin/reports/conversion-rate?from=2020-01-01&to=2020-01-31")
-    body = resp.get_data(as_text=True)
-    assert "0.0%" in body
 
 
-def test_suspended_stores_lists_inactive(client):
-    from app import Store, db
-    with client.application.app_context():
-        s = Store(name="Bad Actor", slug="sa-suspended",
-                  plan="basic", is_active=False)
-        db.session.add(s); db.session.commit()
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/suspended-stores")
-    body = resp.get_data(as_text=True)
-    assert "Bad Actor" in body
-    assert "suspended" in body
 
 
 def test_superadmin_reports_require_superadmin(client, test_store_id):
@@ -169,57 +85,8 @@ def test_superadmin_reports_require_superadmin(client, test_store_id):
     assert resp.status_code in (302, 303, 403)
 
 
-def test_dau_mau_counts_from_login_events(client):
-    """Seed two LoginEvent rows for two distinct users today; the
-    DAU KPI should reflect 2 distinct users, MAU same (within
-    current-month default period)."""
-    from app import User, LoginEvent, db
-    from datetime import datetime
-    with client.application.app_context():
-        sa = User.query.filter_by(role="superadmin").first()
-        # Make sure there are at least two distinct users.
-        u2 = User.query.filter(User.id != sa.id).first()
-        if u2 is None:
-            u2 = User(username="dau_test", full_name="DAU Test",
-                       role="employee", store_id=1)
-            u2.set_password("p")
-            db.session.add(u2); db.session.commit()
-        now = datetime.utcnow()
-        db.session.add_all([
-            LoginEvent(user_id=sa.id, role="superadmin",
-                        method="password", at=now),
-            LoginEvent(user_id=u2.id, role="employee",
-                        method="password", at=now),
-        ])
-        db.session.commit()
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/dau-mau")
-    body = resp.get_data(as_text=True)
-    # DAU + MAU KPIs both ≥ 2 distinct users.
-    assert "DAU (today)" in body
-    assert "MAU (period)" in body
 
 
-def test_webhook_health_counts_logged_events(client):
-    from app import WebhookEvent, db
-    from datetime import datetime
-    with client.application.app_context():
-        db.session.add_all([
-            WebhookEvent(source="stripe", event_type="checkout.session.completed",
-                          status="ok", received_at=datetime.utcnow()),
-            WebhookEvent(source="stripe", event_type="checkout.session.completed",
-                          status="ok", received_at=datetime.utcnow()),
-            WebhookEvent(source="stripe", event_type="bad",
-                          status="signature_err", received_at=datetime.utcnow()),
-        ])
-        db.session.commit()
-    _superadmin_login(client)
-    resp = client.get("/superadmin/reports/webhook-health")
-    body = resp.get_data(as_text=True)
-    # Total deliveries = 3, OK = 2, errors = 1, failure% = 33.3.
-    assert "Total Deliveries" in body
-    assert "33.3%" in body  # failure_pct KPI
-    assert "Ok" in body  # title-cased status row label
 
 
 def test_stripe_webhook_logs_signature_failures(client):

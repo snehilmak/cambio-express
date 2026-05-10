@@ -529,3 +529,100 @@ def list_reports_route(
             ],
         ))
     return SuperadminReportListResponse(categories=out)
+
+
+# ── Generic BI-drilldown endpoint ───────────────────────────
+#
+# The legacy Jinja superadmin drilldowns each had their own
+# _make_superadmin_report_routes(...) registration with custom
+# KPI lambdas + per-template renderers. To migrate the SPA in
+# one shot, this single endpoint dispatches by slug into the
+# matching Service function. The SPA's <SuperadminBIDrilldown>
+# renders the result generically — KPIs are derived from the
+# `totals` dict keys; columns from the first row's keys.
+
+_SA_SERVICE_DISPATCH = {
+    "active-stores-by-plan":    "active_stores_by_plan",
+    "signup-funnel":            "signup_funnel",
+    "login-activity":           "login_activity",
+    "mrr-arr":                  "mrr_arr",
+    "churn-cohort":             "churn_cohort",
+    "conversion-rate":          "conversion_rate",
+    "time-to-convert":          "time_to_convert",
+    "trial-expiry-timing":      "trial_expiry_timing",
+    "bank-sync-adoption":       "bank_sync_adoption",
+    "tv-display-adoption":      "tv_display_adoption",
+    "owner-adoption":           "owner_adoption",
+    "passkey-adoption":         "passkey_adoption",
+    "password-resets":          "password_resets",
+    "suspended-stores":         "suspended_stores",
+    "retention-queue":          "retention_queue",
+    "refunds":                  "refunds",
+    "failed-payments":          "failed_payments",
+    "payouts":                  "payouts",
+    "dau-mau":                  "dau_mau",
+    "webhook-health":           "webhook_health",
+}
+
+
+@router.get("/reports/{slug}")
+def superadmin_report_drilldown_route(
+    slug: str,
+    from_: str | None = Query(None, alias="from"),
+    to: str | None = Query(None),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+):
+    """Generic drilldown for all superadmin BI reports. Dispatches by
+    slug into the matching Service function in
+    api.Modules.Superadmin.Services.
+
+    Returns `{rows, totals}` (or `{rows, totals, ...extras}` when the
+    service includes extras). The SPA renders KPIs from the totals
+    keys and columns from the first row's keys — no per-slug config
+    duplication.
+
+    Unknown slugs return 404 so a typo doesn't fall back to a
+    silently-empty page."""
+    _require_superadmin(claims)
+    fn_name = _SA_SERVICE_DISPATCH.get(slug)
+    if fn_name is None:
+        raise HTTPException(status_code=404, detail=f"Unknown report '{slug}'.")
+    from datetime import date as _date, datetime as _dt
+    today = _date.today()
+    default_from = _date(today.year, today.month, 1)
+    try:
+        d_from = (
+            _dt.strptime(from_, "%Y-%m-%d").date() if from_ else default_from
+        )
+    except ValueError:
+        d_from = default_from
+    try:
+        d_to = _dt.strptime(to, "%Y-%m-%d").date() if to else today
+    except ValueError:
+        d_to = today
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+
+    import api.Modules.Superadmin.Services as svc
+    service = getattr(svc, fn_name, None)
+    if service is None:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Service '{fn_name}' is registered but not exported.",
+        )
+    result = service(db, d_from, d_to)
+    # Most services return `(rows, totals)`; a few return three-tuples
+    # for extras (e.g. dau-mau ships a series alongside totals).
+    if isinstance(result, tuple):
+        rows = result[0]
+        totals = result[1] if len(result) > 1 else {}
+        extras = result[2] if len(result) > 2 else {}
+    else:
+        # Defensive — if a future service returns a dict envelope,
+        # forward it verbatim.
+        return result
+    payload = {"rows": rows, "totals": totals}
+    if isinstance(extras, dict):
+        payload.update(extras)
+    return payload

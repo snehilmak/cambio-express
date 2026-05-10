@@ -77,23 +77,6 @@ def _make_ach_batch(client, store_id, *, ach_date, ach_amount,
 # ── Period P&L ───────────────────────────────────────────────
 
 
-def test_period_pl_aggregates_daily_report_lines(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_daily_report(client, test_store_id, report_date=today,
-                       taxable_sales=300, non_taxable=100,
-                       cash_expense=80, payroll_expense=120)
-    _make_transfer(client, test_store_id, send_date=today, amount=200,
-                   fee=5.0, confirm="T1")
-    resp = client.get("/reports/period-pl")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Income: taxable + non-taxable + transfer fee = 300+100+5 = 405.
-    assert "$405.00" in body
-    # Expenses: cash_expense + payroll = 80+120 = 200.
-    assert "$200.00" in body
-    # Net: 405 - 200 = 205.
-    assert "$205.00" in body
 
 
 def test_period_pl_csv(client, test_store_id):

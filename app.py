@@ -4544,6 +4544,8 @@ _MIGRATED_REPORT_DRILLDOWNS: set[str] = {
     "bank-rule-audit",
     "bank-charges-by-account",
     "period-comparison",
+    "employee-activity",
+    "period-pl",
 }
 
 
@@ -5585,20 +5587,22 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
                                      detail_columns=None):
     """Register `/superadmin/reports/<slug>(.csv)?` routes for a
     superadmin report. Same idea as `_make_report_routes` but
-    superadmin-only — no owner mirror."""
+    superadmin-only — no owner mirror.
+
+    Every superadmin BI drilldown migrated to the SPA in one batch
+    (the legacy Jinja templates were structurally similar — KPI
+    strip + row table — so a single generic React component handles
+    all of them via `/api/v2/superadmin/reports/<slug>`). The GET
+    here unconditionally 301s; the CSV variant stays on Flask for
+    direct downloads."""
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
     underscored = slug.replace("-", "_")
 
     def _view():
-        return _render_superadmin_report(template, data_fn,
-            slug=slug, title=title, result_unit=result_unit,
-            kpis_fn=kpis_fn, extra_args=extra_args_fn(),
-            views=views,
-            graph_label_field=graph_label_field,
-            graph_value_field=graph_value_field,
-            detail_columns=detail_columns,
-        )
+        qs = request.query_string.decode("latin-1") if request.query_string else ""
+        target = f"/app/superadmin/reports/{slug}" + (f"?{qs}" if qs else "")
+        return redirect(target, code=301)
 
     def _csv():
         return _export_superadmin_report_csv(data_fn,

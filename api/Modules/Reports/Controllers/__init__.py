@@ -391,6 +391,30 @@ def period_comparison_route(
     return {"rows": rows, "totals": totals}
 
 
+@router.get("/employee-activity")
+def employee_activity_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import employee_activity
+    d_from, d_to = period
+    rows, totals = employee_activity(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
+@router.get("/period-pl")
+def period_pl_route(
+    period: tuple[date, date] = Depends(parse_period),
+    store_ids: list[int] = Depends(parse_store_ids),
+    db: Session = Depends(get_db),
+):
+    from api.Modules.Reports.Services import period_pl
+    d_from, d_to = period
+    rows, totals = period_pl(db, store_ids, d_from, d_to)
+    return {"rows": rows, "totals": totals}
+
+
 # ── Report-center index ─────────────────────────────────────
 
 
