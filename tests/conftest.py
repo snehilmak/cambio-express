@@ -94,6 +94,82 @@ def _close_fastapi_clients():
             pass
 
 
+# ─────────────────────────────────────────────────────────────
+# /api/v2 dispatch in tests — bypass the leaky a2wsgi bridge.
+#
+# Production routes /api/v2/* through asgi.py's native ASGI
+# dispatcher (see asgi.py + render.yaml). The Flask app's
+# DispatcherMiddleware mount via a2wsgi.ASGIMiddleware is only
+# kept on the Flask side as a strangler-fig fallback that
+# production NEVER hits — but the test suite uses Flask's
+# WSGI test_client, which routes through that legacy mount.
+#
+# Under coverage's tracer the a2wsgi-spawned asyncio.Task objects
+# get GC'd while still flagged "pending" — Python emits
+# "Task was destroyed but it is pending!" and rolls back the
+# SQLAlchemy session of whatever test happens to be running.
+# Manifestation: random 500 Internal Server Errors on
+# /api/v2/monthly PUT in test_bank_charges_pl.py and similar.
+#
+# Fix: replace the /api/v2 mount with a TestClient-backed WSGI
+# bridge. starlette TestClient uses anyio.from_thread.start_
+# blocking_portal — well-defined task lifecycle, no leaks under
+# coverage. Production behaviour is unaffected; asgi.py already
+# bypasses a2wsgi for /api/v2/* (PR #399).
+from werkzeug.middleware.dispatcher import DispatcherMiddleware as _DM
+from a2wsgi import ASGIMiddleware as _A2W
+
+
+def _swap_in_testclient_bridge() -> None:
+    """Swap the /api/v2 ASGIMiddleware mount for a TestClient-backed
+    handler. Idempotent — safe to call once at module import."""
+    bridge = flask_app.wsgi_app
+    if not isinstance(bridge, _DM):
+        return
+    asgi_mw = bridge.mounts.get("/api/v2")
+    if asgi_mw is None or not isinstance(asgi_mw, _A2W):
+        return
+    fastapi_app = asgi_mw.app
+    # Use _OrigTestClient (unpatched starlette class) so the bridge's
+    # client is NOT registered with the autouse close-between-tests
+    # fixture above. The bridge stays alive for the full session.
+    tc = _OrigTestClient(fastapi_app)
+    tc.__enter__()  # spin up the portal + lifespan task
+
+    def _wsgi_handler(environ, start_response):
+        # Translate WSGI environ → httpx request → response →
+        # WSGI iterable. anyio's portal handles the ASGI roundtrip.
+        method = environ["REQUEST_METHOD"]
+        path = environ.get("PATH_INFO", "/")
+        qs = environ.get("QUERY_STRING", "")
+        url = path + ("?" + qs if qs else "")
+        body = b""
+        cl = environ.get("CONTENT_LENGTH")
+        if cl and int(cl) > 0:
+            body = environ["wsgi.input"].read(int(cl))
+        headers: dict[str, str] = {}
+        for k, v in environ.items():
+            if k.startswith("HTTP_"):
+                hdr = k[5:].replace("_", "-").lower()
+                headers[hdr] = v
+        ct = environ.get("CONTENT_TYPE")
+        if ct:
+            headers["content-type"] = ct
+        if cl:
+            headers["content-length"] = cl
+        resp = tc.request(method, url, headers=headers, content=body)
+        status_line = f"{resp.status_code} {resp.reason_phrase or ''}".strip()
+        out_headers = [(k, v) for k, v in resp.headers.items()
+                       if k.lower() != "transfer-encoding"]
+        start_response(status_line, out_headers)
+        return [resp.content]
+
+    bridge.mounts["/api/v2"] = _wsgi_handler
+
+
+_swap_in_testclient_bridge()
+
+
 # Stable TOTP secret for the seeded superadmin so test helpers can
 # compute current codes deterministically via `pyotp.TOTP().now()`.
 # Picked once at module import; never rotated within a session.

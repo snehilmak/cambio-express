@@ -267,6 +267,10 @@ def test_categorize_with_explicit_report_date(client, test_store_id):
 
 
 def test_move_date_route_shifts_linked_line(client, test_store_id):
+    """Happy path: handler re-dates the linked DailyLineItem and
+    redirects. We don't follow the redirect (it lands on the SPA
+    shell which CI doesn't build, returning 503) — just verify the
+    row state changed and the response is a redirect."""
     from datetime import date as ddate
     from app import (BankTransaction, DailyLineItem, db,
                      _categorize_bank_transaction)
@@ -281,8 +285,8 @@ def test_move_date_route_shifts_linked_line(client, test_store_id):
         db.session.commit()
     resp = client.post(f"/bank/transactions/{tid}/move-date",
                        data={"report_date": "2026-05-01"},
-                       follow_redirects=True)
-    assert resp.status_code == 200
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
     with client.application.app_context():
         t = db.session.get(BankTransaction, tid)
         line = db.session.get(DailyLineItem, t.daily_line_item_id)
@@ -290,7 +294,12 @@ def test_move_date_route_shifts_linked_line(client, test_store_id):
 
 
 def test_move_date_route_rejects_invalid_date(client, test_store_id):
-    from app import BankTransaction, db, _categorize_bank_transaction
+    """Invalid date string → handler bounces back without writing.
+    The legacy flash-rendered confirmation UX moved to React in
+    PR #405 (the /bank/transactions list 301s now), so this test
+    only asserts the no-op contract: the underlying DailyLineItem's
+    report_date stays unchanged."""
+    from app import BankTransaction, DailyLineItem, db, _categorize_bank_transaction
     _admin_login(client, test_store_id)
     app = client.application
     acct = _make_account(app, test_store_id)
@@ -299,23 +308,34 @@ def test_move_date_route_rejects_invalid_date(client, test_store_id):
         t = db.session.get(BankTransaction, tid)
         _categorize_bank_transaction(t, "check_deposit")
         db.session.commit()
+        original = db.session.get(DailyLineItem, t.daily_line_item_id).report_date
     resp = client.post(f"/bank/transactions/{tid}/move-date",
                        data={"report_date": "not-a-date"},
-                       follow_redirects=True)
-    assert b"Invalid date" in resp.data
+                       follow_redirects=False)
+    # Form-post handler bounces (redirects) — content-typed result
+    # is what we don't care about; the no-op invariant on the row is.
+    assert resp.status_code in (302, 303)
+    with client.application.app_context():
+        t = db.session.get(BankTransaction, tid)
+        assert db.session.get(DailyLineItem, t.daily_line_item_id).report_date == original
 
 
 def test_move_date_route_rejects_uncategorized(client, test_store_id):
-    """No DailyLineItem to move when transaction is uncategorized."""
-    from app import db
+    """No DailyLineItem to move when transaction is uncategorized →
+    handler refuses the move and the row stays uncategorized."""
+    from app import BankTransaction, db
     _admin_login(client, test_store_id)
     app = client.application
     acct = _make_account(app, test_store_id)
     tid = _make_txn(app, test_store_id, acct, amount_cents=1000, desc="x")
     resp = client.post(f"/bank/transactions/{tid}/move-date",
                        data={"report_date": "2026-05-01"},
-                       follow_redirects=True)
-    assert b"isn&#39;t linked" in resp.data or b"isn't linked" in resp.data
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with client.application.app_context():
+        t = db.session.get(BankTransaction, tid)
+        assert t.daily_line_item_id is None
+        assert (t.category_slug or "") == ""
 
 
 def test_uncategorize_deletes_daily_line_item(client, test_store_id):
