@@ -138,23 +138,6 @@ def test_account_theme_blocks_unauthenticated(client):
 # the picker UI itself is gone.
 
 
-def test_owner_dashboard_carries_theme_attr(client):
-    """Owner shell (base_owner.html) goes through the same context
-    processor — confirm the data-theme attr is set there too."""
-    with flask_app.app_context():
-        from app import User
-        o = User(username="theme_owner@test.com", role="owner",
-                 full_name="Theme Owner", store_id=None)
-        o.set_password("ownerpass123")
-        db.session.add(o)
-        db.session.commit()
-        oid = o.id
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-    rv = client.get("/owner/dashboard")
-    assert rv.status_code == 200
-    assert b'data-theme="dark"' in rv.data
 
 
 def test_theme_chooser_uses_has_selector_for_click_highlight(logged_in_client):

@@ -148,3 +148,104 @@ export function useOwnerPLRollup(year?: number, month?: number) {
     placeholderData: (prev) => prev,
   });
 }
+
+
+// ── Owner dashboard + store detail (PR for /app/owner/dashboard) ──
+
+export interface OwnerKpis {
+  agg_transfers: number;
+  agg_volume: number;
+  agg_over_short: number;
+  agg_transfers_delta: number;
+  agg_volume_delta: number;
+  agg_over_short_delta: number;
+}
+
+export interface OwnerStoreCard {
+  id: number;
+  name: string;
+  slug: string;
+  count: number;
+  volume: number;
+  over_short: number;
+}
+
+export interface OwnerDashboardPayload extends OwnerKpis {
+  period: string;
+  prev_label: string;
+  period_start: string;
+  period_end: string;
+  store_count: number;
+  stores: OwnerStoreCard[];
+  series_labels: string[];
+  series_volume: number[];
+  series_count: number[];
+  company_breakdown: Array<{ company: string; count: number; volume: number }>;
+  store_comparison: Array<{ id: number; name: string; volume: number; count: number }>;
+  rc_period: { count: number; balance_open_cents: number; recovered_cents: number; written_off_cents: number };
+  rc_aging: { age_0_30: number; age_31_60: number; age_61_90: number; age_91_plus: number };
+  rc_labels: string[];
+  rc_recoveries: number[];
+  rc_losses: number[];
+  [key: string]: unknown;
+}
+
+export function useOwnerDashboard(period: "today" | "month" | "year") {
+  return useQuery<OwnerDashboardPayload>({
+    queryKey: ["owner", "dashboard", period],
+    queryFn: () =>
+      api<OwnerDashboardPayload>(
+        `/api/v2/owner/dashboard?period=${encodeURIComponent(period)}`,
+      ),
+  });
+}
+
+export interface OwnerStoreDetailRow {
+  id: number;
+  send_date: string;
+  sender_name: string;
+  recipient_name: string;
+  company: string;
+  send_amount: number;
+  country: string;
+  status: string;
+}
+
+export interface OwnerStoreDetailPayload {
+  store: { id: number; name: string; slug: string; plan: string };
+  period: string;
+  prev_label: string;
+  period_start: string;
+  period_end: string;
+  company_rows: Array<{
+    company: string;
+    count: number;
+    volume: number;
+    fees: number;
+    tax: number;
+  }>;
+  period_count: number;
+  period_volume: number;
+  period_fees: number;
+  period_tax: number;
+  period_over_short: number;
+  prev_count: number;
+  prev_volume: number;
+  daily_labels: string[];
+  over_short_data: number[];
+  receipts_data: number[];
+  recent_transfers: OwnerStoreDetailRow[];
+}
+
+export function useOwnerStoreDetail(
+  storeId: number, period: "today" | "month" | "year",
+) {
+  return useQuery<OwnerStoreDetailPayload>({
+    queryKey: ["owner", "store", storeId, period],
+    queryFn: () =>
+      api<OwnerStoreDetailPayload>(
+        `/api/v2/owner/store/${storeId}?period=${encodeURIComponent(period)}`,
+      ),
+    enabled: storeId > 0,
+  });
+}

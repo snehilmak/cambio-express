@@ -191,26 +191,14 @@ def owner_client():
     return c
 
 
-def test_owner_dashboard_loads_no_stores(owner_client):
-    rv = owner_client.get("/owner/dashboard")
-    assert rv.status_code == 200
-    assert b"invite" in rv.data.lower() or b"connect" in rv.data.lower()
-
-
-def test_owner_dashboard_shows_store_after_link(owner_client):
-    """Dashboard's "Linked stores" KPI reflects newly linked stores. The
-    store list itself moved to /owner/locations, so we check the count
-    here and the per-store rendering on the locations page below."""
-    with flask_app.app_context():
-        from app import User, Store, StoreOwnerLink
-        owner = User.query.filter_by(username="owner@dashboard.com").first()
-        store = Store.query.filter_by(slug="test-store").first()
-        link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
-        db.session.add(link)
-        db.session.commit()
-    rv = owner_client.get("/owner/dashboard")
-    assert rv.status_code == 200
-    assert b"Linked stores" in rv.data
+def test_owner_dashboard_redirects_to_spa(owner_client):
+    """The owner dashboard moved to React (/app/owner/dashboard).
+    Aggregated KPI / store-list invariants are now exercised
+    against the JSON envelope at /api/v2/owner/dashboard — see
+    tests/test_owner_spa.py."""
+    rv = owner_client.get("/owner/dashboard", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == "/app/owner/dashboard"
 
 
 def test_owner_locations_shows_store_after_link(owner_client):
@@ -250,37 +238,15 @@ def test_owner_locations_shows_store_after_link(owner_client):
     assert sid in [r["store_id"] for r in body["rows"]]
 
 
-def test_owner_dashboard_period_filter_today(owner_client):
-    rv = owner_client.get("/owner/dashboard?period=today")
-    assert rv.status_code == 200
-
-
-def test_owner_dashboard_period_filter_month(owner_client):
-    rv = owner_client.get("/owner/dashboard?period=month")
-    assert rv.status_code == 200
-
-
-def test_owner_dashboard_period_filter_year(owner_client):
-    rv = owner_client.get("/owner/dashboard?period=year")
-    assert rv.status_code == 200
-
-
-def test_owner_dashboard_aggregate_counts_transfers(owner_client):
-    from datetime import date
-    with flask_app.app_context():
-        from app import User, Store, StoreOwnerLink, Transfer
-        owner = User.query.filter_by(username="owner@dashboard.com").first()
-        store = Store.query.filter_by(slug="test-store").first()
-        link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
-        db.session.add(link)
-        admin = User.query.filter_by(username="admin@test.com").first()
-        t = Transfer(store_id=store.id, created_by=admin.id, send_date=date.today(),
-                     company="Intermex", sender_name="John", send_amount=100.0)
-        db.session.add(t)
-        db.session.commit()
-    rv = owner_client.get("/owner/dashboard?period=today")
-    assert rv.status_code == 200
-    assert b"100" in rv.data
+def test_owner_dashboard_period_query_string_preserved(owner_client):
+    """The legacy period= query param survives the 301 to React so a
+    deep-linked URL lands the SPA in the right state."""
+    for p in ("today", "month", "year"):
+        rv = owner_client.get(
+            f"/owner/dashboard?period={p}", follow_redirects=False,
+        )
+        assert rv.status_code == 301, f"period={p}"
+        assert rv.headers["Location"] == f"/app/owner/dashboard?period={p}"
 
 
 @pytest.fixture
@@ -679,59 +645,15 @@ def test_owner_locations_only_lists_owned_stores(owner_client):
 
 # ── /owner/store/<id>: drill-down ─────────────────────────────
 
-def test_owner_store_detail_loads(owner_client):
+def test_owner_store_detail_redirects_to_spa(owner_client):
+    """Single-store drill-down moved to React. The cross-store
+    auth check (an owner can't peek into a store they're not
+    linked to) is now enforced by /api/v2/owner/store/{id}; see
+    tests/test_owner_spa.py for that invariant."""
     _, sid = _link_owner_to_test_store("owner@dashboard.com")
-    rv = owner_client.get(f"/owner/store/{sid}")
-    assert rv.status_code == 200
-    assert b"Test Store" in rv.data
-    # KPI labels render
-    assert b"Transfers" in rv.data
-    assert b"Volume" in rv.data
-    assert b"Fees collected" in rv.data
-
-
-def test_owner_store_detail_shows_company_breakdown(owner_client):
-    """Drill-down's per-company table aggregates Transfer.send_amount by
-    company. Owners view by company is the whole reason this page exists."""
-    from datetime import date
-    _, sid = _link_owner_to_test_store("owner@dashboard.com")
-    with flask_app.app_context():
-        from app import User, Transfer
-        admin = User.query.filter_by(username="admin@test.com").first()
-        for co, amt in [("Intermex", 200.0), ("Maxi", 150.0), ("Intermex", 50.0)]:
-            db.session.add(Transfer(
-                store_id=sid, created_by=admin.id, send_date=date.today(),
-                company=co, sender_name="J", send_amount=amt, fee=2.0,
-                status="Sent",
-            ))
-        db.session.commit()
-    rv = owner_client.get(f"/owner/store/{sid}?period=month")
-    assert rv.status_code == 200
-    body = rv.data
-    # Company labels rendered
-    assert b"Intermex" in body
-    assert b"Maxi" in body
-    # Aggregated volume rendered (Intermex = 250, Maxi = 150)
-    assert b"$250" in body
-    assert b"$150" in body
-
-
-def test_owner_store_detail_blocks_unrelated_store(owner_client):
-    """An owner must NOT be able to drill into a store they're not linked
-    to — the route enforces StoreOwnerLink before rendering."""
-    from datetime import datetime, timedelta
-    with flask_app.app_context():
-        from app import Store
-        other = Store(name="Other Shop", slug="other-shop2",
-                      email="x@example.com", plan="trial")
-        if hasattr(Store, "trial_ends_at"):
-            other.trial_ends_at = datetime.utcnow() + timedelta(days=7)
-        db.session.add(other)
-        db.session.commit()
-        other_id = other.id
-    rv = owner_client.get(f"/owner/store/{other_id}", follow_redirects=False)
-    assert rv.status_code == 302
-    assert "/owner/locations" in rv.headers["Location"]
+    rv = owner_client.get(f"/owner/store/{sid}", follow_redirects=False)
+    assert rv.status_code == 301
+    assert rv.headers["Location"] == f"/app/owner/store/{sid}"
 
 
 def test_owner_store_detail_blocks_unauthenticated(client):
@@ -745,11 +667,14 @@ def test_owner_store_detail_blocks_non_owner(logged_in_client):
     assert rv.status_code == 403
 
 
-def test_owner_store_detail_period_filter_accepts_today_month_year(owner_client):
+def test_owner_store_detail_period_query_string_preserved(owner_client):
     _, sid = _link_owner_to_test_store("owner@dashboard.com")
     for p in ("today", "month", "year"):
-        rv = owner_client.get(f"/owner/store/{sid}?period={p}")
-        assert rv.status_code == 200, f"period={p} failed"
+        rv = owner_client.get(
+            f"/owner/store/{sid}?period={p}", follow_redirects=False,
+        )
+        assert rv.status_code == 301, f"period={p} failed"
+        assert rv.headers["Location"] == f"/app/owner/store/{sid}?period={p}"
 
 
 def test_owner_get_admin_dashboard_redirects_to_owner_dashboard(owner_client):
@@ -796,68 +721,9 @@ def test_owner_account_notifications_redirects_to_app(owner_client):
     assert rv.headers["Location"] == "/app/account/notifications"
 
 
-def test_owner_store_detail_renders_recent_transfers(owner_client):
-    """The "Recent transfers" section lists the latest 10 transfers by
-    created_at, regardless of period selector."""
-    from datetime import date
-    _, sid = _link_owner_to_test_store("owner@dashboard.com")
-    with flask_app.app_context():
-        from app import User, Transfer
-        admin = User.query.filter_by(username="admin@test.com").first()
-        db.session.add(Transfer(
-            store_id=sid, created_by=admin.id, send_date=date.today(),
-            company="Barri", sender_name="Alice Q",
-            send_amount=42.0, fee=1.0, status="Sent",
-        ))
-        db.session.commit()
-    rv = owner_client.get(f"/owner/store/{sid}")
-    assert b"Alice Q" in rv.data
-    assert b"Barri" in rv.data
-
-
-# ── /owner/dashboard: rich metrics view ───────────────────────
-
-def test_owner_dashboard_shows_company_breakdown_table(owner_client):
-    """Dashboard's "Company breakdown" mini-table aggregates across
-    every linked store. With one Intermex transfer for $300, the
-    Intermex row should appear with $300 in volume."""
-    from datetime import date
-    _, sid = _link_owner_to_test_store("owner@dashboard.com")
-    with flask_app.app_context():
-        from app import User, Transfer
-        admin = User.query.filter_by(username="admin@test.com").first()
-        db.session.add(Transfer(
-            store_id=sid, created_by=admin.id, send_date=date.today(),
-            company="Intermex", sender_name="X",
-            send_amount=300.0, fee=3.0, status="Sent",
-        ))
-        db.session.commit()
-    rv = owner_client.get("/owner/dashboard?period=month")
-    assert rv.status_code == 200
-    assert b"Intermex" in rv.data
-    assert b"$300" in rv.data
-
-
-def test_owner_dashboard_excludes_canceled_transfers_from_volume(owner_client):
-    """Canceled / Rejected transfers must not inflate the dashboard's
-    volume KPI (matches the superadmin dashboard's same exclusion)."""
-    from datetime import date
-    _, sid = _link_owner_to_test_store("owner@dashboard.com")
-    with flask_app.app_context():
-        from app import User, Transfer
-        admin = User.query.filter_by(username="admin@test.com").first()
-        # 100 Sent + 9999 Canceled — only the 100 should count.
-        db.session.add(Transfer(
-            store_id=sid, created_by=admin.id, send_date=date.today(),
-            company="Intermex", sender_name="X",
-            send_amount=100.0, fee=1.0, status="Sent",
-        ))
-        db.session.add(Transfer(
-            store_id=sid, created_by=admin.id, send_date=date.today(),
-            company="Intermex", sender_name="Y",
-            send_amount=9999.0, fee=1.0, status="Canceled",
-        ))
-        db.session.commit()
-    rv = owner_client.get("/owner/dashboard?period=today")
-    assert b"$9,999" not in rv.data
-    assert b"$100" in rv.data
+# Recent-transfer rendering, company breakdown, canceled-transfer
+# exclusion, and KPI delta correctness for /owner/dashboard +
+# /owner/store/{id} all moved to React. The data invariants live
+# in tests/test_owner_spa.py (which calls the new
+# /api/v2/owner/dashboard + /api/v2/owner/store/{id} endpoints
+# directly) and in tests/Modules/Owners/test_dashboard_context_service.py.

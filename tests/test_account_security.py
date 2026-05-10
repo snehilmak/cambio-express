@@ -110,17 +110,6 @@ def test_topbar_dropdown_links_security_for_admin_chrome(logged_in_client):
     assert "/account/security" in body
 
 
-def test_topbar_dropdown_links_security_for_owner_chrome(client):
-    with client.application.app_context():
-        s = Store(name="OS", slug="os-2", plan="basic")
-        db.session.add(s); db.session.flush()
-        sid = s.id
-    own_id = _make_user(client.application, "owner", sid,
-                        username="own2@x.com", full_name="Own 2")
-    own = _client_for(client.application, own_id, "owner", sid)
-    resp = own.get("/owner/dashboard")
-    assert resp.status_code == 200
-    assert "/account/security" in resp.data.decode()
 
 
 def test_passkey_eligible_now_admits_employees():

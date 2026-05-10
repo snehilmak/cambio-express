@@ -3325,12 +3325,15 @@ def _owner_locations_payload(user, period, query):
 @app.route("/owner/dashboard")
 @owner_required
 def owner_dashboard():
-    u = current_user()
-    period = request.args.get("period", "month")
-    if period not in ("today", "month", "year"):
-        period = "month"
-    return render_template("owner_dashboard.html",
-                           **_owner_dashboard_context(u, period))
+    """301 → /app/owner/dashboard. The owner dashboard moved to
+    React; the SPA reads /api/v2/owner/dashboard?period= and
+    renders the KPI cards + multi-store rollup + charts. Stub
+    keeps url_for('owner_dashboard') working in still-Jinja
+    chrome (sidebar nav, post-mutation redirects). Preserves
+    the period query string."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/owner/dashboard" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/owner/pl-rollup")
@@ -3371,88 +3374,15 @@ def owner_locations():
 @app.route("/owner/store/<int:store_id>")
 @owner_required
 def owner_store_detail(store_id):
-    """Drill-down view for a single store the owner is linked to.
-
-    Read-only — owner can't edit transfers/reports here, only inspect.
-    Access is gated on StoreOwnerLink so an owner can't poke at a
-    store they don't own by guessing IDs.
-    """
-    u = current_user()
-    link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first()
-    if not link:
-        flash("That store is not linked to your account.", "error")
-        return redirect(url_for("owner_locations"))
-    period = request.args.get("period", "month")
-    if period not in ("today", "month", "year"):
-        period = "month"
-    today = date.today()
-    start, end, prev_start, prev_end, prev_label = _owner_period_window(period, today)
-    store = db.session.get(Store, store_id)
-
-    co_rows = db.session.query(
-        Transfer.company,
-        db.func.count(Transfer.id),
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        db.func.coalesce(db.func.sum(Transfer.federal_tax), 0.0),
-    ).filter(
-        Transfer.store_id == store_id,
-        Transfer.send_date >= start, Transfer.send_date <= end,
-        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
-    ).group_by(Transfer.company).order_by(
-        db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0).desc()
-    ).all()
-    company_rows = [
-        {"company": (co or "—"), "count": int(c),
-         "volume": float(v or 0), "fees": float(f or 0), "tax": float(t or 0)}
-        for co, c, v, f, t in co_rows
-    ]
-    period_count = sum(r["count"] for r in company_rows)
-    period_volume = sum(r["volume"] for r in company_rows)
-    period_fees = sum(r["fees"] for r in company_rows)
-    period_tax = sum(r["tax"] for r in company_rows)
-
-    prev_count, prev_volume, _ = _owner_kpis([store_id], prev_start, prev_end)
-
-    # 30-day over/short trend, fixed window — independent of selector.
-    d30_ago = today - timedelta(days=29)
-    daily_reports = DailyReport.query.filter(
-        DailyReport.store_id == store_id,
-        DailyReport.report_date >= d30_ago,
-        DailyReport.report_date <= today,
-    ).all()
-    by_day = {r.report_date: r for r in daily_reports}
-    daily_labels, over_short_data, receipts_data = [], [], []
-    for i in range(29, -1, -1):
-        d = today - timedelta(days=i)
-        r = by_day.get(d)
-        daily_labels.append(d.isoformat())
-        over_short_data.append(round(float(r.over_short) if r else 0.0, 2))
-        receipts_data.append(round(float(r.total_receipts) if r else 0.0, 2))
-
-    # Recent activity for context.
-    recent_transfers = (Transfer.query.filter_by(store_id=store_id)
-                        .order_by(Transfer.created_at.desc()).limit(10).all())
-
-    period_over_short = db.session.query(
-        db.func.coalesce(db.func.sum(DailyReport.over_short), 0.0)
-    ).filter(
-        DailyReport.store_id == store_id,
-        DailyReport.report_date >= start, DailyReport.report_date <= end,
-    ).scalar() or 0.0
-
-    return render_template("owner_store_detail.html",
-        user=u, store=store, period=period, prev_label=prev_label,
-        period_start=start, period_end=end,
-        company_rows=company_rows,
-        period_count=period_count, period_volume=period_volume,
-        period_fees=period_fees, period_tax=period_tax,
-        period_over_short=float(period_over_short),
-        prev_count=prev_count, prev_volume=prev_volume,
-        daily_labels=daily_labels,
-        over_short_data=over_short_data, receipts_data=receipts_data,
-        recent_transfers=recent_transfers,
-    )
+    """301 → /app/owner/store/<id>. The single-store drill-down
+    moved to React; the SPA reads /api/v2/owner/store/<id>?period=
+    for KPIs + 30-day over/short series + recent transfers. The
+    StoreOwnerLink scope check still gates access — same source of
+    truth in the API endpoint, which 404s for unrelated stores.
+    Preserves the period query string."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = f"/app/owner/store/{store_id}" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 @app.route("/owner/connect", methods=["GET"])
 @owner_required

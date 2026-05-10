@@ -156,17 +156,6 @@ def test_topbar_dropdown_links_profile_for_admin_chrome(logged_in_client):
     assert "/account/profile" in body
 
 
-def test_topbar_dropdown_links_profile_for_owner_chrome(client):
-    with client.application.app_context():
-        s = Store(name="OS", slug="os-prof2", plan="basic")
-        db.session.add(s); db.session.flush()
-        sid = s.id
-    own = _client_for(client.application,
-                      _make_user(client.application, "owner", sid,
-                                 username="own-prof2@x.com"),
-                      "owner", sid)
-    body = own.get("/owner/dashboard").data.decode()
-    assert "/account/profile" in body
 
 
 # ── Negative regression ────────────────────────────────────────

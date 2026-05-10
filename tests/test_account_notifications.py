@@ -242,14 +242,3 @@ def test_topbar_dropdown_links_notifications_admin_chrome(logged_in_client):
     assert "/account/notifications" in body
 
 
-def test_topbar_dropdown_links_notifications_owner_chrome(client):
-    with client.application.app_context():
-        s = Store(name="ON2", slug="on-notif-2", plan="basic")
-        db.session.add(s); db.session.flush()
-        sid = s.id
-    own = _client_for(client.application,
-                      _make_user(client.application, "owner", sid,
-                                 username="own-notif-2@test.com"),
-                      "owner", sid)
-    body = own.get("/owner/dashboard").data.decode()
-    assert "/account/notifications" in body
