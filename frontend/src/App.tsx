@@ -6,6 +6,7 @@ import AccountNotifications from "./routes/AccountNotifications";
 import AccountProfile from "./routes/AccountProfile";
 import AdminAuditLog from "./routes/AdminAuditLog";
 import AdminReferrals from "./routes/AdminReferrals";
+import AdminSubscription from "./routes/AdminSubscription";
 import AdminTaxExport from "./routes/AdminTaxExport";
 import AdminUserForm from "./routes/AdminUserForm";
 import AdminUsers from "./routes/AdminUsers";
@@ -108,6 +109,7 @@ export default function App() {
         <Route path="superadmin/reports"       element={<SuperadminReports />} />
         <Route path="subscribe"             element={<Subscribe />} />
         <Route path="subscribe/success"     element={<SubscribeSuccess />} />
+        <Route path="admin/subscription"    element={<AdminSubscription />} />
         <Route path="admin/tax-export"      element={<AdminTaxExport />} />
         <Route path="admin/audit-log"       element={<AdminAuditLog />} />
         <Route path="admin/users"             element={<AdminUsers />} />

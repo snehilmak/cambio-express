@@ -125,5 +125,8 @@ def test_subscribe_is_accessible_when_expired(client):
         sess["role"] = "admin"
         sess["store_id"] = sid
 
-    resp = client.get("/subscribe")
-    assert resp.status_code == 200
+    # /subscribe 301s to /app/subscribe; the no-redirect-loop
+    # invariant for expired stores is what matters here.
+    resp = client.get("/subscribe", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/subscribe"

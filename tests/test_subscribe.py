@@ -3,35 +3,14 @@ def test_subscribe_requires_login(client):
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]
 
-def test_subscribe_loads_for_logged_in_user(logged_in_client):
-    resp = logged_in_client.get("/subscribe")
-    assert resp.status_code == 200
-    assert b"$35" in resp.data
-    assert b"$45" in resp.data
-    assert b"Basic" in resp.data
-    assert b"Pro" in resp.data
-
-
-def test_subscribe_shows_yearly_buttons_when_configured(logged_in_client, monkeypatch):
-    """When the yearly Stripe price IDs are configured, /subscribe surfaces
-    both "Yearly · $350 / yr" (Basic) and "Yearly · $420 / yr" (Pro) buttons.
-    Otherwise they're hidden so users don't hit 'Invalid plan selected.'"""
-    monkeypatch.setenv("STRIPE_BASIC_YEARLY_PRICE_ID", "price_basic_yearly_test")
-    monkeypatch.setenv("STRIPE_PRO_YEARLY_PRICE_ID", "price_pro_yearly_test")
-    resp = logged_in_client.get("/subscribe")
-    assert resp.status_code == 200
-    assert b"$350" in resp.data    # Basic yearly price
-    assert b"$420" in resp.data    # Pro yearly price
-    assert b"basic_yearly" in resp.data
-    assert b"pro_yearly" in resp.data
-
-
-def test_subscribe_hides_yearly_buttons_when_unset(logged_in_client):
-    """No yearly env var → no yearly button, no misleading "save $70" copy."""
-    resp = logged_in_client.get("/subscribe")
-    assert resp.status_code == 200
-    assert b"basic_yearly" not in resp.data
-    assert b"pro_yearly" not in resp.data
+def test_subscribe_redirects_to_spa_for_logged_in_user(logged_in_client):
+    """The /subscribe pricing page moved to React (Subscribe.tsx).
+    Authed callers get a 301 to /app/subscribe; the SPA reads the
+    plan tiles from a static list and POSTs /api/v2/billing/checkout
+    to mint a Stripe Checkout Session."""
+    resp = logged_in_client.get("/subscribe", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/subscribe"
 
 from unittest.mock import patch, MagicMock
 
