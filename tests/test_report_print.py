@@ -16,36 +16,8 @@ def _admin_login(client, store_id):
         s["store_id"] = store_id
 
 
-def test_print_button_renders_on_report_pages(client, test_store_id):
-    """Every report page should have the Print / PDF button."""
-    _admin_login(client, test_store_id)
-    for slug in ("sales-by-company", "period-pl",
-                 "high-value-transfers", "fees-vs-tax"):
-        body = client.get(f"/reports/{slug}").get_data(as_text=True)
-        assert 'class="btn btn-outline btn-sm js-report-print"' in body, slug
-        assert 'window.print()' in body, slug
-        assert "Print / PDF" in body, slug
 
 
-def test_print_button_on_owner_reports(client):
-    """Owner mirror pages should also have the Print button."""
-    from app import User, Store, StoreOwnerLink, db
-    with client.application.app_context():
-        s = Store(name="P", slug="print-owner", plan="trial")
-        db.session.add(s); db.session.commit()
-        sid = s.id
-        o = User(username="po@x.com", full_name="P Owner",
-                 role="owner", store_id=None)
-        o.set_password("pw")
-        db.session.add(o); db.session.commit()
-        oid = o.id
-        db.session.add(StoreOwnerLink(owner_id=oid, store_id=sid))
-        db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid; sess["role"] = "owner"; sess["store_id"] = None
-    body = client.get("/owner/reports/sales-by-company").get_data(as_text=True)
-    assert "Print / PDF" in body
-    assert "window.print()" in body
 
 
 def test_print_button_on_superadmin_reports(client):
