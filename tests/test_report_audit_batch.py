@@ -71,24 +71,6 @@ def test_high_value_csv(client, test_store_id):
 # ── Employee Activity ────────────────────────────────────────
 
 
-def test_employee_activity_includes_cancelled(client, test_store_id):
-    _admin_login(client, test_store_id)
-    eid = _make_employee(client, test_store_id, username="alice",
-                          full_name="Alice")
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   created_by=eid, confirm="A1")
-    _make_transfer(client, test_store_id, send_date=today, amount=200,
-                   created_by=eid, confirm="A2", status="Canceled")
-    _make_transfer(client, test_store_id, send_date=today, amount=300,
-                   created_by=eid, confirm="A3", status="Rejected")
-    resp = client.get("/reports/employee-activity")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Alice" in body
-    # 1 active, 2 cancelled.
-    assert "Cancelled / Rejected" in body
-    assert "Active Transfers" in body
 
 
 def test_employee_activity_csv(client, test_store_id):

@@ -24,11 +24,14 @@ import CancelledTransfers from "./routes/reports/CancelledTransfers";
 import CashierProductivity from "./routes/reports/CashierProductivity";
 import CheckDeposits from "./routes/reports/CheckDeposits";
 import DailyDrops from "./routes/reports/DailyDrops";
+import EmployeeActivity from "./routes/reports/EmployeeActivity";
 import FeesVsTax from "./routes/reports/FeesVsTax";
 import HighValueTransfers from "./routes/reports/HighValueTransfers";
 import NewVsReturning from "./routes/reports/NewVsReturning";
 import PeriodComparison from "./routes/reports/PeriodComparison";
+import PeriodPL from "./routes/reports/PeriodPL";
 import ReturnedCheckStatus from "./routes/reports/ReturnedCheckStatus";
+import SuperadminBIDrilldown from "./routes/reports/SuperadminBIDrilldown";
 import SalesByCompany from "./routes/reports/SalesByCompany";
 import SalesByEmployee from "./routes/reports/SalesByEmployee";
 import SalesByService from "./routes/reports/SalesByService";
@@ -134,6 +137,9 @@ export default function App() {
         <Route path="reports/bank-rule-audit"             element={<BankRuleAudit />} />
         <Route path="reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
         <Route path="reports/period-comparison"           element={<PeriodComparison />} />
+        <Route path="reports/employee-activity"           element={<EmployeeActivity />} />
+        <Route path="reports/period-pl"                   element={<PeriodPL />} />
+        <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
         <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
         <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
         <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
@@ -154,6 +160,8 @@ export default function App() {
         <Route path="owner/reports/bank-rule-audit"             element={<BankRuleAudit />} />
         <Route path="owner/reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
         <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
+        <Route path="owner/reports/employee-activity"           element={<EmployeeActivity />} />
+        <Route path="owner/reports/period-pl"                   element={<PeriodPL />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />
