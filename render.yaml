@@ -6,7 +6,15 @@ services:
     # builds the React/Vite SPA bundle that Flask serves at
     # /app/*. See scripts/build.sh for what each step does.
     buildCommand: bash ./scripts/build.sh
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    # ASGI entrypoint via gunicorn's UvicornWorker (Option C-1 of
+    # the migration plan). asgi.py loads the Flask app first
+    # (which mounts FastAPI at /api/v2 internally) and wraps the
+    # whole WSGI chain in a2wsgi.WSGIMiddleware so the ASGI worker
+    # can serve it. Same routing behaviour as `gunicorn app:app`,
+    # just over an ASGI server — sets up the path for migrating
+    # legacy Flask routes to FastAPI native one-by-one without
+    # another deploy-side change.
+    startCommand: gunicorn asgi:asgi_app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2 --timeout 120
     envVars:
       - key: SECRET_KEY
         generateValue: true

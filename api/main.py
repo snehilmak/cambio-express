@@ -159,29 +159,34 @@ def _register_routers(app: FastAPI) -> None:
 
 
 def create_app() -> FastAPI:
-    """Build and return the FastAPI app.
+    """Build and return the inner FastAPI app — the one carrying
+    every module's APIRouter at relative paths (`/auth`, `/admin`,
+    etc.). In both production modes (legacy gunicorn-on-Flask and
+    new uvicorn-on-FastAPI) it lives mounted at `/api/v2`; the
+    only difference is which side does the mounting.
 
     Doing this in a factory rather than a module-level singleton so
-    tests can build fresh apps with overridden dependencies (e.g. an
-    in-memory DB session) without polluting the production instance.
+    tests can build fresh apps with overridden dependencies (e.g.
+    an in-memory DB session) without polluting the production
+    instance.
     """
     app = FastAPI(
         title="DineroBook API",
-        version="2.0.0-alpha",  # alpha until cleanup PR removes Flask
+        version="2.0.0",
         description=(
-            "Customer-deployable FastAPI backend, currently being "
-            "migrated module-by-module from the legacy Flask "
-            "monolith. See docs/architecture/MIGRATION_ADR.md."
+            "Customer-deployable FastAPI backend. Lives behind "
+            "/api/v2 in production. See "
+            "docs/architecture/MIGRATION_ADR.md for the migration "
+            "story."
         ),
-        # `root_path` tells FastAPI it's mounted under this prefix
-        # (set by the dispatcher), so generated OpenAPI URLs include
-        # /api/v2 even though our route declarations don't.
+        # `root_path` tells FastAPI it's mounted under this prefix,
+        # so generated OpenAPI URLs include /api/v2 even though our
+        # route declarations don't.
         root_path=settings.api_prefix,
-        # OpenAPI docs at /api/v2/docs and /api/v2/redoc — the
-        # docs_url here is RELATIVE to the route base (i.e. inside
-        # FastAPI's view: /docs); the dispatcher prepends /api/v2
-        # at request time and root_path makes the rendered links
-        # absolute.
+        # OpenAPI docs at /api/v2/docs and /api/v2/redoc — paths
+        # are RELATIVE to the route base; the mount point prepends
+        # /api/v2 at request time and root_path makes the rendered
+        # links absolute.
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -198,6 +203,8 @@ def create_app() -> FastAPI:
     return app
 
 
-# Module-level instance for `uvicorn api.main:api_app` and for the
-# Flask DispatcherMiddleware mount in app.py.
+# Module-level instance for the inner API app. Mounted inside
+# Flask at /api/v2 via the dispatcher middleware (see bottom of
+# app.py). Tests + the legacy `gunicorn app:app` entrypoint use
+# this directly.
 api_app = create_app()
