@@ -2267,7 +2267,8 @@ _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
     "/return-checks":      "/app/return-checks",
     "/owner/locations":    "/app/owner/locations",
     "/owner/pl-rollup":    "/app/owner/pl-rollup",
-    "/superadmin/stores":  "/app/superadmin/stores",
+    "/superadmin/stores":     "/app/superadmin/stores",
+    "/superadmin/stores/new": "/app/superadmin/stores/new",
     "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
     "/admin/settings":     "/app/settings",
     "/admin/users":        "/app/admin/users",
@@ -9277,27 +9278,16 @@ def superadmin_stores():
     yet)."""
     return redirect("/app/superadmin/stores", code=301)
 
-@app.route("/superadmin/stores/new",methods=["GET","POST"])
+@app.route("/superadmin/stores/new", methods=["GET", "POST"])
 @superadmin_required
 def superadmin_new_store():
-    user=current_user()
-    if request.method=="POST":
-        slug=request.form.get("slug","").strip().lower().replace(" ","-")
-        if Store.query.filter_by(slug=slug).first():
-            flash("Slug already taken.","error")
-        else:
-            s=Store(name=request.form["name"],slug=slug,email=request.form.get("email",""),
-                phone=request.form.get("phone",""),address=request.form.get("address",""),
-                plan=request.form.get("plan","trial"))
-            db.session.add(s); db.session.flush()
-            a=User(store_id=s.id,username=request.form.get("admin_username","admin"),
-                full_name=request.form.get("admin_name","Store Admin"),role="admin")
-            a.set_password(request.form.get("admin_password","changeme123!"))
-            db.session.add(a)
-            record_audit("create_store", target_type="store", target_id=s.id, details=s.slug)
-            db.session.commit()
-            flash(f"Store '{s.name}' created.","success"); return redirect(url_for("superadmin_stores"))
-    return render_template("superadmin_store_form.html",user=user,store=None)
+    """301 → /app/superadmin/stores/new. The React form posts to
+    POST /api/v2/superadmin/stores which mirrors the legacy field
+    set + records the same `create_store` audit entry. The endpoint
+    declaration stays so url_for('superadmin_new_store') keeps
+    working in any chrome that still references it (sidebar nav,
+    superadmin overview hero CTA)."""
+    return redirect("/app/superadmin/stores/new", code=301)
 
 @app.route("/superadmin/impersonate/<int:store_id>")
 @superadmin_required

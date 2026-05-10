@@ -1,0 +1,113 @@
+"""Pydantic schemas for the platform store CRUD endpoints.
+
+Drives the `/app/superadmin/stores/new` + `/app/superadmin/stores/:id/edit`
+React forms. Mirrors the legacy `superadmin_new_store` Flask handler's
+field set so the SPA covers every input the Jinja form had:
+
+  - Identity: name, slug, email, phone, address.
+  - Plan: one of trial / basic / pro / inactive (legacy form
+    only exposes the first three at create time, but PATCH must
+    accept inactive too so the comp-plan / revert-to-trial flows
+    can route through this surface later if needed).
+  - Initial admin user (create only): admin_username, admin_name,
+    admin_password — all optional with defaults that match the
+    legacy form (admin / Store Admin / changeme123!).
+"""
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# Plan vocabulary — kept aligned with `Store.plan ∈ {trial, basic,
+# pro, inactive}` per CLAUDE.md invariant #3. Any new plan needs to
+# update this regex AND `get_trial_status` simultaneously.
+_PLAN_PATTERN = r"^(trial|basic|pro|inactive)$"
+
+
+class SuperadminStoreDetailRow(BaseModel):
+    """Full store payload for the edit form prefill.
+
+    Superset of `SuperadminStoreRow` (the list-view row): adds
+    address + federal_tax_rate which the form needs but the table
+    doesn't render."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id: int
+    name: str
+    slug: str
+    email: str
+    phone: str
+    address: str
+    plan: str
+    billing_cycle: str
+    is_active: bool
+    federal_tax_rate: float
+    created_at: str
+    trial_ends_at: str
+    grace_ends_at: str
+    data_retention_until: str
+    stripe_customer_id: str
+    stripe_subscription_id: str
+
+
+class SuperadminStoreDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store: SuperadminStoreDetailRow
+
+
+class SuperadminStoreCreateRequest(BaseModel):
+    """POST body for /superadmin/stores.
+
+    Identity fields mirror the Jinja form's required set: `name` and
+    `slug` are mandatory; the rest default to empty strings (matches
+    the legacy ``request.form.get("phone","")`` style). `plan`
+    accepts any of the four canonical values though the legacy form
+    only ever submitted trial / basic / pro.
+
+    The initial admin user is also created in the same transaction.
+    Defaults match the legacy handler so an operator can submit just
+    name + slug + admin_password and get a usable store back —
+    `admin_username` falls back to "admin", `admin_name` to "Store
+    Admin", and `admin_password` is required (the legacy fallback to
+    "changeme123!" was a footgun and is dropped here)."""
+    model_config = ConfigDict(extra="forbid")
+
+    name:    str = Field(..., min_length=1, max_length=120)
+    slug:    str = Field(..., min_length=1, max_length=60)
+    email:   str = Field("",  max_length=120)
+    phone:   str = Field("",  max_length=40)
+    address: str = Field("",  max_length=255)
+    plan:    str = Field("trial", pattern=_PLAN_PATTERN)
+
+    admin_username: str = Field("admin",       min_length=1, max_length=80)
+    admin_name:     str = Field("Store Admin", max_length=120)
+    admin_password: str = Field(..., min_length=1, max_length=200)
+
+
+class SuperadminStoreUpdateRequest(BaseModel):
+    """PATCH body for /superadmin/stores/{id}.
+
+    Every field is optional — clients pass only what they want to
+    change. Slug uniqueness is enforced at the route level (a
+    duplicate returns 409 with `field=slug`).
+
+    `plan` is included because the legacy form drops the operator
+    on a /new page that lets them pick the plan before save; the
+    edit page needs the same affordance so a comped store can be
+    moved between plans without going through Stripe."""
+    model_config = ConfigDict(extra="forbid")
+
+    name:             str   | None = Field(None, min_length=1, max_length=120)
+    slug:             str   | None = Field(None, min_length=1, max_length=60)
+    email:            str   | None = Field(None, max_length=120)
+    phone:            str   | None = Field(None, max_length=40)
+    address:          str   | None = Field(None, max_length=255)
+    plan:             str   | None = Field(None, pattern=_PLAN_PATTERN)
+    federal_tax_rate: float | None = Field(None, ge=0.0, le=1.0)
+
+
+__all__ = [
+    "SuperadminStoreCreateRequest",
+    "SuperadminStoreDetailResponse",
+    "SuperadminStoreDetailRow",
+    "SuperadminStoreUpdateRequest",
+]

@@ -43,6 +43,7 @@ import {
 } from "./routes/TwoFactor";
 import SuperadminAnnouncements from "./routes/SuperadminAnnouncements";
 import SuperadminAuditLog from "./routes/SuperadminAuditLog";
+import SuperadminStoreForm from "./routes/SuperadminStoreForm";
 import SuperadminStores from "./routes/SuperadminStores";
 import TransferDetail from "./routes/TransferDetail";
 import Transfers from "./routes/Transfers";
@@ -96,6 +97,8 @@ export default function App() {
         <Route path="owner/locations" element={<OwnerLocations />} />
         <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
         <Route path="superadmin/stores"        element={<SuperadminStores />} />
+        <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
+        <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
         <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
         <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
         <Route path="subscribe"             element={<Subscribe />} />
