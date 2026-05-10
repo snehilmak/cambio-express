@@ -900,8 +900,10 @@ def test_set_nickname_round_trip(client, test_store_id):
     resp = client.post(
         f"/bank/stripe/nickname/{aid}",
         data={"nickname": "  Operating Checking  "},
-        follow_redirects=True)
-    assert resp.status_code == 200
+        follow_redirects=False)
+    # 302 back to /bank (which 301s to /app/bank — the SPA shell
+    # isn't built in CI, so we don't follow the redirect chain).
+    assert resp.status_code in (302, 303)
     with app.app_context():
         a = db.session.get(StripeBankAccount, aid)
         assert a.nickname == "Operating Checking"
@@ -917,7 +919,7 @@ def test_clear_nickname_reverts_to_last4(client, test_store_id):
         db.session.get(StripeBankAccount, aid).nickname = "Old Name"
         db.session.commit()
     client.post(f"/bank/stripe/nickname/{aid}",
-                data={"nickname": ""}, follow_redirects=True)
+                data={"nickname": ""}, follow_redirects=False)
     with app.app_context():
         a = db.session.get(StripeBankAccount, aid)
         assert a.nickname == ""

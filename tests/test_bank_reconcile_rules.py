@@ -412,10 +412,10 @@ def test_rule_toggle_and_delete(client, test_store_id):
                      desc_match_type="contains", desc_match_value="x")
         db.session.add(r); db.session.commit()
         rid = r.id
-    client.post(f"/bank/rules/{rid}/toggle", follow_redirects=True)
+    client.post(f"/bank/rules/{rid}/toggle", follow_redirects=False)
     with client.application.app_context():
         assert db.session.get(BankRule, rid).enabled is False
-    client.post(f"/bank/rules/{rid}/delete", follow_redirects=True)
+    client.post(f"/bank/rules/{rid}/delete", follow_redirects=False)
     with client.application.app_context():
         assert db.session.get(BankRule, rid) is None
 
