@@ -38,6 +38,9 @@ interface ReportDrilldownProps {
   csvUrl: string;
   // Back link target — /app/reports or /app/owner/reports.
   backTo: string;
+  // Extra query params for the API (e.g. `{sort_by: "count"}`).
+  // The CSV link receives them too so the export matches the view.
+  extraParams?: Record<string, string>;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -49,6 +52,7 @@ const monthStart = () => {
 
 export function ReportDrilldown({
   apiSlug, title, resultUnit, kpis, columns, csvUrl, backTo,
+  extraParams,
 }: ReportDrilldownProps) {
   const [params, setParams] = useSearchParams();
   const [from, setFrom] = useState(() => params.get("from") || monthStart());
@@ -64,15 +68,17 @@ export function ReportDrilldown({
 
   const storeIds = defaultStoreIds();
   const { data, isLoading, isError, error } = useReportDrilldown({
-    apiSlug, from, to, storeIds,
+    apiSlug, from, to, storeIds, extraParams,
   });
 
   const rowCount = data?.rows.length ?? 0;
   const unit = rowCount === 1 ? resultUnit[0] : resultUnit[1];
 
-  // Append the period to the CSV URL so the download matches the
-  // visible filter. The Flask endpoint already reads `from`/`to`.
-  const csvHref = `${csvUrl}?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  // Append the period (and any extraParams) to the CSV URL so the
+  // download matches the visible filter. The Flask endpoint reads
+  // the same query params.
+  const csvParams = new URLSearchParams({ from, to, ...(extraParams ?? {}) });
+  const csvHref = `${csvUrl}?${csvParams.toString()}`;
 
   return (
     <main style={pageStyle}>

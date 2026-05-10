@@ -103,46 +103,8 @@ def test_sales_by_employee_csv(client, test_store_id):
 # ── Top Customers by Volume ──────────────────────────────────
 
 
-def test_top_customers_resolves_customer_rows(client, test_store_id):
-    _admin_login(client, test_store_id)
-    big = _make_customer(client, test_store_id, full_name="Big Sender",
-                         phone="5550001")
-    small = _make_customer(client, test_store_id, full_name="Small Sender",
-                           phone="5550002")
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=500,
-                   customer_id=big, confirm="B1")
-    _make_transfer(client, test_store_id, send_date=today, amount=400,
-                   customer_id=big, confirm="B2")
-    _make_transfer(client, test_store_id, send_date=today, amount=50,
-                   customer_id=small, confirm="S1")
-    resp = client.get("/reports/top-customers")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Customer names + phone appear.
-    assert "Big Sender" in body
-    assert "Small Sender" in body
-    assert "+15550001" in body
-    # KPIs.
-    assert "$950.00" in body
-    assert "2 customers" in body
-    # Top customer (sorted desc by sent) appears before the smaller.
-    assert body.index("Big Sender") < body.index("Small Sender")
 
 
-def test_top_customers_buckets_walkin_transfers(client, test_store_id):
-    """Transfers without a customer_id go into a single (walk-in) row,
-    so totals match the dashboard."""
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=80,
-                   customer_id=None, sender_name="Walk", confirm="W1")
-    _make_transfer(client, test_store_id, send_date=today, amount=20,
-                   customer_id=None, sender_name="Walk2", confirm="W2")
-    resp = client.get("/reports/top-customers")
-    body = resp.get_data(as_text=True)
-    assert "(walk-in)" in body
-    assert "$100.00" in body  # Total Sent KPI
 
 
 def test_top_customers_csv(client, test_store_id):

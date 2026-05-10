@@ -19,6 +19,9 @@ import CashierProductivity from "./routes/reports/CashierProductivity";
 import SalesByCompany from "./routes/reports/SalesByCompany";
 import SalesByEmployee from "./routes/reports/SalesByEmployee";
 import SalesByService from "./routes/reports/SalesByService";
+import TopCustomers from "./routes/reports/TopCustomers";
+import TopRecipients from "./routes/reports/TopRecipients";
+import TopSenders from "./routes/reports/TopSenders";
 import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
@@ -102,10 +105,16 @@ export default function App() {
         <Route path="reports/sales-by-service-type" element={<SalesByService />} />
         <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
         <Route path="reports/cashier-productivity"  element={<CashierProductivity />} />
+        <Route path="reports/top-customers"   element={<TopCustomers />} />
+        <Route path="reports/top-senders"     element={<TopSenders />} />
+        <Route path="reports/top-recipients"  element={<TopRecipients />} />
         <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
         <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
         <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
         <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
+        <Route path="owner/reports/top-customers"  element={<TopCustomers />} />
+        <Route path="owner/reports/top-senders"    element={<TopSenders />} />
+        <Route path="owner/reports/top-recipients" element={<TopRecipients />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />

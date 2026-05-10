@@ -40,6 +40,9 @@ interface UseReportDrilldownOpts {
   to: string;
   // Comma-separated list of store IDs from JWT or owner scope.
   storeIds: number[];
+  // Extra query string fragments (e.g. `sort_by=count`). Passed
+  // through verbatim — caller does its own URL encoding.
+  extraParams?: Record<string, string>;
 }
 
 export function useReportDrilldown(opts: UseReportDrilldownOpts) {
@@ -49,10 +52,17 @@ export function useReportDrilldown(opts: UseReportDrilldownOpts) {
   if (opts.storeIds.length > 0) {
     params.set("store_ids", opts.storeIds.join(","));
   }
+  for (const [k, v] of Object.entries(opts.extraParams ?? {})) {
+    params.set(k, v);
+  }
   const enabled = opts.storeIds.length > 0;
   return useQuery<ReportDrilldownResponse>({
     enabled,
-    queryKey: ["report", opts.apiSlug, opts.from, opts.to, opts.storeIds.join(",")],
+    queryKey: [
+      "report", opts.apiSlug, opts.from, opts.to,
+      opts.storeIds.join(","),
+      JSON.stringify(opts.extraParams ?? {}),
+    ],
     queryFn: () =>
       api<ReportDrilldownResponse>(
         `/api/v2/reports/${opts.apiSlug}?${params.toString()}`,

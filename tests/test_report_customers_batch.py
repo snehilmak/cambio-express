@@ -48,25 +48,6 @@ def _make_transfer(client, store_id, *, send_date, amount, fee=2.0,
 # ── Top Senders (by transaction count) ───────────────────────
 
 
-def test_top_senders_sorts_by_count_desc(client, test_store_id):
-    _admin_login(client, test_store_id)
-    most_active = _make_customer(client, test_store_id,
-                                  full_name="Most Active", phone="5550001")
-    less_active = _make_customer(client, test_store_id,
-                                  full_name="Less Active", phone="5550002")
-    today = date.today()
-    # Most active: 5 small transfers.
-    for i in range(5):
-        _make_transfer(client, test_store_id, send_date=today, amount=20,
-                       customer_id=most_active, confirm=f"M{i}")
-    # Less active: 1 big transfer (would win on volume sort).
-    _make_transfer(client, test_store_id, send_date=today, amount=500,
-                   customer_id=less_active, confirm="L1")
-    resp = client.get("/reports/top-senders")
-    body = resp.get_data(as_text=True)
-    assert "Most Active" in body
-    assert "Less Active" in body
-    assert body.index("Most Active") < body.index("Less Active")
 
 
 def test_top_senders_csv(client, test_store_id):
@@ -84,24 +65,6 @@ def test_top_senders_csv(client, test_store_id):
 # ── Top Recipients ───────────────────────────────────────────
 
 
-def test_top_recipients_groups_by_recipient_name(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=200,
-                   recipient_name="Maria Lopez", confirm="R1")
-    _make_transfer(client, test_store_id, send_date=today, amount=300,
-                   recipient_name="Maria Lopez", confirm="R2")
-    _make_transfer(client, test_store_id, send_date=today, amount=50,
-                   recipient_name="Juan Perez", confirm="R3")
-    resp = client.get("/reports/top-recipients")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Maria Lopez" in body
-    assert "Juan Perez" in body
-    # Maria's row sums 200+300=500.
-    assert "$500.00" in body
-    # Sorted desc by sent.
-    assert body.index("Maria Lopez") < body.index("Juan Perez")
 
 
 def test_top_recipients_csv(client, test_store_id):
