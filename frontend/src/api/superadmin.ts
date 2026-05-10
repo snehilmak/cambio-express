@@ -169,3 +169,35 @@ export function useSuperadminAuditLog(
     placeholderData: (prev) => prev,
   });
 }
+
+
+// ── Report center ───────────────────────────────────────────
+
+export interface SuperadminReportRow {
+  key: string;
+  label: string;
+  description: string;
+  url: string | null;
+  status: string;  // "ready" | "coming_soon"
+}
+
+export interface SuperadminReportCategory {
+  key: string;
+  label: string;
+  icon: string;  // inline stroke SVG
+  reports: SuperadminReportRow[];
+}
+
+export interface SuperadminReportListResponse {
+  categories: SuperadminReportCategory[];
+}
+
+export function useSuperadminReports() {
+  const identity = getCurrentIdentity();
+  return useQuery<SuperadminReportListResponse>({
+    enabled: identity?.role === "superadmin",
+    queryKey: ["superadmin", "reports", identity?.user_id],
+    queryFn: () =>
+      api<SuperadminReportListResponse>("/api/v2/superadmin/reports"),
+  });
+}

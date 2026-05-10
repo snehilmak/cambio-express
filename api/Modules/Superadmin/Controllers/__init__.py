@@ -29,6 +29,9 @@ from api.Modules.Superadmin.Requests import (
     SuperadminAnomalyRow,
     SuperadminAuditListResponse,
     SuperadminAuditRow,
+    SuperadminReportCategory,
+    SuperadminReportListResponse,
+    SuperadminReportRow,
     SuperadminStoreCreateRequest,
     SuperadminStoreDetailResponse,
     SuperadminStoreDetailRow,
@@ -475,3 +478,54 @@ def toggle_discount_route(
     d.is_active = body.is_active
     db.commit()
     return DiscountCodeResponse(discount=_adapt_discount(d))
+
+
+# ── Report center index ─────────────────────────────────────
+
+
+@router.get("/reports", response_model=SuperadminReportListResponse)
+def list_reports_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SuperadminReportListResponse:
+    """Platform-wide report-center categories (Platform Health,
+    Revenue, Stripe, Trial Funnel, Feature Adoption, Support / Audit).
+    Each report carries a Flask drilldown URL — the individual
+    report templates haven't migrated yet, so the SPA links straight
+    back into the legacy render path on click. As each report
+    migrates, its URL will start pointing at /app/superadmin/reports/<slug>.
+
+    The same registry that backs the legacy Jinja page (`_SUPERADMIN_REPORT_CATEGORIES`
+    in app.py) is reused here so categories never drift between the
+    two surfaces."""
+    _require_superadmin(claims)
+    # `_resolved_report_categories` calls Flask's url_for to render
+    # each drilldown URL. url_for needs a Flask request context to
+    # build relative URLs — the FastAPI handler runs outside Flask's
+    # request scope (the WSGI dispatcher forwards before request
+    # binding). Push a synthetic request context so url_for resolves
+    # cleanly without falling back to None.
+    from app import (
+        _SUPERADMIN_REPORT_CATEGORIES, _resolved_report_categories,
+        app as flask_app,
+    )
+    with flask_app.test_request_context():
+        resolved = _resolved_report_categories(_SUPERADMIN_REPORT_CATEGORIES)
+    out: list[SuperadminReportCategory] = []
+    for cat in resolved:
+        out.append(SuperadminReportCategory(
+            key=cat["key"],
+            label=cat["label"],
+            icon=cat["icon"],
+            reports=[
+                SuperadminReportRow(
+                    key=r["key"],
+                    label=r["label"],
+                    description=r["description"],
+                    url=r.get("url"),
+                    status=r["status"],
+                )
+                for r in cat["reports"]
+            ],
+        ))
+    return SuperadminReportListResponse(categories=out)

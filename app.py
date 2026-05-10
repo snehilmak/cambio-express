@@ -5718,10 +5718,14 @@ _SUPERADMIN_REPORT_CATEGORIES = [
 @app.route("/superadmin/reports")
 @superadmin_required
 def superadmin_reports():
-    return render_template("superadmin_reports.html",
-        user=current_user(),
-        categories=_resolved_report_categories(
-            _SUPERADMIN_REPORT_CATEGORIES))
+    """301 → /app/superadmin/reports. The report-center index moved
+    to React; the SPA reads the categories envelope from
+    /api/v2/superadmin/reports. Per-report drilldowns
+    (`/superadmin/reports/<slug>`) still render Jinja templates —
+    each one migrates separately as its own pass. The SPA index
+    links straight back into those URLs on click, so navigation
+    stays continuous during the cutover."""
+    return redirect("/app/superadmin/reports", code=301)
 
 
 @app.route("/superadmin/reports/audit-log")

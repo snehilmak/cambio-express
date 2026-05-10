@@ -50,11 +50,14 @@ def test_wired_report_links_to_existing_route(client, test_store_id):
 def test_unwired_reports_render_coming_soon_when_present(client):
     """Coming-soon rendering still works — but as of the latest
     superadmin wiring there are no unwired reports left in any
-    registry. We assert the inverse: pages render and don't 500
-    even when every report is wired."""
+    registry. The page-render side moved to React in PR #398; the
+    Flask GET 301s to /app/superadmin/reports. The category +
+    coming-soon contract is now exercised against the JSON
+    endpoint."""
     _superadmin_login(client)
-    resp = client.get("/superadmin/reports")
-    assert resp.status_code == 200
+    resp = client.get("/superadmin/reports", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/superadmin/reports"
 
 
 def test_reports_route_requires_admin(client):
@@ -75,19 +78,14 @@ def _superadmin_login(client):
         s["store_id"] = None
 
 
-def test_superadmin_reports_page_renders(client):
+def test_superadmin_reports_page_redirects_to_spa(client):
+    """Page-render moved to React in PR #398. The Flask GET 301s
+    unconditionally; the SPA reads the categories envelope from
+    /api/v2/superadmin/reports."""
     _superadmin_login(client)
-    resp = client.get("/superadmin/reports")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Report Center" in body
-    for label in ("Platform Health", "Revenue", "Stripe",
-                  "Trial Funnel", "Feature Adoption", "Support / Audit"):
-        assert label in body
-    # Every superadmin report is wired now — every entry shows a
-    # View button.
-    assert "Superadmin Audit Log" in body
-    assert ">View<" in body
+    resp = client.get("/superadmin/reports", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/superadmin/reports"
 
 
 def test_superadmin_audit_log_page_redirects_to_app(client):
@@ -114,9 +112,13 @@ def test_legacy_audit_tab_redirects_to_audit_log_route(client):
 
 
 def test_superadmin_reports_requires_superadmin(client, test_store_id):
-    """Plain admin can't see /superadmin/reports."""
+    """Plain admin can't see /superadmin/reports. The Flask 301
+    fires only after `superadmin_required` passes, so a non-
+    superadmin gets bounced to login + 403'd at the API."""
     _admin_login(client, test_store_id)
     resp = client.get("/superadmin/reports", follow_redirects=False)
+    # Either bounced by the decorator or the SPA-redirect bridge —
+    # both 302 to login. 403 covers the API-side gate.
     assert resp.status_code in (302, 303, 403)
 
 
