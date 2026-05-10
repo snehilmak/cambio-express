@@ -1,189 +1,127 @@
-"""Route-level tests for the ACH batches CRUD surface.
+"""Route-level tests for the legacy /batches Flask URL family.
 
-`test_ach_invariants.py` covers the money math (federal_tax flow,
-total_collected) but never hits a route. These tests guard the four
-HTTP entry points: list, new, edit, and per-batch transfer detail.
+The list / new / edit / per-batch transfers pages all moved to React
+(/app/batches[/...]) backed by /api/v2/batches. The Flask routes
+now 301-redirect to the SPA; the data-shape and tenancy contracts
+the legacy tests pinned (cross-store 404, store-scoped list, audit
+log appended on create / edit) are exercised against the JSON
+endpoints in `tests/Modules/Batches/test_batches_controllers.py`.
 
-The model invariants are:
-  - ACHBatch.store_id is the auth boundary; cross-store reads 404.
-  - (store_id, batch_ref) is unique — second insert with the same
-    ref under the same store fails (caller responsibility).
+These tests guard:
+  - The legacy URLs return 301 to the right /app/* target.
+  - The redirect happens *after* the auth gate so a non-admin still
+    sees the bounce-to-login or bounce-to-dashboard, never the SPA
+    create form.
+  - Query strings are preserved (sort + dir on the list view).
 """
-from datetime import date, timedelta
+from datetime import date
 
 from tests.conftest import make_employee_client
 
 
-def _seed_batch(app, store_id, *, batch_ref="B-0001", company="Intermex",
-                ach_date=None, amount=1000.0):
-    from app import ACHBatch, db
-    with app.app_context():
-        b = ACHBatch(
-            store_id=store_id, ach_date=ach_date or date.today(),
-            company=company, batch_ref=batch_ref,
-            ach_amount=amount, status="Pending",
-        )
-        db.session.add(b); db.session.commit()
-        return b.id
-
-
-# ── Auth gate ────────────────────────────────────────────────
+# ── Auth gate (runs BEFORE the 301) ─────────────────────────
 
 
 def test_batches_requires_login(client):
+    """Unauthed → /login. The @admin_required decorator runs before
+    the redirect, so an anonymous request is bounced to login (NOT
+    to the SPA — we don't want unauthed users landing on /app
+    routes that immediately bounce them again)."""
     resp = client.get("/batches", follow_redirects=False)
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]
 
 
 def test_batches_employee_blocked(client, test_store_id):
-    """Employees aren't admins — admin_required bounces them off."""
+    """Employees aren't admins — admin_required bounces them off.
+    The bounce target is /dashboard (the legacy admin_required
+    contract), not the SPA list page."""
     c = make_employee_client(test_store_id)
     resp = c.get("/batches", follow_redirects=False)
     assert resp.status_code == 302
-    assert "/login" not in resp.headers["Location"]  # bounced to dashboard, not login
+    # Bounced by admin_required, not by the SPA redirect.
+    assert "/login" not in resp.headers["Location"]
+    assert "/app/batches" not in resp.headers["Location"]
 
 
-# ── List ─────────────────────────────────────────────────────
+# ── 301 contract (list) ─────────────────────────────────────
 
 
-def test_batches_list_renders(logged_in_client):
-    resp = logged_in_client.get("/batches")
-    assert resp.status_code == 200
-    assert b"ACH" in resp.data or b"Batch" in resp.data
+def test_batches_list_redirects_to_spa(logged_in_client):
+    resp = logged_in_client.get("/batches", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches"
 
 
-def test_batches_list_scoped_to_store(logged_in_client, test_store_id):
-    """A batch under a different store must not leak into this store's list."""
-    from app import ACHBatch, Store, db
-    app = logged_in_client.application
-    with app.app_context():
-        other = Store(name="Other", slug="other-shop", plan="trial")
-        db.session.add(other); db.session.commit()
-        other_id = other.id
-    _seed_batch(app, test_store_id, batch_ref="MINE-1")
-    _seed_batch(app, other_id,      batch_ref="THEIRS-1")
-    resp = logged_in_client.get("/batches")
-    body = resp.data.decode()
-    assert "MINE-1" in body
-    assert "THEIRS-1" not in body
+def test_batches_list_preserves_sort_query_string(logged_in_client):
+    """A deep-link to `/batches?sort=ach_date&dir=asc` should land
+    the SPA in the same sort state — preserve the query string on
+    the redirect."""
+    resp = logged_in_client.get(
+        "/batches?sort=ach_date&dir=asc", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert loc.startswith("/app/batches")
+    assert "sort=ach_date" in loc
+    assert "dir=asc" in loc
 
 
-# ── Create (GET form + POST round-trip) ──────────────────────
+# ── 301 contract (create) ───────────────────────────────────
 
 
-def test_new_batch_get_renders_form(logged_in_client):
-    resp = logged_in_client.get("/batches/new")
-    assert resp.status_code == 200
-    assert b"ach_date" in resp.data or b"date" in resp.data
+def test_new_batch_get_redirects_to_spa(logged_in_client):
+    resp = logged_in_client.get("/batches/new", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches/new"
 
 
-def test_new_batch_post_creates_row(logged_in_client, test_store_id):
-    from app import ACHBatch
-    resp = logged_in_client.post("/batches/new", data={
-        "ach_date":   date.today().isoformat(),
-        "company":    "Maxi",
-        "batch_ref":  "BX-NEW-1",
-        "ach_amount": "1234.56",
-        "status":     "Pending",
-        "transfer_dates": "2026-04-29,2026-04-30",
-        "notes":      "test note",
-    }, follow_redirects=False)
-    assert resp.status_code == 302
-    assert resp.headers["Location"].endswith("/batches")
-    with logged_in_client.application.app_context():
-        b = ACHBatch.query.filter_by(batch_ref="BX-NEW-1").first()
-        assert b is not None
-        assert b.store_id == test_store_id
-        assert b.company == "Maxi"
-        assert abs(b.ach_amount - 1234.56) < 0.001
-        assert b.status == "Pending"
-        assert b.notes == "test note"
-        assert b.reconciled is False  # checkbox unchecked
+def test_new_batch_post_redirects_to_spa(logged_in_client):
+    """Legacy form POST also 301s. The SPA POSTs to /api/v2/batches
+    directly — the legacy form path is dead. Any in-flight Jinja
+    submission lands the user on the SPA create page."""
+    resp = logged_in_client.post(
+        "/batches/new", data={"ach_date": date.today().isoformat()},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches/new"
 
 
-def test_new_batch_reconciled_checkbox(logged_in_client):
-    """The reconciled flag is set only when the form sends `on`."""
-    from app import ACHBatch
-    logged_in_client.post("/batches/new", data={
-        "ach_date":   date.today().isoformat(),
-        "company":    "Barri",
-        "batch_ref":  "BX-CHK-1",
-        "ach_amount": "500.00",
-        "reconciled": "on",
-    }, follow_redirects=False)
-    with logged_in_client.application.app_context():
-        b = ACHBatch.query.filter_by(batch_ref="BX-CHK-1").first()
-        assert b.reconciled is True
+# ── 301 contract (edit) ─────────────────────────────────────
 
 
-# ── Edit (GET form + POST round-trip) ────────────────────────
+def test_edit_batch_get_redirects_to_spa(logged_in_client):
+    """`/batches/<id>/edit` 301s to `/app/batches/<id>/edit`. The
+    redirect runs unconditionally (no DB lookup) — cross-store
+    isolation is enforced at the API layer (see
+    tests/Modules/Batches/test_batches_controllers.py); the SPA's
+    BatchForm.tsx surfaces the 404 from there."""
+    resp = logged_in_client.get(
+        "/batches/9999/edit", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches/9999/edit"
 
 
-def test_edit_batch_get_renders_with_existing_values(logged_in_client, test_store_id):
-    bid = _seed_batch(logged_in_client.application, test_store_id,
-                      batch_ref="EDIT-1", company="Intermex", amount=999.99)
-    resp = logged_in_client.get(f"/batches/{bid}/edit")
-    assert resp.status_code == 200
-    assert b"EDIT-1" in resp.data
-    assert b"999.99" in resp.data
+def test_edit_batch_post_redirects_to_spa(logged_in_client):
+    resp = logged_in_client.post(
+        "/batches/42/edit", data={"ach_date": "2026-01-01"},
+        follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches/42/edit"
 
 
-def test_edit_batch_post_updates_row(logged_in_client, test_store_id):
-    from app import ACHBatch, db
-    bid = _seed_batch(logged_in_client.application, test_store_id,
-                      batch_ref="EDIT-2", company="Intermex", amount=100.0)
-    resp = logged_in_client.post(f"/batches/{bid}/edit", data={
-        "ach_date":   "2026-05-01",
-        "company":    "Maxi",
-        "batch_ref":  "EDIT-2",
-        "ach_amount": "777.77",
-        "status":     "Cleared",
-        "reconciled": "on",
-        "notes":      "updated",
-    }, follow_redirects=False)
-    assert resp.status_code == 302
-    with logged_in_client.application.app_context():
-        b = db.session.get(ACHBatch, bid)
-        assert b.company == "Maxi"
-        assert abs(b.ach_amount - 777.77) < 0.001
-        assert b.status == "Cleared"
-        assert b.reconciled is True
-        assert b.notes == "updated"
-        assert b.ach_date == date(2026, 5, 1)
+# ── 301 contract (linked transfers list) ────────────────────
 
 
-def test_edit_batch_cross_store_404(logged_in_client, test_store_id):
-    """An admin can't edit another store's batch even by guessing the id."""
-    from app import Store, db
-    app = logged_in_client.application
-    with app.app_context():
-        other = Store(name="Other", slug="other-shop-2", plan="trial")
-        db.session.add(other); db.session.commit()
-        other_id = other.id
-    other_bid = _seed_batch(app, other_id, batch_ref="THEIRS-2")
-    resp = logged_in_client.get(f"/batches/{other_bid}/edit")
-    assert resp.status_code == 404
-
-
-# ── Per-batch transfer detail ────────────────────────────────
-
-
-def test_batch_transfers_renders(logged_in_client, test_store_id):
-    bid = _seed_batch(logged_in_client.application, test_store_id,
-                      batch_ref="DET-1")
-    resp = logged_in_client.get(f"/batches/{bid}/transfers")
-    assert resp.status_code == 200
-    assert b"DET-1" in resp.data
-
-
-def test_batch_transfers_cross_store_404(logged_in_client, test_store_id):
-    from app import Store, db
-    app = logged_in_client.application
-    with app.app_context():
-        other = Store(name="Other", slug="other-shop-3", plan="trial")
-        db.session.add(other); db.session.commit()
-        other_id = other.id
-    other_bid = _seed_batch(app, other_id, batch_ref="THEIRS-3")
-    resp = logged_in_client.get(f"/batches/{other_bid}/transfers")
-    assert resp.status_code == 404
+def test_batch_transfers_redirects_to_edit_page(logged_in_client):
+    """The legacy "batch detail" template was a separate page; the
+    SPA's BatchForm.tsx renders linked transfers inline alongside
+    the form. Bounce to the editor."""
+    resp = logged_in_client.get(
+        "/batches/7/transfers", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches/7/edit"

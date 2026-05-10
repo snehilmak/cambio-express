@@ -54,16 +54,41 @@ def test_daily_report_unlock_writes_audit(client, test_store_id):
         assert "unlock" in actions
 
 
+def _admin_jwt(client, test_store_id):
+    """Mint a Bearer JWT for the admin so the SPA-side write
+    endpoints accept the call. The legacy session-based admin
+    login still applies for Flask routes; this gives us the
+    matching API-side auth."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": test_store_id},
+    )
+    return resp.get_json()["access_token"]
+
+
 def test_new_batch_writes_create_audit(client, test_store_id):
+    """The legacy /batches/new POST is gone; the SPA POSTs to
+    /api/v2/batches. The audit-log invariant moved with it: every
+    batch create still appends an OperatorAuditLog row."""
     _admin_login(client, test_store_id)
-    resp = client.post("/batches/new", data={
-        "ach_date":   date.today().isoformat(),
-        "company":    "Intermex",
-        "batch_ref":  "B-001",
-        "ach_amount": "1000.00",
-        "status":     "Pending",
-    }, follow_redirects=False)
-    assert resp.status_code in (200, 302)
+    token = _admin_jwt(client, test_store_id)
+    resp = client.post(
+        "/api/v2/batches",
+        json={
+            "ach_date":   date.today().isoformat(),
+            "company":    "Intermex",
+            "batch_ref":  "B-001",
+            "ach_amount": 1000.00,
+            "status":     "Pending",
+            "transfer_dates": "",
+            "reconciled": False,
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
     from app import OperatorAuditLog, app as flask_app
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
@@ -74,6 +99,9 @@ def test_new_batch_writes_create_audit(client, test_store_id):
 
 
 def test_edit_batch_writes_update_audit(client, test_store_id):
+    """Same migration shape on the edit side: legacy form-POST
+    handler 301'd; audit row now lands when the SPA PUTs to
+    /api/v2/batches/<id>."""
     _admin_login(client, test_store_id)
     from app import ACHBatch, db, app as flask_app
     with flask_app.app_context():
@@ -82,13 +110,22 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
                      ach_amount=500.0, status="Pending")
         db.session.add(b); db.session.commit()
         bid = b.id
-    client.post(f"/batches/{bid}/edit", data={
-        "ach_date":   date.today().isoformat(),
-        "company":    "Maxi",
-        "batch_ref":  "B-EDIT",
-        "ach_amount": "750.00",   # changed
-        "status":     "Cleared",  # changed
-    })
+    token = _admin_jwt(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/batches/{bid}",
+        json={
+            "ach_date":   date.today().isoformat(),
+            "company":    "Maxi",
+            "batch_ref":  "B-EDIT",
+            "ach_amount": 750.00,   # changed
+            "status":     "Cleared",  # changed
+            "transfer_dates": "",
+            "reconciled": False,
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
     from app import OperatorAuditLog
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(

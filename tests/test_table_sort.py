@@ -118,27 +118,27 @@ def test_transfers_page_renders_sortable_th_headers(client, test_store_id):
 # ── Batches ──────────────────────────────────────────────────
 
 
-def test_batches_sort_by_company_asc(client, test_store_id):
+def test_batches_legacy_url_redirects_to_spa(client, test_store_id):
+    """The legacy /batches list moved to React. The Flask page used
+    to do server-side sorting via ?sort= + ?dir=; the SPA does the
+    same client-side against /api/v2/batches. The 301 preserves
+    those query params so a deep-link to a sorted view lands the
+    SPA in the same state. Sort-correctness contract is exercised
+    against the API in tests/Modules/Batches/test_batches_controllers.py."""
     _admin_login(client, test_store_id)
-    from app import app as flask_app
-    with flask_app.app_context():
-        _make_batch(test_store_id, ach_date=date.today(),
-                     ref="A", company="Maxi")
-        _make_batch(test_store_id, ach_date=date.today(),
-                     ref="B", company="Barri")
-    resp = client.get("/batches?sort=company&dir=asc")
-    body = resp.get_data(as_text=True)
-    assert body.find("Barri") < body.find("Maxi")
+    resp = client.get(
+        "/batches?sort=company&dir=asc", follow_redirects=False,
+    )
+    assert resp.status_code == 301
+    loc = resp.headers["Location"]
+    assert loc.startswith("/app/batches")
+    assert "sort=company" in loc
+    assert "dir=asc" in loc
 
 
-def test_batches_default_sort_is_recent_first(client, test_store_id):
+def test_batches_default_sort_legacy_url_redirects(client, test_store_id):
+    """Bare /batches with no sort params still 301s cleanly."""
     _admin_login(client, test_store_id)
-    from app import app as flask_app
-    with flask_app.app_context():
-        _make_batch(test_store_id,
-                     ach_date=date.today() - timedelta(days=1),
-                     ref="OLD")
-        _make_batch(test_store_id, ach_date=date.today(), ref="NEW")
-    resp = client.get("/batches")
-    body = resp.get_data(as_text=True)
-    assert body.find("NEW") < body.find("OLD")
+    resp = client.get("/batches", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches"

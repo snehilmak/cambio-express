@@ -35,13 +35,14 @@ def test_transfers_partial_filtered_empty_state(logged_in_client):
     assert "+ New Transfer" not in html
 
 
-def test_batches_empty_state_renders(logged_in_client):
-    resp = logged_in_client.get("/batches")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert 'class="empty-row"' in body
-    assert "No ACH batches yet" in body
-    assert "+ New Batch" in body
+def test_batches_legacy_url_redirects_to_spa(logged_in_client):
+    """The /batches list moved to React in PR #401. The Flask URL
+    301s; the empty-state copy ("No ACH batches yet") moved with
+    it into Batches.tsx. Pinning the redirect contract here is
+    enough; the empty-state UI is a frontend concern."""
+    resp = logged_in_client.get("/batches", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/batches"
 
 
 def test_admin_dashboard_empty_states_render(logged_in_client):
