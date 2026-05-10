@@ -116,13 +116,16 @@ def test_settings_page_loads(logged_in_client):
 
 
 def test_settings_store_info_updates_store(logged_in_client):
+    """Store info round-trip. POST handler 302s; we don't follow
+    the redirect (it lands on /app/settings, the SPA shell).
+    Assert state directly."""
     resp = logged_in_client.post("/admin/settings", data={
         "_tab": "store",
         "store_name": "Updated Store Name",
         "email": "updated@test.com",
         "phone": "555-9999"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
     with flask_app.app_context():
         from app import Store
         s = Store.query.filter_by(slug="test-store").first()
@@ -137,7 +140,7 @@ def test_settings_store_info_updates_admin_username(logged_in_client):
         "store_name": "Test Store",
         "email": "newemail@test.com",
         "phone": ""
-    }, follow_redirects=True)
+    }, follow_redirects=False)
     with flask_app.app_context():
         from app import User
         u = User.query.filter_by(username="newemail@test.com").first()
@@ -249,14 +252,20 @@ def test_team_reset_scoped_to_store(logged_in_client, client):
 
 
 def test_team_reset_password_too_short(logged_in_client):
+    """Short passwords get rejected. The legacy flash text moved to
+    React; assert the no-op on the row instead of the rendered HTML."""
+    from app import User
     sid = get_store_id()
     emp_id = make_employee(logged_in_client, sid, username="shortpw")
+    with flask_app.app_context():
+        old_hash = User.query.filter_by(id=emp_id).first().password_hash
     resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
         "password": "short",
         "confirm_password": "short"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"8" in resp.data
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with flask_app.app_context():
+        assert User.query.filter_by(id=emp_id).first().password_hash == old_hash
 
 
 def test_team_reset_passwords_do_not_match(logged_in_client):
