@@ -4519,6 +4519,18 @@ def _export_report_csv(data_fn, *, columns, row_fn,
         fname_prefix=fname_prefix, extra_args=extra_args)
 
 
+# Reports whose HTML drilldown has migrated to the SPA. GET on
+# /reports/<slug> + /owner/reports/<slug> 301s to /app/reports/<slug>
+# (and /app/owner/reports/<slug>) — the CSV export route stays on
+# Flask as a direct downloadable URL.
+_MIGRATED_REPORT_DRILLDOWNS: set[str] = {
+    "sales-by-company",
+    "sales-by-service-type",
+    "sales-by-employee",
+    "cashier-productivity",
+}
+
+
 def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                          kpis_fn, csv_columns, csv_row_fn,
                          csv_totals_fn=None, csv_fname_prefix=None,
@@ -4544,6 +4556,10 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
     underscored = slug.replace("-", "_")
 
     def _view():
+        if slug in _MIGRATED_REPORT_DRILLDOWNS:
+            qs = request.query_string.decode("latin-1") if request.query_string else ""
+            target = f"/app/reports/{slug}" + (f"?{qs}" if qs else "")
+            return redirect(target, code=301)
         return _render_report(template, data_fn,
             slug=slug, title=title, result_unit=result_unit,
             kpis_fn=kpis_fn, extra_args=extra_args_fn(),
@@ -4570,6 +4586,10 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                      view_func=admin_required(_csv), methods=["GET"])
     # Owner mirror — distinct functions so endpoint names don't collide.
     def _owner_view():
+        if slug in _MIGRATED_REPORT_DRILLDOWNS:
+            qs = request.query_string.decode("latin-1") if request.query_string else ""
+            target = f"/app/owner/reports/{slug}" + (f"?{qs}" if qs else "")
+            return redirect(target, code=301)
         return _view()
     def _owner_csv():
         return _csv()

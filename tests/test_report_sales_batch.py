@@ -64,27 +64,6 @@ def _make_customer(client, store_id, *, full_name, phone="5551234"):
 # ── Sales by Service Type ────────────────────────────────────
 
 
-def test_sales_by_service_type_groups_per_service(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=200, fee=2.0,
-                   service_type="Money Transfer", confirm="MT1")
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=100, fee=1.5,
-                   service_type="Bill Payment", confirm="BP1")
-    _make_transfer(client, test_store_id, send_date=today,
-                   amount=50, fee=0.5,
-                   service_type="Top Up", confirm="TU1")
-    resp = client.get("/reports/sales-by-service-type")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Sales by Service Type" in body
-    assert "Money Transfer" in body
-    assert "Bill Payment" in body
-    assert "Top Up" in body
-    assert "$350.00" in body  # Total Sent KPI
-    assert "3 service types" in body
 
 
 def test_sales_by_service_type_csv(client, test_store_id):
@@ -103,40 +82,8 @@ def test_sales_by_service_type_csv(client, test_store_id):
 # ── Sales by Employee ────────────────────────────────────────
 
 
-def test_sales_by_employee_resolves_user_names(client, test_store_id):
-    _admin_login(client, test_store_id)
-    alice = _make_employee(client, test_store_id, username="alice",
-                           full_name="Alice Cashier")
-    bob = _make_employee(client, test_store_id, username="bob",
-                         full_name="Bob Cashier")
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=300,
-                   created_by=alice, confirm="A1")
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   created_by=bob, confirm="B1")
-    # Legacy unattributed transfer.
-    _make_transfer(client, test_store_id, send_date=today, amount=50,
-                   created_by=None, confirm="L1")
-    resp = client.get("/reports/sales-by-employee")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Alice Cashier" in body
-    assert "Bob Cashier" in body
-    assert "(unattributed)" in body
-    assert "$450.00" in body  # Total Sent KPI
 
 
-def test_sales_by_employee_falls_back_to_username_when_no_full_name(
-        client, test_store_id):
-    _admin_login(client, test_store_id)
-    only_uname = _make_employee(client, test_store_id, username="charlie",
-                                 full_name="")
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   created_by=only_uname, confirm="C1")
-    resp = client.get("/reports/sales-by-employee")
-    body = resp.get_data(as_text=True)
-    assert "charlie" in body
 
 
 def test_sales_by_employee_csv(client, test_store_id):

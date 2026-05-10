@@ -117,45 +117,10 @@ def test_owner_routes_reject_admin_session(client, test_store_id):
     assert resp.status_code in (302, 303, 403)
 
 
-def test_owner_sales_by_company_aggregates_across_linked_stores(client):
-    """Owner hitting /owner/reports/sales-by-company sees the sum
-    across both linked stores; an admin in just one of them only sees
-    that store's slice."""
-    c, oid, (a_id, b_id) = _owner_with_two_stores(client)
-    today = date.today()
-    _make_transfer(c, a_id, send_date=today, amount=500,
-                   company="Intermex", confirm="A1")
-    _make_transfer(c, b_id, send_date=today, amount=300,
-                   company="Maxi", confirm="B1")
-    resp = c.get("/owner/reports/sales-by-company")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Both companies surfaced — totals sum across the umbrella.
-    assert "Intermex" in body
-    assert "Maxi" in body
-    assert "$800.00" in body  # 500 + 300
 
 
-def test_owner_back_link_targets_owner_reports(client):
-    """The report page's back link should send owners back to
-    /owner/reports, not /reports."""
-    c, *_ = _owner_with_two_stores(client)
-    resp = c.get("/owner/reports/sales-by-company")
-    body = resp.get_data(as_text=True)
-    # url_for('owner_reports') resolves to /owner/reports.
-    assert 'href="/owner/reports"' in body
-    # And NOT the admin /reports.
-    assert 'href="/reports"' not in body
 
 
-def test_owner_csv_export_link_targets_owner_endpoint(client):
-    """The CSV export anchor on the owner page should point at the
-    owner CSV endpoint, not the admin one."""
-    c, *_ = _owner_with_two_stores(client)
-    resp = c.get("/owner/reports/sales-by-company")
-    body = resp.get_data(as_text=True)
-    assert 'href="/owner/reports/sales-by-company.csv' in body
-    assert 'href="/reports/sales-by-company.csv' not in body
 
 
 def test_owner_csv_export_returns_umbrella_data(client):
@@ -216,32 +181,3 @@ def test_owner_report_center_link_resolves_to_owner_endpoints(client):
             assert not r["url"].startswith("/reports/"), r
 
 
-def test_admin_reports_still_store_scoped(client, test_store_id):
-    """Refactor regression check — admin must still see only their
-    store's data (not data from other stores in the DB)."""
-    from app import User, Store, db
-    # Setup: log admin into test_store_id, but also create a sibling
-    # store with transfers; the admin must NOT see them.
-    sibling = None
-    with client.application.app_context():
-        s = Store(name="Sibling", slug="reports-admin-sibling", plan="trial")
-        db.session.add(s); db.session.commit()
-        sibling = s.id
-        u = User.query.filter_by(store_id=test_store_id,
-                                  role="admin").first()
-        uid = u.id
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = test_store_id
-    today = date.today()
-    _make_transfer(client, test_store_id, send_date=today, amount=100,
-                   sender_name="Mine", confirm="MINE")
-    _make_transfer(client, sibling, send_date=today, amount=999,
-                   sender_name="Other Store", confirm="OTHER")
-    resp = client.get("/reports/sales-by-company")
-    body = resp.get_data(as_text=True)
-    # Admin only sees their store's $100.
-    assert "$100.00" in body
-    # The sibling store's $999 must NOT bleed through.
-    assert "$999.00" not in body

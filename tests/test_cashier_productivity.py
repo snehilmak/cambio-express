@@ -100,18 +100,6 @@ def test_cashier_productivity_marks_inactive(client, test_store_id):
     assert rows[0]["is_active"] is False
 
 
-def test_cashier_productivity_route_renders(client, test_store_id):
-    _admin_login(client, test_store_id)
-    today = date.today()
-    maria = _make_employee(client, test_store_id, name="Maria")
-    _make_transfer(client, test_store_id, send_date=today, amount=500,
-                   employee_id=maria, employee_name="Maria")
-
-    resp = client.get("/reports/cashier-productivity")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Cashier Productivity" in body
-    assert "Maria" in body
 
 
 def test_cashier_productivity_listed_in_report_center(client, test_store_id):

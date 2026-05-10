@@ -15,6 +15,10 @@ import BankRules from "./routes/BankRules";
 import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
+import CashierProductivity from "./routes/reports/CashierProductivity";
+import SalesByCompany from "./routes/reports/SalesByCompany";
+import SalesByEmployee from "./routes/reports/SalesByEmployee";
+import SalesByService from "./routes/reports/SalesByService";
 import Customers from "./routes/Customers";
 import DailyBook from "./routes/DailyBook";
 import Dashboard from "./routes/Dashboard";
@@ -94,6 +98,14 @@ export default function App() {
         <Route path="daily"            element={<DailyBook />} />
         <Route path="daily/edit"       element={<EditDailyBook />} />
         <Route path="reports"          element={<Reports />} />
+        <Route path="reports/sales-by-company"      element={<SalesByCompany />} />
+        <Route path="reports/sales-by-service-type" element={<SalesByService />} />
+        <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
+        <Route path="reports/cashier-productivity"  element={<CashierProductivity />} />
+        <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
+        <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
+        <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
+        <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />
