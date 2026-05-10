@@ -27,6 +27,13 @@ from api.Modules.Admin.Requests.team import (
     TeamMemberRow,
     TeamMemberUpdateRequest,
 )
+from api.Modules.Admin.Requests.users import (
+    AdminUserCreateRequest,
+    AdminUserDetailResponse,
+    AdminUserListResponse,
+    AdminUserRow,
+    AdminUserUpdateRequest,
+)
 
 __all__ = [
     "AddonListResponse",
@@ -35,6 +42,11 @@ __all__ = [
     "AdminAuditLogResponse",
     "AdminAuditRow",
     "AdminAuditUserOption",
+    "AdminUserCreateRequest",
+    "AdminUserDetailResponse",
+    "AdminUserListResponse",
+    "AdminUserRow",
+    "AdminUserUpdateRequest",
     "ReferralCodeResponse",
     "ReferralRedemptionRow",
     "StoreInfoResponse",

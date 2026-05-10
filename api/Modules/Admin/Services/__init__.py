@@ -15,16 +15,26 @@ from api.Modules.Admin.Services.team import (
     deactivate_team_member,
     update_team_member,
 )
+from api.Modules.Admin.Services.users import (
+    SelfDemotionError,
+    UsernameTakenError,
+    create_store_user,
+    update_store_user,
+)
 
 __all__ = [
+    "SelfDemotionError",
     "TeamMemberNotFoundError",
     "TrialPlanError",
+    "UsernameTakenError",
     "add_team_member",
+    "create_store_user",
     "deactivate_team_member",
     "get_referral_payload",
     "list_audit_rows",
     "tax_export_default_year",
     "tax_export_year_choices",
     "update_store_info",
+    "update_store_user",
     "update_team_member",
 ]

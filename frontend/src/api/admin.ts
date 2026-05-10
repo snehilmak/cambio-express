@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
+import { getCurrentIdentity } from "../lib/auth";
 
 // Per-store admin endpoints — distinct from `account.ts` (store-info,
 // team, passkeys) and `superadmin.ts` (platform-wide). New admin
@@ -79,4 +80,75 @@ export function useReferralCode() {
     queryKey: ["admin", "referrals"],
     queryFn: () => api<ReferralCodeResponse>("/api/v2/admin/referrals"),
   });
+}
+
+
+// ── Per-store user management ──────────────────────────────
+
+export interface AdminUserRow {
+  id:         number;
+  username:   string;
+  full_name:  string;
+  role:       string;
+  is_active:  boolean;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  rows: AdminUserRow[];
+}
+
+export interface AdminUserDetailResponse {
+  user: AdminUserRow;
+}
+
+export interface AdminUserCreateBody {
+  username:   string;
+  password:   string;
+  full_name?: string;
+  role?:      string;
+}
+
+export interface AdminUserUpdateBody {
+  full_name?: string;
+  role?:      string;
+  is_active?: boolean;
+  password?:  string;
+}
+
+export function useAdminUsers() {
+  const identity = getCurrentIdentity();
+  return useQuery<AdminUserListResponse>({
+    enabled: identity?.store_id != null,
+    queryKey: ["admin", "users", identity?.store_id],
+    queryFn: () =>
+      api<AdminUserListResponse>("/api/v2/admin/users"),
+  });
+}
+
+export function useAdminUser(uid: number | null) {
+  return useQuery<AdminUserDetailResponse>({
+    enabled: uid != null && Number.isFinite(uid),
+    queryKey: ["admin", "users", "detail", uid],
+    queryFn: () =>
+      api<AdminUserDetailResponse>(`/api/v2/admin/users/${uid}`),
+  });
+}
+
+export async function createAdminUser(
+  body: AdminUserCreateBody,
+): Promise<AdminUserRow> {
+  return api<AdminUserRow>(
+    "/api/v2/admin/users",
+    { method: "POST", json: body },
+  );
+}
+
+export async function updateAdminUser(
+  uid: number, body: AdminUserUpdateBody,
+): Promise<AdminUserRow> {
+  return api<AdminUserRow>(
+    `/api/v2/admin/users/${uid}`,
+    { method: "PATCH", json: body },
+  );
 }

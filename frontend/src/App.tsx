@@ -7,6 +7,8 @@ import AccountProfile from "./routes/AccountProfile";
 import AdminAuditLog from "./routes/AdminAuditLog";
 import AdminReferrals from "./routes/AdminReferrals";
 import AdminTaxExport from "./routes/AdminTaxExport";
+import AdminUserForm from "./routes/AdminUserForm";
+import AdminUsers from "./routes/AdminUsers";
 import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
@@ -100,6 +102,9 @@ export default function App() {
         <Route path="subscribe/success"     element={<SubscribeSuccess />} />
         <Route path="admin/tax-export"      element={<AdminTaxExport />} />
         <Route path="admin/audit-log"       element={<AdminAuditLog />} />
+        <Route path="admin/users"             element={<AdminUsers />} />
+        <Route path="admin/users/new"         element={<AdminUserForm />} />
+        <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
         <Route path="account/referrals"     element={<AdminReferrals />} />
         <Route path="account/profile"       element={<AccountProfile />} />
         <Route path="account/notifications" element={<AccountNotifications />} />
