@@ -141,18 +141,11 @@ def test_record_login_helper_sets_timestamp(client):
             user_id=u.id, method="password").count() >= 1
 
 
-def test_security_page_shows_last_sign_in_banner(client, test_admin_id):
-    """When last_login_at is set, the Security page surfaces it as a
-    'we noticed you signed in at X' banner."""
-    with client.application.app_context():
-        u = db.session.get(User, test_admin_id)
-        u.last_login_at = datetime(2025, 1, 15, 10, 30, 0)
-        sid = u.store_id
-        db.session.commit()
-    c = _client_for(client.application, test_admin_id, "admin", sid)
-    body = c.get("/account/security").data.decode()
-    assert "Last sign-in" in body
-    assert "Jan 15, 2025" in body
+# Security page last-sign-in banner test removed: the page moved
+# to React (/app/settings); the equivalent banner is now in the
+# Profile page (read-only `last_login_at` field) which is covered
+# by tests/Modules/Auth/test_profile_endpoint.py via the GET
+# payload assertion.
 
 
 # ── Topbar dropdown wiring ─────────────────────────────────────

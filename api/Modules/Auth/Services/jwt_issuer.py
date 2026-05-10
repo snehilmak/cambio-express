@@ -130,3 +130,42 @@ def decode_pending_2fa_token(token: str) -> dict[str, Any]:
     if claims.get("purpose") != "totp-pending":
         raise jwt.InvalidTokenError("Not a 2FA-pending token")
     return claims
+
+
+# 5 minutes is the same TTL as the 2FA-pending token. Long enough
+# for the user's authenticator UI / OS prompt to resolve, short
+# enough that a stolen token can't be replayed later.
+DEFAULT_PASSKEY_REGISTER_TTL_SECONDS = 5 * 60
+
+
+def issue_passkey_register_token(
+    user_id: int, challenge_b64: str,
+    *,
+    ttl_seconds: int = DEFAULT_PASSKEY_REGISTER_TTL_SECONDS,
+) -> str:
+    """Mint a short-lived JWT carrying the WebAuthn registration
+    challenge between the SPA's begin/finish round-trip. The
+    challenge itself is base64url-encoded inside the token claims —
+    the FastAPI flow can't use Flask's session like the legacy
+    routes did, so the token IS the state."""
+    now = _now()
+    payload = {
+        "sub":       str(user_id),
+        "purpose":   "passkey-register",
+        "challenge": challenge_b64,
+        "iat":       int(now.timestamp()),
+        "exp":       int((now + timedelta(seconds=ttl_seconds)).timestamp()),
+    }
+    return jwt.encode(payload, _secret(), algorithm=JWT_ALGORITHM)
+
+
+def decode_passkey_register_token(token: str) -> dict[str, Any]:
+    """Verify + decode a passkey-register token. Raises
+    `jwt.InvalidTokenError` on invalid / expired / wrong-purpose
+    tokens. The challenge sits in `claims["challenge"]` as
+    base64url; the caller decodes it back to bytes via
+    `webauthn.helpers.base64url_to_bytes`."""
+    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    if claims.get("purpose") != "passkey-register":
+        raise jwt.InvalidTokenError("Not a passkey-register token")
+    return claims

@@ -344,3 +344,117 @@ export function usePasskeys() {
 export async function deletePasskey(id: number): Promise<void> {
   await api<void>(`/api/v2/auth/passkeys/${id}`, { method: "DELETE" });
 }
+
+
+// ── Passkey enrollment ─────────────────────────────────────
+//
+// Drives the WebAuthn registration dance against the FastAPI
+// /passkeys/register/{begin,finish} endpoints. The browser-side
+// `navigator.credentials.create()` call sits in the middle,
+// producing the credential the server verifies.
+//
+// Browser support check: `window.PublicKeyCredential` exists on
+// every modern Chromium / Firefox / Safari (and on most mobile
+// browsers). Older builds lack it — the SPA hides the Add button
+// when this returns false.
+
+interface PasskeyRegisterBeginResponse {
+  options_json:   string;
+  register_token: string;
+}
+
+export function passkeysSupported(): boolean {
+  return typeof window !== "undefined"
+    && typeof window.PublicKeyCredential === "function";
+}
+
+// WebAuthn ships its options as base64url-encoded byte fields
+// (challenge, user.id, excludeCredentials[].id). The browser API
+// wants ArrayBuffer, so we decode + return the underlying buffer.
+// Mirror of the helper in static/passkeys.js so the SPA can drop
+// that legacy file once every page using passkeys is on React.
+function _b64urlToArrayBuffer(s: string): ArrayBuffer {
+  const pad = "=".repeat((4 - (s.length % 4)) % 4);
+  const b64 = (s + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  // Allocate fresh ArrayBuffer (not SharedArrayBuffer) so the
+  // resulting BufferSource is compatible with WebAuthn's lib types.
+  const out = new ArrayBuffer(bin.length);
+  const view = new Uint8Array(out);
+  for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function _bytesToB64url(bytes: ArrayBuffer | Uint8Array): string {
+  const arr = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let bin = "";
+  for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export async function registerPasskey(name: string): Promise<PasskeyRow> {
+  if (!passkeysSupported()) {
+    throw new Error(
+      "This browser doesn't expose the WebAuthn API. Use a modern Chrome, Safari, Firefox, or Edge build.",
+    );
+  }
+  const begin = await api<PasskeyRegisterBeginResponse>(
+    "/api/v2/auth/passkeys/register/begin",
+    { method: "POST", json: {} },
+  );
+  const opts = JSON.parse(begin.options_json) as {
+    challenge: string;
+    user: { id: string; name: string; displayName: string };
+    rp: { id: string; name: string };
+    pubKeyCredParams: { type: string; alg: number }[];
+    timeout?: number;
+    excludeCredentials?: { id: string; type: string; transports?: string[] }[];
+    authenticatorSelection?: PublicKeyCredentialCreationOptions["authenticatorSelection"];
+    attestation?: PublicKeyCredentialCreationOptions["attestation"];
+  };
+
+  const publicKey: PublicKeyCredentialCreationOptions = {
+    challenge: _b64urlToArrayBuffer(opts.challenge),
+    rp: { id: opts.rp.id, name: opts.rp.name },
+    user: {
+      id: _b64urlToArrayBuffer(opts.user.id),
+      name: opts.user.name,
+      displayName: opts.user.displayName,
+    },
+    pubKeyCredParams: opts.pubKeyCredParams as PublicKeyCredentialParameters[],
+    timeout: opts.timeout,
+    excludeCredentials: (opts.excludeCredentials ?? []).map((c) => ({
+      id: _b64urlToArrayBuffer(c.id),
+      type: c.type as PublicKeyCredentialType,
+      transports: c.transports as AuthenticatorTransport[] | undefined,
+    })),
+    authenticatorSelection: opts.authenticatorSelection,
+    attestation: opts.attestation,
+  };
+
+  const cred = (await navigator.credentials.create({ publicKey })) as PublicKeyCredential | null;
+  if (cred === null) throw new Error("Passkey creation was cancelled.");
+  const att = cred.response as AuthenticatorAttestationResponse;
+  const credentialJson = {
+    id:       cred.id,
+    rawId:    _bytesToB64url(cred.rawId),
+    type:     cred.type,
+    response: {
+      clientDataJSON:    _bytesToB64url(att.clientDataJSON),
+      attestationObject: _bytesToB64url(att.attestationObject),
+    },
+  };
+
+  const finish = await api<{ passkey: PasskeyRow }>(
+    "/api/v2/auth/passkeys/register/finish",
+    {
+      method: "POST",
+      json: {
+        register_token: begin.register_token,
+        credential:     credentialJson,
+        name,
+      },
+    },
+  );
+  return finish.passkey;
+}

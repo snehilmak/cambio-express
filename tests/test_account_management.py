@@ -183,60 +183,12 @@ def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
         assert s.email == "admin@test.com"  # unchanged
 
 
-# ── Task 4: Password change (now lives on /account/security) ─
-
-def test_security_wrong_current_password(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "wrongpassword",
-        "new_password": "newpassword123!",
-        "confirm_password": "newpassword123!"
-    })
-    assert resp.status_code == 200
-    assert b"incorrect" in resp.data.lower()
-    # verify old password still works
-    with flask_app.app_context():
-        from app import User
-        u = User.query.filter_by(username="admin@test.com").first()
-        assert u.check_password("testpass123!")
-
-
-def test_security_new_password_too_short(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "short",
-        "confirm_password": "short"
-    })
-    assert resp.status_code == 200
-    assert b"8" in resp.data
-
-
-def test_security_passwords_do_not_match(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "newpassword123!",
-        "confirm_password": "differentpassword!"
-    })
-    assert resp.status_code == 200
-    assert b"match" in resp.data.lower()
-
-
-def test_security_valid_password_change(logged_in_client):
-    resp = logged_in_client.post("/account/security", data={
-        "_action": "password",
-        "current_password": "testpass123!",
-        "new_password": "brandnew123!",
-        "confirm_password": "brandnew123!"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"updated" in resp.data.lower()
-    with flask_app.app_context():
-        from app import User
-        u = User.query.filter_by(username="admin@test.com").first()
-        assert u.check_password("brandnew123!")
-        assert not u.check_password("testpass123!")
+# ── Task 4: Password change ─────────────────────────────────
+#
+# Form-based POST tests removed — /account/security now 301s to
+# /app/settings, which submits to /api/v2/auth/change-password.
+# The corresponding 4 validation tests + happy-path are exercised
+# at the API level in tests/Modules/Auth/test_auth_controllers.py.
 
 
 # ── Task 5: Team tab + employee password reset ───────────────
