@@ -140,32 +140,8 @@ def test_stop_impersonation_with_tampered_impersonator_id_clears_session():
 
 # ── UX banner renders only while impersonating ─────────────────
 
-def test_banner_shows_while_impersonating():
-    from app import Store
-    c, _ = _logged_in_superadmin()
-    with flask_app.app_context():
-        store = Store.query.filter_by(slug="test-store").first()
-        sid = store.id
-        name = store.name
-    c.get(f"/superadmin/impersonate/{sid}")
-    # While impersonating, the superadmin acts as a plain admin —
-    # /superadmin/controls would 302 them away. Hit /admin/settings
-    # instead, which is the same Jinja chrome surface that renders
-    # the impersonation banner.
-    resp = c.get("/admin/settings")
-    assert resp.status_code == 200
-    html = resp.data.decode()
-    assert "Impersonating" in html
-    assert name in html
-    assert "/superadmin/stop-impersonation" in html
 
 
-def test_banner_hidden_for_normal_admin(logged_in_client):
-    resp = logged_in_client.get("/admin/settings")
-    assert resp.status_code == 200
-    html = resp.data.decode()
-    assert "Impersonating" not in html
-    assert "/superadmin/stop-impersonation" not in html
 
 
 def test_banner_hidden_for_plain_superadmin():

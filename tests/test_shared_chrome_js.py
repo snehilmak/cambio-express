@@ -24,13 +24,6 @@ def _shell_js_contents():
         return f.read()
 
 
-def test_admin_shell_loads_shell_js(logged_in_client):
-    resp = logged_in_client.get("/admin/settings")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "shell.js" in body
-    matches = re.findall(r'<script[^>]*shell\.js[^>]*>', body)
-    assert matches, "expected shell.js script tag in admin shell"
 
 
 

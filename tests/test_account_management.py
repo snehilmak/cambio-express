@@ -107,10 +107,12 @@ def test_admin_can_still_use_main_login(client):
 # ── Task 3: /admin/settings — Store Info tab ─────────────────
 
 def test_settings_page_loads(logged_in_client):
-    resp = logged_in_client.get("/admin/settings")
-    assert resp.status_code == 200
-    assert b"Settings" in resp.data
-    assert b"Store Info" in resp.data
+    """The /admin/settings hub moved to React (/app/settings); the
+    legacy GET 301s. Page-rendering invariants moved to the SPA;
+    here we just pin the redirect contract."""
+    resp = logged_in_client.get("/admin/settings", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/settings"
 
 
 def test_settings_store_info_updates_store(logged_in_client):
@@ -193,29 +195,20 @@ def test_settings_store_info_rejects_duplicate_email(logged_in_client, client):
 
 # ── Task 5: Team tab + employee password reset ───────────────
 
-def test_team_tab_loads_and_shows_employees(logged_in_client):
-    sid = get_store_id()
-    make_employee(logged_in_client, sid, username="emp1")
-    resp = logged_in_client.get("/admin/settings?tab=team")
-    assert resp.status_code == 200
-    assert b"emp1" in resp.data or b"Test Cashier" in resp.data
 
 
-def test_team_tab_shows_employee_login_url(logged_in_client):
-    resp = logged_in_client.get("/admin/settings?tab=team")
-    assert resp.status_code == 200
-    assert b"login/test-store" in resp.data
 
 
 def test_team_reset_employee_password(logged_in_client):
+    """The legacy flash text moved to React; assert on the password
+    state directly. Form-handler 302s back to /admin/settings."""
     sid = get_store_id()
     emp_id = make_employee(logged_in_client, sid, username="resetme", password="oldpass123!")
     resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
         "password": "newpass456!",
         "confirm_password": "newpass456!"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"updated" in resp.data.lower() or b"password" in resp.data.lower()
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
     with flask_app.app_context():
         from app import User
         emp = db.session.get(User, emp_id)
@@ -267,11 +260,19 @@ def test_team_reset_password_too_short(logged_in_client):
 
 
 def test_team_reset_passwords_do_not_match(logged_in_client):
+    """Mismatched passwords short-circuit the reset. The legacy
+    flash-text confirmation moved to React; assert the no-op
+    on the user row instead of looking for the string."""
+    from app import User
     sid = get_store_id()
     emp_id = make_employee(logged_in_client, sid, username="mismatch")
+    with flask_app.app_context():
+        old_hash = User.query.filter_by(id=emp_id).first().password_hash
     resp = logged_in_client.post(f"/admin/settings/team/{emp_id}", data={
         "password": "newpass123!",
         "confirm_password": "different123!"
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"match" in resp.data.lower()
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with flask_app.app_context():
+        # Password hash unchanged on mismatch.
+        assert User.query.filter_by(id=emp_id).first().password_hash == old_hash

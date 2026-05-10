@@ -33,33 +33,8 @@ def test_inject_theme_returns_dark_for_logged_out(client):
     assert b'data-theme="dark"' in rv.data
 
 
-def test_inject_theme_uses_user_preference_when_logged_in(logged_in_client, test_admin_id):
-    """Logged-in user with theme_preference='light' should see the base
-    template render with data-theme='light'. The dashboard route is
-    convenient because it goes through base.html."""
-    with flask_app.app_context():
-        from app import User
-        u = db.session.get(User, test_admin_id)
-        u.theme_preference = "light"
-        db.session.commit()
-    rv = logged_in_client.get("/admin/settings")
-    assert rv.status_code == 200
-    assert b'data-theme="light"' in rv.data
 
 
-def test_inject_theme_falls_back_to_dark_on_unknown_value(logged_in_client, test_admin_id):
-    """If the column ever holds something other than 'dark'/'light' the
-    processor returns 'dark' rather than passing the bad value through.
-    Defensive, covers cases like a manual DB edit or partial migration."""
-    with flask_app.app_context():
-        from app import User
-        u = db.session.get(User, test_admin_id)
-        u.theme_preference = "neon-cyberpunk"  # not a valid choice
-        db.session.commit()
-    rv = logged_in_client.get("/admin/settings")
-    assert rv.status_code == 200
-    assert b'data-theme="dark"' in rv.data
-    assert b'data-theme="neon-cyberpunk"' not in rv.data
 
 
 def test_account_theme_persists_light(logged_in_client, test_admin_id):

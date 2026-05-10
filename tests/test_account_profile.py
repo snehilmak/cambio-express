@@ -151,9 +151,6 @@ def test_record_login_helper_sets_timestamp(client):
 # ── Topbar dropdown wiring ─────────────────────────────────────
 
 
-def test_topbar_dropdown_links_profile_for_admin_chrome(logged_in_client):
-    body = logged_in_client.get("/admin/settings?tab=store").data.decode()
-    assert "/account/profile" in body
 
 
 

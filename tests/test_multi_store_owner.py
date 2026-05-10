@@ -318,17 +318,26 @@ def test_admin_redeem_links_store_to_owner(logged_in_client):
         assert code.used_by_store_id == store.id
 
 
+def _store_owner_link_count(client):
+    from app import StoreOwnerLink
+    with client.application.app_context():
+        return StoreOwnerLink.query.count()
+
+
 def test_admin_redeem_rejects_expired_code(logged_in_client):
+    """Expired codes don't create a StoreOwnerLink. The flash text
+    moved to React; assert on the no-op state."""
     with flask_app.app_context():
         from app import User
         owner = User(username="ownerB@x.com", role="owner", store_id=None)
         owner.set_password("p"); db.session.add(owner); db.session.commit()
         _make_owner_connect_code(owner.id, code="EXPIRED1", days=-1)
+    before = _store_owner_link_count(logged_in_client)
     rv = logged_in_client.post("/admin/settings/owner/redeem",
                                  data={"code": "EXPIRED1"},
-                                 follow_redirects=True)
-    body = rv.data.lower()
-    assert b"invalid" in body or b"expired" in body
+                                 follow_redirects=False)
+    assert rv.status_code in (302, 303)
+    assert _store_owner_link_count(logged_in_client) == before
 
 
 def test_admin_redeem_rejects_used_code(logged_in_client):
@@ -339,11 +348,12 @@ def test_admin_redeem_rejects_used_code(logged_in_client):
         owner.set_password("p"); db.session.add(owner); db.session.commit()
         _make_owner_connect_code(owner.id, code="USEDC001",
                                    used_at=datetime.utcnow())
+    before = _store_owner_link_count(logged_in_client)
     rv = logged_in_client.post("/admin/settings/owner/redeem",
                                  data={"code": "USEDC001"},
-                                 follow_redirects=True)
-    body = rv.data.lower()
-    assert b"invalid" in body or b"expired" in body or b"used" in body
+                                 follow_redirects=False)
+    assert rv.status_code in (302, 303)
+    assert _store_owner_link_count(logged_in_client) == before
 
 
 def test_admin_redeem_rejects_revoked_code(logged_in_client):
@@ -354,23 +364,27 @@ def test_admin_redeem_rejects_revoked_code(logged_in_client):
         owner.set_password("p"); db.session.add(owner); db.session.commit()
         _make_owner_connect_code(owner.id, code="REVOKED1",
                                    revoked_at=datetime.utcnow())
+    before = _store_owner_link_count(logged_in_client)
     rv = logged_in_client.post("/admin/settings/owner/redeem",
                                  data={"code": "REVOKED1"},
-                                 follow_redirects=True)
-    body = rv.data.lower()
-    assert b"invalid" in body or b"expired" in body
+                                 follow_redirects=False)
+    assert rv.status_code in (302, 303)
+    assert _store_owner_link_count(logged_in_client) == before
 
 
 def test_admin_redeem_rejects_unknown_code(logged_in_client):
+    before = _store_owner_link_count(logged_in_client)
     rv = logged_in_client.post("/admin/settings/owner/redeem",
                                  data={"code": "BOGUSCD1"},
-                                 follow_redirects=True)
-    assert b"invalid" in rv.data.lower() or b"expired" in rv.data.lower()
+                                 follow_redirects=False)
+    assert rv.status_code in (302, 303)
+    assert _store_owner_link_count(logged_in_client) == before
 
 
 def test_admin_redeem_rejects_already_linked(logged_in_client):
-    """Trying to connect a store that's already linked to the same owner
-    returns an info flash and does NOT consume the code."""
+    """Trying to connect a store that's already linked to the same
+    owner does NOT consume the code (idempotent guard). Flash moved
+    to React; assert directly on OwnerConnectCode.used_at."""
     with flask_app.app_context():
         from app import User, Store, StoreOwnerLink
         owner = User(username="ownerE@x.com", role="owner", store_id=None)
@@ -381,8 +395,8 @@ def test_admin_redeem_rejects_already_linked(logged_in_client):
         _make_owner_connect_code(owner.id, code="DUPLINKA")
     rv = logged_in_client.post("/admin/settings/owner/redeem",
                                  data={"code": "DUPLINKA"},
-                                 follow_redirects=True)
-    assert b"already connected" in rv.data.lower()
+                                 follow_redirects=False)
+    assert rv.status_code in (302, 303)
     with flask_app.app_context():
         from app import OwnerConnectCode
         code = OwnerConnectCode.query.filter_by(code="DUPLINKA").first()
@@ -495,38 +509,8 @@ def test_owner_connect_page_blocks_non_owner(logged_in_client):
 # ── Admin owner-tab UI (post-flow-reversal) ────────────────────
 
 
-def test_admin_owner_tab_shows_redeem_form_when_no_owner(logged_in_client):
-    rv = logged_in_client.get("/admin/settings?tab=owner")
-    assert rv.status_code == 200
-    body = rv.data.lower()
-    assert b"connect" in body
-    # Form posts to the new redeem route.
-    assert b"/admin/settings/owner/redeem" in rv.data
-    # Old generate-code route must NOT appear.
-    assert b"/admin/settings/owner/generate-code" not in rv.data
 
 
-def test_admin_owner_tab_hides_remove_button_when_linked(logged_in_client):
-    """When an owner is linked, the admin sees the read-only "contact
-    your owner" message — no Remove Access button (only owners can
-    disconnect)."""
-    with flask_app.app_context():
-        from app import User, Store, StoreOwnerLink
-        owner = User(username="ownerLinked@x.com", role="owner",
-                     store_id=None, full_name="Linked Owner")
-        owner.set_password("p"); db.session.add(owner); db.session.commit()
-        store = Store.query.filter_by(slug="test-store").first()
-        db.session.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
-        db.session.commit()
-    rv = logged_in_client.get("/admin/settings?tab=owner")
-    assert rv.status_code == 200
-    body = rv.data
-    assert b"Linked Owner" in body
-    assert b"contact your owner" in body.lower()
-    # Old remove-access form must NOT appear.
-    assert b"/admin/settings/owner/remove-access" not in body
-    # No Remove Access button text.
-    assert b"Remove Access" not in body
 
 
 def test_owner_can_unlink_store(owner_with_store_client):
