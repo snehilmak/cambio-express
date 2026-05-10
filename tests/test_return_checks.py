@@ -586,19 +586,40 @@ def test_delete_rc_removes_all_payments_and_line_items(logged_in_client, test_st
 
 # ── Monthly P&L lock ────────────────────────────────────────────
 
-def test_monthly_pl_uses_workflow_value(logged_in_client, test_store_id):
+def test_monthly_pl_uses_workflow_value(client, test_store_id):
     """The Monthly P&L's `return_check_gl` is locked to the workflow's
-    computed value. Tampered POST is ignored — same enforcement as
-    `check_cashing_fees` and the COGS columns."""
+    computed value. The /monthly editor moved to React in PR #402;
+    the SPA PUTs to /api/v2/monthly/<y>/<m>. The auto-derived field
+    is rejected outright by the schema (extra='forbid') — tampering
+    is now a 422, not a silent ignore. Server still auto-populates
+    the field on save."""
     today = date.today()
     # $400 loss this month → P&L expects +400 (loss-positive).
     _seed_rc(test_store_id, amount=400.0, status="loss",
              status_changed_on=today)
-    rv = logged_in_client.post(
-        f"/monthly/{today.year}/{today.month}",
-        data={"return_check_gl": "0.00"},
+    # JWT login for the API path.
+    login = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com",
+              "password": "testpass123!",
+              "store_id": test_store_id},
     )
-    assert rv.status_code in (200, 302)
+    token = login.get_json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    # Tampered payload → 422 (schema forbids return_check_gl).
+    rv = client.put(
+        f"/api/v2/monthly/{today.year}/{today.month}",
+        json={"return_check_gl": 0.0},
+        headers=headers,
+    )
+    assert rv.status_code == 422
+    # Clean PUT (notes only) → server auto-populates from workflow.
+    rv = client.put(
+        f"/api/v2/monthly/{today.year}/{today.month}",
+        json={"notes": ""},
+        headers=headers,
+    )
+    assert rv.status_code == 200
     from app import MonthlyFinancial
     with flask_app.app_context():
         rpt = MonthlyFinancial.query.filter_by(
@@ -606,19 +627,6 @@ def test_monthly_pl_uses_workflow_value(logged_in_client, test_store_id):
         ).first()
         assert rpt is not None
         assert rpt.return_check_gl == 400.0
-
-
-def test_monthly_pl_template_marks_field_readonly(logged_in_client):
-    """Template renders return_check_gl as readonly with the locked
-    badge — confirms the macro call site uses locked=True."""
-    today = date.today()
-    rv = logged_in_client.get(f"/monthly/{today.year}/{today.month}")
-    assert rv.status_code == 200
-    body = rv.data.decode()
-    idx = body.find('name="return_check_gl"')
-    assert idx > 0
-    near = body[max(0, idx - 200):idx + 300]
-    assert "readonly" in near
 
 
 # ── Owner dashboard surface ─────────────────────────────────────
