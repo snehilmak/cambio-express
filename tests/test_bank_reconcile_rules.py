@@ -267,6 +267,10 @@ def test_categorize_with_explicit_report_date(client, test_store_id):
 
 
 def test_move_date_route_shifts_linked_line(client, test_store_id):
+    """Happy path: handler re-dates the linked DailyLineItem and
+    redirects. We don't follow the redirect (it lands on the SPA
+    shell which CI doesn't build, returning 503) — just verify the
+    row state changed and the response is a redirect."""
     from datetime import date as ddate
     from app import (BankTransaction, DailyLineItem, db,
                      _categorize_bank_transaction)
@@ -281,8 +285,8 @@ def test_move_date_route_shifts_linked_line(client, test_store_id):
         db.session.commit()
     resp = client.post(f"/bank/transactions/{tid}/move-date",
                        data={"report_date": "2026-05-01"},
-                       follow_redirects=True)
-    assert resp.status_code == 200
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
     with client.application.app_context():
         t = db.session.get(BankTransaction, tid)
         line = db.session.get(DailyLineItem, t.daily_line_item_id)
