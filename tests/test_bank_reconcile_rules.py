@@ -61,9 +61,11 @@ def test_basic_plan_cannot_access_bank(client, test_store_id):
 
 
 def test_active_trial_can_access_bank(client, test_store_id):
+    """/bank 301s to /app/bank for an active trial — no paywall bounce."""
     _admin_login(client, test_store_id, plan="trial")
-    resp = client.get("/bank")
-    assert resp.status_code == 200
+    resp = client.get("/bank", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/bank"
 
 
 def test_expired_trial_cannot_access_bank(client, test_store_id):
@@ -81,9 +83,11 @@ def test_expired_trial_cannot_access_bank(client, test_store_id):
 
 
 def test_pro_plan_can_access_bank(client, test_store_id):
+    """/bank 301s to /app/bank for a paid Pro store."""
     _admin_login(client, test_store_id, plan="pro")
-    resp = client.get("/bank")
-    assert resp.status_code == 200
+    resp = client.get("/bank", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/bank"
 
 
 # ── _bank_rule_matches ───────────────────────────────────────
@@ -363,31 +367,37 @@ def test_uncategorize_deletes_daily_line_item(client, test_store_id):
 # ── /bank/rules CRUD smoke ───────────────────────────────────
 
 
-def test_bank_rules_page_renders(client, test_store_id):
+def test_bank_rules_legacy_route_redirects_to_spa(client, test_store_id):
+    """/bank/rules moved to React; the legacy route 301s. Rule
+    CRUD lives under /api/v2/bank/rules — covered by the
+    BankSync module tests."""
     _admin_login(client, test_store_id)
-    resp = client.get("/bank/rules")
-    assert resp.status_code == 200
-    assert b"Create rule" in resp.data
-    assert b"Your rules" in resp.data
+    resp = client.get("/bank/rules", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/bank/rules"
 
 
 def test_create_rule_with_minimum_one_condition(client, test_store_id):
-    """At least one condition required (description / sign / amount / account)."""
+    """At least one condition required (description / sign / amount /
+    account). The form-POST handler bounces; we assert on the
+    no-op state because the legacy flash text moved to React in
+    the bank-rules SPA."""
+    from app import BankRule
     _admin_login(client, test_store_id)
-    # Empty rule rejected
+    # Empty rule → no row created.
     resp = client.post("/bank/rules/new", data={"target_kind": "cash_expense"},
-                       follow_redirects=True)
-    assert b"at least one condition" in resp.data.lower()
-    # Description-only rule accepted
+                       follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with client.application.app_context():
+        assert BankRule.query.filter_by(store_id=test_store_id).count() == 0
+    # Description-only rule → row created.
     resp = client.post("/bank/rules/new", data={
         "target_kind": "cash_expense",
         "desc_match_type": "contains",
         "desc_match_value": "EmagineNet",
         "enabled": "on",
-    }, follow_redirects=True)
-    assert resp.status_code == 200
-    assert b"Rule created" in resp.data
-    from app import BankRule
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
     with client.application.app_context():
         rules = BankRule.query.filter_by(store_id=test_store_id).all()
         assert len(rules) == 1
@@ -402,19 +412,24 @@ def test_rule_toggle_and_delete(client, test_store_id):
                      desc_match_type="contains", desc_match_value="x")
         db.session.add(r); db.session.commit()
         rid = r.id
-    client.post(f"/bank/rules/{rid}/toggle", follow_redirects=True)
+    client.post(f"/bank/rules/{rid}/toggle", follow_redirects=False)
     with client.application.app_context():
         assert db.session.get(BankRule, rid).enabled is False
-    client.post(f"/bank/rules/{rid}/delete", follow_redirects=True)
+    client.post(f"/bank/rules/{rid}/delete", follow_redirects=False)
     with client.application.app_context():
         assert db.session.get(BankRule, rid) is None
 
 
 def test_amount_min_max_inverted_rejected(client, test_store_id):
+    """Inverted amount range rejected. The form-POST bounces; assert
+    on the no-op (no row) since the flash moved to React."""
+    from app import BankRule
     _admin_login(client, test_store_id)
     resp = client.post("/bank/rules/new", data={
         "target_kind": "cash_expense",
         "amount_min": "200.00",
         "amount_max": "100.00",
-    }, follow_redirects=True)
-    assert b"can&#39;t be greater" in resp.data or b"can't be greater" in resp.data
+    }, follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with client.application.app_context():
+        assert BankRule.query.filter_by(store_id=test_store_id).count() == 0

@@ -7620,51 +7620,14 @@ def batch_transfers(bid):
 @app.route("/bank")
 @pro_required
 def bank():
-    user = current_user()
-    store = current_store()
-    sid = store.id
-    stripe_accounts = (StripeBankAccount.query
-                       .filter_by(store_id=sid, enabled=True)
-                       .order_by(StripeBankAccount.connected_at.desc()).all())
-    # Auto-refresh balances older than the staleness window so the page
-    # always shows something close to live. Silent on failure.
-    now = datetime.utcnow()
-    stale = [a for a in stripe_accounts
-             if not a.last_balance_as_of or
-             (now - a.last_balance_as_of).total_seconds() > BANK_BALANCE_STALE_SECONDS]
-    if stale and stripe_is_configured():
-        try:
-            refresh_bank_balances(store)
-            stripe_accounts = (StripeBankAccount.query
-                               .filter_by(store_id=sid, enabled=True)
-                               .order_by(StripeBankAccount.connected_at.desc()).all())
-        except Exception as e:
-            app.logger.warning(f"bank() auto-refresh failed: {e}")
-    # The tuple return shape from refresh_bank_balances is intentional —
-    # the manual /bank/stripe/refresh route surfaces last_error in a flash
-    # so operators can see why a refresh failed; the auto-refresh above
-    # ignores it and renders silently.
-    # Rate-limit state for the Sync transactions button. Read-only —
-    # actual gate happens server-side in /bank/stripe/sync-transactions.
-    sync_allowed, sync_reason, sync_retry_after = _can_sync_bank_transactions(store)
-    today_count = (store.bank_sync_count_today or 0) if (
-        store.bank_sync_count_date == datetime.utcnow().date()) else 0
-    recent_txns = (BankTransaction.query.filter_by(store_id=sid)
-                   .order_by(BankTransaction.posted_at.desc(),
-                             BankTransaction.id.desc())
-                   .limit(10).all())
-    return render_template("bank.html", user=user,
-        stripe_accounts=stripe_accounts,
-        stripe_ready=stripe_is_configured(),
-        stripe_publishable_key=stripe_publishable_key(),
-        max_bank_accounts=MAX_BANK_ACCOUNTS_PER_STORE,
-        recent_txns=recent_txns,
-        sync_allowed=sync_allowed,
-        sync_reason=sync_reason,
-        sync_retry_after=sync_retry_after,
-        sync_count_today=today_count,
-        sync_max_per_day=MAX_BANK_SYNCS_PER_DAY,
-        sync_last_at=store.bank_sync_last_at)
+    """301 → /app/bank. The bank-accounts landing moved to React;
+    the SPA reads /api/v2/bank/{accounts,transactions} and drives
+    the Stripe Financial Connections modal via dynamically-loaded
+    Stripe.js. The legacy mutation form-POST endpoints
+    (/bank/stripe/{refresh,sync-transactions,nickname/<id>,
+    disconnect/<id>}) stay live and the SPA submits forms to
+    them; they 302 back to /bank → which 301s to /app/bank."""
+    return redirect("/app/bank", code=301)
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @pro_required
@@ -7956,15 +7919,11 @@ def bank_transaction_move_date(txn_id):
 @app.route("/bank/rules")
 @pro_required
 def bank_rules():
-    sid = session["store_id"]
-    rules = (BankRule.query.filter_by(store_id=sid)
-             .order_by(BankRule.priority.asc(), BankRule.id.asc()).all())
-    accounts = (StripeBankAccount.query.filter_by(store_id=sid, enabled=True)
-                .order_by(StripeBankAccount.connected_at.desc()).all())
-    return render_template("bank_rules.html",
-        user=current_user(), rules=rules, accounts=accounts,
-        category_groups=_bank_category_groups(sid),
-        category_label=_bank_category_label)
+    """301 → /app/bank/rules. Rules CRUD moved to React; the SPA
+    reads/writes via /api/v2/bank/rules. The legacy form-POST
+    handlers below (new / edit / toggle / delete) stay live as
+    fallback callers and 302 back to /bank/rules → 301 → /app."""
+    return redirect("/app/bank/rules", code=301)
 
 @app.route("/bank/rules/new", methods=["POST"])
 @pro_required

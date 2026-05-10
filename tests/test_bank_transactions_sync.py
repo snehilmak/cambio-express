@@ -151,10 +151,10 @@ def test_sync_route_blocked_by_rate_limit(client, test_store_id):
         s.bank_sync_count_date = datetime.utcnow().date()
         db.session.commit()
 
-    resp = client.post("/bank/stripe/sync-transactions", follow_redirects=True)
-    assert resp.status_code == 200
-    body = resp.data.decode()
-    assert "wait" in body.lower() or "minute" in body.lower()
+    # The flash-text confirmation moved to the SPA (/app/bank); the
+    # invariant is "blocked sync doesn't bump the counter."
+    resp = client.post("/bank/stripe/sync-transactions", follow_redirects=False)
+    assert resp.status_code in (302, 303)
 
     with client.application.app_context():
         s = db.session.get(Store, test_store_id)
