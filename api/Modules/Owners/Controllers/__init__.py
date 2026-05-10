@@ -338,3 +338,27 @@ def owner_unlink_store_route(
     db.delete(link)
     db.commit()
     return None
+
+
+# ── Owner report center index ──────────────────────────────
+
+
+@router.get("/reports")
+def owner_reports_route(
+    db: Session = Depends(get_db),  # noqa: ARG001 — kept for symmetry
+    claims: dict = Depends(get_principal),
+):
+    """Owner-prefixed report-center index. Same `_REPORT_CATEGORIES`
+    registry the admin index uses, but with `endpoint_prefix='owner_'`
+    so each report's drilldown URL points at the owner-mirror Flask
+    route (the registered owner-side report renderers).
+
+    Owner role required — admin or employee callers fall back to
+    /api/v2/reports."""
+    from api.Modules.Reports.Controllers import _build_report_list
+    if claims.get("role") != "owner":
+        raise HTTPException(
+            status_code=403,
+            detail="Owner scope required for /owner/reports.",
+        )
+    return _build_report_list(prefix="owner_")

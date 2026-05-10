@@ -115,12 +115,26 @@ def test_cashier_productivity_route_renders(client, test_store_id):
 
 
 def test_cashier_productivity_listed_in_report_center(client, test_store_id):
+    """The Report Center landing moved to React in PR #406. The
+    invariant — Cashier Productivity appears in the per-store
+    report registry and links to /reports/cashier-productivity —
+    now lives on the JSON envelope the SPA fetches."""
     _admin_login(client, test_store_id)
-    resp = client.get("/reports")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    assert "Cashier Productivity" in body
-    assert "/reports/cashier-productivity" in body
+    jwt = client.post(
+        "/api/v2/auth/login",
+        json={"username": "admin@test.com", "password": "testpass123!",
+              "store_id": test_store_id},
+    ).get_json()["access_token"]
+    resp = client.get(
+        "/api/v2/reports",
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    rows = [r for cat in resp.get_json()["categories"] for r in cat["reports"]]
+    cashier = next((r for r in rows if r["key"] == "cashier_productivity"), None)
+    assert cashier is not None, "cashier_productivity missing from report center"
+    assert cashier["label"] == "Cashier Productivity"
+    assert cashier["url"] == "/reports/cashier-productivity"
 
 
 def test_cashier_productivity_csv_export(client, test_store_id):

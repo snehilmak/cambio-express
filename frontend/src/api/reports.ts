@@ -78,3 +78,43 @@ export const useByDestinationCountry = (p: PeriodQuery) =>
 
 export const useTopRecipients = (p: PeriodQuery) =>
   useReport<RecipientRow>("top-recipients", p);
+
+
+// ── Report-center index ─────────────────────────────────────
+
+export interface ReportListRow {
+  key: string;
+  label: string;
+  description: string;
+  url: string | null;
+  status: string;  // "ready" | "coming_soon"
+}
+
+export interface ReportListCategory {
+  key: string;
+  label: string;
+  icon: string;  // inline stroke SVG
+  reports: ReportListRow[];
+}
+
+export interface ReportListResponse {
+  categories: ReportListCategory[];
+}
+
+export function useReportList() {
+  const identity = getCurrentIdentity();
+  return useQuery<ReportListResponse>({
+    enabled: identity?.user_id != null,
+    queryKey: ["reports", "index", identity?.user_id],
+    queryFn: () => api<ReportListResponse>("/api/v2/reports"),
+  });
+}
+
+export function useOwnerReportList() {
+  const identity = getCurrentIdentity();
+  return useQuery<ReportListResponse>({
+    enabled: identity?.role === "owner",
+    queryKey: ["owner", "reports", "index", identity?.user_id],
+    queryFn: () => api<ReportListResponse>("/api/v2/owner/reports"),
+  });
+}

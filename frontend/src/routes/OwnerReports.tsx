@@ -1,16 +1,17 @@
-import { useSuperadminReports } from "../api/superadmin";
+import { useOwnerReportList } from "../api/reports";
 import ReportCenter from "../components/ReportCenter";
 import { ApiError } from "../lib/api";
 
-// /app/superadmin/reports — platform-wide report center index.
+// /app/owner/reports — owner-scoped report center index.
 //
-// Wires the shared ReportCenter component to the superadmin-scoped
-// JSON envelope at /api/v2/superadmin/reports. Drilldown URLs still
-// point at Flask paths (/superadmin/reports/<slug>) — each report's
-// per-page render migrates separately.
+// Same registry as the per-store /app/reports, but the drilldown
+// URLs route through the owner-prefix mirrors registered by
+// `_register_owner_report_mirrors` in app.py — each `report_<x>`
+// admin endpoint has an `owner_report_<x>` mirror that filters to
+// every store under the owner umbrella.
 
-export default function SuperadminReports() {
-  const { data, isLoading, isError, error } = useSuperadminReports();
+export default function OwnerReports() {
+  const { data, isLoading, isError, error } = useOwnerReportList();
 
   if (isLoading) {
     return (
@@ -27,7 +28,7 @@ export default function SuperadminReports() {
         <h1 style={titleStyle}>Reports</h1>
         <p style={errorStyle}>
           {status === 403
-            ? "Superadmin scope required."
+            ? "Owner scope required."
             : `Couldn't load the report list. ${error instanceof Error ? error.message : ""}`}
         </p>
       </main>
@@ -40,6 +41,7 @@ export default function SuperadminReports() {
     </main>
   );
 }
+
 
 const pageStyle: React.CSSProperties = {
   maxWidth: 1100, margin: "0 auto", padding: "1.5rem 1rem 3rem",

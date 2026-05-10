@@ -27,9 +27,11 @@ Layer rules from the ADR:
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Reports.Requests import (
     ByDestinationCountryResponse,
     CashierProductivityResponse,
@@ -213,3 +215,98 @@ def cashier_productivity_route(
     d_from, d_to = period
     rows, totals = cashier_productivity(db, store_ids, d_from, d_to)
     return CashierProductivityResponse(rows=rows, totals=totals)
+
+
+# ── Report-center index ─────────────────────────────────────
+
+
+class ReportRow(BaseModel):
+    """One report card on the categorized index. `url` is the
+    Flask drilldown path (legacy templates still own per-report
+    rendering for now); `status` is `ready` or `coming_soon`."""
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    description: str
+    url: str | None
+    status: str
+
+
+class ReportCategory(BaseModel):
+    """Group of related reports (Sales / Financial / Operations /
+    Customers / Audit). The icon is an inline stroke SVG matching
+    the rest of the design-system iconography (CLAUDE.md)."""
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    icon: str
+    reports: list[ReportRow]
+
+
+class ReportListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    categories: list[ReportCategory]
+
+
+def _build_report_list(prefix: str = "") -> ReportListResponse:
+    """Resolve `_REPORT_CATEGORIES` from app.py through the same
+    `_resolved_report_categories` helper the legacy /reports +
+    /owner/reports Flask routes use, then adapt to the SPA-shaped
+    envelope. `prefix` mirrors the legacy `endpoint_prefix='owner_'`
+    knob: empty for the admin index, 'owner_' for the owner index."""
+    from app import (
+        _REPORT_CATEGORIES, _resolved_report_categories,
+        app as flask_app,
+    )
+    # Flask's url_for needs a request context to render relative URLs
+    # — the FastAPI handler runs outside Flask's request scope (the
+    # WSGI dispatcher forwards before request binding). Push a
+    # synthetic context so url_for resolves cleanly.
+    with flask_app.test_request_context():
+        resolved = _resolved_report_categories(
+            _REPORT_CATEGORIES, endpoint_prefix=prefix,
+        )
+    return ReportListResponse(categories=[
+        ReportCategory(
+            key=cat["key"],
+            label=cat["label"],
+            icon=cat["icon"],
+            reports=[
+                ReportRow(
+                    key=r["key"],
+                    label=r["label"],
+                    description=r["description"],
+                    url=r.get("url"),
+                    status=r["status"],
+                )
+                for r in cat["reports"]
+            ],
+        )
+        for cat in resolved
+    ])
+
+
+@router.get("", response_model=ReportListResponse)
+def list_reports_route(
+    db: Session = Depends(get_db),  # noqa: ARG001 — kept for symmetry
+    claims: dict = Depends(get_principal),
+) -> ReportListResponse:
+    """Per-store report-center categories for the admin Reports page.
+
+    Mirrors the legacy /reports Jinja landing — same registry
+    (`_REPORT_CATEGORIES`), same View / Coming-soon split, same
+    drilldown URLs (still on Flask templates one PR-per-report
+    until each report individually migrates).
+
+    Auth: any logged-in caller scoped to a store. Owners get the
+    same admin-side category list when viewing through their own
+    store; the owner-prefix variant lives at /owner/reports."""
+    if claims.get("role") not in ("admin", "owner", "employee", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Sign in as a store user to view reports.",
+        )
+    return _build_report_list(prefix="")
