@@ -95,47 +95,96 @@ def _close_fastapi_clients():
 
 
 # ─────────────────────────────────────────────────────────────
-# a2wsgi.ASGIMiddleware leak pin
+# /api/v2 dispatch in tests — bypass the leaky a2wsgi bridge.
 #
-# The Flask test_client → DispatcherMiddleware → ASGIMiddleware →
-# FastAPI dispatch path is wired up at app import time. Unlike
-# TestClient, a2wsgi reuses a single shared event-loop thread for
-# every request and creates an asyncio.Task per call via
-# ``loop.create_task(self.app(...))``. When a request finishes,
-# the task is `done()`, but its done-callback chain (through
-# ASGIResponder) holds the task object weakly — under coverage's
-# C-tracer the GC walks the call graph more aggressively and the
-# Task's ``__del__`` fires while still flagged "pending" (the
-# CancelledError -> Task done-callback path doesn't synchronously
-# clear the pending flag). Python emits "Task was destroyed but
-# it is pending!" and starlette/anyio rolls back the SQLAlchemy
-# session of whatever test happens to be running next.
+# Production routes /api/v2/* through asgi.py's native ASGI
+# dispatcher (see asgi.py + render.yaml). The Flask app's
+# DispatcherMiddleware mount via a2wsgi.ASGIMiddleware is only
+# kept on the Flask side as a strangler-fig fallback that
+# production NEVER hits — but the test suite uses Flask's
+# WSGI test_client, which routes through that legacy mount.
 #
-# Manifestation: ``test_monthly_locked_bank_charge_overrides_user_value``
-# (and friends) in test_bank_charges_pl.py fails 500 Internal Server
-# Error on /api/v2/monthly PUT — the route handler blows up because
-# its DB session was rolled back by a Task's __del__ deep in the
-# stack.
+# Under coverage's C-tracer the leak is dramatic: a2wsgi spawns
+# one asyncio.Task per request in its long-lived background
+# thread loop. The task is reachable through the loop's task
+# set, but coverage's GC sweep treats those references as cycles
+# and reclaims Tasks while still flagged "pending". The Task's
+# __del__ raises CancelledError into anyio's portal, which
+# rolls back the SQLAlchemy session of whatever test happens
+# to be running. Manifestation: random 500 Internal Server
+# Errors in tests like test_monthly_locked_bank_charge_*,
+# test_transfers_live_search_*, etc.
 #
-# Fix: monkey-patch a2wsgi's ASGIResponder so every Task it spawns
-# is ALSO appended to a process-global strong-ref list. The list
-# never shrinks within a test process, so Python GC can never
-# reclaim them mid-test. Memory cost is bounded by total request
-# count over a single test run — small (a few KB per task).
-# Compared to per-test loop draining this is O(1) overhead per
-# request; no scheduling cost between tests.
-import a2wsgi.asgi as _a2wsgi_asgi
-_LEAKED_TASK_REFS: list = []
-_orig_start_asgi_app = _a2wsgi_asgi.ASGIResponder.start_asgi_app
+# Fix: in tests, replace the /api/v2 mount with a TestClient-
+# backed WSGI bridge. TestClient uses anyio.from_thread.start_
+# blocking_portal which has well-defined task lifecycle (the
+# portal is held for the full test process lifetime, and the
+# scheduled work is awaited synchronously inside the portal).
+# No long-lived loop, no orphan tasks, no leak under coverage.
+#
+# Production behaviour is unaffected — the asgi.py entrypoint
+# already bypasses a2wsgi for /api/v2/* and is verified by the
+# WORKER TIMEOUT incident hotfix (PR #399).
+from fastapi.testclient import TestClient as _StarletteTestClient
+from werkzeug.middleware.dispatcher import DispatcherMiddleware as _DM
+from a2wsgi import ASGIMiddleware as _A2W
 
 
-async def _start_asgi_app_pinning_task(self, environ):
-    task = await _orig_start_asgi_app(self, environ)
-    _LEAKED_TASK_REFS.append(task)
-    return task
+def _swap_in_testclient_bridge() -> None:
+    """Walk app.wsgi_app's dispatcher chain, find the /api/v2
+    ASGIMiddleware mount, and replace it with a TestClient-backed
+    WSGI handler. Idempotent — safe to call once at module import."""
+    bridge = flask_app.wsgi_app
+    if not isinstance(bridge, _DM):
+        return
+    asgi_mw = bridge.mounts.get("/api/v2")
+    if asgi_mw is None or not isinstance(asgi_mw, _A2W):
+        return
+    fastapi_app = asgi_mw.app
+    # Single TestClient — entered once at module init, reused for
+    # every request through the dispatcher. anyio's portal stays
+    # alive so each request is dispatched on a stable, short-lived
+    # subtask that completes before send_response returns.
+    tc = _StarletteTestClient(fastapi_app)
+    tc.__enter__()  # spin up the portal + lifespan task
+
+    def _wsgi_handler(environ, start_response):
+        # Translate WSGI environ → httpx request → response →
+        # WSGI iterable. starlette TestClient handles the ASGI
+        # roundtrip via its blocking portal (anyio).
+        method = environ["REQUEST_METHOD"]
+        path = environ.get("PATH_INFO", "/")
+        qs = environ.get("QUERY_STRING", "")
+        url = path + ("?" + qs if qs else "")
+        # Body
+        body = b""
+        cl = environ.get("CONTENT_LENGTH")
+        if cl and int(cl) > 0:
+            body = environ["wsgi.input"].read(int(cl))
+        # Headers — strip the CGI-style HTTP_ prefix httpx wants
+        # raw header names.
+        headers: dict[str, str] = {}
+        for k, v in environ.items():
+            if k.startswith("HTTP_"):
+                hdr = k[5:].replace("_", "-").lower()
+                headers[hdr] = v
+        ct = environ.get("CONTENT_TYPE")
+        if ct:
+            headers["content-type"] = ct
+        if cl:
+            headers["content-length"] = cl
+        resp = tc.request(method, url, headers=headers, content=body)
+        # WSGI status line
+        status_line = f"{resp.status_code} {resp.reason_phrase or ''}".strip()
+        out_headers = [(k, v) for k, v in resp.headers.items()
+                       if k.lower() != "transfer-encoding"]
+        start_response(status_line, out_headers)
+        return [resp.content]
+
+    bridge.mounts["/api/v2"] = _wsgi_handler
 
 
-_a2wsgi_asgi.ASGIResponder.start_asgi_app = _start_asgi_app_pinning_task
+_swap_in_testclient_bridge()
 
 
 # Stable TOTP secret for the seeded superadmin so test helpers can
