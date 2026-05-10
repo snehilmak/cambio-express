@@ -3336,122 +3336,36 @@ def owner_dashboard():
 @app.route("/owner/pl-rollup")
 @owner_required
 def owner_pl_rollup():
-    """Side-by-side monthly P&L for every store in the owner umbrella.
-
-    The auto-mirrored owner reports (Period P&L, Sales by Company, etc.)
-    SUM across the umbrella into a single bar — useful for "what's the
-    whole portfolio doing?". This page asks the dual question: how does
-    each store stack up against the others for a given month?
-
-    Returns one row per store with revenue / expenses / over-short /
-    net-income, plus a totals footer. Rows sort by net income desc so
-    the strongest performers float to the top.
-    """
-    user = current_user()
-    today = date.today()
-    try:
-        year = int(request.args.get("year", today.year))
-    except ValueError:
-        year = today.year
-    try:
-        month = int(request.args.get("month", today.month))
-    except ValueError:
-        month = today.month
-    if not (1 <= month <= 12):
-        month = today.month
-
-    store_ids = _owner_store_ids(user)
-    stores = (Store.query.filter(Store.id.in_(store_ids))
-              .order_by(Store.name).all() if store_ids else [])
-    pl_rows = (MonthlyFinancial.query.filter(
-                MonthlyFinancial.store_id.in_(store_ids),
-                MonthlyFinancial.year == year,
-                MonthlyFinancial.month == month,
-            ).all() if store_ids else [])
-    pl_by_store = {r.store_id: r for r in pl_rows}
-
-    rows = []
-    totals = {"revenue": 0.0, "purchases": 0.0, "expenses": 0.0,
-              "over_short": 0.0, "net": 0.0}
-    for s in stores:
-        pl = pl_by_store.get(s.id)
-        if pl:
-            rev = float(pl.total_revenue or 0.0)
-            pur = float(pl.total_purchases or 0.0)
-            exp = float(pl.total_expenses or 0.0)
-            os_ = float(pl.over_short or 0.0)
-            net = float(pl.net_income or 0.0)
-            has_pl = True
-        else:
-            rev = pur = exp = os_ = net = 0.0
-            has_pl = False
-        rows.append({
-            "store":     s,
-            "revenue":   rev,
-            "purchases": pur,
-            "expenses":  exp,
-            "over_short": os_,
-            "net":       net,
-            "has_pl":    has_pl,
-        })
-        totals["revenue"]    += rev
-        totals["purchases"]  += pur
-        totals["expenses"]   += exp
-        totals["over_short"] += os_
-        totals["net"]        += net
-
-    # Sort by net income desc — strongest performers first. Stores
-    # without a P&L for the month sink to the bottom (net=0 sorts low
-    # if other stores have positive net; ties broken by name).
-    rows.sort(key=lambda r: (r["net"], -r["store"].id), reverse=True)
-
-    # Year choices: any year that has at least one MonthlyFinancial
-    # row across the umbrella, plus this year.
-    year_choices = {today.year}
-    if store_ids:
-        for (y,) in (db.session.query(MonthlyFinancial.year)
-                      .filter(MonthlyFinancial.store_id.in_(store_ids))
-                      .distinct().all()):
-            if y is not None:
-                year_choices.add(int(y))
-
-    # Prev/next month for the pager.
-    prev_y, prev_m = (year, month - 1) if month > 1 else (year - 1, 12)
-    next_y, next_m = (year, month + 1) if month < 12 else (year + 1, 1)
-
-    return render_template("owner_pl_rollup.html",
-        user=user, rows=rows, totals=totals,
-        year=year, month=month,
-        month_name=month_name[month],
-        year_choices=sorted(year_choices, reverse=True),
-        prev_y=prev_y, prev_m=prev_m,
-        next_y=next_y, next_m=next_m,
-    )
+    """301 → /app/owner/pl-rollup. The side-by-side monthly P&L
+    rollup moved to React; the SPA reads
+    /api/v2/owner/pl-rollup?year=&month= and renders the same
+    rows + totals + year/month picker. Stub keeps url_for(...)
+    working in still-Jinja chrome (sidebar nav) and bounces old
+    bookmarks. Query string (year + month) is preserved so a
+    direct link to a specific month lands on the right page."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/owner/pl-rollup" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/owner/locations")
 @owner_required
 def owner_locations():
-    """Searchable list of stores the owner is linked to.
-
-    Supports `?partial=1` for the live-search AJAX swap pattern (same
-    contract as /transfers): returns JSON `{html, total, query}` and
-    the page-level template wraps the partial in a stable swap container.
-    """
-    u = current_user()
-    period = request.args.get("period", "month")
-    if period not in ("today", "month", "year"):
-        period = "month"
-    query = (request.args.get("q") or "").strip()
-    rows, total = _owner_locations_payload(u, period, query)
-    if request.args.get("partial") == "1":
-        html = render_template("_owner_locations_table.html",
-                               rows=rows, period=period, query=query)
-        return jsonify({"html": html, "total": total,
-                        "matched": len(rows), "query": query})
-    return render_template("owner_locations.html",
-                           user=u, period=period, query=query,
-                           rows=rows, total=total)
+    """301 → /app/owner/locations. The searchable umbrella store
+    list moved to React; the SPA reads /api/v2/owner/locations
+    (with query / period query params) and live-searches against
+    that JSON envelope. Stub keeps url_for('owner_locations')
+    working in still-Jinja chrome (and the old `?partial=1`
+    AJAX swap pattern is retired with this redirect — the SPA
+    does its own debounced fetching). Preserves the query string
+    so a direct link with `?period=year&q=foo` lands cleanly."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    # Drop the legacy partial=1 marker if present — it was an
+    # AJAX-only contract; the SPA never sends it.
+    if qs:
+        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
+    target = "/app/owner/locations" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/owner/store/<int:store_id>")
