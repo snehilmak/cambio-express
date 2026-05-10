@@ -190,6 +190,31 @@ def update_daily_route(
     return DailyReportResponse(report=_to_row(summary))
 
 
+def _audit_daily_lock_action(db, claims, action, report):
+    """Operator-audit helper for daily-report lock / unlock actions.
+    Mirrors the legacy `record_op_audit('lock'/'unlock',
+    'daily_report', ...)` calls that the Flask form-POST handlers
+    used to make. With those handlers gone (PR #403), the audit row
+    needs to land on this side or it silently disappears from the
+    operator audit log."""
+    from api.Modules.Audit.Services import record_operator_action
+    record_operator_action(
+        db,
+        store_id=int(claims["store_id"]),
+        user_id=int(claims["sub"]),
+        user_name=claims.get("name") or claims.get("username") or "",
+        user_role=claims.get("role") or "",
+        target_type="daily_report",
+        target_id=report.id,
+        target_label=(
+            f"Daily {report.report_date.isoformat()}"
+            if getattr(report, "report_date", None) else ""
+        ),
+        action=action,
+        summary="",
+    )
+
+
 @router.post(
     "/{store_id}/{report_date}/lock",
     response_model=DailyReportResponse,
@@ -203,7 +228,13 @@ def lock_daily_route(
     """Mark a daily report as locked. Auto-creates the row when
     missing so a cashier can lock an empty day on purpose.
     Idempotent — already-locked reports keep their original
-    locked_at/locked_by. Cross-store / superadmin → 403."""
+    locked_at/locked_by. Cross-store / superadmin → 403.
+
+    Writes an OperatorAuditLog row (`action='lock',
+    target_type='daily_report'`) on a state transition (was-not-
+    locked → locked). Already-locked re-lock attempts are no-ops
+    and don't append a second audit row, matching the legacy
+    contract."""
     d = _parse_date(report_date, field="report_date")
     claim_store = claims.get("store_id")
     if claim_store is None or int(claim_store) != int(store_id):
@@ -214,8 +245,20 @@ def lock_daily_route(
                 "daily book."
             ),
         )
+    # Snapshot the prior lock state — the audit row only fires on
+    # a state transition (matches the legacy /daily/<ds>/lock
+    # `was_locked` guard).
+    from app import DailyReport
+    existing = (
+        db.query(DailyReport)
+          .filter_by(store_id=int(store_id), report_date=d)
+          .first()
+    )
+    was_locked = bool(existing and existing.locked_at)
     user_id = int(claims["sub"])
-    lock_report(db, int(store_id), d, locked_by_user_id=user_id)
+    rpt = lock_report(db, int(store_id), d, locked_by_user_id=user_id)
+    if not was_locked:
+        _audit_daily_lock_action(db, claims, "lock", rpt)
     db.commit()
     summary = summarize_report(db, int(store_id), d)
     if summary is None:
@@ -235,7 +278,11 @@ def unlock_daily_route(
 ) -> DailyReportResponse:
     """Clear the lock on a daily report. Cross-store /
     superadmin → 403. Returns 404 if the date never had a report
-    at all (nothing to unlock)."""
+    at all (nothing to unlock).
+
+    Writes an OperatorAuditLog row (`action='unlock'`) on a state
+    transition (was-locked → not-locked). Already-unlocked report
+    is a no-op + no second audit row."""
     d = _parse_date(report_date, field="report_date")
     claim_store = claims.get("store_id")
     if claim_store is None or int(claim_store) != int(store_id):
@@ -246,13 +293,22 @@ def unlock_daily_route(
                 "daily book."
             ),
         )
+    from app import DailyReport
+    existing = (
+        db.query(DailyReport)
+          .filter_by(store_id=int(store_id), report_date=d)
+          .first()
+    )
+    was_locked = bool(existing and existing.locked_at)
     result = unlock_report(db, int(store_id), d)
-    db.commit()
     if result is None:
         raise HTTPException(
             status_code=404,
             detail="No daily report logged for this date",
         )
+    if was_locked:
+        _audit_daily_lock_action(db, claims, "unlock", result)
+    db.commit()
     summary = summarize_report(db, int(store_id), d)
     if summary is None:
         raise HTTPException(status_code=500, detail="Unlock failed")
@@ -350,6 +406,19 @@ def line_items_create_route(
         raise HTTPException(
             status_code=422,
             detail=f"Unknown line-item kind: {body.kind!r}",
+        )
+    # Return-check paybacks come exclusively from the Return Checks
+    # page (POST /return-checks/<id>/payment, which calls the
+    # Service directly). Blocking the manual API path here keeps the
+    # daily book in sync with that single source of truth and matches
+    # the read-only UI the cashier sees in the SPA.
+    if body.kind == "return_payback":
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Log return-check paybacks via Books → Return Checks "
+                "(Add Payment). The daily-book line auto-populates."
+            ),
         )
     try:
         at = parse_at_time(body.at_time)
