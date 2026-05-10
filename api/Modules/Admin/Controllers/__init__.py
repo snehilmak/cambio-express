@@ -15,7 +15,9 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Admin.Repositories import (
     find_store,
+    find_store_user,
     find_team_member,
+    list_store_users,
     list_team,
 )
 
@@ -26,6 +28,11 @@ from api.Modules.Admin.Requests import (
     AdminAuditLogResponse,
     AdminAuditRow,
     AdminAuditUserOption,
+    AdminUserCreateRequest,
+    AdminUserDetailResponse,
+    AdminUserListResponse,
+    AdminUserRow,
+    AdminUserUpdateRequest,
     ReferralCodeResponse,
     ReferralRedemptionRow,
     StoreInfoResponse,
@@ -38,14 +45,18 @@ from api.Modules.Admin.Requests import (
     TeamMemberUpdateRequest,
 )
 from api.Modules.Admin.Services import (
+    SelfDemotionError,
     TrialPlanError,
+    UsernameTakenError,
     add_team_member,
+    create_store_user,
     deactivate_team_member,
     get_referral_payload,
     list_audit_rows,
     tax_export_default_year,
     tax_export_year_choices,
     update_store_info,
+    update_store_user,
     update_team_member,
 )
 
@@ -363,6 +374,181 @@ def get_admin_audit_log_route(
         action_filter=action.strip(),
         user_filter=user.strip(),
     )
+
+
+# ── Per-store user management ───────────────────────────────
+
+
+def _user_row(u) -> AdminUserRow:
+    return AdminUserRow(
+        id=u.id,
+        username=u.username or "",
+        full_name=u.full_name or "",
+        role=u.role or "employee",
+        is_active=bool(u.is_active),
+        created_at=u.created_at.isoformat() if u.created_at else "",
+    )
+
+
+def _audit_user_action(
+    db: Session, *, claims: dict, action: str,
+    target_user, summary: str,
+) -> None:
+    """Record a per-store operator-audit row for a user mutation.
+
+    Mirrors invariant #7 (every mutating admin endpoint records
+    audit) — the legacy `admin_new_user` / `admin_edit_user`
+    routes pre-date the audit table, so this Service-level audit
+    is the SPA's cutover-time addition. target_type 'user' is
+    truncated to 30 chars by the recorder, well under the limit.
+    """
+    from api.Modules.Audit.Services import record_operator_action
+    sid = int(claims.get("store_id") or 0)
+    record_operator_action(
+        db,
+        store_id=sid,
+        user_id=int(claims.get("sub") or 0) or None,
+        user_name=str(claims.get("username") or claims.get("full_name") or ""),
+        user_role=str(claims.get("role") or ""),
+        target_type="user",
+        target_id=str(target_user.id),
+        target_label=(target_user.username or "")[:160],
+        action=action,
+        summary=summary,
+    )
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+def list_users_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminUserListResponse:
+    """All User rows for the JWT principal's store. Powers the
+    /app/admin/users roster. Includes inactive rows so admins
+    can spot + reactivate them — the SPA filters/badges them
+    in the UI."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    rows = list_store_users(db, store_id)
+    return AdminUserListResponse(rows=[_user_row(u) for u in rows])
+
+
+@router.post(
+    "/users", response_model=AdminUserRow, status_code=201,
+)
+def create_user_route(
+    body: AdminUserCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminUserRow:
+    """Create a new User in the principal's store. Username must
+    be unique within the store; password is hashed via
+    `User.set_password` (never stored raw). Role limited to
+    'admin' / 'employee'."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    try:
+        user = create_store_user(
+            db, store_id=store_id,
+            username=body.username,
+            password=body.password,
+            full_name=body.full_name,
+            role=body.role,
+        )
+    except UsernameTakenError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"field_errors": {"username": str(exc)}},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _audit_user_action(
+        db, claims=claims, action="create",
+        target_user=user,
+        summary=(
+            f"created {user.role} user "
+            f"{user.username!r}"
+        ),
+    )
+    db.commit()
+    return _user_row(user)
+
+
+@router.get(
+    "/users/{user_id}", response_model=AdminUserDetailResponse,
+)
+def get_user_route(
+    user_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminUserDetailResponse:
+    """Single-user fetch for the Edit form prefill. Cross-store
+    IDs and unknown IDs both return 404 — opaque tenancy."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    user = find_store_user(db, store_id, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return AdminUserDetailResponse(user=_user_row(user))
+
+
+@router.patch(
+    "/users/{user_id}", response_model=AdminUserRow,
+)
+def update_user_route(
+    user_id: int = Path(..., ge=1),
+    body: AdminUserUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> AdminUserRow:
+    """Edit full_name, role, is_active, and (optionally) password.
+    Self-edit guard: an admin cannot demote / deactivate their
+    own account through this endpoint — that returns 422 with a
+    field-level error so the SPA can render it inline. Cross-
+    store IDs return 404."""
+    _require_admin_role(claims)
+    store_id = _require_store(claims)
+    user = find_store_user(db, store_id, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    fields = body.model_dump(exclude_unset=True)
+    actor_id_raw = claims.get("sub")
+    actor_id = int(actor_id_raw) if actor_id_raw is not None else None
+    try:
+        update_store_user(
+            db, user,
+            full_name=fields.get("full_name"),
+            role=fields.get("role"),
+            is_active=fields.get("is_active"),
+            password=fields.get("password"),
+            actor_id=actor_id,
+        )
+    except SelfDemotionError as exc:
+        # Surface as a field error — SPA renders inline next to
+        # whichever field the operator tried to change.
+        bad_field = "role" if "role" in fields else "is_active"
+        raise HTTPException(
+            status_code=422,
+            detail={"field_errors": {bad_field: str(exc)}},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    # Build a one-line summary listing which fields changed; keep
+    # it short — recorder truncates at 2000 chars but the audit
+    # page renders these inline.
+    changed_keys = [k for k in fields if k != "password"]
+    if "password" in fields and fields["password"]:
+        changed_keys.append("password")
+    summary = (
+        f"updated user {user.username!r} "
+        f"({', '.join(changed_keys) or 'no changes'})"
+    )
+    _audit_user_action(
+        db, claims=claims, action="update",
+        target_user=user, summary=summary,
+    )
+    db.commit()
+    return _user_row(user)
 
 
 # ── Referrals (paid-plan self-service share + earn) ─────────

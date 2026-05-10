@@ -2270,6 +2270,8 @@ _SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
     "/superadmin/stores":  "/app/superadmin/stores",
     "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
     "/admin/settings":     "/app/settings",
+    "/admin/users":        "/app/admin/users",
+    "/admin/users/new":    "/app/admin/users/new",
     "/bank/transactions":  "/app/bank-transactions",
     # SPA-34: Stripe pricing page now on SPA. Note that
     # /admin/subscription stays on legacy because it's a richer
@@ -8956,12 +8958,16 @@ def bank_stripe_disconnect(acct_id):
     return redirect(url_for("bank"))
 
 # ── Admin Users ──────────────────────────────────────────────
-@app.route("/admin/users")
+@app.route("/admin/users", methods=["GET", "POST"])
 @admin_required
 def admin_users():
-    user=current_user(); sid=session["store_id"]
-    users=User.query.filter_by(store_id=sid).all()
-    return render_template("admin_users.html",user=user,users=users)
+    """301 → /app/admin/users. The roster + create + edit forms
+    moved to React; the SPA POSTs to /api/v2/admin/users[...]
+    directly. Stub keeps url_for('admin_users') working for
+    sidebar nav + bounces old bookmarks."""
+    qs = request.query_string.decode("latin-1") if request.query_string else ""
+    target = "/app/admin/users" + (f"?{qs}" if qs else "")
+    return redirect(target, code=301)
 
 
 @app.route("/admin/audit-log")
@@ -8978,32 +8984,20 @@ def admin_audit_log():
     return redirect(target, code=301)
 
 
-@app.route("/admin/users/new",methods=["GET","POST"])
+@app.route("/admin/users/new", methods=["GET", "POST"])
 @admin_required
 def admin_new_user():
-    user=current_user(); sid=session["store_id"]
-    if request.method=="POST":
-        un=request.form.get("username","").strip()
-        if User.query.filter_by(store_id=sid,username=un).first():
-            flash("Username already exists.","error")
-        else:
-            u=User(store_id=sid,username=un,full_name=request.form.get("full_name",""),
-                   role=request.form.get("role","employee"))
-            u.set_password(request.form["password"]); db.session.add(u); db.session.commit()
-            flash(f"User '{u.username}' created.","success"); return redirect(url_for("admin_users"))
-    return render_template("admin_user_form.html",user=user,edit_user=None)
+    """301 → /app/admin/users/new. Form moved to React; the SPA
+    POSTs to /api/v2/admin/users directly."""
+    return redirect("/app/admin/users/new", code=301)
 
-@app.route("/admin/users/<int:uid>/edit",methods=["GET","POST"])
+
+@app.route("/admin/users/<int:uid>/edit", methods=["GET", "POST"])
 @admin_required
 def admin_edit_user(uid):
-    user=current_user(); sid=session["store_id"]
-    eu=User.query.filter_by(id=uid,store_id=sid).first_or_404()
-    if request.method=="POST":
-        eu.full_name=request.form.get("full_name",""); eu.role=request.form.get("role","employee")
-        eu.is_active=request.form.get("is_active")=="on"
-        if request.form.get("password"): eu.set_password(request.form["password"])
-        db.session.commit(); flash("User updated.","success"); return redirect(url_for("admin_users"))
-    return render_template("admin_user_form.html",user=user,edit_user=eu)
+    """301 → /app/admin/users/<uid>/edit. Form moved to React; the
+    SPA PATCHes to /api/v2/admin/users/<uid> directly."""
+    return redirect(f"/app/admin/users/{uid}/edit", code=301)
 
 @app.route("/admin/settings", methods=["GET", "POST"])
 @admin_required
