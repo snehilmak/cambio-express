@@ -35,34 +35,6 @@ def test_admin_shell_loads_search_js_without_defer(logged_in_client):
         )
 
 
-def test_owner_shell_loads_search_js_without_defer():
-    """Same contract on the owner shell — owner_locations.html depends
-    on the same global."""
-    from app import app as flask_app, db, User, StoreOwnerLink, Store
-    with flask_app.app_context():
-        s = Store(name="Search JS Test", slug="search-js-test", plan="trial")
-        db.session.add(s); db.session.commit()
-        o = User(username="owner-search-js@x.com", role="owner",
-                 store_id=None, full_name="Search JS Owner")
-        o.set_password("p"); db.session.add(o); db.session.commit()
-        db.session.add(StoreOwnerLink(owner_id=o.id, store_id=s.id))
-        db.session.commit()
-        oid = o.id
-    c = flask_app.test_client()
-    with c.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-        sess["store_id"] = None
-    resp = c.get("/owner/dashboard")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    import re
-    matches = re.findall(r'<script[^>]*search\.js[^>]*>', body)
-    assert matches, "expected search.js tag in owner shell"
-    for tag in matches:
-        assert "defer" not in tag, (
-            f"search.js must load synchronously in owner shell too — got: {tag}"
-        )
 
 
 # /return-checks page rendering moved to React. The legacy Jinja

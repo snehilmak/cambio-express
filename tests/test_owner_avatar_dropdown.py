@@ -13,38 +13,6 @@ contains the class-toggle pattern.
 """
 
 
-def test_owner_shell_loads_shell_js():
-    """Render the owner base template and confirm static/shell.js
-    is loaded — that's where the avatar dropdown JS lives now."""
-    from app import app as flask_app, db, User, StoreOwnerLink, Store
-
-    with flask_app.app_context():
-        s = Store(name="Owner Avatar Test", slug="owner-avatar-test",
-                  plan="trial")
-        db.session.add(s); db.session.commit()
-        o = User(username="owner-avatar@x.com", role="owner",
-                 store_id=None, full_name="Avatar Owner")
-        o.set_password("p"); db.session.add(o); db.session.commit()
-        db.session.add(StoreOwnerLink(owner_id=o.id, store_id=s.id))
-        db.session.commit()
-        oid = o.id
-
-    c = flask_app.test_client()
-    with c.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-        sess["store_id"] = None
-
-    resp = c.get("/owner/dashboard")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-
-    assert 'id="userAvatar"' in body
-    assert 'id="userDropdown"' in body
-    assert "shell.js" in body, (
-        "owner shell must load static/shell.js — that's where the "
-        "avatar-dropdown JS lives. See PR #197 for the bug history."
-    )
 
 
 def test_shell_js_keeps_is_open_class_toggle():

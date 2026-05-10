@@ -14,7 +14,7 @@ connect/unlink invitation flow.
 """
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -362,3 +362,183 @@ def owner_reports_route(
             detail="Owner scope required for /owner/reports.",
         )
     return _build_report_list(prefix="owner_")
+
+
+# ── Owner dashboard + store detail ─────────────────────────
+
+
+def _safe_value(v):
+    """JSON-coerce dates, datetimes, ORM rows, lists/dicts."""
+    from datetime import date, datetime
+    if isinstance(v, (date, datetime)):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return {k: _safe_value(x) for k, x in v.items()}
+    if isinstance(v, list):
+        return [_safe_value(x) for x in v]
+    if hasattr(v, "__table__"):
+        return {c.name: _safe_value(getattr(v, c.name))
+                for c in v.__table__.columns}
+    return v
+
+
+def _require_owner(db: Session, claims: dict):
+    if claims.get("role") != "owner":
+        raise HTTPException(
+            status_code=403, detail="Owner scope required.",
+        )
+    uid = claims.get("user_id") or claims.get("sub")
+    if uid is None:
+        raise HTTPException(status_code=401, detail="Missing user id.")
+    user = db.get(User, int(uid))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return user
+
+
+@router.get("/dashboard")
+def owner_dashboard_route(
+    period: str = "month",
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+):
+    """Owner dashboard payload — KPIs, multi-store rollup, daily
+    series, return-check aging. Delegates to the existing
+    `dashboard_context` Service so the SPA + legacy template can
+    diverge later without forking aggregation logic.
+    """
+    user = _require_owner(db, claims)
+    if period not in ("today", "month", "year"):
+        period = "month"
+    from api.Modules.Owners.Services.dashboard_context import (
+        dashboard_context,
+    )
+    ctx = dashboard_context(db, user, period)
+    # Drop the User-instance entry so we don't accidentally serialize
+    # internal columns (totp_secret, password_hash, etc.). The SPA
+    # already has the identity from the JWT.
+    ctx.pop("user", None)
+    return {k: _safe_value(v) for k, v in ctx.items()}
+
+
+@router.get("/store/{store_id}")
+def owner_store_detail_route(
+    store_id: int = Path(..., ge=1),
+    period: str = "month",
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+):
+    """Drill-down view for a single store the owner is linked to.
+    Read-only. Returns period KPIs, the company breakdown, the
+    30-day over/short + receipts series, and recent activity."""
+    from datetime import date as ddate, timedelta
+    from app import DailyReport, Store, StoreOwnerLink, Transfer
+    from api.Modules.Owners.Services import (
+        OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
+        owner_period_window as _owner_period_window,
+    )
+    user = _require_owner(db, claims)
+    link = db.query(StoreOwnerLink).filter_by(
+        owner_id=user.id, store_id=store_id,
+    ).first()
+    if link is None:
+        raise HTTPException(
+            status_code=404, detail="That store is not linked to your account.",
+        )
+    if period not in ("today", "month", "year"):
+        period = "month"
+    today = ddate.today()
+    start, end, prev_start, prev_end, prev_label = _owner_period_window(
+        period, today,
+    )
+    store = db.get(Store, store_id)
+
+    from sqlalchemy import func
+    co_rows = db.query(
+        Transfer.company,
+        func.count(Transfer.id),
+        func.coalesce(func.sum(Transfer.send_amount), 0.0),
+        func.coalesce(func.sum(Transfer.fee), 0.0),
+        func.coalesce(func.sum(Transfer.federal_tax), 0.0),
+    ).filter(
+        Transfer.store_id == store_id,
+        Transfer.send_date >= start, Transfer.send_date <= end,
+        Transfer.status.notin_(_OWNER_TRANSFER_EXCLUDED),
+    ).group_by(Transfer.company).order_by(
+        func.coalesce(func.sum(Transfer.send_amount), 0.0).desc()
+    ).all()
+    company_rows = [
+        {"company": (co or "—"), "count": int(c),
+         "volume": float(v or 0), "fees": float(f or 0),
+         "tax": float(t or 0)}
+        for co, c, v, f, t in co_rows
+    ]
+    period_count = sum(r["count"] for r in company_rows)
+    period_volume = sum(r["volume"] for r in company_rows)
+    period_fees = sum(r["fees"] for r in company_rows)
+    period_tax = sum(r["tax"] for r in company_rows)
+
+    from api.Modules.Owners.Services import owner_kpis
+    prev_count, prev_volume, _ = owner_kpis(
+        db, [store_id], prev_start, prev_end,
+    )
+
+    d30_ago = today - timedelta(days=29)
+    daily_reports = db.query(DailyReport).filter(
+        DailyReport.store_id == store_id,
+        DailyReport.report_date >= d30_ago,
+        DailyReport.report_date <= today,
+    ).all()
+    by_day = {r.report_date: r for r in daily_reports}
+    daily_labels, over_short_data, receipts_data = [], [], []
+    for i in range(29, -1, -1):
+        d = today - timedelta(days=i)
+        r = by_day.get(d)
+        daily_labels.append(d.isoformat())
+        over_short_data.append(round(float(r.over_short) if r else 0.0, 2))
+        receipts_data.append(round(
+            float(r.total_receipts) if r else 0.0, 2,
+        ))
+
+    recent_transfers = (
+        db.query(Transfer).filter_by(store_id=store_id)
+        .order_by(Transfer.created_at.desc()).limit(10).all()
+    )
+
+    period_over_short = float(db.query(
+        func.coalesce(func.sum(DailyReport.over_short), 0.0)
+    ).filter(
+        DailyReport.store_id == store_id,
+        DailyReport.report_date >= start, DailyReport.report_date <= end,
+    ).scalar() or 0.0)
+
+    return {
+        "store": {
+            "id": store.id, "name": store.name, "slug": store.slug,
+            "plan": store.plan,
+        },
+        "period": period, "prev_label": prev_label,
+        "period_start": start.isoformat(), "period_end": end.isoformat(),
+        "company_rows": company_rows,
+        "period_count": period_count,
+        "period_volume": period_volume,
+        "period_fees": period_fees,
+        "period_tax": period_tax,
+        "period_over_short": period_over_short,
+        "prev_count": prev_count, "prev_volume": prev_volume,
+        "daily_labels": daily_labels,
+        "over_short_data": over_short_data,
+        "receipts_data": receipts_data,
+        "recent_transfers": [
+            {
+                "id": t.id, "send_date": t.send_date.isoformat(),
+                "sender_name": t.sender_name,
+                "recipient_name": t.recipient_name,
+                "company": t.company,
+                "send_amount": float(t.send_amount or 0),
+                "country": t.country,
+                "status": t.status,
+            }
+            for t in recent_transfers
+        ],
+    }

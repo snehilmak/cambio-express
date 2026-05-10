@@ -29,9 +29,11 @@ import Monthly from "./routes/Monthly";
 import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
 import OwnerConnect from "./routes/OwnerConnect";
+import OwnerDashboard from "./routes/OwnerDashboard";
 import OwnerLocations from "./routes/OwnerLocations";
 import OwnerPLRollup from "./routes/OwnerPLRollup";
 import OwnerReports from "./routes/OwnerReports";
+import OwnerStoreDetail from "./routes/OwnerStoreDetail";
 import Privacy from "./routes/Privacy";
 import Reports from "./routes/Reports";
 import ResetPassword from "./routes/ResetPassword";
@@ -102,9 +104,11 @@ export default function App() {
         <Route path="return-checks/new"      element={<ReturnCheckForm />} />
         <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
         <Route path="owner/connect"   element={<OwnerConnect />} />
+        <Route path="owner/dashboard" element={<OwnerDashboard />} />
         <Route path="owner/locations" element={<OwnerLocations />} />
         <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
         <Route path="owner/reports"   element={<OwnerReports />} />
+        <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
         <Route path="superadmin/stores"        element={<SuperadminStores />} />
         <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
         <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />

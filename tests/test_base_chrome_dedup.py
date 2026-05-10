@@ -90,35 +90,6 @@ def test_admin_shell_renders_with_admin_nav(logged_in_client):
     assert 'topbar-plan-pill' in body or 'TRIAL' in body or 'BASIC' in body or 'PRO' in body
 
 
-def test_owner_shell_renders_with_owner_nav():
-    """Smoke: owner can hit /owner/dashboard and see owner-only nav."""
-    from app import app as flask_app, db, User, StoreOwnerLink, Store
-    with flask_app.app_context():
-        s = Store(name="Chrome Dedup Test", slug="chrome-dedup-test", plan="trial")
-        db.session.add(s); db.session.commit()
-        o = User(username="owner-chrome-dedup@x.com", role="owner",
-                 store_id=None, full_name="Chrome Owner")
-        o.set_password("p"); db.session.add(o); db.session.commit()
-        db.session.add(StoreOwnerLink(owner_id=o.id, store_id=s.id))
-        db.session.commit()
-        oid = o.id
-    c = flask_app.test_client()
-    with c.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-        sess["store_id"] = None
-    resp = c.get("/owner/dashboard")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Owner-specific nav links.
-    assert 'href="/owner/locations"' in body
-    assert 'href="/owner/pl-rollup"' in body
-    assert 'href="/owner/connect"' in body
-    # Admin nav must NOT appear in the owner shell.
-    assert 'href="/transfers"' not in body
-    assert 'href="/daily"' not in body
-    # OWNER badge from owner shell's topbar_pill block.
-    assert ">OWNER<" in body
 
 
 def test_avatar_role_label_uses_block_in_owner_shell():

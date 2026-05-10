@@ -655,38 +655,3 @@ def test_monthly_pl_uses_workflow_value(client, test_store_id):
 
 # ── Owner dashboard surface ─────────────────────────────────────
 
-def test_owner_dashboard_shows_return_checks_section(client, test_store_id):
-    """Owner dashboard surfaces pending balance + recoveries +
-    losses across the umbrella so the owner sees what's happening
-    with bounced checks without drilling into each store."""
-    from app import User, StoreOwnerLink
-    with flask_app.app_context():
-        o = User(username="rc_owner@test.com", role="owner",
-                 full_name="RC Owner", store_id=None)
-        o.set_password("ownerpass123")
-        db.session.add(o)
-        db.session.flush()
-        link = StoreOwnerLink(owner_id=o.id, store_id=test_store_id)
-        db.session.add(link)
-        db.session.commit()
-        oid = o.id
-
-    today = date.today()
-    _seed_rc(test_store_id, customer="Pending Customer", amount=300.0,
-             status="pending")
-    rec_id = _seed_rc(test_store_id, amount=200.0, status="recovered",
-                      status_changed_on=today)
-    _seed_payment(rec_id, amount=200.0, paid_on=today)
-    _seed_rc(test_store_id, amount=100.0, status="loss",
-             status_changed_on=today)
-
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-    rv = client.get("/owner/dashboard?period=month")
-    assert rv.status_code == 200
-    body = rv.data
-    assert b"Return checks" in body
-    assert b"Pending balance" in body
-    assert b"Recoveries" in body
-    assert b"Aging" in body

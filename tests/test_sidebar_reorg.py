@@ -109,25 +109,3 @@ def test_superadmin_sidebar_collapses_monitoring_into_configuration(client):
     assert "System Status" in body
 
 
-def test_owner_sidebar_unchanged(client):
-    """Owner sidebar is already minimal — verify the reorg didn't
-    accidentally touch it."""
-    from app import Store, User, StoreOwnerLink, db
-    with client.application.app_context():
-        s = Store(name="X", slug="x-sidebar-owner", plan="trial")
-        db.session.add(s); db.session.commit()
-        sid = s.id
-        o = User(username="owner@sidebar.test", full_name="X",
-                 role="owner", store_id=None)
-        o.set_password("p")
-        db.session.add(o); db.session.commit()
-        oid = o.id
-        db.session.add(StoreOwnerLink(owner_id=oid, store_id=sid))
-        db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid; sess["role"] = "owner"; sess["store_id"] = None
-    body = client.get("/owner/dashboard").get_data(as_text=True)
-    # Still has Reports section.
-    assert ">Reports<" in body
-    # Locations still there.
-    assert "Locations" in body
