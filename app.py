@@ -6231,68 +6231,20 @@ _make_superadmin_report_routes(
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    user=current_user(); store=current_store(); today=date.today()
-    month_start=date(today.year,today.month,1)
-    if user.role=="superadmin":
-        return render_template("dashboard_superadmin.html",
-                               user=user, today=today,
-                               **_superadmin_dashboard_context())
-    # Owners don't have a `current_store` — they live across multiple
-    # stores under their umbrella. /dashboard previously crashed on
-    # `store.id` for owner sessions; route them to their own dashboard.
-    if user.role == "owner":
-        return redirect(url_for("owner_dashboard"))
-    if store is None:
-        # Defensive: any other role without a store context (shouldn't
-        # happen for admin/employee under normal login) gets bounced
-        # back to login rather than 500'ing on store.id below.
-        return redirect(url_for("login"))
-    sid=store.id
-    if user.role=="admin":
-        total_transfers=Transfer.query.filter_by(store_id=sid).count()
-        today_transfers=Transfer.query.filter_by(store_id=sid,send_date=today).count()
-        pending_ach=ACHBatch.query.filter_by(store_id=sid,reconciled=False).count()
-        recent_transfers=Transfer.query.filter_by(store_id=sid).order_by(Transfer.created_at.desc()).limit(8).all()
-        recent_batches=ACHBatch.query.filter_by(store_id=sid).order_by(ACHBatch.ach_date.desc()).limit(5).all()
-        # One GROUP BY query for every active company instead of one
-        # full SELECT per company (was a 3× round-trip on every admin
-        # dashboard load).
-        co_q = (db.session.query(
-            Transfer.company,
-            db.func.count(Transfer.id),
-            db.func.coalesce(db.func.sum(Transfer.send_amount), 0.0),
-            db.func.coalesce(db.func.sum(Transfer.fee), 0.0),
-        ).filter(
-            Transfer.store_id == sid,
-            Transfer.send_date >= month_start,
-            Transfer.status.notin_(["Canceled", "Rejected"]),
-        ).group_by(Transfer.company).all())
-        co_by_name = {co: (int(c or 0), float(t or 0), float(f or 0))
-                      for co, c, t, f in co_q}
-        company_stats = {}
-        for co in store_mt_companies(store):
-            count, total, fees = co_by_name.get(co, (0, 0.0, 0.0))
-            company_stats[co] = {"count": count, "total": total,
-                                 "fees": fees}
-        today_report=DailyReport.query.filter_by(store_id=sid,report_date=today).first()
-        month_report=MonthlyFinancial.query.filter_by(store_id=sid,year=today.year,month=today.month).first()
-        stripe_accounts = (StripeBankAccount.query
-                           .filter_by(store_id=sid, enabled=True)
-                           .order_by(StripeBankAccount.connected_at.desc()).limit(3).all())
-        return render_template("dashboard_admin.html",user=user,store=store,today=today,
-            total_transfers=total_transfers,today_transfers=today_transfers,
-            pending_ach=pending_ach,recent_transfers=recent_transfers,recent_batches=recent_batches,
-            company_stats=company_stats,today_report=today_report,month_report=month_report,
-            stripe_accounts=stripe_accounts)
-    else:
-        # Employee dashboard shows only TODAY'S transfers and only aggregates
-        # scoped to today. "This Month" and "All Time" counts were removed
-        # — those are business-level totals that belong with the admin.
-        # Historical transfers are still reachable via /transfers for
-        # customer-service lookups.
-        my_today=Transfer.query.filter_by(store_id=sid,send_date=today).order_by(Transfer.created_at.desc()).all()
-        return render_template("dashboard_employee.html",user=user,store=store,today=today,
-            my_today=my_today)
+    """Legacy /dashboard 301s to the SPA. The SPA's
+    /app/dashboard fetches /api/v2/dashboard/summary, which
+    returns a role-shaped payload (admin / employee /
+    superadmin). Owner sessions land at /app/owner/dashboard;
+    the legacy redirect for owner is preserved here.
+
+    `@login_required` preserves two contracts the legacy view
+    relied on: anonymous → /login and expired-trial admins →
+    /subscribe. Without it, expired stores would skip past the
+    paywall by following the bare 301 to the SPA.
+    """
+    if session.get("role") == "owner":
+        return redirect("/app/owner/dashboard", code=301)
+    return redirect("/app/dashboard", code=301)
 
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the

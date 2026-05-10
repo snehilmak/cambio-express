@@ -26,14 +26,11 @@ def test_batches_legacy_url_redirects_to_spa(logged_in_client):
     assert resp.headers["Location"] == "/app/batches"
 
 
-def test_admin_dashboard_empty_states_render(logged_in_client):
-    """Admin dashboard has two empty rows (recent transfers + recent
-    batches). Verify both render via the new partial when the store
-    has no data."""
-    resp = logged_in_client.get("/dashboard")
-    assert resp.status_code == 200
-    body = resp.get_data(as_text=True)
-    # Both empty rows should be present — count occurrences of the class.
-    assert body.count('class="empty-row"') >= 2
-    assert "No transfers yet" in body
-    assert "No batches yet" in body
+def test_admin_dashboard_legacy_url_redirects_to_spa(logged_in_client):
+    """Admin dashboard moved to React in the dashboard SPA migration.
+    Empty-state copy ("No transfers yet" / "No batches yet") moved
+    into Dashboard.tsx; the Flask URL 301s and the empty-state UI
+    is now a frontend concern."""
+    resp = logged_in_client.get("/dashboard", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/dashboard"

@@ -40,7 +40,7 @@ def test_admin_shell_uses_image_brand_mark(logged_in_client):
     """The sidebar in base.html pulls the logo from the SVG file —
     not from a CSS-painted text span. The latter flips under light
     mode because var(--db-neon) is muted there."""
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     assert 'class="brand-mark"' in body

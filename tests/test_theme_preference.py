@@ -42,7 +42,7 @@ def test_inject_theme_uses_user_preference_when_logged_in(logged_in_client, test
         u = db.session.get(User, test_admin_id)
         u.theme_preference = "light"
         db.session.commit()
-    rv = logged_in_client.get("/dashboard")
+    rv = logged_in_client.get("/admin/settings")
     assert rv.status_code == 200
     assert b'data-theme="light"' in rv.data
 
@@ -56,7 +56,7 @@ def test_inject_theme_falls_back_to_dark_on_unknown_value(logged_in_client, test
         u = db.session.get(User, test_admin_id)
         u.theme_preference = "neon-cyberpunk"  # not a valid choice
         db.session.commit()
-    rv = logged_in_client.get("/dashboard")
+    rv = logged_in_client.get("/admin/settings")
     assert rv.status_code == 200
     assert b'data-theme="dark"' in rv.data
     assert b'data-theme="neon-cyberpunk"' not in rv.data

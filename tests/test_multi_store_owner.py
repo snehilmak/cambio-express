@@ -754,11 +754,11 @@ def test_owner_store_detail_period_filter_accepts_today_month_year(owner_client)
 
 def test_owner_get_admin_dashboard_redirects_to_owner_dashboard(owner_client):
     """REGRESSION: /dashboard used to dereference store.id directly,
-    which 500'd for owners (they have no current_store). Now the route
-    must redirect any owner session to /owner/dashboard before that
-    access path runs."""
+    which 500'd for owners (they have no current_store). The legacy
+    302 became a 301 to /app/owner/dashboard when the dashboard
+    landed on the SPA — the no-500 invariant is what matters."""
     rv = owner_client.get("/dashboard", follow_redirects=False)
-    assert rv.status_code == 302, (
+    assert rv.status_code in (301, 302), (
         f"owner GET /dashboard should redirect, got {rv.status_code} "
         f"(this used to 500 — see commit history)"
     )

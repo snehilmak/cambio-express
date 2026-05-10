@@ -16,7 +16,7 @@ for perf" sweep can't regress it without flipping a guarded test.
 
 
 def test_admin_shell_loads_search_js_without_defer(logged_in_client):
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     # The script tag must exist and must NOT carry the `defer` attribute.

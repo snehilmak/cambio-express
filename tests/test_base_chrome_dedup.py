@@ -77,7 +77,7 @@ def test_chrome_loads_shared_assets_once():
 def test_admin_shell_renders_with_admin_nav(logged_in_client):
     """Smoke: admin can hit /dashboard and see admin nav links — the
     shell hasn't broken in the refactor."""
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
     body = resp.get_data(as_text=True)
     # Sidebar nav (admin-specific).

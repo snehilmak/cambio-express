@@ -99,7 +99,7 @@ def test_expired_store_redirected_to_subscribe(client):
 
 
 def test_active_trial_reaches_dashboard(logged_in_client):
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
 
 

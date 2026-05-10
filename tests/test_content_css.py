@@ -5,13 +5,13 @@ edits."""
 
 
 def test_admin_dashboard_loads_content_css(logged_in_client):
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert resp.status_code == 200
     assert b"content.css" in resp.data
 
 
 def test_admin_dashboard_loads_design_tokens(logged_in_client):
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     assert b"design-tokens.css" in resp.data
 
 
@@ -28,7 +28,7 @@ def test_transfers_page_redirects_to_spa(logged_in_client):
 
 def test_shell_still_loaded_after_content(logged_in_client):
     """shell.css must load AFTER content.css so sidebar/topbar wins."""
-    resp = logged_in_client.get("/dashboard")
+    resp = logged_in_client.get("/admin/settings")
     body = resp.data.decode()
     # Find the <link href="...content.css..."> and <link href="...shell.css...">
     # tags (not mere textual mentions in comments).
