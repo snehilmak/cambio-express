@@ -166,3 +166,75 @@ export async function uncategorizeTransaction(
     { method: "POST", json: {} },
   );
 }
+
+
+// ── Rule CRUD ──────────────────────────────────────────────
+
+export interface BankRuleWriteBody {
+  enabled: boolean;
+  priority: number;
+  desc_match_type: string;
+  desc_match_value: string;
+  sign_filter: string;
+  amount_min_cents: number | null;
+  amount_max_cents: number | null;
+  account_filter_id: number | null;
+  target_kind: string;
+  auto_post: boolean;
+  description: string;
+}
+
+export async function createRule(
+  body: BankRuleWriteBody,
+): Promise<{ rule: BankRuleRow }> {
+  return api<{ rule: BankRuleRow }>("/api/v2/bank/rules", {
+    method: "POST",
+    json: body,
+  });
+}
+
+export async function updateRule(
+  ruleId: number, body: BankRuleWriteBody,
+): Promise<{ rule: BankRuleRow }> {
+  return api<{ rule: BankRuleRow }>(`/api/v2/bank/rules/${ruleId}`, {
+    method: "PUT",
+    json: body,
+  });
+}
+
+export async function toggleRule(
+  ruleId: number, enabled: boolean,
+): Promise<{ rule: BankRuleRow }> {
+  return api<{ rule: BankRuleRow }>(
+    `/api/v2/bank/rules/${ruleId}/toggle`,
+    { method: "POST", json: { enabled } },
+  );
+}
+
+export async function deleteRule(ruleId: number): Promise<void> {
+  await api<void>(`/api/v2/bank/rules/${ruleId}`, { method: "DELETE" });
+}
+
+
+// ── Stripe FC connect ──────────────────────────────────────
+
+export interface StripeConnectResponse {
+  clientSecret: string;
+  sessionId: string;
+  publishableKey: string;
+  returnUrl: string;
+}
+
+export async function startStripeConnect(): Promise<StripeConnectResponse> {
+  // Legacy Flask endpoint that mints a Stripe Financial Connections
+  // session — JSON return shape, no template. Stays on Flask because
+  // it composes Stripe-SDK + per-store cap + audit + cookie session
+  // identity.
+  const r = await fetch("/bank/stripe/connect", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || "Could not start bank connection.");
+  return j as StripeConnectResponse;
+}

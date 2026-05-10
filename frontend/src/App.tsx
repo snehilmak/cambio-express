@@ -10,6 +10,8 @@ import AdminSubscription from "./routes/AdminSubscription";
 import AdminTaxExport from "./routes/AdminTaxExport";
 import AdminUserForm from "./routes/AdminUserForm";
 import AdminUsers from "./routes/AdminUsers";
+import Bank from "./routes/Bank";
+import BankRules from "./routes/BankRules";
 import BankTransactions from "./routes/BankTransactions";
 import Batches from "./routes/Batches";
 import BatchForm from "./routes/BatchForm";
@@ -91,6 +93,8 @@ export default function App() {
         <Route path="batches"          element={<Batches />} />
         <Route path="batches/new"      element={<BatchForm />} />
         <Route path="batches/:id/edit" element={<BatchForm />} />
+        <Route path="bank"             element={<Bank />} />
+        <Route path="bank/rules"       element={<BankRules />} />
         <Route path="bank-transactions" element={<BankTransactions />} />
         <Route path="monthly"          element={<Monthly />} />
         <Route path="monthly/edit"     element={<EditMonthly />} />
