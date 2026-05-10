@@ -4459,20 +4459,20 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
 
 
 @app.route("/reports")
-@admin_required
 def reports():
-    return render_template("reports.html",
-        user=current_user(),
-        categories=_resolved_report_categories(_REPORT_CATEGORIES))
+    """Legacy /reports → 301 to /app/reports (categorized accordion).
+    The SPA fetches the categories from /api/v2/reports; per-report
+    drilldowns still hit Flask templates by their dedicated routes."""
+    return redirect("/app/reports", code=301)
 
 
 @app.route("/owner/reports")
-@owner_required
 def owner_reports():
-    return render_template("owner_reports.html",
-        user=current_user(),
-        categories=_resolved_report_categories(
-            _REPORT_CATEGORIES, endpoint_prefix="owner_"))
+    """Legacy /owner/reports → 301 to /app/owner/reports. Same
+    categorized accordion, different drilldown routing (every
+    `report_<x>` admin endpoint has an `owner_report_<x>` mirror
+    that filters to every store under the owner umbrella)."""
+    return redirect("/app/owner/reports", code=301)
 
 
 # ── Reports: shared period helpers ───────────────────────────
