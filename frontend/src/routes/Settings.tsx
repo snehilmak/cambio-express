@@ -555,6 +555,7 @@ function StoreInfoCard() {
   // think in percents — display + edit accordingly.
   useEffect(() => {
     if (!data?.store) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable store-settings fields from server-fetched row (federal_tax_rate gets a decimal->percent conversion for display)
     setName(data.store.name);
     setEmail(data.store.email);
     setPhone(data.store.phone);

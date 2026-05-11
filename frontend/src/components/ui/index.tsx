@@ -38,54 +38,29 @@
 //
 // Motion: classNames in ui.css. Honors prefers-reduced-motion via
 // the global rule at the bottom of static/content.css.
+//
+// Tokens (colors / spacing / type / monoStyle / inputStyle / th/tdStyle)
+// live in `./tokens.ts` — kept separate so Vite fast-refresh isn't
+// blocked by non-component exports. Re-exported below for callers
+// that grab everything from `components/ui` directly.
 import type { CSSProperties, ReactNode } from "react";
 
 import "./ui.css";
+import { fontSize, inputStyle, space, tokens } from "./tokens";
 
-// ── Spacing scale (4 / 8 / 12 / 16 / 24 / 32 / 48 rem-based) ─
-
-export const space = {
-  xs:  "0.25rem",
-  sm:  "0.5rem",
-  md:  "0.75rem",
-  lg:  "1rem",
-  xl:  "1.5rem",
-  "2xl": "2rem",
-  "3xl": "3rem",
-} as const;
-
-// ── Type scale ────────────────────────────────────────────────
-
-export const fontSize = {
-  xs:  "0.72rem",
-  sm:  "0.82rem",
-  base:"0.95rem",
-  lg:  "1.05rem",
-  xl:  "1.25rem",
-  "2xl":"1.5rem",
-  "3xl":"2rem",
-} as const;
-
-// ── Tokens (colocated here so we touch one file per design tweak) ─────
-
-export const tokens = {
-  surface:        "var(--db-surface, #0a0a0a)",
-  surface2:       "var(--db-surface-2, #141414)",
-  surface3:       "var(--db-surface-3, #1f1f1f)",
-  border:         "var(--db-border, #262626)",
-  borderSubtle:   "var(--db-border-subtle, #1f1f1f)",
-  text:           "var(--db-text, #f5f5f5)",
-  textMuted:      "var(--db-text-muted, #a3a3a3)",
-  accent:         "var(--db-accent, #3fff00)",
-  onAccent:       "var(--db-on-accent, #0a0a0a)",
-  negative:       "var(--db-negative, #ff3b30)",
-  warning:        "#ffb800",
-  fontDisplay:    "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontBody:       "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontMono:       "var(--db-font-mono, 'JetBrains Mono', monospace)",
-} as const;
-
-export const monoStyle: CSSProperties = { fontFamily: tokens.fontMono };
+// Re-export non-component values from `./tokens` so consumers have
+// a single `components/ui` import path. Fast-refresh complains
+// because non-component exports on a file that also exports
+// components prevent HMR for THIS file — but the actual values
+// live in `./tokens.ts` (a non-component file that HMR handles
+// fine), so the only practical downside is that this barrel
+// module won't hot-reload its own component edits. Acceptable
+// trade-off for the simpler import surface.
+/* eslint-disable react-refresh/only-export-components -- public DS surface: re-export tokens from this barrel so consumers don't learn two import paths */
+export {
+  fontSize, inputStyle, monoStyle, space, tdStyle, thStyle, tokens,
+} from "./tokens";
+/* eslint-enable react-refresh/only-export-components */
 
 // ── PageShell + PageHeader ────────────────────────────────────────────
 
@@ -270,20 +245,6 @@ export function Field({
 }
 
 
-export const inputStyle: CSSProperties = {
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: tokens.text,
-  fontFamily: tokens.fontBody,
-  fontSize: fontSize.base,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-
 /** Token-styled text/number/date input with the ds-input focus
  *  glow class applied. Forwards every standard input prop. */
 export function Input({
@@ -429,23 +390,8 @@ export function KpiGrid({
 }
 
 // ── Tables ───────────────────────────────────────────────────────────
-
-export const thStyle: CSSProperties = {
-  textAlign: "left",
-  padding: `${space.sm} ${space.md}`,
-  borderBottom: `1px solid ${tokens.border}`,
-  fontSize: fontSize.xs,
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: tokens.textMuted,
-  fontWeight: 500,
-};
-
-export const tdStyle: CSSProperties = {
-  padding: `${space.sm} ${space.md}`,
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
+// `thStyle` + `tdStyle` are imported from ./tokens.ts and re-exported
+// from this file's barrel.
 
 /** Auto-styled <table> with DS th/td defaults. Children pattern
  *  is the standard `<thead>…<tbody>…`; this just sets borders +

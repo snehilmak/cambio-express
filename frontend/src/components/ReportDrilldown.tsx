@@ -236,6 +236,9 @@ function fmtDate(iso: string): string {
   });
 }
 
+// Helper for the per-report TSX wrappers in routes/reports/*. Lives
+// alongside the component so the wrappers only need one import path.
+// eslint-disable-next-line react-refresh/only-export-components -- adjacent helper used by every drilldown wrapper
 export const fmtMoney = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 

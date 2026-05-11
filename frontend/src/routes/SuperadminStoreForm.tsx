@@ -70,6 +70,7 @@ export default function SuperadminStoreForm() {
     if (!isEdit) return;
     const s = detailQuery.data?.store;
     if (!s) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable store fields from server-fetched store row on edit
     setName(s.name);
     setSlug(s.slug);
     setEmail(s.email);

@@ -49,6 +49,7 @@ export default function EditTransfer() {
   useEffect(() => {
     if (!detail.data) return;
     const t = detail.data.transfer;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched transfer on edit
     setForm({
       send_date: t.send_date,
       company: t.company || COMPANIES[0],

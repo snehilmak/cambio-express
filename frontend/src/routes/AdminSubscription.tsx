@@ -30,6 +30,7 @@ export default function AdminSubscription() {
     }
   }
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial async fetch of subscription summary on mount; load() awaits the API then sets data/error state
     load();
   }, []);
 

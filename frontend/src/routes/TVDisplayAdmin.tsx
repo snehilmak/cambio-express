@@ -130,7 +130,6 @@ export default function TVDisplayAdmin() {
       />
       <PairFireTV
         activePairing={data.active_pairing}
-        lastUpdatedAt={data.last_updated_at}
         onClaim={(code) => claimPair.mutateAsync(code)}
         onRevoke={(id) => revokePair.mutateAsync(id)}
         claimError={extractClaimError(claimPair.error)}
@@ -281,11 +280,10 @@ function PublicUrlBar({
 // ── Pair-a-Fire-TV ──────────────────────────────────────────
 
 function PairFireTV({
-  activePairing, lastUpdatedAt: _lastUpdatedAt, onClaim, onRevoke,
+  activePairing, onClaim, onRevoke,
   claimError, claimPending, revokePending,
 }: {
   activePairing: import("../api/tvDisplay").TVPairingSummary | null;
-  lastUpdatedAt: string;
   onClaim: (code: string) => Promise<unknown>;
   onRevoke: (id: number) => Promise<unknown>;
   claimError: string | null;
@@ -424,6 +422,7 @@ function SettingsAndStatsGrid({
 
   // Re-sync if the upstream data changes (e.g. after a save invalidation).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- re-hydrate local editable draft from server-fetched TV display config after save invalidation
     setDraft({
       title:       data.title,
       subtitle:    data.subtitle,

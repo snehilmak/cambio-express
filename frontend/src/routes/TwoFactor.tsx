@@ -124,6 +124,7 @@ export function TwoFactorEnroll() {
       return;
     }
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mark busy before kicking off the async TOTP-enrollment fetch; cancellation flag guards stale resolutions
     setBusy(true);
     totpEnrollStart(pending.pending_token)
       .then((data) => { if (!cancelled) setEnrollment(data); })

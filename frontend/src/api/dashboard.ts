@@ -6,6 +6,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
+import { getCurrentIdentity } from "../lib/auth";
 
 export interface AdminDashboardKpis {
   total_transfers: number;
@@ -94,7 +95,15 @@ export type DashboardSummary =
   | SuperadminDashboard;
 
 export function useDashboardSummary() {
+  // Owners have no store_id on their JWT — /api/v2/dashboard/summary
+  // 400s for them. The Dashboard route component <Navigate>s them
+  // away, but the hook still mounts before that branch returns, so
+  // we gate the fetch here too. Belt-and-suspenders against the
+  // Rules of Hooks ordering.
+  const identity = getCurrentIdentity();
+  const enabled = identity != null && identity.role !== "owner";
   return useQuery<DashboardSummary>({
+    enabled,
     queryKey: ["dashboard", "summary"],
     queryFn: async () =>
       api<DashboardSummary>("/api/v2/dashboard/summary"),

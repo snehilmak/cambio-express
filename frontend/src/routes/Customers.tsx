@@ -32,6 +32,7 @@ export default function Customers() {
     }, 300);
     return () => window.clearTimeout(id);
   }, [draft, q, searchParams, setSearchParams]);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror URL search param into local debounced input when URL changes externally (browser back, link arrival)
   useEffect(() => { setDraft(q); }, [q]);
 
   const { data, isFetching, isError, error } = useCustomerSearch(q);

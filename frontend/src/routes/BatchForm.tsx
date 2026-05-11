@@ -54,6 +54,7 @@ export default function BatchForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const b = detail.data.batch;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched batch on edit
     setForm({
       ach_date:       b.ach_date,
       company:        b.company,

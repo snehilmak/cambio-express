@@ -49,6 +49,7 @@ export default function AdminUserForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const u = detail.data.user;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched user record on edit
     setDraft({
       username:  u.username,
       full_name: u.full_name,
