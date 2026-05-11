@@ -1,0 +1,165 @@
+/* Design-system motion + interaction primitives.
+ *
+ * Source of truth for hover lifts, button press, focus glows,
+ * page entry, modal fade-scale. Components in ./index.tsx attach
+ * these via className so inline styles can stay declarative.
+ *
+ * Honors the global `prefers-reduced-motion: reduce` rule at the
+ * bottom of static/content.css — those rules strip animations +
+ * transitions on every element, so we don't need to repeat them
+ * per class. Don't write inline `style={{transition: ...}}` that
+ * bypasses that rule.
+ *
+ * Duration scale (kept tight — ≤200ms per CLAUDE.md):
+ *   --ds-dur-fast: 100ms  — cell hover, focus glow
+ *   --ds-dur-base: 150ms  — buttons, cards, links
+ *   --ds-dur-slow: 200ms  — page entry, modal fade-scale
+ *
+ * Easing:
+ *   --ds-ease:        ease-out (default)
+ *   --ds-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1) — for
+ *                     "settle" feel on cards (gentle overshoot)
+ */
+
+:root {
+  --ds-dur-fast:   100ms;
+  --ds-dur-base:   150ms;
+  --ds-dur-slow:   200ms;
+  --ds-ease:        cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Cards: hover lift + accent border on hover ────────────── */
+
+.ds-card {
+  transition:
+    transform var(--ds-dur-base) var(--ds-ease),
+    border-color var(--ds-dur-base) var(--ds-ease),
+    box-shadow var(--ds-dur-base) var(--ds-ease);
+  will-change: transform;
+}
+
+.ds-card.ds-card--interactive:hover {
+  transform: translateY(-2px);
+  border-color: rgba(63, 255, 0, 0.4);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+.ds-card.ds-card--interactive:active {
+  transform: translateY(0);
+}
+
+/* ── Buttons: scale-press + hover tint ─────────────────────── */
+
+.ds-btn {
+  transition:
+    transform var(--ds-dur-fast) var(--ds-ease),
+    background var(--ds-dur-base) var(--ds-ease),
+    border-color var(--ds-dur-base) var(--ds-ease),
+    color var(--ds-dur-base) var(--ds-ease),
+    opacity var(--ds-dur-base) var(--ds-ease);
+}
+
+.ds-btn:not(:disabled):hover { transform: translateY(-1px); }
+.ds-btn:not(:disabled):active { transform: scale(0.97); }
+
+.ds-btn--primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--db-accent, #3fff00) 88%, white);
+}
+
+.ds-btn--secondary:not(:disabled):hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(63, 255, 0, 0.4);
+}
+
+.ds-btn--danger:not(:disabled):hover {
+  background: rgba(255, 59, 48, 0.08);
+}
+
+/* ── Inputs: focus glow ────────────────────────────────────── */
+
+.ds-input {
+  transition:
+    border-color var(--ds-dur-base) var(--ds-ease),
+    box-shadow var(--ds-dur-base) var(--ds-ease);
+}
+
+.ds-input:focus {
+  border-color: var(--db-accent, #3fff00);
+  box-shadow: 0 0 0 3px rgba(63, 255, 0, 0.12);
+  outline: none;
+}
+
+/* ── Links: underline reveal ───────────────────────────────── */
+
+.ds-link {
+  text-decoration: none;
+  position: relative;
+  transition: color var(--ds-dur-base) var(--ds-ease);
+}
+
+.ds-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--ds-dur-base) var(--ds-ease);
+}
+
+.ds-link:hover::after {
+  transform: scaleX(1);
+}
+
+/* ── Page entry: subtle fade-up on mount ───────────────────── */
+
+@keyframes ds-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ds-page {
+  animation: ds-page-in var(--ds-dur-slow) var(--ds-ease) both;
+}
+
+/* ── Skeleton shimmer (loading rows) ───────────────────────── */
+
+@keyframes ds-skel-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.ds-skel {
+  background:
+    linear-gradient(
+      90deg,
+      var(--db-surface-2, #141414) 0%,
+      var(--db-surface-3, #1f1f1f) 50%,
+      var(--db-surface-2, #141414) 100%
+    );
+  background-size: 200% 100%;
+  animation: ds-skel-shimmer 1.4s linear infinite;
+  border-radius: 0.4rem;
+}
+
+/* ── KPI value: tabular-nums, monospaced glide on update ───── */
+
+.ds-kpi-value {
+  font-variant-numeric: tabular-nums;
+  transition: color var(--ds-dur-base) var(--ds-ease);
+}
+
+/* ── Status pill: subtle pulse for warning/critical ────────── */
+
+@keyframes ds-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.ds-pill--pulse {
+  animation: ds-pulse 2s ease-in-out infinite;
+}
