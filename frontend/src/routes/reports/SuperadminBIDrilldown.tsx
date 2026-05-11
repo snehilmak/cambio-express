@@ -13,6 +13,7 @@ import {
 import { Bar, Line } from "react-chartjs-2";
 
 import { api } from "../../lib/api";
+import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
 import { EmptyState, ErrorState, TableSkeleton } from "../../components/ui";
 
 ChartJS.register(
@@ -324,41 +325,17 @@ function ChartBlock({
     }],
   };
 
-  const fmtTick = (v: number) =>
-    plan.yIsMoney
-      ? `$${v.toLocaleString()}`
-      : v.toLocaleString();
-
-  const options = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        mode: "index" as const,
-        intersect: false,
-        callbacks: {
-          label: (ctx: { parsed: { y: number | null } }) =>
-            `${plan.yLabel}: ${fmtTick(ctx.parsed.y ?? 0)}`,
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        ticks: {
-          color: "#a3a3a3",
-          callback: (v: string | number) =>
-            fmtTick(typeof v === "number" ? v : Number(v)),
-        },
-        grid: { color: "#1f1f1f" },
-      },
-      x: {
-        ticks: { color: "#a3a3a3", maxRotation: 0, autoSkip: true },
-        grid: { color: "#1f1f1f" },
-      },
-    },
-  };
+  // chart.js types the options prop strictly per chart variant
+  // (`ChartOptions<"line">` vs `ChartOptions<"bar">`). The runtime
+  // shape we return is identical for both, so we resolve the right
+  // generic at each call site rather than the helper trying to
+  // pick a union.
+  const lineOpts = plan.yIsMoney
+    ? moneyChartOptions<"line">(plan.yLabel)
+    : countChartOptions<"line">(plan.yLabel);
+  const barOpts = plan.yIsMoney
+    ? moneyChartOptions<"bar">(plan.yLabel)
+    : countChartOptions<"bar">(plan.yLabel);
 
   return (
     <section
@@ -372,8 +349,8 @@ function ChartBlock({
     >
       <div style={{ height: 280 }}>
         {plan.kind === "line"
-          ? <Line data={data} options={options} />
-          : <Bar  data={data} options={options} />
+          ? <Line data={data} options={lineOpts} />
+          : <Bar  data={data} options={barOpts} />
         }
       </div>
     </section>
