@@ -64,11 +64,13 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
+from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
 from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_owner.bp)
 app.register_blueprint(_bp_tv.bp)
+_bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
@@ -2240,32 +2242,9 @@ def _backfill_uncategorized_rows(store_id):
     return backfill_uncategorized_rows(db.session, store_id)
 
 
-# ── SPA cutover redirects ────────────────────────────────────
-# Move users onto the React SPA at `/app/*` for every route that
-# already has an SPA equivalent. Legacy routes still serve the
-# Jinja UI for areas that haven't been migrated (Stripe billing,
-# bank-sync write side, owner dashboard, superadmin controls,
-# TV display, 2FA enrollment, etc.) — those continue to work
-# unchanged. As more areas migrate the redirect map grows; once
-# everything is on SPA the legacy routes get retired.
-#
-# Set `SPA_CUTOVER_ENABLED=0` to flip this off in production for
-# emergency rollback. Default on per the cutover plan.
-#
-# Only GET is intercepted. POST/PUT/DELETE keep going to the
-# legacy handler so an in-flight form submit on a cached page
-# still completes correctly.
-
-# Defaults to OFF — the strangler-fig migration is mid-flight,
-# and a deploy in May 2026 surfaced a real perf regression when
-# the redirect was on by default (the FastAPI-via-WSGI bridge
-# choked under prod traffic, slowing logins to "network error"
-# timeouts). With the flag off, legacy `/login`, `/dashboard`,
-# etc. keep serving the Jinja UI directly with no bridge hop.
-# Set `SPA_CUTOVER_ENABLED=1` on Render once the
-# WSGI-wraps-ASGI bottleneck is retired (BACKLOG.md P1 #7) or
-# once any one store has been pilot-flipped without regression.
-SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "0") == "1"
+# SPA cutover before_request hook moved to blueprints/spa_cutover.py
+# (D2). SIGNUP_CLOSED stays here because the signup routes below
+# (/signup, /signup/owner) check it directly.
 
 # Self-service signup gate. With SIGNUP_CLOSED=1 the /signup and
 # /signup/owner pages render a "Signups closed" notice instead of
@@ -2276,121 +2255,6 @@ SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "0") == "1"
 # work unchanged. CLAUDE.md note: re-enable once pilot review is
 # complete and we're ready to take real customers.
 SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
-
-# Static path → SPA path. These are pages that have full SPA
-# parity today; everything else falls through to legacy Jinja.
-_SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
-    "/login":              "/app/login",
-    "/signup":             "/app/signup",
-    "/forgot-password":    "/app/forgot-password",
-    "/privacy":            "/app/privacy",
-    "/dashboard":          "/app/dashboard",
-    "/transfers":          "/app/transfers",
-    "/transfers/new":      "/app/transfers/new",
-    "/daily":              "/app/daily",
-    "/reports":            "/app/reports",
-    "/batches":            "/app/batches",
-    "/batches/new":        "/app/batches/new",
-    "/monthly":            "/app/monthly",
-    "/return-checks":      "/app/return-checks",
-    "/owner/locations":    "/app/owner/locations",
-    "/owner/pl-rollup":    "/app/owner/pl-rollup",
-    "/superadmin/stores":     "/app/superadmin/stores",
-    "/superadmin/stores/new": "/app/superadmin/stores/new",
-    "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
-    "/admin/settings":     "/app/settings",
-    "/admin/users":        "/app/admin/users",
-    "/admin/users/new":    "/app/admin/users/new",
-    "/bank/transactions":  "/app/bank-transactions",
-    # SPA-34: Stripe pricing page now on SPA. Note that
-    # /admin/subscription stays on legacy because it's a richer
-    # page (add-ons + retention info); the SPA settings page only
-    # exposes Subscribe + Manage-portal CTAs today.
-    "/subscribe":          "/app/subscribe",
-    # SPA-37: announcements live under the Platform nav group.
-    # The legacy /superadmin/controls?tab=announcements URL has a
-    # query param so the static-map can't catch it; that goes
-    # through the legacy Jinja for now.
-}
-
-
-def _maybe_spa_redirect():
-    """Flask before_request hook: rewrite GETs of legacy pages to
-    their SPA equivalent. POST and other write methods are left
-    alone so legacy form submits still complete; the SPA forms POST
-    to `/api/v2/*` directly so the legacy POST handlers are dead
-    paths once the SPA owns the rendering."""
-    if not SPA_CUTOVER_ENABLED:
-        return None
-    if request.method != "GET":
-        return None
-    path = request.path
-    # Static, API, and the SPA itself never redirect.
-    if (
-        path.startswith("/static/")
-        or path.startswith("/api/")
-        or path.startswith("/app/")
-        or path.startswith("/webhooks/")
-    ):
-        return None
-
-    target = _SPA_REDIRECT_MAP_STATIC.get(path)
-    if target is None:
-        # Dynamic patterns that need regex matching go here.
-        # Reset-password: legacy is /reset-password/<token> path-param,
-        # SPA reads ?token=… query param.
-        if path.startswith("/reset-password/"):
-            tok = path[len("/reset-password/"):]
-            if tok and "/" not in tok:
-                # Preserve any extra query params the caller passed.
-                qs = request.query_string.decode("utf-8")
-                join = "&" if qs else ""
-                return redirect(f"/app/reset-password?token={tok}{join}{qs}")
-        # Transfers detail / edit: /transfers/<int>/<edit?>
-        if path.startswith("/transfers/"):
-            tail = path[len("/transfers/"):].rstrip("/")
-            parts = tail.split("/")
-            if parts and parts[0].isdigit():
-                tid = parts[0]
-                if len(parts) == 1:
-                    return _redirect_with_query(f"/app/transfers/{tid}")
-                if len(parts) == 2 and parts[1] == "edit":
-                    return _redirect_with_query(f"/app/transfers/{tid}/edit")
-        # Batches edit: /batches/<int>/edit
-        if path.startswith("/batches/"):
-            tail = path[len("/batches/"):].rstrip("/")
-            parts = tail.split("/")
-            if (
-                len(parts) == 2 and parts[0].isdigit() and parts[1] == "edit"
-            ):
-                return _redirect_with_query(f"/app/batches/{parts[0]}/edit")
-        # Daily edit: /daily/<date> — legacy uses ?date= now via
-        # /daily/edit; map every dated path to /app/daily/edit?date=...
-        if path.startswith("/daily/"):
-            tail = path[len("/daily/"):].rstrip("/")
-            if tail and "/" not in tail:
-                return redirect(f"/app/daily/edit?date={tail}")
-        # Monthly edit: /monthly/<year>/<month>
-        if path.startswith("/monthly/"):
-            parts = path[len("/monthly/"):].rstrip("/").split("/")
-            if (
-                len(parts) == 2 and parts[0].isdigit()
-                and parts[1].isdigit()
-            ):
-                return redirect(
-                    f"/app/monthly/edit?year={parts[0]}&month={parts[1]}"
-                )
-        return None
-
-    return _redirect_with_query(target)
-
-
-def _redirect_with_query(target: str):
-    qs = request.query_string.decode("utf-8")
-    return redirect(f"{target}?{qs}" if qs else target)
-
-
-app.before_request(_maybe_spa_redirect)
 
 
 # PWA routes (/sw.js, /offline) moved to blueprints/pwa.py (D2).
