@@ -1,4 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 
@@ -87,7 +88,21 @@ const NAV: NavGroup[] = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const identity = getCurrentIdentity();
+  // Drawer is a mobile-only concern but the state lives unconditionally
+  // so the CSS class flip is the same code path on every viewport.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Auto-close the drawer on navigation. Without this, tapping a
+  // nav link on mobile would route to the new page but leave the
+  // drawer open over it. The route-change pulse is the canonical
+  // "sync to external state" use of an effect — pathname is owned
+  // by the router, not React state.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- close drawer when the router navigates; pathname comes from outside React state
+    setDrawerOpen(false);
+  }, [location.pathname]);
 
   function onSignOut() {
     clearAccessToken();
@@ -95,23 +110,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "16rem 1fr",
-        gridTemplateRows:    "auto 1fr",
-        minHeight: "100vh",
-        background: "var(--db-surface, #0a0a0a)",
-      }}
-    >
-      <Sidebar />
-      <Topbar identity={identity} onSignOut={onSignOut} />
+    <div className="app-shell">
+      <Sidebar drawerOpen={drawerOpen} />
+      <Topbar
+        identity={identity}
+        onSignOut={onSignOut}
+        onToggleDrawer={() => setDrawerOpen((v) => !v)}
+      />
       <ContentColumn>{children}</ContentColumn>
+      <button
+        type="button"
+        aria-hidden={!drawerOpen}
+        tabIndex={-1}
+        className={`app-backdrop${drawerOpen ? " is-open" : ""}`}
+        onClick={() => setDrawerOpen(false)}
+      />
     </div>
   );
 }
 
-function Sidebar() {
+function Sidebar({ drawerOpen }: { drawerOpen: boolean }) {
   const identity = getCurrentIdentity();
   const role = identity?.role ?? "";
   const groups = NAV.filter(
@@ -119,16 +137,8 @@ function Sidebar() {
   );
   return (
     <aside
-      style={{
-        gridRow: "1 / -1",
-        gridColumn: "1",
-        background: "var(--db-surface-2, #141414)",
-        borderRight: "1px solid var(--db-border, #262626)",
-        padding: "1.25rem 0.75rem",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      }}
+      className={`app-sidebar${drawerOpen ? " is-open" : ""}`}
+      aria-label="Primary navigation"
     >
       <div
         style={{
@@ -205,25 +215,29 @@ function Sidebar() {
 }
 
 function Topbar({
-  identity, onSignOut,
+  identity, onSignOut, onToggleDrawer,
 }: {
   identity: ReturnType<typeof getCurrentIdentity>;
   onSignOut: () => void;
+  onToggleDrawer: () => void;
 }) {
   return (
-    <header
-      style={{
-        gridColumn: "2",
-        gridRow: "1",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-end",
-        gap: "1rem",
-        padding: "0.85rem 1.5rem",
-        borderBottom: "1px solid var(--db-border, #262626)",
-        background: "var(--db-surface-2, #141414)",
-      }}
-    >
+    <header className="app-topbar">
+      <button
+        type="button"
+        className="app-hamburger"
+        aria-label="Open navigation"
+        onClick={onToggleDrawer}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+          strokeLinejoin="round" aria-hidden="true">
+          <path d="M4 6h16" />
+          <path d="M4 12h16" />
+          <path d="M4 18h16" />
+        </svg>
+      </button>
+      <span style={topbarSpacer} />
       <span
         style={{
           fontSize: "0.9rem",
@@ -253,20 +267,10 @@ function Topbar({
 }
 
 function ContentColumn({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        gridColumn: "2",
-        gridRow: "2",
-        minWidth: 0,         // allow children to shrink in CSS grid
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      {children}
-    </div>
-  );
+  return <div className="app-content">{children}</div>;
 }
+
+const topbarSpacer: React.CSSProperties = { flex: 1 };
 
 const navLinkStyle = ({
   isActive,
