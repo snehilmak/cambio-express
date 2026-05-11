@@ -10,8 +10,8 @@ import {
   type CreateAnnouncementBody,
 } from "../api/announcements";
 import {
-  Button, Card, Empty, Field, inputStyle, monoStyle, PageHeader,
-  PageShell, Pill, SectionTitle, tokens,
+  Button, Card, Empty, EmptyState, ErrorState, Field, inputStyle, monoStyle,
+  PageHeader, PageShell, Pill, SectionTitle, TableSkeleton, tokens,
   type PillTone,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
@@ -34,7 +34,7 @@ const LEVEL_TONE: Record<string, PillTone> = {
 export default function SuperadminAnnouncements() {
   const identity = getCurrentIdentity();
   const qc = useQueryClient();
-  const { data, isLoading, isError, error } = useAnnouncements();
+  const { data, isLoading, isError, error, refetch } = useAnnouncements();
 
   if (identity?.role !== "superadmin") {
     return (
@@ -72,14 +72,15 @@ export default function SuperadminAnnouncements() {
           Banners shown to every user across the app. Disable to hide
           without deleting; delete to remove permanently.
         </p>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={3} cols={4} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No announcements yet.</Empty>
+          <EmptyState title="No announcements yet." />
         )}
         {data && data.rows.length > 0 && (
           <Table rows={data.rows} onChanged={refresh} />

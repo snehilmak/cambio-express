@@ -6,6 +6,7 @@ import {
   type AdminAuditUserOption,
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // /app/admin/audit-log — merged operator + transfer audit feed
 // for the JWT principal's store. Filters live in the URL so the
@@ -19,7 +20,7 @@ export default function AdminAuditLog() {
   const action = sp.get("action") ?? "";
   const user   = sp.get("user")   ?? "";
 
-  const { data, isLoading, isError, error } = useAdminAuditLog(
+  const { data, isLoading, isError, error, refetch } = useAdminAuditLog(
     page, target, action, user,
   );
 
@@ -125,14 +126,15 @@ export default function AdminAuditLog() {
           )}
         </div>
 
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No activity matches these filters.</Empty>
+          <EmptyState title="No activity matches these filters." />
         )}
         {data && data.rows.length > 0 && (
           <>
@@ -274,18 +276,6 @@ function Pager({
         Next →
       </button>
     </div>
-  );
-}
-
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p style={{
-      margin: 0, padding: "2rem 0", textAlign: "center",
-      color: error ? "var(--db-negative, #ff3b30)" : "var(--db-text-muted, #a3a3a3)",
-    }}>{children}</p>
   );
 }
 

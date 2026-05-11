@@ -6,6 +6,7 @@ import {
   type SuperadminAuditRow,
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Platform-wide superadmin audit log at /app/superadmin/audit-log.
 // Mirrors the legacy /superadmin/reports/audit-log report —
@@ -22,7 +23,7 @@ export default function SuperadminAuditLog() {
   const page   = Number(sp.get("page") ?? 1);
   const [draft, setDraft] = useState(action);
 
-  const { data, isLoading, isError, error } = useSuperadminAuditLog(
+  const { data, isLoading, isError, error, refetch } = useSuperadminAuditLog(
     page, action,
   );
 
@@ -82,14 +83,15 @@ export default function SuperadminAuditLog() {
       </header>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No audit entries match.</Empty>
+          <EmptyState title="No audit entries match." />
         )}
         {data && data.rows.length > 0 && (
           <>
@@ -222,24 +224,6 @@ function Pager({
   );
 }
 
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
-  );
-}
 
 const pageStyle: React.CSSProperties = {
   flex: 1,

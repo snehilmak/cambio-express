@@ -8,6 +8,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/admin/users/new and /app/admin/users/:uid/edit — combined
 // create + edit form. Mirrors the legacy admin_user_form.html
@@ -93,7 +94,7 @@ export default function AdminUserForm() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Edit User</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -101,10 +102,10 @@ export default function AdminUserForm() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Edit User</h1>
-        <p style={errorStyle}>
-          Couldn't load this user.
-          {detail.error instanceof Error ? ` ${detail.error.message}` : ""}
-        </p>
+        <ErrorState
+          message={`Couldn't load this user.${detail.error instanceof Error ? ` ${detail.error.message}` : ""}`}
+          onRetry={() => { void detail.refetch(); }}
+        />
         <Link to="/admin/users" style={btnOutlineStyle}>← Back</Link>
       </main>
     );
@@ -401,14 +402,6 @@ const alertErrorStyle: React.CSSProperties = {
   borderRadius: "0.5rem",
   color: "var(--db-negative, #ff4d6d)",
   fontSize: "0.88rem",
-};
-
-const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-negative, #ff4d6d)",
 };
 
 const emptyStyle: React.CSSProperties = {

@@ -5,6 +5,7 @@ import {
   type SuperadminStoreRow,
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Platform-wide stores list at /app/superadmin/stores. Mirrors
 // the legacy `/superadmin/stores` table — superadmin's primary
@@ -15,7 +16,7 @@ import { getCurrentIdentity } from "../lib/auth";
 
 export default function SuperadminStores() {
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError, error } = useSuperadminStores();
+  const { data, isLoading, isError, error, refetch } = useSuperadminStores();
   const [q, setQ] = useState("");
 
   if (identity?.role !== "superadmin") {
@@ -69,14 +70,15 @@ export default function SuperadminStores() {
       </header>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {filtered && filtered.length === 0 && !isLoading && (
-          <Empty>No stores match these filters.</Empty>
+          <EmptyState title="No stores match these filters." />
         )}
         {filtered && filtered.length > 0 && <Table rows={filtered} />}
       </section>
@@ -238,25 +240,6 @@ function TrialCell({ row }: { row: SuperadminStoreRow }) {
     );
   }
   return <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>—</span>;
-}
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
-  );
 }
 
 const pageStyle: React.CSSProperties = {

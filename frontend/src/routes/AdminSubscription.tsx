@@ -9,6 +9,7 @@ import {
   type SubscriptionSummary,
 } from "../api/billing";
 import { ApiError } from "../lib/api";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/admin/subscription — current plan hero + account snapshot +
 // add-ons grid + cancel modal. Mirrors the legacy
@@ -63,7 +64,7 @@ export default function AdminSubscription() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Billing &amp; Subscription</h1>
-        <p style={errorStyle}>{error}</p>
+        <ErrorState message={error} onRetry={() => { void load(); }} />
       </main>
     );
   }
@@ -71,7 +72,7 @@ export default function AdminSubscription() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Billing &amp; Subscription</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -84,7 +85,7 @@ export default function AdminSubscription() {
     <main style={pageStyle}>
       <h1 style={titleStyle}>Billing &amp; Subscription</h1>
 
-      {error && <div style={errorStyle}>{error}</div>}
+      {error && <ErrorState message={error} />}
 
       {inactive && data.retention_days_left != null && (
         <div style={bannerError}>
@@ -420,16 +421,12 @@ const mutedStyle: React.CSSProperties = {
 const moneyValue: React.CSSProperties = {
   fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
 };
-const errorStyle: React.CSSProperties = {
+const bannerError: React.CSSProperties = {
   color: "var(--db-negative, #ff3b30)",
   background: "rgba(255,59,48,0.08)",
   border: "1px solid rgba(255,59,48,0.4)",
   padding: "0.75rem 1rem",
   borderRadius: "0.5rem",
-  marginBottom: "1rem",
-};
-const bannerError: React.CSSProperties = {
-  ...errorStyle,
   marginBottom: "1.25rem",
 };
 const bannerWarn: React.CSSProperties = {

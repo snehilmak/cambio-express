@@ -5,7 +5,8 @@ import {
   type OwnerPLRollupRow,
 } from "../api/owner";
 import {
-  Card, Empty, inputStyle, monoStyle, PageHeader, PageShell, tokens,
+  Card, Empty, EmptyState, ErrorState, inputStyle, monoStyle, PageHeader,
+  PageShell, TableSkeleton, tokens,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 
@@ -25,7 +26,7 @@ export default function OwnerPLRollup() {
   const year  = Number(sp.get("year")  ?? today.getFullYear());
   const month = Number(sp.get("month") ?? today.getMonth() + 1);
 
-  const { data, isLoading, isError, error } = useOwnerPLRollup(year, month);
+  const { data, isLoading, isError, error, refetch } = useOwnerPLRollup(year, month);
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(sp);
@@ -106,17 +107,18 @@ export default function OwnerPLRollup() {
       />
 
       <Card>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>
-            No stores connected — ask each store admin to redeem an
-            owner-connect code.
-          </Empty>
+          <EmptyState
+            title="No stores connected"
+            body="Ask each store admin to redeem an owner-connect code."
+          />
         )}
         {data && data.rows.length > 0 && (
           <Table rows={data.rows} totals={data.totals} />

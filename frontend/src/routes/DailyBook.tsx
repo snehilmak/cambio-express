@@ -14,6 +14,7 @@ import {
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, Loading } from "../components/ui";
 
 // Daily book page at /app/daily. Read-only view of a single
 // day's roll-up:
@@ -46,7 +47,7 @@ export default function DailyBook() {
   }, [dateParam, searchParams, setSearchParams]);
 
   const date = dateParam ?? todayIso();
-  const { data, isLoading, isError, error, isFetching } = useDailyReport(date);
+  const { data, isLoading, isError, error, isFetching, refetch } = useDailyReport(date);
   const queryClient = useQueryClient();
   const [lockBusy, setLockBusy] = useState(false);
   const [lockError, setLockError] = useState<string | null>(null);
@@ -202,17 +203,18 @@ export default function DailyBook() {
         </p>
       )}
 
-      {isLoading && <p style={emptyStyle}>Loading…</p>}
+      {isLoading && <Loading />}
       {isError && (
-        <p style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-          {error instanceof Error ? error.message : "Could not load report"}
-        </p>
+        <ErrorState
+          message={error instanceof Error ? error.message : "Could not load report"}
+          onRetry={() => { void refetch(); }}
+        />
       )}
       {!isLoading && !isError && data == null && (
-        <p style={emptyStyle}>
-          No daily report logged for this date.
-          {isFetching ? " Updating…" : ""}
-        </p>
+        <EmptyState
+          title="No daily report logged for this date."
+          body={isFetching ? "Updating…" : undefined}
+        />
       )}
       {data && <ReportContent r={data} />}
       {!isLoading && !isError && identity?.store_id != null && (

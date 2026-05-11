@@ -13,6 +13,7 @@ import {
   type BankRuleWriteBody,
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
+import { EmptyState, ErrorState, Loading } from "../components/ui";
 
 // /app/bank/rules — bank reconcile rules CRUD. The legacy
 // /bank/rules Jinja page rendered the same list + create form;
@@ -146,7 +147,7 @@ export default function BankRules() {
         <Link to="/bank-transactions" style={btnOutlineLink}>← Transactions</Link>
       </header>
 
-      {error && <div style={errorStyle}>{error}</div>}
+      {error && <ErrorState message={error} />}
 
       <section style={cardStyle}>
         <h2 style={sectionH2}>
@@ -285,9 +286,9 @@ export default function BankRules() {
         <h2 style={sectionH2}>
           Your rules <span style={muted}>({rules.data?.total ?? 0})</span>
         </h2>
-        {rules.isLoading && <p style={muted}>Loading…</p>}
+        {rules.isLoading && <Loading />}
         {!rules.isLoading && (rules.data?.rows ?? []).length === 0 && (
-          <p style={muted}>No rules yet — create one above.</p>
+          <EmptyState title="No rules yet" body="Create one above to start auto-categorising bank transactions." />
         )}
         {(rules.data?.rows ?? []).length > 0 && (
           <table style={tableStyle}>
@@ -402,13 +403,6 @@ const checkRow: React.CSSProperties = {
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)",
   fontSize: "0.85rem",
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem",
-  borderRadius: "0.5rem",
 };
 const btnPrimary: React.CSSProperties = {
   background: "var(--db-accent, #3fff00)",

@@ -17,6 +17,7 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // Account settings page at /app/settings. v1 ships the
 // change-password card; subsequent PRs add profile / preferences /
@@ -51,7 +52,7 @@ export default function Settings() {
 function PasskeysCard() {
   const queryClient = useQueryClient();
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError } = usePasskeys();
+  const { data, isLoading, isError, refetch } = usePasskeys();
   const [busyId, setBusyId] = useState<number | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -192,15 +193,12 @@ function PasskeysCard() {
           </div>
         </div>
       )}
-      {isLoading && (
-        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
-          Loading…
-        </p>
-      )}
+      {isLoading && <Loading />}
       {isError && (
-        <p style={{ margin: 0, color: "var(--db-negative, #ff3b30)" }}>
-          Could not load passkeys.
-        </p>
+        <ErrorState
+          message="Could not load passkeys."
+          onRetry={() => { void refetch(); }}
+        />
       )}
       {data && data.passkeys.length === 0 && !isLoading && (
         <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
@@ -412,11 +410,12 @@ function TeamCard() {
         transfer attribution survives.
       </p>
 
-      {isLoading && <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>Loading…</p>}
+      {isLoading && <Loading />}
       {isError && (
-        <p style={{ margin: 0, color: "var(--db-negative, #ff3b30)" }}>
-          Could not load team.
-        </p>
+        <ErrorState
+          message="Could not load team."
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {data && (
@@ -539,7 +538,7 @@ const miniBtnStyle: React.CSSProperties = {
 function StoreInfoCard() {
   const queryClient = useQueryClient();
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError } = useStoreInfo();
+  const { data, isLoading, isError, refetch } = useStoreInfo();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -610,7 +609,7 @@ function StoreInfoCard() {
     return (
       <section style={cardStyle}>
         <h2 style={sectionTitleStyle}>Store</h2>
-        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>Loading…</p>
+        <Loading />
       </section>
     );
   }
@@ -618,14 +617,10 @@ function StoreInfoCard() {
     return (
       <section style={cardStyle}>
         <h2 style={sectionTitleStyle}>Store</h2>
-        <p
-          style={{
-            margin: 0,
-            color: "var(--db-negative, #ff3b30)",
-          }}
-        >
-          Could not load store info.
-        </p>
+        <ErrorState
+          message="Could not load store info."
+          onRetry={() => { void refetch(); }}
+        />
       </section>
     );
   }

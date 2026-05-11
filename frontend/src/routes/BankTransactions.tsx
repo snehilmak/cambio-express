@@ -12,8 +12,8 @@ import {
   type BankTransactionRow,
 } from "../api/bankSync";
 import {
-  Card, Empty, Field, inputStyle, monoStyle, PageHeader, PageShell, Pager,
-  tokens,
+  Card, Empty, EmptyState, ErrorState, Field, inputStyle, monoStyle,
+  PageHeader, PageShell, Pager, TableSkeleton, tokens,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -188,14 +188,15 @@ export default function BankTransactions() {
           </Field>
         </div>
 
-        {txns.isLoading && <Empty>Loading…</Empty>}
+        {txns.isLoading && <TableSkeleton rows={5} cols={5} />}
         {txns.isError && (
-          <Empty error>
-            {txns.error instanceof Error ? txns.error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={txns.error instanceof Error ? txns.error.message : "Could not load"}
+            onRetry={() => { void txns.refetch(); }}
+          />
         )}
         {txns.data && txns.data.rows.length === 0 && !txns.isLoading && (
-          <Empty>No transactions match these filters.</Empty>
+          <EmptyState title="No transactions match these filters." />
         )}
         {txns.data && txns.data.rows.length > 0 && (
           <>

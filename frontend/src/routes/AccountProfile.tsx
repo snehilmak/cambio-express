@@ -6,6 +6,7 @@ import {
   type ProfileUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/account/profile — personal info form (full_name, email,
 // phone, timezone) + read-only metadata (username, role,
@@ -20,7 +21,7 @@ import { ApiError } from "../lib/api";
 
 export default function AccountProfile() {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error } = useProfile();
+  const { data, isLoading, isError, error, refetch } = useProfile();
 
   const [draft, setDraft] = useState<ProfileUpdateBody>({});
   const [busy, setBusy]   = useState(false);
@@ -87,7 +88,7 @@ export default function AccountProfile() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Profile</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -95,10 +96,10 @@ export default function AccountProfile() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Profile</h1>
-        <p style={errorStyle}>
-          Couldn't load your profile.
-          {error instanceof Error ? ` ${error.message}` : ""}
-        </p>
+        <ErrorState
+          message={`Couldn't load your profile.${error instanceof Error ? ` ${error.message}` : ""}`}
+          onRetry={() => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -358,10 +359,3 @@ const alertOkStyle: React.CSSProperties = {
   fontSize: "0.88rem",
 };
 
-const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-negative, #ff4d6d)",
-};

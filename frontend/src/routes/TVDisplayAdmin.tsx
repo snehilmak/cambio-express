@@ -11,6 +11,7 @@ import {
   useTVDisplayOverview,
 } from "../api/tvDisplay";
 import { ApiError } from "../lib/api";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/tv-display — TV Display add-on operator console.
 //
@@ -74,7 +75,7 @@ function formatPairTimestamp(iso: string): string {
 }
 
 export default function TVDisplayAdmin() {
-  const { data, isLoading, isError, error } = useTVDisplayOverview();
+  const { data, isLoading, isError, error, refetch } = useTVDisplayOverview();
 
   const saveSettings    = useSaveTVDisplaySettings();
   const regenerateToken = useRegenerateTVDisplayToken();
@@ -86,7 +87,7 @@ export default function TVDisplayAdmin() {
   if (isLoading) {
     return (
       <main style={pageStyle}>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -112,10 +113,10 @@ export default function TVDisplayAdmin() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>TV Display</h1>
-        <p style={errorStyle}>
-          Couldn't load the TV display.
-          {error instanceof Error ? ` ${error.message}` : ""}
-        </p>
+        <ErrorState
+          message={`Couldn't load the TV display.${error instanceof Error ? ` ${error.message}` : ""}`}
+          onRetry={() => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -700,7 +701,6 @@ const titleStyle: React.CSSProperties = {
   fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)",
 };
 const mutedStyle: React.CSSProperties = { color: "var(--text-muted)", fontSize: 14 };
-const errorStyle: React.CSSProperties = { color: "var(--db-negative)", fontSize: 14 };
 const linkStyle: React.CSSProperties = { color: "var(--db-neon)", textDecoration: "underline" };
 
 const heroStyle: React.CSSProperties = {

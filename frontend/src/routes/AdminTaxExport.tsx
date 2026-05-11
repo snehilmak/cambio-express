@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTaxExportYears } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState } from "../components/ui";
 
 // /app/admin/tax-export — year-end packet picker + download link.
 //
@@ -13,7 +14,7 @@ import { getCurrentIdentity } from "../lib/auth";
 
 export default function AdminTaxExport() {
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError, error } = useTaxExportYears();
+  const { data, isLoading, isError, error, refetch } = useTaxExportYears();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
@@ -45,10 +46,10 @@ export default function AdminTaxExport() {
         </p>
 
         {isError && (
-          <div style={errorStyle}>
-            Couldn't load the year list:{" "}
-            {error instanceof Error ? error.message : "unknown error"}
-          </div>
+          <ErrorState
+            message={`Couldn't load the year list: ${error instanceof Error ? error.message : "unknown error"}`}
+            onRetry={() => { void refetch(); }}
+          />
         )}
 
         <div style={controlsStyle}>
@@ -195,14 +196,6 @@ const listStyle: React.CSSProperties = {
 const fineStyle: React.CSSProperties = {
   marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
   fontSize: "0.85rem", lineHeight: 1.55,
-};
-
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", padding: "0.75rem 0.9rem",
-  background: "rgba(255,77,109,0.08)",
-  border: "1px solid rgba(255,77,109,0.3)",
-  borderRadius: "0.5rem", color: "var(--db-negative, #ff4d6d)",
-  fontSize: "0.9rem",
 };
 
 const emptyStyle: React.CSSProperties = {

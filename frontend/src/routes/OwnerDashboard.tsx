@@ -7,6 +7,7 @@ import {
 import { Line } from "react-chartjs-2";
 
 import { useOwnerDashboard } from "../api/owner";
+import { ErrorState, Loading } from "../components/ui";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
@@ -22,7 +23,7 @@ const PERIODS: Array<{ value: Period; label: string }> = [
 
 export default function OwnerDashboard() {
   const [period, setPeriod] = useState<Period>("month");
-  const { data, isLoading, isError, error } = useOwnerDashboard(period);
+  const { data, isLoading, isError, error, refetch } = useOwnerDashboard(period);
 
   return (
     <main style={pageStyle}>
@@ -42,11 +43,12 @@ export default function OwnerDashboard() {
         </div>
       </header>
 
-      {isLoading && <p style={muted}>Loading…</p>}
+      {isLoading && <Loading />}
       {isError && (
-        <p style={errorStyle}>
-          Couldn't load dashboard — {error instanceof Error ? error.message : "unknown"}
-        </p>
+        <ErrorState
+          message={`Couldn't load dashboard — ${error instanceof Error ? error.message : "unknown"}`}
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {data && (
@@ -274,10 +276,4 @@ const tdStyle: React.CSSProperties = {
 const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)", margin: 0,
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem", borderRadius: "0.5rem",
 };

@@ -6,6 +6,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/account/referrals — admin self-service for the store's
 // referral code: copy-to-clipboard for code + share link, history
@@ -14,7 +15,7 @@ import { getCurrentIdentity } from "../lib/auth";
 
 export default function AdminReferrals() {
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError, error } = useReferralCode();
+  const { data, isLoading, isError, error, refetch } = useReferralCode();
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
@@ -54,11 +55,12 @@ export default function AdminReferrals() {
         <h1 style={titleStyle}>Referrals</h1>
       </header>
 
-      {isLoading && <Empty>Loading…</Empty>}
+      {isLoading && <Loading />}
       {isError && !(error instanceof ApiError && error.status === 409) && (
-        <Empty error>
-          {error instanceof Error ? error.message : "Could not load"}
-        </Empty>
+        <ErrorState
+          message={error instanceof Error ? error.message : "Could not load"}
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {data && (
@@ -283,18 +285,6 @@ function Badge({
       fontSize: "0.78rem",
       fontWeight: 500,
     }}>{children}</span>
-  );
-}
-
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p style={{
-      margin: "1rem 0", padding: "1.5rem 0", textAlign: "center",
-      color: error ? "var(--db-negative, #ff3b30)" : "var(--db-text-muted, #a3a3a3)",
-    }}>{children}</p>
   );
 }
 

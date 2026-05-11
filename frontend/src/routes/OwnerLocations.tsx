@@ -7,6 +7,7 @@ import {
   type OwnerStoreRow,
 } from "../api/owner";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Owner umbrella: per-store stats grid at /app/owner/locations.
 // Period selector (today/month/year) drives the date window for
@@ -29,7 +30,7 @@ export default function OwnerLocations() {
   const q      = sp.get("q") ?? "";
   const [qDraft, setQDraft] = useState(q);
 
-  const { data, isLoading, isError, error } = useOwnerLocations(period, q);
+  const { data, isLoading, isError, error, refetch } = useOwnerLocations(period, q);
 
   function setParam(key: string, value: string) {
     const next = new URLSearchParams(sp);
@@ -125,20 +126,21 @@ export default function OwnerLocations() {
       </div>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.matched === 0 && !isLoading && data.total === 0 && (
-          <Empty>
-            No stores connected yet — ask each store admin to redeem an
-            owner-connect code.
-          </Empty>
+          <EmptyState
+            title="No stores connected yet"
+            body="Ask each store admin to redeem an owner-connect code."
+          />
         )}
         {data && data.matched === 0 && !isLoading && data.total > 0 && (
-          <Empty>No stores match "{q}".</Empty>
+          <EmptyState title={`No stores match "${q}".`} />
         )}
         {data && data.matched > 0 && <Table rows={data.rows} />}
       </section>
@@ -246,24 +248,6 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
   );
 }
 
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
-  );
-}
 
 const pageStyle: React.CSSProperties = {
   flex: 1,

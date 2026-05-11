@@ -11,6 +11,7 @@ import {
 } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/superadmin/stores/new + /app/superadmin/stores/:id/edit
 //
@@ -84,7 +85,7 @@ export default function SuperadminStoreForm() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>{isEdit ? "Edit store" : "Add store"}</h1>
-        <p style={errorStyle}>Superadmin scope required.</p>
+        <ErrorState message="Superadmin scope required." />
       </main>
     );
   }
@@ -93,7 +94,7 @@ export default function SuperadminStoreForm() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Edit store</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -102,10 +103,10 @@ export default function SuperadminStoreForm() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Edit store</h1>
-        <p style={errorStyle}>
-          Couldn&rsquo;t load the store.
-          {err instanceof Error ? ` ${err.message}` : ""}
-        </p>
+        <ErrorState
+          message={`Couldn't load the store.${err instanceof Error ? ` ${err.message}` : ""}`}
+          onRetry={() => { void detailQuery.refetch(); }}
+        />
       </main>
     );
   }
@@ -518,10 +519,3 @@ const alertOkStyle: React.CSSProperties = {
   fontSize: "0.88rem",
 };
 
-const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-negative, #ff4d6d)",
-};

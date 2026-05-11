@@ -7,6 +7,7 @@ import {
   type BatchSort,
 } from "../api/batches";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Read-only ACH batches list at /app/batches. Sort by clicking
 // column headers (URL-driven). Variance cell colored red when
@@ -31,7 +32,7 @@ export default function Batches() {
   const [sp, setSP] = useSearchParams();
   const sort      = (sp.get("sort") as BatchSort) ?? "";
   const direction = ((sp.get("dir") as BatchDir) ?? "desc");
-  const { data, isLoading, isError, error } = useBatches(sort, direction);
+  const { data, isLoading, isError, error, refetch } = useBatches(sort, direction);
 
   function setSort(slug: BatchSort) {
     if (!slug) return;
@@ -98,14 +99,15 @@ export default function Batches() {
       </header>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No ACH batches yet.</Empty>
+          <EmptyState title="No ACH batches yet." />
         )}
         {data && data.rows.length > 0 && (
           <BatchesTable
@@ -230,25 +232,6 @@ function BatchesTable({
         </tbody>
       </table>
     </div>
-  );
-}
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
   );
 }
 

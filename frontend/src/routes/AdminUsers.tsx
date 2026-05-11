@@ -5,6 +5,7 @@ import {
   type AdminUserRow,
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // /app/admin/users — per-store user roster + entry point to the
 // Add / Edit forms. Mirrors the legacy admin_users.html surface:
@@ -14,7 +15,7 @@ import { getCurrentIdentity } from "../lib/auth";
 
 export default function AdminUsers() {
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError, error } = useAdminUsers();
+  const { data, isLoading, isError, error, refetch } = useAdminUsers();
 
   if (
     !identity
@@ -45,14 +46,15 @@ export default function AdminUsers() {
       </header>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={4} cols={4} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load users"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load users"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No users yet — add one to get started.</Empty>
+          <EmptyState title="No users yet" body="Add one to get started." />
         )}
         {data && data.rows.length > 0 && (
           <Table rows={data.rows} selfId={identity.user_id} />
@@ -168,18 +170,6 @@ function StatusBadge({ active }: { active: boolean }) {
     }}>
       {active ? "Active" : "Inactive"}
     </span>
-  );
-}
-
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p style={{
-      margin: 0, padding: "2rem 0", textAlign: "center",
-      color: error ? "var(--db-negative, #ff4d6d)" : "var(--db-text-muted, #a3a3a3)",
-    }}>{children}</p>
   );
 }
 

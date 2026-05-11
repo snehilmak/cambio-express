@@ -6,6 +6,7 @@ import {
   type NotificationsUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/account/notifications — per-user boolean toggles.
 //
@@ -18,7 +19,7 @@ import { ApiError } from "../lib/api";
 
 export default function AccountNotifications() {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error } = useNotifications();
+  const { data, isLoading, isError, error, refetch } = useNotifications();
 
   const [draft, setDraft] = useState<NotificationsUpdateBody>({});
   const [busy, setBusy]   = useState(false);
@@ -63,7 +64,7 @@ export default function AccountNotifications() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Notifications</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -71,10 +72,10 @@ export default function AccountNotifications() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Notifications</h1>
-        <p style={errorStyle}>
-          Couldn't load preferences.
-          {error instanceof Error ? ` ${error.message}` : ""}
-        </p>
+        <ErrorState
+          message={`Couldn't load preferences.${error instanceof Error ? ` ${error.message}` : ""}`}
+          onRetry={() => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -366,10 +367,3 @@ const alertOkStyle: React.CSSProperties = {
   fontSize: "0.88rem",
 };
 
-const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-negative, #ff4d6d)",
-};

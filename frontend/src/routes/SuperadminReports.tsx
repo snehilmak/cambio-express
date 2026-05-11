@@ -1,5 +1,6 @@
 import { useSuperadminReports } from "../api/superadmin";
 import ReportCenter from "../components/ReportCenter";
+import { ErrorState, Loading } from "../components/ui";
 import { ApiError } from "../lib/api";
 
 // /app/superadmin/reports — platform-wide report center index.
@@ -10,13 +11,13 @@ import { ApiError } from "../lib/api";
 // per-page render migrates separately.
 
 export default function SuperadminReports() {
-  const { data, isLoading, isError, error } = useSuperadminReports();
+  const { data, isLoading, isError, error, refetch } = useSuperadminReports();
 
   if (isLoading) {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Reports</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -25,11 +26,14 @@ export default function SuperadminReports() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Reports</h1>
-        <p style={errorStyle}>
-          {status === 403
-            ? "Superadmin scope required."
-            : `Couldn't load the report list. ${error instanceof Error ? error.message : ""}`}
-        </p>
+        <ErrorState
+          message={
+            status === 403
+              ? "Superadmin scope required."
+              : `Couldn't load the report list. ${error instanceof Error ? error.message : ""}`
+          }
+          onRetry={status === 403 ? undefined : () => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -49,5 +53,3 @@ const titleStyle: React.CSSProperties = {
   fontFamily: "'Space Grotesk', 'Inter', sans-serif",
   fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)",
 };
-const mutedStyle: React.CSSProperties = { color: "var(--text-muted)", fontSize: 14 };
-const errorStyle: React.CSSProperties = { color: "var(--db-negative)", fontSize: 14 };

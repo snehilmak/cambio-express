@@ -5,6 +5,7 @@ import {
   useTVDisplayCountryDetail,
   type TVDisplayBankRow,
 } from "../api/tvDisplay";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/tv-display/countries/:id — country editor for the rate
 // board. The mutation surface (banks add/remove, rate matrix
@@ -16,7 +17,7 @@ import {
 export default function TVDisplayCountry() {
   const { countryId } = useParams<{ countryId: string }>();
   const cid = Number(countryId);
-  const { data, isLoading, isError, error } =
+  const { data, isLoading, isError, error, refetch } =
     useTVDisplayCountryDetail(cid);
 
   const [companiesText, setCompaniesText] = useState("");
@@ -54,17 +55,17 @@ export default function TVDisplayCountry() {
   if (isLoading) {
     return (
       <main style={pageStyle}>
-        <p style={muted}>Loading country…</p>
+        <Loading label="Loading country…" />
       </main>
     );
   }
   if (isError || !data) {
     return (
       <main style={pageStyle}>
-        <p style={errorStyle}>
-          Couldn't load country —{" "}
-          {error instanceof Error ? error.message : "unknown error"}
-        </p>
+        <ErrorState
+          message={`Couldn't load country — ${error instanceof Error ? error.message : "unknown error"}`}
+          onRetry={() => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -339,10 +340,4 @@ const btnOutlineLink: React.CSSProperties = {
 };
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem", borderRadius: "0.5rem",
 };

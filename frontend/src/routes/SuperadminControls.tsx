@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { useDashboardSummary } from "../api/dashboard";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/superadmin/controls — Platform hub. KPI tiles fed by the
 // existing /api/v2/dashboard/summary (superadmin-shaped payload),
@@ -29,7 +30,7 @@ interface SuperadminLite {
 }
 
 export default function SuperadminControls() {
-  const { data, isLoading, isError } = useDashboardSummary();
+  const { data, isLoading, isError, refetch } = useDashboardSummary();
   const d = (data && (data as SuperadminLite & { role: string }).role === "superadmin"
     ? (data as SuperadminLite)
     : null);
@@ -43,9 +44,12 @@ export default function SuperadminControls() {
         </p>
       </header>
 
-      {isLoading && <p style={muted}>Loading platform metrics…</p>}
+      {isLoading && <Loading label="Loading platform metrics…" />}
       {isError && (
-        <p style={errorStyle}>Couldn't load metrics for the overview.</p>
+        <ErrorState
+          message="Couldn't load metrics for the overview."
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {d && (
@@ -255,10 +259,4 @@ const quickLink: React.CSSProperties = {
 };
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem", borderRadius: "0.5rem",
 };
