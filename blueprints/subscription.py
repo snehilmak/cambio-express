@@ -98,7 +98,7 @@ def admin_subscription_billing_portal():
                 "No billing account found. Choose a plan to get started.",
                 "error",
             )
-            return redirect(url_for("subscribe"))
+            return redirect(url_for("billing.subscribe"))
         return _open_billing_portal(
             store,
             error_msg="Could not open billing portal. Please try again.",
