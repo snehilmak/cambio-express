@@ -61,8 +61,10 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
+from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
+app.register_blueprint(_bp_push.bp)
 
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
@@ -2421,59 +2423,11 @@ def send_push(user_id: int, title: str, body: str = "",
     from api.Modules.Notifications.Services import send_push as _svc
     return _svc(db.session, user_id, title, body, url, tag)
 
-@app.route("/api/push/public-key")
-def push_public_key():
-    """Frontend reads this to build a PushManager subscription.
-
-    Returns 200 with key=null when VAPID isn't configured so deployments
-    without push don't fill every user's console with a red 501 on page
-    load. The client treats null as "feature unavailable" and hides the
-    opt-in button.
-    """
-    return jsonify({"key": VAPID_PUBLIC_KEY if push_enabled() else None})
-
-@app.route("/api/push/subscribe", methods=["POST"])
-def push_subscribe():
-    u = current_user()
-    if not u:
-        return jsonify({"error": "auth"}), 401
-    if not push_enabled():
-        return jsonify({"error": "push not configured"}), 501
-    data = request.get_json(silent=True) or {}
-    endpoint = (data.get("endpoint") or "").strip()
-    keys = data.get("keys") or {}
-    p256dh = (keys.get("p256dh") or "").strip()
-    auth   = (keys.get("auth") or "").strip()
-    if not endpoint or not p256dh or not auth:
-        return jsonify({"error": "missing fields"}), 400
-    existing = PushSubscription.query.filter_by(user_id=u.id, endpoint=endpoint).first()
-    if not existing:
-        db.session.add(PushSubscription(
-            user_id=u.id, endpoint=endpoint, p256dh=p256dh, auth=auth,
-            user_agent=(request.headers.get("User-Agent") or "")[:255],
-        ))
-        db.session.commit()
-    return jsonify({"ok": True})
-
-@app.route("/api/push/unsubscribe", methods=["POST"])
-def push_unsubscribe():
-    u = current_user()
-    if not u:
-        return jsonify({"error": "auth"}), 401
-    endpoint = (request.get_json(silent=True) or {}).get("endpoint", "")
-    if endpoint:
-        PushSubscription.query.filter_by(user_id=u.id, endpoint=endpoint).delete()
-        db.session.commit()
-    return jsonify({"ok": True})
-
-@app.route("/api/push/test", methods=["POST"])
-def push_test():
-    """Send a test notification to the caller's own devices."""
-    u = current_user()
-    if not u:
-        return jsonify({"error": "auth"}), 401
-    n = send_push(u.id, "DineroBook", "Push notifications are working on this device.", url="/")
-    return jsonify({"sent": n})
+# /api/push/{public-key,subscribe,unsubscribe,test} moved to
+# blueprints/push.py (D2). The shims above (VAPID_*, push_enabled,
+# send_push) stay here because legacy callers — including
+# tests/Modules/Notifications/test_push_service.py — still
+# import them from `app`.
 
 # ── Referrals ────────────────────────────────────────────────
 from api.Modules.Billing.Services import (
