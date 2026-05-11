@@ -39,7 +39,22 @@ from webauthn.helpers.structs import (
 from sqlalchemy import case
 
 logging.basicConfig(level=logging.INFO)
+
+# ── Observability bootstrap ──────────────────────────────────────
+# Initialise structured logging + Sentry before the Flask app exists
+# so the very first Flask import-time log line is already structured
+# and any boot-time exception is captured. Both calls are idempotent
+# and no-op without configuration (Sentry needs SENTRY_DSN; structlog
+# uses the LOG_FORMAT env var, defaulting to console output for dev).
+from api.Core.Observability import (  # noqa: E402
+    init_logging, init_sentry, install_request_id,
+)
+
+init_logging()
+init_sentry()
+
 app = Flask(__name__)
+install_request_id(app)
 app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-prod")
 
 # Cache-bust query string for the shared stylesheet (and any other static

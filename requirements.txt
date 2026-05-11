@@ -30,3 +30,9 @@ a2wsgi==1.10.10
 # JWT-claims auth model — full permission set as claims, 30-min
 # access token TTL, refresh token + jti blacklist.
 PyJWT==2.7.0
+# Observability stack (see api/Core/Observability/ + BACKLOG E1/E2).
+# Sentry is opt-in via SENTRY_DSN; structlog is the always-on
+# structured-logging foundation. Both libraries are lightweight,
+# import-only when not configured.
+sentry-sdk[flask,fastapi,sqlalchemy]==2.21.0
+structlog==24.4.0
