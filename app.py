@@ -61,10 +61,12 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
+from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
+app.register_blueprint(_bp_owner.bp)
 
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
@@ -2780,7 +2782,7 @@ def login():
     if "user_id" in session:
         u = current_user()
         if u and u.role == "owner":
-            return redirect(url_for("owner_dashboard"))
+            return redirect(url_for("owner.owner_dashboard"))
         return redirect(url_for("dashboard"))
     # On a fresh GET from a device that previously signed in to a store,
     # bounce to that store's login so installed-PWA employees aren't stuck
@@ -2823,7 +2825,7 @@ def login():
                 session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
                 _record_login(u); db.session.commit()
                 if u.role == "owner":
-                    return redirect(url_for("owner_dashboard"))
+                    return redirect(url_for("owner.owner_dashboard"))
                 return redirect(url_for("dashboard"))
         else:
             error="Invalid username or password."
@@ -3127,7 +3129,7 @@ def passkey_login_finish():
     session["role"]     = user.role
     session["store_id"] = user.store_id
     db.session.commit()
-    redirect_url = url_for("owner_dashboard") if user.role == "owner" else url_for("dashboard")
+    redirect_url = url_for("owner.owner_dashboard") if user.role == "owner" else url_for("dashboard")
     return jsonify({"ok": True, "redirect": redirect_url})
 
 # ── Password reset ───────────────────────────────────────────
@@ -3284,144 +3286,11 @@ def _owner_locations_payload(user, period, query):
     return owner_locations_payload(db.session, user, period, query)
 
 
-@app.route("/owner/dashboard")
-@owner_required
-def owner_dashboard():
-    """301 → /app/owner/dashboard. The owner dashboard moved to
-    React; the SPA reads /api/v2/owner/dashboard?period= and
-    renders the KPI cards + multi-store rollup + charts. Stub
-    keeps url_for('owner_dashboard') working in still-Jinja
-    chrome (sidebar nav, post-mutation redirects). Preserves
-    the period query string."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/owner/dashboard" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-
-@app.route("/owner/pl-rollup")
-@owner_required
-def owner_pl_rollup():
-    """301 → /app/owner/pl-rollup. The side-by-side monthly P&L
-    rollup moved to React; the SPA reads
-    /api/v2/owner/pl-rollup?year=&month= and renders the same
-    rows + totals + year/month picker. Stub keeps url_for(...)
-    working in still-Jinja chrome (sidebar nav) and bounces old
-    bookmarks. Query string (year + month) is preserved so a
-    direct link to a specific month lands on the right page."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/owner/pl-rollup" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-
-@app.route("/owner/locations")
-@owner_required
-def owner_locations():
-    """301 → /app/owner/locations. The searchable umbrella store
-    list moved to React; the SPA reads /api/v2/owner/locations
-    (with query / period query params) and live-searches against
-    that JSON envelope. Stub keeps url_for('owner_locations')
-    working in still-Jinja chrome (and the old `?partial=1`
-    AJAX swap pattern is retired with this redirect — the SPA
-    does its own debounced fetching). Preserves the query string
-    so a direct link with `?period=year&q=foo` lands cleanly."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    # Drop the legacy partial=1 marker if present — it was an
-    # AJAX-only contract; the SPA never sends it.
-    if qs:
-        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
-    target = "/app/owner/locations" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-
-@app.route("/owner/store/<int:store_id>")
-@owner_required
-def owner_store_detail(store_id):
-    """301 → /app/owner/store/<id>. The single-store drill-down
-    moved to React; the SPA reads /api/v2/owner/store/<id>?period=
-    for KPIs + 30-day over/short series + recent transfers. The
-    StoreOwnerLink scope check still gates access — same source of
-    truth in the API endpoint, which 404s for unrelated stores.
-    Preserves the period query string."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = f"/app/owner/store/{store_id}" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-@app.route("/owner/connect", methods=["GET"])
-@owner_required
-def owner_connect():
-    """301 → /app/owner/connect. Page rendering moved to React.
-    Mint / revoke / list now run through
-    /api/v2/owner/connect-codes (GET + POST + POST .../revoke).
-    The legacy POST handlers below stay alive briefly so the
-    in-flight Jinja form submissions don't break for any user
-    mid-flow; they redirect through the SPA on next visit."""
-    return redirect("/app/owner/connect", code=301)
-
-
-@app.route("/owner/connect/generate", methods=["POST"])
-@owner_required
-def owner_connect_generate():
-    """Mint a fresh 7-day invite code for this owner. If there's
-    already an active code we revoke it (only one active code at a
-    time keeps the UI simple — owner shares the latest one)."""
-    u = current_user()
-    now = datetime.utcnow()
-    OwnerConnectCode.query.filter(
-        OwnerConnectCode.owner_id == u.id,
-        OwnerConnectCode.used_at.is_(None),
-        OwnerConnectCode.revoked_at.is_(None),
-        OwnerConnectCode.expires_at > now,
-    ).update({"revoked_at": now})
-    db.session.flush()
-    alphabet = string.ascii_uppercase + string.digits
-    code = None
-    for _ in range(10):
-        candidate = "".join(secrets.choice(alphabet) for _ in range(8))
-        if not OwnerConnectCode.query.filter_by(code=candidate).first():
-            code = candidate
-            break
-    if code is None:
-        flash("Could not generate a unique code. Please try again.", "error")
-        return redirect(url_for("owner_connect"))
-    db.session.add(OwnerConnectCode(
-        owner_id=u.id, code=code,
-        expires_at=now + timedelta(days=7),
-    ))
-    db.session.commit()
-    flash("Invite code generated. Share it with the store admin.", "success")
-    return redirect(url_for("owner_connect"))
-
-
-@app.route("/owner/connect/<int:code_id>/revoke", methods=["POST"])
-@owner_required
-def owner_connect_revoke(code_id):
-    """Revoke an active code before it's redeemed (e.g. the owner
-    sent it to the wrong person)."""
-    u = current_user()
-    c = OwnerConnectCode.query.filter_by(id=code_id, owner_id=u.id).first_or_404()
-    if c.used_at is not None:
-        flash("Code has already been redeemed and can't be revoked.", "error")
-    elif c.revoked_at is not None:
-        flash("Code is already revoked.", "info")
-    else:
-        c.revoked_at = datetime.utcnow()
-        db.session.commit()
-        flash("Code revoked.", "success")
-    return redirect(url_for("owner_connect"))
-
-
-@app.route("/owner/unlink/<int:store_id>", methods=["POST"])
-@owner_required
-def owner_unlink_store(store_id):
-    """Disconnect an owner→store relationship. Owner-side only — the
-    store admin sees a read-only "contact your owner" message in
-    their settings. Does not affect store data itself."""
-    u = current_user()
-    link = StoreOwnerLink.query.filter_by(owner_id=u.id, store_id=store_id).first_or_404()
-    db.session.delete(link)
-    db.session.commit()
-    flash("Store disconnected from your account.", "success")
-    return redirect(url_for("owner_dashboard"))
+# Owner routes (/owner/dashboard, /owner/pl-rollup, /owner/locations,
+# /owner/store/<id>, /owner/connect, /owner/connect/generate,
+# /owner/connect/<id>/revoke, /owner/unlink/<id>) moved to
+# blueprints/owner.py (D2). The endpoint names changed from
+# `owner_*` to `owner.owner_*` — callers updated in the same PR.
 
 @app.route("/subscribe")
 @login_required
