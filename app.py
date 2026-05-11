@@ -61,6 +61,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
+from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
@@ -72,6 +73,7 @@ app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_owner.bp)
 app.register_blueprint(_bp_tv.bp)
 app.register_blueprint(_bp_subscription.bp)
+app.register_blueprint(_bp_auth_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -3041,62 +3043,8 @@ def smtp_health_check():
     (PR 82)."""
     return _smtp_svc.health_check(db.session)
 
-@app.route("/forgot-password", methods=["GET", "POST"])
-def forgot_password():
-    """301 to the React /app/forgot-password page. The legacy Jinja
-    form + POST handler are gone — the SPA submits directly to
-    /api/v2/auth/forgot-password, which now also handles SMTP
-    delivery. This stub keeps `url_for('forgot_password')` working
-    in still-Jinja templates and bounces old bookmarks."""
-    return redirect("/app/forgot-password", code=301)
-
-
-@app.route("/reset-password/<token>", methods=["GET", "POST"])
-def reset_password(token):
-    """301 to the React /app/reset-password?token=… page. Old reset
-    emails still in users' inboxes link to /reset-password/<token>;
-    the SPA reads the token from `?token=` so we hand it off via
-    the query string. Form-validation + token consumption now live
-    on /api/v2/auth/reset-password."""
-    return redirect(f"/app/reset-password?token={token}", code=301)
-
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    """301 to the React /app/signup page when signups are open.
-    With SIGNUP_CLOSED=1 we render the "invite-only" notice
-    directly so the user doesn't briefly see the SPA form before
-    it 503s. The legacy Jinja form + POST handler are retired —
-    the SPA submits directly to /api/v2/auth/signup. Stub keeps
-    `url_for('signup')` working in still-Jinja templates and
-    bounces old bookmarks. Query string (?ref=, ?plan=) is
-    preserved."""
-    if SIGNUP_CLOSED:
-        return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/signup" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-@app.route("/signup/owner", methods=["GET", "POST"])
-def signup_owner():
-    """301 to the React /app/signup/owner page when signups are
-    open. With SIGNUP_CLOSED=1 we render the "invite-only" notice
-    directly so the user doesn't briefly see the SPA form before
-    it 503s. Stub keeps url_for('signup_owner') working in
-    still-Jinja templates."""
-    if SIGNUP_CLOSED:
-        return render_template("signup_closed.html"), 200 if request.method == "GET" else 403
-    return redirect("/app/signup/owner", code=301)
-
-@app.route("/logout")
-def logout():
-    user = current_user()
-    store = current_store()
-    is_employee = user and user.role == "employee"
-    slug = store.slug if store else None
-    session.clear()
-    if is_employee and slug:
-        return redirect(url_for("login_store", slug=slug))
-    return redirect(url_for("login"))
+# /forgot-password, /reset-password/<token>, /signup, /signup/owner,
+# /logout moved to blueprints/auth_redirects.py (D2 phase 7).
 
 # ── Owner-side helpers ──────────────────────────────────────────
 #
