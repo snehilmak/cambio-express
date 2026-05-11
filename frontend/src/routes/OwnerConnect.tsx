@@ -7,7 +7,10 @@ import {
 } from "../api/owner";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
+  thStyle, tokens,
+} from "../components/ui";
 
 // /app/owner/connect — owner mints 8-character invite codes that
 // store admins redeem on their settings page to link a store to
@@ -46,12 +49,12 @@ export default function OwnerConnect() {
 
   if (identity?.role !== "owner") {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Connect a Store</h1>
+      <PageShell maxWidth="40rem">
+        <PageHeader title="Connect a Store" />
         <p style={mutedStyle}>
           Only owners can mint store-connect codes.
         </p>
-      </main>
+      </PageShell>
     );
   }
 
@@ -109,111 +112,102 @@ export default function OwnerConnect() {
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1rem" }}>
-        <h1 style={titleStyle}>Connect a Store</h1>
-      </header>
+    <PageShell maxWidth="40rem">
+      <PageHeader title="Connect a Store" />
 
       {serverError && <ErrorState message={serverError} />}
 
-      <section style={cardStyle}>
-        <h2 style={cardTitleStyle}>Active invite code</h2>
-        {isLoading && <Loading />}
-        {isError && (
-          <ErrorState
-            message={`Couldn't load codes.${error instanceof Error ? ` ${error.message}` : ""}`}
-            onRetry={() => { void refetch(); }}
-          />
-        )}
-        {!isLoading && !active && (
-          <>
-            <p style={leadStyle}>
-              No active code. Generate one to give to a store admin —
-              they'll enter it on their store's Settings → Owner Access
-              page to link their store to your umbrella. Codes are
-              valid for 7 days.
-            </p>
-            <button
-              type="button" onClick={handleGenerate}
-              disabled={busy} style={btnPrimaryStyle}
-            >
-              {busy ? "Generating…" : "Generate Invite Code"}
-            </button>
-          </>
-        )}
-        {active && (
-          <>
-            <p style={leadStyle}>
-              Share this code with the store admin you want to connect.
-              They enter it on their store's Settings → Owner Access
-              page. Code expires on{" "}
-              <strong>{formatDate(active.expires_at)}</strong>.
-            </p>
-            <div style={codeRowStyle}>
-              <input
-                type="text" readOnly value={active.code}
-                style={codeInputStyle}
-                onFocus={(e) => e.currentTarget.select()}
-              />
-              <button
-                type="button" onClick={handleCopy} style={btnOutlineStyle}
-              >
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-              <button
-                type="button" onClick={handleRevoke}
-                disabled={busy} style={btnOutlineStyle}
-              >
-                Revoke
-              </button>
-              <button
-                type="button" onClick={handleGenerate}
-                disabled={busy} style={btnOutlineStyle}
-              >
-                {busy ? "Generating…" : "Generate New Code"}
-              </button>
-            </div>
-          </>
-        )}
-      </section>
+      <Section title="Active invite code">
+        <Card>
+          {isLoading && <Loading />}
+          {isError && (
+            <ErrorState
+              message={`Couldn't load codes.${error instanceof Error ? ` ${error.message}` : ""}`}
+              onRetry={() => { void refetch(); }}
+            />
+          )}
+          {!isLoading && !active && (
+            <>
+              <p style={leadStyle}>
+                No active code. Generate one to give to a store admin —
+                they'll enter it on their store's Settings → Owner Access
+                page to link their store to your umbrella. Codes are
+                valid for 7 days.
+              </p>
+              <Button onClick={handleGenerate} busy={busy} disabled={busy}>
+                {busy ? "Generating…" : "Generate Invite Code"}
+              </Button>
+            </>
+          )}
+          {active && (
+            <>
+              <p style={leadStyle}>
+                Share this code with the store admin you want to connect.
+                They enter it on their store's Settings → Owner Access
+                page. Code expires on{" "}
+                <strong>{formatDate(active.expires_at)}</strong>.
+              </p>
+              <div style={codeRowStyle}>
+                <input
+                  type="text" readOnly value={active.code}
+                  style={codeInputStyle}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <Button tone="secondary" onClick={handleCopy}>
+                  {copied ? "Copied" : "Copy"}
+                </Button>
+              </div>
+              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                <Button tone="secondary" onClick={handleRevoke} disabled={busy}>
+                  Revoke
+                </Button>
+                <Button tone="secondary" onClick={handleGenerate} disabled={busy}>
+                  {busy ? "Generating…" : "Generate New Code"}
+                </Button>
+              </div>
+            </>
+          )}
+        </Card>
+      </Section>
 
-      <section style={{ ...cardStyle, marginTop: "1rem" }}>
-        <div style={{ display: "flex", alignItems: "baseline" }}>
-          <h2 style={{ ...cardTitleStyle, flex: 1 }}>Recently redeemed</h2>
-          <span style={{ color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.78rem" }}>
+      <Section
+        title="Recently redeemed"
+        actions={(
+          <span style={{ color: tokens.textMuted, fontSize: "0.78rem" }}>
             Last 10
           </span>
-        </div>
-        {redeemed.length > 0 ? (
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Code</th>
-                <th style={thStyle}>Store</th>
-                <th style={thStyle}>Redeemed</th>
-              </tr>
-            </thead>
-            <tbody>
-              {redeemed.map((r) => (
-                <tr key={r.id}>
-                  <td style={{ ...cellStyle, ...mono }}>{r.code}</td>
-                  <td style={cellStyle}>{r.used_by_store_name || "—"}</td>
-                  <td style={{ ...cellStyle, color: "var(--db-text-muted, #a3a3a3)" }}>
-                    {formatDate(r.used_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p style={emptyStyle}>
-            No codes redeemed yet. Stores you've connected will show
-            up here.
-          </p>
         )}
-      </section>
+      >
+        <Card>
+          {redeemed.length > 0 ? (
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Code</th>
+                  <th style={thStyle}>Store</th>
+                  <th style={thStyle}>Redeemed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {redeemed.map((r) => (
+                  <tr key={r.id}>
+                    <td style={{ ...cellStyle, ...mono }}>{r.code}</td>
+                    <td style={cellStyle}>{r.used_by_store_name || "—"}</td>
+                    <td style={{ ...cellStyle, color: tokens.textMuted }}>
+                      {formatDate(r.used_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p style={emptyStyle}>
+              No codes redeemed yet. Stores you've connected will show
+              up here.
+            </p>
+          )}
+        </Card>
+      </Section>
 
       <p style={fineStyle}>
         To disconnect a store, head to your{" "}
@@ -222,7 +216,7 @@ export default function OwnerConnect() {
         <a href="/app/owner/locations" style={inlineLinkStyle}>Locations</a>{" "}
         page — only the owner can break the link, store admins can't.
       </p>
-    </main>
+    </PageShell>
   );
 }
 
@@ -238,31 +232,8 @@ function formatDate(iso: string): string {
 }
 
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "40rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.25rem",
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  margin: "0 0 0.6rem", fontSize: "1rem", fontWeight: 600,
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-};
-
 const leadStyle: React.CSSProperties = {
-  margin: "0 0 1rem", color: "var(--db-text-muted, #a3a3a3)",
+  margin: "0 0 1rem", color: tokens.textMuted,
   fontSize: "0.85rem", lineHeight: 1.55,
 };
 
@@ -273,33 +244,14 @@ const codeRowStyle: React.CSSProperties = {
 
 const codeInputStyle: React.CSSProperties = {
   flex: 1,
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "1.4rem", letterSpacing: "0.25em",
   fontWeight: 600, textAlign: "center",
   padding: "0.65rem 0.75rem",
   background: "var(--db-bg-input, #0d0d0d)",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 600, fontSize: "0.92rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
-  border: "none", borderRadius: "0.5rem",
-  cursor: "pointer",
-};
-
-const btnOutlineStyle: React.CSSProperties = {
-  padding: "0.55rem 0.95rem",
-  fontWeight: 500, fontSize: "0.85rem",
-  background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  cursor: "pointer",
 };
 
 const tableStyle: React.CSSProperties = {
@@ -307,42 +259,30 @@ const tableStyle: React.CSSProperties = {
   fontSize: "0.88rem",
 };
 
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.55rem 0.7rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-  fontWeight: 500,
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: "1px solid var(--db-border, #262626)",
-};
-
 const cellStyle: React.CSSProperties = {
   padding: "0.6rem 0.7rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const emptyStyle: React.CSSProperties = {
-  margin: "0", color: "var(--db-text-muted, #a3a3a3)",
+  margin: "0", color: tokens.textMuted,
   fontSize: "0.88rem",
 };
 
 const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
+  marginTop: "1rem", color: tokens.textMuted,
   fontSize: "0.78rem", lineHeight: 1.55,
 };
 
 const inlineLinkStyle: React.CSSProperties = {
-  color: "var(--db-neon, #3fff00)",
+  color: tokens.accent,
   textDecoration: "none",
 };
 
 const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
+  marginTop: "1rem", color: tokens.textMuted,
 };
-

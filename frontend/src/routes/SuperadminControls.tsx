@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 
 import { useDashboardSummary } from "../api/dashboard";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Section,
+  tokens,
+} from "../components/ui";
 
 // /app/superadmin/controls — Platform hub. KPI tiles fed by the
 // existing /api/v2/dashboard/summary (superadmin-shaped payload),
@@ -36,13 +39,11 @@ export default function SuperadminControls() {
     : null);
 
   return (
-    <main style={pageStyle}>
-      <header>
-        <h1 style={titleStyle}>Platform Controls</h1>
-        <p style={muted}>
-          Stores, billing, anomalies, audit log, announcements, reports.
-        </p>
-      </header>
+    <PageShell maxWidth="75rem" gap="1.25rem">
+      <PageHeader
+        title="Platform Controls"
+        subtitle="Stores, billing, anomalies, audit log, announcements, reports."
+      />
 
       {isLoading && <Loading label="Loading platform metrics…" />}
       {isError && (
@@ -53,71 +54,75 @@ export default function SuperadminControls() {
       )}
 
       {d && (
-        <section style={cardStyle}>
-          <h2 style={cardTitle}>Overview</h2>
-          <div style={kpiGrid}>
-            <Kpi label="Total Stores" value={d.total_stores ?? "—"} />
-            <Kpi
-              label="Active"
-              value={d.active_stores ?? "—"}
-              accent="positive"
+        <Section title="Overview">
+          <KpiGrid minWidth="180px">
+            <KpiCard
+              label="Total Stores"
+              value={fmt(d.total_stores)}
+              tone="primary"
             />
-            <Kpi label="Trial" value={d.trial_stores ?? "—"} accent="warning" />
-            <Kpi label="Paid" value={d.paid_stores ?? "—"} accent="positive" />
-            <Kpi
+            <KpiCard
+              label="Active"
+              value={fmt(d.active_stores)}
+              tone="positive"
+            />
+            <KpiCard label="Trial" value={fmt(d.trial_stores)} tone="warning" />
+            <KpiCard label="Paid" value={fmt(d.paid_stores)} tone="positive" />
+            <KpiCard
               label="Inactive"
-              value={d.inactive_stores ?? "—"}
-              accent={
+              value={fmt(d.inactive_stores)}
+              tone={
                 typeof d.inactive_stores === "number" && d.inactive_stores > 0
                   ? "negative"
-                  : undefined
+                  : "primary"
               }
             />
-            <Kpi
+            <KpiCard
               label="Retention queue"
-              value={d.retention_queue ?? "—"}
-              accent={
+              value={fmt(d.retention_queue)}
+              tone={
                 typeof d.retention_queue === "number" && d.retention_queue > 0
                   ? "warning"
-                  : undefined
+                  : "primary"
               }
             />
-            <Kpi
+            <KpiCard
               label="MRR"
               value={
                 typeof d.mrr_total === "number"
                   ? `$${d.mrr_total.toLocaleString()}`
                   : "—"
               }
+              tone="primary"
             />
-            <Kpi
+            <KpiCard
               label="ARR"
               value={
                 typeof d.arr_total === "number"
                   ? `$${d.arr_total.toLocaleString()}`
                   : "—"
               }
+              tone="primary"
             />
-            <Kpi
+            <KpiCard
               label="New (30d)"
-              value={d.new_stores_30d ?? "—"}
-              accent="positive"
+              value={fmt(d.new_stores_30d)}
+              tone="positive"
             />
-            <Kpi
+            <KpiCard
               label="Cancellations (30d)"
-              value={d.cancellations_30d ?? "—"}
-              accent={
+              value={fmt(d.cancellations_30d)}
+              tone={
                 typeof d.cancellations_30d === "number" && d.cancellations_30d > 0
                   ? "negative"
-                  : undefined
+                  : "primary"
               }
             />
-          </div>
-        </section>
+          </KpiGrid>
+        </Section>
       )}
 
-      <section style={cardStyle}>
-        <h2 style={cardTitle}>Hubs</h2>
+      <Section title="Hubs">
         <div style={quickLinkGrid}>
           <QuickLink
             to="/superadmin/stores"
@@ -152,9 +157,13 @@ export default function SuperadminControls() {
             desc="Curate the company / bank picker for TV displays. POST endpoints stay on Flask; SPA UI lands in a follow-up."
           />
         </div>
-      </section>
-    </main>
+      </Section>
+    </PageShell>
   );
+}
+
+function fmt(n: number | undefined): React.ReactNode {
+  return typeof n === "number" ? n.toLocaleString() : "—";
 }
 
 function ComingSoon({ title, desc }: { title: string; desc: string }) {
@@ -175,31 +184,6 @@ function ComingSoon({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-function Kpi({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: React.ReactNode;
-  accent?: "positive" | "negative" | "warning";
-}) {
-  const color =
-    accent === "positive"
-      ? "var(--db-positive, #3fff00)"
-      : accent === "negative"
-        ? "var(--db-negative, #ff3b30)"
-        : accent === "warning"
-          ? "var(--db-warning, #ffcc00)"
-          : "var(--db-info, #5ac8fa)";
-  return (
-    <div style={{ ...kpiCard, borderTop: `3px solid ${color}` }}>
-      <div style={kpiLabel}>{label}</div>
-      <div style={kpiValue}>{value}</div>
-    </div>
-  );
-}
-
 function QuickLink({
   to, title, desc,
 }: { to: string; title: string; desc: string }) {
@@ -211,41 +195,6 @@ function QuickLink({
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, padding: "2rem 1.5rem", maxWidth: "75rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-  display: "flex", flexDirection: "column", gap: "1.25rem",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)", fontWeight: 600, margin: 0,
-};
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.25rem",
-};
-const cardTitle: React.CSSProperties = {
-  margin: "0 0 1rem", fontSize: "1rem",
-};
-const kpiGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "0.75rem",
-};
-const kpiCard: React.CSSProperties = {
-  background: "var(--db-surface-1, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem", padding: "0.75rem 1rem",
-};
-const kpiLabel: React.CSSProperties = {
-  fontSize: "0.7rem", textTransform: "uppercase",
-  letterSpacing: "0.05em", color: "var(--db-text-muted, #a3a3a3)",
-};
-const kpiValue: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-  fontSize: "1.4rem", fontWeight: 700, marginTop: "0.4rem",
-};
 const quickLinkGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
@@ -253,10 +202,10 @@ const quickLinkGrid: React.CSSProperties = {
 };
 const quickLink: React.CSSProperties = {
   display: "block", padding: "1rem",
-  background: "var(--db-surface-1, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem", textDecoration: "none", color: "inherit",
 };
 const muted: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
+  color: tokens.textMuted, fontSize: "0.85rem", margin: 0,
 };

@@ -6,7 +6,10 @@ import {
   type TransferRow,
 } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  ButtonLink, Card, Empty, EmptyState, ErrorState, Field, Input,
+  PageHeader, PageShell, Pager, Select, TableSkeleton, tokens,
+} from "../components/ui";
 
 // Full transfers list page at /app/transfers.
 //
@@ -90,62 +93,32 @@ export default function Transfers() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Transfers</h1>
-        <p style={{ color: "var(--db-text-muted, #a3a3a3)" }}>
+      <PageShell maxWidth="78rem">
+        <PageHeader title="Transfers" />
+        <Empty>
           Sign in as a store admin to view this store's transfers.
           Owner umbrellas + superadmin store-picker land in a
           follow-up PR.
-        </p>
-      </main>
+        </Empty>
+      </PageShell>
     );
   }
 
   const { data, isLoading, isFetching, isError, error, refetch } = apiQuery;
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Transfers</h1>
-          <p
-            style={{
-              margin: "0.35rem 0 0",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}
-          >
-            {data
-              ? `${data.total.toLocaleString()} total · page ${data.page} of ${
-                  data.total_pages || 1
-                }`
-              : "—"}
-          </p>
-        </div>
-        <Link
-          to="/transfers/new"
-          style={{
-            background: "var(--db-accent, #3fff00)",
-            color: "var(--db-on-accent, #0a0a0a)",
-            borderRadius: "0.5rem",
-            padding: "0.55rem 1rem",
-            fontFamily:
-              "var(--db-font-display, 'Space Grotesk', sans-serif)",
-            fontSize: "0.9rem",
-            fontWeight: 600,
-            textDecoration: "none",
-          }}
-        >
-          + New transfer
-        </Link>
-      </header>
+    <PageShell maxWidth="78rem">
+      <PageHeader
+        title="Transfers"
+        subtitle={data
+          ? `${data.total.toLocaleString()} total · page ${data.page} of ${data.total_pages || 1}`
+          : "—"}
+        actions={(
+          <ButtonLink href="/transfers/new" tone="primary">
+            + New transfer
+          </ButtonLink>
+        )}
+      />
 
       <FilterBar
         q={qDraft}
@@ -157,7 +130,7 @@ export default function Transfers() {
         busy={isFetching}
       />
 
-      <section style={cardStyle}>
+      <Card>
         {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
           <ErrorState
@@ -169,16 +142,16 @@ export default function Transfers() {
           <EmptyState title="No transfers match these filters." />
         )}
         {data && data.rows.length > 0 && <TransfersTable rows={data.rows} />}
-      </section>
+      </Card>
 
       {data && data.total_pages > 1 && (
         <Pager
           page={data.page}
           totalPages={data.total_pages}
-          onChange={setPage}
+          onPage={setPage}
         />
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -196,9 +169,8 @@ function FilterBar({
   q, onQChange, dateFrom, dateTo, status, onSet, busy,
 }: FilterBarProps) {
   return (
-    <section
+    <Card
       style={{
-        ...cardStyle,
         marginBottom: "1rem",
         display: "grid",
         gridTemplateColumns: "minmax(0, 1fr) 8rem 8rem 9rem",
@@ -207,63 +179,50 @@ function FilterBar({
       }}
     >
       <Field label="Search">
-        <input
+        <Input
           type="search"
           value={q}
           onChange={(e) => onQChange(e.target.value)}
           placeholder="sender, recipient, confirm #, country, batch"
-          style={inputStyle}
         />
       </Field>
       <Field label="From">
-        <input
+        <Input
           type="date"
           value={dateFrom}
           onChange={(e) => onSet("date_from", e.target.value)}
-          style={inputStyle}
         />
       </Field>
       <Field label="To">
-        <input
+        <Input
           type="date"
           value={dateTo}
           onChange={(e) => onSet("date_to", e.target.value)}
-          style={inputStyle}
         />
       </Field>
       <Field label="Status">
-        <select
+        <Select
           value={status}
           onChange={(e) => onSet("status", e.target.value)}
-          style={inputStyle}
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
-        </select>
+        </Select>
       </Field>
       {/* Subtle in-flight indicator without shifting layout. */}
       {busy && (
         <span
           style={{
             gridColumn: "1 / -1",
-            color: "var(--db-text-muted, #a3a3a3)",
+            color: tokens.textMuted,
             fontSize: "0.85rem",
           }}
         >
           Updating…
         </span>
       )}
-    </section>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-      <span style={fieldLabelStyle}>{label}</span>
-      {children}
-    </label>
+    </Card>
   );
 }
 
@@ -280,12 +239,12 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
                   style={{
                     textAlign: i === a.length - 1 ? "right" : "left",
                     padding: "0.6rem 0.75rem",
-                    color: "var(--db-text-muted, #a3a3a3)",
+                    color: tokens.textMuted,
                     fontWeight: 500,
                     fontSize: "0.78rem",
                     textTransform: "uppercase",
                     letterSpacing: "0.05em",
-                    borderBottom: "1px solid var(--db-border, #262626)",
+                    borderBottom: `1px solid ${tokens.border}`,
                   }}
                 >
                   {h}
@@ -299,8 +258,7 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
               key={r.id}
               style={{ transition: "background 120ms ease" }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background =
-                  "var(--db-surface, #0a0a0a)";
+                e.currentTarget.style.background = tokens.surface;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
@@ -332,125 +290,22 @@ function TransfersTable({ rows }: { rows: TransferRow[] }) {
   );
 }
 
-function Pager({
-  page, totalPages, onChange,
-}: {
-  page: number; totalPages: number; onChange: (p: number) => void;
-}) {
-  return (
-    <nav
-      style={{
-        marginTop: "1rem",
-        display: "flex",
-        gap: "0.5rem",
-        justifyContent: "center",
-      }}
-    >
-      <button
-        type="button"
-        disabled={page <= 1}
-        onClick={() => onChange(page - 1)}
-        style={pagerBtnStyle(page <= 1)}
-      >
-        ← Previous
-      </button>
-      <span
-        style={{
-          alignSelf: "center",
-          color: "var(--db-text-muted, #a3a3a3)",
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-          fontSize: "0.9rem",
-        }}
-      >
-        {page} / {totalPages}
-      </span>
-      <button
-        type="button"
-        disabled={page >= totalPages}
-        onClick={() => onChange(page + 1)}
-        style={pagerBtnStyle(page >= totalPages)}
-      >
-        Next →
-      </button>
-    </nav>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2.5rem 1.5rem",
-  maxWidth: "78rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const fieldLabelStyle: React.CSSProperties = {
-  fontSize: "0.78rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const monoMuted: React.CSSProperties = {
   ...mono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const linkStyle: React.CSSProperties = {
   color: "inherit",
   textDecoration: "none",
 };
-
-const pagerBtnStyle = (disabled: boolean): React.CSSProperties => ({
-  background: "transparent",
-  color: disabled
-    ? "var(--db-text-muted, #a3a3a3)"
-    : "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.45rem 0.85rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.9rem",
-  cursor: disabled ? "not-allowed" : "pointer",
-  opacity: disabled ? 0.5 : 1,
-});
