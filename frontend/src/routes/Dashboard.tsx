@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import {
   useDashboardSummary,
@@ -10,8 +10,21 @@ import { getCurrentIdentity } from "../lib/auth";
 
 // Role-shaped dashboard. /api/v2/dashboard/summary returns one
 // payload tagged by role; we render the matching panel.
+//
+// Owner sessions have no `store_id` on their JWT (they live across
+// every store under their umbrella), so /api/v2/dashboard/summary
+// 400s for them. The Flask /dashboard route already handles this
+// by redirecting owners to /owner/dashboard; mirror that in the
+// SPA so owners who hit /app/dashboard directly (post-login,
+// bookmark, hard refresh) land on their own dashboard.
 export default function Dashboard() {
   const identity = getCurrentIdentity();
+
+  // Match the Flask /dashboard redirect: owner → owner dashboard.
+  if (identity?.role === "owner") {
+    return <Navigate to="/owner/dashboard" replace />;
+  }
+
   const { data, isLoading, isError, error } = useDashboardSummary();
 
   return (
