@@ -110,7 +110,7 @@
    None) when the user has no store or the store has no addons, so
    the `in` check is safe without an `or` fallback. #}
 {% if active_addons and 'tv_display' in active_addons and user.role in ('admin', 'employee') %}
-<a href="{{ url_for('admin_tv_display') }}"
+<a href="{{ url_for('tv.admin_tv_display') }}"
    class="nav-link {% if request.endpoint and request.endpoint.startswith(('admin_tv_display','tv_display_')) %}active{% endif %}">
   <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
   TV Display

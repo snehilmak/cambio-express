@@ -64,9 +64,11 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
+from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_owner.bp)
+app.register_blueprint(_bp_tv.bp)
 
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
@@ -3453,7 +3455,7 @@ def admin_subscription_toggle_addon(addon_key):
     # When a feature has a dedicated dashboard, drop the user there
     # right after activating so they don't have to hunt for it.
     if addon_key == "tv_display" and addon_key in keys:
-        return redirect(url_for("admin_tv_display"))
+        return redirect(url_for("tv.admin_tv_display"))
     return redirect(url_for("admin_subscription"))
 
 def store_has_addon(store, addon_key):
@@ -3515,18 +3517,7 @@ def _ensure_tv_display(store):
 def _csv_split(s):
     return [x.strip() for x in (s or "").split(",") if x.strip()]
 
-@app.route("/tv-display")
-@login_required
-def admin_tv_display():
-    """301 → /app/tv-display. The admin landing moved to React; the
-    SPA reads from /api/v2/tv-display/overview and POSTs to the JSON
-    write endpoints under that prefix. Stub keeps
-    url_for('admin_tv_display') working in still-Jinja chrome (the
-    sidebar nav link) and bounces old bookmarks. The addon-not-active
-    error renders inside the SPA from the 409 the overview endpoint
-    returns — no server-side gate here."""
-    return redirect("/app/tv-display", code=301)
-
+# /tv-display moved to blueprints/tv.py (D2).
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
 #
@@ -3825,7 +3816,7 @@ def _render_tv_board(display, store):
         if c.logo_url:
             v = logo_versions.get(("company", c.slug), 0)
             company_logo_by_slug[c.slug] = (
-                url_for("tv_catalog_logo", catalog_type="company", slug=c.slug)
+                url_for("tv.tv_catalog_logo", catalog_type="company", slug=c.slug)
                 + (f"?v={v}" if v else "")
             )
     bank_logo_by_slug = {}
@@ -3833,7 +3824,7 @@ def _render_tv_board(display, store):
         if b.logo_url:
             v = logo_versions.get(("bank", b.slug), 0)
             bank_logo_by_slug[b.slug] = (
-                url_for("tv_catalog_logo", catalog_type="bank", slug=b.slug)
+                url_for("tv.tv_catalog_logo", catalog_type="bank", slug=b.slug)
                 + (f"?v={v}" if v else "")
             )
 
@@ -3896,27 +3887,6 @@ def _render_tv_board(display, store):
 _TV_LOGO_ALLOWED_MIMES = {
     "image/png", "image/jpeg", "image/webp", "image/svg+xml",
 }
-
-@app.route("/tv/logo/<catalog_type>/<slug>")
-def tv_catalog_logo(catalog_type, slug):
-    """Stream the BLOB for a catalog logo. Year-long Cache-Control;
-    cache-bust by ?v=<timestamp> on the embedding template."""
-    if catalog_type not in ("company", "bank"):
-        abort(404)
-    row = TVCatalogLogo.query.filter_by(
-        catalog_type=catalog_type, slug=slug).first()
-    if not row or row.mime_type not in _TV_LOGO_ALLOWED_MIMES:
-        abort(404)
-    resp = make_response(row.blob)
-    resp.headers["Content-Type"] = row.mime_type
-    resp.headers["Content-Length"] = str(len(row.blob))
-    # Year-long immutable cache. Templates append ?v=<unix> so a
-    # re-upload changes the URL → fresh fetch on next render.
-    resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-    # Block image-format sniffing — the served bytes match the
-    # whitelisted mime exactly.
-    resp.headers["X-Content-Type-Options"] = "nosniff"
-    return resp
 
 @app.route("/tv/<token>")
 def tv_public_display(token):
@@ -8530,7 +8500,7 @@ def superadmin_tv_catalog_upload_logo(catalog_type, slug):
     # call sites can hit it without doing a separate logo-table
     # lookup. The ?v=<unix> query param is added by templates that
     # care about cache-busting on re-upload.
-    row.logo_url = url_for("tv_catalog_logo",
+    row.logo_url = url_for("tv.tv_catalog_logo",
                             catalog_type=catalog_type, slug=slug)
 
     record_audit("tv_logo_upload", target_type=catalog_type,
