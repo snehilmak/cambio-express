@@ -36,12 +36,17 @@ import { getCurrentIdentity } from "../lib/auth";
 // bookmark, hard refresh) land on their own dashboard.
 export default function Dashboard() {
   const identity = getCurrentIdentity();
+  // Hooks must be called unconditionally before any early return —
+  // the owner-redirect branch below uses `<Navigate>` to short-circuit
+  // *render*, but the hook itself still fires. TanStack Query reads
+  // the role from getCurrentIdentity() and skips the request when
+  // owner-shaped JWTs are detected via its own `enabled` flag (see
+  // useDashboardSummary in ../api/dashboard.ts).
+  const { data, isLoading, isError, error, refetch } = useDashboardSummary();
 
   if (identity?.role === "owner") {
     return <Navigate to="/owner/dashboard" replace />;
   }
-
-  const { data, isLoading, isError, error, refetch } = useDashboardSummary();
 
   const title =
     identity?.role === "superadmin"

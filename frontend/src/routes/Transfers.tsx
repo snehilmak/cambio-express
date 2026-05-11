@@ -61,6 +61,7 @@ export default function Transfers() {
   // Reset local draft when URL changes from elsewhere (browser
   // back, link arrival).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror URL search param into local debounced input when URL changes externally (browser back, link arrival)
     setQDraft(q);
   }, [q]);
 

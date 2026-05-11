@@ -43,6 +43,7 @@ export default function Signup() {
   // changes. Debounce to avoid hammering the API on every keystroke.
   useEffect(() => {
     const code = refCode.trim().toUpperCase();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- debounced referral-code preview: clear local referral state when the input empties (the .then callback below sets it for non-empty codes)
     if (!code) { setReferral(null); return; }
     let cancelled = false;
     const timer = window.setTimeout(() => {

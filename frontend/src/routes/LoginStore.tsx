@@ -38,6 +38,7 @@ export default function LoginStore() {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error/store flags before async lookup of the store by slug; cancellation flag guards stale resolutions
     setLoading(true); setNotFound(false); setStore(null);
     lookupStoreBySlug(slug).then(
       (s) => {

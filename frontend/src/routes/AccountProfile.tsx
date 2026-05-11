@@ -32,6 +32,7 @@ export default function AccountProfile() {
   // controlled from first paint.
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched profile so inputs are controlled from first paint
     setDraft({
       full_name: data.full_name,
       email:     data.email,

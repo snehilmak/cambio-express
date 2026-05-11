@@ -64,6 +64,7 @@ export default function EditDailyBook() {
     // row OR null for "no report yet").
     if (detail.isLoading || detail.isFetching) return;
     const r = detail.data;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched daily report (or zero-filled defaults when no report exists yet)
     setForm({
       taxable_sales:           r?.taxable_sales ?? 0,
       non_taxable:             r?.non_taxable ?? 0,

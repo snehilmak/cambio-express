@@ -28,6 +28,7 @@ export default function TVDisplayCountry() {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable country/bank/rate grid from server-fetched config; resets pending deletes/new-bank rows on each refresh
     setCompaniesText(data.mt_companies.join(","));
     setBankNames(Object.fromEntries(data.banks.map((b) => [b.id, b.bank_name])));
     setBankSorts(Object.fromEntries(data.banks.map((b) => [b.id, b.sort_order])));

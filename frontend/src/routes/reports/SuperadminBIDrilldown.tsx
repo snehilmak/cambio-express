@@ -98,6 +98,7 @@ export default function SuperadminBIDrilldown() {
 
   useEffect(() => {
     if (!slug) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before async fetch of superadmin BI report; result/error/loading get set in the resolved promise callbacks
     setLoading(true);
     setError(null);
     api<Envelope>(

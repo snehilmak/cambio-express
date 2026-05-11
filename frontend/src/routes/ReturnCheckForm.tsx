@@ -54,6 +54,7 @@ export default function ReturnCheckForm() {
   useEffect(() => {
     if (!isEdit || !detail.data) return;
     const r = detail.data.return_check;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched return-check on edit
     setForm({
       bounced_on:    r.bounced_on,
       customer_name: r.customer_name,

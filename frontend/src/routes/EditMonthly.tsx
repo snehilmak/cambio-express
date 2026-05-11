@@ -87,6 +87,7 @@ export default function EditMonthly() {
       const v = r ? (r as unknown as Record<string, number>)[f.key] : 0;
       (init as Record<string, number>)[f.key] = (v ?? 0) as number;
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched monthly P&L row once the GET resolves
     setForm(init);
   }, [detail.data, detail.isLoading, detail.isFetching]);
 

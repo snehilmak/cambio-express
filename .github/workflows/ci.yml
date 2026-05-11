@@ -80,6 +80,36 @@ jobs:
           coverage run --source=app,api -m pytest --tb=short -rfE --ignore=tests/smoke
           coverage report --fail-under=80
 
+      # ── SPA build + lint gate ─────────────────────────────────
+      # Catches TS regressions and eslint violations before they
+      # ship. The SPA is served as static assets out of
+      # frontend/dist/ — when the build silently breaks, every
+      # /app/* route returns a 503 fallback (we hit this multiple
+      # times during the SPA migration). Build here so a broken
+      # bundle is a red CI light, not a production discovery.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Lint frontend (eslint --max-warnings 0)
+        working-directory: frontend
+        # `--max-warnings 0` makes ANY warning a CI failure. eslint
+        # config currently has 0 errors + 0 warnings on main; new
+        # rules added later default to error severity and need to
+        # be cleaned up before they reach this gate.
+        run: npm run lint -- --max-warnings 0
+
+      - name: Build frontend (tsc + vite)
+        working-directory: frontend
+        run: npm run build
+
       # ── Browser smoke layer ───────────────────────────────────
       # Catches silent JS errors in the page chrome — the gap that
       # let PR #197 (owner avatar dropdown) and PR #198 (return-check

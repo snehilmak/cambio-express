@@ -27,6 +27,7 @@ export default function AccountNotifications() {
 
   useEffect(() => {
     if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched notifications once GET resolves
     setDraft({
       notify_trial_reminders:    data.notify_trial_reminders,
       notify_announcement_email: data.notify_announcement_email,
