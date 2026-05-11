@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, Loading } from "../components/ui";
 
 // Monthly P&L at /app/monthly?year=Y&month=M.
 //
@@ -158,24 +159,27 @@ export default function Monthly() {
       </header>
 
       {(months.data?.months.length ?? 0) === 0 && !months.isLoading && (
-        <p style={emptyStyle}>
-          No monthly P&L logged for this store yet. Log a month
-          via the legacy /monthly page first.
-        </p>
+        <EmptyState
+          title="No monthly P&L logged yet"
+          body="Log a month via the legacy /monthly page first."
+        />
       )}
 
-      {detail.isLoading && <p style={emptyStyle}>Loading…</p>}
+      {detail.isLoading && <Loading />}
       {detail.isError && (
-        <p style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-          {detail.error instanceof Error
-            ? detail.error.message
-            : "Could not load monthly report"}
-        </p>
+        <ErrorState
+          message={
+            detail.error instanceof Error
+              ? detail.error.message
+              : "Could not load monthly report"
+          }
+          onRetry={() => { void detail.refetch(); }}
+        />
       )}
       {detail.data === null && !detail.isLoading && year && month && (
-        <p style={emptyStyle}>
-          No P&L logged for {MONTH_NAMES[month - 1]} {year} yet.
-        </p>
+        <EmptyState
+          title={`No P&L logged for ${MONTH_NAMES[month - 1]} ${year} yet.`}
+        />
       )}
       {detail.data && <ReportContent r={detail.data} />}
     </main>

@@ -7,6 +7,7 @@ import {
 } from "../api/owner";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/owner/connect — owner mints 8-character invite codes that
 // store admins redeem on their settings page to link a store to
@@ -23,7 +24,7 @@ import { getCurrentIdentity } from "../lib/auth";
 export default function OwnerConnect() {
   const identity = getCurrentIdentity();
   const queryClient = useQueryClient();
-  const { data, isLoading, isError, error } = useOwnerConnectCodes();
+  const { data, isLoading, isError, error, refetch } = useOwnerConnectCodes();
 
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -113,16 +114,16 @@ export default function OwnerConnect() {
         <h1 style={titleStyle}>Connect a Store</h1>
       </header>
 
-      {serverError && <div style={alertErrorStyle}>{serverError}</div>}
+      {serverError && <ErrorState message={serverError} />}
 
       <section style={cardStyle}>
         <h2 style={cardTitleStyle}>Active invite code</h2>
-        {isLoading && <p style={mutedStyle}>Loading…</p>}
+        {isLoading && <Loading />}
         {isError && (
-          <p style={errorStyle}>
-            Couldn't load codes.
-            {error instanceof Error ? ` ${error.message}` : ""}
-          </p>
+          <ErrorState
+            message={`Couldn't load codes.${error instanceof Error ? ` ${error.message}` : ""}`}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {!isLoading && !active && (
           <>
@@ -345,16 +346,3 @@ const mutedStyle: React.CSSProperties = {
   marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
 };
 
-const errorStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-negative, #ff4d6d)",
-};
-
-const alertErrorStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "1rem",
-  background: "rgba(255,77,109,0.08)",
-  border: "1px solid rgba(255,77,109,0.3)",
-  borderRadius: "0.5rem",
-  color: "var(--db-negative, #ff4d6d)",
-  fontSize: "0.88rem",
-};

@@ -2,6 +2,7 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
 // status pill, click any row to edit. Status transitions
@@ -19,7 +20,7 @@ export default function ReturnChecks() {
   const identity = getCurrentIdentity();
   const [sp, setSP] = useSearchParams();
   const status = sp.get("status") ?? "";
-  const { data, isLoading, isError, error } = useReturnChecks(status);
+  const { data, isLoading, isError, error, refetch } = useReturnChecks(status);
 
   function setStatus(next: string) {
     const params = new URLSearchParams(sp);
@@ -98,14 +99,17 @@ export default function ReturnChecks() {
       </div>
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No return checks {status ? `with status ${status}` : "yet"}.</Empty>
+          <EmptyState
+            title={`No return checks ${status ? `with status ${status}` : "yet"}.`}
+          />
         )}
         {data && data.rows.length > 0 && <Table rows={data.rows} />}
       </section>
@@ -236,25 +240,6 @@ function StatusPill({ status }: { status: string }) {
     >
       {status}
     </span>
-  );
-}
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
   );
 }
 

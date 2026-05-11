@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   BarElement,
@@ -13,6 +13,7 @@ import {
 import { Bar, Line } from "react-chartjs-2";
 
 import { api } from "../../lib/api";
+import { EmptyState, ErrorState, TableSkeleton } from "../../components/ui";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -96,9 +97,8 @@ export default function SuperadminBIDrilldown() {
     setParams(next, { replace: true });
   }, [from, to]);   // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!slug) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset loading/error before async fetch of superadmin BI report; result/error/loading get set in the resolved promise callbacks
     setLoading(true);
     setError(null);
     api<Envelope>(
@@ -108,6 +108,11 @@ export default function SuperadminBIDrilldown() {
       .catch(e => setError(e instanceof Error ? e.message : "load failed"))
       .finally(() => setLoading(false));
   }, [slug, from, to]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical fetch-on-mount-and-deps-change: load() drives setData/setError, which is the only path to populate the report on slug/period change
+    load();
+  }, [load]);
 
   if (!slug) return null;
 
@@ -152,9 +157,12 @@ export default function SuperadminBIDrilldown() {
         </div>
       </header>
 
-      {isLoading && <p style={muted}>Loading…</p>}
+      {isLoading && <TableSkeleton rows={5} cols={4} />}
       {error && (
-        <p style={errorStyle}>Couldn't load report — {error}</p>
+        <ErrorState
+          message={`Couldn't load report — ${error}`}
+          onRetry={load}
+        />
       )}
 
       {data && totalKeys.length > 0 && (
@@ -176,7 +184,7 @@ export default function SuperadminBIDrilldown() {
       </div>
 
       {data && rows.length === 0 && (
-        <p style={muted}>No data in this period.</p>
+        <EmptyState title="No data in this period." />
       )}
 
       {data && rows.length > 0 && (
@@ -484,12 +492,6 @@ const filterRow: React.CSSProperties = {
 };
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem", borderRadius: "0.5rem",
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",

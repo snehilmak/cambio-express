@@ -5,6 +5,7 @@ import {
   defaultStoreIds, useReportDrilldown,
   type AggregatedRow, type AggregatedTotals,
 } from "../api/reportDrilldown";
+import { EmptyState, ErrorState, TableSkeleton } from "./ui";
 
 export interface KpiSpec {
   label: string;
@@ -67,7 +68,7 @@ export function ReportDrilldown({
   }, [from, to]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const storeIds = defaultStoreIds();
-  const { data, isLoading, isError, error } = useReportDrilldown({
+  const { data, isLoading, isError, error, refetch } = useReportDrilldown({
     apiSlug, from, to, storeIds, extraParams,
   });
 
@@ -158,15 +159,16 @@ export function ReportDrilldown({
         )}
       </div>
 
-      {isLoading && <p style={muted}>Loading…</p>}
+      {isLoading && <TableSkeleton rows={5} cols={columns.length || 4} />}
       {isError && (
-        <p style={errorStyle}>
-          Couldn't load report — {error instanceof Error ? error.message : "unknown error"}
-        </p>
+        <ErrorState
+          message={`Couldn't load report — ${error instanceof Error ? error.message : "unknown error"}`}
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {data && data.rows.length === 0 && (
-        <p style={muted}>No data in this period.</p>
+        <EmptyState title="No data in this period." />
       )}
 
       {data && data.rows.length > 0 && (
@@ -308,12 +310,6 @@ const filterRow: React.CSSProperties = {
 };
 const muted: React.CSSProperties = {
   color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem", borderRadius: "0.5rem",
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",

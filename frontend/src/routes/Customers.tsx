@@ -6,6 +6,7 @@ import {
   type CustomerRow,
 } from "../api/customers";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState } from "../components/ui";
 
 // Customer search at /app/customers. Live-search box; results
 // split into "exact matches" (phone/full-name match) and
@@ -35,7 +36,7 @@ export default function Customers() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror URL search param into local debounced input when URL changes externally (browser back, link arrival)
   useEffect(() => { setDraft(q); }, [q]);
 
-  const { data, isFetching, isError, error } = useCustomerSearch(q);
+  const { data, isFetching, isError, error, refetch } = useCustomerSearch(q);
 
   if (identity?.store_id == null) {
     return (
@@ -106,9 +107,10 @@ export default function Customers() {
       </section>
 
       {isError && (
-        <p style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-          {error instanceof Error ? error.message : "Search failed"}
-        </p>
+        <ErrorState
+          message={error instanceof Error ? error.message : "Search failed"}
+          onRetry={() => { void refetch(); }}
+        />
       )}
 
       {data && data.matches.length > 0 && (
@@ -128,7 +130,7 @@ export default function Customers() {
         data.suggestions.length === 0 &&
         q.length >= 2 &&
         !isFetching && (
-          <p style={emptyStyle}>No customers match "{q}".</p>
+          <EmptyState title={`No customers match "${q}".`} />
         )}
     </main>
   );

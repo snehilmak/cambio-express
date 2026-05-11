@@ -6,6 +6,7 @@ import {
   type TransferRow,
 } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
 
 // Full transfers list page at /app/transfers.
 //
@@ -100,7 +101,7 @@ export default function Transfers() {
     );
   }
 
-  const { data, isLoading, isFetching, isError, error } = apiQuery;
+  const { data, isLoading, isFetching, isError, error, refetch } = apiQuery;
 
   return (
     <main style={pageStyle}>
@@ -157,14 +158,15 @@ export default function Transfers() {
       />
 
       <section style={cardStyle}>
-        {isLoading && <Empty>Loading…</Empty>}
+        {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
-          <Empty error>
-            {error instanceof Error ? error.message : "Could not load transfers"}
-          </Empty>
+          <ErrorState
+            message={error instanceof Error ? error.message : "Could not load transfers"}
+            onRetry={() => { void refetch(); }}
+          />
         )}
         {data && data.rows.length === 0 && !isLoading && (
-          <Empty>No transfers match these filters.</Empty>
+          <EmptyState title="No transfers match these filters." />
         )}
         {data && data.rows.length > 0 && <TransfersTable rows={data.rows} />}
       </section>
@@ -371,25 +373,6 @@ function Pager({
         Next →
       </button>
     </nav>
-  );
-}
-
-function Empty({
-  children, error,
-}: { children: React.ReactNode; error?: boolean }) {
-  return (
-    <p
-      style={{
-        margin: 0,
-        padding: "2rem 0",
-        textAlign: "center",
-        color: error
-          ? "var(--db-negative, #ff3b30)"
-          : "var(--db-text-muted, #a3a3a3)",
-      }}
-    >
-      {children}
-    </p>
   );
 }
 

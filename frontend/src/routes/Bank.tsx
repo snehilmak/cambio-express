@@ -7,6 +7,7 @@ import {
   useBankTransactions,
   type BankAccountRow,
 } from "../api/bankSync";
+import { EmptyState, ErrorState, Loading, TableSkeleton } from "../components/ui";
 
 declare global {
   interface Window {
@@ -63,7 +64,7 @@ export default function Bank() {
     <main style={pageStyle}>
       <h1 style={titleStyle}>Bank Accounts</h1>
 
-      {connectError && <div style={errorStyle}>{connectError}</div>}
+      {connectError && <ErrorState message={connectError} />}
 
       <section style={cardStyle}>
         <header style={sectionHeader}>
@@ -92,12 +93,15 @@ export default function Bank() {
           )}
         </header>
 
-        {accounts.isLoading && <p style={muted}>Loading…</p>}
+        {accounts.isLoading && <Loading />}
         {accounts.isError && (
-          <p style={errorStyle}>Couldn't load accounts.</p>
+          <ErrorState
+            message="Couldn't load accounts."
+            onRetry={() => { void accounts.refetch(); }}
+          />
         )}
 
-        {!accounts.isLoading && accountList.length === 0 && (
+        {!accounts.isLoading && !accounts.isError && accountList.length === 0 && (
           <div style={emptyState}>
             <h3 style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
               Connect your bank
@@ -142,11 +146,12 @@ export default function Bank() {
             </div>
           </header>
 
-          {recent.isLoading && <p style={muted}>Loading…</p>}
+          {recent.isLoading && <TableSkeleton rows={5} cols={4} />}
           {!recent.isLoading && txnList.length === 0 && (
-            <p style={muted}>
-              No transactions pulled yet. Click <strong>Sync transactions</strong> above to fetch.
-            </p>
+            <EmptyState
+              title="No transactions yet"
+              body={<>Click <strong>Sync transactions</strong> above to fetch.</>}
+            />
           )}
           {txnList.length > 0 && (
             <table style={tableStyle}>
@@ -313,13 +318,6 @@ const mutedSmall: React.CSSProperties = {
   fontSize: "0.75rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-};
-const errorStyle: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem",
-  borderRadius: "0.5rem",
 };
 const emptyState: React.CSSProperties = {
   textAlign: "center",
