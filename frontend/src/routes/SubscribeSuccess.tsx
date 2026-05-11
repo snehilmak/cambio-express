@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { useStoreInfo } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
+import { tokens } from "../components/ui";
 
 // /app/subscribe/success — Stripe Checkout's success_url. Stripe
 // redirects here right after the customer pays; the
@@ -36,7 +37,7 @@ export default function SubscribeSuccess() {
   if (!identity) {
     return (
       <main style={pageStyle}>
-        <p style={{ color: "var(--db-text-muted, #a3a3a3)" }}>
+        <p style={{ color: tokens.textMuted }}>
           Sign in to view your subscription status.
         </p>
       </main>
@@ -132,26 +133,26 @@ const badgeStyle: React.CSSProperties = {
 const successBadge: React.CSSProperties = {
   background: "rgba(63,255,0,0.1)",
   border: "1px solid rgba(63,255,0,0.3)",
-  color: "var(--db-neon, #3fff00)",
+  color: tokens.accent,
   boxShadow: "0 0 28px rgba(63,255,0,0.4)",
 };
 
 const pendingBadge: React.CSSProperties = {
   background: "rgba(255,176,32,0.08)",
   border: "1px solid rgba(255,176,32,0.3)",
-  color: "var(--db-warning, #ffb020)",
+  color: tokens.warning,
 };
 
 const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+  fontFamily: tokens.fontDisplay,
   fontSize: "1.75rem", fontWeight: 600,
-  color: "var(--db-gray-9, #f5f5f5)",
+  color: tokens.text,
   letterSpacing: "-0.025em",
   margin: "0 0 0.6rem",
 };
 
 const leadStyle: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.95rem",
   lineHeight: 1.7,
   margin: "0 0 2rem",
@@ -162,8 +163,8 @@ const btnPrimaryStyle: React.CSSProperties = {
   padding: "0.75rem 1.75rem",
   fontSize: "0.95rem",
   fontWeight: 600,
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
+  background: tokens.accent,
+  color: tokens.onAccent,
   border: "none", borderRadius: "0.5rem",
   textDecoration: "none",
 };

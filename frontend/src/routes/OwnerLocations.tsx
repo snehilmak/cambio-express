@@ -7,7 +7,10 @@ import {
   type OwnerStoreRow,
 } from "../api/owner";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 // Owner umbrella: per-store stats grid at /app/owner/locations.
 // Period selector (today/month/year) drives the date window for
@@ -43,36 +46,21 @@ export default function OwnerLocations() {
     identity?.role === "owner" || identity?.role === "superadmin";
   if (!isOwner) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Owner locations</h1>
-        <p style={emptyStyle}>
-          Sign in as an owner to view the multi-store umbrella.
-        </p>
-      </main>
+      <PageShell maxWidth="82rem">
+        <PageHeader title="Owner locations" />
+        <Empty>Sign in as an owner to view the multi-store umbrella.</Empty>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Locations</h1>
-          <p style={{ margin: "0.35rem 0 0", color: "var(--db-text-muted, #a3a3a3)" }}>
-            {data
-              ? `${data.matched.toLocaleString()} of ${data.total.toLocaleString()} stores`
-              : "—"}
-          </p>
-        </div>
-      </header>
+    <PageShell maxWidth="82rem">
+      <PageHeader
+        title="Locations"
+        subtitle={data
+          ? `${data.matched.toLocaleString()} of ${data.total.toLocaleString()} stores`
+          : "—"}
+      />
 
       <div
         style={{
@@ -93,15 +81,9 @@ export default function OwnerLocations() {
                 onClick={() => setParam("period", p.slug)}
                 style={{
                   ...filterBtn,
-                  background: active
-                    ? "var(--db-accent, #3fff00)"
-                    : "transparent",
-                  color: active
-                    ? "var(--db-on-accent, #0a0a0a)"
-                    : "var(--db-text, #f5f5f5)",
-                  borderColor: active
-                    ? "var(--db-accent, #3fff00)"
-                    : "var(--db-border, #262626)",
+                  background: active ? tokens.accent : "transparent",
+                  color: active ? tokens.onAccent : tokens.text,
+                  borderColor: active ? tokens.accent : tokens.border,
                 }}
               >
                 {p.label}
@@ -109,7 +91,7 @@ export default function OwnerLocations() {
             );
           })}
         </div>
-        <input
+        <Input
           type="search"
           value={qDraft}
           placeholder="Search stores…"
@@ -121,11 +103,11 @@ export default function OwnerLocations() {
               setParam("q", qDraft.trim());
             }
           }}
-          style={{ ...inputStyle, maxWidth: "20rem" }}
+          style={{ maxWidth: "20rem" }}
         />
       </div>
 
-      <section style={cardStyle}>
+      <Card>
         {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
           <ErrorState
@@ -143,8 +125,8 @@ export default function OwnerLocations() {
           <EmptyState title={`No stores match "${q}".`} />
         )}
         {data && data.matched > 0 && <Table rows={data.rows} />}
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
 
@@ -172,12 +154,12 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
                 style={{
                   textAlign: align as "left" | "right",
                   padding: "0.6rem 0.75rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                   fontWeight: 500,
                   fontSize: "0.78rem",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--db-border, #262626)",
+                  borderBottom: `1px solid ${tokens.border}`,
                 }}
               >
                 {label}
@@ -192,8 +174,8 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
                 <div style={{ fontWeight: 500 }}>{r.store_name}</div>
                 <div
                   style={{
-                    color: "var(--db-text-muted, #a3a3a3)",
-                    fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                    color: tokens.textMuted,
+                    fontFamily: tokens.fontMono,
                     fontSize: "0.78rem",
                   }}
                 >
@@ -212,10 +194,10 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
                     ...mono,
                     color:
                       r.over_short < 0
-                        ? "var(--db-negative, #ff3b30)"
+                        ? tokens.negative
                         : r.over_short > 0
-                          ? "var(--db-accent, #3fff00)"
-                          : "var(--db-text-muted, #a3a3a3)",
+                          ? tokens.accent
+                          : tokens.textMuted,
                   }}
                 >
                   {r.over_short >= 0 ? "+" : ""}${r.over_short.toFixed(2)}
@@ -230,7 +212,7 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
                   }}
                 >
                   {r.companies.length === 0 ? (
-                    <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>—</span>
+                    <span style={{ color: tokens.textMuted }}>—</span>
                   ) : (
                     r.companies.slice(0, 5).map((c) => (
                       <span key={c.company} style={chipStyle}>
@@ -249,51 +231,13 @@ function Table({ rows }: { rows: OwnerStoreRow[] }) {
 }
 
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "82rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const filterBtn: React.CSSProperties = {
@@ -301,23 +245,16 @@ const filterBtn: React.CSSProperties = {
   borderRadius: "999px",
   padding: "0.4rem 0.9rem",
   fontSize: "0.85rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontFamily: tokens.fontBody,
   cursor: "pointer",
 };
 
 const chipStyle: React.CSSProperties = {
   display: "inline-block",
   background: "rgba(255,255,255,0.06)",
-  color: "var(--db-text, #f5f5f5)",
+  color: tokens.text,
   borderRadius: "999px",
   padding: "0.15rem 0.55rem",
   fontSize: "0.78rem",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  fontFamily: tokens.fontMono,
 };

@@ -6,7 +6,9 @@ import {
 } from "../api/admin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  ButtonLink, Empty, ErrorState, Loading, PageHeader, PageShell, tokens,
+} from "../components/ui";
 
 // /app/account/referrals — admin self-service for the store's
 // referral code: copy-to-clipboard for code + share link, history
@@ -19,41 +21,35 @@ export default function AdminReferrals() {
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Referrals</h1>
-        <p style={emptyStyle}>
-          You need a store-admin sign-in to manage referrals.
-        </p>
-      </main>
+      <PageShell maxWidth="60rem">
+        <PageHeader title="Referrals" />
+        <Empty>You need a store-admin sign-in to manage referrals.</Empty>
+      </PageShell>
     );
   }
 
   // Trial-plan stores get a 409 with a clear upsell.
   if (isError && error instanceof ApiError && error.status === 409) {
     return (
-      <main style={pageStyle}>
-        <header style={{ marginBottom: "1rem" }}>
-          <h1 style={titleStyle}>Referrals</h1>
-        </header>
+      <PageShell maxWidth="60rem">
+        <PageHeader title="Referrals" />
         <section style={cardStyle}>
           <h2 style={cardTitleStyle}>Unlock referrals on a paid plan</h2>
           <p style={leadStyle}>
             Refer another store, both of you get credit. Activate Basic
             or Pro and your referral code mints automatically.
           </p>
-          <a href="/app/subscribe" style={btnStyle}>
+          <ButtonLink href="/app/subscribe" tone="primary" style={{ marginTop: "1rem" }}>
             See plans →
-          </a>
+          </ButtonLink>
         </section>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1rem" }}>
-        <h1 style={titleStyle}>Referrals</h1>
-      </header>
+    <PageShell maxWidth="60rem">
+      <PageHeader title="Referrals" />
 
       {isLoading && <Loading />}
       {isError && !(error instanceof ApiError && error.status === 409) && (
@@ -109,7 +105,7 @@ export default function AdminReferrals() {
           <section style={cardStyle}>
             <div style={cardHeaderStyle}>
               <span>History</span>
-              <span style={{ marginLeft: "auto", color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", fontWeight: 400 }}>
+              <span style={{ marginLeft: "auto", color: tokens.textMuted, fontSize: "0.85rem", fontWeight: 400 }}>
                 {data.redemptions.length}{" "}
                 {data.redemptions.length === 1 ? "redemption" : "redemptions"}
               </span>
@@ -118,7 +114,7 @@ export default function AdminReferrals() {
           </section>
         </>
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -289,21 +285,9 @@ function Badge({
 }
 
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "60rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
 const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.75rem", padding: "1.25rem",
 };
 
@@ -318,7 +302,7 @@ const cardHeaderStyle: React.CSSProperties = {
 };
 
 const leadStyle: React.CSSProperties = {
-  margin: 0, color: "var(--db-text-muted, #a3a3a3)",
+  margin: 0, color: tokens.textMuted,
   fontSize: "0.95rem", lineHeight: 1.55,
 };
 
@@ -340,7 +324,7 @@ const heroLabelStyle: React.CSSProperties = {
 };
 
 const heroCodeStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "2.2rem",
   color: "#ffd96e",
   marginTop: "0.4rem",
@@ -371,7 +355,7 @@ const shareInputStyle: React.CSSProperties = {
   padding: "0.65rem 0.85rem",
   borderRadius: "0.5rem",
   fontSize: "0.85rem",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const btnGoldStyle: React.CSSProperties = {
@@ -383,18 +367,7 @@ const btnGoldStyle: React.CSSProperties = {
   fontSize: "0.88rem",
   fontWeight: 600,
   cursor: "pointer",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-};
-
-const btnStyle: React.CSSProperties = {
-  display: "inline-block",
-  marginTop: "1rem",
-  padding: "0.7rem 1.1rem",
-  fontWeight: 600, fontSize: "0.95rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
-  border: "none", borderRadius: "0.5rem",
-  textDecoration: "none",
+  fontFamily: tokens.fontBody,
 };
 
 const statsRowStyle: React.CSSProperties = {
@@ -407,11 +380,11 @@ const statsRowStyle: React.CSSProperties = {
 const statLabelStyle: React.CSSProperties = {
   fontSize: "0.7rem", letterSpacing: "0.06em",
   textTransform: "uppercase", fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const statValueStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+  fontFamily: tokens.fontDisplay,
   fontSize: "1.6rem",
   fontWeight: 600,
   marginTop: "0.35rem",
@@ -420,48 +393,44 @@ const statValueStyle: React.CSSProperties = {
 const statSubStyle: React.CSSProperties = {
   marginTop: "0.25rem",
   fontSize: "0.78rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const howBoxStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
+  background: tokens.surface2,
   borderLeft: "3px solid #d4a92a",
   borderRadius: "0.4rem",
   padding: "0.85rem 1.1rem",
   fontSize: "0.88rem",
   lineHeight: 1.6,
-  color: "var(--db-text, #e5e5e5)",
+  color: tokens.text,
   marginBottom: "1rem",
 };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.6rem 0.75rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 500,
   fontSize: "0.78rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
 };
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const monoMuted: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const emptyStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const emptyTableStyle: React.CSSProperties = {
   padding: "1.4rem 0", textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.9rem",
 };

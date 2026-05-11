@@ -17,7 +17,7 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading } from "../components/ui";
+import { ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
 
 // Account settings page at /app/settings. v1 ships the
 // change-password card; subsequent PRs add profile / preferences /
@@ -27,25 +27,15 @@ export default function Settings() {
   const identity = getCurrentIdentity();
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Settings</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}
-        >
-          {identity?.username || "—"}
-        </p>
-      </header>
+    <PageShell maxWidth="60rem" gap="1rem">
+      <PageHeader title="Settings" subtitle={identity?.username || "—"} />
 
       <StoreInfoCard />
       <SubscriptionCard />
       <TeamCard />
       <ChangePasswordCard />
       <PasskeysCard />
-    </main>
+    </PageShell>
   );
 }
 
@@ -865,25 +855,6 @@ function Field({
     </label>
   );
 }
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "60rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-  gap: "1rem",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
 
 const sectionTitleStyle: React.CSSProperties = {
   fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",

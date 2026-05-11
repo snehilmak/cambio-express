@@ -5,7 +5,10 @@ import {
   type SuperadminStoreRow,
 } from "../api/superadmin";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 // Platform-wide stores list at /app/superadmin/stores. Mirrors
 // the legacy `/superadmin/stores` table — superadmin's primary
@@ -21,10 +24,10 @@ export default function SuperadminStores() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>All stores</h1>
-        <p style={emptyStyle}>Superadmin scope required.</p>
-      </main>
+      <PageShell maxWidth="82rem">
+        <PageHeader title="All stores" />
+        <Empty>Superadmin scope required.</Empty>
+      </PageShell>
     );
   }
 
@@ -41,35 +44,24 @@ export default function SuperadminStores() {
       : data?.rows;
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>All stores</h1>
-          <p style={{ margin: "0.35rem 0 0", color: "var(--db-text-muted, #a3a3a3)" }}>
-            {data
-              ? `${(filtered?.length ?? 0).toLocaleString()} of ${data.total.toLocaleString()}`
-              : "—"}
-          </p>
-        </div>
-        <input
-          type="search"
-          value={q}
-          placeholder="Search name, slug, email…"
-          onChange={(e) => setQ(e.target.value)}
-          style={{ ...inputStyle, maxWidth: "22rem" }}
-        />
-      </header>
+    <PageShell maxWidth="82rem">
+      <PageHeader
+        title="All stores"
+        subtitle={data
+          ? `${(filtered?.length ?? 0).toLocaleString()} of ${data.total.toLocaleString()}`
+          : "—"}
+        actions={(
+          <Input
+            type="search"
+            value={q}
+            placeholder="Search name, slug, email…"
+            onChange={(e) => setQ(e.target.value)}
+            style={{ maxWidth: "22rem" }}
+          />
+        )}
+      />
 
-      <section style={cardStyle}>
+      <Card>
         {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
           <ErrorState
@@ -81,8 +73,8 @@ export default function SuperadminStores() {
           <EmptyState title="No stores match these filters." />
         )}
         {filtered && filtered.length > 0 && <Table rows={filtered} />}
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
 
@@ -111,12 +103,12 @@ function Table({ rows }: { rows: SuperadminStoreRow[] }) {
                 style={{
                   textAlign: "left",
                   padding: "0.6rem 0.75rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                   fontWeight: 500,
                   fontSize: "0.78rem",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--db-border, #262626)",
+                  borderBottom: `1px solid ${tokens.border}`,
                 }}
               >
                 {h}
@@ -131,9 +123,8 @@ function Table({ rows }: { rows: SuperadminStoreRow[] }) {
                 <div style={{ fontWeight: 500 }}>{r.name}</div>
                 <div
                   style={{
-                    color: "var(--db-text-muted, #a3a3a3)",
-                    fontFamily:
-                      "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                    color: tokens.textMuted,
+                    fontFamily: tokens.fontMono,
                     fontSize: "0.78rem",
                   }}
                 >
@@ -156,13 +147,13 @@ function Table({ rows }: { rows: SuperadminStoreRow[] }) {
                     style={{
                       ...mono,
                       fontSize: "0.8rem",
-                      color: "var(--db-text-muted, #a3a3a3)",
+                      color: tokens.textMuted,
                     }}
                   >
                     {r.stripe_customer_id.slice(0, 14)}…
                   </span>
                 ) : (
-                  <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>—</span>
+                  <span style={{ color: tokens.textMuted }}>—</span>
                 )}
               </td>
               <td style={cellStyle}>
@@ -210,9 +201,7 @@ function StatusPill({ active }: { active: boolean }) {
         background: active
           ? "rgba(63,255,0,0.12)"
           : "rgba(255,59,48,0.15)",
-        color: active
-          ? "var(--db-accent, #3fff00)"
-          : "var(--db-negative, #ff3b30)",
+        color: active ? tokens.accent : tokens.negative,
         borderRadius: "999px",
         padding: "0.15rem 0.55rem",
         fontSize: "0.78rem",
@@ -227,77 +216,32 @@ function StatusPill({ active }: { active: boolean }) {
 function TrialCell({ row }: { row: SuperadminStoreRow }) {
   if (row.data_retention_until) {
     return (
-      <span style={{ color: "var(--db-negative, #ff3b30)", fontSize: "0.85rem" }}>
+      <span style={{ color: tokens.negative, fontSize: "0.85rem" }}>
         Purge {row.data_retention_until.slice(0, 10)}
       </span>
     );
   }
   if (row.plan === "trial" && row.trial_ends_at) {
     return (
-      <span style={{ color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem" }}>
+      <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
         Trial ends {row.trial_ends_at.slice(0, 10)}
       </span>
     );
   }
-  return <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>—</span>;
+  return <span style={{ color: tokens.textMuted }}>—</span>;
 }
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "82rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const monoMuted: React.CSSProperties = {
   ...mono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };

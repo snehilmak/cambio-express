@@ -7,7 +7,10 @@ import {
   useBankTransactions,
   type BankAccountRow,
 } from "../api/bankSync";
-import { EmptyState, ErrorState, Loading, TableSkeleton } from "../components/ui";
+import {
+  Card, EmptyState, ErrorState, Loading, PageHeader, PageShell,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 declare global {
   interface Window {
@@ -61,12 +64,12 @@ export default function Bank() {
   const atCap = accountList.length >= 6; // mirror MAX_BANK_ACCOUNTS_PER_STORE
 
   return (
-    <main style={pageStyle}>
-      <h1 style={titleStyle}>Bank Accounts</h1>
+    <PageShell maxWidth="70rem" gap="1.25rem">
+      <PageHeader title="Bank Accounts" />
 
       {connectError && <ErrorState message={connectError} />}
 
-      <section style={cardStyle}>
+      <Card>
         <header style={sectionHeader}>
           <span style={cardTitle}>
             Connected Bank Accounts
@@ -128,10 +131,10 @@ export default function Bank() {
             ))}
           </div>
         )}
-      </section>
+      </Card>
 
       {accountList.length > 0 && (
-        <section style={cardStyle}>
+        <Card>
           <header style={sectionHeader}>
             <span style={cardTitle}>Recent Transactions</span>
             <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -180,7 +183,7 @@ export default function Bank() {
                       style={{
                         ...tdStyle,
                         textAlign: "right",
-                        color: t.amount >= 0 ? "var(--db-positive, #3fff00)" : "var(--db-negative, #ff3b30)",
+                        color: t.amount >= 0 ? tokens.accent : tokens.negative,
                       }}
                     >
                       {t.amount >= 0 ? "+" : ""}${Math.abs(t.amount).toFixed(2)}
@@ -190,9 +193,9 @@ export default function Bank() {
               </tbody>
             </table>
           )}
-        </section>
+        </Card>
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -230,8 +233,8 @@ function AccountCard({ acct }: { acct: BankAccountRow }) {
           style={{
             flex: 1,
             padding: "0.4rem 0.5rem",
-            background: "var(--db-surface-1, #0a0a0a)",
-            border: "1px solid var(--db-border, #262626)",
+            background: tokens.surface,
+            border: `1px solid ${tokens.border}`,
             color: "inherit",
             borderRadius: "0.4rem",
             fontSize: "0.85rem",
@@ -270,29 +273,6 @@ function ensureStripeJs(): Promise<void> {
   return _stripeLoadPromise;
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "2rem 1.5rem",
-  maxWidth: "70rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  gap: "1.25rem",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
 const sectionHeader: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
@@ -307,10 +287,10 @@ const mutedInline: React.CSSProperties = {
   fontWeight: 400,
   marginLeft: "0.5rem",
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const muted: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   margin: 0,
 };
 const mutedSmall: React.CSSProperties = {
@@ -329,19 +309,19 @@ const accountGrid: React.CSSProperties = {
   gap: "1rem",
 };
 const accountCard: React.CSSProperties = {
-  background: "var(--db-surface-1, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
   padding: "1rem",
 };
 const balance: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "1.5rem",
   fontWeight: 700,
   margin: "0.5rem 0 0.25rem",
 };
 const btnPrimary: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
+  background: tokens.accent,
   color: "#000",
   border: "none",
   padding: "0.4rem 0.85rem",
@@ -353,7 +333,7 @@ const btnPrimary: React.CSSProperties = {
 const btnOutline: React.CSSProperties = {
   background: "transparent",
   color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   padding: "0.4rem 0.85rem",
   borderRadius: "0.5rem",
   fontSize: "0.85rem",
@@ -371,8 +351,8 @@ const btnOutlineSm: React.CSSProperties = {
 };
 const btnDangerSm: React.CSSProperties = {
   ...btnOutlineSm,
-  color: "var(--db-negative, #ff3b30)",
-  borderColor: "var(--db-negative, #ff3b30)",
+  color: tokens.negative,
+  borderColor: tokens.negative,
 };
 const tableStyle: React.CSSProperties = {
   width: "100%",
@@ -382,13 +362,13 @@ const tableStyle: React.CSSProperties = {
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
   fontWeight: 500,
   fontSize: "0.75rem",
   textTransform: "uppercase",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const tdStyle: React.CSSProperties = {
   padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };

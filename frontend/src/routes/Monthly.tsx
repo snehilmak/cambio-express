@@ -1,9 +1,12 @@
 import { useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 
 import { useLoggedMonths, useMonthly, type MonthlyRow } from "../api/monthly";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, Loading } from "../components/ui";
+import {
+  ButtonLink, Card, Empty, EmptyState, ErrorState, Loading, PageHeader,
+  PageShell, Section, Select, tokens,
+} from "../components/ui";
 
 // Monthly P&L at /app/monthly?year=Y&month=M.
 //
@@ -81,82 +84,58 @@ export default function Monthly() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Monthly P&L</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to view monthly P&L.
-        </p>
-      </main>
+      <PageShell maxWidth="78rem" gap="1rem">
+        <PageHeader title="Monthly P&L" />
+        <Empty>Sign in as a store admin to view monthly P&amp;L.</Empty>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Monthly P&L</h1>
-          <p
-            style={{
-              margin: "0.35rem 0 0",
-              color: "var(--db-text-muted, #a3a3a3)",
-              fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-            }}
-          >
-            {year && month
-              ? `${MONTH_NAMES[month - 1]} ${year}`
-              : "—"}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <select
-            value={year && month ? `${year}-${month}` : ""}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) return;
-              const [y, m] = v.split("-").map(Number);
-              const params = new URLSearchParams(sp);
-              params.set("year", String(y));
-              params.set("month", String(m));
-              setSP(params, { replace: true });
-            }}
-            style={pickerStyle}
-          >
-            {(months.data?.months ?? []).map((m) => (
-              <option
-                key={`${m.year}-${m.month}`}
-                value={`${m.year}-${m.month}`}
-              >
-                {MONTH_NAMES[m.month - 1]} {m.year}
-              </option>
-            ))}
-          </select>
-          {year && month && (
-            <Link
-              to={`/monthly/edit?year=${year}&month=${month}`}
-              style={{
-                background: "var(--db-accent, #3fff00)",
-                color: "var(--db-on-accent, #0a0a0a)",
-                borderRadius: "0.5rem",
-                padding: "0.45rem 0.85rem",
-                fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                textDecoration: "none",
+    <PageShell maxWidth="78rem" gap="1rem">
+      <PageHeader
+        title="Monthly P&L"
+        subtitle={year && month ? (
+          <span style={{ fontFamily: tokens.fontMono }}>
+            {MONTH_NAMES[month - 1]} {year}
+          </span>
+        ) : "—"}
+        actions={(
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <Select
+              value={year && month ? `${year}-${month}` : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                const [y, m] = v.split("-").map(Number);
+                const params = new URLSearchParams(sp);
+                params.set("year", String(y));
+                params.set("month", String(m));
+                setSP(params, { replace: true });
               }}
+              style={{ width: "auto" }}
             >
-              Edit
-            </Link>
-          )}
-        </div>
-      </header>
+              {(months.data?.months ?? []).map((m) => (
+                <option
+                  key={`${m.year}-${m.month}`}
+                  value={`${m.year}-${m.month}`}
+                >
+                  {MONTH_NAMES[m.month - 1]} {m.year}
+                </option>
+              ))}
+            </Select>
+            {year && month && (
+              <ButtonLink
+                href={`/monthly/edit?year=${year}&month=${month}`}
+                tone="primary"
+                size="sm"
+              >
+                Edit
+              </ButtonLink>
+            )}
+          </div>
+        )}
+      />
 
       {(months.data?.months.length ?? 0) === 0 && !months.isLoading && (
         <EmptyState
@@ -182,7 +161,7 @@ export default function Monthly() {
         />
       )}
       {detail.data && <ReportContent r={detail.data} />}
-    </main>
+    </PageShell>
   );
 }
 
@@ -190,80 +169,66 @@ function ReportContent({ r }: { r: MonthlyRow }) {
   return (
     <>
       <Section title="Totals">
-        <Grid>
-          <Stat label="Total income"     value={r.total_income}   positive />
-          <Stat label="Total expenses"   value={r.total_expenses} />
-          <Stat
-            label="Net profit"
-            value={r.net_profit}
-            positive={r.net_profit >= 0}
-            negative={r.net_profit < 0}
-          />
-          <Stat label="Cash carry forward" value={r.cash_carry_forward} />
-        </Grid>
+        <Card>
+          <Grid>
+            <Stat label="Total income"     value={r.total_income}   positive />
+            <Stat label="Total expenses"   value={r.total_expenses} />
+            <Stat
+              label="Net profit"
+              value={r.net_profit}
+              positive={r.net_profit >= 0}
+              negative={r.net_profit < 0}
+            />
+            <Stat label="Cash carry forward" value={r.cash_carry_forward} />
+          </Grid>
+        </Card>
       </Section>
 
       <Section title="Income">
-        <Grid>
-          {INCOME_FIELDS.map((f) => (
-            <Stat
-              key={f.key}
-              label={f.label}
-              value={r[f.key] as number}
-            />
-          ))}
-        </Grid>
+        <Card>
+          <Grid>
+            {INCOME_FIELDS.map((f) => (
+              <Stat
+                key={f.key}
+                label={f.label}
+                value={r[f.key] as number}
+              />
+            ))}
+          </Grid>
+        </Card>
       </Section>
 
       <Section title="Expenses">
-        <Grid>
-          {EXPENSE_FIELDS.map((f) => (
-            <Stat
-              key={f.key}
-              label={f.label}
-              value={r[f.key] as number}
-            />
-          ))}
-        </Grid>
+        <Card>
+          <Grid>
+            {EXPENSE_FIELDS.map((f) => (
+              <Stat
+                key={f.key}
+                label={f.label}
+                value={r[f.key] as number}
+              />
+            ))}
+          </Grid>
+        </Card>
       </Section>
 
       {r.notes && (
         <Section title="Notes">
-          <p
-            style={{
-              margin: 0,
-              color: "var(--db-text, #f5f5f5)",
-              whiteSpace: "pre-wrap",
-              lineHeight: 1.6,
-            }}
-          >
-            {r.notes}
-          </p>
+          <Card>
+            <p
+              style={{
+                margin: 0,
+                color: tokens.text,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+              }}
+            >
+              {r.notes}
+            </p>
+          </Card>
         </Section>
       )}
     </>
-  );
-}
-
-function Section({
-  title, children,
-}: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={cardStyle}>
-      <h2
-        style={{
-          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-          fontSize: "0.95rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "var(--db-text-muted, #a3a3a3)",
-          margin: "0 0 1rem",
-        }}
-      >
-        {title}
-      </h2>
-      {children}
-    </section>
   );
 }
 
@@ -288,15 +253,15 @@ function Stat({
   positive?: boolean; negative?: boolean;
 }) {
   const color = positive
-    ? "var(--db-accent, #3fff00)"
+    ? tokens.accent
     : negative
-      ? "var(--db-negative, #ff3b30)"
-      : "var(--db-text, #f5f5f5)";
+      ? tokens.negative
+      : tokens.text;
   return (
     <div
       style={{
-        background: "var(--db-surface, #0a0a0a)",
-        border: "1px solid var(--db-border-subtle, #1f1f1f)",
+        background: tokens.surface,
+        border: `1px solid ${tokens.borderSubtle}`,
         borderRadius: "0.5rem",
         padding: "0.6rem 0.8rem",
       }}
@@ -305,7 +270,7 @@ function Stat({
         style={{
           margin: 0,
           fontSize: "0.72rem",
-          color: "var(--db-text-muted, #a3a3a3)",
+          color: tokens.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
         }}
@@ -315,7 +280,7 @@ function Stat({
       <p
         style={{
           margin: "0.2rem 0 0",
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+          fontFamily: tokens.fontMono,
           fontSize: "1.05rem",
           fontWeight: 500,
           color,
@@ -326,47 +291,3 @@ function Stat({
     </div>
   );
 }
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "78rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-  gap: "1rem",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
-const pickerStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.5rem 0.75rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.9rem",
-  outline: "none",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};

@@ -5,7 +5,10 @@ import {
   type AdminUserRow,
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 // /app/admin/users — per-store user roster + entry point to the
 // Add / Edit forms. Mirrors the legacy admin_users.html surface:
@@ -22,30 +25,26 @@ export default function AdminUsers() {
     || (identity.role !== "admin" && identity.role !== "owner")
   ) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>User Management</h1>
-        <p style={emptyStyle}>
-          You need a store-admin sign-in to manage users.
-        </p>
-      </main>
+      <PageShell maxWidth="82rem">
+        <PageHeader title="User Management" />
+        <Empty>You need a store-admin sign-in to manage users.</Empty>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={headerStyle}>
-        <div>
-          <h1 style={titleStyle}>User Management</h1>
-          <p style={leadStyle}>
-            Manage who has access and what they can see.
-          </p>
-        </div>
-        <Link to="/admin/users/new" style={btnPrimaryStyle}>
-          + Add User
-        </Link>
-      </header>
+    <PageShell maxWidth="82rem">
+      <PageHeader
+        title="User Management"
+        subtitle="Manage who has access and what they can see."
+        actions={(
+          <ButtonLink href="/admin/users/new" tone="primary">
+            + Add User
+          </ButtonLink>
+        )}
+      />
 
-      <section style={cardStyle}>
+      <Card padding="0.5rem 0.5rem">
         {isLoading && <TableSkeleton rows={4} cols={4} />}
         {isError && (
           <ErrorState
@@ -59,7 +58,7 @@ export default function AdminUsers() {
         {data && data.rows.length > 0 && (
           <Table rows={data.rows} selfId={identity.user_id} />
         )}
-      </section>
+      </Card>
 
       <section style={infoCalloutStyle}>
         <h2 style={cardTitleStyle}>Access Levels</h2>
@@ -76,7 +75,7 @@ export default function AdminUsers() {
           </p>
         </div>
       </section>
-    </main>
+    </PageShell>
   );
 }
 
@@ -187,110 +186,65 @@ function formatCreated(iso: string): string {
 }
 
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "82rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const headerStyle: React.CSSProperties = {
-  display: "flex", flexWrap: "wrap",
-  alignItems: "center", justifyContent: "space-between",
-  gap: "0.75rem", marginBottom: "1rem",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const leadStyle: React.CSSProperties = {
-  margin: "0.4rem 0 0",
-  color: "var(--db-text-muted, #a3a3a3)",
-  fontSize: "0.9rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "0.5rem 0.5rem",
-};
-
 const infoCalloutStyle: React.CSSProperties = {
   marginTop: "1.25rem",
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderLeft: "3px solid var(--db-neon, #3fff00)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
+  borderLeft: `3px solid ${tokens.accent}`,
   borderRadius: "0.75rem",
   padding: "1.25rem",
 };
 
 const cardTitleStyle: React.CSSProperties = {
   margin: "0 0 0.6rem", fontSize: "0.95rem", fontWeight: 600,
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+  fontFamily: tokens.fontDisplay,
 };
 
 const accessLevelsStyle: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.88rem", lineHeight: 1.6,
 };
 
 const strongStyle: React.CSSProperties = {
-  color: "var(--db-text, #e5e5e5)", fontWeight: 600,
+  color: tokens.text, fontWeight: 600,
 };
 
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.6rem 0.75rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 500,
   fontSize: "0.78rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
 };
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
   verticalAlign: "middle",
 };
 
 const monoCell: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   whiteSpace: "nowrap",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 600, fontSize: "0.92rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
-  border: "none", borderRadius: "0.5rem",
-  textDecoration: "none",
-  display: "inline-block",
 };
 
 const btnOutlineSmStyle: React.CSSProperties = {
   padding: "0.35rem 0.75rem",
   fontWeight: 500, fontSize: "0.82rem",
   background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.4rem",
   textDecoration: "none",
   display: "inline-block",
 };
 
 const mutedSmallStyle: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.85rem",
-};
-
-const emptyStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
 };

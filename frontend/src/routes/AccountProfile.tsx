@@ -6,7 +6,9 @@ import {
   type ProfileUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Card, ErrorState, Loading, PageHeader, PageShell, Section, tokens,
+} from "../components/ui";
 
 // /app/account/profile — personal info form (full_name, email,
 // phone, timezone) + read-only metadata (username, role,
@@ -86,21 +88,21 @@ export default function AccountProfile() {
 
   if (isLoading) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Profile</h1>
+      <PageShell maxWidth="40rem">
+        <PageHeader title="Profile" />
         <Loading />
-      </main>
+      </PageShell>
     );
   }
   if (isError || !data) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Profile</h1>
+      <PageShell maxWidth="40rem">
+        <PageHeader title="Profile" />
         <ErrorState
           message={`Couldn't load your profile.${error instanceof Error ? ` ${error.message}` : ""}`}
           onRetry={() => { void refetch(); }}
         />
-      </main>
+      </PageShell>
     );
   }
 
@@ -114,101 +116,100 @@ export default function AccountProfile() {
     : "—";
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1rem" }}>
-        <h1 style={titleStyle}>Profile</h1>
-      </header>
+    <PageShell maxWidth="40rem">
+      <PageHeader title="Profile" />
 
-      <section style={cardStyle}>
-        <h2 style={cardTitleStyle}>Personal info</h2>
-        <p style={leadStyle}>
-          Used for things addressed to you personally — receipts,
-          password-reset emails, audit-log attribution. Your
-          username and role are set by your store admin and shown
-          here for reference.
-        </p>
+      <Section title="Personal info">
+        <Card padding="1.5rem">
+          <p style={leadStyle}>
+            Used for things addressed to you personally — receipts,
+            password-reset emails, audit-log attribution. Your
+            username and role are set by your store admin and shown
+            here for reference.
+          </p>
 
-        {serverError && <div style={alertErrorStyle}>{serverError}</div>}
-        {saved && (
-          <div style={alertOkStyle} role="status">Profile updated.</div>
-        )}
+          {serverError && <div style={alertErrorStyle}>{serverError}</div>}
+          {saved && (
+            <div style={alertOkStyle} role="status">Profile updated.</div>
+          )}
 
-        <form onSubmit={onSubmit} autoComplete="off">
-          <Field label="Display name *" error={fieldErrors.full_name}>
-            <input
-              type="text" maxLength={120} required
-              value={draft.full_name ?? ""}
-              onChange={(e) => set("full_name", e.target.value)}
-              disabled={busy} style={inputStyle}
-            />
-          </Field>
+          <form onSubmit={onSubmit} autoComplete="off">
+            <FormField label="Display name *" error={fieldErrors.full_name}>
+              <input
+                type="text" maxLength={120} required
+                value={draft.full_name ?? ""}
+                onChange={(e) => set("full_name", e.target.value)}
+                disabled={busy} style={inputStyle}
+              />
+            </FormField>
 
-          <Field label="Email" error={fieldErrors.email}
-                 hint="We use this for password reset and account notices. Leave blank if you'd rather not receive email.">
-            <input
-              type="email" maxLength={255}
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={draft.email ?? ""}
-              onChange={(e) => set("email", e.target.value)}
-              disabled={busy} style={inputStyle}
-            />
-          </Field>
+            <FormField label="Email" error={fieldErrors.email}
+                   hint="We use this for password reset and account notices. Leave blank if you'd rather not receive email.">
+              <input
+                type="email" maxLength={255}
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={draft.email ?? ""}
+                onChange={(e) => set("email", e.target.value)}
+                disabled={busy} style={inputStyle}
+              />
+            </FormField>
 
-          <Field label="Phone" error={fieldErrors.phone}>
-            <input
-              type="tel" maxLength={40}
-              autoComplete="tel"
-              placeholder="+1 555 123 4567"
-              value={draft.phone ?? ""}
-              onChange={(e) => set("phone", e.target.value)}
-              disabled={busy} style={inputStyle}
-            />
-          </Field>
+            <FormField label="Phone" error={fieldErrors.phone}>
+              <input
+                type="tel" maxLength={40}
+                autoComplete="tel"
+                placeholder="+1 555 123 4567"
+                value={draft.phone ?? ""}
+                onChange={(e) => set("phone", e.target.value)}
+                disabled={busy} style={inputStyle}
+              />
+            </FormField>
 
-          <Field label="Timezone" error={fieldErrors.timezone}
-                 hint="Daily reports + audit timestamps render in this zone for you. Don't see yours? Ask your admin to add it.">
-            <select
-              value={draft.timezone ?? ""}
-              onChange={(e) => set("timezone", e.target.value)}
-              disabled={busy} style={inputStyle}
-            >
-              <option value="">— Use store / UTC default —</option>
-              {data.timezone_choices.map((tz) => (
-                <option key={tz} value={tz}>{tz}</option>
-              ))}
-            </select>
-          </Field>
+            <FormField label="Timezone" error={fieldErrors.timezone}
+                   hint="Daily reports + audit timestamps render in this zone for you. Don't see yours? Ask your admin to add it.">
+              <select
+                value={draft.timezone ?? ""}
+                onChange={(e) => set("timezone", e.target.value)}
+                disabled={busy} style={inputStyle}
+              >
+                <option value="">— Use store / UTC default —</option>
+                {data.timezone_choices.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </FormField>
 
-          <hr style={hrStyle} />
+            <hr style={hrStyle} />
 
-          <div style={readOnlyGridStyle}>
-            <ReadOnly label="Username" value={data.username} />
-            <ReadOnly label="Role" value={
-              data.role.charAt(0).toUpperCase() + data.role.slice(1)
-            } />
-            <ReadOnly label="Member since" value={memberSince} />
-            <ReadOnly label="Last sign-in" value={lastLogin} />
-          </div>
+            <div style={readOnlyGridStyle}>
+              <ReadOnly label="Username" value={data.username} />
+              <ReadOnly label="Role" value={
+                data.role.charAt(0).toUpperCase() + data.role.slice(1)
+              } />
+              <ReadOnly label="Member since" value={memberSince} />
+              <ReadOnly label="Last sign-in" value={lastLogin} />
+            </div>
 
-          <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.6rem" }}>
-            <button
-              type="submit" disabled={busy} style={btnPrimaryStyle}
-            >
-              {busy ? "Saving…" : "Save profile"}
-            </button>
-            <a href="/app/settings" style={btnOutlineStyle}>
-              Security →
-            </a>
-          </div>
-        </form>
-      </section>
-    </main>
+            <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.6rem" }}>
+              <button
+                type="submit" disabled={busy} style={btnPrimaryStyle}
+              >
+                {busy ? "Saving…" : "Save profile"}
+              </button>
+              <a href="/app/settings" style={btnOutlineStyle}>
+                Security →
+              </a>
+            </div>
+          </form>
+        </Card>
+      </Section>
+    </PageShell>
   );
 }
 
 
-function Field({
+function FormField({
   label, error, hint, children,
 }: {
   label:    string;
@@ -252,31 +253,8 @@ function formatTs(iso: string): string {
 }
 
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "40rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.5rem",
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  margin: "0 0 0.5rem", fontSize: "1.05rem", fontWeight: 600,
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-};
-
 const leadStyle: React.CSSProperties = {
-  margin: "0 0 1.25rem", color: "var(--db-text-muted, #a3a3a3)",
+  margin: "0 0 1.25rem", color: tokens.textMuted,
   fontSize: "0.88rem", lineHeight: 1.55,
 };
 
@@ -288,28 +266,28 @@ const fieldStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: "0.7rem", letterSpacing: "0.06em",
   textTransform: "uppercase", fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const inputStyle: React.CSSProperties = {
   padding: "0.6rem 0.75rem",
   background: "var(--db-bg-input, #0d0d0d)",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem", fontSize: "0.95rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontFamily: tokens.fontBody,
 };
 
 const hintStyle: React.CSSProperties = {
-  fontSize: "0.78rem", color: "var(--db-text-muted, #a3a3a3)",
+  fontSize: "0.78rem", color: tokens.textMuted,
 };
 
 const fieldErrorStyle: React.CSSProperties = {
-  fontSize: "0.8rem", color: "var(--db-negative, #ff4d6d)",
+  fontSize: "0.8rem", color: tokens.negative,
 };
 
 const hrStyle: React.CSSProperties = {
-  border: 0, borderTop: "1px solid var(--db-border, #262626)",
+  border: 0, borderTop: `1px solid ${tokens.border}`,
   margin: "1.5rem 0 1rem",
 };
 
@@ -322,8 +300,8 @@ const readOnlyGridStyle: React.CSSProperties = {
 const btnPrimaryStyle: React.CSSProperties = {
   padding: "0.65rem 1.1rem",
   fontWeight: 600, fontSize: "0.92rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
+  background: tokens.accent,
+  color: tokens.onAccent,
   border: "none", borderRadius: "0.5rem",
   cursor: "pointer",
 };
@@ -332,8 +310,8 @@ const btnOutlineStyle: React.CSSProperties = {
   padding: "0.65rem 1.1rem",
   fontWeight: 500, fontSize: "0.92rem",
   background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
   textDecoration: "none",
   display: "inline-block",
@@ -345,7 +323,7 @@ const alertErrorStyle: React.CSSProperties = {
   background: "rgba(255,77,109,0.08)",
   border: "1px solid rgba(255,77,109,0.3)",
   borderRadius: "0.5rem",
-  color: "var(--db-negative, #ff4d6d)",
+  color: tokens.negative,
   fontSize: "0.88rem",
 };
 
@@ -355,7 +333,6 @@ const alertOkStyle: React.CSSProperties = {
   background: "rgba(63,255,0,0.08)",
   border: "1px solid rgba(63,255,0,0.3)",
   borderRadius: "0.5rem",
-  color: "var(--db-neon, #3fff00)",
+  color: tokens.accent,
   fontSize: "0.88rem",
 };
-

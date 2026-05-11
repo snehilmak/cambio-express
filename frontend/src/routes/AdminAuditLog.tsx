@@ -6,7 +6,10 @@ import {
   type AdminAuditUserOption,
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  Card, Empty, EmptyState, ErrorState, PageHeader, PageShell, Pager,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 // /app/admin/audit-log — merged operator + transfer audit feed
 // for the JWT principal's store. Filters live in the URL so the
@@ -34,32 +37,28 @@ export default function AdminAuditLog() {
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Activity Log</h1>
-        <p style={emptyStyle}>
-          You need a store-admin sign-in to see the activity log.
-        </p>
-      </main>
+      <PageShell maxWidth="82rem">
+        <PageHeader title="Activity Log" />
+        <Empty>You need a store-admin sign-in to see the activity log.</Empty>
+      </PageShell>
     );
   }
 
   const hasFilters = !!(target || action || user);
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1rem" }}>
-        <h1 style={titleStyle}>Activity Log</h1>
-      </header>
+    <PageShell maxWidth="82rem">
+      <PageHeader title="Activity Log" />
 
-      <section style={{ ...cardStyle, marginBottom: "1rem" }}>
+      <Card style={{ marginBottom: "1rem" }}>
         <div style={cardHeaderStyle}>
           Filters
-          <span style={{ marginLeft: "0.5rem", color: "var(--db-text-muted, #a3a3a3)", fontWeight: 400 }}>
+          <span style={{ marginLeft: "0.5rem", color: tokens.textMuted, fontWeight: 400 }}>
             {data ? `${data.total.toLocaleString()} ${data.total === 1 ? "event" : "events"}` : "—"}
           </span>
         </div>
         <div style={filtersRowStyle}>
-          <Field label="Target">
+          <FilterField label="Target">
             <select
               value={target}
               onChange={(e) => setParam("target", e.target.value)}
@@ -70,8 +69,8 @@ export default function AdminAuditLog() {
               <option value="daily_report">Daily Report</option>
               <option value="batch">ACH Batch</option>
             </select>
-          </Field>
-          <Field label="Action">
+          </FilterField>
+          <FilterField label="Action">
             <select
               value={action}
               onChange={(e) => setParam("action", e.target.value)}
@@ -85,8 +84,8 @@ export default function AdminAuditLog() {
               <option value="unlock">Unlock</option>
               <option value="status_changed">Status changed</option>
             </select>
-          </Field>
-          <Field label="User">
+          </FilterField>
+          <FilterField label="User">
             <select
               value={user}
               onChange={(e) => setParam("user", e.target.value)}
@@ -100,7 +99,7 @@ export default function AdminAuditLog() {
                 </option>
               ))}
             </select>
-          </Field>
+          </FilterField>
           {hasFilters && (
             <button
               type="button"
@@ -114,13 +113,13 @@ export default function AdminAuditLog() {
             </button>
           )}
         </div>
-      </section>
+      </Card>
 
-      <section style={cardStyle}>
+      <Card>
         <div style={cardHeaderStyle}>
           Recent activity
           {data && (
-            <span style={{ marginLeft: "auto", color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", fontWeight: 400 }}>
+            <span style={{ marginLeft: "auto", color: tokens.textMuted, fontSize: "0.85rem", fontWeight: 400 }}>
               Page {data.page} of {data.total_pages}
             </span>
           )}
@@ -146,7 +145,7 @@ export default function AdminAuditLog() {
             />
           </>
         )}
-      </section>
+      </Card>
 
       <p style={fineStyle}>
         Audit covers transfer creates / edits / status changes /
@@ -155,12 +154,12 @@ export default function AdminAuditLog() {
         auto-saves and isn't logged here — the lock event captures
         who closed the day.
       </p>
-    </main>
+    </PageShell>
   );
 }
 
 
-function Field({
+function FilterField({
   label, children,
 }: { label: string; children: React.ReactNode }) {
   return (
@@ -195,7 +194,7 @@ function Table({ rows }: { rows: AdminAuditRow[] }) {
               <td style={cellStyle}>
                 <strong>{r.user_name || "—"}</strong>
                 {r.user_role && (
-                  <span style={{ marginLeft: "0.4rem", color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem" }}>
+                  <span style={{ marginLeft: "0.4rem", color: tokens.textMuted, fontSize: "0.85rem" }}>
                     ({r.user_role})
                   </span>
                 )}
@@ -204,7 +203,7 @@ function Table({ rows }: { rows: AdminAuditRow[] }) {
                 <ActionBadge action={r.action} />
               </td>
               <td style={cellStyle}>
-                <span style={{ color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem" }}>
+                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
                   {r.target_type || "—"}
                 </span>
                 {r.target_label && <div>{r.target_label}</div>}
@@ -250,36 +249,6 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 
-function Pager({
-  page, totalPages, onPage,
-}: { page: number; totalPages: number; onPage: (p: number) => void }) {
-  if (totalPages <= 1) return null;
-  return (
-    <div style={pagerStyle}>
-      <button
-        type="button"
-        onClick={() => onPage(page - 1)}
-        disabled={page <= 1}
-        style={{ ...pagerBtn, opacity: page <= 1 ? 0.4 : 1, cursor: page <= 1 ? "not-allowed" : "pointer" }}
-      >
-        ← Prev
-      </button>
-      <span style={{ color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem" }}>
-        {page} / {totalPages}
-      </span>
-      <button
-        type="button"
-        onClick={() => onPage(page + 1)}
-        disabled={page >= totalPages}
-        style={{ ...pagerBtn, opacity: page >= totalPages ? 0.4 : 1, cursor: page >= totalPages ? "not-allowed" : "pointer" }}
-      >
-        Next →
-      </button>
-    </div>
-  );
-}
-
-
 // Server returns ISO timestamps. Render as "May 09, 2026 17:42 UTC"
 // to match the legacy %b %d, %Y %H:%M UTC format.
 function formatTs(iso: string): string {
@@ -294,25 +263,6 @@ function formatTs(iso: string): string {
   return `${month} ${day}, ${yr} ${hh}:${mm} UTC`;
 }
 
-
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "82rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
 
 const cardHeaderStyle: React.CSSProperties = {
   display: "flex", alignItems: "center",
@@ -333,22 +283,22 @@ const fieldStyle: React.CSSProperties = {
 const fieldLabelStyle: React.CSSProperties = {
   fontSize: "0.7rem", letterSpacing: "0.06em",
   textTransform: "uppercase", fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const selectStyle: React.CSSProperties = {
   padding: "0.55rem 0.75rem",
   background: "var(--db-bg-input, #0d0d0d)",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem", fontSize: "0.9rem",
   minWidth: "10rem",
 };
 
 const clearBtnStyle: React.CSSProperties = {
   padding: "0.55rem 0.85rem",
-  background: "transparent", color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
+  background: "transparent", color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem", fontSize: "0.85rem",
   cursor: "pointer",
 };
@@ -356,44 +306,28 @@ const clearBtnStyle: React.CSSProperties = {
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.6rem 0.75rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 500,
   fontSize: "0.78rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
 };
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
   verticalAlign: "top",
 };
 
 const monoMuted: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   whiteSpace: "nowrap",
 };
 
-const pagerStyle: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between",
-  alignItems: "center", marginTop: "1rem", padding: "0 0.5rem",
-};
-
-const pagerBtn: React.CSSProperties = {
-  padding: "0.45rem 0.85rem",
-  background: "transparent", color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem", fontSize: "0.85rem",
-};
-
 const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
+  marginTop: "1rem", color: tokens.textMuted,
   fontSize: "0.85rem", lineHeight: 1.55,
-};
-
-const emptyStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
 };

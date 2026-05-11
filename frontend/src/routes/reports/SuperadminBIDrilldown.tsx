@@ -14,7 +14,10 @@ import { Bar, Line } from "react-chartjs-2";
 
 import { api } from "../../lib/api";
 import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
-import { EmptyState, ErrorState, TableSkeleton } from "../../components/ui";
+import {
+  ButtonLink, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
+  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle, tokens,
+} from "../../components/ui";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -128,35 +131,41 @@ export default function SuperadminBIDrilldown() {
   const csvHref = `/superadmin/reports/${slug}.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 
   return (
-    <main style={pageStyle}>
-      <header>
+    <PageShell maxWidth="75rem" gap="1.25rem">
+      <div>
         <Link to="/superadmin/reports" style={backLink}>← Platform Reports</Link>
-        <h1 style={titleStyle}>{title}</h1>
-        <div style={actionRow}>
-          <label style={inputLabel}>
-            <span>From</span>
-            <input
-              type="date"
-              value={from}
-              onChange={e => setFrom(e.target.value)}
-              style={dateInput}
-            />
-          </label>
-          <label style={inputLabel}>
-            <span>To</span>
-            <input
-              type="date"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              style={dateInput}
-            />
-          </label>
-          <a href={csvHref} style={btnOutline} download>Export CSV</a>
-          <button type="button" style={btnOutline} onClick={() => window.print()}>
-            Print / PDF
-          </button>
-        </div>
-      </header>
+        <PageHeader
+          title={title}
+          actions={(
+            <div style={actionRow}>
+              <label style={inputLabel}>
+                <span>From</span>
+                <input
+                  type="date"
+                  value={from}
+                  onChange={e => setFrom(e.target.value)}
+                  style={dateInput}
+                />
+              </label>
+              <label style={inputLabel}>
+                <span>To</span>
+                <input
+                  type="date"
+                  value={to}
+                  onChange={e => setTo(e.target.value)}
+                  style={dateInput}
+                />
+              </label>
+              <ButtonLink tone="secondary" size="sm" href={csvHref} download>
+                Export CSV
+              </ButtonLink>
+              <button type="button" style={btnOutline} onClick={() => window.print()}>
+                Print / PDF
+              </button>
+            </div>
+          )}
+        />
+      </div>
 
       {isLoading && <TableSkeleton rows={5} cols={4} />}
       {error && (
@@ -167,14 +176,15 @@ export default function SuperadminBIDrilldown() {
       )}
 
       {data && totalKeys.length > 0 && (
-        <div style={kpiGrid}>
+        <KpiGrid minWidth="180px">
           {totalKeys.map(k => (
-            <div key={k} style={kpiCard}>
-              <div style={kpiLabel}>{humanize(k)}</div>
-              <div style={kpiValue}>{fmtValue(totals[k])}</div>
-            </div>
+            <KpiCard
+              key={k}
+              label={humanize(k)}
+              value={fmtValue(totals[k])}
+            />
           ))}
-        </div>
+        </KpiGrid>
       )}
 
       <div style={filterRow}>
@@ -215,9 +225,7 @@ export default function SuperadminBIDrilldown() {
                     <td key={k} style={{
                       ...tdStyle,
                       textAlign: numeric ? "right" : "left",
-                      fontFamily: numeric
-                        ? "var(--db-font-mono, 'JetBrains Mono', monospace)"
-                        : undefined,
+                      fontFamily: numeric ? tokens.fontMono : undefined,
                     }}>
                       {fmtCell(k, r[k])}
                     </td>
@@ -228,7 +236,7 @@ export default function SuperadminBIDrilldown() {
           </tbody>
         </table>
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -338,22 +346,14 @@ function ChartBlock({
     : countChartOptions<"bar">(plan.yLabel);
 
   return (
-    <section
-      style={{
-        background: "var(--db-surface-2, #141414)",
-        border: "1px solid var(--db-border, #262626)",
-        borderRadius: "0.75rem",
-        padding: "1.25rem",
-      }}
-      aria-label={`${title} chart`}
-    >
-      <div style={{ height: 280 }}>
+    <Card padding="1.25rem">
+      <div aria-label={`${title} chart`} style={{ height: 280 }}>
         {plan.kind === "line"
           ? <Line data={data} options={lineOpts} />
           : <Bar  data={data} options={barOpts} />
         }
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -406,80 +406,42 @@ function fmtDate(iso: string): string {
   });
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1, padding: "2rem 1.5rem", maxWidth: "75rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-  display: "flex", flexDirection: "column", gap: "1.25rem",
-};
 const backLink: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem",
+  color: tokens.textMuted, fontSize: "0.85rem",
   textDecoration: "none",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)", fontWeight: 600,
-  margin: "0.25rem 0 0",
 };
 const actionRow: React.CSSProperties = {
   display: "flex", flexWrap: "wrap", gap: "0.5rem",
-  alignItems: "center", marginTop: "0.5rem",
+  alignItems: "center",
 };
 const inputLabel: React.CSSProperties = {
   display: "flex", flexDirection: "column", gap: "0.15rem",
-  fontSize: "0.7rem", color: "var(--db-text-muted, #a3a3a3)",
+  fontSize: "0.7rem", color: tokens.textMuted,
   textTransform: "uppercase", letterSpacing: "0.05em",
 };
 const dateInput: React.CSSProperties = {
   padding: "0.35rem 0.5rem",
-  background: "var(--db-surface-1, #0a0a0a)", color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface, color: "inherit",
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.4rem", fontSize: "0.85rem",
   fontFamily: "inherit",
 };
 const btnOutline: React.CSSProperties = {
   background: "transparent", color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   padding: "0.4rem 0.85rem", borderRadius: "0.5rem",
   fontSize: "0.85rem", cursor: "pointer",
   textDecoration: "none", display: "inline-block",
 };
-const kpiGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "0.75rem",
-};
-const kpiCard: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "0.75rem 1rem",
-};
-const kpiLabel: React.CSSProperties = {
-  fontSize: "0.7rem", textTransform: "uppercase",
-  letterSpacing: "0.05em", color: "var(--db-text-muted, #a3a3a3)",
-};
-const kpiValue: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-  fontSize: "1.4rem", fontWeight: 700, marginTop: "0.4rem",
-};
 const filterRow: React.CSSProperties = {
   display: "flex", justifyContent: "space-between",
   padding: "0.5rem 0",
-  borderTop: "1px solid var(--db-border, #262626)",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderTop: `1px solid ${tokens.border}`,
+  borderBottom: `1px solid ${tokens.border}`,
 };
 const muted: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
+  color: tokens.textMuted, fontSize: "0.85rem", margin: 0,
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
-};
-const thStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border, #262626)",
-  fontSize: "0.7rem", textTransform: "uppercase",
-  color: "var(--db-text-muted, #a3a3a3)", fontWeight: 500,
-};
-const tdStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
 };
