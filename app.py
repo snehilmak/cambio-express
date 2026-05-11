@@ -69,6 +69,7 @@ from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
+from blueprints import spa_redirects as _bp_spa_redirects  # noqa: E402
 from blueprints import subscription as _bp_subscription  # noqa: E402
 from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
@@ -80,6 +81,7 @@ app.register_blueprint(_bp_auth_redirects.bp)
 app.register_blueprint(_bp_landing.bp)
 app.register_blueprint(_bp_billing.bp)
 app.register_blueprint(_bp_account.bp)
+app.register_blueprint(_bp_spa_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -1815,7 +1817,7 @@ def admin_required(f):
         if "user_id" not in session: return redirect(url_for("login"))
         u=current_user()
         if not u or u.role not in ("admin","superadmin"):
-            flash("Admin access required.","error"); return redirect(url_for("dashboard"))
+            flash("Admin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
         return f(*a,**k)
     return d
 
@@ -1838,13 +1840,13 @@ def pro_required(f):
         u = current_user()
         if not u or u.role not in ("admin", "superadmin"):
             flash("Admin access required.", "error")
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("spa_redirects.dashboard"))
         if u.role == "superadmin":
             return f(*a, **k)
         store = current_store()
         if not store:
             flash("Bank sync requires a store context.", "error")
-            return redirect(url_for("dashboard"))
+            return redirect(url_for("spa_redirects.dashboard"))
         if store.plan == "pro":
             return f(*a, **k)
         if store.plan == "trial" and get_trial_status(store) != "expired":
@@ -1859,7 +1861,7 @@ def superadmin_required(f):
         if "user_id" not in session: return redirect(url_for("login"))
         u=current_user()
         if not u or u.role!="superadmin":
-            flash("Superadmin access required.","error"); return redirect(url_for("dashboard"))
+            flash("Superadmin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
         return f(*a,**k)
     return d
 
@@ -2667,7 +2669,7 @@ def login():
         u = current_user()
         if u and u.role == "owner":
             return redirect(url_for("owner.owner_dashboard"))
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("spa_redirects.dashboard"))
     # On a fresh GET from a device that previously signed in to a store,
     # bounce to that store's login so installed-PWA employees aren't stuck
     # on the generic page with the address bar hidden.
@@ -2710,7 +2712,7 @@ def login():
                 _record_login(u); db.session.commit()
                 if u.role == "owner":
                     return redirect(url_for("owner.owner_dashboard"))
-                return redirect(url_for("dashboard"))
+                return redirect(url_for("spa_redirects.dashboard"))
         else:
             error="Invalid username or password."
     return render_template("login.html",error=error)
@@ -2985,7 +2987,7 @@ def passkey_login_finish():
     session["role"]     = user.role
     session["store_id"] = user.store_id
     db.session.commit()
-    redirect_url = url_for("owner.owner_dashboard") if user.role == "owner" else url_for("dashboard")
+    redirect_url = url_for("owner.owner_dashboard") if user.role == "owner" else url_for("spa_redirects.dashboard")
     return jsonify({"ok": True, "redirect": redirect_url})
 
 # ── Password reset ───────────────────────────────────────────
@@ -3754,21 +3756,8 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
     return out
 
 
-@app.route("/reports")
-def reports():
-    """Legacy /reports → 301 to /app/reports (categorized accordion).
-    The SPA fetches the categories from /api/v2/reports; per-report
-    drilldowns still hit Flask templates by their dedicated routes."""
-    return redirect("/app/reports", code=301)
-
-
-@app.route("/owner/reports")
-def owner_reports():
-    """Legacy /owner/reports → 301 to /app/owner/reports. Same
-    categorized accordion, different drilldown routing (every
-    `report_<x>` admin endpoint has an `owner_report_<x>` mirror
-    that filters to every store under the owner umbrella)."""
-    return redirect("/app/owner/reports", code=301)
+# /reports + /owner/reports moved to blueprints/spa_redirects.py
+# (D2 phase 11).
 
 
 # ── Reports: shared period helpers ───────────────────────────
@@ -5563,24 +5552,7 @@ _make_superadmin_report_routes(
 )
 
 
-# ── Dashboard ────────────────────────────────────────────────
-@app.route("/dashboard")
-@login_required
-def dashboard():
-    """Legacy /dashboard 301s to the SPA. The SPA's
-    /app/dashboard fetches /api/v2/dashboard/summary, which
-    returns a role-shaped payload (admin / employee /
-    superadmin). Owner sessions land at /app/owner/dashboard;
-    the legacy redirect for owner is preserved here.
-
-    `@login_required` preserves two contracts the legacy view
-    relied on: anonymous → /login and expired-trial admins →
-    /subscribe. Without it, expired stores would skip past the
-    paywall by following the bare 301 to the SPA.
-    """
-    if session.get("role") == "owner":
-        return redirect("/app/owner/dashboard", code=301)
-    return redirect("/app/dashboard", code=301)
+# /dashboard moved to blueprints/spa_redirects.py (D2 phase 11).
 
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
@@ -5713,7 +5685,7 @@ def transfers():
         # no-store error path. (Owners hitting this URL get caught
         # by the dashboard redirect chain to /owner/dashboard.)
         flash("Select a store first.", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("spa_redirects.dashboard"))
     qs = request.query_string.decode("latin-1") if request.query_string else ""
     if qs:
         # Drop the legacy `partial=1` marker — it was an AJAX-only
@@ -7762,7 +7734,7 @@ def superadmin_impersonate(store_id):
     session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
     db.session.commit()
     flash(f"Viewing as {store.name}. Use 'Exit impersonation' to return.","success")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("spa_redirects.dashboard"))
 
 
 @app.route("/superadmin/stop-impersonation", methods=["POST"])
@@ -7779,7 +7751,7 @@ def superadmin_stop_impersonation():
     imp_id = session.get("impersonator_user_id")
     if not imp_id:
         flash("Not currently impersonating.", "error")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for("spa_redirects.dashboard"))
     imp = db.session.get(User, imp_id)
     if not imp or imp.role != "superadmin" or not imp.is_active:
         # Defense in depth — cookie tampering or a since-deactivated
@@ -7795,7 +7767,7 @@ def superadmin_stop_impersonation():
     session.pop("impersonator_user_id", None)
     db.session.commit()
     flash("Returned to superadmin.", "success")
-    return redirect(url_for("dashboard"))
+    return redirect(url_for("spa_redirects.dashboard"))
 
 # ── Superadmin control panel ─────────────────────────────────
 STORES_PER_PAGE = 20
