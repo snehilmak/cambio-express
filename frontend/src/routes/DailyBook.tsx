@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -14,7 +14,10 @@ import {
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, Loading } from "../components/ui";
+import {
+  ButtonLink, Card, Empty, EmptyState, ErrorState, Loading, PageHeader,
+  PageShell, Section, tokens,
+} from "../components/ui";
 
 // Daily book page at /app/daily. Read-only view of a single
 // day's roll-up:
@@ -79,12 +82,10 @@ export default function DailyBook() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Daily book</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to view the daily book.
-        </p>
-      </main>
+      <PageShell maxWidth="78rem" gap="1rem">
+        <PageHeader title="Daily book" />
+        <Empty>Sign in as a store admin to view the daily book.</Empty>
+      </PageShell>
     );
   }
 
@@ -104,25 +105,11 @@ export default function DailyBook() {
   }
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Daily book</h1>
-          <p
-            style={{
-              margin: "0.35rem 0 0",
-              color: "var(--db-text-muted, #a3a3a3)",
-              fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-            }}
-          >
+    <PageShell maxWidth="78rem" gap="1rem">
+      <PageHeader
+        title="Daily book"
+        subtitle={(
+          <span style={{ fontFamily: tokens.fontMono }}>
             {date}
             {data?.locked && (
               <span
@@ -132,70 +119,64 @@ export default function DailyBook() {
                   padding: "0.15rem 0.5rem",
                   borderRadius: "999px",
                   background: "var(--db-warning-bg, #2a1a00)",
-                  color: "var(--db-warning, #ffb84d)",
+                  color: tokens.warning,
                   letterSpacing: "0.05em",
                 }}
               >
                 LOCKED
               </span>
             )}
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button onClick={() => shiftDate(-1)} style={dateBtnStyle}>
-            ← Day
-          </button>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={dateInputStyle}
-          />
-          <button onClick={() => shiftDate(1)} style={dateBtnStyle}>
-            Day →
-          </button>
-          <button
-            type="button"
-            onClick={toggleLock}
-            disabled={lockBusy}
-            style={{
-              background: "transparent",
-              color: "var(--db-text, #f5f5f5)",
-              border: "1px solid var(--db-border, #262626)",
-              borderRadius: "0.5rem",
-              padding: "0.45rem 0.85rem",
-              fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-              fontSize: "0.85rem",
-              cursor: lockBusy ? "wait" : "pointer",
-              opacity: lockBusy ? 0.6 : 1,
-              marginLeft: "0.5rem",
-            }}
-          >
-            {lockBusy ? "…" : data?.locked ? "Unlock" : "Lock"}
-          </button>
-          <Link
-            to={`/daily/edit?date=${date}`}
-            style={{
-              background: "var(--db-accent, #3fff00)",
-              color: "var(--db-on-accent, #0a0a0a)",
-              borderRadius: "0.5rem",
-              padding: "0.45rem 0.85rem",
-              fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Edit
-          </Link>
-        </div>
-      </header>
+          </span>
+        )}
+        actions={(
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <button onClick={() => shiftDate(-1)} style={dateBtnStyle}>
+              ← Day
+            </button>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={dateInputStyle}
+            />
+            <button onClick={() => shiftDate(1)} style={dateBtnStyle}>
+              Day →
+            </button>
+            <button
+              type="button"
+              onClick={toggleLock}
+              disabled={lockBusy}
+              style={{
+                background: "transparent",
+                color: tokens.text,
+                border: `1px solid ${tokens.border}`,
+                borderRadius: "0.5rem",
+                padding: "0.45rem 0.85rem",
+                fontFamily: tokens.fontBody,
+                fontSize: "0.85rem",
+                cursor: lockBusy ? "wait" : "pointer",
+                opacity: lockBusy ? 0.6 : 1,
+                marginLeft: "0.5rem",
+              }}
+            >
+              {lockBusy ? "…" : data?.locked ? "Unlock" : "Lock"}
+            </button>
+            <ButtonLink
+              href={`/daily/edit?date=${date}`}
+              tone="primary"
+              size="sm"
+            >
+              Edit
+            </ButtonLink>
+          </div>
+        )}
+      />
       {lockError && (
         <p
           role="alert"
           style={{
             margin: "0 0 1rem",
-            color: "var(--db-negative, #ff3b30)",
+            color: tokens.negative,
             fontSize: "0.9rem",
           }}
         >
@@ -224,7 +205,7 @@ export default function DailyBook() {
           locked={Boolean(data?.locked)}
         />
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -248,45 +229,28 @@ function LineItemsSection({
   storeId, date, locked,
 }: { storeId: number; date: string; locked: boolean }) {
   return (
-    <section
-      style={{
-        background: "var(--db-surface-2, #141414)",
-        border: "1px solid var(--db-border, #262626)",
-        borderRadius: "0.75rem",
-        padding: "1.25rem 1.5rem",
-      }}
-    >
-      <h2
-        style={{
-          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-          fontSize: "0.95rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "var(--db-text-muted, #a3a3a3)",
-          margin: "0 0 1rem",
-        }}
-      >
-        Line items
-      </h2>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
-          gap: "1rem",
-        }}
-      >
-        {LINE_ITEM_KINDS.map((k) => (
-          <KindGroup
-            key={k.kind}
-            storeId={storeId}
-            date={date}
-            kind={k.kind}
-            label={k.label}
-            locked={locked}
-          />
-        ))}
-      </div>
-    </section>
+    <Section title="Line items">
+      <Card padding="1.25rem 1.5rem">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
+            gap: "1rem",
+          }}
+        >
+          {LINE_ITEM_KINDS.map((k) => (
+            <KindGroup
+              key={k.kind}
+              storeId={storeId}
+              date={date}
+              kind={k.kind}
+              label={k.label}
+              locked={locked}
+            />
+          ))}
+        </div>
+      </Card>
+    </Section>
   );
 }
 
@@ -345,8 +309,8 @@ function KindGroup({
   return (
     <div
       style={{
-        background: "var(--db-surface, #0a0a0a)",
-        border: "1px solid var(--db-border-subtle, #1f1f1f)",
+        background: tokens.surface,
+        border: `1px solid ${tokens.borderSubtle}`,
         borderRadius: "0.5rem",
         padding: "0.75rem 1rem",
       }}
@@ -361,7 +325,7 @@ function KindGroup({
       >
         <h3
           style={{
-            fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+            fontFamily: tokens.fontBody,
             fontSize: "0.95rem",
             fontWeight: 500,
             margin: 0,
@@ -371,9 +335,9 @@ function KindGroup({
         </h3>
         <span
           style={{
-            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            fontFamily: tokens.fontMono,
             fontSize: "0.85rem",
-            color: "var(--db-text-muted, #a3a3a3)",
+            color: tokens.textMuted,
           }}
         >
           ${total.toFixed(2)}
@@ -385,7 +349,7 @@ function KindGroup({
           style={{
             margin: "0.25rem 0 0.75rem",
             fontSize: "0.85rem",
-            color: "var(--db-text-muted, #a3a3a3)",
+            color: tokens.textMuted,
           }}
         >
           No entries yet.
@@ -400,14 +364,14 @@ function KindGroup({
                 gap: "0.5rem",
                 alignItems: "baseline",
                 padding: "0.35rem 0",
-                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+                borderBottom: `1px solid ${tokens.borderSubtle}`,
                 fontSize: "0.9rem",
               }}
             >
               <span
                 style={{
-                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  fontFamily: tokens.fontMono,
+                  color: tokens.textMuted,
                   minWidth: "3.5rem",
                 }}
               >
@@ -415,13 +379,13 @@ function KindGroup({
               </span>
               <span
                 style={{
-                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                  fontFamily: tokens.fontMono,
                   minWidth: "5rem",
                 }}
               >
                 ${r.amount.toFixed(2)}
               </span>
-              <span style={{ flex: 1, color: "var(--db-text-muted, #a3a3a3)" }}>
+              <span style={{ flex: 1, color: tokens.textMuted }}>
                 {r.note || "—"}
               </span>
               <button
@@ -435,7 +399,7 @@ function KindGroup({
                 }
                 style={{
                   background: "transparent",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                   border: "none",
                   cursor:
                     locked || r.return_check_id != null
@@ -487,8 +451,8 @@ function KindGroup({
             onClick={add}
             disabled={busy || !time || !amount}
             style={{
-              background: "var(--db-accent, #3fff00)",
-              color: "var(--db-on-accent, #0a0a0a)",
+              background: tokens.accent,
+              color: tokens.onAccent,
               border: "none",
               borderRadius: "0.4rem",
               padding: "0.35rem 0.75rem",
@@ -508,7 +472,7 @@ function KindGroup({
           style={{
             margin: "0.4rem 0 0",
             fontSize: "0.8rem",
-            color: "var(--db-negative, #ff3b30)",
+            color: tokens.negative,
           }}
         >
           {err}
@@ -519,12 +483,12 @@ function KindGroup({
 }
 
 const miniInputStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.4rem",
   padding: "0.35rem 0.5rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  color: tokens.text,
+  fontFamily: tokens.fontBody,
   fontSize: "0.85rem",
   outline: "none",
 };
@@ -533,77 +497,63 @@ function ReportContent({ r }: { r: DailyReportRow }) {
   return (
     <>
       <Section title="Totals">
-        <Grid>
-          <Stat label="Total receipts"     value={r.total_receipts} positive />
-          <Stat label="Total disbursements" value={r.total_disbursements} />
-          <Stat
-            label="Net"
-            value={r.net}
-            positive={r.net >= 0}
-            negative={r.net < 0}
-          />
-          <Stat label="Over / short"       value={r.over_short}
-                negative={r.over_short < 0} />
-          <Stat label="Safe balance"       value={r.safe_balance} />
-        </Grid>
+        <Card>
+          <Grid>
+            <Stat label="Total receipts"     value={r.total_receipts} positive />
+            <Stat label="Total disbursements" value={r.total_disbursements} />
+            <Stat
+              label="Net"
+              value={r.net}
+              positive={r.net >= 0}
+              negative={r.net < 0}
+            />
+            <Stat label="Over / short"       value={r.over_short}
+                  negative={r.over_short < 0} />
+            <Stat label="Safe balance"       value={r.safe_balance} />
+          </Grid>
+        </Card>
       </Section>
 
       <Section title="Receipts">
-        <Grid>
-          <Stat label="Taxable sales"  value={r.taxable_sales} />
-          <Stat label="Non-taxable"    value={r.non_taxable} />
-          <Stat label="Sales tax"      value={r.sales_tax} />
-          <Stat label="Money transfer" value={r.money_transfer} />
-          <Stat label="Money order"    value={r.money_order} />
-        </Grid>
+        <Card>
+          <Grid>
+            <Stat label="Taxable sales"  value={r.taxable_sales} />
+            <Stat label="Non-taxable"    value={r.non_taxable} />
+            <Stat label="Sales tax"      value={r.sales_tax} />
+            <Stat label="Money transfer" value={r.money_transfer} />
+            <Stat label="Money order"    value={r.money_order} />
+          </Grid>
+        </Card>
       </Section>
 
       <Section title="Disbursements">
-        <Grid>
-          <Stat label="Cash expense"    value={r.cash_expense} />
-          <Stat label="Check expense"   value={r.check_expense} />
-          <Stat label="Cash deposit"    value={r.cash_deposit} />
-          <Stat label="Checks deposit"  value={r.checks_deposit} />
-        </Grid>
+        <Card>
+          <Grid>
+            <Stat label="Cash expense"    value={r.cash_expense} />
+            <Stat label="Check expense"   value={r.check_expense} />
+            <Stat label="Cash deposit"    value={r.cash_deposit} />
+            <Stat label="Checks deposit"  value={r.checks_deposit} />
+          </Grid>
+        </Card>
       </Section>
 
       {r.notes && (
         <Section title="Notes">
-          <p
-            style={{
-              margin: 0,
-              color: "var(--db-text, #f5f5f5)",
-              whiteSpace: "pre-wrap",
-              lineHeight: 1.6,
-            }}
-          >
-            {r.notes}
-          </p>
+          <Card>
+            <p
+              style={{
+                margin: 0,
+                color: tokens.text,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+              }}
+            >
+              {r.notes}
+            </p>
+          </Card>
         </Section>
       )}
     </>
-  );
-}
-
-function Section({
-  title, children,
-}: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={cardStyle}>
-      <h2
-        style={{
-          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-          fontSize: "0.95rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "var(--db-text-muted, #a3a3a3)",
-          margin: "0 0 1rem",
-        }}
-      >
-        {title}
-      </h2>
-      {children}
-    </section>
   );
 }
 
@@ -630,15 +580,15 @@ function Stat({
   negative?: boolean;
 }) {
   const color = positive
-    ? "var(--db-accent, #3fff00)"
+    ? tokens.accent
     : negative
-      ? "var(--db-negative, #ff3b30)"
-      : "var(--db-text, #f5f5f5)";
+      ? tokens.negative
+      : tokens.text;
   return (
     <div
       style={{
-        background: "var(--db-surface, #0a0a0a)",
-        border: "1px solid var(--db-border-subtle, #1f1f1f)",
+        background: tokens.surface,
+        border: `1px solid ${tokens.borderSubtle}`,
         borderRadius: "0.5rem",
         padding: "0.75rem 0.9rem",
       }}
@@ -647,7 +597,7 @@ function Stat({
         style={{
           margin: 0,
           fontSize: "0.78rem",
-          color: "var(--db-text-muted, #a3a3a3)",
+          color: tokens.textMuted,
           textTransform: "uppercase",
           letterSpacing: "0.05em",
         }}
@@ -657,7 +607,7 @@ function Stat({
       <p
         style={{
           margin: "0.25rem 0 0",
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+          fontFamily: tokens.fontMono,
           fontSize: "1.2rem",
           fontWeight: 500,
           color,
@@ -669,57 +619,24 @@ function Stat({
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2.5rem 1.5rem",
-  maxWidth: "78rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-  gap: "1rem",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
 const dateBtnStyle: React.CSSProperties = {
   background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
+  color: tokens.text,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
   padding: "0.45rem 0.75rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontFamily: tokens.fontBody,
   fontSize: "0.85rem",
   cursor: "pointer",
 };
 
 const dateInputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
   padding: "0.45rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  color: tokens.text,
+  fontFamily: tokens.fontMono,
   fontSize: "0.9rem",
   outline: "none",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
 };

@@ -6,7 +6,10 @@ import {
   type CustomerRow,
 } from "../api/customers";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState } from "../components/ui";
+import {
+  Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader, PageShell,
+  Section, tokens,
+} from "../components/ui";
 
 // Customer search at /app/customers. Live-search box; results
 // split into "exact matches" (phone/full-name match) and
@@ -40,71 +43,49 @@ export default function Customers() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Customers</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to search this store's customers.
-        </p>
-      </main>
+      <PageShell maxWidth="70rem">
+        <PageHeader title="Customers" />
+        <Empty>Sign in as a store admin to search this store's customers.</Empty>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Customers</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}
-        >
-          {q.length >= 2
-            ? data
-              ? `${data.matches.length} match${
-                  data.matches.length === 1 ? "" : "es"
-                } · ${data.suggestions.length} suggestion${
-                  data.suggestions.length === 1 ? "" : "s"
-                }`
-              : "Searching…"
-            : "Type at least 2 characters to search."}
-        </p>
-      </header>
+    <PageShell maxWidth="70rem">
+      <PageHeader
+        title="Customers"
+        subtitle={q.length >= 2
+          ? data
+            ? `${data.matches.length} match${
+                data.matches.length === 1 ? "" : "es"
+              } · ${data.suggestions.length} suggestion${
+                data.suggestions.length === 1 ? "" : "s"
+              }`
+            : "Searching…"
+          : "Type at least 2 characters to search."}
+      />
 
-      <section style={{ ...cardStyle, marginBottom: "1rem" }}>
-        <label
-          style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}
-        >
-          <span
-            style={{
-              fontSize: "0.78rem",
-              color: "var(--db-text-muted, #a3a3a3)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            Search
-          </span>
-          <input
+      <Card style={{ marginBottom: "1rem" }}>
+        <Field label="Search">
+          <Input
             type="search"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Name, phone, …"
-            style={inputStyle}
           />
-        </label>
+        </Field>
         {isFetching && (
           <p
             style={{
               margin: "0.5rem 0 0",
               fontSize: "0.85rem",
-              color: "var(--db-text-muted, #a3a3a3)",
+              color: tokens.textMuted,
             }}
           >
             Searching…
           </p>
         )}
-      </section>
+      </Card>
 
       {isError && (
         <ErrorState
@@ -115,13 +96,17 @@ export default function Customers() {
 
       {data && data.matches.length > 0 && (
         <Section title="Matches">
-          <CustomerTable rows={data.matches} />
+          <Card>
+            <CustomerTable rows={data.matches} />
+          </Card>
         </Section>
       )}
 
       {data && data.suggestions.length > 0 && (
         <Section title="Suggestions">
-          <CustomerTable rows={data.suggestions} />
+          <Card>
+            <CustomerTable rows={data.suggestions} />
+          </Card>
         </Section>
       )}
 
@@ -132,29 +117,7 @@ export default function Customers() {
         !isFetching && (
           <EmptyState title={`No customers match "${q}".`} />
         )}
-    </main>
-  );
-}
-
-function Section({
-  title, children,
-}: { title: string; children: React.ReactNode }) {
-  return (
-    <section style={{ ...cardStyle, marginBottom: "1rem" }}>
-      <h2
-        style={{
-          fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-          fontSize: "0.95rem",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-          color: "var(--db-text-muted, #a3a3a3)",
-          margin: "0 0 1rem",
-        }}
-      >
-        {title}
-      </h2>
-      {children}
-    </section>
+    </PageShell>
   );
 }
 
@@ -180,8 +143,7 @@ function CustomerTable({ rows }: { rows: CustomerRow[] }) {
               <td style={cellStyle}>
                 <span
                   style={{
-                    fontFamily:
-                      "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                    fontFamily: tokens.fontMono,
                     fontSize: "0.9rem",
                   }}
                 >
@@ -191,10 +153,9 @@ function CustomerTable({ rows }: { rows: CustomerRow[] }) {
               <td style={cellStyle}>
                 <span
                   style={{
-                    fontFamily:
-                      "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                    fontFamily: tokens.fontMono,
                     fontSize: "0.85rem",
-                    color: "var(--db-text-muted, #a3a3a3)",
+                    color: tokens.textMuted,
                   }}
                 >
                   {c.dob || "—"}
@@ -203,11 +164,11 @@ function CustomerTable({ rows }: { rows: CustomerRow[] }) {
               <td style={cellStyle}>{c.address || "—"}</td>
               <td style={cellStyle}>
                 {c.home_store_name ? (
-                  <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>
+                  <span style={{ color: tokens.textMuted }}>
                     {c.home_store_name}
                   </span>
                 ) : (
-                  <span style={{ color: "var(--db-text-muted, #a3a3a3)" }}>
+                  <span style={{ color: tokens.textMuted }}>
                     (this store)
                   </span>
                 )}
@@ -220,63 +181,18 @@ function CustomerTable({ rows }: { rows: CustomerRow[] }) {
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2.5rem 1.5rem",
-  maxWidth: "70rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.75rem, 4vw, 2.5rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.6rem 0.75rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 500,
   fontSize: "0.78rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
 };
 
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };

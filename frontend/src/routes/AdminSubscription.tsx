@@ -9,7 +9,9 @@ import {
   type SubscriptionSummary,
 } from "../api/billing";
 import { ApiError } from "../lib/api";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  ErrorState, Loading, PageHeader, PageShell, tokens,
+} from "../components/ui";
 
 // /app/admin/subscription — current plan hero + account snapshot +
 // add-ons grid + cancel modal. Mirrors the legacy
@@ -62,18 +64,18 @@ export default function AdminSubscription() {
 
   if (error && !data) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Billing &amp; Subscription</h1>
+      <PageShell maxWidth="70rem">
+        <PageHeader title="Billing & Subscription" />
         <ErrorState message={error} onRetry={() => { void load(); }} />
-      </main>
+      </PageShell>
     );
   }
   if (!data) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Billing &amp; Subscription</h1>
+      <PageShell maxWidth="70rem">
+        <PageHeader title="Billing & Subscription" />
         <Loading />
-      </main>
+      </PageShell>
     );
   }
 
@@ -82,8 +84,8 @@ export default function AdminSubscription() {
   const trial = store.plan === "trial";
 
   return (
-    <main style={pageStyle}>
-      <h1 style={titleStyle}>Billing &amp; Subscription</h1>
+    <PageShell maxWidth="70rem">
+      <PageHeader title="Billing & Subscription" />
 
       {error && <ErrorState message={error} />}
 
@@ -305,13 +307,13 @@ export default function AdminSubscription() {
           </div>
         </div>
       )}
-    </main>
+    </PageShell>
   );
 }
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "0.4rem 0", borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)" }}>
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "0.4rem 0", borderBottom: `1px solid ${tokens.borderSubtle}` }}>
       <span style={mutedStyle}>{label}</span>
       <span style={mono ? { ...moneyValue, fontSize: "0.85rem" } : undefined}>
         {value}
@@ -320,20 +322,6 @@ function InfoRow({ label, value, mono }: { label: string; value: string; mono?: 
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "2rem 1.5rem",
-  maxWidth: "70rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  marginTop: 0,
-};
 const twoColGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
@@ -341,8 +329,8 @@ const twoColGrid: React.CSSProperties = {
   marginBottom: "1.5rem",
 };
 const planHero: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-accent, #3fff00)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.accent}`,
   borderRadius: "0.75rem",
   padding: "1.5rem",
   position: "relative",
@@ -351,23 +339,23 @@ const planEyebrow: React.CSSProperties = {
   fontSize: "0.75rem",
   letterSpacing: "0.1em",
   textTransform: "uppercase",
-  color: "var(--db-accent, #3fff00)",
+  color: tokens.accent,
   fontWeight: 600,
 };
 const planName: React.CSSProperties = {
   fontSize: "1.75rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
+  fontFamily: tokens.fontDisplay,
   marginTop: "0.25rem",
 };
 const planPrice: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const planMeta: React.CSSProperties = {
   marginTop: "1rem",
   fontSize: "0.9rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const planActions: React.CSSProperties = {
   marginTop: "1.25rem",
@@ -376,13 +364,13 @@ const planActions: React.CSSProperties = {
   flexWrap: "wrap",
 };
 const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.75rem",
   padding: "1.25rem",
 };
 const btnPrimaryDark: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
+  background: tokens.accent,
   color: "#000",
   padding: "0.55rem 1rem",
   borderRadius: "0.5rem",
@@ -399,13 +387,13 @@ const btnGhostDark: React.CSSProperties = {
   borderRadius: "0.5rem",
   fontSize: "0.9rem",
   fontWeight: 500,
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   textDecoration: "none",
   cursor: "pointer",
 };
 const cancelLink: React.CSSProperties = {
   background: "transparent",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   border: "none",
   padding: "0.5rem 0",
   marginTop: "0.5rem",
@@ -415,14 +403,14 @@ const cancelLink: React.CSSProperties = {
   display: "block",
 };
 const mutedStyle: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.85rem",
 };
 const moneyValue: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 const bannerError: React.CSSProperties = {
-  color: "var(--db-negative, #ff3b30)",
+  color: tokens.negative,
   background: "rgba(255,59,48,0.08)",
   border: "1px solid rgba(255,59,48,0.4)",
   padding: "0.75rem 1rem",
@@ -443,8 +431,8 @@ const addonGrid: React.CSSProperties = {
   gap: "1rem",
 };
 const addonCard: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.75rem",
   padding: "1.25rem",
   display: "flex",
@@ -462,14 +450,14 @@ const addonName: React.CSSProperties = {
   fontWeight: 600,
 };
 const addonPrice: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const addonDesc: React.CSSProperties = {
   margin: 0,
   fontSize: "0.9rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 const addonFoot: React.CSSProperties = {
   marginTop: "auto",
@@ -481,8 +469,8 @@ const addonFoot: React.CSSProperties = {
 };
 const btnLinkLive: React.CSSProperties = {
   background: "transparent",
-  border: "1px solid var(--db-accent, #3fff00)",
-  color: "var(--db-accent, #3fff00)",
+  border: `1px solid ${tokens.accent}`,
+  color: tokens.accent,
   padding: "0.4rem 0.85rem",
   borderRadius: "0.5rem",
   fontSize: "0.85rem",
@@ -491,7 +479,7 @@ const btnLinkLive: React.CSSProperties = {
 };
 const badgeGreen: React.CSSProperties = {
   background: "rgba(63,255,0,0.15)",
-  color: "var(--db-accent, #3fff00)",
+  color: tokens.accent,
   padding: "0.15rem 0.55rem",
   borderRadius: "999px",
   fontSize: "0.75rem",
@@ -515,8 +503,8 @@ const modalBackdrop: React.CSSProperties = {
   zIndex: 100,
 };
 const modalCard: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.75rem",
   padding: "1.5rem",
   maxWidth: "32rem",
@@ -533,14 +521,14 @@ const infoBox: React.CSSProperties = {
 };
 const btnOutline: React.CSSProperties = {
   background: "transparent",
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   color: "inherit",
   padding: "0.5rem 1rem",
   borderRadius: "0.5rem",
   cursor: "pointer",
 };
 const btnDanger: React.CSSProperties = {
-  background: "var(--db-negative, #ff3b30)",
+  background: tokens.negative,
   color: "#fff",
   padding: "0.5rem 1rem",
   borderRadius: "0.5rem",

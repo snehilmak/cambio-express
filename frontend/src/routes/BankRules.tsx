@@ -13,7 +13,10 @@ import {
   type BankRuleWriteBody,
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
-import { EmptyState, ErrorState, Loading } from "../components/ui";
+import {
+  Card, EmptyState, ErrorState, Loading, PageHeader, PageShell, Section,
+  tokens,
+} from "../components/ui";
 
 // /app/bank/rules — bank reconcile rules CRUD. The legacy
 // /bank/rules Jinja page rendered the same list + create form;
@@ -141,20 +144,20 @@ export default function BankRules() {
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={titleStyle}>Bank Rules</h1>
-        <Link to="/bank-transactions" style={btnOutlineLink}>← Transactions</Link>
-      </header>
+    <PageShell maxWidth="70rem" gap="1.25rem">
+      <PageHeader
+        title="Bank Rules"
+        actions={(
+          <Link to="/bank-transactions" style={btnOutlineLink}>← Transactions</Link>
+        )}
+      />
 
       {error && <ErrorState message={error} />}
 
-      <section style={cardStyle}>
-        <h2 style={sectionH2}>
-          {editingId ? "Edit rule" : "Create new rule"}
-        </h2>
-        <form onSubmit={handleSubmit} style={formGrid}>
-          <Field label="Match type" span={1}>
+      <Section title={editingId ? "Edit rule" : "Create new rule"}>
+        <Card>
+          <form onSubmit={handleSubmit} style={formGrid}>
+          <FormField label="Match type" span={1}>
             <select
               value={form.desc_match_type}
               onChange={(e) => setForm({ ...form, desc_match_type: e.target.value })}
@@ -164,8 +167,8 @@ export default function BankRules() {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
-          </Field>
-          <Field label="Match value" span={1}>
+          </FormField>
+          <FormField label="Match value" span={1}>
             <input
               required
               value={form.desc_match_value}
@@ -173,8 +176,8 @@ export default function BankRules() {
               placeholder="e.g. REMOTE DEPOSIT FEE"
               style={inputStyle}
             />
-          </Field>
-          <Field label="Sign filter" span={1}>
+          </FormField>
+          <FormField label="Sign filter" span={1}>
             <select
               value={form.sign_filter}
               onChange={(e) => setForm({ ...form, sign_filter: e.target.value })}
@@ -184,8 +187,8 @@ export default function BankRules() {
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
-          </Field>
-          <Field label="Account filter (optional)" span={1}>
+          </FormField>
+          <FormField label="Account filter (optional)" span={1}>
             <select
               value={form.account_filter_id}
               onChange={(e) => setForm({ ...form, account_filter_id: e.target.value })}
@@ -198,8 +201,8 @@ export default function BankRules() {
                 </option>
               ))}
             </select>
-          </Field>
-          <Field label="Min amount $" span={1}>
+          </FormField>
+          <FormField label="Min amount $" span={1}>
             <input
               type="number"
               step="0.01"
@@ -208,8 +211,8 @@ export default function BankRules() {
               placeholder="(blank = no min)"
               style={inputStyle}
             />
-          </Field>
-          <Field label="Max amount $" span={1}>
+          </FormField>
+          <FormField label="Max amount $" span={1}>
             <input
               type="number"
               step="0.01"
@@ -218,8 +221,8 @@ export default function BankRules() {
               placeholder="(blank = no max)"
               style={inputStyle}
             />
-          </Field>
-          <Field label="Target category" span={1}>
+          </FormField>
+          <FormField label="Target category" span={1}>
             <select
               value={form.target_kind}
               onChange={(e) => setForm({ ...form, target_kind: e.target.value })}
@@ -229,23 +232,23 @@ export default function BankRules() {
                 <option key={o.slug} value={o.slug}>{o.label}</option>
               ))}
             </select>
-          </Field>
-          <Field label="Priority" span={1}>
+          </FormField>
+          <FormField label="Priority" span={1}>
             <input
               type="number"
               value={form.priority}
               onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
               style={inputStyle}
             />
-          </Field>
-          <Field label="Description (memo)" span={2}>
+          </FormField>
+          <FormField label="Description (memo)" span={2}>
             <input
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="What this rule does"
               style={inputStyle}
             />
-          </Field>
+          </FormField>
           <label style={{ ...checkRow }}>
             <input
               type="checkbox"
@@ -279,63 +282,66 @@ export default function BankRules() {
               </button>
             )}
           </div>
-        </form>
-      </section>
+          </form>
+        </Card>
+      </Section>
 
-      <section style={cardStyle}>
-        <h2 style={sectionH2}>
-          Your rules <span style={muted}>({rules.data?.total ?? 0})</span>
-        </h2>
-        {rules.isLoading && <Loading />}
-        {!rules.isLoading && (rules.data?.rows ?? []).length === 0 && (
-          <EmptyState title="No rules yet" body="Create one above to start auto-categorising bank transactions." />
-        )}
-        {(rules.data?.rows ?? []).length > 0 && (
-          <table style={tableStyle}>
-            <thead>
-              <tr>
-                <th style={thStyle}>Description</th>
-                <th style={thStyle}>Match</th>
-                <th style={thStyle}>Sign</th>
-                <th style={thStyle}>Account</th>
-                <th style={thStyle}>Category</th>
-                <th style={thStyle}>Hits</th>
-                <th style={thStyle}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {(rules.data?.rows ?? []).map((r) => (
-                <tr key={r.id} style={!r.enabled ? { opacity: 0.5 } : undefined}>
-                  <td style={tdStyle}>{r.description || "—"}</td>
-                  <td style={tdStyle}>
-                    <code>{r.desc_match_type}</code>: {r.desc_match_value}
-                  </td>
-                  <td style={tdStyle}>{r.sign_filter}</td>
-                  <td style={tdStyle}>{r.account_filter_label || "Any"}</td>
-                  <td style={tdStyle}>{r.target_kind}</td>
-                  <td style={tdStyle}>{r.match_count}</td>
-                  <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                    <button type="button" style={btnOutlineSm} onClick={() => startEdit(r)}>
-                      Edit
-                    </button>{" "}
-                    <button type="button" style={btnOutlineSm} onClick={() => handleToggle(r)}>
-                      {r.enabled ? "Disable" : "Enable"}
-                    </button>{" "}
-                    <button type="button" style={btnDangerSm} onClick={() => handleDelete(r)}>
-                      Delete
-                    </button>
-                  </td>
+      <Section
+        title={`Your rules`}
+        actions={<span style={muted}>({rules.data?.total ?? 0})</span>}
+      >
+        <Card>
+          {rules.isLoading && <Loading />}
+          {!rules.isLoading && (rules.data?.rows ?? []).length === 0 && (
+            <EmptyState title="No rules yet" body="Create one above to start auto-categorising bank transactions." />
+          )}
+          {(rules.data?.rows ?? []).length > 0 && (
+            <table style={tableStyle}>
+              <thead>
+                <tr>
+                  <th style={thStyle}>Description</th>
+                  <th style={thStyle}>Match</th>
+                  <th style={thStyle}>Sign</th>
+                  <th style={thStyle}>Account</th>
+                  <th style={thStyle}>Category</th>
+                  <th style={thStyle}>Hits</th>
+                  <th style={thStyle}></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </main>
+              </thead>
+              <tbody>
+                {(rules.data?.rows ?? []).map((r) => (
+                  <tr key={r.id} style={!r.enabled ? { opacity: 0.5 } : undefined}>
+                    <td style={tdStyle}>{r.description || "—"}</td>
+                    <td style={tdStyle}>
+                      <code>{r.desc_match_type}</code>: {r.desc_match_value}
+                    </td>
+                    <td style={tdStyle}>{r.sign_filter}</td>
+                    <td style={tdStyle}>{r.account_filter_label || "Any"}</td>
+                    <td style={tdStyle}>{r.target_kind}</td>
+                    <td style={tdStyle}>{r.match_count}</td>
+                    <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
+                      <button type="button" style={btnOutlineSm} onClick={() => startEdit(r)}>
+                        Edit
+                      </button>{" "}
+                      <button type="button" style={btnOutlineSm} onClick={() => handleToggle(r)}>
+                        {r.enabled ? "Disable" : "Enable"}
+                      </button>{" "}
+                      <button type="button" style={btnDangerSm} onClick={() => handleDelete(r)}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </Section>
+    </PageShell>
   );
 }
 
-function Field({ label, span, children }: { label: string; span: 1 | 2; children: React.ReactNode }) {
+function FormField({ label, span, children }: { label: string; span: 1 | 2; children: React.ReactNode }) {
   return (
     <label style={{ gridColumn: span === 2 ? "span 2" : undefined }}>
       <div style={fieldLabel}>{label}</div>
@@ -344,33 +350,6 @@ function Field({ label, span, children }: { label: string; span: 1 | 2; children
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "2rem 1.5rem",
-  maxWidth: "70rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-  display: "flex",
-  flexDirection: "column",
-  gap: "1.25rem",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-const sectionH2: React.CSSProperties = {
-  margin: "0 0 1rem",
-  fontSize: "1.05rem",
-};
 const formGrid: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -380,16 +359,16 @@ const fieldLabel: React.CSSProperties = {
   fontSize: "0.7rem",
   textTransform: "uppercase",
   letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 600,
   marginBottom: "0.25rem",
 };
 const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "0.5rem 0.65rem",
-  background: "var(--db-surface-1, #0a0a0a)",
+  background: tokens.surface,
   color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.4rem",
   fontSize: "0.85rem",
   fontFamily: "inherit",
@@ -401,11 +380,11 @@ const checkRow: React.CSSProperties = {
   fontSize: "0.85rem",
 };
 const muted: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontSize: "0.85rem",
 };
 const btnPrimary: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
+  background: tokens.accent,
   color: "#000",
   border: "none",
   padding: "0.5rem 1rem",
@@ -417,7 +396,7 @@ const btnPrimary: React.CSSProperties = {
 const btnOutline: React.CSSProperties = {
   background: "transparent",
   color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
+  border: `1px solid ${tokens.border}`,
   padding: "0.5rem 1rem",
   borderRadius: "0.5rem",
   fontSize: "0.85rem",
@@ -435,8 +414,8 @@ const btnOutlineSm: React.CSSProperties = {
 };
 const btnDangerSm: React.CSSProperties = {
   ...btnOutlineSm,
-  color: "var(--db-negative, #ff3b30)",
-  borderColor: "var(--db-negative, #ff3b30)",
+  color: tokens.negative,
+  borderColor: tokens.negative,
 };
 const tableStyle: React.CSSProperties = {
   width: "100%",
@@ -446,13 +425,13 @@ const tableStyle: React.CSSProperties = {
 const thStyle: React.CSSProperties = {
   textAlign: "left",
   padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border, #262626)",
+  borderBottom: `1px solid ${tokens.border}`,
   fontSize: "0.7rem",
   textTransform: "uppercase",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
   fontWeight: 500,
 };
 const tdStyle: React.CSSProperties = {
   padding: "0.5rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };

@@ -2,7 +2,10 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, ErrorState, TableSkeleton } from "../components/ui";
+import {
+  ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
+  TableSkeleton, tokens,
+} from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
 // status pill, click any row to edit. Status transitions
@@ -31,45 +34,28 @@ export default function ReturnChecks() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Return checks</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to view return checks.
-        </p>
-      </main>
+      <PageShell maxWidth="78rem">
+        <PageHeader title="Return checks" />
+        <Empty>Sign in as a store admin to view return checks.</Empty>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          marginBottom: "1.5rem",
-          display: "flex",
-          alignItems: "baseline",
-          justifyContent: "space-between",
-          gap: "1rem",
-        }}
-      >
-        <div>
-          <h1 style={titleStyle}>Return checks</h1>
-          <p
-            style={{
-              margin: "0.35rem 0 0",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}
-          >
-            {data
-              ? `${data.rows.length.toLocaleString()} ${
-                  status || "total"
-                } check${data.rows.length === 1 ? "" : "s"}`
-              : "—"}
-          </p>
-        </div>
-        <Link to="/return-checks/new" style={primaryBtn}>
-          + New return check
-        </Link>
-      </header>
+    <PageShell maxWidth="78rem">
+      <PageHeader
+        title="Return checks"
+        subtitle={data
+          ? `${data.rows.length.toLocaleString()} ${
+              status || "total"
+            } check${data.rows.length === 1 ? "" : "s"}`
+          : "—"}
+        actions={(
+          <ButtonLink href="/return-checks/new" tone="primary">
+            + New return check
+          </ButtonLink>
+        )}
+      />
 
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
         {STATUSES.map((s) => {
@@ -81,15 +67,9 @@ export default function ReturnChecks() {
               onClick={() => setStatus(s.slug)}
               style={{
                 ...filterBtn,
-                background: active
-                  ? "var(--db-accent, #3fff00)"
-                  : "transparent",
-                color: active
-                  ? "var(--db-on-accent, #0a0a0a)"
-                  : "var(--db-text, #f5f5f5)",
-                borderColor: active
-                  ? "var(--db-accent, #3fff00)"
-                  : "var(--db-border, #262626)",
+                background: active ? tokens.accent : "transparent",
+                color: active ? tokens.onAccent : tokens.text,
+                borderColor: active ? tokens.accent : tokens.border,
               }}
             >
               {s.label}
@@ -98,7 +78,7 @@ export default function ReturnChecks() {
         })}
       </div>
 
-      <section style={cardStyle}>
+      <Card>
         {isLoading && <TableSkeleton rows={5} cols={5} />}
         {isError && (
           <ErrorState
@@ -112,8 +92,8 @@ export default function ReturnChecks() {
           />
         )}
         {data && data.rows.length > 0 && <Table rows={data.rows} />}
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
 
@@ -143,12 +123,12 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                 style={{
                   textAlign: i >= 4 && i <= 5 ? "right" : "left",
                   padding: "0.6rem 0.75rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                   fontWeight: 500,
                   fontSize: "0.78rem",
                   textTransform: "uppercase",
                   letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--db-border, #262626)",
+                  borderBottom: `1px solid ${tokens.border}`,
                 }}
               >
                 {h}
@@ -162,8 +142,7 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
               key={r.id}
               style={{ transition: "background 120ms ease" }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background =
-                  "var(--db-surface, #0a0a0a)";
+                e.currentTarget.style.background = tokens.surface;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = "transparent";
@@ -186,10 +165,7 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                 <span
                   style={{
                     ...mono,
-                    color:
-                      r.recovered_total >= r.amount
-                        ? "var(--db-accent, #3fff00)"
-                        : "var(--db-text, #f5f5f5)",
+                    color: r.recovered_total >= r.amount ? tokens.accent : tokens.text,
                   }}
                 >
                   ${r.recovered_total.toFixed(2)}
@@ -197,7 +173,7 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                 {r.payment_count > 0 && (
                   <span
                     style={{
-                      color: "var(--db-text-muted, #a3a3a3)",
+                      color: tokens.textMuted,
                       marginLeft: "0.4rem",
                       fontSize: "0.85rem",
                     }}
@@ -243,66 +219,23 @@ function StatusPill({ status }: { status: string }) {
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "78rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
 const cellStyle: React.CSSProperties = {
   padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
 };
 
 const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  fontFamily: tokens.fontMono,
 };
 
 const monoMuted: React.CSSProperties = {
   ...mono,
   fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
+  color: tokens.textMuted,
 };
 
 const rowLink: React.CSSProperties = {
   color: "inherit",
-  textDecoration: "none",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const primaryBtn: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 1rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.9rem",
-  fontWeight: 600,
   textDecoration: "none",
 };
 
@@ -311,6 +244,6 @@ const filterBtn: React.CSSProperties = {
   borderRadius: "999px",
   padding: "0.4rem 0.9rem",
   fontSize: "0.85rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
+  fontFamily: tokens.fontBody,
   cursor: "pointer",
 };
