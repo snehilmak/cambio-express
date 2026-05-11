@@ -36,3 +36,7 @@ PyJWT==2.7.0
 # import-only when not configured.
 sentry-sdk[flask,fastapi,sqlalchemy]==2.21.0
 structlog==24.4.0
+# Alembic for schema migrations (see docs/architecture/
+# ADR-004-alembic-adoption.md). Coexists with the legacy
+# `_ADDED_COLUMNS` boot mechanism until the cutover PR.
+alembic==1.13.3

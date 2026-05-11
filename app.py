@@ -10370,7 +10370,13 @@ def init_db():
         # creates their own stores. The superadmin seed above is the only
         # row a fresh DB needs. (2FA is mandatory and enforced at login.)
 
-init_db()
+# Skip the boot-time DB init when invoked from Alembic — env.py
+# imports `app` purely to harvest `db.metadata`, and running
+# init_db() would populate the same DB Alembic is about to diff
+# against (yielding an empty migration). The env var is unset
+# everywhere else.
+if not os.environ.get("DINEROBOOK_SKIP_INIT_DB"):
+    init_db()
 
 # ── FastAPI strangler-fig dispatcher ─────────────────────────
 # ── SPA shell at /app/* ─────────────────────────────────────────
