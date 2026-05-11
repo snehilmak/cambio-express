@@ -214,7 +214,7 @@ input::placeholder{color:var(--db-gray-5)}
       <div class="field">
         <div class="label-row">
           <label for="lf-pass" style="margin-bottom:0">Password</label>
-          <a class="forgot-link" href="{{ url_for('forgot_password') }}">Forgot?</a>
+          <a class="forgot-link" href="{{ url_for('auth_redirects.forgot_password') }}">Forgot?</a>
         </div>
         <input id="lf-pass" type="password" name="password" placeholder="••••••••" required autocomplete="current-password">
       </div>
@@ -235,7 +235,7 @@ input::placeholder{color:var(--db-gray-5)}
 
     <div class="switcher">
       <span>New to DineroBook?</span>
-      <a href="{{ url_for('signup') }}">Create an account →</a>
+      <a href="{{ url_for('auth_redirects.signup') }}">Create an account →</a>
     </div>
 
     <div class="login-footer">
