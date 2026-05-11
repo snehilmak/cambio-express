@@ -57,6 +57,13 @@ app = Flask(__name__)
 install_request_id(app)
 app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-prod")
 
+# Blueprints — sections that have been peeled off into
+# ``blueprints/`` per BACKLOG D2. Registration happens here, right
+# after the Flask app exists, so a Blueprint route lookup behaves
+# identically to the original @app.route decorator.
+from blueprints import pwa as _bp_pwa  # noqa: E402
+app.register_blueprint(_bp_pwa.bp)
+
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
 # the file's mtime so every new deploy yields a different `?v=...` and
@@ -2380,21 +2387,7 @@ def _redirect_with_query(target: str):
 app.before_request(_maybe_spa_redirect)
 
 
-# ── PWA ──────────────────────────────────────────────────────
-# Service worker must be served from root so its default scope covers
-# every path. The file lives in /static/ but is routed here.
-@app.route("/sw.js")
-def service_worker():
-    resp = send_from_directory("static", "sw.js", mimetype="application/javascript")
-    resp.headers["Cache-Control"] = "no-cache"
-    resp.headers["Service-Worker-Allowed"] = "/"
-    return resp
-
-@app.route("/offline")
-def offline():
-    """Plain offline page. Precached by the service worker so it
-    renders even when the network is completely unavailable."""
-    return render_template("offline.html")
+# PWA routes (/sw.js, /offline) moved to blueprints/pwa.py (D2).
 
 # ── Push notifications ───────────────────────────────────────
 # Operators generate a VAPID keypair once (see docs/push-keys.md)
@@ -9735,38 +9728,9 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     if created_store: click.echo("   (Store was created on this run.)")
     if created_user:  click.echo("   (User was created on this run.)")
 
-# ── Error handlers ───────────────────────────────────────────
-def _render_error(code, message, user):
-    """Pick the right error template. Logged-out visitors get the
-    standalone error_public.html — no sidebar/topbar so a typo
-    like /APP doesn't render the admin chrome and look like a
-    half-loaded dashboard. Logged-in visitors keep the in-app
-    error.html with their normal shell (so the "Back to Dashboard"
-    button routes correctly)."""
-    if user is None:
-        return render_template(
-            "error_public.html",
-            code=code, message=message,
-            request_path=request.path,
-        ), code
-    return render_template(
-        "error.html", user=user, code=code, message=message,
-    ), code
-
-
-@app.errorhandler(404)
-def not_found(e):
-    return _render_error(404, "Page not found.", current_user())
-
-@app.errorhandler(500)
-def server_error(e):
-    import traceback
-    app.logger.error(f"500 error: {e}\n{traceback.format_exc()}")
-    try:
-        u = current_user()
-    except Exception:
-        u = None
-    return _render_error(500, "Something went wrong. Please try again.", u)
+# 404 + 500 error handlers moved to blueprints/errors.py (D2).
+from blueprints import errors as _bp_errors  # noqa: E402
+_bp_errors.register(app, current_user)
 
 # ── Init ─────────────────────────────────────────────────────
 # Column additions applied to existing installs on boot. Each entry is
