@@ -1,85 +1,106 @@
+import { lazy, Suspense } from "react";
 import { Outlet, Route, Routes } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
-import AccountNotifications from "./routes/AccountNotifications";
-import AccountProfile from "./routes/AccountProfile";
-import AdminAuditLog from "./routes/AdminAuditLog";
-import AdminReferrals from "./routes/AdminReferrals";
-import AdminSubscription from "./routes/AdminSubscription";
-import AdminTaxExport from "./routes/AdminTaxExport";
-import AdminUserForm from "./routes/AdminUserForm";
-import AdminUsers from "./routes/AdminUsers";
-import Bank from "./routes/Bank";
-import BankRules from "./routes/BankRules";
-import BankTransactions from "./routes/BankTransactions";
-import Batches from "./routes/Batches";
-import BatchForm from "./routes/BatchForm";
-import AchVolume from "./routes/reports/AchVolume";
-import BankChargesByAccount from "./routes/reports/BankChargesByAccount";
-import BankRuleAudit from "./routes/reports/BankRuleAudit";
-import BankTxnBreakdown from "./routes/reports/BankTxnBreakdown";
-import ByDestinationCountry from "./routes/reports/ByDestinationCountry";
-import CancelledTransfers from "./routes/reports/CancelledTransfers";
-import CashierProductivity from "./routes/reports/CashierProductivity";
-import CheckDeposits from "./routes/reports/CheckDeposits";
-import DailyDrops from "./routes/reports/DailyDrops";
-import EmployeeActivity from "./routes/reports/EmployeeActivity";
-import FeesVsTax from "./routes/reports/FeesVsTax";
-import HighValueTransfers from "./routes/reports/HighValueTransfers";
-import NewVsReturning from "./routes/reports/NewVsReturning";
-import PeriodComparison from "./routes/reports/PeriodComparison";
-import PeriodPL from "./routes/reports/PeriodPL";
-import ReturnedCheckStatus from "./routes/reports/ReturnedCheckStatus";
-import SuperadminBIDrilldown from "./routes/reports/SuperadminBIDrilldown";
-import SalesByCompany from "./routes/reports/SalesByCompany";
-import SalesByEmployee from "./routes/reports/SalesByEmployee";
-import SalesByService from "./routes/reports/SalesByService";
-import TopCustomers from "./routes/reports/TopCustomers";
-import TopRecipients from "./routes/reports/TopRecipients";
-import TopSenders from "./routes/reports/TopSenders";
-import Customers from "./routes/Customers";
-import DailyBook from "./routes/DailyBook";
-import Dashboard from "./routes/Dashboard";
-import EditDailyBook from "./routes/EditDailyBook";
-import EditMonthly from "./routes/EditMonthly";
-import EditTransfer from "./routes/EditTransfer";
-import ForgotPassword from "./routes/ForgotPassword";
+import { Loading } from "./components/ui";
 import Home from "./routes/Home";
-import Login from "./routes/Login";
-import LoginStore from "./routes/LoginStore";
-import Monthly from "./routes/Monthly";
-import NewTransfer from "./routes/NewTransfer";
 import NotFound from "./routes/NotFound";
-import OwnerConnect from "./routes/OwnerConnect";
-import OwnerDashboard from "./routes/OwnerDashboard";
-import OwnerLocations from "./routes/OwnerLocations";
-import OwnerPLRollup from "./routes/OwnerPLRollup";
-import OwnerReports from "./routes/OwnerReports";
-import OwnerStoreDetail from "./routes/OwnerStoreDetail";
-import Privacy from "./routes/Privacy";
-import Reports from "./routes/Reports";
-import ResetPassword from "./routes/ResetPassword";
-import ReturnCheckForm from "./routes/ReturnCheckForm";
-import ReturnChecks from "./routes/ReturnChecks";
-import Settings from "./routes/Settings";
-import Signup from "./routes/Signup";
-import SignupOwner from "./routes/SignupOwner";
-import Subscribe from "./routes/Subscribe";
-import SubscribeSuccess from "./routes/SubscribeSuccess";
-import {
-  TwoFactorEnroll, TwoFactorRecover, TwoFactorVerify,
-} from "./routes/TwoFactor";
-import SuperadminAnnouncements from "./routes/SuperadminAnnouncements";
-import SuperadminAuditLog from "./routes/SuperadminAuditLog";
-import SuperadminControls from "./routes/SuperadminControls";
-import SuperadminReports from "./routes/SuperadminReports";
-import SuperadminStoreForm from "./routes/SuperadminStoreForm";
-import SuperadminStores from "./routes/SuperadminStores";
-import TransferDetail from "./routes/TransferDetail";
-import Transfers from "./routes/Transfers";
-import TVDisplayAdmin from "./routes/TVDisplayAdmin";
-import TVDisplayCountry from "./routes/TVDisplayCountry";
+
+// Eager: tiny bounce + 404 modules that should be in the entry chunk
+// so the first paint never blocks on a network round-trip. Everything
+// else is lazy — the bundle splits per-route via Vite's dynamic-import
+// handling. Chart.js (~190KB minified) only loads for routes that
+// render charts (owner dashboard + superadmin BI drilldowns).
+
+const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
+const AccountProfile = lazy(() => import("./routes/AccountProfile"));
+const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
+const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
+const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
+const AdminTaxExport = lazy(() => import("./routes/AdminTaxExport"));
+const AdminUserForm = lazy(() => import("./routes/AdminUserForm"));
+const AdminUsers = lazy(() => import("./routes/AdminUsers"));
+const Bank = lazy(() => import("./routes/Bank"));
+const BankRules = lazy(() => import("./routes/BankRules"));
+const BankTransactions = lazy(() => import("./routes/BankTransactions"));
+const Batches = lazy(() => import("./routes/Batches"));
+const BatchForm = lazy(() => import("./routes/BatchForm"));
+const Customers = lazy(() => import("./routes/Customers"));
+const DailyBook = lazy(() => import("./routes/DailyBook"));
+const Dashboard = lazy(() => import("./routes/Dashboard"));
+const EditDailyBook = lazy(() => import("./routes/EditDailyBook"));
+const EditMonthly = lazy(() => import("./routes/EditMonthly"));
+const EditTransfer = lazy(() => import("./routes/EditTransfer"));
+const ForgotPassword = lazy(() => import("./routes/ForgotPassword"));
+const Login = lazy(() => import("./routes/Login"));
+const LoginStore = lazy(() => import("./routes/LoginStore"));
+const Monthly = lazy(() => import("./routes/Monthly"));
+const NewTransfer = lazy(() => import("./routes/NewTransfer"));
+const OwnerConnect = lazy(() => import("./routes/OwnerConnect"));
+const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
+const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
+const OwnerPLRollup = lazy(() => import("./routes/OwnerPLRollup"));
+const OwnerReports = lazy(() => import("./routes/OwnerReports"));
+const OwnerStoreDetail = lazy(() => import("./routes/OwnerStoreDetail"));
+const Privacy = lazy(() => import("./routes/Privacy"));
+const Reports = lazy(() => import("./routes/Reports"));
+const ResetPassword = lazy(() => import("./routes/ResetPassword"));
+const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
+const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
+const Settings = lazy(() => import("./routes/Settings"));
+const Signup = lazy(() => import("./routes/Signup"));
+const SignupOwner = lazy(() => import("./routes/SignupOwner"));
+const Subscribe = lazy(() => import("./routes/Subscribe"));
+const SubscribeSuccess = lazy(() => import("./routes/SubscribeSuccess"));
+const SuperadminAnnouncements = lazy(() => import("./routes/SuperadminAnnouncements"));
+const SuperadminAuditLog = lazy(() => import("./routes/SuperadminAuditLog"));
+const SuperadminControls = lazy(() => import("./routes/SuperadminControls"));
+const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
+const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
+const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
+const TransferDetail = lazy(() => import("./routes/TransferDetail"));
+const Transfers = lazy(() => import("./routes/Transfers"));
+const TVDisplayAdmin = lazy(() => import("./routes/TVDisplayAdmin"));
+const TVDisplayCountry = lazy(() => import("./routes/TVDisplayCountry"));
+
+// TwoFactor.tsx exports three named components from one file. They share
+// a 2FA chrome bundle, so co-locating them in the same chunk is correct;
+// we unwrap the named exports into default-shaped lazy promises.
+const TwoFactorEnroll = lazy(() =>
+  import("./routes/TwoFactor").then((m) => ({ default: m.TwoFactorEnroll })),
+);
+const TwoFactorRecover = lazy(() =>
+  import("./routes/TwoFactor").then((m) => ({ default: m.TwoFactorRecover })),
+);
+const TwoFactorVerify = lazy(() =>
+  import("./routes/TwoFactor").then((m) => ({ default: m.TwoFactorVerify })),
+);
+
+// Reports.
+const AchVolume = lazy(() => import("./routes/reports/AchVolume"));
+const BankChargesByAccount = lazy(() => import("./routes/reports/BankChargesByAccount"));
+const BankRuleAudit = lazy(() => import("./routes/reports/BankRuleAudit"));
+const BankTxnBreakdown = lazy(() => import("./routes/reports/BankTxnBreakdown"));
+const ByDestinationCountry = lazy(() => import("./routes/reports/ByDestinationCountry"));
+const CancelledTransfers = lazy(() => import("./routes/reports/CancelledTransfers"));
+const CashierProductivity = lazy(() => import("./routes/reports/CashierProductivity"));
+const CheckDeposits = lazy(() => import("./routes/reports/CheckDeposits"));
+const DailyDrops = lazy(() => import("./routes/reports/DailyDrops"));
+const EmployeeActivity = lazy(() => import("./routes/reports/EmployeeActivity"));
+const FeesVsTax = lazy(() => import("./routes/reports/FeesVsTax"));
+const HighValueTransfers = lazy(() => import("./routes/reports/HighValueTransfers"));
+const NewVsReturning = lazy(() => import("./routes/reports/NewVsReturning"));
+const PeriodComparison = lazy(() => import("./routes/reports/PeriodComparison"));
+const PeriodPL = lazy(() => import("./routes/reports/PeriodPL"));
+const ReturnedCheckStatus = lazy(() => import("./routes/reports/ReturnedCheckStatus"));
+const SalesByCompany = lazy(() => import("./routes/reports/SalesByCompany"));
+const SalesByEmployee = lazy(() => import("./routes/reports/SalesByEmployee"));
+const SalesByService = lazy(() => import("./routes/reports/SalesByService"));
+const SuperadminBIDrilldown = lazy(() => import("./routes/reports/SuperadminBIDrilldown"));
+const TopCustomers = lazy(() => import("./routes/reports/TopCustomers"));
+const TopRecipients = lazy(() => import("./routes/reports/TopRecipients"));
+const TopSenders = lazy(() => import("./routes/reports/TopSenders"));
 
 // Top-level routing for the SPA.
 //
@@ -93,116 +114,122 @@ import TVDisplayCountry from "./routes/TVDisplayCountry";
 // Adding a new authed screen = adding one nested <Route> under
 // the AuthedShell layout — no need to repeat RequireAuth +
 // AppShell wrappers per page.
+//
+// Every <Route> element is a lazy() chunk; the global <Suspense>
+// boundary below renders <Loading /> during the chunk fetch. Per-
+// route error boundaries are tracked separately as BACKLOG C4.
 export default function App() {
   return (
-    <Routes>
-      <Route index element={<Home />} />
-      <Route path="login"               element={<Login />} />
-      <Route path="login/2fa"           element={<TwoFactorVerify />} />
-      <Route path="login/2fa/enroll"    element={<TwoFactorEnroll />} />
-      <Route path="login/2fa/recover"   element={<TwoFactorRecover />} />
-      <Route path="login/:slug"         element={<LoginStore />} />
-      <Route path="signup"           element={<Signup />} />
-      <Route path="signup/owner"     element={<SignupOwner />} />
-      <Route path="forgot-password"  element={<ForgotPassword />} />
-      <Route path="reset-password"   element={<ResetPassword />} />
-      <Route path="privacy"          element={<Privacy />} />
-      <Route element={<AuthedShell />}>
-        <Route path="dashboard"        element={<Dashboard />} />
-        <Route path="transfers"        element={<Transfers />} />
-        <Route path="transfers/new"      element={<NewTransfer />} />
-        <Route path="transfers/:id"      element={<TransferDetail />} />
-        <Route path="transfers/:id/edit" element={<EditTransfer />} />
-        <Route path="customers"        element={<Customers />} />
-        <Route path="daily"            element={<DailyBook />} />
-        <Route path="daily/edit"       element={<EditDailyBook />} />
-        <Route path="reports"          element={<Reports />} />
-        <Route path="reports/sales-by-company"      element={<SalesByCompany />} />
-        <Route path="reports/sales-by-service-type" element={<SalesByService />} />
-        <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
-        <Route path="reports/cashier-productivity"  element={<CashierProductivity />} />
-        <Route path="reports/top-customers"   element={<TopCustomers />} />
-        <Route path="reports/top-senders"     element={<TopSenders />} />
-        <Route path="reports/top-recipients"  element={<TopRecipients />} />
-        <Route path="reports/new-vs-returning"       element={<NewVsReturning />} />
-        <Route path="reports/by-destination-country" element={<ByDestinationCountry />} />
-        <Route path="reports/fees-vs-tax"            element={<FeesVsTax />} />
-        <Route path="reports/high-value-transfers"   element={<HighValueTransfers />} />
-        <Route path="reports/cancelled-transfers"    element={<CancelledTransfers />} />
-        <Route path="reports/ach-volume"             element={<AchVolume />} />
-        <Route path="reports/returned-check-status"       element={<ReturnedCheckStatus />} />
-        <Route path="reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
-        <Route path="reports/daily-drops"                 element={<DailyDrops />} />
-        <Route path="reports/check-deposits"              element={<CheckDeposits />} />
-        <Route path="reports/bank-rule-audit"             element={<BankRuleAudit />} />
-        <Route path="reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
-        <Route path="reports/period-comparison"           element={<PeriodComparison />} />
-        <Route path="reports/employee-activity"           element={<EmployeeActivity />} />
-        <Route path="reports/period-pl"                   element={<PeriodPL />} />
-        <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
-        <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
-        <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
-        <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
-        <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
-        <Route path="owner/reports/top-customers"  element={<TopCustomers />} />
-        <Route path="owner/reports/top-senders"    element={<TopSenders />} />
-        <Route path="owner/reports/top-recipients"        element={<TopRecipients />} />
-        <Route path="owner/reports/new-vs-returning"       element={<NewVsReturning />} />
-        <Route path="owner/reports/by-destination-country" element={<ByDestinationCountry />} />
-        <Route path="owner/reports/fees-vs-tax"            element={<FeesVsTax />} />
-        <Route path="owner/reports/high-value-transfers"   element={<HighValueTransfers />} />
-        <Route path="owner/reports/cancelled-transfers"    element={<CancelledTransfers />} />
-        <Route path="owner/reports/ach-volume"             element={<AchVolume />} />
-        <Route path="owner/reports/returned-check-status"       element={<ReturnedCheckStatus />} />
-        <Route path="owner/reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
-        <Route path="owner/reports/daily-drops"                 element={<DailyDrops />} />
-        <Route path="owner/reports/check-deposits"              element={<CheckDeposits />} />
-        <Route path="owner/reports/bank-rule-audit"             element={<BankRuleAudit />} />
-        <Route path="owner/reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
-        <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
-        <Route path="owner/reports/employee-activity"           element={<EmployeeActivity />} />
-        <Route path="owner/reports/period-pl"                   element={<PeriodPL />} />
-        <Route path="batches"          element={<Batches />} />
-        <Route path="batches/new"      element={<BatchForm />} />
-        <Route path="batches/:id/edit" element={<BatchForm />} />
-        <Route path="bank"             element={<Bank />} />
-        <Route path="bank/rules"       element={<BankRules />} />
-        <Route path="bank-transactions" element={<BankTransactions />} />
-        <Route path="monthly"          element={<Monthly />} />
-        <Route path="monthly/edit"     element={<EditMonthly />} />
-        <Route path="return-checks"          element={<ReturnChecks />} />
-        <Route path="return-checks/new"      element={<ReturnCheckForm />} />
-        <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
-        <Route path="owner/connect"   element={<OwnerConnect />} />
-        <Route path="owner/dashboard" element={<OwnerDashboard />} />
-        <Route path="owner/locations" element={<OwnerLocations />} />
-        <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
-        <Route path="owner/reports"   element={<OwnerReports />} />
-        <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
-        <Route path="superadmin/stores"        element={<SuperadminStores />} />
-        <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
-        <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
-        <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
-        <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
-        <Route path="superadmin/controls"      element={<SuperadminControls />} />
-        <Route path="superadmin/reports"       element={<SuperadminReports />} />
-        <Route path="subscribe"             element={<Subscribe />} />
-        <Route path="subscribe/success"     element={<SubscribeSuccess />} />
-        <Route path="admin/subscription"    element={<AdminSubscription />} />
-        <Route path="admin/tax-export"      element={<AdminTaxExport />} />
-        <Route path="admin/audit-log"       element={<AdminAuditLog />} />
-        <Route path="admin/users"             element={<AdminUsers />} />
-        <Route path="admin/users/new"         element={<AdminUserForm />} />
-        <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
-        <Route path="account/referrals"     element={<AdminReferrals />} />
-        <Route path="account/profile"       element={<AccountProfile />} />
-        <Route path="account/notifications" element={<AccountNotifications />} />
-        <Route path="tv-display"            element={<TVDisplayAdmin />} />
-        <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
-        <Route path="settings"         element={<Settings />} />
-      </Route>
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <Suspense fallback={<Loading />}>
+      <Routes>
+        <Route index element={<Home />} />
+        <Route path="login"               element={<Login />} />
+        <Route path="login/2fa"           element={<TwoFactorVerify />} />
+        <Route path="login/2fa/enroll"    element={<TwoFactorEnroll />} />
+        <Route path="login/2fa/recover"   element={<TwoFactorRecover />} />
+        <Route path="login/:slug"         element={<LoginStore />} />
+        <Route path="signup"           element={<Signup />} />
+        <Route path="signup/owner"     element={<SignupOwner />} />
+        <Route path="forgot-password"  element={<ForgotPassword />} />
+        <Route path="reset-password"   element={<ResetPassword />} />
+        <Route path="privacy"          element={<Privacy />} />
+        <Route element={<AuthedShell />}>
+          <Route path="dashboard"        element={<Dashboard />} />
+          <Route path="transfers"        element={<Transfers />} />
+          <Route path="transfers/new"      element={<NewTransfer />} />
+          <Route path="transfers/:id"      element={<TransferDetail />} />
+          <Route path="transfers/:id/edit" element={<EditTransfer />} />
+          <Route path="customers"        element={<Customers />} />
+          <Route path="daily"            element={<DailyBook />} />
+          <Route path="daily/edit"       element={<EditDailyBook />} />
+          <Route path="reports"          element={<Reports />} />
+          <Route path="reports/sales-by-company"      element={<SalesByCompany />} />
+          <Route path="reports/sales-by-service-type" element={<SalesByService />} />
+          <Route path="reports/sales-by-employee"     element={<SalesByEmployee />} />
+          <Route path="reports/cashier-productivity"  element={<CashierProductivity />} />
+          <Route path="reports/top-customers"   element={<TopCustomers />} />
+          <Route path="reports/top-senders"     element={<TopSenders />} />
+          <Route path="reports/top-recipients"  element={<TopRecipients />} />
+          <Route path="reports/new-vs-returning"       element={<NewVsReturning />} />
+          <Route path="reports/by-destination-country" element={<ByDestinationCountry />} />
+          <Route path="reports/fees-vs-tax"            element={<FeesVsTax />} />
+          <Route path="reports/high-value-transfers"   element={<HighValueTransfers />} />
+          <Route path="reports/cancelled-transfers"    element={<CancelledTransfers />} />
+          <Route path="reports/ach-volume"             element={<AchVolume />} />
+          <Route path="reports/returned-check-status"       element={<ReturnedCheckStatus />} />
+          <Route path="reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
+          <Route path="reports/daily-drops"                 element={<DailyDrops />} />
+          <Route path="reports/check-deposits"              element={<CheckDeposits />} />
+          <Route path="reports/bank-rule-audit"             element={<BankRuleAudit />} />
+          <Route path="reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
+          <Route path="reports/period-comparison"           element={<PeriodComparison />} />
+          <Route path="reports/employee-activity"           element={<EmployeeActivity />} />
+          <Route path="reports/period-pl"                   element={<PeriodPL />} />
+          <Route path="superadmin/reports/:slug"            element={<SuperadminBIDrilldown />} />
+          <Route path="owner/reports/sales-by-company"      element={<SalesByCompany />} />
+          <Route path="owner/reports/sales-by-service-type" element={<SalesByService />} />
+          <Route path="owner/reports/sales-by-employee"     element={<SalesByEmployee />} />
+          <Route path="owner/reports/cashier-productivity"  element={<CashierProductivity />} />
+          <Route path="owner/reports/top-customers"  element={<TopCustomers />} />
+          <Route path="owner/reports/top-senders"    element={<TopSenders />} />
+          <Route path="owner/reports/top-recipients"        element={<TopRecipients />} />
+          <Route path="owner/reports/new-vs-returning"       element={<NewVsReturning />} />
+          <Route path="owner/reports/by-destination-country" element={<ByDestinationCountry />} />
+          <Route path="owner/reports/fees-vs-tax"            element={<FeesVsTax />} />
+          <Route path="owner/reports/high-value-transfers"   element={<HighValueTransfers />} />
+          <Route path="owner/reports/cancelled-transfers"    element={<CancelledTransfers />} />
+          <Route path="owner/reports/ach-volume"             element={<AchVolume />} />
+          <Route path="owner/reports/returned-check-status"       element={<ReturnedCheckStatus />} />
+          <Route path="owner/reports/bank-transactions-breakdown" element={<BankTxnBreakdown />} />
+          <Route path="owner/reports/daily-drops"                 element={<DailyDrops />} />
+          <Route path="owner/reports/check-deposits"              element={<CheckDeposits />} />
+          <Route path="owner/reports/bank-rule-audit"             element={<BankRuleAudit />} />
+          <Route path="owner/reports/bank-charges-by-account"     element={<BankChargesByAccount />} />
+          <Route path="owner/reports/period-comparison"           element={<PeriodComparison />} />
+          <Route path="owner/reports/employee-activity"           element={<EmployeeActivity />} />
+          <Route path="owner/reports/period-pl"                   element={<PeriodPL />} />
+          <Route path="batches"          element={<Batches />} />
+          <Route path="batches/new"      element={<BatchForm />} />
+          <Route path="batches/:id/edit" element={<BatchForm />} />
+          <Route path="bank"             element={<Bank />} />
+          <Route path="bank/rules"       element={<BankRules />} />
+          <Route path="bank-transactions" element={<BankTransactions />} />
+          <Route path="monthly"          element={<Monthly />} />
+          <Route path="monthly/edit"     element={<EditMonthly />} />
+          <Route path="return-checks"          element={<ReturnChecks />} />
+          <Route path="return-checks/new"      element={<ReturnCheckForm />} />
+          <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
+          <Route path="owner/connect"   element={<OwnerConnect />} />
+          <Route path="owner/dashboard" element={<OwnerDashboard />} />
+          <Route path="owner/locations" element={<OwnerLocations />} />
+          <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
+          <Route path="owner/reports"   element={<OwnerReports />} />
+          <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
+          <Route path="superadmin/stores"        element={<SuperadminStores />} />
+          <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
+          <Route path="superadmin/stores/:id/edit" element={<SuperadminStoreForm />} />
+          <Route path="superadmin/audit-log"     element={<SuperadminAuditLog />} />
+          <Route path="superadmin/announcements" element={<SuperadminAnnouncements />} />
+          <Route path="superadmin/controls"      element={<SuperadminControls />} />
+          <Route path="superadmin/reports"       element={<SuperadminReports />} />
+          <Route path="subscribe"             element={<Subscribe />} />
+          <Route path="subscribe/success"     element={<SubscribeSuccess />} />
+          <Route path="admin/subscription"    element={<AdminSubscription />} />
+          <Route path="admin/tax-export"      element={<AdminTaxExport />} />
+          <Route path="admin/audit-log"       element={<AdminAuditLog />} />
+          <Route path="admin/users"             element={<AdminUsers />} />
+          <Route path="admin/users/new"         element={<AdminUserForm />} />
+          <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
+          <Route path="account/referrals"     element={<AdminReferrals />} />
+          <Route path="account/profile"       element={<AccountProfile />} />
+          <Route path="account/notifications" element={<AccountNotifications />} />
+          <Route path="tv-display"            element={<TVDisplayAdmin />} />
+          <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
+          <Route path="settings"         element={<Settings />} />
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 }
 
