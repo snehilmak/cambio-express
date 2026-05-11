@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { useTransfer } from "../api/transfers";
 import { getCurrentIdentity } from "../lib/auth";
+import { ErrorState, Loading } from "../components/ui";
 
 // Single-transfer detail page. Backed by /api/v2/transfers/{id}
 // — same shape as a row in the list, so the read-only detail
@@ -12,7 +13,7 @@ export default function TransferDetail() {
   const params = useParams<{ id: string }>();
   const id = params.id ? Number(params.id) : undefined;
   const identity = getCurrentIdentity();
-  const { data, isLoading, isError, error } = useTransfer(id);
+  const { data, isLoading, isError, error, refetch } = useTransfer(id);
 
   if (Number.isNaN(id)) {
     return (
@@ -38,7 +39,7 @@ export default function TransferDetail() {
     return (
       <main style={pageStyle}>
         <BackLink />
-        <p style={emptyStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -47,9 +48,10 @@ export default function TransferDetail() {
     return (
       <main style={pageStyle}>
         <BackLink />
-        <p style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-          {error instanceof Error ? error.message : "Could not load transfer"}
-        </p>
+        <ErrorState
+          message={error instanceof Error ? error.message : "Could not load transfer"}
+          onRetry={() => { void refetch(); }}
+        />
       </main>
     );
   }

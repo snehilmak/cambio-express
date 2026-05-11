@@ -1,5 +1,6 @@
 import { useReportList } from "../api/reports";
 import ReportCenter from "../components/ReportCenter";
+import { ErrorState, Loading } from "../components/ui";
 import { ApiError } from "../lib/api";
 
 // /app/reports — store-scoped report center index.
@@ -11,13 +12,13 @@ import { ApiError } from "../lib/api";
 // — each individual report's per-page render migrates separately.
 
 export default function Reports() {
-  const { data, isLoading, isError, error } = useReportList();
+  const { data, isLoading, isError, error, refetch } = useReportList();
 
   if (isLoading) {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Reports</h1>
-        <p style={mutedStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -26,11 +27,14 @@ export default function Reports() {
     return (
       <main style={pageStyle}>
         <h1 style={titleStyle}>Reports</h1>
-        <p style={errorStyle}>
-          {status === 403
-            ? "Sign in as a store user to view reports."
-            : `Couldn't load the report list. ${error instanceof Error ? error.message : ""}`}
-        </p>
+        <ErrorState
+          message={
+            status === 403
+              ? "Sign in as a store user to view reports."
+              : `Couldn't load the report list. ${error instanceof Error ? error.message : ""}`
+          }
+          onRetry={status === 403 ? undefined : () => { void refetch(); }}
+        />
       </main>
     );
   }
@@ -51,5 +55,3 @@ const titleStyle: React.CSSProperties = {
   fontFamily: "'Space Grotesk', 'Inter', sans-serif",
   fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)",
 };
-const mutedStyle: React.CSSProperties = { color: "var(--text-muted)", fontSize: 14 };
-const errorStyle: React.CSSProperties = { color: "var(--db-negative)", fontSize: 14 };

@@ -6,6 +6,7 @@ import {
   type ProfileUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import { ErrorState, Loading } from "../components/ui";
 
 // /app/account/profile — personal info form (full_name, email,
 // phone, timezone) + read-only metadata (username, role,
