@@ -21,7 +21,7 @@
   </div>
   <div style="color:var(--db-gray-7);font-size:15px;margin-bottom:32px;">{{ message }}</div>
   {% if user and user.role == "owner" %}
-    <a href="{{ url_for('owner_dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
+    <a href="{{ url_for('owner.owner_dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
   {% else %}
     <a href="{{ url_for('dashboard') }}" class="btn btn-primary">← Back to Dashboard</a>
   {% endif %}
