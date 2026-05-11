@@ -13,17 +13,18 @@ import os
 
 import pytest
 
-import app as app_module
+import app as app_module  # noqa: F401 — ensures the Flask app is loaded
+from blueprints import spa_cutover as cutover_module
 
 
 @pytest.fixture
 def cutover_on(monkeypatch):
-    monkeypatch.setattr(app_module, "SPA_CUTOVER_ENABLED", True)
+    monkeypatch.setattr(cutover_module, "SPA_CUTOVER_ENABLED", True)
 
 
 @pytest.fixture
 def cutover_off(monkeypatch):
-    monkeypatch.setattr(app_module, "SPA_CUTOVER_ENABLED", False)
+    monkeypatch.setattr(cutover_module, "SPA_CUTOVER_ENABLED", False)
 
 
 # ── Static path mappings ────────────────────────────────────
