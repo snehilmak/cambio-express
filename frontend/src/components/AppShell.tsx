@@ -27,6 +27,8 @@ interface NavItem {
   to: string;
   label: string;
   icon: React.ReactNode;
+  /** Roles that should see this item. Omit for "everyone authed". */
+  roles?: string[];
 }
 
 interface NavGroup {
@@ -36,15 +38,49 @@ interface NavGroup {
   roles?: string[];
 }
 
+// Role-by-role nav so each persona only sees the surfaces they
+// can actually use:
+//
+//   employee  — Workspace + Books, no Finance (no bank txns / P&L /
+//               ACH), no Owner / Platform, profile-only Account.
+//   admin     — Workspace + Books + Finance + Account (Settings,
+//               Users, Subscription). No Owner / Platform.
+//   owner     — Workspace (Owner Dashboard) + Owner umbrella +
+//               Account. No Books / Finance — those are per-store
+//               surfaces the owner reaches via the per-store
+//               drill-down inside the Owner section.
+//   superadmin — sees Platform + every other surface for support.
+//
+// Within Workspace, the Dashboard target depends on role: store
+// users land on /dashboard, owners on /owner/dashboard,
+// superadmin on /superadmin/stores (their list view IS their
+// landing page). Each variant is its own NavItem with a `roles`
+// filter so the sidebar shows exactly one Dashboard link per role.
+
 const NAV: NavGroup[] = [
   {
     title: "Workspace",
     items: [
-      { to: "/dashboard", label: "Dashboard", icon: iconDashboard() },
+      {
+        to: "/dashboard", label: "Dashboard",
+        roles: ["admin", "employee"],
+        icon: iconDashboard(),
+      },
+      {
+        to: "/owner/dashboard", label: "Dashboard",
+        roles: ["owner"],
+        icon: iconDashboard(),
+      },
+      {
+        to: "/superadmin/stores", label: "Platform",
+        roles: ["superadmin"],
+        icon: iconDashboard(),
+      },
     ],
   },
   {
     title: "Books",
+    roles: ["admin", "employee", "superadmin"],
     items: [
       { to: "/transfers",     label: "Transfers",     icon: iconTransfers() },
       { to: "/customers",     label: "Customers",     icon: iconCustomers() },
@@ -54,6 +90,9 @@ const NAV: NavGroup[] = [
   },
   {
     title: "Finance",
+    // Employees don't reconcile bank or close monthly — keep the
+    // Finance section admin-only (superadmin sees it for support).
+    roles: ["admin", "superadmin"],
     items: [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
@@ -65,8 +104,10 @@ const NAV: NavGroup[] = [
     title: "Owner",
     roles: ["owner", "superadmin"],
     items: [
-      { to: "/owner/locations", label: "Locations", icon: iconOwner() },
-      { to: "/owner/pl-rollup", label: "P&L rollup", icon: iconRollup() },
+      { to: "/owner/locations", label: "Locations",   icon: iconOwner() },
+      { to: "/owner/pl-rollup", label: "P&L rollup",  icon: iconRollup() },
+      { to: "/owner/reports",   label: "Reports",     icon: iconReports() },
+      { to: "/owner/connect",   label: "Connect",     icon: iconBanner() },
     ],
   },
   {
@@ -76,12 +117,27 @@ const NAV: NavGroup[] = [
       { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform() },
       { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit() },
       { to: "/superadmin/announcements", label: "Announcements", icon: iconBanner() },
+      { to: "/superadmin/reports",       label: "Reports",       icon: iconReports() },
+      { to: "/superadmin/controls",      label: "Controls",      icon: iconSettings() },
     ],
   },
   {
     title: "Account",
     items: [
-      { to: "/settings",  label: "Settings",    icon: iconSettings() },
+      // Settings is admin-only (employees, owners use a smaller
+      // profile screen — `/account/profile`). Superadmin sees
+      // Settings because they may be impersonating a store.
+      {
+        to: "/settings", label: "Settings",
+        roles: ["admin", "superadmin"],
+        icon: iconSettings(),
+      },
+      // Profile is everyone — single place to change password,
+      // manage passkeys, etc.
+      {
+        to: "/account/profile", label: "Profile",
+        icon: iconCustomers(),
+      },
     ],
   },
 ];
@@ -132,9 +188,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 function Sidebar({ drawerOpen }: { drawerOpen: boolean }) {
   const identity = getCurrentIdentity();
   const role = identity?.role ?? "";
-  const groups = NAV.filter(
-    (g) => !g.roles || g.roles.includes(role),
-  );
+  // Filter at both levels: drop the whole group if its `roles`
+  // excludes this user, then drop individual items that have their
+  // own `roles` filter (e.g. the per-role Dashboard variants). A
+  // group that ends up empty after item filtering is hidden too so
+  // we don't render a section heading with nothing under it.
+  const visible = (i: NavItem) => !i.roles || i.roles.includes(role);
+  const groups = NAV
+    .filter((g) => !g.roles || g.roles.includes(role))
+    .map((g) => ({ ...g, items: g.items.filter(visible) }))
+    .filter((g) => g.items.length > 0);
   return (
     <aside
       className={`app-sidebar${drawerOpen ? " is-open" : ""}`}
