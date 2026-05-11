@@ -65,11 +65,13 @@ from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
+from blueprints import subscription as _bp_subscription  # noqa: E402
 from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_owner.bp)
 app.register_blueprint(_bp_tv.bp)
+app.register_blueprint(_bp_subscription.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -3223,104 +3225,10 @@ def admin_referrals():
     bounces old bookmarks."""
     return redirect("/app/account/referrals", code=301)
 
-# ── Subscription management ──────────────────────────────────
-@app.route("/admin/subscription")
-@admin_required
-def admin_subscription():
-    """301 → /app/admin/subscription. Subscription / add-ons
-    page moved to React; the SPA reads /api/v2/admin/subscription
-    for plan + add-on state. Stub keeps url_for('admin_subscription')
-    working in still-Jinja chrome and the legacy POST handlers
-    below (cancel, billing portal, addon toggle) which still
-    redirect via url_for('admin_subscription')."""
-    return redirect("/app/admin/subscription", code=301)
-
-def _open_billing_portal(store, error_msg, log_label="billing portal"):
-    """Flask-side adapter for the billing-portal Service. On success
-    303-redirects to Stripe; on Stripe error flashes `error_msg` and
-    redirects back to /admin/subscription.
-
-    Caller handles the pre-checks (paid plan, stripe_customer_id
-    present, etc.). Single source of truth lives in
-    `api.Modules.Billing.Services.create_billing_portal_session`
-    (PR 44).
-    """
-    from api.Modules.Billing.Services import (
-        StripeServiceError, create_billing_portal_session,
-    )
-    try:
-        url = create_billing_portal_session(
-            store,
-            return_url=url_for("admin_subscription", _external=True),
-        )
-        return redirect(url, code=303)
-    except StripeServiceError as e:
-        app.logger.error(f"Stripe {log_label} error: {e.__cause__}")
-        flash(error_msg, "error")
-        return redirect(url_for("admin_subscription"))
-
-
-@app.route("/admin/subscription/billing-portal", methods=["POST"])
-@admin_required
-def admin_subscription_billing_portal():
-    store = current_store()
-    if not store or not store.stripe_customer_id:
-        flash("No billing account found. Choose a plan to get started.", "error")
-        return redirect(url_for("subscribe"))
-    return _open_billing_portal(
-        store,
-        error_msg="Could not open billing portal. Please try again.",
-        log_label="billing portal")
-
-
-@app.route("/admin/subscription/cancel", methods=["POST"])
-@admin_required
-def admin_subscription_cancel():
-    """User has acknowledged the 6-month retention policy. Send them to the
-    Stripe billing portal to actually cancel; the webhook will then mark the
-    store inactive and start the 180-day retention timer."""
-    store = current_store()
-    if not store_has_paid_plan(store) or not store.stripe_customer_id:
-        flash("No active subscription to cancel.", "error")
-        return redirect(url_for("admin_subscription"))
-    return _open_billing_portal(
-        store,
-        error_msg="Could not open the cancellation page. Please try again.",
-        log_label="billing portal (cancel)")
-
-@app.route("/admin/subscription/addons/<addon_key>", methods=["POST"])
-@admin_required
-def admin_subscription_toggle_addon(addon_key):
-    store = current_store()
-    addon = ADDONS_CATALOG.get(addon_key)
-    if not addon:
-        flash("Unknown add-on.", "error")
-        return redirect(url_for("admin_subscription"))
-    if not store_has_paid_plan(store):
-        flash("Add-ons require an active Basic or Pro subscription.", "error")
-        return redirect(url_for("admin_subscription"))
-    if addon.get("status") == "coming_soon":
-        flash(f"{addon['name']} is coming soon — we'll let you know when it goes live.",
-              "success")
-        return redirect(url_for("admin_subscription"))
-    # Toggle the addon key in/out of the CSV. Stripe billing for the
-    # subscription item is handled separately (see BACKLOG); for now
-    # this gives the pilot store immediate access to the feature, and
-    # the "real money" wiring can land once we've validated the UX.
-    keys = store_addon_keys(store)
-    if addon_key in keys:
-        keys.discard(addon_key)
-        flash(f"{addon['name']} turned off.", "success")
-    else:
-        keys.add(addon_key)
-        flash(f"{addon['name']} is now active. Set up your display →", "success")
-    store.addons = ",".join(sorted(keys))
-    db.session.commit()
-    # When a feature has a dedicated dashboard, drop the user there
-    # right after activating so they don't have to hunt for it.
-    if addon_key == "tv_display" and addon_key in keys:
-        return redirect(url_for("tv.admin_tv_display"))
-    return redirect(url_for("admin_subscription"))
+# Subscription management routes (/admin/subscription[/billing-portal
+# /cancel/addons/<key>]) moved to blueprints/subscription.py (D2).
+# store_has_addon() stays here because many other parts of app.py
+# import it for the addon-gate predicate.
 
 def store_has_addon(store, addon_key):
     """Single predicate every gated route uses, so future Stripe-driven
@@ -3366,7 +3274,7 @@ def _tv_required(allow_employee=True):
     if not store_has_addon(store, "tv_display"):
         flash("The TV Display add-on isn't active for this store. "
               "Turn it on from your subscription page.", "warning")
-        return redirect(url_for("admin_subscription"))
+        return redirect(url_for("subscription.admin_subscription"))
     return (user, store)
 
 def _ensure_tv_display(store):
