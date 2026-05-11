@@ -62,6 +62,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
+from blueprints import billing as _bp_billing  # noqa: E402
 from blueprints import landing as _bp_landing  # noqa: E402
 from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
@@ -76,6 +77,7 @@ app.register_blueprint(_bp_tv.bp)
 app.register_blueprint(_bp_subscription.bp)
 app.register_blueprint(_bp_auth_redirects.bp)
 app.register_blueprint(_bp_landing.bp)
+app.register_blueprint(_bp_billing.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -1562,13 +1564,32 @@ class PushSubscription(db.Model):
 def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
 def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
-_TRIAL_EXEMPT = {"subscribe", "subscribe_checkout", "subscribe_success", "logout",
-                 "owner_dashboard", "owner_locations", "owner_store_detail",
-                 "owner_connect", "owner_connect_generate", "owner_connect_revoke",
-                 "owner_unlink_store",
-                 "admin_subscription", "admin_subscription_billing_portal",
-                 "admin_subscription_toggle_addon", "admin_subscription_cancel",
-                 "account_theme"}
+# Routes a trial-expired store can still reach (so the operator can
+# pay or sign out without bouncing). Matched against
+# `request.endpoint` so Blueprint-namespaced endpoints work too.
+_TRIAL_EXEMPT = {
+    # Subscribe flow
+    "billing.subscribe",
+    "billing.subscribe_checkout",
+    "billing.subscribe_success",
+    # Sign-out path
+    "auth_redirects.logout",
+    # Owner umbrella (per-store gate happens on the inner pages)
+    "owner.owner_dashboard",
+    "owner.owner_locations",
+    "owner.owner_store_detail",
+    "owner.owner_connect",
+    "owner.owner_connect_generate",
+    "owner.owner_connect_revoke",
+    "owner.owner_unlink_store",
+    # Manage-subscription surface
+    "subscription.admin_subscription",
+    "subscription.admin_subscription_billing_portal",
+    "subscription.admin_subscription_toggle_addon",
+    "subscription.admin_subscription_cancel",
+    # Theme toggle (cosmetic, fine to reach even when expired)
+    "account_theme",
+}
 
 # ── Add-ons catalog ──────────────────────────────────────────
 # Each add-on has a stable key used in the Store.addons CSV column.
@@ -1768,10 +1789,21 @@ def login_required(f):
         if "user_id" not in session:
             return redirect(url_for("login"))
         user = current_user()
-        if user and user.role != "superadmin" and f.__name__ not in _TRIAL_EXEMPT:
-            store = current_store()
-            if store and get_trial_status(store) == "expired":
-                return redirect(url_for("subscribe"))
+        # Trial-expired stores can still reach a fixed set of routes
+        # (subscribe, billing portal, logout, owner pages, …) so
+        # they can pay or sign out without bouncing. The exempt set
+        # is matched against `request.endpoint` so it works both for
+        # bare-app routes (endpoint == function name) and Blueprint
+        # routes (endpoint == "bp.func"). When called outside a
+        # request context (rare — backfills, tests), fall through
+        # without the exempt check.
+        if user and user.role != "superadmin":
+            from flask import has_request_context
+            endpoint = request.endpoint if has_request_context() else None
+            if endpoint not in _TRIAL_EXEMPT:
+                store = current_store()
+                if store and get_trial_status(store) == "expired":
+                    return redirect(url_for("billing.subscribe"))
         return f(*a, **k)
     return d
 
@@ -1816,7 +1848,7 @@ def pro_required(f):
         if store.plan == "trial" and get_trial_status(store) != "expired":
             return f(*a, **k)
         flash("Bank sync is a Pro plan feature. Upgrade to enable it.", "error")
-        return redirect(url_for("subscribe"))
+        return redirect(url_for("billing.subscribe"))
     return d
 
 def superadmin_required(f):
@@ -3088,57 +3120,8 @@ def _owner_locations_payload(user, period, query):
 # blueprints/owner.py (D2). The endpoint names changed from
 # `owner_*` to `owner.owner_*` — callers updated in the same PR.
 
-@app.route("/subscribe")
-@login_required
-def subscribe():
-    """301 → /app/subscribe. The plan picker moved to React;
-    the SPA reads /api/v2/admin/store-info for the current plan
-    and POSTs to /api/v2/billing/checkout to mint a Stripe
-    Checkout Session. Stub keeps url_for('subscribe') working
-    in still-Jinja chrome."""
-    return redirect("/app/subscribe", code=301)
-
-@app.route("/subscribe/checkout", methods=["POST"])
-@login_required
-def subscribe_checkout():
-    """Create a Stripe Checkout Session for the chosen plan and redirect.
-
-    Plan validation + Stripe Session creation delegate to
-    `api.Modules.Billing.Services.create_checkout_session` (PR 43);
-    this route handles the form parsing + flash/redirect glue.
-    The webhook (`checkout.session.completed`) is what actually flips
-    the store onto the new plan — this route only initiates the
-    payment flow.
-    """
-    from api.Modules.Billing.Services import (
-        InvalidPlanError, StripeServiceError, create_checkout_session,
-    )
-    store = current_store()
-    plan = request.form.get("plan", "").strip()
-    try:
-        url = create_checkout_session(
-            store, plan=plan,
-            success_url=url_for("subscribe_success", _external=True),
-            cancel_url=url_for("subscribe", _external=True),
-        )
-    except InvalidPlanError:
-        flash("Invalid plan selected.", "error")
-        return redirect(url_for("subscribe"))
-    except StripeServiceError as e:
-        app.logger.error(f"Stripe error: {e.__cause__}")
-        flash("Payment service error. Please try again.", "error")
-        return redirect(url_for("subscribe"))
-    return redirect(url, code=303)
-
-@app.route("/subscribe/success")
-@login_required
-def subscribe_success():
-    """301 → /app/subscribe/success. Stripe Checkout's success_url
-    points at this URL — the redirect chain (Stripe → here → /app)
-    is opaque to the user. The SPA polls /api/v2/admin/store-info
-    every 2s for ~30s so the page flips from "Payment received"
-    to "You're on Basic/Pro" without a manual refresh."""
-    return redirect("/app/subscribe/success", code=301)
+# /subscribe, /subscribe/checkout, /subscribe/success moved to
+# blueprints/billing.py (D2 phase 9).
 
 # ── Referrals (store-admin to new-store share + earn) ───────
 @app.route("/account/referrals")

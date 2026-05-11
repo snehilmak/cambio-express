@@ -279,12 +279,12 @@
 {% if trial_status == "expiring_soon" %}
 <div class="banner banner-warning">
   <span class="banner-msg">⏳ Your free trial ends in <strong>{{ trial_days_left }} day{{ 's' if trial_days_left != 1 else '' }}</strong>.</span>
-  <a href="{{ url_for('subscribe') }}" class="banner-cta">Choose a Plan →</a>
+  <a href="{{ url_for('billing.subscribe') }}" class="banner-cta">Choose a Plan →</a>
 </div>
 {% elif trial_status == "grace" %}
 <div class="banner banner-error">
   <span class="banner-msg">🔴 Your free trial has ended. Upgrade now to keep full access.</span>
-  <a href="{{ url_for('subscribe') }}" class="banner-cta">Upgrade Now →</a>
+  <a href="{{ url_for('billing.subscribe') }}" class="banner-cta">Upgrade Now →</a>
 </div>
 {% endif %}
 {% endblock %}
