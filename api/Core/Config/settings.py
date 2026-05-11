@@ -78,6 +78,46 @@ class Settings(BaseSettings):
         ),
     )
 
+    # ── Observability ──────────────────────────────────────────
+    sentry_dsn: str = Field(
+        default="",
+        description=(
+            "Sentry project DSN. Empty (default) disables Sentry "
+            "entirely — the SDK is installed but never initialised, "
+            "so CI and local dev pay nothing. Set in production to "
+            "start capturing unhandled exceptions, performance "
+            "traces, and Flask/FastAPI/SQLAlchemy breadcrumbs."
+        ),
+    )
+    environment: str = Field(
+        default="development",
+        description=(
+            "Free-form environment tag attached to every Sentry "
+            "event + structured-log entry: `development`, "
+            "`staging`, `production`. Render sets this via the "
+            "ENVIRONMENT env var."
+        ),
+    )
+    log_format: str = Field(
+        default="console",
+        description=(
+            "Output format for the structured logger: `json` for "
+            "production (one log line = one JSON object, ready for "
+            "log aggregation) or `console` for human-readable dev "
+            "output. Defaults to console so a developer running "
+            "`python app.py` gets readable output without config."
+        ),
+    )
+    sentry_traces_sample_rate: float = Field(
+        default=0.0,
+        description=(
+            "Fraction of requests captured as Sentry performance "
+            "traces (0.0–1.0). Default 0 — error capture only. Set "
+            "to 0.05 in prod to capture 5%% of traffic without "
+            "blowing the Sentry quota."
+        ),
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

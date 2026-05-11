@@ -4,7 +4,12 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
+import { initSentry } from "./lib/sentry";
 import "./styles.css";
+
+// No-op when VITE_SENTRY_DSN is empty (CI, local dev). Activates and
+// hooks browserTracing + ErrorBoundary integrations otherwise.
+initSentry();
 
 // Single QueryClient for the SPA. Defaults are conservative: we don't
 // auto-refetch on window focus (financial data is rarely stale enough

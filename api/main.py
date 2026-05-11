@@ -25,6 +25,9 @@ declaration. The mount or the OpenAPI `root_path` carry it.
 from fastapi import FastAPI
 
 from api.Core.Config import settings
+from api.Core.Observability import (
+    RequestIDMiddleware, init_logging, init_sentry,
+)
 
 
 def _register_routers(app: FastAPI) -> None:
@@ -176,6 +179,12 @@ def create_app() -> FastAPI:
     tests can build fresh apps with overridden dependencies (e.g. an
     in-memory DB session) without polluting the production instance.
     """
+    # Idempotent — if app.py already booted observability, these are
+    # no-ops. If FastAPI is run standalone (`uvicorn api.main:api_app`)
+    # they run for real.
+    init_logging()
+    init_sentry()
+
     app = FastAPI(
         title="DineroBook API",
         version="2.0.0-alpha",  # alpha until cleanup PR removes Flask
@@ -197,6 +206,8 @@ def create_app() -> FastAPI:
         redoc_url="/redoc",
         openapi_url="/openapi.json",
     )
+
+    app.add_middleware(RequestIDMiddleware)
 
     @app.get("/health", tags=["meta"])
     def health() -> dict:
