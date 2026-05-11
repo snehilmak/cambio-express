@@ -146,12 +146,42 @@ def dashboard_context(db: Session, user, period: str) -> dict:
         sid: (int(c), float(v or 0))
         for sid, c, v in store_rows
     }
+    # Per-store over/short rollup from DailyReport.over_short over
+    # the selected period — same data source the locations view
+    # uses. Mirrors the per-store card the SPA renders.
+    daily_rows_per_store = (
+        db.query(
+            DailyReport.store_id,
+            func.coalesce(func.sum(DailyReport.over_short), 0.0),
+        )
+        .filter(
+            DailyReport.store_id.in_(store_ids),
+            DailyReport.report_date >= start,
+            DailyReport.report_date <= end,
+        )
+        .group_by(DailyReport.store_id)
+        .all()
+        if store_ids else []
+    )
+    over_short_by_store = {
+        sid: float(os_v or 0) for sid, os_v in daily_rows_per_store
+    }
     store_comparison = []
+    store_cards = []
     for s in stores:
         c, v = store_stat.get(s.id, (0, 0.0))
+        os_v = over_short_by_store.get(s.id, 0.0)
         store_comparison.append({
             "id": s.id, "name": s.name,
             "count": c, "volume": v,
+        })
+        # Shape matches `OwnerStoreCard` in frontend/src/api/owner.ts —
+        # the SPA owner-dashboard grid renders these directly. Keep
+        # `slug` so the route to /owner/store/<slug-or-id> works.
+        store_cards.append({
+            "id": s.id, "name": s.name, "slug": s.slug,
+            "count": c, "volume": v,
+            "over_short": os_v,
         })
     store_comparison.sort(key=lambda x: x["volume"], reverse=True)
 
@@ -168,7 +198,10 @@ def dashboard_context(db: Session, user, period: str) -> dict:
     return dict(
         user=user, period=period, prev_label=prev_label,
         period_start=start, period_end=end,
-        store_count=len(stores), stores=stores,
+        # `store_count` reflects the umbrella size; `stores` is the
+        # SPA-shaped card list with per-store count/volume/over_short
+        # so the dashboard grid can render without re-fetching.
+        store_count=len(stores), stores=store_cards,
         agg_transfers=agg_transfers, agg_volume=agg_volume,
         agg_over_short=agg_over_short,
         agg_transfers_delta=agg_transfers - prev_transfers,
