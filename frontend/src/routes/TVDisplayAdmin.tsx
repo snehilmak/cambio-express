@@ -701,7 +701,6 @@ const titleStyle: React.CSSProperties = {
   fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)",
 };
 const mutedStyle: React.CSSProperties = { color: "var(--text-muted)", fontSize: 14 };
-const errorStyle: React.CSSProperties = { color: "var(--db-negative)", fontSize: 14 };
 const linkStyle: React.CSSProperties = { color: "var(--db-neon)", textDecoration: "underline" };
 
 const heroStyle: React.CSSProperties = {
