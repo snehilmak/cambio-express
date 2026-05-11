@@ -34,7 +34,7 @@ status header of the old one. The old reasoning stays readable.
 | [ADR-001](ADR-001-spa-migration.md) | SPA migration recap | ACCEPTED — executed | What we actually shipped vs. what MIGRATION_ADR.md proposed. |
 | [ADR-002](ADR-002-jwt-only-auth.md) | JWT-only auth (retire Flask cookie sessions) | PROPOSED | Tracks backlog D3. |
 | [ADR-003](ADR-003-background-job-queue.md) | Background job queue (RQ + Redis) | PROPOSED | Tracks backlog D5. |
-| [ADR-004](ADR-004-alembic-adoption.md) | Alembic for migrations | PROPOSED | Tracks backlog D4. |
+| [ADR-004](ADR-004-alembic-adoption.md) | Alembic for migrations | PROPOSED — phase 1 shipped | Tracks backlog D4. Baseline migration + scaffolding live; cutover (alembic stamp + retire `_ADDED_COLUMNS`) is a follow-up PR. Workflow doc: [migrations.md](migrations.md). |
 
 ## Writing a new ADR
 
