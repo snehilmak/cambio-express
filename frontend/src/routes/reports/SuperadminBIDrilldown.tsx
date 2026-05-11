@@ -1,7 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+} from "chart.js";
+import { Bar, Line } from "react-chartjs-2";
 
 import { api } from "../../lib/api";
+
+ChartJS.register(
+  CategoryScale, LinearScale, PointElement, LineElement,
+  BarElement, Filler, Tooltip,
+);
 
 // Generic React shell for all superadmin BI drilldowns. The legacy
 // Jinja drilldowns shared the same shape (KPI strip + period filter
@@ -9,6 +25,21 @@ import { api } from "../../lib/api";
 // report (20 reports → 20 files), this single component reads the
 // `{rows, totals}` envelope from /api/v2/superadmin/reports/<slug>
 // and auto-derives KPIs from totals and columns from the first row.
+//
+// Chart auto-detection
+// --------------------
+// We render a Line or Bar chart above the table when the row shape
+// permits it:
+//   - Line: first row has a date-like identity key (date / month /
+//           period / day / bucket-of-dates). x = identity, y =
+//           first numeric column. Good for trends (signup-funnel,
+//           dau-mau, churn-cohort, login-activity).
+//   - Bar:  no date key but a single string identity column +
+//           single numeric value column. Good for categorical
+//           breakdowns (active-stores-by-plan, mrr-arr, payouts,
+//           bank-sync-adoption).
+//   - Skip: <2 or >40 rows (too cluttered or too sparse), or
+//           ambiguous shapes. Falls through to table-only render.
 //
 // Per-report title comes from `_SUPERADMIN_REPORT_TITLES`. Anything
 // not in the lookup falls back to a humanized slug.
@@ -148,6 +179,10 @@ export default function SuperadminBIDrilldown() {
       )}
 
       {data && rows.length > 0 && (
+        <ChartBlock rows={rows} title={title} />
+      )}
+
+      {data && rows.length > 0 && (
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -192,6 +227,148 @@ function isNumericKey(key: string, sample: Record<string, unknown>): boolean {
   // matches /\d/. Lets fallback string "—" co-exist with floats.
   const v = sample?.[key];
   return typeof v === "number";
+}
+
+// ── Chart detection + rendering ──────────────────────────────
+
+const DATE_KEYS = new Set([
+  "date", "month", "period", "day", "bucket", "week", "year",
+]);
+const MONEY_KEY_RE = /amount|sent|revenue|fee|mrr|arr|payout|refund|charge/i;
+
+interface ChartPlan {
+  kind: "line" | "bar";
+  xKey: string;
+  yKey: string;
+  yLabel: string;
+  yIsMoney: boolean;
+}
+
+function detectChart(rows: Array<Record<string, unknown>>): ChartPlan | null {
+  if (rows.length < 2 || rows.length > 40) return null;
+  const first = rows[0];
+  const keys = Object.keys(first);
+
+  // Find a numeric column for the Y axis — prefer 'amount' / 'count'
+  // / 'value' over arbitrary numeric keys.
+  const numericKeys = keys.filter(k => typeof first[k] === "number");
+  if (numericKeys.length === 0) return null;
+  const yKey =
+    numericKeys.find(k => /count|total/i.test(k))
+    ?? numericKeys.find(k => MONEY_KEY_RE.test(k))
+    ?? numericKeys[0];
+
+  // Date-keyed → Line chart.
+  const dateKey = keys.find(k =>
+    DATE_KEYS.has(k.toLowerCase())
+    || /^date|date$|^month$|^period$|^day$/i.test(k),
+  );
+  if (dateKey && typeof first[dateKey] !== "number") {
+    return {
+      kind: "line",
+      xKey: dateKey,
+      yKey,
+      yLabel: humanize(yKey),
+      yIsMoney: MONEY_KEY_RE.test(yKey),
+    };
+  }
+
+  // Otherwise pick a string column for the X axis → Bar.
+  const stringKey = keys.find(k => typeof first[k] === "string");
+  if (stringKey) {
+    return {
+      kind: "bar",
+      xKey: stringKey,
+      yKey,
+      yLabel: humanize(yKey),
+      yIsMoney: MONEY_KEY_RE.test(yKey),
+    };
+  }
+  return null;
+}
+
+function ChartBlock({
+  rows, title,
+}: {
+  rows: Array<Record<string, unknown>>;
+  title: string;
+}) {
+  const plan = detectChart(rows);
+  if (!plan) return null;
+
+  const labels = rows.map(r => String(r[plan.xKey] ?? ""));
+  const series = rows.map(r => Number(r[plan.yKey] ?? 0));
+
+  const data = {
+    labels,
+    datasets: [{
+      label: plan.yLabel,
+      data: series,
+      borderColor: "#3fff00",
+      backgroundColor: plan.kind === "line"
+        ? "rgba(63, 255, 0, 0.12)"
+        : "rgba(63, 255, 0, 0.55)",
+      fill: plan.kind === "line",
+      tension: 0.25,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+    }],
+  };
+
+  const fmtTick = (v: number) =>
+    plan.yIsMoney
+      ? `$${v.toLocaleString()}`
+      : v.toLocaleString();
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+        callbacks: {
+          label: (ctx: { parsed: { y: number | null } }) =>
+            `${plan.yLabel}: ${fmtTick(ctx.parsed.y ?? 0)}`,
+        },
+      },
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          color: "#a3a3a3",
+          callback: (v: string | number) =>
+            fmtTick(typeof v === "number" ? v : Number(v)),
+        },
+        grid: { color: "#1f1f1f" },
+      },
+      x: {
+        ticks: { color: "#a3a3a3", maxRotation: 0, autoSkip: true },
+        grid: { color: "#1f1f1f" },
+      },
+    },
+  };
+
+  return (
+    <section
+      style={{
+        background: "var(--db-surface-2, #141414)",
+        border: "1px solid var(--db-border, #262626)",
+        borderRadius: "0.75rem",
+        padding: "1.25rem",
+      }}
+      aria-label={`${title} chart`}
+    >
+      <div style={{ height: 280 }}>
+        {plan.kind === "line"
+          ? <Line data={data} options={options} />
+          : <Bar  data={data} options={options} />
+        }
+      </div>
+    </section>
+  );
 }
 
 function fmtValue(v: unknown): string {
