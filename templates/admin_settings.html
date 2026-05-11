@@ -16,7 +16,7 @@
   {# Security moved to /account/security — a per-user page reachable
      from every role's chrome. Link kept here for discoverability since
      that's where admins habitually look. #}
-  <a href="{{ url_for('account_security') }}" class="tab-link">Security ↗</a>
+  <a href="{{ url_for('account.account_security') }}" class="tab-link">Security ↗</a>
   <a href="{{ url_for('admin_settings', tab='companies') }}"
      class="tab-link {% if active_tab == 'companies' %}active{% endif %}">Companies</a>
   <a href="{{ url_for('admin_settings', tab='team') }}"

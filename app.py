@@ -61,6 +61,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
+from blueprints import account as _bp_account  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
 from blueprints import landing as _bp_landing  # noqa: E402
@@ -78,6 +79,7 @@ app.register_blueprint(_bp_subscription.bp)
 app.register_blueprint(_bp_auth_redirects.bp)
 app.register_blueprint(_bp_landing.bp)
 app.register_blueprint(_bp_billing.bp)
+app.register_blueprint(_bp_account.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -2871,7 +2873,7 @@ def passkey_delete(pk_id):
     db.session.delete(pk)
     db.session.commit()
     flash("Passkey removed.", "success")
-    return redirect(url_for("account_security"))
+    return redirect(url_for("account.account_security"))
 
 # ── Shared account settings ──────────────────────────────────
 #
@@ -2886,36 +2888,8 @@ def passkey_delete(pk_id):
 # URL can serve every form on the page — keeps the redirect target
 # stable for the PRG pattern.
 
-@app.route("/account/security", methods=["GET", "POST"])
-@login_required
-def account_security():
-    """301 → /app/settings. Password change + passkey list/delete
-    were already on the SPA Settings page; passkey enrollment
-    moved there too in this PR (FastAPI register/begin+finish
-    routes bridge the WebAuthn challenge via a signed JWT since
-    we can't share Flask's session). The legacy POST handlers
-    /account/passkeys/register/begin+finish stay alive for any
-    in-flight Jinja request mid-rollout."""
-    return redirect("/app/settings", code=301)
-
-@app.route("/account/profile", methods=["GET", "POST"])
-@login_required
-def account_profile():
-    """301 → /app/account/profile. Personal profile editor moved
-    to React. Validation + persistence now live behind
-    GET/PUT /api/v2/auth/profile; the SPA renders inline
-    field_errors on 422 so the user sees the same messages the
-    legacy Jinja form did. The legacy Appearance theme picker is
-    intentionally not ported — CLAUDE.md invariant #1 fixes the
-    SPA to dark-only."""
-    return redirect("/app/account/profile", code=301)
-
-@app.route("/admin/settings/security", methods=["GET"])
-@login_required
-def admin_settings_security_redirect():
-    """Permanent redirect from the old admin-only Security tab to the
-    new shared page. Keeps any bookmarks / external docs working."""
-    return redirect(url_for("account_security"), code=301)
+# /account/security, /account/profile, /admin/settings/security,
+# /account/referrals moved to blueprints/account.py (D2 phase 10).
 
 
 @app.route("/account/theme", methods=["POST"])
@@ -2938,7 +2912,7 @@ def account_theme():
     else:
         flash("Invalid theme — no change.", "error")
     # Bounce back to the referring page so the toggle works from anywhere.
-    nxt = request.form.get("next") or request.referrer or url_for("account_profile")
+    nxt = request.form.get("next") or request.referrer or url_for("account.account_profile")
     return redirect(nxt)
 
 @app.route("/account/notifications", methods=["GET", "POST"])
@@ -3123,18 +3097,7 @@ def _owner_locations_payload(user, period, query):
 # /subscribe, /subscribe/checkout, /subscribe/success moved to
 # blueprints/billing.py (D2 phase 9).
 
-# ── Referrals (store-admin to new-store share + earn) ───────
-@app.route("/account/referrals")
-@admin_required
-def admin_referrals():
-    """301 → /app/account/referrals. Self-service code + stats
-    moved to React. The lazy-mint-on-first-paid-visit and the
-    trial-blocked behavior live behind /api/v2/admin/referrals
-    now (returns 409 for trial admins; the SPA renders an
-    upsell card pointing at /app/subscribe). Stub keeps
-    url_for('admin_referrals') working for the topbar crown +
-    bounces old bookmarks."""
-    return redirect("/app/account/referrals", code=301)
+# /account/referrals moved to blueprints/account.py (D2 phase 10).
 
 # Subscription management routes (/admin/subscription[/billing-portal
 # /cancel/addons/<key>]) moved to blueprints/subscription.py (D2).
@@ -7493,7 +7456,7 @@ def admin_settings():
         active_tab = request.args.get("tab", "store")
         # The Security tab graduated to /account/security long ago.
         if active_tab == "security":
-            return redirect(url_for("account_security"), code=301)
+            return redirect(url_for("account.account_security"), code=301)
         return redirect("/app/settings", code=301)
 
     # POST falls through to the legacy multi-tab handler below.
@@ -7559,7 +7522,7 @@ def admin_settings():
             if not errors:
                 db.session.commit()
                 flash("Password updated.", "success")
-                return redirect(url_for("account_security"))
+                return redirect(url_for("account.account_security"))
 
         elif form_tab == "companies":
             # Known companies come in as checkboxes ("company_known" list);
