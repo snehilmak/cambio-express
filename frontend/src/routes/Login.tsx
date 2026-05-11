@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { api, ApiError } from "../lib/api";
-import { setAccessToken } from "../lib/auth";
+import { decodeJwtClaims, setAccessToken } from "../lib/auth";
 
 interface LoginResponse {
   access_token: string;
@@ -54,11 +54,19 @@ export default function Login() {
   const [pending, setPending]   = useState<PendingState | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const dest = (location.state as LocationState | null)?.from || "/dashboard";
+  // Default post-login destination depends on role: owners go to
+  // /owner/dashboard (no store_id on their JWT, the /dashboard
+  // endpoint would 400). Anything else lands on /dashboard. An
+  // explicit `?from=` overrides both.
+  const stateDest = (location.state as LocationState | null)?.from;
 
   function finishLogin(token: string) {
     setAccessToken(token);
-    navigate(dest, { replace: true });
+    const claims = decodeJwtClaims(token);
+    const roleDefault = claims?.role === "owner"
+      ? "/owner/dashboard"
+      : "/dashboard";
+    navigate(stateDest || roleDefault, { replace: true });
   }
 
   async function onSubmit(e: FormEvent) {
