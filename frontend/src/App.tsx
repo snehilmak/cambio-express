@@ -3,6 +3,7 @@ import { Outlet, Route, Routes } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { Loading } from "./components/ui";
 import Home from "./routes/Home";
 import NotFound from "./routes/NotFound";
@@ -120,6 +121,7 @@ const TopSenders = lazy(() => import("./routes/reports/TopSenders"));
 // route error boundaries are tracked separately as BACKLOG C4.
 export default function App() {
   return (
+    <RouteErrorBoundary routeName="spa-root">
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route index element={<Home />} />
@@ -230,6 +232,7 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
+    </RouteErrorBoundary>
   );
 }
 
@@ -240,7 +243,12 @@ function AuthedShell() {
   return (
     <RequireAuth>
       <AppShell>
-        <Outlet />
+        {/* Inner boundary keeps the shell intact when a single
+            route crashes — sidebar + topbar stay, only the
+            content column shows the fallback. */}
+        <RouteErrorBoundary routeName="authed-route">
+          <Outlet />
+        </RouteErrorBoundary>
       </AppShell>
     </RequireAuth>
   );
