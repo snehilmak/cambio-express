@@ -4,6 +4,178 @@ Tracked work we're deferring. Anything in **Before going live** must be
 closed out before public / paid launch; the other sections can happen on
 any cadence.
 
+## Post-SPA-migration cleanup (new — work top-down)
+
+The SPA migration finished in May 2026 (PRs #395–#419). Every landing
++ all 35 report drilldowns are on React. This section captures the
+follow-up work surfaced during + immediately after that migration. PRs
+should reference the item number for traceability.
+
+### A. UX polish (USER-VISIBLE, do these first)
+
+The migration was scope-controlled — get every surface onto React,
+ship redirects, retire templates. Visual fit-and-finish was
+deliberately deferred. None of these change behavior; they're all
+the kind of thing that makes the product feel premium vs. functional.
+
+- [ ] **A1. Animations & transitions per CLAUDE.md design system.**
+      The "Motion is part of the design system" section in CLAUDE.md
+      specifies hover lifts, button scale-press, input focus glow,
+      modal fade-scale, page fade-up, etc. Most SPA components I
+      wrote during the migration have zero transitions. Audit every
+      route under `frontend/src/routes/` and add `transition:` rules
+      (≤200ms) per CLAUDE.md guidance. Honor `prefers-reduced-motion`
+      (already wired in `content.css`).
+- [ ] **A2. Padding / spacing consistency.** Every drilldown +
+      dashboard component declares its own `pageStyle`, `cardStyle`,
+      `kpiCard`, etc. Spacing varies. Extract `<Card>`, `<KpiCard>`,
+      `<Page>`, `<Section>` into `frontend/src/components/` with one
+      canonical padding scale (4/8/12/16/24 px ladder). Drop the
+      inline style objects in each route. (Overlaps with BACKLOG
+      item #9 "Shared SPA component library" — fold them together.)
+- [ ] **A3. Typography consistency.** Currently each page picks its
+      own font-size scale. Define a TypeScript `text` token (`xs / sm /
+      base / lg / xl / 2xl`) in a shared module and route all `font-
+      size:` through it.
+- [ ] **A4. Empty states.** Every drilldown + list shows "No data in
+      this period." with no illustration. Build a shared `<EmptyState>`
+      with the inbox SVG (already on the design system) + a CTA slot.
+- [ ] **A5. Loading skeletons** instead of bare "Loading…" text. Build
+      one shared `<TableSkeleton rows={n}>` and `<KpiSkeleton>`.
+- [ ] **A6. Error states.** Same as A4 — every fetch error renders a
+      red inline `<p>`. Build `<ErrorState>` with a retry button.
+
+### B. Missing charts on superadmin reports
+
+I migrated owner dashboards + store detail with chart.js but the 20
+superadmin BI reports go through a generic auto-rendering
+component (`SuperadminBIDrilldown.tsx`) that ONLY shows KPIs + a
+table. The user expected charts because the legacy Jinja superadmin
+reports rendered ApexCharts inline.
+
+- [ ] **B1. Time-series chart on superadmin reports that have a
+      monthly/daily series.** Targets at minimum: `signup-funnel`,
+      `dau-mau`, `mrr-arr`, `churn-cohort`, `login-activity`,
+      `webhook-health`. Detection rule: if the row shape has a
+      date-like key (`date` / `month` / `period`), render a Line
+      chart above the table. Reuse the chart.js setup from
+      `OwnerDashboard.tsx`.
+- [ ] **B2. Bar charts** for reports where rows are a categorical
+      breakdown (e.g. `active-stores-by-plan`, `trial-expiry-timing`,
+      `payouts`). Heuristic: if no date key + numeric "count"-style
+      column, render a Bar chart.
+- [ ] **B3. Owner dashboard chart hover tooltips** are minimal —
+      revisit chart.js options for nicer tooltips, axis formatting,
+      currency on Y-axis.
+- [ ] **B4. Add chart toggle.** Some reports are better as tables
+      (audit log, refunds list). Let the user toggle chart / table
+      view if both make sense.
+
+### C. SPA architectural cleanup
+
+- [ ] **C1. Code-split the bundle by route.** Bundle is now ~900 KB
+      (240 KB gzipped) after chart.js. Convert every
+      `<Route element={<X />}>` to `lazy(() => import(...))` + a
+      shared `<Suspense fallback={...}>` wrapper. Especially big
+      win for the superadmin BI drilldown (chart.js only loads for
+      superadmin sessions). (See also BACKLOG #12.)
+- [ ] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
+      Each route file has 100–300 lines of `const xStyle: CSSProperties
+      = {...}`. Type-checked CSS Modules will give us scoped styles,
+      better DX, smaller JS bundle.
+- [ ] **C3. Shared `<Page>` layout component.** Standard
+      header / actions / body slots. Use it on every route to enforce
+      the design system padding scale.
+- [ ] **C4. Per-route error boundaries.** A 500 from any API call
+      currently crashes the whole route. Add an error boundary
+      around `<Outlet />` in `AuthedShell`.
+
+### D. Backend cleanup (legacy Flask half)
+
+The SPA migration left the Flask side intact (form-POST handlers
+still serve mutation traffic for many of the 301'd routes). These
+items decompose the monolith.
+
+- [ ] **D1. Delete the 16 remaining Jinja templates that are no
+      longer rendered.** Surviving `reports.html`,
+      `owner_reports.html`, `admin_settings.html`,
+      `superadmin_controls.html` are unreachable after the GET 301s.
+      Audit + delete.
+- [ ] **D2. Split `app.py` (10,487 lines) into Flask Blueprints by
+      the 80 `# ── HEADER ──` markers.** Suggested grouping:
+      `flask/{auth,admin,superadmin,transfers,daily,monthly,bank,
+       owner,tv,billing,reports,api_v1}.py`. Each becomes a Blueprint
+      registered on `app`. No behavior change; pure refactor.
+      Mechanical, ~5 PRs.
+- [ ] **D3. Retire `@login_required` cookie-session path on routes
+      the SPA has fully replaced.** Once D1 ships and we audit
+      what still POSTs to Flask, convert remaining form-POST
+      handlers to FastAPI endpoints, then delete the
+      session-cookie path entirely. (Requires BACKLOG #1 cookie
+      JWT first.)
+- [ ] **D4. Adopt Alembic.** `_ADDED_COLUMNS` can't drop/rename/
+      backfill. Pin current schema as baseline. (Already in
+      BACKLOG #8 — promoting visibility.)
+- [ ] **D5. Background job queue** for Stripe webhooks, email send,
+      ACH retries, retention purge. RQ + Redis is the lowest-cost
+      path on Render. Today every webhook does its Stripe SDK calls
+      + audit insert + email send synchronously inside the HTTP
+      request.
+- [ ] **D6. Edge rate limiting** on `/login`, `/forgot-password`,
+      `/api/v2/auth/*`, `/webhooks/stripe`. slowapi (FastAPI) +
+      flask-limiter. (Also in BACKLOG "Before going live".)
+
+### E. Observability + ops
+
+- [ ] **E1. Sentry on Python + React.** (BACKLOG #4 — promoting.)
+- [ ] **E2. Structured JSON logs.** Replace `app.logger.info(...)`
+      with `structlog` or stdlib JSON formatter; add request-ID
+      middleware. (BACKLOG #4 — second half.)
+- [ ] **E3. Build SPA in CI** (BACKLOG #3). Catches TS regressions.
+- [ ] **E4. Coverage tracks `api/` too** (BACKLOG #5).
+- [ ] **E5. mypy strict on `api/Modules/*`** — Pydantic types make
+      this easy.
+- [ ] **E6. eslint --max-warnings 0** in CI on frontend.
+- [ ] **E7. Generate TS types from FastAPI OpenAPI.** (BACKLOG #6.)
+- [ ] **E8. E2E smoke tests** with Playwright on the SPA — login,
+      log a transfer, view a report. Would have caught the SPA-
+      build-missing-in-CI class of issues that bit us during
+      migration.
+
+### F. Documentation
+
+- [ ] **F1. `docs/architecture/` ADR index.**
+      - ADR-001: SPA migration (just landed, recap the rationale +
+        outcome).
+      - ADR-002: JWT-only auth (the future-state of D3).
+      - ADR-003: Background job queue (D5).
+      - ADR-004: Alembic adoption (D4).
+- [ ] **F2. Request-lifecycle doc.** Diagram showing
+      `client → CDN → Render → asgi.py → FastAPI / Flask
+      Blueprint → SQLAlchemy → Postgres`, plus where Sentry +
+      structured logs hook in.
+- [ ] **F3. Frontend component catalog.** Once C2/C3 ship, document
+      each shared component with a Storybook page (or simpler:
+      a `frontend/docs/components.md` with screenshots).
+- [ ] **F4. Onboarding README.** First-day-on-the-job runbook:
+      clone → install → seed DB → run dev → test → deploy.
+      The existing top-level README has install steps but no
+      "where do I look to add a new report / route / table?"
+      orientation.
+
+### How to use this list
+
+- Cross out items as PRs ship (`- [x]`).
+- Each PR should reference the item number in its description (e.g.
+  "Closes A1, A2 from BACKLOG.md").
+- A items are user-visible and should ship first.
+- B items are user-visible and were a surfaced gap from the
+  migration — chart.js is in the bundle, the rendering plumbing
+  just doesn't fire on superadmin reports yet.
+- C/D items are internal but high-leverage.
+- E/F items are ongoing — don't block on them, but never let them
+  fall to zero.
+
 ## Architecture roadmap (priority-ordered)
 
 Honest review of the SPA migration architecture. Top of the list = highest
