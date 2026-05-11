@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
+import { ErrorState, Loading } from "../components/ui";
 import {
   updateTransfer,
   useEmployees,
@@ -122,7 +123,7 @@ export default function EditTransfer() {
   if (detail.isLoading || form == null) {
     return (
       <main style={pageStyle}>
-        <p style={emptyStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }
@@ -130,11 +131,14 @@ export default function EditTransfer() {
   if (detail.isError) {
     return (
       <main style={pageStyle}>
-        <p style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-          {detail.error instanceof Error
-            ? detail.error.message
-            : "Could not load this transfer."}
-        </p>
+        <ErrorState
+          message={
+            detail.error instanceof Error
+              ? detail.error.message
+              : "Could not load this transfer."
+          }
+          onRetry={() => { void detail.refetch(); }}
+        />
       </main>
     );
   }

@@ -8,6 +8,7 @@ import {
 } from "../api/monthly";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { Loading } from "../components/ui";
 
 // Edit page for the monthly P&L at /app/monthly/edit?year=Y&month=M.
 //
@@ -147,7 +148,7 @@ export default function EditMonthly() {
   if (detail.isLoading || form == null) {
     return (
       <main style={pageStyle}>
-        <p style={emptyStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }

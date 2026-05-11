@@ -8,6 +8,7 @@ import {
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { Loading } from "../components/ui";
 
 // Edit page for the daily book at /app/daily/edit?date=YYYY-MM-DD.
 //
@@ -145,7 +146,7 @@ export default function EditDailyBook() {
   if (detail.isLoading || form == null) {
     return (
       <main style={pageStyle}>
-        <p style={emptyStyle}>Loading…</p>
+        <Loading />
       </main>
     );
   }

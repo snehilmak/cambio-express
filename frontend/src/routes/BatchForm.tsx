@@ -9,6 +9,7 @@ import {
 } from "../api/batches";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { Loading } from "../components/ui";
 
 // Combined New/Edit form for ACH batches at /app/batches/new
 // and /app/batches/:id/edit. Mirrors the legacy batch_form.html
@@ -120,7 +121,7 @@ export default function BatchForm() {
   }
 
   if (isEdit && (detail.isLoading || !detail.data)) {
-    return <main style={pageStyle}><p style={emptyStyle}>Loading…</p></main>;
+    return <main style={pageStyle}><Loading /></main>;
   }
 
   return (

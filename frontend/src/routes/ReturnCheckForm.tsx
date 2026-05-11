@@ -14,6 +14,7 @@ import {
 } from "../api/returnChecks";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { EmptyState, Loading } from "../components/ui";
 
 // Combined New/Edit form for return checks at /app/return-checks/new
 // and /app/return-checks/:id/edit. Edit variant also surfaces
@@ -134,7 +135,7 @@ export default function ReturnCheckForm() {
   }
 
   if (isEdit && (detail.isLoading || !detail.data)) {
-    return <main style={pageStyle}><p style={emptyStyle}>Loading…</p></main>;
+    return <main style={pageStyle}><Loading /></main>;
   }
 
   const status = isEdit ? detail.data?.return_check.status ?? "pending" : "pending";
@@ -288,9 +289,9 @@ export default function ReturnCheckForm() {
       {isEdit && (
         <section style={{ ...cardStyle, marginTop: "1rem" }}>
           <h2 style={sectionTitle}>Recovery payments</h2>
-          {payments.isLoading && <p style={emptyStyle}>Loading…</p>}
+          {payments.isLoading && <Loading />}
           {payments.data && payments.data.payments.length === 0 && (
-            <p style={emptyStyle}>No recovery payments recorded.</p>
+            <EmptyState title="No recovery payments recorded." />
           )}
           {payments.data && payments.data.payments.length > 0 && (
             <PaymentsTable rows={payments.data.payments} />
