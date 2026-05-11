@@ -144,12 +144,16 @@ items decompose the monolith.
 
 ### F. Documentation
 
-- [ ] **F1. `docs/architecture/` ADR index.**
-      - ADR-001: SPA migration (just landed, recap the rationale +
-        outcome).
-      - ADR-002: JWT-only auth (the future-state of D3).
-      - ADR-003: Background job queue (D5).
-      - ADR-004: Alembic adoption (D4).
+- [x] **F1. `docs/architecture/` ADR index.** Landed.
+      - [`README.md`](docs/architecture/README.md) — index + format spec.
+      - [`ADR-001`](docs/architecture/ADR-001-spa-migration.md): SPA
+        migration recap (ACCEPTED — executed).
+      - [`ADR-002`](docs/architecture/ADR-002-jwt-only-auth.md):
+        JWT-only auth (PROPOSED — tracks D3).
+      - [`ADR-003`](docs/architecture/ADR-003-background-job-queue.md):
+        Background job queue / RQ + Redis (PROPOSED — tracks D5).
+      - [`ADR-004`](docs/architecture/ADR-004-alembic-adoption.md):
+        Alembic adoption (PROPOSED — tracks D4).
 - [ ] **F2. Request-lifecycle doc.** Diagram showing
       `client → CDN → Render → asgi.py → FastAPI / Flask
       Blueprint → SQLAlchemy → Postgres`, plus where Sentry +
