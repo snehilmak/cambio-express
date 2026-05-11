@@ -71,6 +71,9 @@ from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
 from blueprints import spa_redirects as _bp_spa_redirects  # noqa: E402
 from blueprints import subscription as _bp_subscription  # noqa: E402
+from blueprints import (  # noqa: E402
+    superadmin_redirects as _bp_superadmin_redirects,
+)
 from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
@@ -82,6 +85,7 @@ app.register_blueprint(_bp_landing.bp)
 app.register_blueprint(_bp_billing.bp)
 app.register_blueprint(_bp_account.bp)
 app.register_blueprint(_bp_spa_redirects.bp)
+app.register_blueprint(_bp_superadmin_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -4934,7 +4938,7 @@ _SUPERADMIN_REPORT_CATEGORIES = [
             {"key": "audit_log",
              "label": "Superadmin Audit Log",
              "description": "Every superadmin mutation, with target and actor.",
-             "endpoint": "superadmin_audit_log"},
+             "endpoint": "superadmin_redirects.superadmin_audit_log"},
             {"key": "password_resets",
              "label": "Password Resets",
              "description": "Reset-token activity in the period (used / expired / open).",
@@ -4952,28 +4956,8 @@ _SUPERADMIN_REPORT_CATEGORIES = [
 ]
 
 
-@app.route("/superadmin/reports")
-@superadmin_required
-def superadmin_reports():
-    """301 → /app/superadmin/reports. The report-center index moved
-    to React; the SPA reads the categories envelope from
-    /api/v2/superadmin/reports. Per-report drilldowns
-    (`/superadmin/reports/<slug>`) still render Jinja templates —
-    each one migrates separately as its own pass. The SPA index
-    links straight back into those URLs on click, so navigation
-    stays continuous during the cutover."""
-    return redirect("/app/superadmin/reports", code=301)
-
-
-@app.route("/superadmin/reports/audit-log")
-@superadmin_required
-def superadmin_audit_log():
-    """301 → /app/superadmin/audit-log. The React page reads the
-    feed via /api/v2/superadmin/audit-log (paginated + filterable
-    — wider than the legacy 100-row limit). Stub keeps
-    url_for('superadmin_audit_log') working in still-Jinja chrome
-    + bounces old bookmarks."""
-    return redirect("/app/superadmin/audit-log", code=301)
+# /superadmin/reports + /superadmin/reports/audit-log moved to
+# blueprints/superadmin_redirects.py (D2 phase 12).
 
 
 # ── Superadmin reports: shared route helpers ─────────────────
@@ -7786,7 +7770,7 @@ def superadmin_controls():
     discounts CRUD, feature-flags CRUD, etc.) stay live as
     direct callers."""
     if request.args.get("tab") == "audit":
-        return redirect(url_for("superadmin_audit_log"))
+        return redirect(url_for("superadmin_redirects.superadmin_audit_log"))
     qs = request.query_string.decode("latin-1") if request.query_string else ""
     target = "/app/superadmin/controls" + (f"?{qs}" if qs else "")
     return redirect(target, code=301)
