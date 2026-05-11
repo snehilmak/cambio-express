@@ -8,6 +8,7 @@ import { Bar, Line } from "react-chartjs-2";
 
 import { useOwnerStoreDetail } from "../api/owner";
 import { ErrorState, Loading } from "../components/ui";
+import { moneyChartOptions } from "../lib/chartOptions";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
@@ -117,18 +118,50 @@ export default function OwnerStoreDetail() {
                 options={{
                   responsive: true,
                   maintainAspectRatio: false,
+                  interaction: { mode: "index", intersect: false },
                   plugins: {
                     legend: { labels: { color: "#a3a3a3" } },
-                    tooltip: { mode: "index" },
+                    tooltip: {
+                      mode: "index",
+                      intersect: false,
+                      backgroundColor: "#141414",
+                      titleColor: "#f5f5f5",
+                      bodyColor: "#f5f5f5",
+                      borderColor: "#262626",
+                      borderWidth: 1,
+                      padding: 10,
+                      cornerRadius: 8,
+                      callbacks: {
+                        label: (ctx) => {
+                          const y = (ctx.parsed as { y?: number | null }).y ?? 0;
+                          const lbl = ctx.dataset.label || "";
+                          return `${lbl}: $${y.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                        },
+                      },
+                    },
                   },
                   scales: {
-                    y: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
+                    y: {
+                      beginAtZero: true,
+                      ticks: {
+                        color: "#a3a3a3",
+                        callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      },
+                      grid: { color: "#1f1f1f" },
+                    },
                     y1: {
                       position: "right",
-                      ticks: { color: "#a3a3a3" },
+                      beginAtZero: true,
+                      ticks: {
+                        color: "#a3a3a3",
+                        callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      },
                       grid: { drawOnChartArea: false },
                     },
-                    x: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
+                    x: {
+                      ticks: { color: "#a3a3a3", maxRotation: 0, autoSkip: true },
+                      grid: { color: "#1f1f1f" },
+                    },
                   },
                 }}
               />
@@ -148,14 +181,7 @@ export default function OwnerStoreDetail() {
                       backgroundColor: "rgba(63,255,0,0.5)",
                     }],
                   }}
-                  options={{
-                    responsive: true, maintainAspectRatio: false,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                      y: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
-                      x: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
-                    },
-                  }}
+                  options={moneyChartOptions("Volume")}
                 />
               </div>
               <table style={tableStyle}>

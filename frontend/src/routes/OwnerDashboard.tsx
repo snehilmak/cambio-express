@@ -8,6 +8,7 @@ import { Line } from "react-chartjs-2";
 
 import { useOwnerDashboard } from "../api/owner";
 import { ErrorState, Loading } from "../components/ui";
+import { moneyChartOptions } from "../lib/chartOptions";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
@@ -96,15 +97,7 @@ export default function OwnerDashboard() {
                       pointRadius: 0,
                     }],
                   }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: { legend: { display: false }, tooltip: { mode: "index" } },
-                    scales: {
-                      y: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
-                      x: { ticks: { color: "#a3a3a3" }, grid: { color: "#1f1f1f" } },
-                    },
-                  }}
+                  options={moneyChartOptions("Volume")}
                 />
               </div>
             </section>
