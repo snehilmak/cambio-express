@@ -18,14 +18,22 @@ ship redirects, retire templates. Visual fit-and-finish was
 deliberately deferred. None of these change behavior; they're all
 the kind of thing that makes the product feel premium vs. functional.
 
-- [ ] **A1. Animations & transitions per CLAUDE.md design system.**
-      The "Motion is part of the design system" section in CLAUDE.md
-      specifies hover lifts, button scale-press, input focus glow,
-      modal fade-scale, page fade-up, etc. Most SPA components I
-      wrote during the migration have zero transitions. Audit every
-      route under `frontend/src/routes/` and add `transition:` rules
-      (≤200ms) per CLAUDE.md guidance. Honor `prefers-reduced-motion`
-      (already wired in `content.css`).
+- [x] **A1. Animations & transitions per CLAUDE.md design system.**
+      Landed in two waves:
+      - `frontend/src/components/ui/ui.css` (PR #431) — `.ds-card`
+        hover lift, `.ds-btn` scale-press + hover tint, `.ds-input`
+        focus glow, `.ds-link` underline reveal, `.ds-page`
+        fade-up entry, `.ds-skel` shimmer, `.ds-pill--pulse`.
+        Every `<Card>` / `<Button>` / `<Input>` / `<PageShell>` in
+        `components/ui/index.tsx` opts in by default.
+      - Motion fallback (this PR) — global `transition` baseline on
+        every raw `<button>`/`<a>`/`<input>`/`<select>`/`<textarea>`
+        so pages with hand-rolled inline-style elements still
+        animate. Raw buttons get `opacity` shift on hover/active.
+        New `.ds-popover` class for dropdown fade-scale-in,
+        applied to `SenderAutocomplete`.
+      Honors `prefers-reduced-motion: reduce` via the global rule
+      in `frontend/src/styles.css`.
 - [x] **A2. Padding / spacing consistency.** Landed — `<PageShell>`,
       `<PageHeader>`, `<Section>`, `<Card>`, `<KpiCard>`,
       `<KpiGrid>`, `<Table>` live in
