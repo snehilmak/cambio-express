@@ -223,6 +223,45 @@ export interface PeriodSummary {
   days_logged: number;
 }
 
+// ── Money-transfer auto-fill ─────────────────────────────────
+
+export interface TransferCompanyTotals {
+  company: string;
+  count: number;
+  amount: number;
+  fees: number;
+  federal_tax: number;
+  commission: number;
+  total: number;
+}
+
+export interface TransfersSummary {
+  companies: string[];
+  by_company: TransferCompanyTotals[];
+  grand_total: number;
+}
+
+// Hook: per-day MT roll-up from the employee transfer log.
+// Read-only — the daily book's `money_transfer` field is the
+// operator's writable counterpart; this hook just shows what
+// the transfer table already has so the cashier doesn't have
+// to re-key it.
+export function useTransfersSummary(date: string | undefined) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<TransfersSummary>({
+    enabled:
+      Boolean(date) && storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "transfers-summary", storeId, date],
+    queryFn: async () => {
+      return await api<TransfersSummary>(
+        `/api/v2/daily/${storeId}/${date}/transfers-summary`,
+      );
+    },
+  });
+}
+
+
 export function useDailyPeriod(from: string, to: string) {
   const identity = getCurrentIdentity();
   const storeId = identity?.store_id;

@@ -27,6 +27,8 @@ from api.Modules.DailyBook.Requests import (
     LineItemListResponse,
     LineItemRow,
     PeriodSummaryResponse,
+    TransferCompanyTotalsResponse,
+    TransfersSummaryResponse,
 )
 from api.Modules.DailyBook.Services import (
     DailyReportLockedError,
@@ -43,6 +45,7 @@ from api.Modules.DailyBook.Services import (
     recompute_line_items_total,
     summarize_period,
     summarize_report,
+    summarize_transfers_for_day,
     unlock_report,
     update_daily_report,
 )
@@ -499,3 +502,48 @@ def line_items_delete_route(
             kind=kind, daily_report_field=target_field,
         )
     db.commit()
+
+
+# ── Money-transfer auto-fill ──────────────────────────────────
+
+
+@router.get(
+    "/{store_id}/{report_date}/transfers-summary",
+    response_model=TransfersSummaryResponse,
+)
+def transfers_summary_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransfersSummaryResponse:
+    """Auto-fill summary for the Daily Book's Money Transfers tab.
+
+    Aggregates active (non-cancelled) `transfer` rows for the day
+    by company. Cashiers see this as a read-only "Auto" table on
+    the Money Transfers panel; the grand total is what the daily
+    book's `money_transfer` receipt line should reflect when the
+    operator hasn't manually overridden it.
+
+    Cross-store + superadmin → 403 with the same opaque message as
+    the rest of the daily-book write surface.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    summary = summarize_transfers_for_day(db, int(store_id), d)
+    return TransfersSummaryResponse(
+        companies=summary.companies,
+        by_company=[
+            TransferCompanyTotalsResponse(
+                company=row.company,
+                count=row.count,
+                amount=row.amount,
+                fees=row.fees,
+                federal_tax=row.federal_tax,
+                commission=row.commission,
+                total=row.total,
+            )
+            for row in summary.by_company
+        ],
+        grand_total=summary.grand_total,
+    )

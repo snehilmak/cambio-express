@@ -13,9 +13,11 @@ import {
   updateDailyReport,
   useDailyReport,
   useLineItems,
+  useTransfersSummary,
   type DailyReportRow,
   type DailyReportUpdateBody,
   type LineItemRow,
+  type TransferCompanyTotals,
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -352,6 +354,7 @@ export default function EditDailyBook() {
             form={form}
             set={set}
             locked={locked}
+            date={date}
             onJumpReceipts={() => switchTab("receipts")}
           />
         )}
@@ -590,42 +593,155 @@ function DisbursementsPanel(props: PanelProps) {
 }
 
 function TransfersPanel({
-  form, set, locked, onJumpReceipts,
+  form, set, locked, date, onJumpReceipts,
 }: {
   form: FormState;
   set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   locked: boolean;
+  date: string;
   onJumpReceipts: () => void;
 }) {
+  const summary = useTransfersSummary(date || undefined);
+
+  const rows = summary.data?.by_company ?? [];
+  const grandTotal = summary.data?.grand_total ?? 0;
+  const hasAuto = grandTotal > 0;
+  const drift = Math.abs((form.money_transfer || 0) - grandTotal);
+  const inSync = hasAuto && drift < 0.005;
+
   return (
-    <Card padding="1.25rem 1.5rem">
-      <PanelTitle>Money transfer total</PanelTitle>
-      <p style={subTextStyle}>
-        Combined wire-transfer revenue for the day — amount + fees + tax +
-        commission across every company. Per-company breakdown (Intermex,
-        Maxi, Barri…) with auto-fill from the employee transfer log is
-        landing in the next pass.
-      </p>
-      <div style={{ maxWidth: "20rem", marginTop: "0.75rem" }}>
-        <NumberInput
-          label="Money transfer (total)"
-          value={form.money_transfer}
-          onChange={(v) => set("money_transfer", v)}
-          disabled={locked}
-        />
-      </div>
-      <div style={{ marginTop: "1rem" }}>
-        <Button
-          tone="ghost"
-          size="sm"
-          type="button"
-          onClick={onJumpReceipts}
-        >
-          ← Edit the rest of the receipts
-        </Button>
-      </div>
-    </Card>
+    <div style={panelGridStyle}>
+      <Card padding="1.25rem 1.5rem">
+        <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
+          <PanelTitle>By company · Auto-summary</PanelTitle>
+          <Pill tone="info">Auto from transfer log</Pill>
+        </div>
+        <p style={subTextStyle}>
+          Aggregated from every active money transfer logged for this date —
+          one row per company. Cancelled transfers are excluded.
+          Tap "Apply to receipts" to copy the grand total into the
+          Money transfer line on the receipts tab.
+        </p>
+
+        {summary.isLoading ? (
+          <Loading />
+        ) : rows.length === 0 ? (
+          <p style={emptyEntriesStyle}>
+            No companies configured for this store.
+          </p>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={mtTableStyle}>
+              <thead>
+                <tr>
+                  <th style={mtThStyle}>Company</th>
+                  <th style={mtThNumStyle}>Transfers</th>
+                  <th style={mtThNumStyle}>Amount</th>
+                  <th style={mtThNumStyle}>Fees</th>
+                  <th style={mtThNumStyle}>Fed. tax</th>
+                  <th style={mtThNumStyle}>Commission</th>
+                  <th style={mtThNumStyle}>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <MTCompanyRow key={r.company} row={r} />
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style={mtTdStrongStyle}>TOTAL</td>
+                  <td style={mtTdNumMutedStyle}>
+                    {rows.reduce((s, r) => s + r.count, 0)}
+                  </td>
+                  <td style={mtTdNumMutedStyle}>
+                    {fmtMoney2(rows.reduce((s, r) => s + r.amount, 0))}
+                  </td>
+                  <td style={mtTdNumMutedStyle}>
+                    {fmtMoney2(rows.reduce((s, r) => s + r.fees, 0))}
+                  </td>
+                  <td style={mtTdNumMutedStyle}>
+                    {fmtMoney2(rows.reduce((s, r) => s + r.federal_tax, 0))}
+                  </td>
+                  <td style={mtTdNumMutedStyle}>
+                    {fmtMoney2(rows.reduce((s, r) => s + r.commission, 0))}
+                  </td>
+                  <td style={mtTdNumStrongStyle}>
+                    {fmtMoney2(grandTotal)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Manual override</PanelTitle>
+        <p style={subTextStyle}>
+          The receipts tab's <em>Money transfer</em> field is what lands on the
+          daily P&amp;L. Apply the auto-summary above, or override it here if a
+          paper-only transfer didn't make it into the log.
+        </p>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div style={{ flex: "0 0 14rem" }}>
+            <NumberInput
+              label="Money transfer (total)"
+              value={form.money_transfer}
+              onChange={(v) => set("money_transfer", v)}
+              disabled={locked}
+            />
+          </div>
+          <Button
+            type="button"
+            tone={inSync ? "secondary" : "primary"}
+            size="md"
+            disabled={locked || !hasAuto || inSync}
+            onClick={() => set("money_transfer", Number(grandTotal.toFixed(2)))}
+          >
+            {inSync
+              ? "✓ In sync with auto-summary"
+              : `Apply ${fmtMoney2(grandTotal)} from auto-summary`}
+          </Button>
+          <Button
+            type="button"
+            tone="ghost"
+            size="sm"
+            onClick={onJumpReceipts}
+          >
+            ← Edit the rest of the receipts
+          </Button>
+        </div>
+      </Card>
+    </div>
   );
+}
+
+function MTCompanyRow({ row }: { row: TransferCompanyTotals }) {
+  const muted = row.count === 0;
+  return (
+    <tr style={muted ? { opacity: 0.6 } : undefined}>
+      <td style={mtTdStrongStyle}>
+        <span style={{ color: companyAccent(row.company) }}>•</span>{" "}
+        {row.company}
+      </td>
+      <td style={mtTdNumStyle}>{row.count}</td>
+      <td style={mtTdNumStyle}>{fmtMoney2(row.amount)}</td>
+      <td style={mtTdNumStyle}>{fmtMoney2(row.fees)}</td>
+      <td style={mtTdNumStyle}>{fmtMoney2(row.federal_tax)}</td>
+      <td style={mtTdNumStyle}>{fmtMoney2(row.commission)}</td>
+      <td style={mtTdNumStrongStyle}>{fmtMoney2(row.total)}</td>
+    </tr>
+  );
+}
+
+// Brand accent dots for the known major companies, neutral for the rest.
+function companyAccent(name: string): string {
+  const k = name.toLowerCase();
+  if (k === "intermex") return "var(--db-co-intermex, #4a87d4)";
+  if (k === "maxi")     return "var(--db-co-maxi, #9d52e0)";
+  if (k === "barri")    return "var(--db-co-barri, #2cb5b0)";
+  return tokens.textMuted;
 }
 
 function NotesPanel({
@@ -1260,4 +1376,56 @@ const errorStyle: CSSProperties = {
   border: `1px solid ${tokens.negative}`,
   borderRadius: "0.5rem",
   fontSize: "0.9rem",
+};
+
+// MT auto-summary table styles
+const mtTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+  marginTop: "0.5rem",
+};
+
+const mtThStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "0.5rem 0.75rem",
+  fontSize: "0.72rem",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: tokens.textMuted,
+  fontWeight: 600,
+  borderBottom: `1px solid ${tokens.border}`,
+  background: tokens.surface,
+};
+
+const mtThNumStyle: CSSProperties = {
+  ...mtThStyle,
+  textAlign: "right",
+};
+
+const mtTdStyle: CSSProperties = {
+  padding: "0.55rem 0.75rem",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
+  fontSize: "0.88rem",
+};
+
+const mtTdStrongStyle: CSSProperties = {
+  ...mtTdStyle,
+  fontWeight: 600,
+};
+
+const mtTdNumStyle: CSSProperties = {
+  ...mtTdStyle,
+  fontFamily: tokens.fontMono,
+  textAlign: "right",
+};
+
+const mtTdNumStrongStyle: CSSProperties = {
+  ...mtTdNumStyle,
+  fontWeight: 700,
+};
+
+const mtTdNumMutedStyle: CSSProperties = {
+  ...mtTdNumStyle,
+  color: tokens.textMuted,
+  borderTop: `1px solid ${tokens.border}`,
 };

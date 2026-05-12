@@ -7,6 +7,8 @@ from api.Modules.DailyBook.Requests.reports import (
     LineItemListResponse,
     LineItemRow,
     PeriodSummaryResponse,
+    TransferCompanyTotalsResponse,
+    TransfersSummaryResponse,
 )
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "LineItemListResponse",
     "LineItemRow",
     "PeriodSummaryResponse",
+    "TransferCompanyTotalsResponse",
+    "TransfersSummaryResponse",
 ]

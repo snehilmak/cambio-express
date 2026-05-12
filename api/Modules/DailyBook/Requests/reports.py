@@ -123,6 +123,37 @@ class LineItemCreateRequest(BaseModel):
     note: str = ""
 
 
+class TransferCompanyTotalsResponse(BaseModel):
+    """One company's roll-up inside the day's transfer-summary
+    response. Mirrors the editable columns the legacy Jinja MT
+    table showed; the React Money Transfers tab renders this
+    read-only with an "Auto" pill — operator overrides go through
+    the receipts tab's `money_transfer` field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    count: int
+    amount: float
+    fees: float
+    federal_tax: float
+    commission: float
+    total: float
+
+
+class TransfersSummaryResponse(BaseModel):
+    """Auto-fill payload for the Daily Book's Money Transfers tab.
+    Aggregates active (non-cancelled) Transfer rows by company for
+    a single (store, send_date). Zero-row days still return one
+    entry per active company so the table renders consistently."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    companies: list[str]
+    by_company: list[TransferCompanyTotalsResponse]
+    grand_total: float
+
+
 class DailyReportUpdateRequest(BaseModel):
     """PUT body for /daily/{store_id}/{date}. Only the editable
     top-level totals + notes — line-item-derived fields
