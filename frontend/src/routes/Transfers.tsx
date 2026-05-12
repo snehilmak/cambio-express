@@ -8,8 +8,15 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   ButtonLink, Card, Empty, EmptyState, ErrorState, Field, Input,
-  PageHeader, PageShell, Pager, Select, TableSkeleton, tokens,
+  PageHeader, PageShell, Pager, Pill, Select, TableSkeleton, tokens,
 } from "../components/ui";
+
+// Poll the transfers list this often so two cashiers sharing one
+// employee login on different machines see each other's edits
+// without a manual refresh. Foreground only — TanStack Query
+// pauses the timer when the tab is hidden so we don't burn
+// bandwidth in a background tab.
+const POLL_INTERVAL_MS = 20_000;
 
 // Full transfers list page at /app/transfers.
 //
@@ -69,12 +76,18 @@ export default function Transfers() {
     setQDraft(q);
   }, [q]);
 
+  // Pause polling while the user is mid-typing in the search box
+  // so we don't fire two queries in quick succession (one debounced
+  // from the typing, one from the timer). qDraft !== q means a
+  // pending debounce — re-enable as soon as the URL catches up.
+  const isTypingQuery = qDraft !== q;
   const apiQuery = useTransfers({
     page, perPage: PAGE_SIZE,
     q: q.length >= 2 ? q : undefined,
     date_from: dateFrom || undefined,
     date_to:   dateTo || undefined,
     status:    status || undefined,
+    pollMs: isTypingQuery ? 0 : POLL_INTERVAL_MS,
   });
 
   function setFilter(key: string, value: string) {
@@ -104,7 +117,7 @@ export default function Transfers() {
     );
   }
 
-  const { data, isLoading, isFetching, isError, error, refetch } = apiQuery;
+  const { data, dataUpdatedAt, isLoading, isFetching, isError, error, refetch } = apiQuery;
 
   return (
     <PageShell>
@@ -114,9 +127,16 @@ export default function Transfers() {
           ? `${data.total.toLocaleString()} total · page ${data.page} of ${data.total_pages || 1}`
           : "—"}
         actions={(
-          <ButtonLink href="/transfers/new" tone="primary">
-            + New transfer
-          </ButtonLink>
+          <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+            {data && dataUpdatedAt > 0 && (
+              <Pill tone="accent">
+                {isFetching ? "Syncing…" : `Live · synced ${formatSyncTime(dataUpdatedAt)}`}
+              </Pill>
+            )}
+            <ButtonLink href="/transfers/new" tone="primary">
+              + New transfer
+            </ButtonLink>
+          </div>
         )}
       />
 
@@ -309,3 +329,17 @@ const linkStyle: React.CSSProperties = {
   color: "inherit",
   textDecoration: "none",
 };
+
+
+// Format the TanStack Query `dataUpdatedAt` timestamp for the
+// header's "Live · synced HH:MM" pill. Below 60s shows as "just
+// now" so a tight polling cycle doesn't churn through "synced
+// 0:00 PM" updates every second.
+function formatSyncTime(ms: number): string {
+  if (!ms) return "—";
+  const diff = Date.now() - ms;
+  if (diff < 60_000) return "just now";
+  return new Date(ms).toLocaleTimeString(undefined, {
+    hour: "numeric", minute: "2-digit",
+  });
+}

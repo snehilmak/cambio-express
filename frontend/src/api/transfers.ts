@@ -187,6 +187,13 @@ export interface TransferFilters {
 interface TransfersPageOptions extends TransferFilters {
   page: number;
   perPage: number;
+  /** Polling interval in ms — pass a positive number to keep the
+   *  list fresh while two cashiers share an employee login on
+   *  different machines. Foreground only (TanStack Query's default
+   *  `refetchIntervalInBackground=false` pauses polling when the
+   *  tab is hidden, so we don't burn bandwidth in a background
+   *  tab). Omit to disable polling. */
+  pollMs?: number;
 }
 
 // Hook: paginated transfer list with filters. Powers the
@@ -194,7 +201,7 @@ interface TransfersPageOptions extends TransferFilters {
 // `useRecentTransfers` — different query key + filters so
 // TanStack Query caches them independently.
 export function useTransfers({
-  page, perPage, q, date_from, date_to, status,
+  page, perPage, q, date_from, date_to, status, pollMs,
 }: TransfersPageOptions) {
   const identity = getCurrentIdentity();
   const storeId = identity?.store_id;
@@ -227,5 +234,10 @@ export function useTransfers({
     // page is loading — avoids a flash of "Loading..." that
     // makes pagination feel laggy.
     placeholderData: (prev) => prev,
+    // Multi-device sync: when pollMs is set, refetch on that
+    // cadence so a second cashier's edits show up without a
+    // page reload. Returns false (disabled) when no interval
+    // was passed.
+    refetchInterval: pollMs && pollMs > 0 ? pollMs : false,
   });
 }

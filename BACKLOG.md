@@ -422,14 +422,15 @@ impact ÷ effort. Numbers are an estimate.
       + 9 unit tests (read defaults, auto/saved pull, unknown-company
       ordering, bulk-replace, idempotency, zero-row skip, locked guard,
       empty-rows-preserves-money_transfer).
-- [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers
-      sharing the same employee login on different computers currently
-      only see each other's edits after a page reload / filter change.
-      Add a ~20s polling timer on `/transfers` that re-runs the existing
-      `?partial=1` fetch so the table silently refreshes. Skip while the
-      user is actively typing in the search box or has an unsaved form
-      open. If this ever feels too laggy, upgrade to Server-Sent Events
-      from the route that fires after `commit_transfer()`.
+- [x] **Multi-device auto-refresh on the Transfers list** — landed.
+      `useTransfers` now accepts a `pollMs` parameter that wires
+      TanStack Query's `refetchInterval`; the `/app/transfers`
+      route passes 20_000ms by default. Polling pauses while a
+      debounced search query is mid-flight (`qDraft !== q`) so we
+      don't double-fetch on every keystroke, and the
+      `refetchIntervalInBackground=false` default pauses the timer
+      when the tab is hidden. The header carries a "Live · synced
+      HH:MM" pill so the cashier sees the freshness at a glance.
 - [ ] Auto-fill `federal_tax` at 1% of send amount (or a per-company
       rate map) with an override field, so cashiers don't typo.
 - [ ] Backfill script for `federal_tax` on historical transfers — they
