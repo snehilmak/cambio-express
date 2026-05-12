@@ -322,9 +322,14 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] **Stripe LIVE mode** — swap test → live keys, verify via the
       "Stripe connection" card at `/superadmin/controls` Overview.
       Confirm webhook endpoint is pointed at production `/webhooks/stripe`.
-- [ ] **Data retention cron** — wire `flask purge-expired-stores` to a
-      daily scheduler so canceled stores actually age out at 6 months.
-      Currently it only runs if invoked manually.
+- [x] **Data retention cron** — landed. `render.yaml` now declares
+      a `type: cron` service `dinerobook-data-retention-purge`
+      that runs `flask purge-expired-stores` daily at 03:15 UTC.
+      Shares the production DB via `fromDatabase:` and reads the
+      same `SECRET_KEY` as the web service (so the prod-secret
+      safety gate in `app.py` doesn't reject the cron boot). CLI
+      is idempotent — re-running on a quiet day is a no-op.
+      Regression guard in `tests/test_data_retention_cron.py`.
 - [ ] **CI/CD agents** — unattended checks on every PR (syntax, tests,
       coverage floor, secret scan) running in GitHub Actions. Currently
       we rely on the existing "Syntax + Import + Tests" check plus
