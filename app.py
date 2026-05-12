@@ -84,6 +84,7 @@ from blueprints import (  # noqa: E402
     transfers_redirects as _bp_transfers_redirects,
 )
 from blueprints import tv as _bp_tv  # noqa: E402
+from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_owner.bp)
@@ -100,6 +101,7 @@ app.register_blueprint(_bp_transfers_redirects.bp)
 app.register_blueprint(_bp_bookkeeping_redirects.bp)
 app.register_blueprint(_bp_bank_redirects.bp)
 app.register_blueprint(_bp_admin_redirects.bp)
+app.register_blueprint(_bp_tv_pair.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -3248,100 +3250,7 @@ def _generate_device_token():
     # reuse a token.
     raise RuntimeError("Could not mint a unique device_token")
 
-@app.route("/api/tv-pair/init", methods=["POST"])
-def tv_pair_init():
-    """The Fire TV app calls this on launch. Creates a TVPendingPair
-    with a fresh code + device_token and returns both. The app
-    displays the code on screen and polls /api/tv-pair/status with
-    its device_token until claimed.
-
-    No auth — anyone with the app can request a code; the addon
-    gate sits on /tv-display/claim where the admin binds the code
-    to a paying store."""
-    payload = request.get_json(silent=True) or {}
-    device_label = (payload.get("device_label") or "").strip()[:80]
-
-    # Loop on code collision (rare with a 387M space, free to retry).
-    for _ in range(8):
-        code = _generate_pair_code()
-        if not TVPendingPair.query.filter_by(code=code).first():
-            break
-
-    now = datetime.utcnow()
-    pending = TVPendingPair(
-        code=code,
-        device_token=_generate_device_token(),
-        device_label=device_label,
-        created_at=now,
-        expires_at=now + _PAIR_CODE_LIFETIME,
-    )
-    db.session.add(pending)
-    db.session.commit()
-
-    return jsonify({
-        "code":         pending.code,
-        "device_token": pending.device_token,
-        "expires_at":   pending.expires_at.isoformat() + "Z",
-        "ttl_seconds":  int(_PAIR_CODE_LIFETIME.total_seconds()),
-    })
-
-@app.route("/api/tv-pair/status", methods=["GET"])
-def tv_pair_status():
-    """The Fire TV polls this with its device_token. Returns one of:
-       200 {status: "pending", code, ttl_seconds}    — code still on screen, waiting
-       200 {status: "claimed", display_url, ...}     — operator claimed it; load the URL
-       200 {status: "expired"}                       — code expired; app should call /init again
-
-    Always 200 so the Fire TV can branch off the JSON. Unknown
-    tokens get treated as "expired" so a fresh /init is the
-    recovery path; that's a stronger UX guarantee than 404'ing the
-    whole poll loop."""
-    token = (request.args.get("token") or "").strip()
-    if not token:
-        return jsonify({"status": "expired"}), 200
-
-    # Did this token already get claimed (i.e. there's a TVPairing
-    # row keyed by it)? If so, return claimed regardless of pending
-    # state — claim cleanup may not have run yet.
-    pairing = TVPairing.query.filter_by(
-        device_token=token, revoked_at=None).first()
-    if pairing is not None:
-        display = db.session.get(TVDisplay, pairing.display_id)
-        store = db.session.get(Store, display.store_id) if display else None
-        if (display and store and store_has_addon(store, "tv_display")):
-            display_url = url_for("tv_device_display", device_token=token,
-                                   _external=True)
-            return jsonify({
-                "status":      "claimed",
-                "display_url": display_url,
-                "store_name":  store.name,
-                "title":       display.title or "Money Transfer Rates",
-            }), 200
-        # Pairing exists but addon is gone — same as expired from
-        # the app's POV; it should re-init.
-        return jsonify({"status": "expired"}), 200
-
-    pending = TVPendingPair.query.filter_by(device_token=token).first()
-    if not pending:
-        return jsonify({"status": "expired"}), 200
-    if pending.expires_at < datetime.utcnow():
-        return jsonify({"status": "expired"}), 200
-    if pending.claimed_at is not None:
-        # Pending row was claimed but the resulting TVPairing was
-        # already revoked (someone paired a newer Fire TV with the
-        # same backing token? unlikely but possible) or the addon
-        # was yanked between claim and poll. Treat as expired so
-        # the Fire TV re-inits.
-        return jsonify({"status": "expired"}), 200
-    # Still pending. Return the code so the Fire TV can re-display
-    # it after a process death / config change without losing the
-    # bound code.
-    ttl = int((pending.expires_at - datetime.utcnow()).total_seconds())
-    return jsonify({
-        "status":       "pending",
-        "code":         pending.code,
-        "ttl_seconds":  max(0, ttl),
-    }), 200
+# /api/tv-pair/{init,status} moved to blueprints/tv_pair.py (D2 phase 19).
 
 @app.route("/tv-display/countries/<int:country_id>", methods=["GET", "POST"])
 @login_required
