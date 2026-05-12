@@ -99,7 +99,7 @@ export default function SenderAutocomplete({
         style={inputStyle}
       />
       {open && value.length >= 2 && (
-        <div style={popoverStyle}>
+        <div className="ds-popover" style={popoverStyle}>
           {isFetching && (
             <p style={{ ...rowMutedStyle, padding: "0.6rem 0.85rem" }}>
               Searching…

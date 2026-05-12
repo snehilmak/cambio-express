@@ -163,3 +163,52 @@
 .ds-pill--pulse {
   animation: ds-pulse 2s ease-in-out infinite;
 }
+
+/* ── Popovers / dropdowns: fade-scale in ───────────────────── */
+
+@keyframes ds-popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+.ds-popover {
+  animation: ds-popover-in var(--ds-dur-base) var(--ds-ease) both;
+  transform-origin: top center;
+}
+
+/* ── Fallback motion baseline ──────────────────────────────────
+ *
+ * The .ds-btn / .ds-input / .ds-card / .ds-link classes give the
+ * design system its motion, but the SPA still has pages that
+ * hand-roll <button style={{...}}> instead of using <Button>. To
+ * avoid those raw elements feeling dead, give every common
+ * interactive element a baseline transition on the cheap (color +
+ * background + border + box-shadow + opacity — never transform,
+ * to avoid colliding with `.ds-card--interactive` hover lifts).
+ *
+ * Inline `style={{ transition: ... }}` still wins (CSS specificity
+ * favors inline). The `prefers-reduced-motion: reduce` rule in
+ * `styles.css` strips this universally for users who asked for it.
+ */
+button,
+a,
+input,
+select,
+textarea {
+  transition:
+    color var(--ds-dur-base) var(--ds-ease),
+    background var(--ds-dur-base) var(--ds-ease),
+    border-color var(--ds-dur-base) var(--ds-ease),
+    box-shadow var(--ds-dur-base) var(--ds-ease),
+    opacity var(--ds-dur-base) var(--ds-ease);
+}
+
+/* Raw <button> hover/active feedback when no .ds-btn variant is
+ * attached. Subtle — we don't want to override the page's own
+ * hover styles, just give a hint of life. */
+button:not(.ds-btn):not(:disabled):hover {
+  opacity: 0.92;
+}
+button:not(.ds-btn):not(:disabled):active {
+  opacity: 0.85;
+}
