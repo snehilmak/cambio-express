@@ -258,7 +258,7 @@
     👁 <strong>Impersonating {{ impersonated_store_name }}</strong> —
     actions you take now are recorded as this store's admin.
   </span>
-  <form method="POST" action="{{ url_for('superadmin_stop_impersonation') }}" style="margin:0;">
+  <form method="POST" action="{{ url_for('superadmin_extras.superadmin_stop_impersonation') }}" style="margin:0;">
     <button type="submit" class="banner-cta" style="border:none;cursor:pointer;">Exit impersonation →</button>
   </form>
 </div>

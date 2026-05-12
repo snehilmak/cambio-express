@@ -62,6 +62,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
+from blueprints import admin_extras as _bp_admin_extras  # noqa: E402
 from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
 from blueprints import auth as _bp_auth  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
@@ -82,6 +83,9 @@ from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
 from blueprints import spa_redirects as _bp_spa_redirects  # noqa: E402
 from blueprints import subscription as _bp_subscription  # noqa: E402
+from blueprints import (  # noqa: E402
+    superadmin_extras as _bp_superadmin_extras,
+)
 from blueprints import (  # noqa: E402
     superadmin_misc_mutations as _bp_superadmin_misc_mutations,
 )
@@ -120,6 +124,8 @@ app.register_blueprint(_bp_superadmin_misc_mutations.bp)
 app.register_blueprint(_bp_auth.bp)
 app.register_blueprint(_bp_bookkeeping_mutations.bp)
 app.register_blueprint(_bp_bank_mutations.bp)
+app.register_blueprint(_bp_superadmin_extras.bp)
+app.register_blueprint(_bp_admin_extras.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -2985,118 +2991,8 @@ def _generate_device_token():
 
 # /api/tv-pair/{init,status} moved to blueprints/tv_pair.py (D2 phase 19).
 
-@app.route("/tv-display/countries/<int:country_id>", methods=["GET", "POST"])
-@login_required
-def tv_display_country_edit(country_id):
-    guard = _tv_required()
-    if not isinstance(guard, tuple):
-        return guard
-    _, store = guard
-    display = _ensure_tv_display(store)
-    country = TVDisplayCountry.query.filter_by(
-        id=country_id, display_id=display.id).first_or_404()
-
-    if request.method == "GET":
-        # 301 → /app/tv-display/countries/<id>. The country editor
-        # moved to React; the SPA reads /api/v2/tv-display/countries/<id>
-        # for the bank list + rate matrix and submits the rest of the
-        # form back to this same URL via POST (handler below stays
-        # live as the canonical mutation surface).
-        return redirect(f"/app/tv-display/countries/{country_id}", code=301)
-
-    if request.method == "POST":
-        # Single big form holds:
-        #   - country header fields (name, code, mt_companies CSV)
-        #   - the bank list (existing rows + optional "new bank")
-        #   - the rate matrix (one input per cell, named "rate-<bank_id>-<col_idx>")
-        # Rates that come back blank delete the cell entirely so admins
-        # can clear a value by emptying the box.
-        country.country_name = (request.form.get("country_name") or country.country_name).strip()[:80]
-        country.country_code = (request.form.get("country_code") or "").strip().upper()[:4]
-        new_companies = (request.form.get("mt_companies") or "").strip()[:500]
-        country.mt_companies = new_companies
-        companies = _csv_split(new_companies)
-
-        # Update existing banks (by id), drop ones flagged delete=1,
-        # and append a single new bank if the form supplies one.
-        for b in TVDisplayPayoutBank.query.filter_by(country_id=country.id).all():
-            if request.form.get(f"bank-{b.id}-delete"):
-                # Cascade-delete the cells under this bank too.
-                TVDisplayRate.query.filter_by(bank_id=b.id).delete(
-                    synchronize_session=False)
-                db.session.delete(b)
-                continue
-            new_name = (request.form.get(f"bank-{b.id}-name") or "").strip()[:120]
-            if new_name:
-                b.bank_name = new_name
-            try:
-                b.sort_order = int(request.form.get(f"bank-{b.id}-sort") or 0)
-            except ValueError:
-                pass
-        # Accept one or many new banks in a single POST — the grid
-        # editor exposes "+ Insert row" which can be tapped multiple
-        # times before the operator hits Save. Backwards compatible:
-        # form.getlist returns ["x"] for a single new_bank_name=x and
-        # [] when the field is absent.
-        new_bank_names = [
-            (n or "").strip()[:120]
-            for n in request.form.getlist("new_bank_name")
-            if (n or "").strip()
-        ]
-        if new_bank_names:
-            last = (db.session.query(db.func.max(TVDisplayPayoutBank.sort_order))
-                     .filter_by(country_id=country.id).scalar() or 0)
-            for offset, name in enumerate(new_bank_names, start=1):
-                db.session.add(TVDisplayPayoutBank(
-                    country_id=country.id, bank_name=name,
-                    sort_order=last + 10 * offset))
-        db.session.commit()
-
-        # Now upsert the rate matrix. After the bank deletes/adds above
-        # we re-query so the form can include cells for both old and
-        # newly created banks.
-        banks = (TVDisplayPayoutBank.query
-                  .filter_by(country_id=country.id)
-                  .order_by(TVDisplayPayoutBank.sort_order, TVDisplayPayoutBank.id).all())
-        for b in banks:
-            for idx, company in enumerate(companies):
-                key = f"rate-{b.id}-{idx}"
-                raw = (request.form.get(key) or "").strip()
-                existing = TVDisplayRate.query.filter_by(
-                    bank_id=b.id, mt_company=company).first()
-                if not raw:
-                    if existing:
-                        db.session.delete(existing)
-                    continue
-                try:
-                    val = float(raw)
-                except ValueError:
-                    continue
-                if existing:
-                    existing.rate = val
-                else:
-                    db.session.add(TVDisplayRate(
-                        bank_id=b.id, mt_company=company, rate=val))
-        # Drop any orphan rates whose mt_company isn't in the current
-        # column list (admin removed a column). Use a subquery on
-        # bank_id rather than .join().delete(), which SQLAlchemy
-        # explicitly doesn't allow on bulk deletes.
-        bank_ids_subq = db.session.query(TVDisplayPayoutBank.id).filter_by(
-            country_id=country.id)
-        if companies:
-            (TVDisplayRate.query
-             .filter(TVDisplayRate.bank_id.in_(bank_ids_subq),
-                     ~TVDisplayRate.mt_company.in_(companies))
-             .delete(synchronize_session=False))
-        else:
-            # No columns at all — wipe every rate for this country.
-            TVDisplayRate.query.filter(
-                TVDisplayRate.bank_id.in_(bank_ids_subq)
-            ).delete(synchronize_session=False)
-        display.last_updated_at = datetime.utcnow()
-        db.session.commit()
-        flash("Saved.", "success")
-        return redirect(url_for("tv_display_country_edit", country_id=country.id))
+# /tv-display/countries/<id> (GET, POST) moved to
+# blueprints/admin_extras.py (D2 phase 28).
 
 
 def _render_tv_board(display, store):
@@ -5767,18 +5663,8 @@ def _build_tax_pack_zip(store, year):
 # /admin/tax-export moved to blueprints/admin_redirects.py (D2 phase 17).
 
 
-@app.route("/admin/tax-export.zip")
-@admin_required
-def admin_tax_export_zip():
-    store = current_store()
-    try:
-        year = int(request.args.get("year", date.today().year - 1))
-    except ValueError:
-        year = date.today().year - 1
-    payload = _build_tax_pack_zip(store, year)
-    fname = f"dinerobook_tax_pack_{store.slug}_{year}.zip"
-    return Response(payload, mimetype="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+# /admin/tax-export.zip moved to
+# blueprints/admin_extras.py (D2 phase 28).
 
 
 # ── Return Checks ────────────────────────────────────────────
@@ -6343,119 +6229,22 @@ def admin_redeem_owner_code():
 # /superadmin/stores + /superadmin/stores/new moved to
 # blueprints/superadmin_redirects.py (D2 phase 18).
 
-@app.route("/superadmin/impersonate/<int:store_id>")
-@superadmin_required
-def superadmin_impersonate(store_id):
-    """Swap the current session into the target store's admin user.
-
-    Used by the superadmin to debug a customer's view. The *real*
-    superadmin identity is stashed in `session["impersonator_user_id"]`
-    so `/superadmin/stop-impersonation` can restore it — before this,
-    the only way back was a full re-login. Every start AND end of an
-    impersonation is written to the audit log.
-    """
-    store=db.session.get(Store, store_id) or abort(404)
-    admin=User.query.filter_by(store_id=store_id,role="admin").first()
-    if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_redirects.superadmin_stores"))
-    record_audit("impersonate_start", target_type="store", target_id=store.id,
-                 details=f"as {admin.username}")
-    # Preserve the real superadmin identity so the "Exit impersonation"
-    # button can restore it without a re-login. We only ever set this
-    # from a route guarded by @superadmin_required, so the value is
-    # trustworthy at write time; /superadmin/stop-impersonation still
-    # re-validates it on read.
-    session["impersonator_user_id"] = session["user_id"]
-    session["user_id"]=admin.id; session["role"]=admin.role; session["store_id"]=store_id
-    db.session.commit()
-    flash(f"Viewing as {store.name}. Use 'Exit impersonation' to return.","success")
-    return redirect(url_for("spa_redirects.dashboard"))
+# /superadmin/impersonate/<store_id> moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
 
-@app.route("/superadmin/stop-impersonation", methods=["POST"])
-def superadmin_stop_impersonation():
-    """Return to the real superadmin identity after impersonation.
+# /superadmin/stop-impersonation moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
-    Intentionally NOT guarded by @superadmin_required — while
-    impersonating, session['role'] is 'admin', so the decorator would
-    reject the superadmin trying to exit. Instead we verify the
-    stashed impersonator_user_id still resolves to an active
-    superadmin before restoring. If anything looks off, clear the
-    session entirely rather than elevate the current identity.
-    """
-    imp_id = session.get("impersonator_user_id")
-    if not imp_id:
-        flash("Not currently impersonating.", "error")
-        return redirect(url_for("spa_redirects.dashboard"))
-    imp = db.session.get(User, imp_id)
-    if not imp or imp.role != "superadmin" or not imp.is_active:
-        # Defense in depth — cookie tampering or a since-deactivated
-        # superadmin account shouldn't be a path to an elevated session.
-        session.clear()
-        flash("Session invalid. Please sign in again.", "error")
-        return redirect(url_for("auth.login"))
-    record_audit("impersonate_end", target_type="user", target_id=imp.id,
-                 details=f"returning to {imp.username}")
-    session["user_id"] = imp.id
-    session["role"] = "superadmin"
-    session["store_id"] = None
-    session.pop("impersonator_user_id", None)
-    db.session.commit()
-    flash("Returned to superadmin.", "success")
-    return redirect(url_for("spa_redirects.dashboard"))
 
 # ── Superadmin control panel ─────────────────────────────────
 STORES_PER_PAGE = 20
 
 # /superadmin/controls moved to blueprints/superadmin_redirects.py (D2 phase 18).
 
-# ── Email delivery test (superadmin) ─────────────────────────
-@app.route("/superadmin/send-test-email", methods=["POST"])
-@superadmin_required
-def superadmin_send_test_email():
-    """One-click deliverability probe. Sends a plain email to the
-    superadmin's own User.email (they populate it from /account/profile)
-    so they can verify the SMTP env vars are wired correctly without
-    waiting for a real trigger like password reset.
+# /superadmin/send-test-email moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
-    No dedup, no rate limit — superadmin-only, and the worst case is
-    they spam their own inbox. The response is a flash + redirect back
-    to the Overview so the SMTP health card updates with the new
-    _last_smtp_attempt state on the next render."""
-    user = current_user()
-    to_addr = (user.email or "").strip()
-    if not to_addr:
-        flash("Set your email on /account/profile first — "
-              "nowhere to send a test to.", "warning")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="overview"))
-    subject = "DineroBook test email"
-    sent_at = datetime.utcnow().isoformat(timespec="seconds")
-    body = (
-        "This is a deliverability test from DineroBook.\n\n"
-        f"Sent to: {to_addr}\n"
-        f"Sent at: {sent_at}Z\n\n"
-        "If you're reading this, SMTP is configured correctly and "
-        "transactional email (password reset, trial reminders) will "
-        "reach your users.\n"
-    )
-    html = render_template(
-        "emails/test.html",
-        preheader="Deliverability test from your DineroBook superadmin panel.",
-        to_addr=to_addr, sent_at=sent_at + "Z",
-        sender=os.environ.get("SMTP_FROM", "no-reply@dinerobook.com"),
-        year=datetime.utcnow().year,
-        base_url=os.environ.get("APP_BASE_URL", "https://dinerobook.com"),
-    )
-    ok = _send_email(to_addr, subject, body, html=html)
-    if ok:
-        flash(f"Test email sent to {to_addr}. Check your inbox in a minute.", "success")
-    else:
-        # _last_smtp_attempt now holds the error; it'll render on the
-        # same page's SMTP health card. Keep the flash message terse —
-        # the card has the detail.
-        flash("Test email failed. See the Email service card for the error.", "warning")
-    record_audit("send_test_email", "superadmin", None, f"to={to_addr} ok={ok}")
-    db.session.commit()
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="overview"))
 
 # ── Per-store actions (superadmin) ───────────────────────────
 def _store_or_404(store_id): return db.session.get(Store, store_id) or abort(404)
@@ -6582,99 +6371,13 @@ def _resolve_catalog_row(catalog_type, slug):
         return TVBankCatalog.query.filter_by(slug=slug).first()
     return None
 
-@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/logo",
-            methods=["POST"])
-@superadmin_required
-def superadmin_tv_catalog_upload_logo(catalog_type, slug):
-    """Upload (or replace) the logo for a catalog entry."""
-    if catalog_type not in ("company", "bank"):
-        abort(404)
-    row = _resolve_catalog_row(catalog_type, slug)
-    if row is None:
-        flash("Unknown catalog entry.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
+# /superadmin/tv-catalog/<type>/<slug>/logo moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
-    f = request.files.get("logo")
-    if not f or not f.filename:
-        flash("Pick a file to upload.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
-    mime = (f.mimetype or "").lower()
-    if mime not in _TV_LOGO_ALLOWED_MIMES:
-        flash("File must be PNG, JPEG, WebP, or SVG.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
+# /superadmin/tv-catalog/<type>/<slug>/edit moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
-    raw_blob = f.read()
-    if len(raw_blob) == 0:
-        flash("Uploaded file is empty.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-    if len(raw_blob) > _TV_LOGO_MAX_BYTES:
-        flash(f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-
-    # Normalize raster uploads to a uniform 600x200 transparent
-    # canvas. SVG passes through unchanged. Result: every catalog
-    # logo renders at the same visual weight on the public board
-    # regardless of the source image's pixel dimensions or padding.
-    blob, mime = _normalize_logo_blob(raw_blob, mime)
-
-    existing = TVCatalogLogo.query.filter_by(
-        catalog_type=catalog_type, slug=slug).first()
-    if existing is None:
-        existing = TVCatalogLogo(catalog_type=catalog_type, slug=slug)
-        db.session.add(existing)
-    existing.mime_type = mime
-    existing.blob      = blob
-    existing.file_size = len(blob)
-    existing.updated_at = datetime.utcnow()
-
-    # Mirror the public URL into the parent row's logo_url so other
-    # call sites can hit it without doing a separate logo-table
-    # lookup. The ?v=<unix> query param is added by templates that
-    # care about cache-busting on re-upload.
-    row.logo_url = url_for("tv.tv_catalog_logo",
-                            catalog_type=catalog_type, slug=slug)
-
-    record_audit("tv_logo_upload", target_type=catalog_type,
-                  target_id=row.id,
-                  details=f"{slug} ({len(blob)} bytes, {mime})")
-    db.session.commit()
-    flash(f"Uploaded logo for {row.display_name}.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-
-@app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/edit",
-            methods=["POST"])
-@superadmin_required
-def superadmin_tv_catalog_edit(catalog_type, slug):
-    """Rename, re-sort, change country code (banks only), or toggle
-    is_active. Slug is intentionally NOT mutable — references on
-    TVDisplayCountry / TVDisplayPayoutBank would silently break."""
-    if catalog_type not in ("company", "bank"):
-        abort(404)
-    row = _resolve_catalog_row(catalog_type, slug)
-    if row is None:
-        flash("Unknown catalog entry.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-
-    new_name = (request.form.get("display_name") or "").strip()[:80]
-    if new_name:
-        row.display_name = new_name
-    try:
-        row.sort_order = int(request.form.get("sort_order", row.sort_order))
-    except (TypeError, ValueError):
-        pass
-    if catalog_type == "bank":
-        new_cc = (request.form.get("country_code") or "").strip().upper()[:4]
-        if new_cc:
-            row.country_code = new_cc
-    # Checkbox semantics: present → True, absent → False.
-    row.is_active = bool(request.form.get("is_active"))
-
-    record_audit("tv_catalog_edit", target_type=catalog_type,
-                  target_id=row.id, details=slug)
-    db.session.commit()
-    flash(f"Saved {row.display_name}.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
 def _slugify_catalog_name(name):
     """Display name → URL-safe lowercase slug. Wraps python-slugify
@@ -6717,61 +6420,9 @@ def _next_unique_slug(catalog_type, base_slug):
             return candidate
     return ""  # exhausted; caller flashes the duplicate-slug error
 
-@app.route("/superadmin/tv-catalog/new", methods=["POST"])
-@superadmin_required
-def superadmin_tv_catalog_new():
-    """Add a fresh catalog entry. Slug is auto-generated from the
-    display_name (and country_code for banks); dedup'd with a
-    numeric suffix on collision. The operator never types a slug."""
-    catalog_type = (request.form.get("catalog_type") or "").strip()
-    if catalog_type not in ("company", "bank"):
-        flash("Pick company or bank.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-    display_name = (request.form.get("display_name") or "").strip()[:80]
-    if not display_name:
-        flash("Display name is required.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
+# /superadmin/tv-catalog/new moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
 
-    if catalog_type == "company":
-        base_slug = _slugify_catalog_name(display_name)
-    else:
-        cc = (request.form.get("country_code") or "").strip().upper()[:4]
-        if not cc:
-            flash("Banks need a country code (ISO-2).", "error")
-            return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-        base_slug = _slugify_bank_name(display_name, cc)
-
-    if not base_slug:
-        flash("Couldn't derive a slug from that name. Try a different one.",
-              "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-
-    slug = _next_unique_slug(catalog_type, base_slug)
-    if not slug:
-        flash("Too many entries with similar names — slug exhausted.",
-              "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
-
-    if catalog_type == "company":
-        last = (db.session.query(db.func.max(TVCompanyCatalog.sort_order))
-                .scalar() or 0)
-        db.session.add(TVCompanyCatalog(
-            slug=slug, display_name=display_name,
-            sort_order=last + 10, is_active=True,
-        ))
-    else:
-        last = (db.session.query(db.func.max(TVBankCatalog.sort_order))
-                .filter_by(country_code=cc).scalar() or 0)
-        db.session.add(TVBankCatalog(
-            slug=slug, display_name=display_name,
-            country_code=cc,
-            sort_order=last + 10, is_active=True,
-        ))
-    record_audit("tv_catalog_create", target_type=catalog_type,
-                  target_id=0, details=slug)
-    db.session.commit()
-    flash(f"Added {display_name}.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
 # ── Discount codes (superadmin) ──────────────────────────────
 def _sync_discount_to_stripe(dc):
@@ -6804,30 +6455,9 @@ def _sync_discount_to_stripe(dc):
 # /superadmin/announcements/{new,<id>/toggle,<id>/delete}
 # moved to blueprints/superadmin_misc_mutations.py (D2 phase 23).
 
-# ── Audit log CSV export ─────────────────────────────────────
-@app.route("/superadmin/controls/audit.csv")
-@superadmin_required
-def superadmin_audit_export():
-    """Stream the full audit log as CSV for spreadsheet review."""
-    import csv
-    buf = io.StringIO()
-    w = csv.writer(buf)
-    w.writerow(["timestamp_utc", "admin_id", "admin_name", "action", "target_type", "target_id", "details"])
-    rows = SuperadminAuditLog.query.order_by(SuperadminAuditLog.created_at.desc()).all()
-    for r in rows:
-        w.writerow([
-            r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else "",
-            r.admin_id or "", r.admin_name or "",
-            r.action or "", r.target_type or "", r.target_id or "",
-            (r.details or "").replace("\n", " "),
-        ])
-    record_audit("export_audit_csv", target_type="audit", details=f"rows={len(rows)}")
-    db.session.commit()
-    filename = f"audit-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.csv"
-    return buf.getvalue(), 200, {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": f'attachment; filename="{filename}"',
-    }
+# /superadmin/controls/audit.csv moved to
+# blueprints/superadmin_extras.py (D2 phase 28).
+
 
 # ── Stripe webhook ───────────────────────────────────────────
 # ── Resend webhook (delivery events) ─────────────────────────

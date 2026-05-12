@@ -47,7 +47,10 @@ def _store_href(store) -> str:
         return ""
     try:
         from flask import url_for
-        return url_for("superadmin_impersonate", store_id=store.id)
+        return url_for(
+            "superadmin_extras.superadmin_impersonate",
+            store_id=store.id,
+        )
     except RuntimeError:
         # No active request context. Caller can post-process.
         return ""
