@@ -1,133 +1,267 @@
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback, useEffect, useMemo, useState,
+  type CSSProperties, type FormEvent,
+} from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  createLineItem,
+  deleteLineItem,
+  lockDailyReport,
+  unlockDailyReport,
   updateDailyReport,
   useDailyReport,
+  useLineItems,
+  type DailyReportRow,
   type DailyReportUpdateBody,
+  type LineItemRow,
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Button, Card, EmptyState, Loading, PageHeader, PageShell, tokens,
+  Button, Card, EmptyState, Field, Input, Loading,
+  PageHeader, PageShell, Pill, Textarea, tokens,
 } from "../components/ui";
 
-// Edit page for the daily book at /app/daily/edit?date=YYYY-MM-DD.
+// /app/daily/edit?date=YYYY-MM-DD — the per-day editor.
 //
-// Saves only the editable top-level totals (the subset the
-// FastAPI schema accepts). Line-item-derived fields like
-// money_transfer, drops, check_deposits, cash_purchases, etc.
-// are NOT in the form — they roll up from their own tables and
-// keep going through the legacy /daily-book write path until a
-// follow-up PR migrates them.
+// Layout mirrors the legacy Jinja `daily_report.html` workflow:
+//   • Sticky 3-card totals strip at the top (Receipts / Disbursements / Net),
+//     updates live as the cashier types.
+//   • 4 tabs underneath — Receipts, Disbursements, Money Transfers,
+//     and Over/Short & Notes.
+//   • Each tab shows a mix of operator-editable inputs and line-item
+//     widgets. Line-item widgets are disclosure rows (read-only sum
+//     + an expandable list of timestamped entries with an add-row
+//     beneath).
+//   • Sticky save bar pinned to the viewport bottom — Save / Cancel /
+//     Lock day. When locked the bar swaps to "Unlock to edit".
+//
+// All line-item kinds (drops, check deposits, cash purchases, etc.)
+// fire through the FastAPI `/api/v2/daily/{store}/{date}/line-items`
+// surface. After every add / delete we invalidate the daily-report
+// query so the derived totals on the report row refresh server-side.
 
-const FIELDS: { key: keyof DailyReportUpdateBody; label: string; section: "Sales" | "Receipts" | "Disbursements" | "Other" }[] = [
-  { key: "taxable_sales",           label: "Taxable sales",           section: "Sales" },
-  { key: "non_taxable",             label: "Non-taxable",             section: "Sales" },
-  { key: "sales_tax",               label: "Sales tax",               section: "Sales" },
+// ── Field definitions ────────────────────────────────────────
 
-  { key: "bill_payment_charge",     label: "Bill payment charge",     section: "Receipts" },
-  { key: "phone_recargas",          label: "Phone recargas",          section: "Receipts" },
-  { key: "boost_mobile",            label: "Boost Mobile",            section: "Receipts" },
-  { key: "money_order",             label: "Money order",             section: "Receipts" },
-  { key: "check_cashing_fees",      label: "Check cashing fees",      section: "Receipts" },
-  { key: "return_check_hold_fees",  label: "Return check hold fees",  section: "Receipts" },
-  { key: "forward_balance",         label: "Forward balance",         section: "Receipts" },
-  { key: "from_bank",               label: "From bank",               section: "Receipts" },
-  { key: "rebates_commissions",     label: "Rebates / commissions",   section: "Receipts" },
+// Editable totals on the report. Keys must match the API's
+// DailyReportUpdateBody schema 1:1.
+const EDITABLE_KEYS = [
+  "taxable_sales", "non_taxable", "sales_tax",
+  "bill_payment_charge", "phone_recargas", "boost_mobile",
+  "money_transfer", "money_order",
+  "check_cashing_fees", "return_check_hold_fees",
+  "forward_balance", "from_bank", "rebates_commissions",
+  "cash_deposit", "safe_balance", "payroll_expense",
+  "over_short",
+] as const;
+type EditKey = (typeof EDITABLE_KEYS)[number];
 
-  { key: "cash_deposit",            label: "Cash deposit",            section: "Disbursements" },
-  { key: "payroll_expense",         label: "Payroll expense",         section: "Disbursements" },
+interface FormState {
+  taxable_sales: number;
+  non_taxable: number;
+  sales_tax: number;
+  bill_payment_charge: number;
+  phone_recargas: number;
+  boost_mobile: number;
+  money_transfer: number;
+  money_order: number;
+  check_cashing_fees: number;
+  return_check_hold_fees: number;
+  forward_balance: number;
+  from_bank: number;
+  rebates_commissions: number;
+  cash_deposit: number;
+  safe_balance: number;
+  payroll_expense: number;
+  over_short: number;
+  notes: string;
+}
 
-  { key: "safe_balance",            label: "Safe balance",            section: "Other" },
-  { key: "over_short",              label: "Over / short",            section: "Other" },
+interface InputFieldDef {
+  key: EditKey;
+  label: string;
+}
+
+// Line-item-derived fields — displayed as widgets (read-only total +
+// disclosure with line items). The widget POSTs / DELETEs against
+// the line-items endpoint; the report's derived field auto-updates
+// server-side.
+interface LineItemFieldDef {
+  key: keyof DailyReportRow;
+  label: string;
+  kind: string;
+  /** True for kinds the cashier may not edit directly (return_payback
+   *  is auto-populated from the Return Checks page). */
+  readOnly?: boolean;
+}
+
+const RECEIPT_INPUTS: InputFieldDef[] = [
+  { key: "taxable_sales",          label: "Taxable sales" },
+  { key: "non_taxable",            label: "Non-taxable" },
+  { key: "sales_tax",              label: "Sales tax" },
+  { key: "bill_payment_charge",    label: "Bill payment charge" },
+  { key: "phone_recargas",         label: "Phone recargas" },
+  { key: "boost_mobile",           label: "Boost Mobile" },
+  { key: "money_transfer",         label: "Money transfer" },
+  { key: "money_order",            label: "Money order" },
+  { key: "check_cashing_fees",     label: "Check cashing fees" },
+  { key: "return_check_hold_fees", label: "Return check hold fees" },
+  { key: "forward_balance",        label: "Forward balance" },
+  { key: "from_bank",              label: "From bank" },
+  { key: "rebates_commissions",    label: "Rebates / commissions" },
 ];
 
-const SECTIONS: Array<"Sales" | "Receipts" | "Disbursements" | "Other"> = [
-  "Sales", "Receipts", "Disbursements", "Other",
+const RECEIPT_LINE_ITEMS: LineItemFieldDef[] = [
+  { key: "other_cash_in",          label: "Other cash in",         kind: "other_cash_in" },
+  { key: "return_check_paid_back", label: "Return check payback", kind: "return_payback", readOnly: true },
 ];
+
+const DISBURSEMENT_INPUTS: InputFieldDef[] = [
+  { key: "cash_deposit",     label: "Cash deposit" },
+  { key: "safe_balance",     label: "Safe balance" },
+  { key: "payroll_expense",  label: "Payroll expense" },
+];
+
+const DISBURSEMENT_LINE_ITEMS: LineItemFieldDef[] = [
+  { key: "cash_purchases",     label: "Cash purchases",       kind: "cash_purchase" },
+  { key: "cash_expense",       label: "Cash expense",         kind: "cash_expense" },
+  { key: "check_purchases",    label: "Check purchases",      kind: "check_purchase" },
+  { key: "check_expense",      label: "Check expense",        kind: "check_expense" },
+  { key: "outside_cash_drops", label: "Outside cash & drops", kind: "drop" },
+  { key: "checks_deposit",     label: "Check deposits",       kind: "check_deposit" },
+  { key: "other_cash_out",     label: "Other cash out",       kind: "other_cash_out" },
+];
+
+type Tab = "receipts" | "disbursements" | "transfers" | "notes";
+const TAB_DEFS: Array<{ id: Tab; label: string }> = [
+  { id: "receipts",      label: "Receipts" },
+  { id: "disbursements", label: "Disbursements" },
+  { id: "transfers",     label: "Money Transfers" },
+  { id: "notes",         label: "Over / Short & Notes" },
+];
+
+// ── Component ────────────────────────────────────────────────
 
 export default function EditDailyBook() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const identity = getCurrentIdentity();
-  const [searchParams] = useSearchParams();
-  const dateParam = searchParams.get("date");
-  const date = dateParam ?? "";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const date = searchParams.get("date") ?? "";
+  const initialTab = (searchParams.get("tab") as Tab) ?? "receipts";
 
   const detail = useDailyReport(date || undefined);
+  const lineItemsQuery = useLineItems(date || undefined);
 
-  const [form, setForm] = useState<DailyReportUpdateBody | null>(null);
+  const [form, setForm] = useState<FormState | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>(
+    TAB_DEFS.some((t) => t.id === initialTab) ? initialTab : "receipts",
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
-  // Hydrate the form once the existing report (if any) loads.
-  // Missing report → empty form (auto-create on save).
+  // Hydrate the form from the server payload — runs again after a
+  // save invalidation so derived totals stay in sync.
   useEffect(() => {
-    // Wait for the network attempt to settle (data could be the
-    // row OR null for "no report yet").
     if (detail.isLoading || detail.isFetching) return;
-    const r = detail.data;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched daily report (or zero-filled defaults when no report exists yet)
-    setForm({
-      taxable_sales:           r?.taxable_sales ?? 0,
-      non_taxable:             r?.non_taxable ?? 0,
-      sales_tax:               r?.sales_tax ?? 0,
-      money_order:             r?.money_order ?? 0,
-      cash_deposit:            r?.cash_deposit ?? 0,
-      safe_balance:            r?.safe_balance ?? 0,
-      over_short:              r?.over_short ?? 0,
-      // Fields that aren't on the read-side row default to 0;
-      // the form lets the cashier set them.
-      bill_payment_charge:     0,
-      phone_recargas:          0,
-      boost_mobile:            0,
-      check_cashing_fees:      0,
-      return_check_hold_fees:  0,
-      forward_balance:         0,
-      from_bank:               0,
-      rebates_commissions:     0,
-      payroll_expense:         0,
-      notes:                   r?.notes ?? "",
-    });
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable form from server-fetched daily report
+    setForm(buildInitialForm(detail.data));
   }, [detail.data, detail.isLoading, detail.isFetching]);
 
-  function set<K extends keyof DailyReportUpdateBody>(
-    key: K, value: DailyReportUpdateBody[K],
-  ) {
+  // Real-time totals strip — combines editable form values with the
+  // line-item-derived fields on the latest server row. The derived
+  // ones are updated server-side after every line-item mutation so
+  // we just take them from `detail.data`.
+  const totals = useMemo(
+    () => computeTotals(form, detail.data),
+    [form, detail.data],
+  );
+
+  const storeId = identity?.store_id;
+
+  const set = useCallback(<K extends keyof FormState>(
+    key: K, value: FormState[K],
+  ) => {
     setForm((f) => (f ? { ...f, [key]: value } : f));
+  }, []);
+
+  const switchTab = useCallback((next: Tab) => {
+    setActiveTab(next);
+    const p = new URLSearchParams(searchParams);
+    p.set("tab", next);
+    setSearchParams(p, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Invalidate after a line-item mutation so the report's derived
+  // total + the entries list both re-fetch.
+  const refreshAfterLineItem = useCallback(() => {
+    if (storeId == null) return;
+    void queryClient.invalidateQueries({
+      queryKey: ["dailybook", "report", storeId, date],
+    });
+    void queryClient.invalidateQueries({
+      queryKey: ["dailybook", "line-items", storeId, date],
+    });
+  }, [queryClient, storeId, date]);
+
+  async function persistEdits(): Promise<void> {
+    if (!form || !date || storeId == null) return;
+    const body: DailyReportUpdateBody = { notes: form.notes };
+    for (const k of EDITABLE_KEYS) {
+      (body as Record<string, number>)[k] = Number(form[k]) || 0;
+    }
+    await updateDailyReport(storeId, date, body);
+    await queryClient.invalidateQueries({
+      queryKey: ["dailybook", "report", storeId, date],
+    });
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!form || !date || identity?.store_id == null) return;
+    if (busy) return;
     setError(null);
     setBusy(true);
     try {
-      // Coerce all numeric fields to numbers in case the inputs
-      // returned strings on submit.
-      const body: DailyReportUpdateBody = { notes: form.notes ?? "" };
-      for (const f of FIELDS) {
-        const v = form[f.key];
-        if (typeof v === "number" || typeof v === "string") {
-          (body as Record<string, number>)[f.key] = Number(v) || 0;
-        }
-      }
-      await updateDailyReport(identity.store_id, date, body);
-      navigate("/daily", { replace: true });
+      await persistEdits();
+      setSavedAt(new Date());
     } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? err.message
-          : "Could not save the daily book. Please try again.",
-      );
+      setError(humanizeError(err, "Could not save the daily book."));
     } finally {
       setBusy(false);
     }
   }
 
-  if (identity?.store_id == null) {
+  async function onLockToggle() {
+    if (busy || !date || storeId == null) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (detail.data?.locked) {
+        await unlockDailyReport(storeId, date);
+      } else {
+        // Save current edits before locking so the operator doesn't
+        // freeze a stale snapshot.
+        await persistEdits();
+        await lockDailyReport(storeId, date);
+      }
+      await queryClient.invalidateQueries({
+        queryKey: ["dailybook", "report", storeId, date],
+      });
+    } catch (err) {
+      setError(humanizeError(err, "Could not change lock state."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── Render guards ────────────────────────────────────────
+
+  if (storeId == null) {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Edit daily book" />
         <EmptyState title="Sign in as a store admin to edit the daily book." />
       </PageShell>
@@ -135,7 +269,7 @@ export default function EditDailyBook() {
   }
   if (!date) {
     return (
-      <PageShell maxWidth="70rem">
+      <PageShell>
         <PageHeader title="Edit daily book" />
         <EmptyState
           title="Missing date."
@@ -145,124 +279,748 @@ export default function EditDailyBook() {
     );
   }
   if (detail.isLoading || form == null) {
-    return (
-      <PageShell maxWidth="70rem">
-        <Loading />
-      </PageShell>
-    );
+    return <PageShell><Loading /></PageShell>;
   }
 
+  const report = detail.data;
+  const locked = report?.locked === true;
+  const lineItems = lineItemsQuery.data?.items ?? [];
+
   return (
-    <PageShell maxWidth="70rem" gap="1.25rem">
+    <PageShell maxWidth="92rem" gap="1rem">
       <PageHeader
-        title="Edit daily book"
+        title="Daily book"
         subtitle={(
-          <span style={{ fontFamily: tokens.fontMono }}>
-            {formatHumanDate(date)} <span style={{ color: tokens.textMuted }}>· {date}</span>
+          <span style={{ fontFamily: tokens.fontMono, color: tokens.textMuted }}>
+            {formatHumanDate(date)}{" "}
+            <span style={{ opacity: 0.7 }}>· {date}</span>
           </span>
         )}
         actions={(
-          <Button
-            tone="ghost"
-            size="sm"
-            onClick={() => navigate("/daily")}
-          >
-            ← Calendar
-          </Button>
+          <div style={headerActionsStyle}>
+            {locked && (
+              <Pill tone="warning">
+                Locked · {formatLockedAt(report?.locked_at)}
+              </Pill>
+            )}
+            {savedAt && !locked && (
+              <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>
+            )}
+            <Button tone="secondary" size="sm" onClick={() => navigate("/daily")}>
+              ← Calendar
+            </Button>
+          </div>
         )}
       />
 
-      {detail.data?.locked && (
-        <Card padding="0.85rem 1rem">
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: tokens.warning,
-              fontSize: "0.9rem",
-            }}
-          >
-            ⚠ This day is locked. Unlock it before editing.
-          </span>
-        </Card>
-      )}
+      <TotalsStrip
+        receipts={totals.receipts}
+        disbursements={totals.disbursements}
+        net={totals.net}
+        overShort={form.over_short}
+      />
 
-      <form
-        onSubmit={onSubmit}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.25rem",
-        }}
-      >
-        {SECTIONS.map((sec) => (
-          <Card key={sec} padding="1.25rem 1.5rem">
-            <h2 style={sectionTitleStyle}>{sec}</h2>
-            <Grid>
-              {FIELDS.filter((f) => f.section === sec).map((f) => (
-                <Field key={f.key} label={f.label}>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={
-                      typeof form[f.key] === "number"
-                        ? (form[f.key] as number)
-                        : 0
-                    }
-                    onChange={(e) =>
-                      set(f.key, Number(e.target.value) as never)
-                    }
-                    style={inputStyle}
-                  />
-                </Field>
-              ))}
-            </Grid>
-          </Card>
-        ))}
+      <TabBar active={activeTab} onChange={switchTab} totals={totals} />
 
-        <Card padding="1.25rem 1.5rem">
-          <h2 style={sectionTitleStyle}>Notes</h2>
-          <textarea
-            value={form.notes ?? ""}
-            onChange={(e) => set("notes", e.target.value)}
-            rows={4}
-            style={{ ...inputStyle, resize: "vertical", minHeight: "5rem" }}
+      <form onSubmit={onSubmit} style={formStyle}>
+        {activeTab === "receipts" && (
+          <ReceiptsPanel
+            form={form}
+            set={set}
+            report={report}
+            date={date}
+            storeId={storeId}
+            locked={locked}
+            lineItems={lineItems}
+            onLineItemChange={refreshAfterLineItem}
           />
-        </Card>
-
-        {error && (
-          <p role="alert" style={errorStyle}>
-            {error}
-          </p>
+        )}
+        {activeTab === "disbursements" && (
+          <DisbursementsPanel
+            form={form}
+            set={set}
+            report={report}
+            date={date}
+            storeId={storeId}
+            locked={locked}
+            lineItems={lineItems}
+            onLineItemChange={refreshAfterLineItem}
+          />
+        )}
+        {activeTab === "transfers" && (
+          <TransfersPanel
+            form={form}
+            set={set}
+            locked={locked}
+            onJumpReceipts={() => switchTab("receipts")}
+          />
+        )}
+        {activeTab === "notes" && (
+          <NotesPanel form={form} set={set} locked={locked} />
         )}
 
-        <div style={actionRowStyle}>
-          <Button
-            type="button"
-            tone="secondary"
-            onClick={() => navigate("/daily")}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            tone="primary"
-            disabled={busy || detail.data?.locked === true}
-          >
-            {busy ? "Saving…" : "Save"}
-          </Button>
-        </div>
+        {error && <ErrorRow message={error} />}
+
+        <StickySaveBar
+          locked={locked}
+          busy={busy}
+          onCancel={() => navigate("/daily")}
+          onLockToggle={onLockToggle}
+        />
       </form>
     </PageShell>
   );
 }
 
+// ── Sticky totals strip ──────────────────────────────────────
+
+function TotalsStrip({
+  receipts, disbursements, net, overShort,
+}: {
+  receipts: number;
+  disbursements: number;
+  net: number;
+  overShort: number;
+}) {
+  const netNeg = net < 0;
+  return (
+    <div style={totalsStripStyle}>
+      <TotalsCard label="Receipts" value={receipts} tone="accent" />
+      <TotalsCard label="Disbursements" value={disbursements} tone="negative" />
+      <TotalsCard
+        label="Net position"
+        value={net}
+        tone={netNeg ? "negative" : "accent"}
+        sub={
+          Math.abs(overShort) >= 0.005
+            ? `Over/short ${fmtMoney2(overShort)} included`
+            : undefined
+        }
+      />
+    </div>
+  );
+}
+
+function TotalsCard({
+  label, value, tone, sub,
+}: {
+  label: string;
+  value: number;
+  tone: "accent" | "negative";
+  sub?: string;
+}) {
+  const accent = tone === "accent" ? tokens.accent : tokens.negative;
+  return (
+    <div
+      style={{
+        background: tokens.surface2,
+        border: `1px solid ${tokens.border}`,
+        borderTop: `3px solid ${accent}`,
+        borderRadius: "0.875rem",
+        padding: "0.85rem 1.1rem",
+        flex: 1,
+        minWidth: "12rem",
+      }}
+    >
+      <div style={totalsLabelStyle}>{label}</div>
+      <div
+        style={{
+          fontFamily: tokens.fontMono,
+          fontSize: "1.55rem",
+          fontWeight: 700,
+          marginTop: "0.2rem",
+          color: tone === "negative" ? tokens.negative : tokens.text,
+          letterSpacing: "-0.01em",
+        }}
+      >
+        {fmtMoney2(value)}
+      </div>
+      {sub && (
+        <div style={{ marginTop: "0.25rem", fontSize: "0.72rem", color: tokens.textMuted }}>
+          {sub}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tab bar ──────────────────────────────────────────────────
+
+function TabBar({
+  active, onChange, totals,
+}: {
+  active: Tab;
+  onChange: (t: Tab) => void;
+  totals: { receipts: number; disbursements: number };
+}) {
+  return (
+    <div role="tablist" aria-label="Daily book sections" style={tabBarStyle}>
+      {TAB_DEFS.map((t) => {
+        const isActive = t.id === active;
+        const hint = (() => {
+          if (t.id === "receipts") return fmtMoney(totals.receipts);
+          if (t.id === "disbursements") return fmtMoney(totals.disbursements);
+          return null;
+        })();
+        return (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onChange(t.id)}
+            style={{
+              ...tabBtnStyle,
+              ...(isActive ? tabBtnActiveStyle : null),
+            }}
+          >
+            <span>{t.label}</span>
+            {hint && (
+              <span
+                style={{
+                  fontFamily: tokens.fontMono,
+                  fontSize: "0.72rem",
+                  color: isActive ? tokens.accent : tokens.textMuted,
+                  fontWeight: 600,
+                }}
+              >
+                {hint}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Panels ───────────────────────────────────────────────────
+
+interface PanelProps {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  report: DailyReportRow | null | undefined;
+  date: string;
+  storeId: number;
+  locked: boolean;
+  lineItems: LineItemRow[];
+  onLineItemChange: () => void;
+}
+
+function ReceiptsPanel(props: PanelProps) {
+  return (
+    <div style={panelGridStyle}>
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Sales & receipts</PanelTitle>
+        <InputGrid>
+          {RECEIPT_INPUTS.map((f) => (
+            <NumberInput
+              key={f.key}
+              label={f.label}
+              value={props.form[f.key]}
+              onChange={(v) => props.set(f.key, v)}
+              disabled={props.locked}
+            />
+          ))}
+        </InputGrid>
+      </Card>
+
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Auto-summed entries</PanelTitle>
+        <p style={subTextStyle}>
+          Total updates as you add or delete entries — no manual entry needed.
+        </p>
+        {RECEIPT_LINE_ITEMS.map((f) => (
+          <LineItemWidget
+            key={f.kind}
+            kind={f.kind}
+            label={f.label}
+            readOnly={f.readOnly === true || props.locked}
+            total={Number(props.report?.[f.key] ?? 0)}
+            items={props.lineItems.filter((li) => li.kind === f.kind)}
+            storeId={props.storeId}
+            date={props.date}
+            onChange={props.onLineItemChange}
+          />
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function DisbursementsPanel(props: PanelProps) {
+  return (
+    <div style={panelGridStyle}>
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Manual disbursements</PanelTitle>
+        <InputGrid>
+          {DISBURSEMENT_INPUTS.map((f) => (
+            <NumberInput
+              key={f.key}
+              label={f.label}
+              value={props.form[f.key]}
+              onChange={(v) => props.set(f.key, v)}
+              disabled={props.locked}
+            />
+          ))}
+        </InputGrid>
+      </Card>
+
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Logged entries</PanelTitle>
+        <p style={subTextStyle}>
+          Tap a row to add a timestamped entry — totals roll up automatically.
+        </p>
+        {DISBURSEMENT_LINE_ITEMS.map((f) => (
+          <LineItemWidget
+            key={f.kind}
+            kind={f.kind}
+            label={f.label}
+            readOnly={props.locked}
+            total={Number(props.report?.[f.key] ?? 0)}
+            items={props.lineItems.filter((li) => li.kind === f.kind)}
+            storeId={props.storeId}
+            date={props.date}
+            onChange={props.onLineItemChange}
+          />
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+function TransfersPanel({
+  form, set, locked, onJumpReceipts,
+}: {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  locked: boolean;
+  onJumpReceipts: () => void;
+}) {
+  return (
+    <Card padding="1.25rem 1.5rem">
+      <PanelTitle>Money transfer total</PanelTitle>
+      <p style={subTextStyle}>
+        Combined wire-transfer revenue for the day — amount + fees + tax +
+        commission across every company. Per-company breakdown (Intermex,
+        Maxi, Barri…) with auto-fill from the employee transfer log is
+        landing in the next pass.
+      </p>
+      <div style={{ maxWidth: "20rem", marginTop: "0.75rem" }}>
+        <NumberInput
+          label="Money transfer (total)"
+          value={form.money_transfer}
+          onChange={(v) => set("money_transfer", v)}
+          disabled={locked}
+        />
+      </div>
+      <div style={{ marginTop: "1rem" }}>
+        <Button
+          tone="ghost"
+          size="sm"
+          type="button"
+          onClick={onJumpReceipts}
+        >
+          ← Edit the rest of the receipts
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function NotesPanel({
+  form, set, locked,
+}: {
+  form: FormState;
+  set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  locked: boolean;
+}) {
+  return (
+    <div style={panelGridStyle}>
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Over / short</PanelTitle>
+        <p style={subTextStyle}>
+          Positive number means the till had more cash than expected;
+          negative is short. Folded into "Net position" above.
+        </p>
+        <div style={{ maxWidth: "16rem" }}>
+          <NumberInput
+            label="Over / short"
+            value={form.over_short}
+            onChange={(v) => set("over_short", v)}
+            disabled={locked}
+          />
+        </div>
+      </Card>
+      <Card padding="1.25rem 1.5rem">
+        <PanelTitle>Notes</PanelTitle>
+        <Field label="Anything the closer should know">
+          <Textarea
+            value={form.notes ?? ""}
+            onChange={(e) => set("notes", e.target.value)}
+            rows={6}
+            disabled={locked}
+            placeholder="e.g. cash drop at 2pm, register short due to refund …"
+          />
+        </Field>
+      </Card>
+    </div>
+  );
+}
+
+// ── Line item widget ─────────────────────────────────────────
+
+function LineItemWidget({
+  kind, label, readOnly, total, items, storeId, date, onChange,
+}: {
+  kind: string;
+  label: string;
+  readOnly: boolean;
+  total: number;
+  items: LineItemRow[];
+  storeId: number;
+  date: string;
+  onChange: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function add() {
+    if (busy) return;
+    setErr(null);
+    const amt = Number(amount);
+    if (!time) { setErr("Pick a time."); return; }
+    if (!amt || amt <= 0) { setErr("Amount must be greater than zero."); return; }
+    setBusy(true);
+    try {
+      await createLineItem(storeId, date, {
+        kind, at_time: time, amount: amt, note,
+      });
+      setTime("");
+      setAmount("");
+      setNote("");
+      onChange();
+    } catch (e) {
+      setErr(humanizeError(e, "Could not add entry."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(itemId: number) {
+    if (busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await deleteLineItem(storeId, itemId);
+      onChange();
+    } catch (e) {
+      setErr(humanizeError(e, "Could not delete entry."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const count = items.length;
+
+  return (
+    <div style={widgetStyle}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        style={widgetHeaderStyle}
+        aria-expanded={open}
+      >
+        <span style={widgetLabelStyle}>
+          <span
+            style={{
+              ...widgetCaretStyle,
+              transform: open ? "rotate(90deg)" : undefined,
+            }}
+          >
+            ▸
+          </span>
+          {label}
+          {readOnly && <Pill tone="info">Auto</Pill>}
+          <span style={widgetCountStyle}>
+            {count} {count === 1 ? "entry" : "entries"}
+          </span>
+        </span>
+        <span style={widgetTotalStyle}>{fmtMoney2(total)}</span>
+      </button>
+
+      {open && (
+        <div style={widgetBodyStyle}>
+          {!readOnly && (
+            <div style={widgetAddRowStyle}>
+              <div style={{ flex: "0 0 7.5rem" }}>
+                <Field label="Time">
+                  <Input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    disabled={busy}
+                  />
+                </Field>
+              </div>
+              <div style={{ flex: "0 0 9rem" }}>
+                <Field label="Amount">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    disabled={busy}
+                  />
+                </Field>
+              </div>
+              <div style={{ flex: 1, minWidth: "10rem" }}>
+                <Field label="Note (optional)">
+                  <Input
+                    type="text"
+                    maxLength={120}
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    disabled={busy}
+                    placeholder="optional"
+                  />
+                </Field>
+              </div>
+              <div style={{ alignSelf: "flex-end" }}>
+                <Button
+                  type="button"
+                  tone="primary"
+                  size="sm"
+                  busy={busy}
+                  onClick={add}
+                  disabled={busy}
+                >
+                  + Add
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {err && <ErrorRow message={err} />}
+
+          {items.length === 0 ? (
+            <p style={emptyEntriesStyle}>
+              {readOnly
+                ? "No entries logged for this day yet."
+                : "No entries yet — add one above."}
+            </p>
+          ) : (
+            <div style={{ overflowX: "auto" }}>
+              <table style={widgetTableStyle}>
+                <thead>
+                  <tr>
+                    <th style={widgetThStyle}>Time</th>
+                    <th style={widgetThStyle}>Amount</th>
+                    <th style={widgetThStyle}>Note</th>
+                    {!readOnly && <th style={widgetThStyle} aria-label="actions" />}
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td style={widgetTdMonoStyle}>{item.at_time || "—"}</td>
+                      <td style={widgetTdMonoStyle}>{fmtMoney2(item.amount)}</td>
+                      <td style={widgetTdStyle}>{item.note || "—"}</td>
+                      {!readOnly && (
+                        <td style={widgetTdStyle}>
+                          {item.return_check_id == null ? (
+                            <Button
+                              type="button"
+                              tone="danger"
+                              size="sm"
+                              busy={busy}
+                              onClick={() => remove(item.id)}
+                            >
+                              Remove
+                            </Button>
+                          ) : (
+                            <span style={{ color: tokens.textMuted, fontSize: "0.78rem" }}>
+                              from return check
+                            </span>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Save bar + helpers ──────────────────────────────────────
+
+function StickySaveBar({
+  locked, busy, onCancel, onLockToggle,
+}: {
+  locked: boolean;
+  busy: boolean;
+  onCancel: () => void;
+  onLockToggle: () => void;
+}) {
+  return (
+    <div style={saveBarStyle}>
+      <div style={{ flex: 1, color: tokens.textMuted, fontSize: "0.85rem" }}>
+        {locked
+          ? "This day is locked. Unlock to edit any field."
+          : "Saves apply to every field in every tab."}
+      </div>
+      <Button
+        type="button"
+        tone="secondary"
+        size="md"
+        onClick={onCancel}
+        disabled={busy}
+      >
+        Back to calendar
+      </Button>
+      <Button
+        type="button"
+        tone={locked ? "secondary" : "secondary"}
+        size="md"
+        busy={busy}
+        onClick={onLockToggle}
+        disabled={busy}
+      >
+        {locked ? "Unlock to edit" : "Lock day"}
+      </Button>
+      {!locked && (
+        <Button
+          type="submit"
+          tone="primary"
+          size="md"
+          busy={busy}
+          disabled={busy}
+        >
+          {busy ? "Saving…" : "Save daily book"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function PanelTitle({ children }: { children: React.ReactNode }) {
+  return <h2 style={panelTitleStyle}>{children}</h2>;
+}
+
+function InputGrid({ children }: { children: React.ReactNode }) {
+  return <div style={inputGridStyle}>{children}</div>;
+}
+
+function NumberInput({
+  label, value, onChange, disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (next: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <Field label={label}>
+      <Input
+        type="number"
+        step="0.01"
+        value={Number.isFinite(value) ? value : 0}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        disabled={disabled}
+        style={{ fontFamily: tokens.fontMono }}
+      />
+    </Field>
+  );
+}
+
+function ErrorRow({ message }: { message: string }) {
+  return (
+    <p role="alert" style={errorStyle}>
+      {message}
+    </p>
+  );
+}
+
+// ── Helpers ─────────────────────────────────────────────────
+
+function buildInitialForm(r: DailyReportRow | null | undefined): FormState {
+  return {
+    taxable_sales:           r?.taxable_sales           ?? 0,
+    non_taxable:             r?.non_taxable             ?? 0,
+    sales_tax:               r?.sales_tax               ?? 0,
+    bill_payment_charge:     r?.bill_payment_charge     ?? 0,
+    phone_recargas:          r?.phone_recargas          ?? 0,
+    boost_mobile:            r?.boost_mobile            ?? 0,
+    money_transfer:          r?.money_transfer          ?? 0,
+    money_order:             r?.money_order             ?? 0,
+    check_cashing_fees:      r?.check_cashing_fees      ?? 0,
+    return_check_hold_fees:  r?.return_check_hold_fees  ?? 0,
+    forward_balance:         r?.forward_balance         ?? 0,
+    from_bank:               r?.from_bank               ?? 0,
+    rebates_commissions:     r?.rebates_commissions     ?? 0,
+    cash_deposit:            r?.cash_deposit            ?? 0,
+    safe_balance:            r?.safe_balance            ?? 0,
+    payroll_expense:         r?.payroll_expense         ?? 0,
+    over_short:              r?.over_short              ?? 0,
+    notes:                   r?.notes                   ?? "",
+  };
+}
+
+function computeTotals(form: FormState | null, report: DailyReportRow | null | undefined) {
+  const receiptsEditable = form ? (
+    form.taxable_sales + form.non_taxable + form.sales_tax +
+    form.bill_payment_charge + form.phone_recargas + form.boost_mobile +
+    form.money_transfer + form.money_order +
+    form.check_cashing_fees + form.return_check_hold_fees +
+    form.forward_balance + form.from_bank + form.rebates_commissions
+  ) : 0;
+  const receiptsDerived =
+    (report?.other_cash_in ?? 0) + (report?.return_check_paid_back ?? 0);
+  const receipts = receiptsEditable + receiptsDerived;
+
+  const disbursementsEditable = form ? (
+    form.cash_deposit + form.safe_balance + form.payroll_expense
+  ) : 0;
+  const disbursementsDerived =
+    (report?.cash_purchases ?? 0) + (report?.cash_expense ?? 0) +
+    (report?.check_purchases ?? 0) + (report?.check_expense ?? 0) +
+    (report?.outside_cash_drops ?? 0) + (report?.checks_deposit ?? 0) +
+    (report?.other_cash_out ?? 0);
+  const disbursements = disbursementsEditable + disbursementsDerived;
+
+  const overShort = form?.over_short ?? 0;
+  const net = receipts - disbursements + overShort;
+  return { receipts, disbursements, net };
+}
+
+function fmtMoney(n: number): string {
+  if (!Number.isFinite(n)) return "$0";
+  return n.toLocaleString(undefined, {
+    style: "currency", currency: "USD",
+    minimumFractionDigits: 0, maximumFractionDigits: 0,
+  });
+}
+
+function fmtMoney2(n: number): string {
+  if (!Number.isFinite(n)) return "$0.00";
+  return n.toLocaleString(undefined, {
+    style: "currency", currency: "USD",
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
 
 function formatHumanDate(iso: string): string {
-  // YYYY-MM-DD → "Mon, May 12, 2026". Falls back to the raw string
-  // on parse error so we never block the page.
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return iso;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
@@ -271,77 +1029,230 @@ function formatHumanDate(iso: string): string {
   });
 }
 
-function Field({
-  label, children,
-}: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
+function formatTime(d: Date): string {
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-function Grid({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-        gap: "0.75rem",
-      }}
-    >
-      {children}
-    </div>
-  );
+function formatLockedAt(iso: string | undefined): string {
+  if (!iso) return "locked";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "locked";
+  return d.toLocaleString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
 }
 
-const sectionTitleStyle: React.CSSProperties = {
+function humanizeError(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) return err.message || fallback;
+  if (err instanceof Error) return err.message || fallback;
+  return fallback;
+}
+
+// ── Styles ──────────────────────────────────────────────────
+
+const headerActionsStyle: CSSProperties = {
+  display: "inline-flex",
+  gap: "0.5rem",
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const totalsStripStyle: CSSProperties = {
+  position: "sticky",
+  top: "0.25rem",
+  zIndex: 5,
+  display: "flex",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  background: tokens.surface,
+  paddingBottom: "0.25rem",
+};
+
+const totalsLabelStyle: CSSProperties = {
+  fontSize: "0.72rem",
+  textTransform: "uppercase",
+  letterSpacing: "0.07em",
+  color: tokens.textMuted,
+  fontWeight: 600,
+};
+
+const tabBarStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.4rem",
+  flexWrap: "wrap",
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: "0.875rem",
+  padding: "0.35rem",
+};
+
+const tabBtnStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.55rem",
+  background: "transparent",
+  color: tokens.textMuted,
+  border: "1px solid transparent",
+  borderRadius: "0.65rem",
+  padding: "0.55rem 0.95rem",
+  fontFamily: tokens.fontBody,
+  fontSize: "0.88rem",
+  fontWeight: 600,
+  cursor: "pointer",
+  transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
+};
+
+const tabBtnActiveStyle: CSSProperties = {
+  background: tokens.surface,
+  color: tokens.text,
+  borderColor: "rgba(63,255,0,0.25)",
+  boxShadow: "0 1px 0 rgba(63,255,0,0.18) inset",
+};
+
+const formStyle: CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "1rem",
+  paddingBottom: "5rem",
+};
+
+const panelGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: "1rem",
+};
+
+const panelTitleStyle: CSSProperties = {
   fontFamily: tokens.fontDisplay,
   fontSize: "0.85rem",
   textTransform: "uppercase",
   letterSpacing: "0.08em",
   color: tokens.textMuted,
-  margin: "0 0 1rem",
+  margin: "0 0 0.85rem",
   fontWeight: 600,
 };
 
-const inputStyle: React.CSSProperties = {
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: tokens.text,
-  fontFamily: tokens.fontMono,
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
+const subTextStyle: CSSProperties = {
+  margin: "0 0 1rem",
+  color: tokens.textMuted,
+  fontSize: "0.85rem",
 };
 
-const actionRowStyle: React.CSSProperties = {
+const inputGridStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(11.5rem, 1fr))",
+  gap: "0.85rem 1rem",
+};
+
+const widgetStyle: CSSProperties = {
+  border: `1px solid ${tokens.border}`,
+  background: tokens.surface,
+  borderRadius: "0.75rem",
+  marginBottom: "0.65rem",
+  overflow: "hidden",
+};
+
+const widgetHeaderStyle: CSSProperties = {
+  width: "100%",
   display: "flex",
-  gap: "0.75rem",
-  justifyContent: "flex-end",
+  alignItems: "center",
+  justifyContent: "space-between",
+  background: "transparent",
+  border: "none",
+  padding: "0.75rem 1rem",
+  cursor: "pointer",
+  color: tokens.text,
+  fontFamily: tokens.fontBody,
+};
+
+const widgetLabelStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "0.55rem",
+  fontWeight: 600,
+  fontSize: "0.92rem",
+};
+
+const widgetCaretStyle: CSSProperties = {
+  display: "inline-block",
+  width: "0.85rem",
+  color: tokens.textMuted,
+  transition: "transform 120ms ease",
+};
+
+const widgetCountStyle: CSSProperties = {
+  color: tokens.textMuted,
+  fontWeight: 500,
+  fontSize: "0.8rem",
+};
+
+const widgetTotalStyle: CSSProperties = {
+  fontFamily: tokens.fontMono,
+  fontSize: "0.95rem",
+  fontWeight: 600,
+};
+
+const widgetBodyStyle: CSSProperties = {
+  borderTop: `1px solid ${tokens.borderSubtle}`,
+  padding: "0.85rem 1rem 1rem",
+  display: "flex",
+  flexDirection: "column",
+  gap: "0.85rem",
+};
+
+const widgetAddRowStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.65rem",
+  flexWrap: "wrap",
+};
+
+const widgetTableStyle: CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
+};
+
+const widgetThStyle: CSSProperties = {
+  textAlign: "left",
+  padding: "0.4rem 0.6rem",
+  fontSize: "0.72rem",
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: tokens.textMuted,
+  fontWeight: 600,
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
+};
+
+const widgetTdStyle: CSSProperties = {
+  padding: "0.5rem 0.6rem",
+  borderBottom: `1px solid ${tokens.borderSubtle}`,
+  fontSize: "0.88rem",
+};
+
+const widgetTdMonoStyle: CSSProperties = {
+  ...widgetTdStyle,
+  fontFamily: tokens.fontMono,
+};
+
+const emptyEntriesStyle: CSSProperties = {
+  margin: 0,
+  color: tokens.textMuted,
+  fontSize: "0.85rem",
+  fontStyle: "italic",
+};
+
+const saveBarStyle: CSSProperties = {
   position: "sticky",
   bottom: 0,
+  display: "flex",
+  alignItems: "center",
+  gap: "0.65rem",
   background: tokens.surface,
   borderTop: `1px solid ${tokens.border}`,
   padding: "0.85rem 0",
-  marginTop: "0.5rem",
-  zIndex: 1,
+  zIndex: 4,
 };
 
-const errorStyle: React.CSSProperties = {
+const errorStyle: CSSProperties = {
   margin: 0,
   padding: "0.65rem 0.85rem",
   color: tokens.negative,

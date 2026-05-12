@@ -14,23 +14,51 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
+// Full DailyReport payload — every model column the editor needs
+// to hydrate every input, plus derived totals + lock state.
+// Line-item-derived fields (cash_purchases, checks_deposit, etc.)
+// are read-only in the UI; they roll up from the line-item tables.
 export interface DailyReportRow {
   id: number;
   store_id: number;
   report_date: string;
+  // Sales
   taxable_sales: number;
   non_taxable: number;
   sales_tax: number;
+  // Receipts — operator-editable
+  bill_payment_charge: number;
+  phone_recargas: number;
+  boost_mobile: number;
   money_transfer: number;
   money_order: number;
-  cash_expense: number;
-  check_expense: number;
+  check_cashing_fees: number;
+  return_check_hold_fees: number;
+  forward_balance: number;
+  from_bank: number;
+  rebates_commissions: number;
+  // Receipts — line-item derived (read-only)
+  return_check_paid_back: number;
+  other_cash_in: number;
+  // Disbursements — operator-editable
   cash_deposit: number;
-  checks_deposit: number;
   safe_balance: number;
+  payroll_expense: number;
+  // Disbursements — line-item derived (read-only)
+  cash_purchases: number;
+  cash_expense: number;
+  check_purchases: number;
+  check_expense: number;
+  outside_cash_drops: number;
+  checks_deposit: number;
+  other_cash_out: number;
+  // Other
   over_short: number;
   locked: boolean;
   notes: string;
+  /** ISO datetime when the report was locked, "" otherwise. */
+  locked_at: string;
+  // Derived
   total_receipts: number;
   total_disbursements: number;
   net: number;

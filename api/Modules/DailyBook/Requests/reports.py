@@ -4,26 +4,55 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DailyReportRow(BaseModel):
     """One day's roll-up. Pre-computes receipts / disbursements /
-    net so the React table doesn't have to."""
+    net so the React table doesn't have to.
+
+    Carries the full DailyReport field set — the editor hydrates
+    every input from this payload, line-item-derived fields display
+    as read-only "Auto" tiles, and the real-time totals strip sums
+    them client-side as the cashier types."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: int
     store_id: int
     report_date: str  # YYYY-MM-DD
+    # Sales
     taxable_sales: float = 0.0
     non_taxable: float = 0.0
     sales_tax: float = 0.0
+    # Receipts (operator-editable)
+    bill_payment_charge: float = 0.0
+    phone_recargas: float = 0.0
+    boost_mobile: float = 0.0
     money_transfer: float = 0.0
     money_order: float = 0.0
-    cash_expense: float = 0.0
-    check_expense: float = 0.0
+    check_cashing_fees: float = 0.0
+    return_check_hold_fees: float = 0.0
+    forward_balance: float = 0.0
+    from_bank: float = 0.0
+    rebates_commissions: float = 0.0
+    # Receipts (line-item derived — read-only in editor)
+    return_check_paid_back: float = 0.0
+    other_cash_in: float = 0.0
+    # Disbursements (operator-editable)
     cash_deposit: float = 0.0
-    checks_deposit: float = 0.0
     safe_balance: float = 0.0
+    payroll_expense: float = 0.0
+    # Disbursements (line-item derived — read-only in editor)
+    cash_purchases: float = 0.0
+    cash_expense: float = 0.0
+    check_purchases: float = 0.0
+    check_expense: float = 0.0
+    outside_cash_drops: float = 0.0
+    checks_deposit: float = 0.0
+    other_cash_out: float = 0.0
+    # Other
     over_short: float = 0.0
     locked: bool = False
     notes: str = ""
+    # ISO datetime, or "" when unlocked
+    locked_at: str = ""
+    # Derived
     total_receipts: float
     total_disbursements: float
     net: float

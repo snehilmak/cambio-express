@@ -28,23 +28,50 @@ from api.Modules.DailyBook.Repositories import (
 class DailyReportSummary:
     """Wire-shape for one DailyReport. Receipts / disbursements /
     net are derived (Python-side) from the model's @property fields
-    so the frontend doesn't have to recompute them."""
+    so the frontend doesn't have to recompute them.
+
+    Full field set mirrors the SQLAlchemy DailyReport model — the
+    React editor needs every input so it can hydrate the form on
+    page load + show real-time totals as the cashier types."""
     id: int
     store_id: int
     report_date: str  # ISO YYYY-MM-DD
+    # Sales tab
     taxable_sales: float
     non_taxable: float
     sales_tax: float
+    # Receipts (operator-editable)
+    bill_payment_charge: float
+    phone_recargas: float
+    boost_mobile: float
     money_transfer: float
     money_order: float
-    cash_expense: float
-    check_expense: float
+    check_cashing_fees: float
+    return_check_hold_fees: float
+    forward_balance: float
+    from_bank: float
+    rebates_commissions: float
+    # Receipts (line-item derived)
+    return_check_paid_back: float
+    other_cash_in: float
+    # Disbursements (operator-editable)
     cash_deposit: float
-    checks_deposit: float
     safe_balance: float
+    payroll_expense: float
+    # Disbursements (line-item derived)
+    cash_purchases: float
+    cash_expense: float
+    check_purchases: float
+    check_expense: float
+    outside_cash_drops: float
+    checks_deposit: float
+    other_cash_out: float
+    # Other
     over_short: float
     locked: bool
     notes: str
+    locked_at: str  # ISO datetime, or "" when unlocked
+    # Derived
     total_receipts: float
     total_disbursements: float
     net: float
@@ -70,16 +97,32 @@ def _summarize(r: DailyReport) -> DailyReportSummary:
         taxable_sales=float(r.taxable_sales or 0),
         non_taxable=float(r.non_taxable or 0),
         sales_tax=float(r.sales_tax or 0),
+        bill_payment_charge=float(r.bill_payment_charge or 0),
+        phone_recargas=float(r.phone_recargas or 0),
+        boost_mobile=float(r.boost_mobile or 0),
         money_transfer=float(r.money_transfer or 0),
         money_order=float(r.money_order or 0),
-        cash_expense=float(r.cash_expense or 0),
-        check_expense=float(r.check_expense or 0),
+        check_cashing_fees=float(r.check_cashing_fees or 0),
+        return_check_hold_fees=float(r.return_check_hold_fees or 0),
+        forward_balance=float(r.forward_balance or 0),
+        from_bank=float(r.from_bank or 0),
+        rebates_commissions=float(r.rebates_commissions or 0),
+        return_check_paid_back=float(r.return_check_paid_back or 0),
+        other_cash_in=float(r.other_cash_in or 0),
         cash_deposit=float(r.cash_deposit or 0),
-        checks_deposit=float(r.checks_deposit or 0),
         safe_balance=float(r.safe_balance or 0),
+        payroll_expense=float(r.payroll_expense or 0),
+        cash_purchases=float(r.cash_purchases or 0),
+        cash_expense=float(r.cash_expense or 0),
+        check_purchases=float(r.check_purchases or 0),
+        check_expense=float(r.check_expense or 0),
+        outside_cash_drops=float(r.outside_cash_drops or 0),
+        checks_deposit=float(r.checks_deposit or 0),
+        other_cash_out=float(r.other_cash_out or 0),
         over_short=float(r.over_short or 0),
         locked=r.locked_at is not None,
         notes=r.notes or "",
+        locked_at=r.locked_at.isoformat() if r.locked_at else "",
         total_receipts=float(r.total_receipts or 0),
         total_disbursements=float(r.total_disbursements or 0),
         net=float((r.total_receipts or 0) - (r.total_disbursements or 0)),
