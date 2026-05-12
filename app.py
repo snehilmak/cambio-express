@@ -63,6 +63,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
+from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
 from blueprints import (  # noqa: E402
     bookkeeping_redirects as _bp_bookkeeping_redirects,
@@ -96,6 +97,7 @@ app.register_blueprint(_bp_superadmin_redirects.bp)
 app.register_blueprint(_bp_customers_api.bp)
 app.register_blueprint(_bp_transfers_redirects.bp)
 app.register_blueprint(_bp_bookkeeping_redirects.bp)
+app.register_blueprint(_bp_bank_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -6722,17 +6724,7 @@ _BATCH_SORT_COLUMNS = {
 # blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 # ── Bank (Stripe Financial Connections) ─────────────────────────
-@app.route("/bank")
-@pro_required
-def bank():
-    """301 → /app/bank. The bank-accounts landing moved to React;
-    the SPA reads /api/v2/bank/{accounts,transactions} and drives
-    the Stripe Financial Connections modal via dynamically-loaded
-    Stripe.js. The legacy mutation form-POST endpoints
-    (/bank/stripe/{refresh,sync-transactions,nickname/<id>,
-    disconnect/<id>}) stay live and the SPA submits forms to
-    them; they 302 back to /bank → which 301s to /app/bank."""
-    return redirect("/app/bank", code=301)
+# /bank moved to blueprints/bank_redirects.py (D2 phase 16).
 
 @app.route("/bank/stripe/connect", methods=["POST"])
 @pro_required
@@ -6800,7 +6792,7 @@ def bank_stripe_return():
                      or session.pop("fc_session_id", None))
     if not fc_session_id:
         flash("No active bank-link session found.", "error")
-        return redirect(url_for("bank"))
+        return redirect(url_for("bank_redirects.bank"))
     # Always clear the server-side copy now that we have an id in hand.
     session.pop("fc_session_id", None)
     try:
@@ -6809,7 +6801,7 @@ def bank_stripe_return():
         accounts = fc_session.accounts.data if hasattr(fc_session, "accounts") else []
         if not accounts:
             flash("No accounts were linked.", "error")
-            return redirect(url_for("bank"))
+            return redirect(url_for("bank_redirects.bank"))
         # Per-store cap. We honor existing enabled rows AND any of the
         # just-linked accounts that are already on file (re-link case),
         # then accept up to the remaining slots.
@@ -6876,7 +6868,7 @@ def bank_stripe_return():
     except stripe.error.StripeError as e:
         app.logger.error(f"FC session retrieve failed: {e}")
         flash(f"Stripe error while completing the link: {e.user_message or str(e)}", "error")
-    return redirect(url_for("bank"))
+    return redirect(url_for("bank_redirects.bank"))
 
 @app.route("/bank/stripe/refresh", methods=["POST"])
 @pro_required
@@ -6891,7 +6883,7 @@ def bank_stripe_refresh():
         flash(f"Refresh failed: {last_error}", "error")
     else:
         flash("Nothing to refresh.", "error")
-    return redirect(url_for("bank"))
+    return redirect(url_for("bank_redirects.bank"))
 
 @app.route("/bank/stripe/sync-transactions", methods=["POST"])
 @pro_required
@@ -6904,7 +6896,7 @@ def bank_stripe_sync_transactions():
     allowed, reason, retry_after = _can_sync_bank_transactions(store)
     if not allowed:
         flash(reason, "error")
-        return redirect(url_for("bank"))
+        return redirect(url_for("bank_redirects.bank"))
     new_rows, total, last_error = sync_bank_transactions(store)
     # Always record the sync attempt — Stripe billed us regardless of
     # how many rows came back. Caller's commit happens here.
@@ -6921,25 +6913,9 @@ def bank_stripe_sync_transactions():
         flash((f"Synced {new_rows} new transaction(s) "
                f"({remaining} sync(s) remaining today)."),
               "success" if total else "info")
-    return redirect(url_for("bank"))
+    return redirect(url_for("bank_redirects.bank"))
 
-@app.route("/bank/transactions")
-@pro_required
-def bank_transactions():
-    """301 → /app/bank-transactions. The bank-transactions ledger
-    moved to React; the SPA reads /api/v2/bank-sync/transactions
-    (paginated + filtered) and does its own debounced live-search.
-    Stub keeps url_for('bank_transactions') working in still-Jinja
-    chrome (the /bank summary page still links here) and bounces
-    old bookmarks. Query string (account / date / q / page)
-    preserved so a deep-link to a filtered view lands the SPA in
-    the same state — minus `?partial=1`, the legacy AJAX-only
-    marker the SPA never sends."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    if qs:
-        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
-    target = "/app/bank-transactions" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /bank/transactions moved to blueprints/bank_redirects.py (D2 phase 16).
 
 # ── Reconcile actions ───────────────────────────────────────
 @app.route("/bank/transactions/<int:txn_id>/categorize", methods=["POST"])
@@ -6950,10 +6926,10 @@ def bank_transaction_categorize(txn_id):
     target = (request.form.get("kind") or "").strip()
     if not target:
         flash("Pick a category before saving.", "error")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     if not _is_valid_bank_category(target, sid):
         flash("Unknown category.", "error")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     # Optional date override — supports the RDC case where the bank
     # posted the entry the next morning but it should land on the
     # previous day's daily book.
@@ -6964,13 +6940,13 @@ def bank_transaction_categorize(txn_id):
             override_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
         except ValueError:
             flash("Invalid date.", "error")
-            return redirect(request.referrer or url_for("bank_transactions"))
+            return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     _categorize_bank_transaction(txn, target, rule=None,
                                   post_to_daily=True,
                                   report_date=override_date)
     db.session.commit()
     flash(f"Categorized as {_bank_category_label(target)}.", "success")
-    return redirect(request.referrer or url_for("bank_transactions"))
+    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
 
 @app.route("/bank/transactions/<int:txn_id>/uncategorize", methods=["POST"])
 @pro_required
@@ -6980,7 +6956,7 @@ def bank_transaction_uncategorize(txn_id):
     _uncategorize_bank_transaction(txn)
     db.session.commit()
     flash("Uncategorized; daily-book line removed.", "success")
-    return redirect(request.referrer or url_for("bank_transactions"))
+    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
 
 @app.route("/bank/transactions/<int:txn_id>/move-date", methods=["POST"])
 @pro_required
@@ -6992,16 +6968,16 @@ def bank_transaction_move_date(txn_id):
     txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
     if not txn.daily_line_item_id:
         flash("This transaction isn't linked to a daily-book line.", "error")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     raw = (request.form.get("report_date") or "").strip()
     if not raw:
         flash("Pick a date.", "error")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     try:
         new_date = datetime.strptime(raw, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid date.", "error")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     line = db.session.get(DailyLineItem, txn.daily_line_item_id)
     if line is None:
         # Linked line was deleted out from under us — clear the link
@@ -7009,11 +6985,11 @@ def bank_transaction_move_date(txn_id):
         txn.daily_line_item_id = None
         db.session.commit()
         flash("Linked line not found; cleared the link.", "warning")
-        return redirect(request.referrer or url_for("bank_transactions"))
+        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
     line.report_date = new_date
     db.session.commit()
     flash(f"Moved to {new_date.isoformat()}.", "success")
-    return redirect(request.referrer or url_for("bank_transactions"))
+    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
 
 # ── Rules CRUD ──────────────────────────────────────────────
 # `_parse_rule_form` was extracted into
@@ -7021,14 +6997,7 @@ def bank_transaction_move_date(txn_id):
 # Flask routes below delegate validation, account-scope check, and
 # the row mutations to that Service.
 
-@app.route("/bank/rules")
-@pro_required
-def bank_rules():
-    """301 → /app/bank/rules. Rules CRUD moved to React; the SPA
-    reads/writes via /api/v2/bank/rules. The legacy form-POST
-    handlers below (new / edit / toggle / delete) stay live as
-    fallback callers and 302 back to /bank/rules → 301 → /app."""
-    return redirect("/app/bank/rules", code=301)
+# /bank/rules moved to blueprints/bank_redirects.py (D2 phase 16).
 
 @app.route("/bank/rules/new", methods=["POST"])
 @pro_required
@@ -7046,11 +7015,11 @@ def bank_rule_new():
         )
     except RuleValidationError as e:
         flash(str(e), "error")
-        return redirect(url_for("bank_rules"))
+        return redirect(url_for("bank_redirects.bank_rules"))
     create_rule(db.session, sid, fields)
     db.session.commit()
     flash("Rule created.", "success")
-    return redirect(url_for("bank_rules"))
+    return redirect(url_for("bank_redirects.bank_rules"))
 
 @app.route("/bank/rules/<int:rule_id>/edit", methods=["POST"])
 @pro_required
@@ -7067,14 +7036,14 @@ def bank_rule_edit(rule_id):
         )
     except RuleValidationError as e:
         flash(str(e), "error")
-        return redirect(url_for("bank_rules"))
+        return redirect(url_for("bank_redirects.bank_rules"))
     try:
         update_rule(db.session, rule_id, sid, fields)
     except RuleNotFoundError:
         abort(404)
     db.session.commit()
     flash("Rule updated.", "success")
-    return redirect(url_for("bank_rules"))
+    return redirect(url_for("bank_redirects.bank_rules"))
 
 @app.route("/bank/rules/<int:rule_id>/toggle", methods=["POST"])
 @pro_required
@@ -7089,7 +7058,7 @@ def bank_rule_toggle(rule_id):
         abort(404)
     db.session.commit()
     flash(f"Rule { 'enabled' if rule.enabled else 'disabled' }.", "success")
-    return redirect(url_for("bank_rules"))
+    return redirect(url_for("bank_redirects.bank_rules"))
 
 @app.route("/bank/rules/<int:rule_id>/delete", methods=["POST"])
 @pro_required
@@ -7104,7 +7073,7 @@ def bank_rule_delete(rule_id):
         abort(404)
     db.session.commit()
     flash("Rule deleted.", "success")
-    return redirect(url_for("bank_rules"))
+    return redirect(url_for("bank_redirects.bank_rules"))
 
 @app.route("/bank/stripe/nickname/<int:acct_id>", methods=["POST"])
 @pro_required
@@ -7118,7 +7087,7 @@ def bank_stripe_set_nickname(acct_id):
     acct.nickname = nickname
     db.session.commit()
     flash(("Nickname saved." if nickname else "Nickname cleared."), "success")
-    return redirect(url_for("bank"))
+    return redirect(url_for("bank_redirects.bank"))
 
 @app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
 @pro_required
@@ -7137,7 +7106,7 @@ def bank_stripe_disconnect(acct_id):
     row.disconnected_at = datetime.utcnow()
     db.session.commit()
     flash("Bank account disconnected.", "success")
-    return redirect(url_for("bank"))
+    return redirect(url_for("bank_redirects.bank"))
 
 # ── Admin Users ──────────────────────────────────────────────
 @app.route("/admin/users", methods=["GET", "POST"])

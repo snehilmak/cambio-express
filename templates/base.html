@@ -73,7 +73,7 @@
 {% if user and (user.role == 'superadmin'
                 or (store and store.plan == 'pro')
                 or (store and store.plan == 'trial' and trial_status != 'expired')) %}
-<a href="{{ url_for('bank') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('bank') %}active{% endif %}">
+<a href="{{ url_for('bank_redirects.bank') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('bank_redirects.bank') %}active{% endif %}">
   <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
   Bank Sync
 </a>
