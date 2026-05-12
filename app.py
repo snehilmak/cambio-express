@@ -1614,7 +1614,7 @@ _TRIAL_EXEMPT = {
     "subscription.admin_subscription_toggle_addon",
     "subscription.admin_subscription_cancel",
     # Theme toggle (cosmetic, fine to reach even when expired)
-    "account_theme",
+    "account.account_theme",
 }
 
 # ── Add-ons catalog ──────────────────────────────────────────
@@ -2889,15 +2889,7 @@ def passkey_register_finish():
     db.session.commit()
     return jsonify({"ok": True, "name": name})
 
-@app.route("/account/passkeys/<int:pk_id>/delete", methods=["POST"])
-@login_required
-def passkey_delete(pk_id):
-    user = current_user()
-    pk = Passkey.query.filter_by(id=pk_id, user_id=user.id).first_or_404()
-    db.session.delete(pk)
-    db.session.commit()
-    flash("Passkey removed.", "success")
-    return redirect(url_for("account.account_security"))
+# /account/passkeys/<id>/delete moved to blueprints/account.py (D2 phase 21).
 
 # ── Shared account settings ──────────────────────────────────
 #
@@ -2916,38 +2908,9 @@ def passkey_delete(pk_id):
 # /account/referrals moved to blueprints/account.py (D2 phase 10).
 
 
-@app.route("/account/theme", methods=["POST"])
-@login_required
-def account_theme():
-    """Persist the user's UI theme preference.
+# /account/theme moved to blueprints/account.py (D2 phase 21).
 
-    Lives as its own endpoint (not folded into /account/profile) so the
-    toggle can be a one-click action with its own redirect target —
-    submitting it from any page returns the user to where they were.
-    Validates strictly: anything other than "dark" / "light" is treated
-    as a no-op rather than wiping the column.
-    """
-    user = current_user()
-    choice = (request.form.get("theme") or "").strip().lower()
-    if choice in ("dark", "light"):
-        user.theme_preference = choice
-        db.session.commit()
-        flash(f"Switched to {choice} mode.", "success")
-    else:
-        flash("Invalid theme — no change.", "error")
-    # Bounce back to the referring page so the toggle works from anywhere.
-    nxt = request.form.get("next") or request.referrer or url_for("account.account_profile")
-    return redirect(nxt)
-
-@app.route("/account/notifications", methods=["GET", "POST"])
-@login_required
-def account_notifications():
-    """301 → /app/account/notifications. Toggle UI moved to React;
-    GET/PUT /api/v2/auth/notifications drives persistence. The
-    trial-toggle gating logic (admin/owner of a trialing store)
-    moved into the api.Modules.Auth.Services.notifications module
-    so SPA + Flask see the same `applies` state."""
-    return redirect("/app/account/notifications", code=301)
+# /account/notifications moved to blueprints/account.py (D2 phase 21).
 
 @app.route("/login/passkey/begin", methods=["POST"])
 def passkey_login_begin():
