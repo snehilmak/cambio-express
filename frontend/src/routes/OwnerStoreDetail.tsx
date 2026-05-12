@@ -33,7 +33,7 @@ export default function OwnerStoreDetail() {
   const { data, isLoading, isError, error, refetch } = useOwnerStoreDetail(sid, period);
 
   return (
-    <PageShell maxWidth="75rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <div>
         <Link to="/owner/locations" style={backLink}>← All locations</Link>
         <PageHeader

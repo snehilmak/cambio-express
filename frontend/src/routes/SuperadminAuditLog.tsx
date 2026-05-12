@@ -40,7 +40,7 @@ export default function SuperadminAuditLog() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <PageShell maxWidth="82rem">
+      <PageShell>
         <PageHeader title="Audit log" />
         <Empty>Superadmin scope required.</Empty>
       </PageShell>
@@ -48,7 +48,7 @@ export default function SuperadminAuditLog() {
   }
 
   return (
-    <PageShell maxWidth="82rem">
+    <PageShell>
       <PageHeader
         title="Audit log"
         subtitle={data

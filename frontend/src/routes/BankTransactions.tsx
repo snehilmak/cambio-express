@@ -77,7 +77,7 @@ export default function BankTransactions() {
   const page       = txns.data?.page        ?? 1;
 
   return (
-    <PageShell maxWidth="82rem">
+    <PageShell>
       <PageHeader
         title="Bank transactions"
         subtitle={

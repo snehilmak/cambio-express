@@ -160,7 +160,7 @@ export default function SuperadminBIDrilldown() {
   const csvHref = `/superadmin/reports/${slug}.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
 
   return (
-    <PageShell maxWidth="75rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <div>
         <Link to="/superadmin/reports" style={backLink}>← Platform Reports</Link>
         <PageHeader
