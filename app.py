@@ -64,6 +64,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import admin_extras as _bp_admin_extras  # noqa: E402
 from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
+from blueprints import (  # noqa: E402
+    admin_settings_mutations as _bp_admin_settings_mutations,
+)
 from blueprints import auth as _bp_auth  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import bank_mutations as _bp_bank_mutations  # noqa: E402
@@ -126,6 +129,7 @@ app.register_blueprint(_bp_bookkeeping_mutations.bp)
 app.register_blueprint(_bp_bank_mutations.bp)
 app.register_blueprint(_bp_superadmin_extras.bp)
 app.register_blueprint(_bp_admin_extras.bp)
+app.register_blueprint(_bp_admin_settings_mutations.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -6088,141 +6092,9 @@ def admin_settings():
         roster=roster,
     )
 
-@app.route("/admin/settings/roster/add", methods=["POST"])
-@admin_required
-def admin_roster_add():
-    store = current_store()
-    name = (request.form.get("name") or "").strip()
-    if not name:
-        flash("Name is required.", "error")
-        return redirect(url_for("admin_settings", tab="roster"))
-    # Case-insensitive dedupe against the store's existing roster. If a
-    # deactivated entry matches, re-activate it instead of creating a second
-    # row so the audit log stays intact.
-    existing = StoreEmployee.query.filter(
-        StoreEmployee.store_id == store.id,
-        db.func.lower(StoreEmployee.name) == name.lower(),
-    ).first()
-    if existing:
-        if not existing.is_active:
-            existing.is_active = True
-            db.session.commit()
-            flash(f"Reactivated {existing.name}.", "success")
-        else:
-            flash(f"{existing.name} is already on the roster.", "error")
-        return redirect(url_for("admin_settings", tab="roster"))
-    db.session.add(StoreEmployee(store_id=store.id, name=name))
-    db.session.commit()
-    flash(f"Added {name}.", "success")
-    return redirect(url_for("admin_settings", tab="roster"))
-
-@app.route("/admin/settings/roster/<int:eid>/toggle", methods=["POST"])
-@admin_required
-def admin_roster_toggle(eid):
-    sid = session["store_id"]
-    emp = StoreEmployee.query.filter_by(id=eid, store_id=sid).first_or_404()
-    emp.is_active = not emp.is_active
-    db.session.commit()
-    flash(
-        f"{emp.name} {'reactivated' if emp.is_active else 'deactivated'}.",
-        "success",
-    )
-    return redirect(url_for("admin_settings", tab="roster"))
-
-@app.route("/admin/settings/roster/<int:eid>/rename", methods=["POST"])
-@admin_required
-def admin_roster_rename(eid):
-    sid = session["store_id"]
-    emp = StoreEmployee.query.filter_by(id=eid, store_id=sid).first_or_404()
-    new_name = (request.form.get("name") or "").strip()
-    if not new_name:
-        flash("Name cannot be empty.", "error")
-    else:
-        emp.name = new_name
-        db.session.commit()
-        # Historical transfers keep their snapshotted employee_name — a
-        # rename only affects future dropdown picks. That's the intended
-        # audit-preserving behavior.
-        flash(f"Renamed to {new_name}.", "success")
-    return redirect(url_for("admin_settings", tab="roster"))
-
-
-@app.route("/admin/settings/team/<int:uid>", methods=["POST"])
-@admin_required
-def admin_reset_employee_password(uid):
-    """Admin-side employee password reset. Validation + apply
-    delegate to `api.Modules.Auth.Services.admin_set_password`
-    (PR 40); this Flask route handles the cross-store scope check
-    and the inline flash messages."""
-    from api.Modules.Auth.Services import admin_set_password
-    sid = session["store_id"]
-    emp = User.query.filter_by(id=uid, store_id=sid).first_or_404()
-    errors = admin_set_password(
-        db.session, emp,
-        request.form.get("password", ""),
-        request.form.get("confirm_password", ""),
-    )
-    if errors:
-        # Surface the first error as a flash (matches the legacy
-        # behaviour — only one message per round-trip).
-        flash(next(iter(errors.values())), "error")
-    else:
-        db.session.commit()
-        flash(
-            f"Password updated for {emp.full_name or emp.username}.",
-            "success",
-        )
-    return redirect(url_for("admin_settings", tab="team"))
-
-
-@app.route("/admin/settings/owner/redeem", methods=["POST"])
-@admin_required
-def admin_redeem_owner_code():
-    """Store admin enters an owner-supplied code to link this store
-    to that owner's umbrella. Replaces the old store-admin-generates /
-    owner-redeems flow — see OwnerConnectCode model docstring for why.
-
-    Validation chain: code exists, not used, not revoked, not expired,
-    no existing link to that owner. Disconnect after this point is
-    owner-side only (/owner/unlink) — the store admin sees a
-    read-only "contact your owner" message.
-    """
-    store = current_store()
-    code_str = request.form.get("code", "").strip().upper()
-    if not code_str:
-        flash("Enter the code your owner gave you.", "error")
-        return redirect(url_for("admin_settings", tab="owner"))
-    now = datetime.utcnow()
-    # NOTE: TOCTOU window between lookup and commit — safe under SQLite
-    # (serialised writes); a Postgres migration should add SELECT FOR
-    # UPDATE here.
-    code = OwnerConnectCode.query.filter(
-        OwnerConnectCode.code == code_str,
-        OwnerConnectCode.used_at.is_(None),
-        OwnerConnectCode.revoked_at.is_(None),
-        OwnerConnectCode.expires_at > now,
-    ).first()
-    if not code:
-        flash("Invalid, expired, or already-used code.", "error")
-        return redirect(url_for("admin_settings", tab="owner"))
-    owner = db.session.get(User, code.owner_id)
-    if not owner or owner.role != "owner":
-        flash("That code's owner account is no longer valid.", "error")
-        return redirect(url_for("admin_settings", tab="owner"))
-    already = StoreOwnerLink.query.filter_by(
-        owner_id=owner.id, store_id=store.id).first()
-    if already:
-        flash("This store is already connected to that owner.", "info")
-        return redirect(url_for("admin_settings", tab="owner"))
-    link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
-    code.used_at = now
-    code.used_by_user_id = current_user().id
-    code.used_by_store_id = store.id
-    db.session.add(link)
-    db.session.commit()
-    flash(f"Store connected to {owner.full_name or owner.username}.",
-          "success")
-    return redirect(url_for("admin_settings", tab="owner"))
+# /admin/settings/{roster/add, roster/<id>/toggle, roster/<id>/rename,
+# team/<uid>, owner/redeem} moved to
+# blueprints/admin_settings_mutations.py (D2 phase 24).
 
 
 # ── Superadmin ───────────────────────────────────────────────
