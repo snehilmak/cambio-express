@@ -151,6 +151,7 @@ def daily_report_unlock(ds: str):
 def return_check_new():
     from app import (
         ReturnCheck, admin_required, current_user, db,
+        record_op_audit,
     )
 
     @admin_required
@@ -203,6 +204,12 @@ def return_check_new():
             created_by=user.id,
         )
         db.session.add(rc)
+        db.session.flush()  # need rc.id for the audit row
+        record_op_audit(
+            "create", "return_check", str(rc.id),
+            label=rc.customer_name,
+            summary=f"${rc.amount:,.2f} bounced {bounced_on.isoformat()}",
+        )
         db.session.commit()
         flash(
             f"Return check logged for {rc.customer_name} "
@@ -230,7 +237,7 @@ def return_check_payment_new(rc_id: int):
     from app import (
         ReturnCheckPayment, _PAYMENT_METHODS,
         _create_daily_payback_for, _get_owned_return_check,
-        admin_required, current_user, db,
+        admin_required, current_user, db, record_op_audit,
     )
 
     @admin_required
@@ -309,6 +316,14 @@ def return_check_payment_new(rc_id: int):
         if new_total + 0.005 >= float(rc.amount or 0.0):
             rc.status = "recovered"
             rc.status_changed_on = paid_on
+        record_op_audit(
+            "payment", "return_check", str(rc.id),
+            label=rc.customer_name,
+            summary=(
+                f"${amt:,.2f} on {paid_on.isoformat()}"
+                + (f" via {method}" if method else "")
+            ),
+        )
         db.session.commit()
         flash(
             f"Logged ${amt:,.2f} payment for {rc.customer_name}"
@@ -333,7 +348,7 @@ def return_check_payment_delete(rc_id: int, pid: int):
     'pending' so the row reappears in the active list."""
     from app import (
         ReturnCheckPayment, _delete_daily_paybacks_for_payment,
-        _get_owned_return_check, admin_required, db,
+        _get_owned_return_check, admin_required, db, record_op_audit,
     )
 
     @admin_required
@@ -358,6 +373,11 @@ def return_check_payment_delete(rc_id: int, pid: int):
         ):
             rc.status = "pending"
             rc.status_changed_on = None
+        record_op_audit(
+            "delete_payment", "return_check", str(rc.id),
+            label=rc.customer_name,
+            summary=f"-${payment.amount:,.2f}",
+        )
         db.session.commit()
         flash("Payment removed.", "success")
         return redirect(url_for(
@@ -395,15 +415,23 @@ def return_check_reopen(rc_id: int):
     Payments themselves are NOT deleted (they represent real money
     that came in); only the closing status is reverted. To remove an
     individual payment, use the payment-delete route."""
-    from app import _get_owned_return_check, admin_required, db
+    from app import (
+        _get_owned_return_check, admin_required, db, record_op_audit,
+    )
 
     @admin_required
     def _h():
         rc, err = _get_owned_return_check(rc_id)
         if err is not None:
             return err
+        prior_status = rc.status
         rc.status = "pending"
         rc.status_changed_on = None
+        record_op_audit(
+            "reopen", "return_check", str(rc.id),
+            label=rc.customer_name,
+            summary=f"from {prior_status}",
+        )
         db.session.commit()
         flash(f"Reopened: {rc.customer_name}.", "success")
         return redirect(url_for(
@@ -415,7 +443,9 @@ def return_check_reopen(rc_id: int):
 
 @bp.route("/return-checks/<int:rc_id>/edit", methods=["POST"])
 def return_check_edit(rc_id: int):
-    from app import _get_owned_return_check, admin_required, db
+    from app import (
+        _get_owned_return_check, admin_required, db, record_op_audit,
+    )
 
     @admin_required
     def _h():
@@ -449,6 +479,10 @@ def return_check_edit(rc_id: int):
                     ).date()
                 except ValueError:
                     pass
+        record_op_audit(
+            "update", "return_check", str(rc.id),
+            label=rc.customer_name,
+        )
         db.session.commit()
         flash("Return check updated.", "success")
         return redirect(url_for(
@@ -462,6 +496,7 @@ def return_check_edit(rc_id: int):
 def return_check_delete(rc_id: int):
     from app import (
         DailyLineItem, _get_owned_return_check, admin_required, db,
+        record_op_audit,
     )
 
     @admin_required
@@ -469,6 +504,12 @@ def return_check_delete(rc_id: int):
         rc, err = _get_owned_return_check(rc_id)
         if err is not None:
             return err
+        # Audit BEFORE delete so we still have rc.customer_name etc.
+        record_op_audit(
+            "delete", "return_check", str(rc.id),
+            label=rc.customer_name,
+            summary=f"${rc.amount:,.2f}",
+        )
         DailyLineItem.query.filter_by(
             store_id=rc.store_id,
             return_check_id=rc.id,

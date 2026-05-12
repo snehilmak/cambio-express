@@ -1876,8 +1876,15 @@ def record_op_audit(action, target_type, target_id, *, label="", summary=""):
     of truth lives in
     `api.Modules.Audit.Services.record_operator_action` (PR 52).
 
-    Targets: 'transfer', 'daily_report', 'batch'.
-    Actions: 'create', 'update', 'delete', 'lock', 'unlock'.
+    Target types: see the canonical list in
+    `api.Modules.Audit.Services.recorder.record_operator_action`'s
+    docstring. As of 2026-05 the set is 'transfer', 'daily_report',
+    'batch', 'return_check', 'roster_member', 'user', 'owner_link'.
+
+    Actions: 'create', 'update', 'delete', 'lock', 'unlock',
+    'reactivate', 'deactivate', 'rename', 'mark_loss', 'mark_fraud',
+    'reopen', 'payment', 'delete_payment', 'reset_password',
+    'connect'.
     """
     from api.Modules.Audit.Services import record_operator_action
     sid = session.get("store_id")
@@ -6049,6 +6056,14 @@ def _close_as_writeoff(rc_id, status):
         return redirect(url_for("bookkeeping_redirects.return_checks"))
     rc.status = status
     rc.status_changed_on = when
+    record_op_audit(
+        f"mark_{status}", "return_check", str(rc.id),
+        label=rc.customer_name,
+        summary=(
+            f"remaining ${rc.remaining:,.2f} as of "
+            f"{when.isoformat()}"
+        ),
+    )
     db.session.commit()
     label = "fraud" if status == "fraud" else "loss"
     flash(
