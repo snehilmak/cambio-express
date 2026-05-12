@@ -63,6 +63,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
+from blueprints import auth as _bp_auth  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
@@ -112,6 +113,7 @@ app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
 app.register_blueprint(_bp_superadmin_store_mutations.bp)
 app.register_blueprint(_bp_superadmin_misc_mutations.bp)
+app.register_blueprint(_bp_auth.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -1821,7 +1823,7 @@ def login_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         user = current_user()
         # Trial-expired stores can still reach a fixed set of routes
         # (subscribe, billing portal, logout, owner pages, …) so
@@ -1844,7 +1846,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("login"))
+        if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role not in ("admin","superadmin"):
             flash("Admin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
@@ -1866,7 +1868,7 @@ def pro_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         u = current_user()
         if not u or u.role not in ("admin", "superadmin"):
             flash("Admin access required.", "error")
@@ -1888,7 +1890,7 @@ def pro_required(f):
 def superadmin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("login"))
+        if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role!="superadmin":
             flash("Superadmin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
@@ -1899,7 +1901,7 @@ def owner_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         u = current_user()
         if not u or u.role != "owner":
             abort(403)
@@ -2693,133 +2695,8 @@ def _require_pending_auth():
         return None
     return u
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if "user_id" in session:
-        u = current_user()
-        if u and u.role == "owner":
-            return redirect(url_for("owner.owner_dashboard"))
-        return redirect(url_for("spa_redirects.dashboard"))
-    # On a fresh GET from a device that previously signed in to a store,
-    # bounce to that store's login so installed-PWA employees aren't stuck
-    # on the generic page with the address bar hidden.
-    if request.method == "GET":
-        store = _active_store_from_cookie()
-        if store:
-            return redirect(url_for("login_store", slug=store.slug))
-    error=None
-    if request.method=="POST":
-        from api.Modules.Auth.Services import verify_password_cross_store
-        username=request.form.get("username","").strip()
-        u = verify_password_cross_store(
-            db.session, username, request.form.get("password",""),
-        )
-        if u is not None:
-            if u.role == "employee":
-                # Don't authenticate on the generic page, but leave a
-                # breadcrumb: persist the slug so their next hit to `/`
-                # or `/login` auto-redirects to `/login/<slug>` (helps
-                # PWA installs where the address bar is hidden).
-                emp_store = db.session.get(Store, u.store_id) if u.store_id else None
-                error = "Please use your store's sign-in page. Enter your store code below."
-                resp = make_response(render_template(
-                    "login.html", error=error,
-                    store_code_value=(emp_store.slug if emp_store and emp_store.is_active else ""),
-                ))
-                if emp_store and emp_store.is_active:
-                    _set_last_store_slug_cookie(resp, emp_store.slug)
-                return resp
-            elif _needs_totp(u):
-                # Drop any previous partial-auth before starting a new one.
-                session.pop("pending_auth_user_id", None)
-                session.pop("totp_enrollment_codes", None)
-                session["pending_auth_user_id"] = u.id
-                if _totp_is_enrolled(u):
-                    return redirect(url_for("login_totp"))
-                return redirect(url_for("login_totp_enroll"))
-            else:
-                session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
-                _record_login(u); db.session.commit()
-                if u.role == "owner":
-                    return redirect(url_for("owner.owner_dashboard"))
-                return redirect(url_for("spa_redirects.dashboard"))
-        else:
-            error="Invalid username or password."
-    return render_template("login.html",error=error)
-
-@app.route("/login/2fa", methods=["GET", "POST"])
-def login_totp():
-    """301 → /app/login. The legacy Jinja form is retired; the SPA
-    drives the verify hop inline from /app/login (it holds the
-    pending_token in component state and POSTs to
-    /api/v2/auth/login/totp). This stub keeps url_for('login_totp')
-    + old bookmarks working — they just bounce to the SPA login,
-    which prompts the user to sign in again."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/recover", methods=["GET", "POST"])
-def login_totp_recover():
-    """301 → /app/login. SPA equivalent is /app/login/2fa/recover,
-    but reaching it requires the in-flight pending_token (held in
-    React Router state). Direct visits here have no pending token,
-    so we bounce to /app/login and let the user start fresh."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/enroll", methods=["GET", "POST"])
-def login_totp_enroll():
-    """301 → /app/login. The SPA enrollment page lives at
-    /app/login/2fa/enroll, but it needs a pending_token from a
-    fresh /api/v2/auth/login response. Direct hits to the legacy
-    URL don't carry that state, so we bounce to /app/login."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/recovery-codes", methods=["GET", "POST"])
-def login_totp_recovery_codes():
-    """301 → /app/login. Recovery codes are shown exactly once
-    inline on the SPA enrollment page; there is no standalone SPA
-    URL for re-displaying them (the codes are not retrievable
-    after the enrollment session ends). Direct visits to this
-    legacy URL bounce to /app/login."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/<slug>", methods=["GET", "POST"])
-def login_store(slug):
-    """301 to the React /app/login/<slug> page. The legacy Jinja
-    form + POST handler are gone — the SPA submits directly to
-    /api/v2/auth/login (which sets the same `ds_last_store`
-    cookie when a store_id is provided, mirroring the legacy
-    behavior). This stub keeps url_for('login_store') working
-    in still-Jinja templates and bounces old bookmarks +
-    installed-PWA shortcuts that point at /login/<slug>.
-
-    We also set the `ds_last_store` cookie on the redirect when
-    the slug resolves to an active store, so an installed-PWA
-    employee whose session expired keeps getting bounced back to
-    their store on the legacy fallback paths (`/`, `/login`)."""
-    resp = redirect(f"/app/login/{slug}", code=301)
-    store = Store.query.filter_by(slug=slug).first()
-    if store is not None and store.is_active:
-        _set_last_store_slug_cookie(resp, store.slug)
-    return resp
-
-@app.route("/employee-login", methods=["POST"])
-def employee_login_redirect():
-    """Escape hatch for an installed-PWA employee who lands on the
-    generic /login page (cleared cookies / fresh device). They enter
-    their store code and we bounce them to /login/<slug>."""
-    raw = (request.form.get("store_code") or "").strip().lower()
-    # Accept anything that could be a slug; trim to the allowed charset.
-    slug = re.sub(r"[^a-z0-9\-]", "", raw)
-    if slug:
-        store = Store.query.filter_by(slug=slug).first()
-        if store and store.is_active:
-            resp = redirect(url_for("login_store", slug=slug))
-            return _set_last_store_slug_cookie(resp, slug)
-    return render_template(
-        "login.html",
-        error="We couldn't find a store with that code. Check with your manager for the correct code.",
-        store_code_value=raw,
-    )
+# /login + /login/2fa/* + /login/<slug> + /employee-login moved to
+# blueprints/auth.py (D2 phase 25).
 
 # ── Passkey authentication (WebAuthn) ────────────────────────
 #
@@ -2832,70 +2709,8 @@ def employee_login_redirect():
 # session (single-use — popped on finish) so the browser can't replay a
 # previous attestation / assertion on a later request.
 
-@app.route("/account/passkeys/register/begin", methods=["POST"])
-@login_required
-def passkey_register_begin():
-    user = current_user()
-    if not _passkey_eligible(user):
-        return jsonify({"ok": False,
-                        "error": "Passkeys aren't enabled for this account."}), 403
-    options = generate_registration_options(
-        rp_id=_webauthn_rp_id(),
-        rp_name=_webauthn_rp_name(),
-        user_id=str(user.id).encode("utf-8"),
-        user_name=user.username,
-        user_display_name=user.full_name or user.username,
-        exclude_credentials=_passkey_exclude_list(user),
-        authenticator_selection=AuthenticatorSelectionCriteria(
-            resident_key=ResidentKeyRequirement.REQUIRED,
-            user_verification=UserVerificationRequirement.PREFERRED,
-        ),
-    )
-    # Challenge is single-use — stored base64url-encoded in the session
-    # so it survives the round-trip and the finish route can decode it back.
-    session["pk_reg_challenge"] = bytes_to_base64url(options.challenge)
-    return Response(options_to_json(options), mimetype="application/json")
-
-@app.route("/account/passkeys/register/finish", methods=["POST"])
-@login_required
-def passkey_register_finish():
-    user = current_user()
-    if not _passkey_eligible(user):
-        return jsonify({"ok": False,
-                        "error": "Passkeys aren't enabled for this account."}), 403
-    challenge_b64 = session.pop("pk_reg_challenge", None)
-    if not challenge_b64:
-        return jsonify({"ok": False,
-                        "error": "No registration in progress. Start again."}), 400
-    body = request.get_json(silent=True) or {}
-    credential = body.get("credential")
-    if not credential:
-        return jsonify({"ok": False, "error": "Missing credential."}), 400
-    name = (body.get("name") or "").strip()[:120] or "Passkey"
-    try:
-        verification = verify_registration_response(
-            credential=credential,
-            expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_origin=_webauthn_origin(),
-            expected_rp_id=_webauthn_rp_id(),
-            require_user_verification=False,
-        )
-    except Exception as e:
-        # Normalize the error message — library raises a mix of
-        # InvalidRegistrationResponse / InvalidJSONStructure / …; the
-        # user just needs to know it didn't work.
-        return jsonify({"ok": False,
-                        "error": f"Passkey could not be verified ({type(e).__name__})."}), 400
-    db.session.add(Passkey(
-        user_id=user.id,
-        credential_id=verification.credential_id,
-        public_key=verification.credential_public_key,
-        sign_count=verification.sign_count,
-        name=name,
-        aaguid=str(verification.aaguid or ""),
-    ))
-    db.session.commit()
-    return jsonify({"ok": True, "name": name})
+# /account/passkeys/register/{begin,finish} moved to
+# blueprints/auth.py (D2 phase 25).
 
 # /account/passkeys/<id>/delete moved to blueprints/account.py (D2 phase 21).
 
@@ -2920,68 +2735,7 @@ def passkey_register_finish():
 
 # /account/notifications moved to blueprints/account.py (D2 phase 21).
 
-@app.route("/login/passkey/begin", methods=["POST"])
-def passkey_login_begin():
-    """Discoverable-credential sign-in. No username needed — the browser
-    asks the platform to pick one of the user's stored passkeys for
-    this RP ID. The server just generates a challenge and lets the
-    authenticator decide which credential to use."""
-    options = generate_authentication_options(
-        rp_id=_webauthn_rp_id(),
-        user_verification=UserVerificationRequirement.PREFERRED,
-    )
-    session["pk_login_challenge"] = bytes_to_base64url(options.challenge)
-    return Response(options_to_json(options), mimetype="application/json")
-
-@app.route("/login/passkey/finish", methods=["POST"])
-def passkey_login_finish():
-    challenge_b64 = session.pop("pk_login_challenge", None)
-    if not challenge_b64:
-        return jsonify({"ok": False,
-                        "error": "No sign-in challenge in progress."}), 400
-    body = request.get_json(silent=True) or {}
-    credential = body.get("credential")
-    if not credential:
-        return jsonify({"ok": False, "error": "Missing credential."}), 400
-    raw_cred_id_b64 = credential.get("rawId") or credential.get("id")
-    if not raw_cred_id_b64:
-        return jsonify({"ok": False, "error": "Invalid credential."}), 400
-    try:
-        cred_bytes = base64url_to_bytes(raw_cred_id_b64)
-    except Exception:
-        return jsonify({"ok": False, "error": "Invalid credential."}), 400
-    pk = Passkey.query.filter_by(credential_id=cred_bytes).first()
-    if not pk:
-        return jsonify({"ok": False, "error": "Passkey not recognized."}), 400
-    user = db.session.get(User, pk.user_id)
-    if not user or not user.is_active:
-        return jsonify({"ok": False, "error": "Account unavailable."}), 403
-    try:
-        verification = verify_authentication_response(
-            credential=credential,
-            expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_origin=_webauthn_origin(),
-            expected_rp_id=_webauthn_rp_id(),
-            credential_public_key=pk.public_key,
-            credential_current_sign_count=pk.sign_count,
-            require_user_verification=False,
-        )
-    except Exception:
-        return jsonify({"ok": False,
-                        "error": "Passkey verification failed."}), 400
-    pk.sign_count = verification.new_sign_count
-    pk.last_used_at = datetime.utcnow()
-    _record_login(user)
-    # Passkey IS MFA — skip the TOTP gate per the carve-out in CLAUDE.md
-    # invariant #13. Clear any stale pending-auth too.
-    session.pop("pending_auth_user_id", None)
-    session.pop("totp_enrollment_codes", None)
-    session["user_id"]  = user.id
-    session["role"]     = user.role
-    session["store_id"] = user.store_id
-    db.session.commit()
-    redirect_url = url_for("owner.owner_dashboard") if user.role == "owner" else url_for("spa_redirects.dashboard")
-    return jsonify({"ok": True, "redirect": redirect_url})
+# /login/passkey/{begin,finish} moved to blueprints/auth.py (D2 phase 25).
 
 # ── Password reset ───────────────────────────────────────────
 PASSWORD_RESET_TTL_HOURS = 1
@@ -7274,7 +7028,7 @@ def superadmin_stop_impersonation():
         # superadmin account shouldn't be a path to an elevated session.
         session.clear()
         flash("Session invalid. Please sign in again.", "error")
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
     record_audit("impersonate_end", target_type="user", target_id=imp.id,
                  details=f"returning to {imp.username}")
     session["user_id"] = imp.id

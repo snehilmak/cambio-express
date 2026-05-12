@@ -111,5 +111,5 @@ def logout():
     slug = store.slug if store else None
     session.clear()
     if is_employee and slug:
-        return redirect(url_for("login_store", slug=slug))
-    return redirect(url_for("login"))
+        return redirect(url_for("auth.login_store", slug=slug))
+    return redirect(url_for("auth.login"))

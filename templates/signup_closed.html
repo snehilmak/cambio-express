@@ -52,7 +52,7 @@ nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdr
     <img class="mark" src="{{ url_for('static', filename='brand-mark.svg') }}" alt="">
     <span class="name">DineroBook</span>
   </a>
-  <a href="{{ url_for('login') }}" class="nav-login">Sign in</a>
+  <a href="{{ url_for('auth.login') }}" class="nav-login">Sign in</a>
 </nav>
 
 <div class="page">
@@ -67,7 +67,7 @@ nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.85);backdr
       you'd like to be notified when signups re-open, drop us a note.
     </div>
     <div class="actions">
-      <a href="{{ url_for('login') }}" class="btn-primary">Sign in →</a>
+      <a href="{{ url_for('auth.login') }}" class="btn-primary">Sign in →</a>
       <a href="/" class="btn-ghost">Back to home</a>
     </div>
   </div>
