@@ -486,22 +486,21 @@ impact ÷ effort. Numbers are an estimate.
       next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
-- [ ] **Inline-CSS audit (rest of the codebase).** May 2026 PR
-      cleaned up `subscribe.html` (34 inline `style="…"` attrs →
-      page-scoped class set). 67 templates still carry inline styles;
-      worst offenders by count: `superadmin_controls.html` (75),
-      `daily_report.html` (47), `admin_settings.html` (43),
-      `landing.html` (37), `monthly_report.html` (31). Pattern to
-      follow: page-specific layout chrome goes in a
-      `{% block head %}<style>...</style>{% endblock %}` block with
-      a per-page namespace (e.g. `.subscribe-*`, `.daily-*`); colors
-      come from `--db-*` design tokens, never hex; truly-shared
-      components (cards, forms, banners, buttons) must use the
-      classes already in `static/content.css`. Plan: tackle one
-      template per PR, top-down by inline-style count, so each diff
-      stays reviewable. Not a launch blocker — pages render fine —
-      but every new feature on a noisy template duplicates more
-      style strings until it gets cleaned up.
+- [ ] **Inline-CSS audit (mostly done; vestigial).** D1 (PR #424)
+      retired 16 of the 17 templates the original audit flagged.
+      Surviving templates with inline styles today (2026-05):
+      - `templates/admin_settings.html` — 43 attrs. Only rendered
+        on validation failure (GET 301s to `/app/settings`); low
+        impact.
+      - `templates/error.html` — 4 attrs.
+      - `templates/base.html` — 3 attrs.
+      - `templates/_base_chrome.html` — 2 attrs.
+      - `templates/login.html` — 1 attr.
+      Total inline-style count dropped from ~300 to 53. Cleaning
+      `admin_settings.html` would close this entry — but the
+      surface is rarely seen and the SPA-side
+      `frontend/src/routes/Settings.tsx` is the canonical
+      settings page, so this is firmly nice-to-have.
 - [ ] **Browser smoke layer — make CI green**. PR #200 added a
       Playwright-based smoke layer (`tests/smoke/`) that catches
       silent JS errors in chrome wiring. It runs locally (14 tests
@@ -525,15 +524,14 @@ impact ÷ effort. Numbers are an estimate.
       `tests/`. Current gap: subscription, superadmin controls, customer
       directory, forgot-password flow.
 - [ ] `pytest-cov` report + target ≥ 80% line coverage.
-- [ ] Split `app.py` (~13k lines) into Flask blueprints once feature
-      cadence slows down. Likely slices: `auth`, `billing`,
-      `superadmin`, `transfers`, `reports`. **Priority slice:** extract
-      the reports block (~3000 lines, roughly app.py:5500–8500 — every
-      `_sa_*_data`, `_render_report_generic`, `_run_report_csv`, and the
-      `_make_report_routes` / `_make_superadmin_report_routes`
-      registrars) into a new `reports.py`. This is the single biggest
-      coherent chunk and would make the rest of `app.py` materially
-      easier to read.
+- [x] Split `app.py` (~13k lines) into Flask blueprints. **Done**
+      via D2 above — 29 phases of extraction shipped between
+      PRs #433–#476. Every form-handling route now lives under
+      `blueprints/`; `app.py` is down to ~7,500 lines (models,
+      helpers, init, SPA-fallback routes, and the two webhooks).
+      The reports module noted as "priority slice" was ported to
+      FastAPI under `api/Modules/Reports/` rather than carved
+      into a new Flask blueprint.
 - [ ] Replace the PR description smoke-test lists with committed tests
       so the "Test plan" checklist can stay short.
 - [ ] **Data-fn unit tests for 5 superadmin reports** still missing
@@ -605,14 +603,16 @@ gaps. Ordered by "what I'd do next" at the top.
       Mail for the vast majority of users. Defer the VMC until
       Gmail's unverified logo is actually live + we've seen real user
       impact.
-- [ ] **Resend delivery webhooks** — Resend posts events (delivered /
-      bounced / complained / opened / clicked) to a URL we register.
-      Wire a new `/webhooks/resend` handler that verifies the Resend
-      signature header and stamps a new `email_send_event` table.
-      Unblocks: bounce-suppression (don't keep emailing addresses that
-      hard-bounce), complaint auto-unsubscribe (mark notify_* False on
-      spam report), and per-message status surfacing on the superadmin
-      health card beyond "last attempt succeeded/failed."
+- [x] **Resend delivery webhooks** — landed. `/webhooks/resend`
+      verifies the Resend (svix) signature header and stamps an
+      `EmailEvent` row per (event-type × recipient) tuple. Hard-
+      bounce events set `User.email_bounced_at` so future
+      `_send_email` calls skip the address; complaint events
+      additionally flip every `notify_*` toggle to False. The
+      route is `csrf.exempt`-listed (external caller, no session
+      cookie) and rate-limited at 120/min (signature verification
+      is the actual auth). See `app.py` `resend_webhook()` for
+      the handler.
 - [ ] **Announcement-broadcast email** — when a superadmin posts an
       announcement, optionally email the full audience. Pairs with an
       opt-out toggle on `/account/notifications` + a new email template
