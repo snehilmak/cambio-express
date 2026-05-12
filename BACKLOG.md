@@ -309,7 +309,12 @@ impact ÷ effort. Numbers are an estimate.
       must be overridden via env vars in prod.
 - [ ] **CSRF protection** — add Flask-WTF (or manual tokens) to every
       POST route. Currently unprotected.
-- [ ] **Session cookie hardening** — `Secure`, `HttpOnly`, `SameSite=Lax`.
+- [x] **Session cookie hardening** — `Secure`, `HttpOnly`,
+      `SameSite=Lax` set in `app.py` after the SQLAlchemy config
+      block. `Secure` gates on `APP_BASE_URL` starting with
+      `https://` so dev / CI / sqlite mode keeps working over HTTP.
+      Also bounds `PERMANENT_SESSION_LIFETIME` to 7 days. Regression
+      guard in `tests/test_session_cookie_hardening.py`.
 
 ## Nice to have (post-launch)
 - [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers

@@ -203,6 +203,39 @@ if ":memory:" in DATABASE_URL:
     _engine_opts["poolclass"] = StaticPool
     _engine_opts["connect_args"] = {"check_same_thread": False}
 app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = _engine_opts
+
+# Session-cookie hardening. The Flask `session` cookie carries the
+# logged-in user id; an attacker who exfiltrates it gets full account
+# access until logout. Three defenses against the common attack
+# surfaces:
+#
+#   - HTTPOnly: no JavaScript can read `document.cookie` and ship
+#     it off. Flask defaults this to True; we set it explicitly so
+#     a future refactor that toggles cookie config doesn't silently
+#     turn it off.
+#   - SameSite=Lax: the browser will not attach the session cookie
+#     to most cross-site requests (top-level GET navigations still
+#     do, which preserves the "click a deeplink in email and stay
+#     logged in" UX). Mitigates CSRF without breaking the SPA.
+#   - Secure: only sent over HTTPS. Required in prod (TLS-terminated
+#     at the Render edge). MUST stay False in dev / CI / sqlite
+#     mode or sessions silently fail to set over HTTP, which makes
+#     the test suite log everyone out between requests.
+#
+# Production is detected by APP_BASE_URL pointing at https:// — the
+# render.yaml env block sets it, and the SMTP / Stripe URL builders
+# already gate on the same value (search `APP_BASE_URL` for the
+# other call sites).
+_app_base_url = os.environ.get("APP_BASE_URL", "")
+_is_https_prod = _app_base_url.startswith("https://")
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = _is_https_prod
+# Disallow the legacy default of an unbounded session — bound to the
+# browser session by default so a forgotten signed-in laptop in a
+# coffee shop stops being a key to the kingdom after a reboot.
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
+
 db = SQLAlchemy(app)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
