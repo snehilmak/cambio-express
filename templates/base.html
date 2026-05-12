@@ -34,11 +34,11 @@
   <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></span>
   Dashboard
 </a>
-<a href="{{ url_for('transfers') }}" class="nav-link {% if 'transfer' in (request.endpoint or '') and request.endpoint != 'new_transfer' %}active{% endif %}">
+<a href="{{ url_for('transfers_redirects.transfers') }}" class="nav-link {% if 'transfer' in (request.endpoint or '') and request.endpoint != 'transfers_redirects.new_transfer' %}active{% endif %}">
   <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg></span>
   Transfers
 </a>
-<a href="{{ url_for('new_transfer') }}" class="nav-link {% if request.endpoint == 'new_transfer' %}active{% endif %}">
+<a href="{{ url_for('transfers_redirects.new_transfer') }}" class="nav-link {% if request.endpoint == 'transfers_redirects.new_transfer' %}active{% endif %}">
   <span class="icon"><svg viewBox="0 0 24 24" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></span>
   New Transfer
 </a>

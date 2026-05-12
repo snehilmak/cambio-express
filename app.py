@@ -75,6 +75,9 @@ from blueprints import subscription as _bp_subscription  # noqa: E402
 from blueprints import (  # noqa: E402
     superadmin_redirects as _bp_superadmin_redirects,
 )
+from blueprints import (  # noqa: E402
+    transfers_redirects as _bp_transfers_redirects,
+)
 from blueprints import tv as _bp_tv  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
@@ -88,6 +91,7 @@ app.register_blueprint(_bp_account.bp)
 app.register_blueprint(_bp_spa_redirects.bp)
 app.register_blueprint(_bp_superadmin_redirects.bp)
 app.register_blueprint(_bp_customers_api.bp)
+app.register_blueprint(_bp_transfers_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -5590,34 +5594,7 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 # resolution + pagination to the Service layer.
 
 
-@app.route("/transfers")
-@login_required
-def transfers():
-    """301 → /app/transfers. The transfer ledger moved to React;
-    the SPA reads /api/v2/transfers (paginated + filtered + sorted)
-    and does its own debounced live-search fetch. Stub keeps
-    url_for('transfers') working in still-Jinja chrome (sidebar
-    nav + post-create redirects from legacy mutators) and bounces
-    old bookmarks. Query string (filters, sort, pagination)
-    preserved so a deep-link to a filtered + sorted view lands the
-    SPA in the same state — minus `?partial=1`, which was the
-    legacy AJAX-only marker the SPA never sends."""
-    if not session.get("store_id"):
-        # Guard preserved from the legacy route — without a store
-        # context the SPA would also blow up trying to request
-        # /api/v2/transfers, so bounce back to /dashboard for the
-        # no-store error path. (Owners hitting this URL get caught
-        # by the dashboard redirect chain to /owner/dashboard.)
-        flash("Select a store first.", "error")
-        return redirect(url_for("spa_redirects.dashboard"))
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    if qs:
-        # Drop the legacy `partial=1` marker — it was an AJAX-only
-        # contract for the deleted Jinja live-search; the SPA never
-        # sends it.
-        qs = "&".join(p for p in qs.split("&") if p != "partial=1")
-    target = "/app/transfers" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /transfers moved to blueprints/transfers_redirects.py (D2 phase 14).
 
 def _parse_dob(raw):
     """Parse a YYYY-MM-DD date string from the form, or None when
@@ -5732,42 +5709,8 @@ def _transfer_form_ctx(store):
         federal_tax_rate=(store.federal_tax_rate or 0),
     )
 
-@app.route("/transfers/new", methods=["GET", "POST"])
-@login_required
-def new_transfer():
-    """301 → /app/transfers/new. The transfer-create form moved to
-    React; the SPA POSTs to /api/v2/transfers directly. Both verbs
-    redirect — any in-flight Jinja form submission lands the user
-    on the SPA create page (their data is lost, but the SPA forms
-    have been the canonical path for weeks)."""
-    return redirect("/app/transfers/new", code=301)
-
-
-@app.route("/transfers/<int:tid>/edit", methods=["GET", "POST"])
-@login_required
-def edit_transfer(tid):
-    """301 → /app/transfers/<tid>/edit. The transfer-edit form moved
-    to React; the SPA PUTs to /api/v2/transfers/<id> directly with
-    the same federal-tax recompute, customer-upsert, and TransferAudit
-    behaviour the legacy POST handled. Both verbs redirect."""
-    return redirect(f"/app/transfers/{tid}/edit", code=301)
-
-# NOTE: The legacy edit_transfer body lived here. Replaced by the
-# 301-stub above (PR #404). The full create/edit/audit logic now
-# lives in api/Modules/Transfers/Controllers + Services and is
-# exercised by the SPA at /app/transfers/<id>/edit.
-
-
-@app.route("/transfers/<int:tid>/delete", methods=["POST"])
-@admin_required
-def delete_transfer(tid):
-    """301 → /app/transfers. The Flask form-POST delete handler moved
-    to React; the SPA DELETEs /api/v2/transfers/<id> with the same
-    admin-role guard + audit-log row + cross-store 404. Audit-log
-    invariant (`action='delete', target_type='transfer'`) is preserved
-    on the API side — see api/Modules/Transfers/Controllers
-    `delete_transfer_route`."""
-    return redirect("/app/transfers", code=301)
+# /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete
+# moved to blueprints/transfers_redirects.py (D2 phase 14).
 
 
 # ── Daily Book ───────────────────────────────────────────────
