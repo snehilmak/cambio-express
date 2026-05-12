@@ -298,16 +298,30 @@ impact ÷ effort. Numbers are an estimate.
        once owner dashboard + superadmin controls + TV land. ~1 PR.
 
 ## Before going live (public / paid launch)
-- [ ] **SMTP configured** — set `SMTP_HOST` / `SMTP_USER` / `SMTP_PASS`
-      (optionally `SMTP_PORT` / `SMTP_FROM`) on the hosting platform so
-      `/forgot-password` actually emails. Gmail + an app password works.
-      Until this is set, reset URLs are logged at WARNING level and
-      superadmin has to relay them manually.
-- [ ] **Error tracking** — Sentry (free tier) so crashes surface without
-      a friend having to tell us. Alternative: any APM the hosting
-      platform offers.
-- [ ] **DB backups verified** — confirm Render/Railway snapshots Postgres
-      daily. Do a trial restore into a staging DB at least once.
+
+> Items marked **(ops)** can't be closed by a code PR — they're
+> Render dashboard or vendor-portal actions. Owner of each ops
+> item lives in [`docs/architecture/deployment.md`](docs/architecture/deployment.md).
+
+- [ ] **SMTP configured** (ops) — set `SMTP_HOST` / `SMTP_USER` /
+      `SMTP_PASS` (optionally `SMTP_PORT` / `SMTP_FROM`) on Render
+      → Environment so `/forgot-password` actually emails. Gmail +
+      an app password works. Until this is set, reset URLs are
+      logged at WARNING level and superadmin has to relay them
+      manually. See [`deployment.md`](docs/architecture/deployment.md)
+      §1 step 4 for the Gmail walkthrough.
+- [x] **Error tracking** — landed (BACKLOG E1) in PR #429. Sentry
+      Python + React with opt-in via DSN env vars. Both apps share
+      one DSN so the Sentry UI shows traces that cross the
+      Flask/FastAPI boundary as one event. See
+      [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
+      §3 for the SENTRY_DSN env var setup.
+- [ ] **DB backups verified** (ops) — confirm Render snapshots
+      Postgres daily (verify on the current plan via Render →
+      Database → Backups). Do a trial restore into a staging DB at
+      least once before paid launch. See
+      [`deployment.md`](docs/architecture/deployment.md) §4
+      "Backups" for the trial-restore steps.
 - [x] **Rate limiting** — landed (BACKLOG D6). Flask-Limiter on
       every auth Blueprint endpoint + the two webhooks; slowapi on
       `/api/v2/auth/{login,forgot-password,reset-password,signup}`.
@@ -325,9 +339,12 @@ impact ÷ effort. Numbers are an estimate.
       Regression tests in
       `tests/test_employee_action_audit.py` (7 tests covering
       the formerly-unaudited surfaces).
-- [ ] **Stripe LIVE mode** — swap test → live keys, verify via the
-      "Stripe connection" card at `/superadmin/controls` Overview.
-      Confirm webhook endpoint is pointed at production `/webhooks/stripe`.
+- [ ] **Stripe LIVE mode** (ops) — swap test → live keys, verify
+      via the "Stripe connection" card at `/superadmin/controls`
+      Overview. Confirm webhook endpoint is pointed at production
+      `/webhooks/stripe`. Step-by-step verification:
+      [`deployment.md`](docs/architecture/deployment.md) §3
+      "Secrets rotation → Stripe live mode swap".
 - [x] **Data retention cron** — landed. `render.yaml` now declares
       a `type: cron` service `dinerobook-data-retention-purge`
       that runs `flask purge-expired-stores` daily at 03:15 UTC.
@@ -336,10 +353,19 @@ impact ÷ effort. Numbers are an estimate.
       safety gate in `app.py` doesn't reject the cron boot). CLI
       is idempotent — re-running on a quiet day is a no-op.
       Regression guard in `tests/test_data_retention_cron.py`.
-- [ ] **CI/CD agents** — unattended checks on every PR (syntax, tests,
-      coverage floor, secret scan) running in GitHub Actions. Currently
-      we rely on the existing "Syntax + Import + Tests" check plus
-      manual `pytest` runs.
+- [x] **CI/CD agents** — landed across PRs #425 (coverage source),
+      #426 (SPA build + eslint --max-warnings 0 in CI), and the
+      pre-existing "Syntax + Import + Tests" job. Every PR now
+      runs:
+      - `pytest tests/` (full Python suite ≥2,400 tests).
+      - `npm run build` (SPA TypeScript + Vite production build).
+      - `npm run lint` (ESLint --max-warnings 0).
+      - Python import smoke check via the `Syntax + Import +
+        Tests` job declared in `.github/workflows/`.
+      Items still desired but not gating: secret-scanning (no
+      tool wired yet — the `secrets-audit.md` recurring checklist
+      is the manual stand-in), coverage-floor enforcement (we
+      track coverage but don't fail PRs on regressions).
 - [x] **Deployment runbook** — landed at
       [`docs/architecture/deployment.md`](docs/architecture/deployment.md).
       Covers the Render service / DB layout, first-time
