@@ -12,6 +12,13 @@ os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
 # `cutover_off` fixtures defined in tests/test_spa_cutover.py.
 # Production / CI deploy honours the real flag (default on).
 os.environ["SPA_CUTOVER_ENABLED"] = "0"
+# Disable rate limiting in tests — the in-memory bucket persists
+# across tests in a single session, so the second test that calls
+# /login would 429 instantly. Tests that exercise the limiter
+# itself opt back in via the fixture in
+# tests/test_rate_limiting.py. Force-set (not setdefault) so a
+# stray RATELIMIT_ENABLED=1 in the shell can't break CI.
+os.environ["RATELIMIT_ENABLED"] = "0"
 
 import pytest
 from datetime import date, datetime, timedelta

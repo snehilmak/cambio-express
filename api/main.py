@@ -209,6 +209,37 @@ def create_app() -> FastAPI:
 
     app.add_middleware(RequestIDMiddleware)
 
+    # Rate limiting (BACKLOG D6). slowapi shares Flask-Limiter's
+    # `limits` library — same Redis backend when one is configured.
+    # In dev / CI we fall back to in-memory like the Flask side.
+    # See app.py "_apply_rate_limits" for the Flask twin; tunings
+    # match. The module-level singleton lives in
+    # api/Core/RateLimit.py so per-route decorators in controllers
+    # can import it without depending on this factory's lifecycle.
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+    from starlette.responses import JSONResponse
+
+    from api.Core.RateLimit import limiter as slow_limiter
+
+    app.state.limiter = slow_limiter
+    app.add_middleware(SlowAPIMiddleware)
+
+    @app.exception_handler(RateLimitExceeded)
+    async def _rate_limit_handler(request, exc):
+        """Per-route 429 envelope. Keeps body shape consistent
+        with the FastAPI default (`detail`) so the SPA's existing
+        `api()` wrapper renders it as the standard error message."""
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": (
+                    "Too many requests — try again in a moment."
+                ),
+                "limit": str(exc.detail) if hasattr(exc, "detail") else "",
+            },
+        )
+
     @app.get("/health", tags=["meta"])
     def health() -> dict:
         """Tiny liveness probe. Returns 200 + a JSON envelope so a

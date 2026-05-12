@@ -132,9 +132,25 @@ items decompose the monolith.
       path on Render. Today every webhook does its Stripe SDK calls
       + audit insert + email send synchronously inside the HTTP
       request.
-- [ ] **D6. Edge rate limiting** on `/login`, `/forgot-password`,
-      `/api/v2/auth/*`, `/webhooks/stripe`. slowapi (FastAPI) +
-      flask-limiter. (Also in BACKLOG "Before going live".)
+- [x] **D6. Edge rate limiting.** Landed —
+      `Flask-Limiter` 3.8 on the Flask side + `slowapi` 0.1.9 on
+      the FastAPI side. Both share the same `RATELIMIT_STORAGE_URI`
+      env var (in-memory in dev, Redis in prod) and the same
+      `RATELIMIT_ENABLED` kill-switch. Tunings:
+      - Auth burst: 10/min + 50/hour per IP — applied to every
+        `auth.*` Flask Blueprint endpoint and to
+        `/api/v2/auth/login`.
+      - Forgot/reset password: 5/min + 20/hour per IP (lower
+        because each request triggers an SMTP send).
+      - Signup: 5/hour + 20/day per IP (signup is rare; an
+        attacker minting stores at scale is the threat).
+      - Webhooks (`/webhooks/{stripe,resend}`): 120/min per IP.
+        Signature verification is the real defense; this is just a
+        flood ceiling.
+      Regression guards in `tests/test_rate_limiting.py` (4 tests)
+      use a subprocess-with-fresh-env trick so they exercise the
+      decorator path even though the conftest disables the limiter
+      for the rest of the suite. See the file docstring for why.
 
 ### E. Observability + ops
 
@@ -286,9 +302,12 @@ impact ÷ effort. Numbers are an estimate.
       platform offers.
 - [ ] **DB backups verified** — confirm Render/Railway snapshots Postgres
       daily. Do a trial restore into a staging DB at least once.
-- [ ] **Rate limiting** — Flask-Limiter on `/login`, `/forgot-password`,
-      `/reset-password/<token>`, and `/api/customers/search`. Prevents
-      brute-force and enumeration.
+- [x] **Rate limiting** — landed (BACKLOG D6). Flask-Limiter on
+      every auth Blueprint endpoint + the two webhooks; slowapi on
+      `/api/v2/auth/{login,forgot-password,reset-password,signup}`.
+      Both share `RATELIMIT_STORAGE_URI` (Redis in prod) and
+      `RATELIMIT_ENABLED` kill-switch. Tests in
+      `tests/test_rate_limiting.py`.
 - [ ] **Employee action audit** — log who created / edited / deleted
       transfers, daily reports, batches. Superadmin actions already go
       through `record_audit()`; the employee side is unaudited.
