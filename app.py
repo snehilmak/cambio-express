@@ -63,9 +63,14 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
+from blueprints import auth as _bp_auth  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
+from blueprints import bank_mutations as _bp_bank_mutations  # noqa: E402
 from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
+from blueprints import (  # noqa: E402
+    bookkeeping_mutations as _bp_bookkeeping_mutations,
+)
 from blueprints import (  # noqa: E402
     bookkeeping_redirects as _bp_bookkeeping_redirects,
 )
@@ -112,6 +117,9 @@ app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
 app.register_blueprint(_bp_superadmin_store_mutations.bp)
 app.register_blueprint(_bp_superadmin_misc_mutations.bp)
+app.register_blueprint(_bp_auth.bp)
+app.register_blueprint(_bp_bookkeeping_mutations.bp)
+app.register_blueprint(_bp_bank_mutations.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -1821,7 +1829,7 @@ def login_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         user = current_user()
         # Trial-expired stores can still reach a fixed set of routes
         # (subscribe, billing portal, logout, owner pages, …) so
@@ -1844,7 +1852,7 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("login"))
+        if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role not in ("admin","superadmin"):
             flash("Admin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
@@ -1866,7 +1874,7 @@ def pro_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         u = current_user()
         if not u or u.role not in ("admin", "superadmin"):
             flash("Admin access required.", "error")
@@ -1888,7 +1896,7 @@ def pro_required(f):
 def superadmin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("login"))
+        if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role!="superadmin":
             flash("Superadmin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
@@ -1899,7 +1907,7 @@ def owner_required(f):
     @wraps(f)
     def d(*a, **k):
         if "user_id" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         u = current_user()
         if not u or u.role != "owner":
             abort(403)
@@ -2693,133 +2701,8 @@ def _require_pending_auth():
         return None
     return u
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if "user_id" in session:
-        u = current_user()
-        if u and u.role == "owner":
-            return redirect(url_for("owner.owner_dashboard"))
-        return redirect(url_for("spa_redirects.dashboard"))
-    # On a fresh GET from a device that previously signed in to a store,
-    # bounce to that store's login so installed-PWA employees aren't stuck
-    # on the generic page with the address bar hidden.
-    if request.method == "GET":
-        store = _active_store_from_cookie()
-        if store:
-            return redirect(url_for("login_store", slug=store.slug))
-    error=None
-    if request.method=="POST":
-        from api.Modules.Auth.Services import verify_password_cross_store
-        username=request.form.get("username","").strip()
-        u = verify_password_cross_store(
-            db.session, username, request.form.get("password",""),
-        )
-        if u is not None:
-            if u.role == "employee":
-                # Don't authenticate on the generic page, but leave a
-                # breadcrumb: persist the slug so their next hit to `/`
-                # or `/login` auto-redirects to `/login/<slug>` (helps
-                # PWA installs where the address bar is hidden).
-                emp_store = db.session.get(Store, u.store_id) if u.store_id else None
-                error = "Please use your store's sign-in page. Enter your store code below."
-                resp = make_response(render_template(
-                    "login.html", error=error,
-                    store_code_value=(emp_store.slug if emp_store and emp_store.is_active else ""),
-                ))
-                if emp_store and emp_store.is_active:
-                    _set_last_store_slug_cookie(resp, emp_store.slug)
-                return resp
-            elif _needs_totp(u):
-                # Drop any previous partial-auth before starting a new one.
-                session.pop("pending_auth_user_id", None)
-                session.pop("totp_enrollment_codes", None)
-                session["pending_auth_user_id"] = u.id
-                if _totp_is_enrolled(u):
-                    return redirect(url_for("login_totp"))
-                return redirect(url_for("login_totp_enroll"))
-            else:
-                session["user_id"]=u.id; session["role"]=u.role; session["store_id"]=u.store_id
-                _record_login(u); db.session.commit()
-                if u.role == "owner":
-                    return redirect(url_for("owner.owner_dashboard"))
-                return redirect(url_for("spa_redirects.dashboard"))
-        else:
-            error="Invalid username or password."
-    return render_template("login.html",error=error)
-
-@app.route("/login/2fa", methods=["GET", "POST"])
-def login_totp():
-    """301 → /app/login. The legacy Jinja form is retired; the SPA
-    drives the verify hop inline from /app/login (it holds the
-    pending_token in component state and POSTs to
-    /api/v2/auth/login/totp). This stub keeps url_for('login_totp')
-    + old bookmarks working — they just bounce to the SPA login,
-    which prompts the user to sign in again."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/recover", methods=["GET", "POST"])
-def login_totp_recover():
-    """301 → /app/login. SPA equivalent is /app/login/2fa/recover,
-    but reaching it requires the in-flight pending_token (held in
-    React Router state). Direct visits here have no pending token,
-    so we bounce to /app/login and let the user start fresh."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/enroll", methods=["GET", "POST"])
-def login_totp_enroll():
-    """301 → /app/login. The SPA enrollment page lives at
-    /app/login/2fa/enroll, but it needs a pending_token from a
-    fresh /api/v2/auth/login response. Direct hits to the legacy
-    URL don't carry that state, so we bounce to /app/login."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/2fa/recovery-codes", methods=["GET", "POST"])
-def login_totp_recovery_codes():
-    """301 → /app/login. Recovery codes are shown exactly once
-    inline on the SPA enrollment page; there is no standalone SPA
-    URL for re-displaying them (the codes are not retrievable
-    after the enrollment session ends). Direct visits to this
-    legacy URL bounce to /app/login."""
-    return redirect("/app/login", code=301)
-
-@app.route("/login/<slug>", methods=["GET", "POST"])
-def login_store(slug):
-    """301 to the React /app/login/<slug> page. The legacy Jinja
-    form + POST handler are gone — the SPA submits directly to
-    /api/v2/auth/login (which sets the same `ds_last_store`
-    cookie when a store_id is provided, mirroring the legacy
-    behavior). This stub keeps url_for('login_store') working
-    in still-Jinja templates and bounces old bookmarks +
-    installed-PWA shortcuts that point at /login/<slug>.
-
-    We also set the `ds_last_store` cookie on the redirect when
-    the slug resolves to an active store, so an installed-PWA
-    employee whose session expired keeps getting bounced back to
-    their store on the legacy fallback paths (`/`, `/login`)."""
-    resp = redirect(f"/app/login/{slug}", code=301)
-    store = Store.query.filter_by(slug=slug).first()
-    if store is not None and store.is_active:
-        _set_last_store_slug_cookie(resp, store.slug)
-    return resp
-
-@app.route("/employee-login", methods=["POST"])
-def employee_login_redirect():
-    """Escape hatch for an installed-PWA employee who lands on the
-    generic /login page (cleared cookies / fresh device). They enter
-    their store code and we bounce them to /login/<slug>."""
-    raw = (request.form.get("store_code") or "").strip().lower()
-    # Accept anything that could be a slug; trim to the allowed charset.
-    slug = re.sub(r"[^a-z0-9\-]", "", raw)
-    if slug:
-        store = Store.query.filter_by(slug=slug).first()
-        if store and store.is_active:
-            resp = redirect(url_for("login_store", slug=slug))
-            return _set_last_store_slug_cookie(resp, slug)
-    return render_template(
-        "login.html",
-        error="We couldn't find a store with that code. Check with your manager for the correct code.",
-        store_code_value=raw,
-    )
+# /login + /login/2fa/* + /login/<slug> + /employee-login moved to
+# blueprints/auth.py (D2 phase 25).
 
 # ── Passkey authentication (WebAuthn) ────────────────────────
 #
@@ -2832,70 +2715,8 @@ def employee_login_redirect():
 # session (single-use — popped on finish) so the browser can't replay a
 # previous attestation / assertion on a later request.
 
-@app.route("/account/passkeys/register/begin", methods=["POST"])
-@login_required
-def passkey_register_begin():
-    user = current_user()
-    if not _passkey_eligible(user):
-        return jsonify({"ok": False,
-                        "error": "Passkeys aren't enabled for this account."}), 403
-    options = generate_registration_options(
-        rp_id=_webauthn_rp_id(),
-        rp_name=_webauthn_rp_name(),
-        user_id=str(user.id).encode("utf-8"),
-        user_name=user.username,
-        user_display_name=user.full_name or user.username,
-        exclude_credentials=_passkey_exclude_list(user),
-        authenticator_selection=AuthenticatorSelectionCriteria(
-            resident_key=ResidentKeyRequirement.REQUIRED,
-            user_verification=UserVerificationRequirement.PREFERRED,
-        ),
-    )
-    # Challenge is single-use — stored base64url-encoded in the session
-    # so it survives the round-trip and the finish route can decode it back.
-    session["pk_reg_challenge"] = bytes_to_base64url(options.challenge)
-    return Response(options_to_json(options), mimetype="application/json")
-
-@app.route("/account/passkeys/register/finish", methods=["POST"])
-@login_required
-def passkey_register_finish():
-    user = current_user()
-    if not _passkey_eligible(user):
-        return jsonify({"ok": False,
-                        "error": "Passkeys aren't enabled for this account."}), 403
-    challenge_b64 = session.pop("pk_reg_challenge", None)
-    if not challenge_b64:
-        return jsonify({"ok": False,
-                        "error": "No registration in progress. Start again."}), 400
-    body = request.get_json(silent=True) or {}
-    credential = body.get("credential")
-    if not credential:
-        return jsonify({"ok": False, "error": "Missing credential."}), 400
-    name = (body.get("name") or "").strip()[:120] or "Passkey"
-    try:
-        verification = verify_registration_response(
-            credential=credential,
-            expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_origin=_webauthn_origin(),
-            expected_rp_id=_webauthn_rp_id(),
-            require_user_verification=False,
-        )
-    except Exception as e:
-        # Normalize the error message — library raises a mix of
-        # InvalidRegistrationResponse / InvalidJSONStructure / …; the
-        # user just needs to know it didn't work.
-        return jsonify({"ok": False,
-                        "error": f"Passkey could not be verified ({type(e).__name__})."}), 400
-    db.session.add(Passkey(
-        user_id=user.id,
-        credential_id=verification.credential_id,
-        public_key=verification.credential_public_key,
-        sign_count=verification.sign_count,
-        name=name,
-        aaguid=str(verification.aaguid or ""),
-    ))
-    db.session.commit()
-    return jsonify({"ok": True, "name": name})
+# /account/passkeys/register/{begin,finish} moved to
+# blueprints/auth.py (D2 phase 25).
 
 # /account/passkeys/<id>/delete moved to blueprints/account.py (D2 phase 21).
 
@@ -2920,68 +2741,7 @@ def passkey_register_finish():
 
 # /account/notifications moved to blueprints/account.py (D2 phase 21).
 
-@app.route("/login/passkey/begin", methods=["POST"])
-def passkey_login_begin():
-    """Discoverable-credential sign-in. No username needed — the browser
-    asks the platform to pick one of the user's stored passkeys for
-    this RP ID. The server just generates a challenge and lets the
-    authenticator decide which credential to use."""
-    options = generate_authentication_options(
-        rp_id=_webauthn_rp_id(),
-        user_verification=UserVerificationRequirement.PREFERRED,
-    )
-    session["pk_login_challenge"] = bytes_to_base64url(options.challenge)
-    return Response(options_to_json(options), mimetype="application/json")
-
-@app.route("/login/passkey/finish", methods=["POST"])
-def passkey_login_finish():
-    challenge_b64 = session.pop("pk_login_challenge", None)
-    if not challenge_b64:
-        return jsonify({"ok": False,
-                        "error": "No sign-in challenge in progress."}), 400
-    body = request.get_json(silent=True) or {}
-    credential = body.get("credential")
-    if not credential:
-        return jsonify({"ok": False, "error": "Missing credential."}), 400
-    raw_cred_id_b64 = credential.get("rawId") or credential.get("id")
-    if not raw_cred_id_b64:
-        return jsonify({"ok": False, "error": "Invalid credential."}), 400
-    try:
-        cred_bytes = base64url_to_bytes(raw_cred_id_b64)
-    except Exception:
-        return jsonify({"ok": False, "error": "Invalid credential."}), 400
-    pk = Passkey.query.filter_by(credential_id=cred_bytes).first()
-    if not pk:
-        return jsonify({"ok": False, "error": "Passkey not recognized."}), 400
-    user = db.session.get(User, pk.user_id)
-    if not user or not user.is_active:
-        return jsonify({"ok": False, "error": "Account unavailable."}), 403
-    try:
-        verification = verify_authentication_response(
-            credential=credential,
-            expected_challenge=base64url_to_bytes(challenge_b64),
-            expected_origin=_webauthn_origin(),
-            expected_rp_id=_webauthn_rp_id(),
-            credential_public_key=pk.public_key,
-            credential_current_sign_count=pk.sign_count,
-            require_user_verification=False,
-        )
-    except Exception:
-        return jsonify({"ok": False,
-                        "error": "Passkey verification failed."}), 400
-    pk.sign_count = verification.new_sign_count
-    pk.last_used_at = datetime.utcnow()
-    _record_login(user)
-    # Passkey IS MFA — skip the TOTP gate per the carve-out in CLAUDE.md
-    # invariant #13. Clear any stale pending-auth too.
-    session.pop("pending_auth_user_id", None)
-    session.pop("totp_enrollment_codes", None)
-    session["user_id"]  = user.id
-    session["role"]     = user.role
-    session["store_id"] = user.store_id
-    db.session.commit()
-    redirect_url = url_for("owner.owner_dashboard") if user.role == "owner" else url_for("spa_redirects.dashboard")
-    return jsonify({"ok": True, "redirect": redirect_url})
+# /login/passkey/{begin,finish} moved to blueprints/auth.py (D2 phase 25).
 
 # ── Password reset ───────────────────────────────────────────
 PASSWORD_RESET_TTL_HOURS = 1
@@ -5612,7 +5372,7 @@ def _reject_if_locked(store_id, report_date, ds):
     if _wants_json():
         return jsonify({"ok": False, "error": _DAILY_LOCKED_MSG}), 403
     flash(_DAILY_LOCKED_MSG, "error")
-    return redirect(url_for("daily_report", ds=ds))
+    return redirect(url_for("bookkeeping_mutations.daily_report", ds=ds))
 
 
 
@@ -5724,15 +5484,9 @@ _DAILY_REPORT_FIELDS = [
     "cash_deposit","safe_balance","payroll_expense","over_short",
 ]
 
-@app.route("/daily/<string:ds>", methods=["GET", "POST"])
-@admin_required
-def daily_report(ds):
-    """301 → /app/daily/edit?date=<ds>. The per-day editor (with the
-    full daily-book + MT-summary spreadsheet) moved to React; the
-    SPA PUTs to /api/v2/daily/<store>/<date> with the same locked-
-    fields contract (server still derives line-item totals + the MT
-    grand total + bounces locked-day writes). Both verbs redirect."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
+# /daily/<ds> (GET, POST) moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
+
 
 def _wants_json():
     """Client explicitly asked for JSON (AJAX from the drops widget).
@@ -5752,43 +5506,10 @@ def _line_items_json_payload(kind, store_id, report_date):
     return {"ok": True, "kind": kind, "total": float(total),
             "items": [r.to_dict() for r in rows]}
 
-@app.route("/daily/<string:ds>/line-items/<string:kind>/new", methods=["POST"])
-@admin_required
-def daily_line_item_new(ds, kind):
-    """301 → /app/daily/edit?date=<ds>. The legacy AJAX endpoint
-    (drops / check-deposits widget) moved to React; the SPA POSTs
-    to /api/v2/daily/<store>/<date>/line-items with the same locked-
-    day + return-payback gates enforced server-side. Anyone still
-    holding the old form URL lands on the SPA editor."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
+# /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
+# /daily/<ds>/{lock,unlock} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
-
-@app.route("/daily/<string:ds>/line-items/<string:kind>/<int:item_id>/delete", methods=["POST"])
-@admin_required
-def daily_line_item_delete(ds, kind, item_id):
-    """301 → /app/daily/edit?date=<ds>. Delete moved to the SPA
-    (DELETE /api/v2/daily/<store>/<date>/line-items/<id>). The
-    return-check-linkage guard lives in the Service so the SPA-
-    side and Return-Checks-side delete paths can't drift."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
-
-
-@app.route("/daily/<string:ds>/lock", methods=["POST"])
-@admin_required
-def daily_report_lock(ds):
-    """301 → /app/daily/edit?date=<ds>. Lock moved to the SPA (POST
-    /api/v2/daily/<store>/<date>/lock). Audit-log row writing moved
-    with it — see api/Modules/DailyBook/Controllers `_audit_daily_lock_action`."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
-
-
-@app.route("/daily/<string:ds>/unlock", methods=["POST"])
-@admin_required
-def daily_report_unlock(ds):
-    """301 → /app/daily/edit?date=<ds>. Same migration as lock — the
-    SPA POSTs to /api/v2/daily/<store>/<date>/unlock and the audit
-    row lands on that side."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
 # ── Monthly P&L ──────────────────────────────────────────────
 # /monthly + /monthly/<y>/<m> + /monthly/new moved to
@@ -6196,47 +5917,8 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
 # (D2 phase 15). Mutation routes (POSTs below) stay here.
 
 
-@app.route("/return-checks/new", methods=["POST"])
-@admin_required
-def return_check_new():
-    sid = session["store_id"]
-    user = current_user()
-    bounced_on_s = (request.form.get("bounced_on") or "").strip()
-    customer = (request.form.get("customer_name") or "").strip()
-    amount_s = (request.form.get("amount") or "").strip()
-    if not bounced_on_s or not customer or not amount_s:
-        flash("Date, customer, and amount are required.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        bounced_on = datetime.strptime(bounced_on_s, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Invalid bounce date.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        amount = float(amount_s)
-    except ValueError:
-        flash("Invalid amount.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    if amount <= 0:
-        flash("Amount must be greater than zero.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    rc = ReturnCheck(
-        store_id=sid,
-        bounced_on=bounced_on,
-        customer_name=customer[:120],
-        check_number=(request.form.get("check_number") or "").strip()[:40],
-        payer_bank=(request.form.get("payer_bank") or "").strip()[:120],
-        amount=amount,
-        notes=(request.form.get("notes") or "").strip(),
-        status="pending",
-        created_by=user.id,
-    )
-    db.session.add(rc)
-    db.session.commit()
-    flash(f"Return check logged for {rc.customer_name} (${rc.amount:,.2f}).",
-          "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/new moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 def _get_owned_return_check(rc_id):
@@ -6316,114 +5998,8 @@ def _delete_daily_paybacks_for_payment(rc, payment_amount, payment_paid_on):
         db.session.delete(li)
 
 
-@app.route("/return-checks/<int:rc_id>/payment", methods=["POST"])
-@admin_required
-def return_check_payment_new(rc_id):
-    """Log one installment of repayment.
-
-    Validates the amount fits within the still-outstanding balance.
-    On a fully-paid parent we auto-flip status='recovered' so the
-    admin doesn't have to click a separate "close" button — and the
-    P&L doesn't double-count: the closing event simply marks WHEN it
-    became fully recovered, the actual recovered $ already counted at
-    the payment level.
-    """
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    if rc.status in ("loss", "fraud"):
-        flash("This return check is closed (loss/fraud) — reopen it first.",
-              "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    amt_s    = (request.form.get("amount") or "").strip()
-    paid_s   = (request.form.get("paid_on") or "").strip()
-    method   = (request.form.get("payment_method") or "").strip().lower()
-    note     = (request.form.get("note") or "").strip()
-    if method and method not in _PAYMENT_METHODS:
-        method = "other"
-    try:
-        amt = float(amt_s)
-    except ValueError:
-        flash("Invalid payment amount.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    remaining = rc.remaining
-    if amt <= 0:
-        flash("Payment amount must be greater than zero.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    # Allow a tiny float epsilon on the cap so $999.999... rounding
-    # from the front-end doesn't trip the validation.
-    if amt > remaining + 0.005:
-        flash(
-            f"Payment $ {amt:,.2f} exceeds remaining balance "
-            f"${remaining:,.2f}. Lower the amount or split into "
-            f"multiple payments.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        paid_on = (datetime.strptime(paid_s, "%Y-%m-%d").date()
-                   if paid_s else date.today())
-    except ValueError:
-        flash("Invalid payment date.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    user = current_user()
-    payment = ReturnCheckPayment(
-        return_check_id=rc.id,
-        amount=amt,
-        paid_on=paid_on,
-        payment_method=method,
-        note=note[:200],
-        created_by=user.id if user else None,
-    )
-    # Snapshot the prior total BEFORE adding the new row — the
-    # `payments` relationship is lazy-loaded once and won't see the
-    # uncommitted insert without an explicit refresh. Cheaper to just
-    # add the new payment's amount to what we already had.
-    prior_total = rc.recovered_total
-    db.session.add(payment)
-    db.session.flush()
-    _create_daily_payback_for(rc, payment)
-    # Auto-close when the cumulative payments reach the original
-    # amount. Use the new payment's date as status_changed_on so the
-    # dashboard's "marked recovered" badge ties back to the same day.
-    new_total = prior_total + amt
-    if new_total + 0.005 >= float(rc.amount or 0.0):
-        rc.status = "recovered"
-        rc.status_changed_on = paid_on
-    db.session.commit()
-    flash(
-        f"Logged ${amt:,.2f} payment for {rc.customer_name}"
-        + (f" via {method}" if method else "") + ".",
-        "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/payment/<int:pid>/delete",
-           methods=["POST"])
-@admin_required
-def return_check_payment_delete(rc_id, pid):
-    """Remove one installment. Drops the shadow daily-book line item
-    and, if the parent was auto-flipped to 'recovered' but the
-    deletion now leaves the balance > 0, walks status back to
-    'pending' so the row reappears in the active list."""
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    payment = db.session.get(ReturnCheckPayment, pid)
-    if payment is None or payment.return_check_id != rc.id:
-        flash("Payment not found.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    _delete_daily_paybacks_for_payment(rc, payment.amount, payment.paid_on)
-    db.session.delete(payment)
-    db.session.flush()
-    # If this was a recovered case and the deletion drops below full
-    # payment, reopen so the admin's UI stays accurate.
-    if rc.status == "recovered" and rc.recovered_total + 0.005 < float(rc.amount or 0.0):
-        rc.status = "pending"
-        rc.status_changed_on = None
-    db.session.commit()
-    flash("Payment removed.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/<rc_id>/payment{,/<pid>/delete} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 def _close_as_writeoff(rc_id, status):
@@ -6450,89 +6026,8 @@ def _close_as_writeoff(rc_id, status):
     return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
-@app.route("/return-checks/<int:rc_id>/loss", methods=["POST"])
-@admin_required
-def return_check_loss(rc_id):
-    return _close_as_writeoff(rc_id, "loss")
-
-
-@app.route("/return-checks/<int:rc_id>/fraud", methods=["POST"])
-@admin_required
-def return_check_fraud(rc_id):
-    return _close_as_writeoff(rc_id, "fraud")
-
-
-@app.route("/return-checks/<int:rc_id>/reopen", methods=["POST"])
-@admin_required
-def return_check_reopen(rc_id):
-    """Undo a recover / loss / fraud — returns the row to pending.
-    Payments themselves are NOT deleted (they represent real money
-    that came in); only the closing status is reverted. To remove an
-    individual payment, use the payment-delete route."""
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    rc.status = "pending"
-    rc.status_changed_on = None
-    db.session.commit()
-    flash(f"Reopened: {rc.customer_name}.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/edit", methods=["POST"])
-@admin_required
-def return_check_edit(rc_id):
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    customer = (request.form.get("customer_name") or "").strip()
-    if customer:
-        rc.customer_name = customer[:120]
-    rc.check_number = (request.form.get("check_number") or "").strip()[:40]
-    rc.payer_bank   = (request.form.get("payer_bank") or "").strip()[:120]
-    rc.notes        = (request.form.get("notes") or "").strip()
-    # Allow editing amount only on pending rows — once booked, the P&L
-    # for the closed month is fixed and we don't want a quiet retroactive
-    # change.
-    if rc.status == "pending":
-        amt_s = (request.form.get("amount") or "").strip()
-        if amt_s:
-            try:
-                amt = float(amt_s)
-                if amt > 0:
-                    rc.amount = amt
-            except ValueError:
-                pass
-        on_s = (request.form.get("bounced_on") or "").strip()
-        if on_s:
-            try:
-                rc.bounced_on = datetime.strptime(on_s, "%Y-%m-%d").date()
-            except ValueError:
-                pass
-    db.session.commit()
-    flash("Return check updated.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/delete", methods=["POST"])
-@admin_required
-def return_check_delete(rc_id):
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    # Sweep up the shadow line items first so the daily-book stays
-    # consistent — the FK column on DailyLineItem isn't ON DELETE
-    # CASCADE because we want to track who created which line item,
-    # so the cleanup is explicit here.
-    DailyLineItem.query.filter_by(
-        store_id=rc.store_id,
-        return_check_id=rc.id,
-        kind="return_payback",
-    ).delete(synchronize_session=False)
-    db.session.delete(rc)
-    db.session.commit()
-    flash("Return check deleted.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/<rc_id>/{loss,fraud,reopen,edit,delete} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 # ── ACH Batches ──────────────────────────────────────────────
@@ -6555,387 +6050,10 @@ _BATCH_SORT_COLUMNS = {
 # ── Bank (Stripe Financial Connections) ─────────────────────────
 # /bank moved to blueprints/bank_redirects.py (D2 phase 16).
 
-@app.route("/bank/stripe/connect", methods=["POST"])
-@pro_required
-def bank_stripe_connect():
-    """Create a Stripe Financial Connections session and return its
-    client_secret as JSON. The browser then opens the Stripe-hosted FC
-    modal via stripe.js (collectFinancialConnectionsAccounts), which
-    settles the linking flow and POSTs the user back to
-    /bank/stripe/return?session_id=<id> on success.
-
-    Stripe's FC API does NOT expose a server-side hosted URL — the
-    browser drives the modal directly with the client_secret."""
-    if not stripe_is_configured():
-        return jsonify({"error": "Stripe isn't configured yet — ask the platform admin."}), 503
-    if not stripe_publishable_key():
-        return jsonify({"error": "STRIPE_PUBLISHABLE_KEY is not set; the FC modal can't initialize."}), 503
-    store = current_store()
-    # Enforce the per-store account cap before we even mint an FC
-    # session. The UI already hides the button when at the cap, but
-    # this is the authoritative check in case someone POSTs directly.
-    existing_count = StripeBankAccount.query.filter_by(
-        store_id=store.id, enabled=True).count()
-    if existing_count >= MAX_BANK_ACCOUNTS_PER_STORE:
-        return jsonify({
-            "error": (f"You've reached the {MAX_BANK_ACCOUNTS_PER_STORE}-account "
-                      "limit. Disconnect an account first to free up a slot."),
-        }), 409
-    try:
-        customer_id = ensure_stripe_customer(store)
-        fc_session = stripe.financial_connections.Session.create(
-            account_holder={"type": "customer", "customer": customer_id},
-            permissions=["balances", "transactions"],
-            # Pre-fetch balances + transactions during the linking flow
-            # itself — without this, balance.current is None on retrieve
-            # and Transaction.list returns nothing until Stripe's async
-            # fetcher catches up. Prefetch keeps the user inside the
-            # Stripe modal until both feeds are populated.
-            prefetch=["balances", "transactions"],
-            filters={"countries": ["US"]},
-            return_url=url_for("bank_stripe_return", _external=True),
-        )
-        # Remember the session id server-side too — gives us a fallback
-        # path if Stripe.js can't echo the id back through the URL.
-        session["fc_session_id"] = fc_session.id
-        return jsonify({
-            "clientSecret": fc_session.client_secret,
-            "sessionId":    fc_session.id,
-            "publishableKey": stripe_publishable_key(),
-            "returnUrl":    url_for("bank_stripe_return", session_id=fc_session.id),
-        })
-    except stripe.error.StripeError as e:
-        app.logger.error(f"FC session create failed: {e}")
-        msg = e.user_message or str(e)
-        return jsonify({"error": f"Could not start the bank connection: {msg}"}), 502
-
-@app.route("/bank/stripe/return")
-@pro_required
-def bank_stripe_return():
-    """Called by the browser after the FC modal finishes. Accepts
-    session_id from the query string (Stripe.js path) or falls back to
-    the server-side session value (for browsers that lose the query
-    after a redirect chain)."""
-    sid = session["store_id"]
-    fc_session_id = (request.args.get("session_id")
-                     or session.pop("fc_session_id", None))
-    if not fc_session_id:
-        flash("No active bank-link session found.", "error")
-        return redirect(url_for("bank_redirects.bank"))
-    # Always clear the server-side copy now that we have an id in hand.
-    session.pop("fc_session_id", None)
-    try:
-        fc_session = stripe.financial_connections.Session.retrieve(
-            fc_session_id, expand=["accounts"])
-        accounts = fc_session.accounts.data if hasattr(fc_session, "accounts") else []
-        if not accounts:
-            flash("No accounts were linked.", "error")
-            return redirect(url_for("bank_redirects.bank"))
-        # Per-store cap. We honor existing enabled rows AND any of the
-        # just-linked accounts that are already on file (re-link case),
-        # then accept up to the remaining slots.
-        existing_ids = {row.stripe_account_id for row in
-                        StripeBankAccount.query.filter_by(
-                            store_id=sid, enabled=True).all()}
-        slots_remaining = MAX_BANK_ACCOUNTS_PER_STORE - len(existing_ids)
-        kept = 0
-        skipped = 0
-        for acct_summary in accounts:
-            already_linked = acct_summary.id in existing_ids
-            if not already_linked and slots_remaining <= 0:
-                skipped += 1
-                continue
-            # The session returns a trimmed account object; retrieve it fully
-            # so we get balance and institution metadata.
-            full = stripe.financial_connections.Account.retrieve(acct_summary.id)
-            _upsert_fc_account(sid, full)
-            # Subscribe to the transactions feature on each linked account.
-            # Session-level permission alone is NOT enough — Stripe needs an
-            # account-level subscription before it will populate Transaction
-            # data (and before Transaction.list returns anything). Idempotent;
-            # safe to call on re-link. Best-effort — we still consider the
-            # account "kept" if the subscribe call fails.
-            try:
-                stripe.financial_connections.Account.subscribe(
-                    acct_summary.id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions subscribe failed for {acct_summary.id}: {e}")
-            # Trigger an immediate refresh so the first sync picks up data
-            # rather than waiting for Stripe's async fetcher.
-            try:
-                stripe.financial_connections.Account.refresh_account(
-                    acct_summary.id, features=["transactions"])
-            except stripe.error.StripeError as e:
-                app.logger.warning(
-                    f"FC transactions refresh failed for {acct_summary.id}: {e}")
-            if not already_linked:
-                slots_remaining -= 1
-            kept += 1
-        db.session.commit()
-        # Immediately pull fresh balances + initial transaction window
-        # (yesterday + today) for the newly-linked accounts. The initial
-        # txn sync does NOT count against the per-store daily cap — it's
-        # part of the connect flow, not a discretionary user action.
-        try:
-            refresh_bank_balances(current_store())
-        except Exception as e:
-            app.logger.warning(f"post-connect refresh failed: {e}")
-        try:
-            initial_since = datetime.combine(
-                (datetime.utcnow() - timedelta(days=INITIAL_SYNC_DAYS_BACK)).date(),
-                datetime.min.time())
-            sync_bank_transactions(current_store(), since=initial_since)
-        except Exception as e:
-            app.logger.warning(f"post-connect initial txn sync failed: {e}")
-        if skipped:
-            flash((f"Connected {kept} account(s); skipped {skipped} because the "
-                   f"per-store limit is {MAX_BANK_ACCOUNTS_PER_STORE}. Disconnect "
-                   "an existing account to free a slot."), "warning")
-        else:
-            flash(f"Connected {kept} account(s) via Stripe.", "success")
-    except stripe.error.StripeError as e:
-        app.logger.error(f"FC session retrieve failed: {e}")
-        flash(f"Stripe error while completing the link: {e.user_message or str(e)}", "error")
-    return redirect(url_for("bank_redirects.bank"))
-
-@app.route("/bank/stripe/refresh", methods=["POST"])
-@pro_required
-def bank_stripe_refresh():
-    """Manually refresh all connected account balances."""
-    n, last_error = refresh_bank_balances(current_store())
-    if n and not last_error:
-        flash(f"Refreshed {n} account(s).", "success")
-    elif n and last_error:
-        flash(f"Refreshed {n} account(s); one or more failed: {last_error}", "warning")
-    elif last_error:
-        flash(f"Refresh failed: {last_error}", "error")
-    else:
-        flash("Nothing to refresh.", "error")
-    return redirect(url_for("bank_redirects.bank"))
-
-@app.route("/bank/stripe/sync-transactions", methods=["POST"])
-@pro_required
-def bank_stripe_sync_transactions():
-    """Pull new transactions for every connected account, gated by the
-    per-store rate-limiter so we don't blow through Stripe billing.
-    Each Transaction.list call is metered, and a single click can
-    fan out to up to MAX_BANK_ACCOUNTS_PER_STORE accounts."""
-    store = current_store()
-    allowed, reason, retry_after = _can_sync_bank_transactions(store)
-    if not allowed:
-        flash(reason, "error")
-        return redirect(url_for("bank_redirects.bank"))
-    new_rows, total, last_error = sync_bank_transactions(store)
-    # Always record the sync attempt — Stripe billed us regardless of
-    # how many rows came back. Caller's commit happens here.
-    _record_bank_sync(store)
-    db.session.commit()
-    if last_error and not total:
-        flash(f"Sync failed: {last_error}", "error")
-    elif last_error:
-        flash(f"Synced {new_rows} new transaction(s); one or more accounts errored: {last_error}",
-              "warning")
-    else:
-        used = store.bank_sync_count_today
-        remaining = MAX_BANK_SYNCS_PER_DAY - used
-        flash((f"Synced {new_rows} new transaction(s) "
-               f"({remaining} sync(s) remaining today)."),
-              "success" if total else "info")
-    return redirect(url_for("bank_redirects.bank"))
-
-# /bank/transactions moved to blueprints/bank_redirects.py (D2 phase 16).
-
-# ── Reconcile actions ───────────────────────────────────────
-@app.route("/bank/transactions/<int:txn_id>/categorize", methods=["POST"])
-@pro_required
-def bank_transaction_categorize(txn_id):
-    sid = session["store_id"]
-    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
-    target = (request.form.get("kind") or "").strip()
-    if not target:
-        flash("Pick a category before saving.", "error")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    if not _is_valid_bank_category(target, sid):
-        flash("Unknown category.", "error")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    # Optional date override — supports the RDC case where the bank
-    # posted the entry the next morning but it should land on the
-    # previous day's daily book.
-    override_date = None
-    raw_date = (request.form.get("report_date") or "").strip()
-    if raw_date:
-        try:
-            override_date = datetime.strptime(raw_date, "%Y-%m-%d").date()
-        except ValueError:
-            flash("Invalid date.", "error")
-            return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    _categorize_bank_transaction(txn, target, rule=None,
-                                  post_to_daily=True,
-                                  report_date=override_date)
-    db.session.commit()
-    flash(f"Categorized as {_bank_category_label(target)}.", "success")
-    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-
-@app.route("/bank/transactions/<int:txn_id>/uncategorize", methods=["POST"])
-@pro_required
-def bank_transaction_uncategorize(txn_id):
-    sid = session["store_id"]
-    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
-    _uncategorize_bank_transaction(txn)
-    db.session.commit()
-    flash("Uncategorized; daily-book line removed.", "success")
-    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-
-@app.route("/bank/transactions/<int:txn_id>/move-date", methods=["POST"])
-@pro_required
-def bank_transaction_move_date(txn_id):
-    """Re-date the linked DailyLineItem. Use case: the bank posted the
-    transaction next morning (e.g. RDC dropped at 9 PM) but the cash-
-    handling event belongs on the previous day's book."""
-    sid = session["store_id"]
-    txn = BankTransaction.query.filter_by(id=txn_id, store_id=sid).first_or_404()
-    if not txn.daily_line_item_id:
-        flash("This transaction isn't linked to a daily-book line.", "error")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    raw = (request.form.get("report_date") or "").strip()
-    if not raw:
-        flash("Pick a date.", "error")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    try:
-        new_date = datetime.strptime(raw, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Invalid date.", "error")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    line = db.session.get(DailyLineItem, txn.daily_line_item_id)
-    if line is None:
-        # Linked line was deleted out from under us — clear the link
-        # silently so the row goes back to its uncategorized look.
-        txn.daily_line_item_id = None
-        db.session.commit()
-        flash("Linked line not found; cleared the link.", "warning")
-        return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-    line.report_date = new_date
-    db.session.commit()
-    flash(f"Moved to {new_date.isoformat()}.", "success")
-    return redirect(request.referrer or url_for("bank_redirects.bank_transactions"))
-
-# ── Rules CRUD ──────────────────────────────────────────────
-# `_parse_rule_form` was extracted into
-# `api.Modules.BankSync.Services.rules.parse_rule_form` (PR 31). The
-# Flask routes below delegate validation, account-scope check, and
-# the row mutations to that Service.
-
-# /bank/rules moved to blueprints/bank_redirects.py (D2 phase 16).
-
-@app.route("/bank/rules/new", methods=["POST"])
-@pro_required
-def bank_rule_new():
-    """Create a BankRule. Validation, account-scope check, and the
-    INSERT itself live in `api.Modules.BankSync.Services.rules`; this
-    route handles the Flask form-redirect + flash glue."""
-    from api.Modules.BankSync.Services import (
-        RuleValidationError, create_rule, parse_rule_form,
-    )
-    sid = session["store_id"]
-    try:
-        fields = parse_rule_form(
-            db.session, request.form, sid, _is_valid_bank_category,
-        )
-    except RuleValidationError as e:
-        flash(str(e), "error")
-        return redirect(url_for("bank_redirects.bank_rules"))
-    create_rule(db.session, sid, fields)
-    db.session.commit()
-    flash("Rule created.", "success")
-    return redirect(url_for("bank_redirects.bank_rules"))
-
-@app.route("/bank/rules/<int:rule_id>/edit", methods=["POST"])
-@pro_required
-def bank_rule_edit(rule_id):
-    """Update a BankRule. Cross-store rule_id 404s."""
-    from api.Modules.BankSync.Services import (
-        RuleNotFoundError, RuleValidationError,
-        parse_rule_form, update_rule,
-    )
-    sid = session["store_id"]
-    try:
-        fields = parse_rule_form(
-            db.session, request.form, sid, _is_valid_bank_category,
-        )
-    except RuleValidationError as e:
-        flash(str(e), "error")
-        return redirect(url_for("bank_redirects.bank_rules"))
-    try:
-        update_rule(db.session, rule_id, sid, fields)
-    except RuleNotFoundError:
-        abort(404)
-    db.session.commit()
-    flash("Rule updated.", "success")
-    return redirect(url_for("bank_redirects.bank_rules"))
-
-@app.route("/bank/rules/<int:rule_id>/toggle", methods=["POST"])
-@pro_required
-def bank_rule_toggle(rule_id):
-    from api.Modules.BankSync.Services import (
-        RuleNotFoundError, toggle_rule,
-    )
-    sid = session["store_id"]
-    try:
-        rule = toggle_rule(db.session, rule_id, sid)
-    except RuleNotFoundError:
-        abort(404)
-    db.session.commit()
-    flash(f"Rule { 'enabled' if rule.enabled else 'disabled' }.", "success")
-    return redirect(url_for("bank_redirects.bank_rules"))
-
-@app.route("/bank/rules/<int:rule_id>/delete", methods=["POST"])
-@pro_required
-def bank_rule_delete(rule_id):
-    from api.Modules.BankSync.Services import (
-        RuleNotFoundError, delete_rule,
-    )
-    sid = session["store_id"]
-    try:
-        delete_rule(db.session, rule_id, sid)
-    except RuleNotFoundError:
-        abort(404)
-    db.session.commit()
-    flash("Rule deleted.", "success")
-    return redirect(url_for("bank_redirects.bank_rules"))
-
-@app.route("/bank/stripe/nickname/<int:acct_id>", methods=["POST"])
-@pro_required
-def bank_stripe_set_nickname(acct_id):
-    """Set or clear the operator-defined nickname on a connected
-    bank account. Empty input reverts to the ••<last4> label."""
-    sid = session["store_id"]
-    acct = StripeBankAccount.query.filter_by(
-        id=acct_id, store_id=sid).first_or_404()
-    nickname = (request.form.get("nickname") or "").strip()[:60]
-    acct.nickname = nickname
-    db.session.commit()
-    flash(("Nickname saved." if nickname else "Nickname cleared."), "success")
-    return redirect(url_for("bank_redirects.bank"))
-
-@app.route("/bank/stripe/disconnect/<int:acct_id>", methods=["POST"])
-@pro_required
-def bank_stripe_disconnect(acct_id):
-    """Disconnect a single Stripe FC account. We both mark it disabled
-    locally and tell Stripe to revoke, so the account stops counting
-    toward the per-account billing line as well."""
-    sid = session["store_id"]
-    row = StripeBankAccount.query.filter_by(id=acct_id, store_id=sid).first_or_404()
-    try:
-        if stripe_is_configured():
-            stripe.financial_connections.Account.disconnect(row.stripe_account_id)
-    except stripe.error.StripeError as e:
-        app.logger.warning(f"FC disconnect API call failed (continuing locally): {e}")
-    row.enabled = False
-    row.disconnected_at = datetime.utcnow()
-    db.session.commit()
-    flash("Bank account disconnected.", "success")
-    return redirect(url_for("bank_redirects.bank"))
+# /bank/stripe/{connect,return,refresh,sync-transactions,nickname/<id>,disconnect/<id>},
+# /bank/transactions/<id>/{categorize,uncategorize,move-date},
+# /bank/rules/{new,<id>/edit,<id>/toggle,<id>/delete} moved to
+# blueprints/bank_mutations.py (D2 phase 27).
 
 # ── Admin Users ──────────────────────────────────────────────
 # /admin/users[/new|/<uid>/edit] + /admin/audit-log moved to
@@ -7274,7 +6392,7 @@ def superadmin_stop_impersonation():
         # superadmin account shouldn't be a path to an elevated session.
         session.clear()
         flash("Session invalid. Please sign in again.", "error")
-        return redirect(url_for("login"))
+        return redirect(url_for("auth.login"))
     record_audit("impersonate_end", target_type="user", target_id=imp.id,
                  details=f"returning to {imp.username}")
     session["user_id"] = imp.id
