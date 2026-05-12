@@ -7381,27 +7381,8 @@ def admin_redeem_owner_code():
 
 
 # ── Superadmin ───────────────────────────────────────────────
-@app.route("/superadmin/stores")
-@superadmin_required
-def superadmin_stores():
-    """301 → /app/superadmin/stores. The React page reads via
-    /api/v2/superadmin/stores (paginated, filterable). Stub keeps
-    url_for('superadmin_stores') working for sidebar nav + bounces
-    old bookmarks. The /superadmin/stores/new + /<id>/edit form
-    routes below stay alive (their SPA equivalents aren't built
-    yet)."""
-    return redirect("/app/superadmin/stores", code=301)
-
-@app.route("/superadmin/stores/new", methods=["GET", "POST"])
-@superadmin_required
-def superadmin_new_store():
-    """301 → /app/superadmin/stores/new. The React form posts to
-    POST /api/v2/superadmin/stores which mirrors the legacy field
-    set + records the same `create_store` audit entry. The endpoint
-    declaration stays so url_for('superadmin_new_store') keeps
-    working in any chrome that still references it (sidebar nav,
-    superadmin overview hero CTA)."""
-    return redirect("/app/superadmin/stores/new", code=301)
+# /superadmin/stores + /superadmin/stores/new moved to
+# blueprints/superadmin_redirects.py (D2 phase 18).
 
 @app.route("/superadmin/impersonate/<int:store_id>")
 @superadmin_required
@@ -7416,7 +7397,7 @@ def superadmin_impersonate(store_id):
     """
     store=db.session.get(Store, store_id) or abort(404)
     admin=User.query.filter_by(store_id=store_id,role="admin").first()
-    if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_stores"))
+    if not admin: flash("No admin for this store.","error"); return redirect(url_for("superadmin_redirects.superadmin_stores"))
     record_audit("impersonate_start", target_type="store", target_id=store.id,
                  details=f"as {admin.username}")
     # Preserve the real superadmin identity so the "Exit impersonation"
@@ -7466,24 +7447,7 @@ def superadmin_stop_impersonation():
 # ── Superadmin control panel ─────────────────────────────────
 STORES_PER_PAGE = 20
 
-@app.route("/superadmin/controls")
-@superadmin_required
-def superadmin_controls():
-    """301 → /app/superadmin/controls. The platform-controls hub
-    moved to React; the SPA reads /api/v2/dashboard/summary,
-    /api/v2/superadmin/{stores,discounts,reports}, and
-    /api/v2/feature-flags. The legacy Audit Log link
-    (?tab=audit) still bounces to /superadmin/audit-log so old
-    bookmarks keep working.
-
-    All POST mutation endpoints (extend-trial, toggle-active,
-    discounts CRUD, feature-flags CRUD, etc.) stay live as
-    direct callers."""
-    if request.args.get("tab") == "audit":
-        return redirect(url_for("superadmin_redirects.superadmin_audit_log"))
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/superadmin/controls" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /superadmin/controls moved to blueprints/superadmin_redirects.py (D2 phase 18).
 
 # ── Email delivery test (superadmin) ─────────────────────────
 @app.route("/superadmin/send-test-email", methods=["POST"])
@@ -7503,7 +7467,7 @@ def superadmin_send_test_email():
     if not to_addr:
         flash("Set your email on /account/profile first — "
               "nowhere to send a test to.", "warning")
-        return redirect(url_for("superadmin_controls", tab="overview"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="overview"))
     subject = "DineroBook test email"
     sent_at = datetime.utcnow().isoformat(timespec="seconds")
     body = (
@@ -7532,7 +7496,7 @@ def superadmin_send_test_email():
         flash("Test email failed. See the Email service card for the error.", "warning")
     record_audit("send_test_email", "superadmin", None, f"to={to_addr} ok={ok}")
     db.session.commit()
-    return redirect(url_for("superadmin_controls", tab="overview"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="overview"))
 
 # ── Per-store actions (superadmin) ───────────────────────────
 def _store_or_404(store_id): return db.session.get(Store, store_id) or abort(404)
@@ -7571,7 +7535,7 @@ def superadmin_extend_trial(store_id):
                  details=f"+{days}d → {store.trial_ends_at.isoformat()}")
     db.session.commit()
     flash(f"{store.name}: trial extended by {days} days.", "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 @app.route("/superadmin/stores/<int:store_id>/comp-plan", methods=["POST"])
 @superadmin_required
@@ -7580,7 +7544,7 @@ def superadmin_comp_plan(store_id):
     store = _store_or_404(store_id)
     plan = request.form.get("plan", "pro")
     if plan not in ("basic", "pro"):
-        flash("Invalid plan.", "error"); return redirect(url_for("superadmin_controls", tab="stores"))
+        flash("Invalid plan.", "error"); return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
     store.plan = plan
     store.canceled_at = None
     store.data_retention_until = None
@@ -7588,7 +7552,7 @@ def superadmin_comp_plan(store_id):
                  details=f"granted {plan} (no Stripe)")
     db.session.commit()
     flash(f"{store.name}: comped to {plan.title()}.", "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 @app.route("/superadmin/stores/<int:store_id>/toggle-active", methods=["POST"])
 @superadmin_required
@@ -7600,7 +7564,7 @@ def superadmin_toggle_active(store_id):
                  details=f"is_active={store.is_active}")
     db.session.commit()
     flash(f"{store.name}: {'active' if store.is_active else 'disabled'}.", "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 @app.route("/superadmin/stores/<int:store_id>/extend-retention", methods=["POST"])
 @superadmin_required
@@ -7614,7 +7578,7 @@ def superadmin_extend_retention(store_id):
                  details=f"+{days}d → {store.data_retention_until.isoformat()}")
     db.session.commit()
     flash(f"{store.name}: retention extended by {days} days.", "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 @app.route("/superadmin/stores/<int:store_id>/revert-to-trial", methods=["POST"])
 @superadmin_required
@@ -7630,7 +7594,7 @@ def superadmin_revert_to_trial(store_id):
     record_audit("revert_to_trial", target_type="store", target_id=store.id)
     db.session.commit()
     flash(f"{store.name}: reverted to 7-day trial.", "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 @app.route("/superadmin/stores/<int:store_id>/addons/<addon_key>/toggle",
             methods=["POST"])
@@ -7645,7 +7609,7 @@ def superadmin_toggle_addon(store_id, addon_key):
     addon = ADDONS_CATALOG.get(addon_key)
     if not addon:
         flash("Unknown add-on.", "error")
-        return redirect(url_for("superadmin_controls", tab="stores"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
     keys = {k.strip() for k in (store.addons or "").split(",") if k.strip()}
     if addon_key in keys:
         keys.discard(addon_key)
@@ -7660,7 +7624,7 @@ def superadmin_toggle_addon(store_id, addon_key):
                   details=addon_key)
     db.session.commit()
     flash(msg, "success")
-    return redirect(url_for("superadmin_controls", tab="stores"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
 
 # ── TV catalog admin (superadmin) ────────────────────────────
 #
@@ -7772,25 +7736,25 @@ def superadmin_tv_catalog_upload_logo(catalog_type, slug):
     row = _resolve_catalog_row(catalog_type, slug)
     if row is None:
         flash("Unknown catalog entry.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     f = request.files.get("logo")
     if not f or not f.filename:
         flash("Pick a file to upload.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     mime = (f.mimetype or "").lower()
     if mime not in _TV_LOGO_ALLOWED_MIMES:
         flash("File must be PNG, JPEG, WebP, or SVG.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     raw_blob = f.read()
     if len(raw_blob) == 0:
         flash("Uploaded file is empty.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
     if len(raw_blob) > _TV_LOGO_MAX_BYTES:
         flash(f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     # Normalize raster uploads to a uniform 600x200 transparent
     # canvas. SVG passes through unchanged. Result: every catalog
@@ -7820,7 +7784,7 @@ def superadmin_tv_catalog_upload_logo(catalog_type, slug):
                   details=f"{slug} ({len(blob)} bytes, {mime})")
     db.session.commit()
     flash(f"Uploaded logo for {row.display_name}.", "success")
-    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
 @app.route("/superadmin/tv-catalog/<catalog_type>/<slug>/edit",
             methods=["POST"])
@@ -7834,7 +7798,7 @@ def superadmin_tv_catalog_edit(catalog_type, slug):
     row = _resolve_catalog_row(catalog_type, slug)
     if row is None:
         flash("Unknown catalog entry.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     new_name = (request.form.get("display_name") or "").strip()[:80]
     if new_name:
@@ -7854,7 +7818,7 @@ def superadmin_tv_catalog_edit(catalog_type, slug):
                   target_id=row.id, details=slug)
     db.session.commit()
     flash(f"Saved {row.display_name}.", "success")
-    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
 def _slugify_catalog_name(name):
     """Display name → URL-safe lowercase slug. Wraps python-slugify
@@ -7906,11 +7870,11 @@ def superadmin_tv_catalog_new():
     catalog_type = (request.form.get("catalog_type") or "").strip()
     if catalog_type not in ("company", "bank"):
         flash("Pick company or bank.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
     display_name = (request.form.get("display_name") or "").strip()[:80]
     if not display_name:
         flash("Display name is required.", "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     if catalog_type == "company":
         base_slug = _slugify_catalog_name(display_name)
@@ -7918,19 +7882,19 @@ def superadmin_tv_catalog_new():
         cc = (request.form.get("country_code") or "").strip().upper()[:4]
         if not cc:
             flash("Banks need a country code (ISO-2).", "error")
-            return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+            return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
         base_slug = _slugify_bank_name(display_name, cc)
 
     if not base_slug:
         flash("Couldn't derive a slug from that name. Try a different one.",
               "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     slug = _next_unique_slug(catalog_type, base_slug)
     if not slug:
         flash("Too many entries with similar names — slug exhausted.",
               "error")
-        return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
     if catalog_type == "company":
         last = (db.session.query(db.func.max(TVCompanyCatalog.sort_order))
@@ -7951,7 +7915,7 @@ def superadmin_tv_catalog_new():
                   target_id=0, details=slug)
     db.session.commit()
     flash(f"Added {display_name}.", "success")
-    return redirect(url_for("superadmin_controls", tab="tv-catalog"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="tv-catalog"))
 
 # ── Discount codes (superadmin) ──────────────────────────────
 def _sync_discount_to_stripe(dc):
@@ -7985,19 +7949,19 @@ def superadmin_new_discount():
     code = request.form.get("code", "").strip().upper()
     if not code or not re.match(r"^[A-Z0-9_-]{3,40}$", code):
         flash("Code must be 3–40 chars (A-Z, 0-9, _, -).", "error")
-        return redirect(url_for("superadmin_controls", tab="discounts"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
     if DiscountCode.query.filter_by(code=code).first():
         flash("That code already exists.", "error")
-        return redirect(url_for("superadmin_controls", tab="discounts"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
     kind = request.form.get("kind", "percent")
     percent = int(request.form.get("percent_off") or 0) if kind == "percent" else 0
     amount_cents = int(float(request.form.get("amount_off") or 0) * 100) if kind == "amount" else 0
     if kind == "percent" and not (1 <= percent <= 100):
         flash("Percent off must be 1–100.", "error")
-        return redirect(url_for("superadmin_controls", tab="discounts"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
     if kind == "amount" and amount_cents <= 0:
         flash("Amount off must be greater than zero.", "error")
-        return redirect(url_for("superadmin_controls", tab="discounts"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
     duration = request.form.get("duration", "once")
     duration_months = int(request.form.get("duration_months") or 0) if duration == "repeating" else None
     max_redemptions = int(request.form.get("max_redemptions") or 0) or None
@@ -8018,7 +7982,7 @@ def superadmin_new_discount():
                  details=f"{dc.code} {dc.value_label}")
     db.session.commit()
     flash(f"Discount code {code} created.", "success")
-    return redirect(url_for("superadmin_controls", tab="discounts"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
 
 @app.route("/superadmin/discounts/<int:dc_id>/toggle", methods=["POST"])
 @superadmin_required
@@ -8035,7 +7999,7 @@ def superadmin_toggle_discount(dc_id):
                  details=f"active={dc.is_active}")
     db.session.commit()
     flash(f"{dc.code}: {'active' if dc.is_active else 'disabled'}.", "success")
-    return redirect(url_for("superadmin_controls", tab="discounts"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="discounts"))
 
 # ── Feature flags (superadmin) ───────────────────────────────
 @app.route("/superadmin/features/new", methods=["POST"])
@@ -8045,10 +8009,10 @@ def superadmin_new_feature():
     key = request.form.get("key", "").strip().lower()
     if not re.match(r"^[a-z][a-z0-9_]{1,40}$", key):
         flash("Flag key must be lowercase letters/numbers/underscore, 2–41 chars.", "error")
-        return redirect(url_for("superadmin_controls", tab="features"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="features"))
     if FeatureFlag.query.filter_by(key=key).first():
         flash("That flag already exists.", "error")
-        return redirect(url_for("superadmin_controls", tab="features"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="features"))
     flag = FeatureFlag(
         key=key,
         label=request.form.get("label", "").strip() or key,
@@ -8059,7 +8023,7 @@ def superadmin_new_feature():
     record_audit("create_feature", target_type="feature", target_id=key)
     db.session.commit()
     flash(f"Feature flag {key} created.", "success")
-    return redirect(url_for("superadmin_controls", tab="features"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="features"))
 
 @app.route("/superadmin/features/<string:key>/toggle-global", methods=["POST"])
 @superadmin_required
@@ -8071,7 +8035,7 @@ def superadmin_toggle_feature_global(key):
                  details=f"enabled_by_default={flag.enabled_by_default}")
     db.session.commit()
     flash(f"Flag {key} globally {'on' if flag.enabled_by_default else 'off'}.", "success")
-    return redirect(url_for("superadmin_controls", tab="features"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="features"))
 
 @app.route("/superadmin/features/<string:key>/stores/<int:store_id>", methods=["POST"])
 @superadmin_required
@@ -8101,7 +8065,7 @@ def superadmin_set_feature_override(key, store_id):
                  details=f"store={store_id} action={action}")
     db.session.commit()
     flash("Override updated.", "success")
-    return redirect(url_for("superadmin_controls", tab="features"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="features"))
 
 # ── Announcements (superadmin) ───────────────────────────────
 @app.route("/superadmin/announcements/new", methods=["POST"])
@@ -8113,7 +8077,7 @@ def superadmin_new_announcement():
     message = request.form.get("message", "").strip()
     if not message:
         flash("Announcement message is required.", "error")
-        return redirect(url_for("superadmin_controls", tab="announcements"))
+        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="announcements"))
     level = request.form.get("level", "info")
     if level not in ("info", "warning", "error", "success"):
         level = "info"
@@ -8148,7 +8112,7 @@ def superadmin_new_announcement():
                   "Check the Email service card for details.", "warning")
     else:
         flash("Announcement posted.", "success")
-    return redirect(url_for("superadmin_controls", tab="announcements"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="announcements"))
 
 @app.route("/superadmin/announcements/<int:ann_id>/toggle", methods=["POST"])
 @superadmin_required
@@ -8160,7 +8124,7 @@ def superadmin_toggle_announcement(ann_id):
                  details=f"active={a.is_active}")
     db.session.commit()
     flash(f"Announcement {'enabled' if a.is_active else 'disabled'}.", "success")
-    return redirect(url_for("superadmin_controls", tab="announcements"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="announcements"))
 
 @app.route("/superadmin/announcements/<int:ann_id>/delete", methods=["POST"])
 @superadmin_required
@@ -8170,7 +8134,7 @@ def superadmin_delete_announcement(ann_id):
     record_audit("delete_announcement", target_type="announcement", target_id=a.id)
     db.session.delete(a); db.session.commit()
     flash("Announcement deleted.", "success")
-    return redirect(url_for("superadmin_controls", tab="announcements"))
+    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="announcements"))
 
 # ── Audit log CSV export ─────────────────────────────────────
 @app.route("/superadmin/controls/audit.csv")
