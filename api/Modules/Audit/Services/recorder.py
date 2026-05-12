@@ -98,12 +98,30 @@ def record_operator_action(
     Captures user identity + role at write time so the audit row
     stays useful even after the User row is later deleted.
 
-    Targets:
-        'transfer' (delete-only — TransferAudit covers create/edit),
-        'daily_report', 'batch'.
+    Target types (canonical list — add new ones here when wiring
+    a new mutation surface):
+        'transfer'        (delete-only — TransferAudit covers
+                           create/edit on the per-row table)
+        'daily_report'    (lock / unlock / line-item writes via
+                           api/Modules/DailyBook)
+        'batch'           (create / update / delete via
+                           api/Modules/Batches)
+        'return_check'    (create / update / delete / mark_loss /
+                           mark_fraud / reopen / payment /
+                           delete_payment via
+                           blueprints/bookkeeping_mutations.py)
+        'roster_member'   (create / reactivate / deactivate /
+                           rename via
+                           blueprints/admin_settings_mutations.py)
+        'user'            (reset_password — admin-side employee
+                           password reset)
+        'owner_link'      (connect — admin redeems an owner code)
 
     Actions:
-        'create', 'update', 'delete', 'lock', 'unlock'.
+        'create', 'update', 'delete', 'lock', 'unlock',
+        'reactivate', 'deactivate', 'rename', 'mark_loss',
+        'mark_fraud', 'reopen', 'payment', 'delete_payment',
+        'reset_password', 'connect'.
 
     Returns the unsaved row (added to the session, not flushed).
     """

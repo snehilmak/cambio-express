@@ -57,6 +57,7 @@ def admin_roster_add():
     second row so audit history stays intact."""
     from app import (
         StoreEmployee, admin_required, current_store, db,
+        record_op_audit,
     )
 
     @admin_required
@@ -73,6 +74,10 @@ def admin_roster_add():
         if existing:
             if not existing.is_active:
                 existing.is_active = True
+                record_op_audit(
+                    "reactivate", "roster_member",
+                    str(existing.id), label=existing.name,
+                )
                 db.session.commit()
                 flash(f"Reactivated {existing.name}.", "success")
             else:
@@ -81,7 +86,12 @@ def admin_roster_add():
                     "error",
                 )
             return redirect(url_for("admin_settings_form.view", tab="roster"))
-        db.session.add(StoreEmployee(store_id=store.id, name=name))
+        emp = StoreEmployee(store_id=store.id, name=name)
+        db.session.add(emp)
+        db.session.flush()
+        record_op_audit(
+            "create", "roster_member", str(emp.id), label=name,
+        )
         db.session.commit()
         flash(f"Added {name}.", "success")
         return redirect(url_for("admin_settings_form.view", tab="roster"))
@@ -92,7 +102,9 @@ def admin_roster_add():
 @bp.route("/admin/settings/roster/<int:eid>/toggle", methods=["POST"])
 def admin_roster_toggle(eid: int):
     """Reactivate / deactivate a roster entry."""
-    from app import StoreEmployee, admin_required, db
+    from app import (
+        StoreEmployee, admin_required, db, record_op_audit,
+    )
 
     @admin_required
     def _h():
@@ -101,6 +113,10 @@ def admin_roster_toggle(eid: int):
             id=eid, store_id=sid,
         ).first_or_404()
         emp.is_active = not emp.is_active
+        record_op_audit(
+            "reactivate" if emp.is_active else "deactivate",
+            "roster_member", str(emp.id), label=emp.name,
+        )
         db.session.commit()
         flash(
             f"{emp.name} "
@@ -118,7 +134,9 @@ def admin_roster_rename(eid: int):
     snapshotted employee_name — a rename only affects future
     dropdown picks. That's the intended audit-preserving
     behaviour."""
-    from app import StoreEmployee, admin_required, db
+    from app import (
+        StoreEmployee, admin_required, db, record_op_audit,
+    )
 
     @admin_required
     def _h():
@@ -130,7 +148,13 @@ def admin_roster_rename(eid: int):
         if not new_name:
             flash("Name cannot be empty.", "error")
         else:
+            old_name = emp.name
             emp.name = new_name
+            record_op_audit(
+                "rename", "roster_member", str(emp.id),
+                label=new_name,
+                summary=f"{old_name!r} → {new_name!r}",
+            )
             db.session.commit()
             flash(f"Renamed to {new_name}.", "success")
         return redirect(url_for("admin_settings_form.view", tab="roster"))
@@ -144,7 +168,7 @@ def admin_reset_employee_password(uid: int):
     delegate to ``api.Modules.Auth.Services.admin_set_password``;
     this Flask route handles the cross-store scope check and the
     inline flash messages."""
-    from app import User, admin_required, db
+    from app import User, admin_required, db, record_op_audit
     from api.Modules.Auth.Services import admin_set_password
 
     @admin_required
@@ -163,6 +187,10 @@ def admin_reset_employee_password(uid: int):
             # legacy behaviour — only one message per round-trip).
             flash(next(iter(errors.values())), "error")
         else:
+            record_op_audit(
+                "reset_password", "user", str(emp.id),
+                label=emp.full_name or emp.username,
+            )
             db.session.commit()
             flash(
                 f"Password updated for "
@@ -185,7 +213,7 @@ def admin_redeem_owner_code():
     point is owner-side only (``/owner/unlink``)."""
     from app import (
         OwnerConnectCode, StoreOwnerLink, User, admin_required,
-        current_store, current_user, db,
+        current_store, current_user, db, record_op_audit,
     )
 
     @admin_required
@@ -229,6 +257,11 @@ def admin_redeem_owner_code():
         code.used_by_user_id = current_user().id
         code.used_by_store_id = store.id
         db.session.add(link)
+        record_op_audit(
+            "connect", "owner_link", str(owner.id),
+            label=owner.full_name or owner.username,
+            summary=f"code {code_str}",
+        )
         db.session.commit()
         flash(
             f"Store connected to "

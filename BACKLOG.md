@@ -308,9 +308,17 @@ impact ÷ effort. Numbers are an estimate.
       Both share `RATELIMIT_STORAGE_URI` (Redis in prod) and
       `RATELIMIT_ENABLED` kill-switch. Tests in
       `tests/test_rate_limiting.py`.
-- [ ] **Employee action audit** — log who created / edited / deleted
-      transfers, daily reports, batches. Superadmin actions already go
-      through `record_audit()`; the employee side is unaudited.
+- [x] **Employee action audit** — landed. Transfers, daily reports,
+      batches, return-checks (create/update/delete/payment/loss/
+      fraud/reopen), roster (create/reactivate/deactivate/rename),
+      employee password resets, and owner-link redemption all
+      append an `OperatorAuditLog` row via the in-app
+      `record_op_audit()` helper. The full target-type +
+      action vocabulary is documented on
+      `api.Modules.Audit.Services.recorder.record_operator_action`.
+      Regression tests in
+      `tests/test_employee_action_audit.py` (7 tests covering
+      the formerly-unaudited surfaces).
 - [ ] **Stripe LIVE mode** — swap test → live keys, verify via the
       "Stripe connection" card at `/superadmin/controls` Overview.
       Confirm webhook endpoint is pointed at production `/webhooks/stripe`.
