@@ -55,7 +55,61 @@ init_sentry()
 
 app = Flask(__name__)
 install_request_id(app)
-app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-prod")
+
+# ── SECRET_KEY safety gate ────────────────────────────────────
+#
+# Flask's session cookie is signed with `app.secret_key`. If a
+# prod deploy boots with the dev fallback value below, anyone
+# who reads the value out of the public Git history can forge
+# session cookies and impersonate any user — including
+# superadmin. We REFUSE to start in that state.
+#
+# "Prod" is detected by APP_BASE_URL starting with `https://`
+# (same gate the session-cookie hardening + SMTP / Stripe URL
+# builders use). Local dev and CI run over plain HTTP and keep
+# the dev fallback so the test suite can boot without ceremony.
+_SECRET_KEY_DEV_FALLBACK = "dinerobook-dev-secret-change-in-prod"
+_secret_key_env = os.environ.get("SECRET_KEY", "")
+app.secret_key = _secret_key_env or _SECRET_KEY_DEV_FALLBACK
+
+if (
+    os.environ.get("APP_BASE_URL", "").startswith("https://")
+    and app.secret_key == _SECRET_KEY_DEV_FALLBACK
+):
+    raise RuntimeError(
+        "Refusing to boot in prod with the dev-fallback SECRET_KEY. "
+        "Set the SECRET_KEY env var in Render → Environment to a "
+        "random value (e.g. `python -c 'import secrets; "
+        "print(secrets.token_urlsafe(48))'`) and re-deploy. "
+        "See docs/architecture/secrets-audit.md for the audit "
+        "context."
+    )
+
+# Seed-password safety warning. The init_db() seed step (way at
+# the bottom of this file) hardcodes `super2025!` / `cambio2025!`
+# for the first-boot users when SUPERADMIN_PASSWORD /
+# ADMIN_PASSWORD aren't set. Once an operator changes the
+# password in the UI those defaults become irrelevant, but a
+# fresh-deploy admin reading this from the docs is the most
+# obvious takeover path. Loud structured-log warning so
+# Sentry / Render → Logs picks it up.
+_seed_pw_missing = []
+if (
+    os.environ.get("APP_BASE_URL", "").startswith("https://")
+):
+    if not os.environ.get("SUPERADMIN_PASSWORD"):
+        _seed_pw_missing.append("SUPERADMIN_PASSWORD")
+    if not os.environ.get("ADMIN_PASSWORD"):
+        _seed_pw_missing.append("ADMIN_PASSWORD")
+    if _seed_pw_missing:
+        app.logger.critical(
+            "Seed password fallback is active in prod for: "
+            "%s. The default values (super2025! / cambio2025!) "
+            "are public in the repo. Either set the env vars OR "
+            "change the password in the UI immediately on first "
+            "login. See docs/architecture/secrets-audit.md.",
+            ", ".join(_seed_pw_missing),
+        )
 
 # Blueprints — sections that have been peeled off into
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right

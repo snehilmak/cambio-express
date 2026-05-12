@@ -43,6 +43,7 @@ status header of the old one. The old reasoning stays readable.
 | [request-lifecycle.md](request-lifecycle.md) | End-to-end trace of how a request flows from Cloudflare → Render → `asgi.py` → Flask Blueprint or FastAPI module → SQLAlchemy → Postgres. Also covers Sentry / structured-logs / request-ID middleware on both sides. Tracks backlog F2. |
 | [migrations.md](migrations.md) | Alembic + `_ADDED_COLUMNS` workflow. Tracks ADR-004 phase 1. |
 | [deployment.md](deployment.md) | Render deploy runbook — env vars, secret rotation, backup verification, data-retention purge, incident playbook. Tracks the "Deployment runbook" item in BACKLOG's "Before going live" list. |
+| [secrets-audit.md](secrets-audit.md) | 2026-05 repo-wide secrets audit. Documents the prod safety gates and the recurring-audit checklist for PR reviews. |
 | [MIGRATION_ADR.md](MIGRATION_ADR.md) | Umbrella ADR for the May 2026 SPA migration. |
 
 ## Writing a new ADR

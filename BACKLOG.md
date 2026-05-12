@@ -338,9 +338,20 @@ impact ÷ effort. Numbers are an estimate.
       schema migrations + Alembic state, backup verification,
       data-retention purge cron, and an incident playbook
       indexed by symptom.
-- [ ] **Secrets audit** — confirm no hardcoded keys in the repo; the
-      default passwords in `init_db()` (`super2025!`, `cambio2025!`)
-      must be overridden via env vars in prod.
+- [x] **Secrets audit** — landed at
+      [`docs/architecture/secrets-audit.md`](docs/architecture/secrets-audit.md).
+      Repo scan confirmed no live Stripe / AWS / bearer tokens
+      committed; only documented dev-fallback values for
+      `SECRET_KEY` + the two seed passwords. Added two prod
+      safety gates in `app.py`:
+      - `RuntimeError` at boot if `APP_BASE_URL` starts with
+        `https://` and `SECRET_KEY` is missing (forces a real
+        signing key in prod).
+      - CRITICAL-level log when `SUPERADMIN_PASSWORD` /
+        `ADMIN_PASSWORD` are missing in prod (loud but doesn't
+        block deploy).
+      Tests in `tests/test_secrets_audit_safety_gate.py` (5
+      subprocess tests).
 - [x] **CSRF protection** — landed. Flask-WTF's `CSRFProtect`
       installs a `before_request` hook that rejects any
       POST/PUT/PATCH/DELETE on a Flask route without a valid
