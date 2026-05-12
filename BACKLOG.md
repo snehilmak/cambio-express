@@ -174,11 +174,15 @@ items decompose the monolith.
 - [ ] **F3. Frontend component catalog.** Once C2/C3 ship, document
       each shared component with a Storybook page (or simpler:
       a `frontend/docs/components.md` with screenshots).
-- [ ] **F4. Onboarding README.** First-day-on-the-job runbook:
-      clone → install → seed DB → run dev → test → deploy.
-      The existing top-level README has install steps but no
-      "where do I look to add a new report / route / table?"
-      orientation.
+- [x] **F4. Onboarding README.** Landed —
+      [`README.md`](README.md). Covers stack-at-a-glance,
+      quick-start commands, project layout, a "where do I look
+      to do X?" table for the common new-route / new-column /
+      new-report / new-rule cases, common workflows
+      (single-test run, superadmin password reset, data-retention
+      purge), production env vars, and cross-links to
+      `CLAUDE.md`, `BACKLOG.md`, and the `docs/architecture/`
+      ADRs + runbooks.
 
 ### How to use this list
 
