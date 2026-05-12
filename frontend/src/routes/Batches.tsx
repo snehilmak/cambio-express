@@ -51,7 +51,7 @@ export default function Batches() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="78rem">
+      <PageShell>
         <PageHeader title="ACH batches" />
         <Empty>Sign in as a store admin to view ACH batches.</Empty>
       </PageShell>
@@ -59,7 +59,7 @@ export default function Batches() {
   }
 
   return (
-    <PageShell maxWidth="78rem">
+    <PageShell>
       <PageHeader
         title="ACH batches"
         subtitle={data ? `${data.rows.length.toLocaleString()} batches` : "—"}

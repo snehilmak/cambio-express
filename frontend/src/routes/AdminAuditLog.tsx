@@ -37,7 +37,7 @@ export default function AdminAuditLog() {
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
-      <PageShell maxWidth="82rem">
+      <PageShell>
         <PageHeader title="Activity Log" />
         <Empty>You need a store-admin sign-in to see the activity log.</Empty>
       </PageShell>
@@ -47,7 +47,7 @@ export default function AdminAuditLog() {
   const hasFilters = !!(target || action || user);
 
   return (
-    <PageShell maxWidth="82rem">
+    <PageShell>
       <PageHeader title="Activity Log" />
 
       <Card style={{ marginBottom: "1rem" }}>

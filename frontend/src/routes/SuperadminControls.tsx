@@ -39,7 +39,7 @@ export default function SuperadminControls() {
     : null);
 
   return (
-    <PageShell maxWidth="75rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <PageHeader
         title="Platform Controls"
         subtitle="Stores, billing, anomalies, audit log, announcements, reports."

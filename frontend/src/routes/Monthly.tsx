@@ -84,7 +84,7 @@ export default function Monthly() {
 
   if (identity?.store_id == null) {
     return (
-      <PageShell maxWidth="78rem" gap="1rem">
+      <PageShell gap="1rem">
         <PageHeader title="Monthly P&L" />
         <Empty>Sign in as a store admin to view monthly P&amp;L.</Empty>
       </PageShell>
@@ -92,7 +92,7 @@ export default function Monthly() {
   }
 
   return (
-    <PageShell maxWidth="78rem" gap="1rem">
+    <PageShell gap="1rem">
       <PageHeader
         title="Monthly P&L"
         subtitle={year && month ? (
