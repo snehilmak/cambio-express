@@ -84,6 +84,7 @@ from blueprints import (  # noqa: E402
     transfers_redirects as _bp_transfers_redirects,
 )
 from blueprints import tv as _bp_tv  # noqa: E402
+from blueprints import tv_board as _bp_tv_board  # noqa: E402
 from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_push.bp)
@@ -102,6 +103,7 @@ app.register_blueprint(_bp_bookkeeping_redirects.bp)
 app.register_blueprint(_bp_bank_redirects.bp)
 app.register_blueprint(_bp_admin_redirects.bp)
 app.register_blueprint(_bp_tv_pair.bp)
+app.register_blueprint(_bp_tv_board.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -3463,48 +3465,7 @@ _TV_LOGO_ALLOWED_MIMES = {
     "image/png", "image/jpeg", "image/webp", "image/svg+xml",
 }
 
-@app.route("/tv/<token>")
-def tv_public_display(token):
-    """Fullscreen rate board, no auth. Anyone with the URL sees it.
-    No chrome (no base.html), so it works on a smart-TV browser /
-    Chromecast / Fire TV WebView with no extra UI to confuse the
-    operator.
-
-    Tablets / Chromecasts use this URL directly. Fire TV companion
-    apps go through /tv/device/<device_token> instead so the shared
-    public_token never leaves the browser/Chromecast world."""
-    display = TVDisplay.query.filter_by(public_token=token).first_or_404()
-    store = db.session.get(Store, display.store_id)
-    # If the store later removes the addon, the URL stops working —
-    # belt-and-suspenders, since regenerate_token is the supported path.
-    if not store or not store_has_addon(store, "tv_display"):
-        abort(404)
-    return _render_tv_board(display, store)
-
-@app.route("/tv/device/<device_token>")
-def tv_device_display(device_token):
-    """Per-device rate-board URL handed to a Fire TV companion app
-    after a successful pair-code redeem. Same content as
-    /tv/<public_token>, but bound to a single TVPairing row.
-
-    404s on:
-      - unknown device_token
-      - revoked TVPairing (replaced by a newer pairing or admin-revoked)
-      - addon switched off after pairing
-    On every successful render we bump TVPairing.last_seen_at so the
-    admin UI can show "last seen 2 min ago"."""
-    pairing = TVPairing.query.filter_by(device_token=device_token).first()
-    if not pairing or pairing.revoked_at is not None:
-        abort(404)
-    display = db.session.get(TVDisplay, pairing.display_id)
-    if not display:
-        abort(404)
-    store = db.session.get(Store, display.store_id)
-    if not store or not store_has_addon(store, "tv_display"):
-        abort(404)
-    pairing.last_seen_at = datetime.utcnow()
-    db.session.commit()
-    return _render_tv_board(display, store)
+# /tv/<token> + /tv/device/<dt> moved to blueprints/tv_board.py (D2 phase 20).
 
 # ── Report Center ────────────────────────────────────────────
 # Categorised list of reports surfaced in /reports (admin) and
