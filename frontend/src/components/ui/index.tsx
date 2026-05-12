@@ -188,7 +188,9 @@ export function Card({
       style={{
         background: tokens.surface2,
         border: `1px solid ${tokens.border}`,
-        borderRadius: "0.75rem",
+        // Slightly softer radius than the original 0.75rem so cards
+        // feel modern without going so big they read as decorative.
+        borderRadius: "0.875rem",
         padding,
         ...style,
       }}
@@ -255,13 +257,16 @@ export function Field({
   children: ReactNode;
 }) {
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
       <span
         style={{
-          fontSize: "0.78rem",
-          color: highlight ? tokens.negative : tokens.textMuted,
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
+          // Slightly bigger + bolder than the original 0.78rem / 400.
+          // 0.8rem / 600 reads as a proper form label instead of a
+          // whisper.
+          fontSize: "0.8rem",
+          fontWeight: 600,
+          color: highlight ? tokens.negative : tokens.text,
+          letterSpacing: "0",
         }}
       >
         {label}

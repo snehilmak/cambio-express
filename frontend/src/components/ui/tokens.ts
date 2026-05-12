@@ -65,8 +65,12 @@ export const fontSize = {
 export const inputStyle: CSSProperties = {
   background: tokens.surface,
   border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
+  // Slightly more vertical breathing room. Pre: 0.55rem felt
+  // cramped especially next to the heavier <Button> primitive
+  // (which has minHeight 2.4rem). Post: inputs match button
+  // visual weight in toolbars + forms.
+  borderRadius: "0.55rem",
+  padding: "0.65rem 0.85rem",
   color: tokens.text,
   fontFamily: tokens.fontBody,
   fontSize: fontSize.base,
@@ -79,16 +83,23 @@ export const inputStyle: CSSProperties = {
 
 export const thStyle: CSSProperties = {
   textAlign: "left",
-  padding: `${space.sm} ${space.md}`,
+  // More vertical padding so header rows don't sit right on top
+  // of the first data row, and there's enough room for the bold
+  // weight to breathe.
+  padding: "0.75rem 0.9rem",
   borderBottom: `1px solid ${tokens.border}`,
   fontSize: fontSize.xs,
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   color: tokens.textMuted,
-  fontWeight: 500,
+  fontWeight: 600,
+  background: tokens.surface,
+  position: "sticky",
+  top: 0,
 };
 
 export const tdStyle: CSSProperties = {
-  padding: `${space.sm} ${space.md}`,
+  padding: "0.7rem 0.9rem",
   borderBottom: `1px solid ${tokens.borderSubtle}`,
+  fontSize: fontSize.sm,
 };
