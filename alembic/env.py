@@ -25,7 +25,6 @@ Alembic only runs when invoked explicitly; ``db.create_all()`` +
 from __future__ import annotations
 
 import os
-from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
@@ -42,8 +41,13 @@ _db_url = os.environ.get("DATABASE_URL")
 if _db_url:
     config.set_main_option("sqlalchemy.url", _db_url)
 
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+# Deliberately NOT calling `logging.config.fileConfig` — the
+# app boots structlog via `init_logging()` in
+# `api.Core.Observability.logging`, which routes stdlib logging
+# through a single structured formatter. Alembic's own log lines
+# inherit that setup. Calling fileConfig here would replace the
+# structlog formatter with whatever's in alembic.ini's [loggers]
+# section and break observability tests.
 
 
 # Import the Flask app to register every SQLAlchemy model on
@@ -82,9 +86,24 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     """Run migrations against a live DB connection.
 
-    This is the normal path — ``alembic upgrade head`` from the
-    deploy hook (once wired) or a CLI invocation lands here.
+    Two callers:
+
+      * Alembic CLI (``alembic upgrade head`` from a developer
+        shell) — env.py opens its own engine via
+        ``engine_from_config``.
+      * Flask ``init_db()`` (boot path) — passes the Flask engine
+        through via ``cfg.attributes["connection"]`` so the
+        migrations run against the SAME DB the Flask app is using.
+        Critical for tests on an in-memory SQLite, where each
+        engine gets its own private DB; without this, Alembic
+        would migrate one DB and the test would query a different,
+        empty one.
     """
+    injected = config.attributes.get("connection", None)
+    if injected is not None:
+        _configure_and_run(injected)
+        return
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -92,21 +111,24 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            # Render batch mode for SQLite. Postgres ignores this; on
-            # SQLite, ALTER TABLE is limited so Alembic falls back to
-            # create-new-table-and-copy when needed.
-            render_as_batch=connection.dialect.name == "sqlite",
-            # Catch identifier-only changes (e.g. server_default
-            # tweaks) so autogenerate produces accurate diffs.
-            compare_server_default=True,
-            compare_type=True,
-        )
+        _configure_and_run(connection)
 
-        with context.begin_transaction():
-            context.run_migrations()
+
+def _configure_and_run(connection) -> None:
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        # Render batch mode for SQLite. Postgres ignores this; on
+        # SQLite, ALTER TABLE is limited so Alembic falls back to
+        # create-new-table-and-copy when needed.
+        render_as_batch=connection.dialect.name == "sqlite",
+        # Catch identifier-only changes (e.g. server_default
+        # tweaks) so autogenerate produces accurate diffs.
+        compare_server_default=True,
+        compare_type=True,
+    )
+    with context.begin_transaction():
+        context.run_migrations()
 
 
 if context.is_offline_mode():

@@ -14,7 +14,7 @@ one **Superadmin**.
 ## Stack
 - Flask 3.0 (intentionally monolithic; all routes in `app.py`).
 - SQLAlchemy 3.1, SQLite in dev, Postgres in prod.
-- No migrations framework — see "Migrations" below.
+- Alembic is the sole source of schema truth (see "Migrations").
 - Jinja2 templates + a 3-layer stylesheet split:
   - `static/design-tokens.css` — dark+neon tokens (`--db-*`) + legacy aliases.
   - `static/content.css` — overrides for every legacy content class
@@ -333,16 +333,24 @@ that was active at registration time.
       silently breaks webhook exemption — see git history for
       the trap I fell into.
 
-## Migrations (no framework)
-New columns on existing tables go in `_ADDED_COLUMNS` (list at bottom of
-`app.py`):
-```python
-("table_name", "column_name", "<DDL after ADD COLUMN>"),
+## Migrations
+**Every schema change is an Alembic revision.** Generate one with:
+```bash
+alembic revision --autogenerate -m "add foo.bar"
 ```
-`_ensure_added_columns()` runs on boot and is idempotent — safe on every
-restart. New **tables** are picked up by `db.create_all()`. **Never drop
-a column from a running database** — rename/backfill in a follow-up
-deploy if you really need to remove one.
+Review + edit the generated file under `alembic/versions/`
+(autogenerate gets most things right but misses data backfills
+and SQLite batch-mode quirks — read every line before committing).
+
+`init_db()` runs `alembic upgrade head` on boot — that's the sole
+schema mechanism. Fresh dev DBs are built by the baseline
+migration + every subsequent revision; existing DBs upgrade in
+place. There is no `db.create_all()`, no `_ADDED_COLUMNS` list.
+
+**Never drop a column from a running database without a backfill
+step** — rename it in one revision, copy data over, drop the old
+column in a follow-up revision once the dual-write window has
+elapsed.
 
 ## Bank-charge automation (built-in rules)
 Standard bank charges from a known institution shouldn't require the
