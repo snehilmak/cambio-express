@@ -100,6 +100,55 @@ services:
       - key: SMTP_FROM
         sync: false
 
+  # ── Data-retention purge (BACKLOG "Before going live") ───
+  # Render Cron Job that runs once a day at 03:15 UTC and deletes
+  # Store rows past their 180-day data_retention_until deadline.
+  # The Flask CLI `purge-expired-stores` is idempotent — re-running
+  # on a day with nothing to delete is a no-op. Cascades through
+  # _STORE_OWNED_MODELS before deleting the Store row; per
+  # CLAUDE.md invariant #4, never add a per-store model without
+  # adding it to that list or the purge silently leaks data.
+  - type: cron
+    name: dinerobook-data-retention-purge
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 03:15 UTC daily — off-peak for every operator timezone.
+    schedule: "15 3 * * *"
+    startCommand: flask purge-expired-stores
+    envVars:
+      # Reuse the same database the web service writes to.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dinerobook-db
+          property: connectionString
+      # Flask CLI loads app.py which reads SECRET_KEY at boot. The
+      # cron context doesn't issue session cookies, but the prod
+      # safety gate in app.py demands a real value when
+      # APP_BASE_URL is https://. Mirror both env vars from the
+      # web service.
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: dinerobook
+          envVarKey: SECRET_KEY
+      - key: APP_BASE_URL
+        value: https://dinerobook.com
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      # Stripe keys are imported by app.py at module level but the
+      # purge CLI itself never calls Stripe. Wire the env vars
+      # anyway so the import succeeds. sync: false → Render shares
+      # the values you entered on the web service.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_BASIC_PRICE_ID
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+
 databases:
   - name: dinerobook-db
     plan: free          # upgrade to starter ($7/mo) for production
