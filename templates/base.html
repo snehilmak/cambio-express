@@ -259,6 +259,7 @@
     actions you take now are recorded as this store's admin.
   </span>
   <form method="POST" action="{{ url_for('superadmin_extras.superadmin_stop_impersonation') }}" style="margin:0;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="banner-cta" style="border:none;cursor:pointer;">Exit impersonation →</button>
   </form>
 </div>

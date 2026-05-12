@@ -334,8 +334,20 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] **Secrets audit** — confirm no hardcoded keys in the repo; the
       default passwords in `init_db()` (`super2025!`, `cambio2025!`)
       must be overridden via env vars in prod.
-- [ ] **CSRF protection** — add Flask-WTF (or manual tokens) to every
-      POST route. Currently unprotected.
+- [x] **CSRF protection** — landed. Flask-WTF's `CSRFProtect`
+      installs a `before_request` hook that rejects any
+      POST/PUT/PATCH/DELETE on a Flask route without a valid
+      `csrf_token` form field (or `X-CSRFToken` header). Token is
+      derived from the session, so cross-origin forgeries can't
+      forge it. Every `<form method="POST">` in the legacy
+      templates renders `{{ csrf_token() }}`. Webhook
+      (`/webhooks/{stripe,resend}`) + WebAuthn passkey JSON
+      routes are `csrf.exempt(...)`-listed because their callers
+      don't have a session token (webhook signatures + the
+      session cookie are the actual auth). FastAPI side is moot:
+      JWT in Authorization header isn't cross-site-attachable.
+      Kill-switch `WTF_CSRF_ENABLED=False` for the test conftest.
+      Regression guard in `tests/test_csrf_protection.py`.
 - [x] **Session cookie hardening** — `Secure`, `HttpOnly`,
       `SameSite=Lax` set in `app.py` after the SQLAlchemy config
       block. `Secure` gates on `APP_BASE_URL` starting with

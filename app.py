@@ -136,6 +136,10 @@ app.register_blueprint(_bp_admin_settings_form.bp)
 app.register_blueprint(_bp_admin_settings_mutations.bp)
 _bp_spa_cutover.register(app)
 
+
+# CSRF exemptions live below, after `csrf = CSRFProtect(app)` is
+# created (see "CSRF protection" block).
+
 # Cache-bust query string for the shared stylesheet (and any other static
 # asset we want to force-refresh on deploy). Computed once at boot from
 # the file's mtime so every new deploy yields a different `?v=...` and
@@ -342,6 +346,84 @@ def _apply_rate_limits():
 
 
 _apply_rate_limits()
+
+
+# ── CSRF protection (Before-going-live) ──────────────────────
+#
+# Flask-WTF's CSRFProtect installs a before_request hook that
+# rejects any POST/PUT/PATCH/DELETE not carrying a valid
+# `csrf_token` form field (or `X-CSRFToken` header). The token is
+# derived from the Flask session, so a foreign-origin form-POST
+# can't forge it.
+#
+# Scope:
+#   - Flask form routes: PROTECTED. Every <form method="POST">
+#     in the legacy templates renders {{ csrf_token() }} so the
+#     token rides along.
+#   - FastAPI /api/v2/*: NOT protected by this — those use a
+#     Bearer JWT in the Authorization header, which is not
+#     auto-attached to cross-origin requests. CSRF is moot there.
+#     Flask-WTF still never sees those requests (the
+#     DispatcherMiddleware routes them straight into the FastAPI
+#     ASGI app).
+#   - Webhooks (`/webhooks/{stripe,resend}`): EXEMPTED via
+#     `csrf.exempt(...)` after blueprint registration; external
+#     callers can't carry our session-bound token. Signature
+#     verification is the actual auth on those routes.
+#   - WebAuthn passkey JSON routes: EXEMPTED. POST a JSON body
+#     not a form; the session itself guards them.
+#
+# Kill-switch: `WTF_CSRF_ENABLED` config. The test conftest sets
+# it to False so existing form-POST tests don't need to mint
+# tokens. Production keeps it on.
+from flask_wtf.csrf import CSRFProtect
+
+# Reads from env so the conftest can flip the kill-switch with a
+# single `os.environ` write — `app.config["WTF_CSRF_ENABLED"]` is
+# what Flask-WTF actually checks, so we mirror the env value
+# there.
+_CSRF_ENABLED = os.environ.get("WTF_CSRF_ENABLED", "True") not in (
+    "0", "false", "False",
+)
+app.config["WTF_CSRF_ENABLED"] = _CSRF_ENABLED
+app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60 * 24 * 7  # 7 days
+app.config["WTF_CSRF_SSL_STRICT"] = _is_https_prod
+
+csrf = CSRFProtect(app)
+
+
+def _csrf_exempt_endpoints():
+    """Remove specific endpoints from CSRF enforcement.
+
+    Webhooks: external callers can't carry our session-bound
+    token. Stripe + Resend both sign their requests; signature
+    verification is the actual auth.
+
+    WebAuthn passkey JSON: POST a JSON body not a form. The
+    session itself guards these routes; CSRF tokens add no
+    value when the client must already prove a valid session.
+    """
+    for endpoint in (
+        # Webhooks
+        "stripe_webhook",
+        "resend_webhook",
+        # WebAuthn passkey ceremonies (JSON, session-protected)
+        "auth.passkey_login_begin",
+        "auth.passkey_login_finish",
+        "auth.passkey_register_begin",
+        "auth.passkey_register_finish",
+        "account.passkey_delete",
+    ):
+        if endpoint in app.view_functions:
+            csrf.exempt(app.view_functions[endpoint])
+
+
+# Note: _csrf_exempt_endpoints() is only CALLED at the bottom of
+# this module (after the FastAPI mount block) — after every
+# @app.route decoration in this file has registered its view
+# function. Calling here would miss the in-app webhook endpoints
+# (stripe_webhook, resend_webhook) which are defined further
+# down. Look for the matching invocation at the bottom of app.py.
 
 # ── Models ───────────────────────────────────────────────────
 class Store(db.Model):
@@ -7707,6 +7789,15 @@ except Exception as _fastapi_err:
     # Don't break Flask boot if the new backend fails to import.
     # Log it loudly so it doesn't go unnoticed in dev.
     app.logger.warning(f"FastAPI mount skipped: {_fastapi_err}")
+
+
+# Run CSRF exemption registration AFTER every @app.route + every
+# Blueprint route + the FastAPI mount have settled. By this point
+# `app.view_functions` is complete and the exempts can find every
+# endpoint name they target. See `_csrf_exempt_endpoints` at the
+# top of the file for the function body.
+_csrf_exempt_endpoints()
+
 
 if __name__=="__main__":
     # Dev server. NOTE: this uses Flask's built-in WSGI dev server,

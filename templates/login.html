@@ -207,6 +207,7 @@ input::placeholder{color:var(--db-gray-5)}
     <div id="pk-login-divider" class="or-divider" hidden>or password</div>
 
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field">
         <label for="lf-user">Username</label>
         <input id="lf-user" type="text" name="username" placeholder="admin@store.com" autofocus required autocomplete="username">
@@ -225,6 +226,7 @@ input::placeholder{color:var(--db-gray-5)}
       <div class="employee-box-title">Employee? Sign in to your store</div>
       <div class="employee-box-sub">Enter the store code your manager gave you. We'll take you to your store's sign-in page.</div>
       <form method="POST" action="{{ url_for('auth.employee_login_redirect') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="text" name="store_code" placeholder="Store code"
                autocomplete="off" autocapitalize="none" autocorrect="off"
                spellcheck="false" required

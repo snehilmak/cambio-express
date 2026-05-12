@@ -32,6 +32,7 @@
   <div class="card-header"><span class="card-title">Store Info</span></div>
   <div class="card-body">
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="_tab" value="store">
       <div class="form-grid cols-1">
         <div class="field">
@@ -83,6 +84,7 @@
       hidden, so cashiers can't log transfers for providers you don't carry.
     </p>
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="_tab" value="companies">
 
       <div class="section-title" style="margin-top:8px;">Common providers</div>
@@ -194,6 +196,7 @@
     <h3 id="resetModalTitle">Reset Password</h3>
     <div id="reset-name" class="text-sm text-muted" style="margin-bottom:18px;"></div>
     <form id="reset-form" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field" style="margin-bottom:14px;">
         <label>New Password</label>
         <input type="password" name="password" placeholder="Min 8 characters" required>
@@ -221,6 +224,7 @@
     </p>
     <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_add') }}"
           style="display:flex;gap:10px;align-items:flex-end;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="field" style="flex:1;margin:0;">
         <label>Full Name</label>
         <input type="text" name="name" placeholder="e.g. Maria Gonzalez" required>
@@ -244,6 +248,7 @@
           <td>
             <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_rename', eid=e.id) }}"
                   style="display:flex;gap:6px;align-items:center;margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <input type="text" name="name" value="{{ e.name }}"
                      style="font-size:14px;padding:6px 10px;">
               <button type="submit" class="btn btn-outline btn-sm">Save</button>
@@ -260,6 +265,7 @@
           <td>
             <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_toggle', eid=e.id) }}"
                   style="margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-outline btn-sm">
                 {{ 'Deactivate' if e.is_active else 'Reactivate' }}
               </button>
@@ -308,6 +314,7 @@
     </p>
     <form method="POST" action="{{ url_for('admin_settings_mutations.admin_redeem_owner_code') }}"
           style="display:flex;gap:10px;align-items:center;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="text" name="code" autocomplete="off" required
              pattern="[A-Z0-9]{8}" maxlength="8"
              placeholder="XXXXXXXX"
