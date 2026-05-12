@@ -26,13 +26,19 @@ from api.Modules.DailyBook.Requests import (
     LineItemCreateRequest,
     LineItemListResponse,
     LineItemRow,
+    MTBreakdownResponse,
+    MTBreakdownRowResponse,
+    MTBreakdownWriteRequest,
     PeriodSummaryResponse,
+    TransferCompanyTotalsResponse,
+    TransfersSummaryResponse,
 )
 from api.Modules.DailyBook.Services import (
     DailyReportLockedError,
     DailyReportSummary,
     LINE_ITEM_KINDS,
     LineItemValidationError,
+    MTWriteRow,
     add_line_item,
     delete_line_item,
     field_for_kind,
@@ -40,9 +46,12 @@ from api.Modules.DailyBook.Services import (
     lock_report,
     parse_amount,
     parse_at_time,
+    read_mt_breakdown,
     recompute_line_items_total,
+    replace_mt_breakdown,
     summarize_period,
     summarize_report,
+    summarize_transfers_for_day,
     unlock_report,
     update_daily_report,
 )
@@ -56,11 +65,24 @@ def _to_row(s: DailyReportSummary) -> DailyReportRow:
         id=s.id, store_id=s.store_id, report_date=s.report_date,
         taxable_sales=s.taxable_sales,
         non_taxable=s.non_taxable, sales_tax=s.sales_tax,
+        bill_payment_charge=s.bill_payment_charge,
+        phone_recargas=s.phone_recargas, boost_mobile=s.boost_mobile,
         money_transfer=s.money_transfer, money_order=s.money_order,
-        cash_expense=s.cash_expense, check_expense=s.check_expense,
-        cash_deposit=s.cash_deposit, checks_deposit=s.checks_deposit,
-        safe_balance=s.safe_balance, over_short=s.over_short,
-        locked=s.locked, notes=s.notes,
+        check_cashing_fees=s.check_cashing_fees,
+        return_check_hold_fees=s.return_check_hold_fees,
+        forward_balance=s.forward_balance, from_bank=s.from_bank,
+        rebates_commissions=s.rebates_commissions,
+        return_check_paid_back=s.return_check_paid_back,
+        other_cash_in=s.other_cash_in,
+        cash_deposit=s.cash_deposit, safe_balance=s.safe_balance,
+        payroll_expense=s.payroll_expense,
+        cash_purchases=s.cash_purchases, cash_expense=s.cash_expense,
+        check_purchases=s.check_purchases, check_expense=s.check_expense,
+        outside_cash_drops=s.outside_cash_drops,
+        checks_deposit=s.checks_deposit,
+        other_cash_out=s.other_cash_out,
+        over_short=s.over_short,
+        locked=s.locked, notes=s.notes, locked_at=s.locked_at,
         total_receipts=s.total_receipts,
         total_disbursements=s.total_disbursements, net=s.net,
     )
@@ -257,9 +279,30 @@ def lock_daily_route(
     was_locked = bool(existing and existing.locked_at)
     user_id = int(claims["sub"])
     rpt = lock_report(db, int(store_id), d, locked_by_user_id=user_id)
-    if not was_locked:
+    just_locked = not was_locked
+    if just_locked:
         _audit_daily_lock_action(db, claims, "lock", rpt)
     db.commit()
+
+    # Owner digest — fired only on a was-not-locked → locked
+    # state transition so re-clicking the lock button doesn't spam
+    # the inbox. Delivery failures are caught + logged inside the
+    # glue function; we never roll back the lock on email errors.
+    if just_locked:
+        try:
+            from app import send_locked_day_digest
+            send_locked_day_digest(rpt)
+        except Exception:
+            # Last-ditch guard — Flask glue should already swallow
+            # its own SMTP errors, but if the import itself trips
+            # (e.g. in a unit test that mocks app), the lock still
+            # succeeds.
+            import logging
+            logging.getLogger(__name__).exception(
+                "locked-day digest fan-out failed for report_id=%s",
+                rpt.id,
+            )
+
     summary = summarize_report(db, int(store_id), d)
     if summary is None:
         raise HTTPException(status_code=500, detail="Lock failed")
@@ -486,3 +529,166 @@ def line_items_delete_route(
             kind=kind, daily_report_field=target_field,
         )
     db.commit()
+
+
+# ── Money-transfer auto-fill ──────────────────────────────────
+
+
+@router.get(
+    "/{store_id}/{report_date}/transfers-summary",
+    response_model=TransfersSummaryResponse,
+)
+def transfers_summary_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TransfersSummaryResponse:
+    """Auto-fill summary for the Daily Book's Money Transfers tab.
+
+    Aggregates active (non-cancelled) `transfer` rows for the day
+    by company. Cashiers see this as a read-only "Auto" table on
+    the Money Transfers panel; the grand total is what the daily
+    book's `money_transfer` receipt line should reflect when the
+    operator hasn't manually overridden it.
+
+    Cross-store + superadmin → 403 with the same opaque message as
+    the rest of the daily-book write surface.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    summary = summarize_transfers_for_day(db, int(store_id), d)
+    return TransfersSummaryResponse(
+        companies=summary.companies,
+        by_company=[
+            TransferCompanyTotalsResponse(
+                company=row.company,
+                count=row.count,
+                amount=row.amount,
+                fees=row.fees,
+                federal_tax=row.federal_tax,
+                commission=row.commission,
+                total=row.total,
+            )
+            for row in summary.by_company
+        ],
+        grand_total=summary.grand_total,
+    )
+
+
+# ── Editable per-company MT breakdown ────────────────────────
+
+
+@router.get(
+    "/{store_id}/{report_date}/mt-breakdown",
+    response_model=MTBreakdownResponse,
+)
+def mt_breakdown_get_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MTBreakdownResponse:
+    """Read the per-company Money Transfer breakdown for a day.
+
+    Each row carries both `saved_*` values (from
+    `MoneyTransferSummary` — the operator's last entry, if any)
+    and `auto_*` values (from the employee transfer log). The
+    React editor pre-fills inputs from saved-when-present and
+    auto-otherwise, so a fresh day picks up the log automatically
+    and overridden days keep the operator's edits.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    breakdown = read_mt_breakdown(db, int(store_id), d)
+    return MTBreakdownResponse(
+        rows=[
+            MTBreakdownRowResponse(
+                company=row.company,
+                saved_amount=row.saved_amount,
+                saved_fees=row.saved_fees,
+                saved_federal_tax=row.saved_federal_tax,
+                saved_commission=row.saved_commission,
+                saved_total=row.saved_total,
+                auto_amount=row.auto_amount,
+                auto_fees=row.auto_fees,
+                auto_federal_tax=row.auto_federal_tax,
+                auto_commission=row.auto_commission,
+                auto_count=row.auto_count,
+                auto_total=row.auto_total,
+            )
+            for row in breakdown.rows
+        ],
+        saved_total=breakdown.saved_total,
+        auto_total=breakdown.auto_total,
+    )
+
+
+@router.put(
+    "/{store_id}/{report_date}/mt-breakdown",
+    response_model=MTBreakdownResponse,
+)
+def mt_breakdown_put_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    body: MTBreakdownWriteRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MTBreakdownResponse:
+    """Bulk-replace the per-company breakdown for one day.
+
+    Every row in `body.rows` becomes a `MoneyTransferSummary`
+    insert (zero-only rows are skipped to keep the table from
+    bloating with empty companies). After the replace, the daily
+    report's `money_transfer` field is updated to the new grand
+    total so the receipts tab + total_receipts stay consistent in
+    one transaction.
+
+    Locked-day returns 403 — same UX as the rest of the daily-book
+    write surface.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    try:
+        replace_mt_breakdown(
+            db,
+            store_id=int(store_id),
+            report_date=d,
+            rows=[
+                MTWriteRow(
+                    company=r.company,
+                    amount=r.amount,
+                    fees=r.fees,
+                    federal_tax=r.federal_tax,
+                    commission=r.commission,
+                )
+                for r in body.rows
+            ],
+        )
+    except DailyReportLockedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    db.commit()
+
+    # Re-read so the response carries the fresh saved + auto view.
+    breakdown = read_mt_breakdown(db, int(store_id), d)
+    return MTBreakdownResponse(
+        rows=[
+            MTBreakdownRowResponse(
+                company=row.company,
+                saved_amount=row.saved_amount,
+                saved_fees=row.saved_fees,
+                saved_federal_tax=row.saved_federal_tax,
+                saved_commission=row.saved_commission,
+                saved_total=row.saved_total,
+                auto_amount=row.auto_amount,
+                auto_fees=row.auto_fees,
+                auto_federal_tax=row.auto_federal_tax,
+                auto_commission=row.auto_commission,
+                auto_count=row.auto_count,
+                auto_total=row.auto_total,
+            )
+            for row in breakdown.rows
+        ],
+        saved_total=breakdown.saved_total,
+        auto_total=breakdown.auto_total,
+    )

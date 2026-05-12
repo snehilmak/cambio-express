@@ -14,23 +14,51 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
+// Full DailyReport payload — every model column the editor needs
+// to hydrate every input, plus derived totals + lock state.
+// Line-item-derived fields (cash_purchases, checks_deposit, etc.)
+// are read-only in the UI; they roll up from the line-item tables.
 export interface DailyReportRow {
   id: number;
   store_id: number;
   report_date: string;
+  // Sales
   taxable_sales: number;
   non_taxable: number;
   sales_tax: number;
+  // Receipts — operator-editable
+  bill_payment_charge: number;
+  phone_recargas: number;
+  boost_mobile: number;
   money_transfer: number;
   money_order: number;
-  cash_expense: number;
-  check_expense: number;
+  check_cashing_fees: number;
+  return_check_hold_fees: number;
+  forward_balance: number;
+  from_bank: number;
+  rebates_commissions: number;
+  // Receipts — line-item derived (read-only)
+  return_check_paid_back: number;
+  other_cash_in: number;
+  // Disbursements — operator-editable
   cash_deposit: number;
-  checks_deposit: number;
   safe_balance: number;
+  payroll_expense: number;
+  // Disbursements — line-item derived (read-only)
+  cash_purchases: number;
+  cash_expense: number;
+  check_purchases: number;
+  check_expense: number;
+  outside_cash_drops: number;
+  checks_deposit: number;
+  other_cash_out: number;
+  // Other
   over_short: number;
   locked: boolean;
   notes: string;
+  /** ISO datetime when the report was locked, "" otherwise. */
+  locked_at: string;
+  // Derived
   total_receipts: number;
   total_disbursements: number;
   net: number;
@@ -194,6 +222,108 @@ export interface PeriodSummary {
   net: number;
   days_logged: number;
 }
+
+// ── Money-transfer auto-fill ─────────────────────────────────
+
+export interface TransferCompanyTotals {
+  company: string;
+  count: number;
+  amount: number;
+  fees: number;
+  federal_tax: number;
+  commission: number;
+  total: number;
+}
+
+export interface TransfersSummary {
+  companies: string[];
+  by_company: TransferCompanyTotals[];
+  grand_total: number;
+}
+
+// Hook: per-day MT roll-up from the employee transfer log.
+// Read-only — the daily book's `money_transfer` field is the
+// operator's writable counterpart; this hook just shows what
+// the transfer table already has so the cashier doesn't have
+// to re-key it.
+export function useTransfersSummary(date: string | undefined) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<TransfersSummary>({
+    enabled:
+      Boolean(date) && storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "transfers-summary", storeId, date],
+    queryFn: async () => {
+      return await api<TransfersSummary>(
+        `/api/v2/daily/${storeId}/${date}/transfers-summary`,
+      );
+    },
+  });
+}
+
+
+// ── Editable per-company MT breakdown ────────────────────────
+
+export interface MTBreakdownRow {
+  company: string;
+  saved_amount: number;
+  saved_fees: number;
+  saved_federal_tax: number;
+  saved_commission: number;
+  saved_total: number;
+  auto_amount: number;
+  auto_fees: number;
+  auto_federal_tax: number;
+  auto_commission: number;
+  auto_count: number;
+  auto_total: number;
+}
+
+export interface MTBreakdown {
+  rows: MTBreakdownRow[];
+  saved_total: number;
+  auto_total: number;
+}
+
+export interface MTBreakdownWriteRow {
+  company: string;
+  amount: number;
+  fees: number;
+  federal_tax: number;
+  commission: number;
+}
+
+// Hook: per-company saved + auto values for the editor's Money
+// Transfers tab. Each row carries BOTH saved (operator's last
+// entry) and auto (transfer-log aggregate) so the form can pre-
+// fill from saved-when-present, auto-otherwise.
+export function useMTBreakdown(date: string | undefined) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<MTBreakdown>({
+    enabled:
+      Boolean(date) && storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "mt-breakdown", storeId, date],
+    queryFn: async () => {
+      return await api<MTBreakdown>(
+        `/api/v2/daily/${storeId}/${date}/mt-breakdown`,
+      );
+    },
+  });
+}
+
+// PUT /api/v2/daily/{store}/{date}/mt-breakdown — bulk-replace
+// every saved row + sync the grand total into the daily report's
+// `money_transfer` field in one transaction.
+export async function replaceMTBreakdown(
+  storeId: number, date: string, rows: MTBreakdownWriteRow[],
+): Promise<MTBreakdown> {
+  return api<MTBreakdown>(
+    `/api/v2/daily/${storeId}/${date}/mt-breakdown`,
+    { method: "PUT", json: { rows } },
+  );
+}
+
 
 export function useDailyPeriod(from: string, to: string) {
   const identity = getCurrentIdentity();

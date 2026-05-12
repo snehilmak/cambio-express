@@ -4,11 +4,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import { ErrorState, Loading } from "../components/ui";
 import {
+  previewFederalTax,
   updateTransfer,
   useEmployees,
   useTransfer,
   type CreateTransferBody,
 } from "../api/transfers";
+import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
@@ -40,6 +42,7 @@ export default function EditTransfer() {
   const identity = getCurrentIdentity();
   const detail = useTransfer(Number.isFinite(transferId) ? transferId : undefined);
   const roster = useEmployees();
+  const storeInfo = useStoreInfo();
 
   const [form, setForm] = useState<CreateTransferBody | null>(null);
   const [busy, setBusy] = useState(false);
@@ -284,6 +287,32 @@ export default function EditTransfer() {
                 value={form.fee}
                 onChange={(e) => set("fee", Number(e.target.value))}
                 style={inputStyle} />
+            </Field>
+            <Field
+              label={
+                (storeInfo.data?.store.federal_tax_rate ?? 0) > 0
+                  ? `Federal tax preview (${((storeInfo.data!.store.federal_tax_rate) * 100).toFixed(0)}%, server recomputes)`
+                  : "Federal tax preview"
+              }
+            >
+              <input
+                type="text"
+                readOnly
+                tabIndex={-1}
+                value={`$${previewFederalTax({
+                  sendAmount: form.send_amount,
+                  serviceType: form.service_type,
+                  country: form.country,
+                  rate: storeInfo.data?.store.federal_tax_rate ?? 0,
+                }).toFixed(2)}`}
+                style={{
+                  ...inputStyle,
+                  background: "var(--db-surface-2, #141414)",
+                  color: "var(--db-text-muted, #a3a3a3)",
+                  cursor: "default",
+                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+                }}
+              />
             </Field>
             <Field label="Confirm #">
               <input type="text" value={form.confirm_number}

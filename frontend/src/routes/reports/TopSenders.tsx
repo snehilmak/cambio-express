@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 
 import { ReportDrilldown, fmtMoney } from "../../components/ReportDrilldown";
+import { maskPhone } from "../../lib/format";
 
 export default function TopSenders() {
   // Same shape as Top Customers but sorted by transfer count rather
@@ -22,7 +23,7 @@ export default function TopSenders() {
       ]}
       columns={[
         { label: "Customer",    field: "customer" },
-        { label: "Phone",       field: "phone",                       mono: true },
+        { label: "Phone",       field: r => maskPhone(String(r.phone ?? "")), mono: true },
         { label: "Count",       field: r => r.count.toLocaleString(), align: "right", mono: true },
         { label: "Total Sent",  field: r => fmtMoney(Number(r.sent)), align: "right", mono: true },
         { label: "Fees",        field: r => fmtMoney(Number(r.fees)), align: "right", mono: true },

@@ -6,6 +6,7 @@ import {
   type CustomerRow,
 } from "../api/customers";
 import { getCurrentIdentity } from "../lib/auth";
+import { maskPhone } from "../lib/format";
 import {
   Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader, PageShell,
   Section, tokens,
@@ -146,8 +147,12 @@ function CustomerTable({ rows }: { rows: CustomerRow[] }) {
                     fontFamily: tokens.fontMono,
                     fontSize: "0.9rem",
                   }}
+                  // Full number copied to clipboard via the row's
+                  // detail page; the list view only shows the last
+                  // 4 digits per compliance (over-the-shoulder PII).
+                  title="Open the customer for the full number"
                 >
-                  {c.phone_country} {c.phone_number || "—"}
+                  {c.phone_country} {maskPhone(c.phone_number)}
                 </span>
               </td>
               <td style={cellStyle}>

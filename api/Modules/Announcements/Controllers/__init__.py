@@ -136,30 +136,73 @@ def create_route(
 ) -> AnnouncementResponse:
     """Mint a new banner. `expires_days=0` (or omitted) means no
     expiry. `broadcast=True` queues the message for the broadcast-
-    email fan-out (one-shot at create time)."""
+    email fan-out (one-shot at create time).
+
+    `start_at_iso` schedules the banner for a future timestamp —
+    the visibility helper (`active_announcements`) skips rows whose
+    `starts_at` is still in the future, so a scheduled announcement
+    silently waits until its time arrives. Empty / unparseable
+    falls back to "start now"."""
     user = _require_superadmin_user(db, claims)
     from app import Announcement
+    now = datetime.utcnow()
+    starts_at = _parse_starts_at(body.start_at_iso, fallback=now)
+    # expires_days is measured from the start time so a scheduled
+    # banner gets its full visibility window — "10-day banner that
+    # goes live next Monday" expires 10 days after Monday, not 10
+    # days from create time.
     expires_at = (
-        datetime.utcnow() + timedelta(days=body.expires_days)
+        starts_at + timedelta(days=body.expires_days)
         if body.expires_days else None
     )
     a = Announcement(
         message=body.message[:2000],
         level=body.level,
         is_active=True,
-        starts_at=datetime.utcnow(),
+        starts_at=starts_at,
         expires_at=expires_at,
         created_by=user.id,
         broadcast_requested=body.broadcast,
     )
     db.add(a); db.flush()
+    scheduled = starts_at > now
     _audit(
         db, user, "create_announcement",
         target_type="announcement", target_id=str(a.id),
-        details=f"level={body.level}, broadcast={body.broadcast}",
+        details=(
+            f"level={body.level}, broadcast={body.broadcast}, "
+            f"scheduled={scheduled}"
+        ),
     )
     db.commit()
     return AnnouncementResponse(announcement=_adapt(a))
+
+
+def _parse_starts_at(raw: str, *, fallback: datetime) -> datetime:
+    """Parse the ISO-8601 datetime sent by the SPA. Accepts both
+    naive ("2026-05-15T14:00") and offset-aware ("...Z" / "+00:00")
+    forms; offset-aware values are converted to naive UTC so the
+    column stays homogeneous with the rest of the model.
+
+    Bad / empty input falls back to the caller-supplied `fallback`
+    so a typo never blocks the create — the superadmin can still
+    fix the schedule via a follow-up edit (or delete + recreate)."""
+    if not raw or not raw.strip():
+        return fallback
+    text = raw.strip()
+    # datetime.fromisoformat in 3.11+ handles "Z" suffix; coerce to
+    # the "+00:00" form for older runtimes just in case.
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return fallback
+    if parsed.tzinfo is not None:
+        # Convert to UTC + drop tzinfo (Announcement.starts_at is naive UTC).
+        from datetime import timezone
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
 
 
 @router.post(

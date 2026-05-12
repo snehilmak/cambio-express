@@ -96,6 +96,11 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
     useState<CreateAnnouncementBody["level"]>("info");
   const [expiresDays, setExpiresDays] = useState("0");
   const [broadcast, setBroadcast] = useState(false);
+  // Local form field for the optional schedule. Empty = "start
+  // now". Stored as `<input type="datetime-local">` returns a
+  // local string ("2026-05-15T14:00") so we convert to ISO+UTC
+  // at submit.
+  const [scheduleLocal, setScheduleLocal] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -108,8 +113,15 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
         level,
         expires_days: Number(expiresDays) || 0,
         broadcast,
+        // Convert "2026-05-15T14:00" (browser-local) to a real
+        // ISO datetime so the server interprets the correct UTC
+        // instant. Empty stays empty.
+        start_at_iso: scheduleLocal
+          ? new Date(scheduleLocal).toISOString()
+          : "",
       });
       setMessage(""); setExpiresDays("0"); setBroadcast(false);
+      setScheduleLocal("");
       onCreated();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Could not post.");
@@ -164,6 +176,14 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setExpiresDays(e.target.value)}
               style={inputStyle}
               placeholder="0 = no expiry"
+            />
+          </Field>
+          <Field label="Schedule for later (optional)">
+            <input
+              type="datetime-local"
+              value={scheduleLocal}
+              onChange={(e) => setScheduleLocal(e.target.value)}
+              style={inputStyle}
             />
           </Field>
           <Field label="Email blast">
@@ -288,10 +308,14 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
       <td style={cellStyle}>
         {row.is_visible ? (
           <Pill tone="accent">live</Pill>
-        ) : row.is_active ? (
-          <Pill tone="warning">inactive window</Pill>
-        ) : (
+        ) : !row.is_active ? (
           <Pill tone="neutral">disabled</Pill>
+        ) : isScheduledForFuture(row.starts_at) ? (
+          <Pill tone="info">
+            scheduled · {formatScheduleHint(row.starts_at)}
+          </Pill>
+        ) : (
+          <Pill tone="warning">expired</Pill>
         )}
       </td>
       <td style={cellStyle}>
@@ -332,3 +356,26 @@ const cellStyle: React.CSSProperties = {
   borderBottom: `1px solid ${tokens.borderSubtle}`,
   verticalAlign: "top",
 };
+
+// True when `starts_at` is a parseable future date — drives the
+// "scheduled" status pill on each table row.
+function isScheduledForFuture(iso: string): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return false;
+  return t > Date.now();
+}
+
+// Short, human-readable hint for when the schedule will fire,
+// rendered inside the scheduled status pill.
+function formatScheduleHint(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const diffMs = d.getTime() - Date.now();
+  const diffH = Math.round(diffMs / 3_600_000);
+  if (diffH < 24) return `in ${diffH}h`;
+  return d.toLocaleDateString(undefined, {
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}

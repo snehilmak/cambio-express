@@ -411,16 +411,36 @@ impact ÷ effort. Numbers are an estimate.
       guard in `tests/test_session_cookie_hardening.py`.
 
 ## Nice to have (post-launch)
-- [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers
-      sharing the same employee login on different computers currently
-      only see each other's edits after a page reload / filter change.
-      Add a ~20s polling timer on `/transfers` that re-runs the existing
-      `?partial=1` fetch so the table silently refreshes. Skip while the
-      user is actively typing in the search box or has an unsaved form
-      open. If this ever feels too laggy, upgrade to Server-Sent Events
-      from the route that fires after `commit_transfer()`.
-- [ ] Auto-fill `federal_tax` at 1% of send amount (or a per-company
-      rate map) with an override field, so cashiers don't typo.
+- [x] **Daily Book Money Transfers — editable per-company breakdown.**
+      Landed. New `GET/PUT /api/v2/daily/{store}/{date}/mt-breakdown`
+      endpoints back the Transfers tab: each row carries saved
+      (operator's last entry) + auto (transfer-log aggregate) so
+      the form pre-fills from saved-when-present, auto-otherwise.
+      Save fires a bulk-replace into `MoneyTransferSummary` AND
+      syncs the grand total into `DailyReport.money_transfer` in
+      one transaction. Locked-day → 403. Service + Pydantic schemas
+      + 9 unit tests (read defaults, auto/saved pull, unknown-company
+      ordering, bulk-replace, idempotency, zero-row skip, locked guard,
+      empty-rows-preserves-money_transfer).
+- [x] **Multi-device auto-refresh on the Transfers list** — landed.
+      `useTransfers` now accepts a `pollMs` parameter that wires
+      TanStack Query's `refetchInterval`; the `/app/transfers`
+      route passes 20_000ms by default. Polling pauses while a
+      debounced search query is mid-flight (`qDraft !== q`) so we
+      don't double-fetch on every keystroke, and the
+      `refetchIntervalInBackground=false` default pauses the timer
+      when the tab is hidden. The header carries a "Live · synced
+      HH:MM" pill so the cashier sees the freshness at a glance.
+- [x] Auto-fill `federal_tax` at the store's configured rate —
+      landed. New/Edit Transfer forms now show a read-only
+      "Federal tax preview" field that updates live as the
+      cashier types. Mirrors the server-side rule in
+      `api/Modules/Transfers/Services/tax.py` (exempt for Bill
+      Payment / Top Up / Recharge, and for US-domestic recipients
+      even on Money Transfer). The number is purely a preview;
+      the server still recomputes on save per CLAUDE.md invariant
+      #9. Hook + helper: `previewFederalTax` in
+      `frontend/src/api/transfers.ts`.
 - [ ] Backfill script for `federal_tax` on historical transfers — they
       currently default to 0 but some of those fee amounts secretly
       included tax.
@@ -428,16 +448,33 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] Recipient autocomplete (same pattern as sender) if repeat
       recipients become common in the data.
 - [ ] Rich text / markdown links in announcements.
-- [ ] Scheduled announcements (`Announcement.starts_at` already exists).
+- [x] Scheduled announcements — landed. The Announcement create
+      endpoint accepts an optional `start_at_iso` (ISO-8601 UTC);
+      omit / empty starts the banner immediately. expires_days is
+      measured from start_at_iso so a scheduled banner gets its
+      full visibility window. The existing `active_announcements`
+      visibility helper already skipped not-yet-started rows.
+      Superadmin → Announcements form has a "Schedule for later"
+      datetime-local input; history table shows a "scheduled · in
+      4h" pill for future rows. 5 new controller tests cover the
+      future / past / empty / bad-parse / expiry-from-start_at
+      cases.
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
-- [ ] Mask phone numbers in list views per compliance.
+- [x] Mask phone numbers in list views per compliance — landed.
+      `maskPhone` helper in `frontend/src/lib/format.ts` keeps
+      the last 4 digits + replaces the rest with middle dots.
+      Applied to `/app/customers`, `/app/reports/top-customers`,
+      and `/app/reports/top-senders`. Customer / transfer detail
+      pages still show the full number on click-through.
 - [ ] CSV export on the customer directory.
-- [ ] **Email locked-day digest to owner** — when a daily book is locked
-      via the lock button, fire off a one-page HTML/PDF summary email
-      to the store owner. Use `Store.locked_at` as the trigger so it
-      fires for the right calendar day even when the book is locked
-      late (cashiers often close out the next morning). Pairs with
-      the notifications-toggle work in the personal-settings backlog.
+- [x] **Email locked-day digest to owner** — landed. The FastAPI
+      lock controller fires `send_locked_day_digest(report)` on a
+      was-not-locked → locked transition; recipient query +
+      static copy live in
+      `api/Modules/Notifications/Services/locked_day_digest.py`,
+      template at `templates/emails/locked_day_digest.html`,
+      opt-out toggle on `User.notify_locked_day_digest` (default
+      TRUE, flipped off on Resend complaint webhook).
 
 ## Compliance (gated on check-cashing feature)
 - [ ] **OFAC SDN screening** — once we expand from remittance

@@ -4,26 +4,55 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class DailyReportRow(BaseModel):
     """One day's roll-up. Pre-computes receipts / disbursements /
-    net so the React table doesn't have to."""
+    net so the React table doesn't have to.
+
+    Carries the full DailyReport field set — the editor hydrates
+    every input from this payload, line-item-derived fields display
+    as read-only "Auto" tiles, and the real-time totals strip sums
+    them client-side as the cashier types."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: int
     store_id: int
     report_date: str  # YYYY-MM-DD
+    # Sales
     taxable_sales: float = 0.0
     non_taxable: float = 0.0
     sales_tax: float = 0.0
+    # Receipts (operator-editable)
+    bill_payment_charge: float = 0.0
+    phone_recargas: float = 0.0
+    boost_mobile: float = 0.0
     money_transfer: float = 0.0
     money_order: float = 0.0
-    cash_expense: float = 0.0
-    check_expense: float = 0.0
+    check_cashing_fees: float = 0.0
+    return_check_hold_fees: float = 0.0
+    forward_balance: float = 0.0
+    from_bank: float = 0.0
+    rebates_commissions: float = 0.0
+    # Receipts (line-item derived — read-only in editor)
+    return_check_paid_back: float = 0.0
+    other_cash_in: float = 0.0
+    # Disbursements (operator-editable)
     cash_deposit: float = 0.0
-    checks_deposit: float = 0.0
     safe_balance: float = 0.0
+    payroll_expense: float = 0.0
+    # Disbursements (line-item derived — read-only in editor)
+    cash_purchases: float = 0.0
+    cash_expense: float = 0.0
+    check_purchases: float = 0.0
+    check_expense: float = 0.0
+    outside_cash_drops: float = 0.0
+    checks_deposit: float = 0.0
+    other_cash_out: float = 0.0
+    # Other
     over_short: float = 0.0
     locked: bool = False
     notes: str = ""
+    # ISO datetime, or "" when unlocked
+    locked_at: str = ""
+    # Derived
     total_receipts: float
     total_disbursements: float
     net: float
@@ -92,6 +121,99 @@ class LineItemCreateRequest(BaseModel):
     at_time: str  # HH:MM
     amount: float  # > 0; the Service rejects ≤0
     note: str = ""
+
+
+class TransferCompanyTotalsResponse(BaseModel):
+    """One company's roll-up inside the day's transfer-summary
+    response. Mirrors the editable columns the legacy Jinja MT
+    table showed; the React Money Transfers tab renders this
+    read-only with an "Auto" pill — operator overrides go through
+    the receipts tab's `money_transfer` field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    count: int
+    amount: float
+    fees: float
+    federal_tax: float
+    commission: float
+    total: float
+
+
+class TransfersSummaryResponse(BaseModel):
+    """Auto-fill payload for the Daily Book's Money Transfers tab.
+    Aggregates active (non-cancelled) Transfer rows by company for
+    a single (store, send_date). Zero-row days still return one
+    entry per active company so the table renders consistently."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    companies: list[str]
+    by_company: list[TransferCompanyTotalsResponse]
+    grand_total: float
+
+
+class MTBreakdownRowResponse(BaseModel):
+    """One company's row in the MT breakdown read response.
+
+    Carries BOTH `saved_*` (operator-edited persisted values) and
+    `auto_*` (transfer-log aggregate). The React editor pre-fills
+    each input from saved when present, falls back to auto on a
+    fresh day, and renders a "reset to auto" affordance when the
+    two diverge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    saved_amount: float
+    saved_fees: float
+    saved_federal_tax: float
+    saved_commission: float
+    saved_total: float
+    auto_amount: float
+    auto_fees: float
+    auto_federal_tax: float
+    auto_commission: float
+    auto_count: int
+    auto_total: float
+
+
+class MTBreakdownResponse(BaseModel):
+    """Per-company MT breakdown for a single (store, date). Empty
+    `rows` means the store has no MT companies configured (a fresh
+    install before the company list is populated)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[MTBreakdownRowResponse]
+    saved_total: float
+    auto_total: float
+
+
+class MTBreakdownWriteRow(BaseModel):
+    """Operator-edited per-company values. Sent as a list inside
+    MTBreakdownWriteRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    amount: float = 0.0
+    fees: float = 0.0
+    federal_tax: float = 0.0
+    commission: float = 0.0
+
+
+class MTBreakdownWriteRequest(BaseModel):
+    """Bulk-replace payload for the per-company MT breakdown. Every
+    row in `rows` becomes a `MoneyTransferSummary` insert (or no
+    insert at all when every field is zero), and the daily
+    report's `money_transfer` field is updated to the new grand
+    total in one transaction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[MTBreakdownWriteRow]
 
 
 class DailyReportUpdateRequest(BaseModel):

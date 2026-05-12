@@ -177,6 +177,36 @@ export function useTransfer(transferId: number | undefined) {
   });
 }
 
+// Service types exempt from the federal-tax remittance — must
+// stay 1:1 with `api/Modules/Transfers/Services/tax.py`. Bill
+// Payment / Top Up / Recharge are exempt because no ACH crosses
+// a border for them; only Money Transfer carries the levy.
+const TAX_EXEMPT_SERVICES: ReadonlySet<string> = new Set([
+  "Bill Payment", "Top Up", "Recharge",
+]);
+
+// Domestic countries that also skip the tax even for Money
+// Transfer — mirrors `DOMESTIC_COUNTRIES` server-side.
+const DOMESTIC_COUNTRIES: ReadonlySet<string> = new Set(["United States"]);
+
+/** Client-side preview of `Transfer.federal_tax` so the cashier
+ *  can sanity-check the line before submit. The server recomputes
+ *  on save (CLAUDE.md invariant #9) — this is purely a sticker
+ *  for the form. Mirrors `federal_tax_for` in
+ *  `api/Modules/Transfers/Services/tax.py`. */
+export function previewFederalTax(opts: {
+  sendAmount: number | string | null | undefined;
+  serviceType: string;
+  country?: string | null;
+  rate: number | null | undefined;
+}): number {
+  if (TAX_EXEMPT_SERVICES.has(opts.serviceType)) return 0;
+  if (opts.country && DOMESTIC_COUNTRIES.has(opts.country.trim())) return 0;
+  const amount = Number(opts.sendAmount) || 0;
+  const rate = Number(opts.rate) || 0;
+  return Math.round(amount * rate * 100) / 100;
+}
+
 export interface TransferFilters {
   q?: string;
   date_from?: string;
@@ -187,6 +217,13 @@ export interface TransferFilters {
 interface TransfersPageOptions extends TransferFilters {
   page: number;
   perPage: number;
+  /** Polling interval in ms — pass a positive number to keep the
+   *  list fresh while two cashiers share an employee login on
+   *  different machines. Foreground only (TanStack Query's default
+   *  `refetchIntervalInBackground=false` pauses polling when the
+   *  tab is hidden, so we don't burn bandwidth in a background
+   *  tab). Omit to disable polling. */
+  pollMs?: number;
 }
 
 // Hook: paginated transfer list with filters. Powers the
@@ -194,7 +231,7 @@ interface TransfersPageOptions extends TransferFilters {
 // `useRecentTransfers` — different query key + filters so
 // TanStack Query caches them independently.
 export function useTransfers({
-  page, perPage, q, date_from, date_to, status,
+  page, perPage, q, date_from, date_to, status, pollMs,
 }: TransfersPageOptions) {
   const identity = getCurrentIdentity();
   const storeId = identity?.store_id;
@@ -227,5 +264,10 @@ export function useTransfers({
     // page is loading — avoids a flash of "Loading..." that
     // makes pagination feel laggy.
     placeholderData: (prev) => prev,
+    // Multi-device sync: when pollMs is set, refetch on that
+    // cadence so a second cashier's edits show up without a
+    // page reload. Returns false (disabled) when no interval
+    // was passed.
+    refetchInterval: pollMs && pollMs > 0 ? pollMs : false,
   });
 }
