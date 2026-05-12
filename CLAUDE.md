@@ -107,10 +107,12 @@ Non-negotiables:
 ## Running locally
 ```bash
 pip install -r requirements.txt
-python app.py             # dev server on :5000
+python app.py             # dev server on :5000 (uvicorn → asgi:asgi_app, prod-parity)
 pytest tests/             # full suite
 flask purge-expired-stores  # deletes inactive stores past retention
 ```
+Set `DEV_RELOAD=1` for hot-reload on Python edits. The Vite dev
+server (port 5173) handles SPA reload on its own.
 First boot seeds a superadmin (`superadmin / super2025!`) and demo store
 admin (`admin / cambio2025!`). Override via `SUPERADMIN_PASSWORD` /
 `ADMIN_PASSWORD` env vars in prod.

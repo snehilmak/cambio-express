@@ -7959,9 +7959,16 @@ def spa_asset(filename: str):
 #
 # Wrapped in try/except so a broken FastAPI import doesn't break
 # the Flask app — during early-stage migration, half the FastAPI
-# routers may not exist yet. Once Flask is removed (cleanup PR),
-# this whole block goes away and api/main.py becomes the entry
-# point.
+# routers may not exist yet.
+#
+# **Why this block still exists** even though production runs from
+# `asgi.py` (uvicorn) and never traverses the inner a2wsgi bridge:
+# the pytest suite uses Flask's `test_client()` and hits /api/v2/*
+# URLs through this dispatcher. Tests are short-lived single-call
+# requests, so the leaked-task pathology that crashed gunicorn
+# workers in May 2026 doesn't manifest. Once every test moves to
+# the ASGI client (httpx + ASGITransport on `asgi:asgi_app`), this
+# block + the a2wsgi dependency can be deleted.
 try:
     from api.main import api_app as _fastapi_app
     from a2wsgi import ASGIMiddleware
@@ -7986,19 +7993,28 @@ _csrf_exempt_endpoints()
 
 
 if __name__=="__main__":
-    # Dev server. NOTE: this uses Flask's built-in WSGI dev server,
-    # which means /api/v2/* requests still cross the inner
-    # a2wsgi.ASGIMiddleware bridge (see the FastAPI mount block
-    # above). That bridge accumulates leaked asyncio tasks under
-    # sustained load and hangs gunicorn workers in production —
-    # which is why production now boots from `asgi.py` via uvicorn
-    # (see render.yaml's startCommand). Dev sessions are short and
-    # single-user, so the bug doesn't manifest here, but for an
-    # exact prod-parity dev loop run:
+    # Dev server — uvicorn pointing at `asgi:asgi_app`, the same
+    # entrypoint production uses (`render.yaml` startCommand:
+    # `gunicorn asgi:asgi_app -k uvicorn.workers.UvicornWorker`).
+    # This means dev /api/v2/* requests go through the native
+    # ASGI path, NOT the in-app a2wsgi.ASGIMiddleware bridge.
+    # Prod-parity is the point: any latency / lifecycle / cookie
+    # surprise the cashier hits in prod shows up in dev too.
     #
-    #     python -m uvicorn asgi:asgi_app --host 0.0.0.0 --port 5000
-    #
-    # That path skips the leaky bridge entirely, same as production.
-    port=int(os.environ.get("PORT",5000))
-    print(f"🚀 DineroBook → http://0.0.0.0:{port}")
-    app.run(host="0.0.0.0",port=port,debug=False)
+    # Module-level imports above mounted the dispatcher onto
+    # `app.wsgi_app` for the test suite's benefit — uvicorn ignores
+    # it because we point it at `asgi:asgi_app`, not `app:app`.
+    import uvicorn
+    port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 DineroBook → http://0.0.0.0:{port}  (uvicorn/ASGI)")
+    uvicorn.run(
+        "asgi:asgi_app",
+        host="0.0.0.0",
+        port=port,
+        # reload=False matches prod; flip via env if a contributor
+        # wants hot-reload on file edits. The Vite dev server at
+        # :5173 owns SPA hot-reload already so most edits don't
+        # need a Python reload.
+        reload=bool(os.environ.get("DEV_RELOAD")),
+        log_level="info",
+    )
