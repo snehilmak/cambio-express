@@ -106,7 +106,9 @@ def tv_pair_status():
         )
         if display and store and store_has_addon(store, "tv_display"):
             display_url = url_for(
-                "tv_device_display", device_token=token, _external=True,
+                "tv_board.tv_device_display",
+                device_token=token,
+                _external=True,
             )
             return jsonify({
                 "status":      "claimed",
