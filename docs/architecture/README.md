@@ -44,6 +44,7 @@ status header of the old one. The old reasoning stays readable.
 | [migrations.md](migrations.md) | Alembic + `_ADDED_COLUMNS` workflow. Tracks ADR-004 phase 1. |
 | [deployment.md](deployment.md) | Render deploy runbook — env vars, secret rotation, backup verification, data-retention purge, incident playbook. Tracks the "Deployment runbook" item in BACKLOG's "Before going live" list. |
 | [secrets-audit.md](secrets-audit.md) | 2026-05 repo-wide secrets audit. Documents the prod safety gates and the recurring-audit checklist for PR reviews. |
+| [component-catalog.md](component-catalog.md) | Flat reference for every SPA primitive in `frontend/src/components/ui/index.tsx` + every `.ds-*` motion class. Tracks BACKLOG F3. |
 | [MIGRATION_ADR.md](MIGRATION_ADR.md) | Umbrella ADR for the May 2026 SPA migration. |
 
 ## Writing a new ADR

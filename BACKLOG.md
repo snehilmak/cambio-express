@@ -192,9 +192,15 @@ items decompose the monolith.
       middleware on both Flask and FastAPI sides), the SPA →
       Flask vs SPA → FastAPI routing split, and common debugging
       tasks.
-- [ ] **F3. Frontend component catalog.** Once C2/C3 ship, document
-      each shared component with a Storybook page (or simpler:
-      a `frontend/docs/components.md` with screenshots).
+- [x] **F3. Frontend component catalog.** Landed at
+      [`docs/architecture/component-catalog.md`](docs/architecture/component-catalog.md).
+      Flat reference for every primitive in
+      `frontend/src/components/ui/index.tsx` (layout, forms,
+      tables, states, buttons, pills, tokens, motion classes)
+      with usage notes + a "where to add new ad-hoc styling"
+      decision tree. Storybook-as-screenshots is still nice-to-
+      have but the markdown reference is the
+      first-day-onboarding artifact.
 - [x] **F4. Onboarding README.** Landed —
       [`README.md`](README.md). Covers stack-at-a-glance,
       quick-start commands, project layout, a "where do I look
