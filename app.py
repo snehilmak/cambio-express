@@ -2239,7 +2239,9 @@ def inject_trial_context():
     try:
         announcements = active_announcements()
     except Exception:
-        # Table may not exist yet on a fresh install between db.create_all() calls.
+        # Defensive — context processor runs on every request; if the
+        # announcement table can't be queried for any reason, treat as
+        # "no banner" so the page still renders.
         announcements = []
     user = current_user()
     if not user:
@@ -5568,7 +5570,7 @@ def _reject_if_locked(store_id, report_date, ds):
 def _migrate_legacy_line_item_tables():
     """One-time, idempotent migration: copy legacy DailyDrop and
     CheckDeposit rows into DailyLineItem with discriminator kinds
-    ('drop' and 'check_deposit'). Runs at boot after db.create_all().
+    ('drop' and 'check_deposit'). Runs at boot after Alembic upgrade.
 
     Why this exists: DailyDrop and CheckDeposit predated the generic
     DailyLineItem(kind=...) model. They were kept side-by-side because
@@ -5594,9 +5596,9 @@ def _migrate_legacy_line_item_tables():
     try:
         legacy_drops = DailyDrop.query.all()
     except Exception:
-        # Tables don't exist yet on a brand-new boot before
-        # db.create_all() finishes. Caller wraps this in a try block
-        # but we belt-and-suspenders here too.
+        # Defensive — caller wraps this whole function in a try
+        # block; this inner guard catches the case where the legacy
+        # tables were already dropped from a freshly-baselined DB.
         legacy_drops = []
     for dd in legacy_drops:
         existing = DailyLineItem.query.filter_by(
@@ -7250,188 +7252,16 @@ def seed_amazon_reviewer_cmd(password, keep_data):
 from blueprints import errors as _bp_errors  # noqa: E402
 _bp_errors.register(app, current_user)
 
-# ── Init ─────────────────────────────────────────────────────
-# Column additions applied to existing installs on boot. Each entry is
-#   (table_name, column_name, DDL snippet after ADD COLUMN)
-# Kept here so a single helper can migrate any table.
-_ADDED_COLUMNS = [
-    ("store",    "addons",               "VARCHAR(255) DEFAULT ''"),
-    ("store",    "canceled_at",          "TIMESTAMP NULL"),
-    ("store",    "data_retention_until", "TIMESTAMP NULL"),
-    ("transfer", "federal_tax",          "FLOAT DEFAULT 0"),
-    ("transfer", "sender_phone",         "VARCHAR(40) DEFAULT ''"),
-    ("transfer", "customer_id",          "INTEGER NULL"),
-    ("transfer", "sender_phone_country", "VARCHAR(8) DEFAULT ''"),
-    ("transfer", "sender_address",       "VARCHAR(255) DEFAULT ''"),
-    ("transfer", "sender_dob",           "DATE NULL"),
-    ("store",    "companies",            "VARCHAR(500) DEFAULT ''"),
-    ("mt_summary","federal_tax",         "FLOAT DEFAULT 0"),
-    # Processed-by attribution. Nullable so old transfers stay valid; the
-    # transfer form enforces a non-empty value for new saves.
-    ("transfer", "employee_id",          "INTEGER NULL"),
-    ("transfer", "employee_name",        "VARCHAR(120) DEFAULT ''"),
-    ("store",    "referred_by_code_id",  "INTEGER NULL"),
-    ("store",    "referee_credit_applied_at", "TIMESTAMP NULL"),
-    # Per-store federal tax rate — 0.01 = 1%. Existing stores get 0.01 via
-    # the DEFAULT; admins can change via Settings → Store.
-    ("store",    "federal_tax_rate",     "FLOAT DEFAULT 0.01 NOT NULL"),
-    # 2FA (TOTP) columns on user. Mandatory for superadmin; optional/unused
-    # for other roles today. Nullable so existing rows stay valid on upgrade.
-    ("user",     "totp_secret",          "VARCHAR(64) NULL"),
-    ("user",     "totp_enrolled_at",     "TIMESTAMP NULL"),
-    # Service performed: Money Transfer (default, taxed) vs Bill Payment /
-    # Top Up / Recharge (no federal tax). Existing rows backfill to
-    # "Money Transfer" via the DEFAULT, which preserves their current tax
-    # state because the tax was already computed at save time.
-    ("transfer", "service_type",         "VARCHAR(30) DEFAULT 'Money Transfer' NOT NULL"),
-    # Billing cadence. "monthly" or "yearly" for paid subscribers; ""
-    # for trial / inactive. Backfilled by the Stripe webhook on the
-    # next activation/renewal for any store that upgrades or
-    # reactivates after this column ships.
-    ("store",    "billing_cycle",        "VARCHAR(10) DEFAULT ''"),
-    # Daily-book lock. When locked_at is not NULL the report + its
-    # line-item tables reject writes until an admin explicitly unlocks.
-    ("daily_report", "locked_at",        "TIMESTAMP NULL"),
-    ("daily_report", "locked_by",        "INTEGER NULL"),
-    # Per-user profile fields. Email is the headline addition — today
-    # username doubles as email for most accounts but isn't validated
-    # as one, and the password-reset flow currently uses username
-    # which gets messy when the username isn't an email. phone +
-    # timezone are quality-of-life. last_login_at is read-only
-    # (login routes set it) and surfaces as a "you last signed in
-    # from X" signal on the Security page.
-    ("user",     "email",                "VARCHAR(255) DEFAULT ''"),
-    ("user",     "phone",                "VARCHAR(40) DEFAULT ''"),
-    ("user",     "timezone",             "VARCHAR(60) DEFAULT ''"),
-    ("user",     "last_login_at",        "TIMESTAMP NULL"),
-    # Notification preferences. Opt-out defaults (reminder emails are
-    # the kind of thing users want by default; only silence them
-    # explicitly). Employees and superadmin ignore the trial column
-    # since they aren't tied to a trialing store.
-    ("user",     "notify_trial_reminders", "BOOLEAN DEFAULT TRUE"),
-    # Trial-reminder dedup. Stamped the first time the reminder
-    # cron sends an email for a given trial; cleared on resubscribe
-    # (so a second trial, e.g. after reactivation, gets a fresh
-    # reminder). Without this the cron would spam daily once the
-    # store enters expiring_soon.
-    ("store",    "trial_reminder_sent_at", "TIMESTAMP NULL"),
-    # Email deliverability suppression. When Resend posts an
-    # `email.bounced` webhook with bounce_type=hard for this user's
-    # address, we stamp this column. `_send_email()` skips any
-    # recipient whose matching User row is stamped, so we stop
-    # hammering Resend with guaranteed-failing addresses. Cleared by
-    # a superadmin "clear suppression" action (not yet built — one
-    # for later when we have a user who fixes their mailbox and
-    # wants to un-bounce).
-    ("user",     "email_bounced_at",     "TIMESTAMP NULL"),
-    # Announcement broadcast — per-user opt-in flag + per-announcement
-    # "send requested" + dedup stamp. Opt-in default False because
-    # announcements fan out to every user (unlike trial reminders
-    # which only hit the user's own store).
-    ("user",         "notify_announcement_email", "BOOLEAN DEFAULT FALSE"),
-    ("announcement", "broadcast_requested",       "BOOLEAN DEFAULT FALSE"),
-    ("announcement", "broadcast_sent_at",         "TIMESTAMP NULL"),
-    # Locked-day digest. Fires when a daily book is locked from the
-    # SPA editor; goes to admins + linked owners of the store.
-    # Opt-out default — close-outs are usually wanted but the
-    # /account/notifications page lets users silence them.
-    ("user",         "notify_locked_day_digest",  "BOOLEAN DEFAULT TRUE"),
-    # UI theme preference (dark | light). Default dark to match the
-    # historical behavior — users opt in to light explicitly.
-    ("user",         "theme_preference",          "VARCHAR(8) DEFAULT 'dark'"),
-    # Return-check workflow ↔ daily-book payback line item link.
-    # Auto-created line items carry the source ReturnCheck.id so we
-    # can update / delete the shadow row when the return check is
-    # edited or reopened.
-    ("daily_line_item", "return_check_id",        "INTEGER NULL"),
-    # TV Display companion-app pairing (Fire TV / Google TV).
-    # DEPRECATED columns — the pair-code state moved to the
-    # TVPendingPair table when we inverted the flow. Left in the
-    # schema because CLAUDE.md forbids dropping columns from a
-    # running DB; safe to remove via a backfill migration later.
-    ("tv_display",     "pair_code",              "VARCHAR(8) DEFAULT ''"),
-    ("tv_display",     "pair_code_expires_at",   "TIMESTAMP NULL"),
-    # Phase 2 bank-transaction sync — rate-limit accounting on Store.
-    # Each Stripe Transaction.list call is billed, so manual syncs are
-    # gated by a per-store cooldown (15 min) and daily cap (5/day).
-    ("store",          "bank_sync_last_at",      "TIMESTAMP NULL"),
-    ("store",          "bank_sync_count_today",  "INTEGER DEFAULT 0"),
-    ("store",          "bank_sync_count_date",   "DATE NULL"),
-    # Phase 3 reconcile — back-link from BankTransaction to the
-    # DailyLineItem we created when the row was categorized into a
-    # daily-book bucket. Lets "Un-reconcile" delete the line item.
-    ("bank_transaction", "daily_line_item_id",   "INTEGER NULL"),
-    # Single consolidated bank-charges P&L column. Replaces the
-    # Nizari-specific 210/230 split in the UI. The legacy columns stay
-    # in the schema for historic data; the read-time sum on the
-    # monthly_report page rolls them into the total.
-    ("monthly_financial", "bank_charges_total",  "REAL DEFAULT 0"),
-    # Operator-set nickname for a connected bank account. When set the
-    # transactions list and P&L breakdown show this instead of the
-    # ••<last4>. Forward-compat for stores that may add a second
-    # account at the same bank — distinct nicknames > opaque last4s.
-    ("stripe_bank_account", "nickname",          "VARCHAR(60) DEFAULT ''"),
-]
 
-def _ensure_added_columns():
-    """Apply the _ADDED_COLUMNS migrations. Idempotent and safe on every boot.
-
-    Table names are ALWAYS quoted — `user` is a Postgres reserved word
-    (it aliases CURRENT_USER), so `ALTER TABLE user …` throws a syntax
-    error in PG even though the table exists. Quoting (`"user"`) makes
-    the reserved-word issue go away; sqlite accepts the quotes too.
-
-    Each ALTER runs in its own transaction on Postgres so one failure
-    doesn't abort the others — and we log the specific column that
-    failed instead of a silent "column migration skipped"."""
-    try:
-        dialect = db.engine.dialect.name
-    except Exception as e:
-        app.logger.warning(f"column migration skipped (no engine): {e}")
-        return
-
-    if dialect == "sqlite":
-        try:
-            with db.engine.connect() as conn:
-                existing = {}
-                for table, _, _ in _ADDED_COLUMNS:
-                    if table not in existing:
-                        rows = conn.exec_driver_sql(
-                            f'PRAGMA table_info("{table}");')
-                        existing[table] = [r[1] for r in rows]
-                for table, name, ddl in _ADDED_COLUMNS:
-                    if name not in existing.get(table, []):
-                        try:
-                            conn.exec_driver_sql(
-                                f'ALTER TABLE "{table}" ADD COLUMN {name} {ddl}')
-                        except Exception as e:
-                            app.logger.warning(
-                                f"sqlite ADD COLUMN failed for {table}.{name}: {e}")
-                conn.commit()
-        except Exception as e:
-            app.logger.warning(f"sqlite column migration skipped: {e}")
-        return
-
-    # Postgres path. Each ALTER in its own transaction — so a failure on
-    # one doesn't poison the rest (PG aborts the whole tx on any error).
-    for table, name, ddl in _ADDED_COLUMNS:
-        try:
-            with db.engine.begin() as conn:
-                conn.exec_driver_sql(
-                    f'ALTER TABLE "{table}" ADD COLUMN IF NOT EXISTS {name} {ddl}')
-        except Exception as e:
-            app.logger.warning(f"pg ADD COLUMN failed for {table}.{name}: {e}")
-
-# Indexes added after the table existed in production. Like
-# `_ADDED_COLUMNS`, this is the no-framework migration path:
-# `db.create_all()` only adds indexes when the table is being CREATED,
-# so any index added later to a model needs an explicit
-# `CREATE INDEX IF NOT EXISTS` to land on existing prod databases.
+# Indexes safety-net. Alembic's autogenerate doesn't always pick
+# up index-only changes, so we keep an explicit `CREATE INDEX IF
+# NOT EXISTS` list that runs on boot. Idempotent — the IF NOT
+# EXISTS no-ops once the index is in place.
 #
-# Each entry is `(index_name, table, column_csv)`. Idempotent and
-# safe on every boot — `IF NOT EXISTS` is a no-op once the index is
-# in place, and the model declarations stay the source of truth so
-# fresh installs get the indexes via `db.create_all()`.
+# Each entry is `(index_name, table, column_csv)`. When adding a
+# new index, ALSO declare it on the SQLAlchemy model so a fresh
+# Alembic baseline picks it up; this list is the bridge for
+# already-deployed DBs.
 _ADDED_INDEXES = [
     # Transfer hot path (PR 104).
     ("ix_transfer_store_send_date", "transfer", "store_id, send_date"),
@@ -7814,10 +7644,53 @@ def _rename_maxi_transfer_to_maxi():
         db.session.rollback()
         app.logger.warning(f"Maxi Transfer rename backfill skipped: {e}")
 
+def _apply_schema():
+    """Run ``alembic upgrade head`` against the Flask app's DB.
+
+    Alembic is the sole source of schema truth. Fresh DBs are built
+    by the baseline migration; existing DBs upgrade in place. New
+    columns, tables, indexes — all go through
+    ``alembic revision --autogenerate -m '…'``, then commit the
+    generated file under ``alembic/versions/``.
+
+    We pass Flask's existing DB connection into Alembic via
+    ``cfg.attributes`` so both run against the SAME database. This
+    matters for in-memory SQLite (tests): each engine creates its
+    own private DB, so if Alembic opens a fresh engine it migrates
+    a DB the Flask app can't see, and the suite blows up on the
+    first query against a missing table.
+
+    ``DINEROBOOK_SKIP_INIT_DB`` is set inside Alembic's ``env.py``
+    via ``os.environ.setdefault`` so the Alembic CLI doesn't
+    recursively boot Flask. We save + restore the value so the side
+    effect doesn't leak into pytest's subprocesses (some tests
+    spawn Python subprocesses that re-import ``app`` — a leaked
+    ``DINEROBOOK_SKIP_INIT_DB=1`` would silently skip ``init_db``).
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", str(db.engine.url))
+
+    prev_skip = os.environ.get("DINEROBOOK_SKIP_INIT_DB")
+    try:
+        with db.engine.connect() as connection:
+            cfg.attributes["connection"] = connection
+            command.upgrade(cfg, "head")
+    finally:
+        if prev_skip is None:
+            os.environ.pop("DINEROBOOK_SKIP_INIT_DB", None)
+        else:
+            os.environ["DINEROBOOK_SKIP_INIT_DB"] = prev_skip
+    app.logger.info("Alembic upgrade head: OK")
+
+
 def init_db():
     with app.app_context():
-        db.create_all()
-        _ensure_added_columns()
+        # Alembic builds + upgrades the schema. No db.create_all,
+        # no _ADDED_COLUMNS — every schema change is a revision.
+        _apply_schema()
         _ensure_added_indexes()
         _drop_legacy_tables()
         _rename_maxi_transfer_to_maxi()
