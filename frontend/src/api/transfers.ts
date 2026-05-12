@@ -177,6 +177,36 @@ export function useTransfer(transferId: number | undefined) {
   });
 }
 
+// Service types exempt from the federal-tax remittance — must
+// stay 1:1 with `api/Modules/Transfers/Services/tax.py`. Bill
+// Payment / Top Up / Recharge are exempt because no ACH crosses
+// a border for them; only Money Transfer carries the levy.
+const TAX_EXEMPT_SERVICES: ReadonlySet<string> = new Set([
+  "Bill Payment", "Top Up", "Recharge",
+]);
+
+// Domestic countries that also skip the tax even for Money
+// Transfer — mirrors `DOMESTIC_COUNTRIES` server-side.
+const DOMESTIC_COUNTRIES: ReadonlySet<string> = new Set(["United States"]);
+
+/** Client-side preview of `Transfer.federal_tax` so the cashier
+ *  can sanity-check the line before submit. The server recomputes
+ *  on save (CLAUDE.md invariant #9) — this is purely a sticker
+ *  for the form. Mirrors `federal_tax_for` in
+ *  `api/Modules/Transfers/Services/tax.py`. */
+export function previewFederalTax(opts: {
+  sendAmount: number | string | null | undefined;
+  serviceType: string;
+  country?: string | null;
+  rate: number | null | undefined;
+}): number {
+  if (TAX_EXEMPT_SERVICES.has(opts.serviceType)) return 0;
+  if (opts.country && DOMESTIC_COUNTRIES.has(opts.country.trim())) return 0;
+  const amount = Number(opts.sendAmount) || 0;
+  const rate = Number(opts.rate) || 0;
+  return Math.round(amount * rate * 100) / 100;
+}
+
 export interface TransferFilters {
   q?: string;
   date_from?: string;

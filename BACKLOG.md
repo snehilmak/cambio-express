@@ -431,8 +431,16 @@ impact ÷ effort. Numbers are an estimate.
       `refetchIntervalInBackground=false` default pauses the timer
       when the tab is hidden. The header carries a "Live · synced
       HH:MM" pill so the cashier sees the freshness at a glance.
-- [ ] Auto-fill `federal_tax` at 1% of send amount (or a per-company
-      rate map) with an override field, so cashiers don't typo.
+- [x] Auto-fill `federal_tax` at the store's configured rate —
+      landed. New/Edit Transfer forms now show a read-only
+      "Federal tax preview" field that updates live as the
+      cashier types. Mirrors the server-side rule in
+      `api/Modules/Transfers/Services/tax.py` (exempt for Bill
+      Payment / Top Up / Recharge, and for US-domestic recipients
+      even on Money Transfer). The number is purely a preview;
+      the server still recomputes on save per CLAUDE.md invariant
+      #9. Hook + helper: `previewFederalTax` in
+      `frontend/src/api/transfers.ts`.
 - [ ] Backfill script for `federal_tax` on historical transfers — they
       currently default to 0 but some of those fee amounts secretly
       included tax.

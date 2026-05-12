@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import {
   createTransfer,
+  previewFederalTax,
   useEmployees,
   type CreateTransferBody,
 } from "../api/transfers";
+import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
@@ -41,6 +43,7 @@ export default function NewTransfer() {
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
   const roster = useEmployees();
+  const storeInfo = useStoreInfo();
 
   const [form, setForm] = useState<CreateTransferBody>({
     send_date: todayIso(),
@@ -114,8 +117,8 @@ export default function NewTransfer() {
             color: "var(--db-text-muted, #a3a3a3)",
           }}
         >
-          Federal tax is computed server-side from amount + service
-          + country.
+          Federal tax preview updates as you type; the server
+          recomputes the final value on save.
         </p>
       </header>
 
@@ -295,6 +298,12 @@ export default function NewTransfer() {
                 style={inputStyle}
               />
             </Field>
+            <FederalTaxPreview
+              sendAmount={form.send_amount}
+              serviceType={form.service_type}
+              country={form.country ?? ""}
+              rate={storeInfo.data?.store.federal_tax_rate ?? 0}
+            />
             <Field label="Confirm #">
               <input
                 type="text"
@@ -425,6 +434,63 @@ function Grid({ children }: { children: React.ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+// Read-only client-side preview of the federal tax the server is
+// about to compute. Mirrors the rule in
+// `api/Modules/Transfers/Services/tax.py` so the cashier can
+// sanity-check the number before submit; the actual value still
+// comes from the server (CLAUDE.md invariant #9).
+function FederalTaxPreview({
+  sendAmount, serviceType, country, rate,
+}: {
+  sendAmount: number | string;
+  serviceType: string;
+  country: string;
+  rate: number;
+}) {
+  const tax = previewFederalTax({
+    sendAmount, serviceType, country, rate,
+  });
+  const exempt = tax === 0 && (Number(sendAmount) || 0) > 0;
+  const pct = (rate * 100).toFixed(rate < 0.01 ? 2 : 0);
+  return (
+    <Field
+      label={
+        rate > 0
+          ? `Federal tax preview (${pct}%, server recomputes)`
+          : "Federal tax preview"
+      }
+    >
+      <input
+        type="text"
+        readOnly
+        tabIndex={-1}
+        value={`$${tax.toFixed(2)}`}
+        style={{
+          ...inputStyle,
+          background: "var(--db-surface-2, #141414)",
+          color: "var(--db-text-muted, #a3a3a3)",
+          cursor: "default",
+          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+        }}
+      />
+      {exempt && (
+        <span
+          style={{
+            display: "block",
+            marginTop: "0.25rem",
+            fontSize: "0.75rem",
+            color: "var(--db-text-muted, #a3a3a3)",
+          }}
+        >
+          Exempt — {country === "United States"
+            ? "domestic recipient"
+            : `${serviceType} service`}
+        </span>
+      )}
+    </Field>
   );
 }
 
