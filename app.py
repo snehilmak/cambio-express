@@ -81,6 +81,9 @@ from blueprints import (  # noqa: E402
     superadmin_redirects as _bp_superadmin_redirects,
 )
 from blueprints import (  # noqa: E402
+    superadmin_store_mutations as _bp_superadmin_store_mutations,
+)
+from blueprints import (  # noqa: E402
     transfers_redirects as _bp_transfers_redirects,
 )
 from blueprints import tv as _bp_tv  # noqa: E402
@@ -104,6 +107,7 @@ app.register_blueprint(_bp_bank_redirects.bp)
 app.register_blueprint(_bp_admin_redirects.bp)
 app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
+app.register_blueprint(_bp_superadmin_store_mutations.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -7352,112 +7356,9 @@ def _extended_deadline(existing, days):
     return base + timedelta(days=days)
 
 
-@app.route("/superadmin/stores/<int:store_id>/extend-trial", methods=["POST"])
-@superadmin_required
-def superadmin_extend_trial(store_id):
-    """Push the store's trial/grace deadlines forward by N days (default 7)."""
-    store = _store_or_404(store_id)
-    days = _parse_extend_days(request.form, default=7, maximum=180)
-    store.trial_ends_at = _extended_deadline(store.trial_ends_at, days)
-    store.grace_ends_at = store.trial_ends_at + timedelta(days=4)
-    if store.plan == "inactive":
-        store.plan = "trial"
-        store.data_retention_until = None
-        store.canceled_at = None
-    record_audit("extend_trial", target_type="store", target_id=store.id,
-                 details=f"+{days}d → {store.trial_ends_at.isoformat()}")
-    db.session.commit()
-    flash(f"{store.name}: trial extended by {days} days.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-
-@app.route("/superadmin/stores/<int:store_id>/comp-plan", methods=["POST"])
-@superadmin_required
-def superadmin_comp_plan(store_id):
-    """Grant a free plan (basic or pro) bypassing Stripe. For friends/family/comps."""
-    store = _store_or_404(store_id)
-    plan = request.form.get("plan", "pro")
-    if plan not in ("basic", "pro"):
-        flash("Invalid plan.", "error"); return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-    store.plan = plan
-    store.canceled_at = None
-    store.data_retention_until = None
-    record_audit("comp_plan", target_type="store", target_id=store.id,
-                 details=f"granted {plan} (no Stripe)")
-    db.session.commit()
-    flash(f"{store.name}: comped to {plan.title()}.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-
-@app.route("/superadmin/stores/<int:store_id>/toggle-active", methods=["POST"])
-@superadmin_required
-def superadmin_toggle_active(store_id):
-    """Enable/disable the store account without touching billing state."""
-    store = _store_or_404(store_id)
-    store.is_active = not store.is_active
-    record_audit("toggle_active", target_type="store", target_id=store.id,
-                 details=f"is_active={store.is_active}")
-    db.session.commit()
-    flash(f"{store.name}: {'active' if store.is_active else 'disabled'}.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-
-@app.route("/superadmin/stores/<int:store_id>/extend-retention", methods=["POST"])
-@superadmin_required
-def superadmin_extend_retention(store_id):
-    """Push the 6-month data purge deadline out by N days (default 30)."""
-    store = _store_or_404(store_id)
-    days = _parse_extend_days(request.form, default=30, maximum=720)
-    store.data_retention_until = _extended_deadline(
-        store.data_retention_until, days)
-    record_audit("extend_retention", target_type="store", target_id=store.id,
-                 details=f"+{days}d → {store.data_retention_until.isoformat()}")
-    db.session.commit()
-    flash(f"{store.name}: retention extended by {days} days.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-
-@app.route("/superadmin/stores/<int:store_id>/revert-to-trial", methods=["POST"])
-@superadmin_required
-def superadmin_revert_to_trial(store_id):
-    """Drop a paid/comped store back onto the 7-day trial. Keeps all data."""
-    store = _store_or_404(store_id)
-    now = datetime.utcnow()
-    store.plan = "trial"
-    store.trial_ends_at = now + timedelta(days=7)
-    store.grace_ends_at = now + timedelta(days=11)
-    store.canceled_at = None
-    store.data_retention_until = None
-    record_audit("revert_to_trial", target_type="store", target_id=store.id)
-    db.session.commit()
-    flash(f"{store.name}: reverted to 7-day trial.", "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-
-@app.route("/superadmin/stores/<int:store_id>/addons/<addon_key>/toggle",
-            methods=["POST"])
-@superadmin_required
-def superadmin_toggle_addon(store_id, addon_key):
-    """Override switch for a store's add-ons. Bypasses the
-    "needs paid plan" gate that admin_subscription_toggle_addon
-    enforces — sometimes superadmin needs to flip an addon on for a
-    pilot/comped store, or off for a non-paying one. Audit-logged
-    so the override path is always attributable."""
-    store = _store_or_404(store_id)
-    addon = ADDONS_CATALOG.get(addon_key)
-    if not addon:
-        flash("Unknown add-on.", "error")
-        return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
-    keys = {k.strip() for k in (store.addons or "").split(",") if k.strip()}
-    if addon_key in keys:
-        keys.discard(addon_key)
-        action = "remove_addon"
-        msg = f"{store.name}: {addon['name']} turned off."
-    else:
-        keys.add(addon_key)
-        action = "add_addon"
-        msg = f"{store.name}: {addon['name']} activated."
-    store.addons = ",".join(sorted(keys))
-    record_audit(action, target_type="store", target_id=store.id,
-                  details=addon_key)
-    db.session.commit()
-    flash(msg, "success")
-    return redirect(url_for("superadmin_redirects.superadmin_controls", tab="stores"))
+# /superadmin/stores/<int:store_id>/{extend-trial,comp-plan,toggle-active,
+# extend-retention,revert-to-trial,addons/<key>/toggle} moved to
+# blueprints/superadmin_store_mutations.py (D2 phase 22).
 
 # ── TV catalog admin (superadmin) ────────────────────────────
 #
