@@ -11,19 +11,19 @@
 {% block content %}
 
 <div class="tab-bar">
-  <a href="{{ url_for('admin_settings', tab='store') }}"
+  <a href="{{ url_for('admin_settings_form.view', tab='store') }}"
      class="tab-link {% if active_tab == 'store' %}active{% endif %}">Store Info</a>
   {# Security moved to /account/security — a per-user page reachable
      from every role's chrome. Link kept here for discoverability since
      that's where admins habitually look. #}
   <a href="{{ url_for('account.account_security') }}" class="tab-link">Security ↗</a>
-  <a href="{{ url_for('admin_settings', tab='companies') }}"
+  <a href="{{ url_for('admin_settings_form.view', tab='companies') }}"
      class="tab-link {% if active_tab == 'companies' %}active{% endif %}">Companies</a>
-  <a href="{{ url_for('admin_settings', tab='team') }}"
+  <a href="{{ url_for('admin_settings_form.view', tab='team') }}"
      class="tab-link {% if active_tab == 'team' %}active{% endif %}">Team</a>
-  <a href="{{ url_for('admin_settings', tab='roster') }}"
+  <a href="{{ url_for('admin_settings_form.view', tab='roster') }}"
      class="tab-link {% if active_tab == 'roster' %}active{% endif %}">Employees</a>
-  <a href="{{ url_for('admin_settings', tab='owner') }}"
+  <a href="{{ url_for('admin_settings_form.view', tab='owner') }}"
      class="tab-link {% if active_tab == 'owner' %}active{% endif %}">Owner Access</a>
 </div>
 

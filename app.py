@@ -65,6 +65,9 @@ from blueprints import account as _bp_account  # noqa: E402
 from blueprints import admin_extras as _bp_admin_extras  # noqa: E402
 from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
 from blueprints import (  # noqa: E402
+    admin_settings_form as _bp_admin_settings_form,
+)
+from blueprints import (  # noqa: E402
     admin_settings_mutations as _bp_admin_settings_mutations,
 )
 from blueprints import auth as _bp_auth  # noqa: E402
@@ -129,6 +132,7 @@ app.register_blueprint(_bp_bookkeeping_mutations.bp)
 app.register_blueprint(_bp_bank_mutations.bp)
 app.register_blueprint(_bp_superadmin_extras.bp)
 app.register_blueprint(_bp_admin_extras.bp)
+app.register_blueprint(_bp_admin_settings_form.bp)
 app.register_blueprint(_bp_admin_settings_mutations.bp)
 _bp_spa_cutover.register(app)
 
@@ -5949,148 +5953,8 @@ _BATCH_SORT_COLUMNS = {
 # /admin/users[/new|/<uid>/edit] + /admin/audit-log moved to
 # blueprints/admin_redirects.py (D2 phase 17).
 
-@app.route("/admin/settings", methods=["GET", "POST"])
-@admin_required
-def admin_settings():
-    """Tabbed admin settings (store info / security / team / owner /
-    companies). The GET 301s to /app/settings (Settings.tsx covers
-    store info + team + change password + passkeys + subscription
-    redirect). The POST handler stays live for the legacy
-    `_tab=store|companies` form-submit paths used by
-    /admin/settings/roster/* and /admin/settings/owner/redeem so a
-    direct POST still mutates state.
-
-    Companies-tab and owner-access-tab UI haven't been ported to
-    Settings.tsx yet — the mutation endpoints
-    (/admin/settings POST with _tab=companies, plus
-    /admin/settings/owner/redeem and /admin/settings/owner/...
-    routes) remain reachable for direct callers; SPA cards land
-    in a follow-up PR.
-    """
-    if request.method == "GET":
-        active_tab = request.args.get("tab", "store")
-        # The Security tab graduated to /account/security long ago.
-        if active_tab == "security":
-            return redirect(url_for("account.account_security"), code=301)
-        return redirect("/app/settings", code=301)
-
-    # POST falls through to the legacy multi-tab handler below.
-    user = current_user()
-    store = current_store()
-    active_tab = request.args.get("tab", "store")
-    errors = {}
-
-    if request.method == "POST":
-        form_tab = request.form.get("_tab", "store")
-        active_tab = form_tab
-
-        if form_tab == "store":
-            name = request.form.get("store_name", "").strip()
-            email = request.form.get("email", "").strip().lower()
-            phone = request.form.get("phone", "").strip()
-            # Federal tax rate: input is a percentage string (e.g. "1.00" for
-            # 1%). Store as a decimal. Clamp 0–100% so an accidental "25" ≠ 25x.
-            rate_raw = (request.form.get("federal_tax_rate") or "").strip()
-            rate_decimal = store.federal_tax_rate or 0.01
-            if rate_raw:
-                try:
-                    rate_pct = float(rate_raw)
-                    if rate_pct < 0 or rate_pct > 100:
-                        errors["federal_tax_rate"] = "Enter a percent between 0 and 100."
-                    else:
-                        rate_decimal = round(rate_pct / 100.0, 6)
-                except ValueError:
-                    errors["federal_tax_rate"] = "Enter a number (e.g. 1 for 1%)."
-
-            if not name:
-                errors["store_name"] = "Store name is required."
-            if not email:
-                errors["email"] = "Email is required."
-            elif not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-                errors["email"] = "Enter a valid email address."
-            if not errors:
-                taken = User.query.filter(
-                    User.username == email,
-                    User.role == "admin",
-                    User.store_id != store.id
-                ).first()
-                if taken:
-                    errors["email"] = "That email is already registered to another account."
-
-            if not errors:
-                store.name = name
-                store.email = email
-                store.phone = phone
-                store.federal_tax_rate = rate_decimal
-                user.username = email
-                db.session.commit()
-                flash("Store info updated.", "success")
-                return redirect(url_for("admin_settings", tab="store"))
-
-        elif form_tab == "security":
-            errors = _update_user_password(
-                user,
-                request.form.get("current_password", ""),
-                request.form.get("new_password", ""),
-                request.form.get("confirm_password", ""),
-            )
-            if not errors:
-                db.session.commit()
-                flash("Password updated.", "success")
-                return redirect(url_for("account.account_security"))
-
-        elif form_tab == "companies":
-            # Known companies come in as checkboxes ("company_known" list);
-            # operator-added names come as a newline-separated free-form
-            # textarea. We merge + dedupe preserving input order.
-            picked = request.form.getlist("company_known")
-            extras_raw = request.form.get("company_extras", "")
-            extras = [line.strip() for line in extras_raw.splitlines() if line.strip()]
-            seen, out = set(), []
-            for name in list(picked) + extras:
-                if name not in seen:
-                    seen.add(name); out.append(name)
-            # Cap length so we don't try to stuff a novel into the column.
-            csv = ",".join(out)[:500]
-            store.companies = csv
-            db.session.commit()
-            flash("Money transfer companies updated.", "success")
-            return redirect(url_for("admin_settings", tab="companies"))
-
-    employees = User.query.filter(
-        User.store_id == store.id,
-        User.id != user.id
-    ).order_by(User.full_name).all()
-
-    # Owner connection state: post-flow-reversal, the store admin no
-    # longer mints the code (the owner does, on /owner/connect). All
-    # this tab needs is whether a link exists and who the owner is.
-    owner_link = StoreOwnerLink.query.filter_by(store_id=store.id).first()
-    owner_user = db.session.get(User, owner_link.owner_id) if owner_link else None
-
-    # Companies tab state: split the CSV into a set for checkbox state, and
-    # list any names that aren't in the known catalog as "custom" so the
-    # operator can see them and keep/remove.
-    current_companies = store_mt_companies(store)
-    current_set       = set(current_companies)
-    custom_companies  = [c for c in current_companies if c not in KNOWN_MT_COMPANIES]
-
-    # Roster tab: list every named employee, active first, then alpha.
-    roster = StoreEmployee.query.filter_by(store_id=store.id).order_by(
-        StoreEmployee.is_active.desc(), StoreEmployee.name.asc()
-    ).all()
-
-    return render_template("admin_settings.html",
-        user=user, store=store,
-        active_tab=active_tab, errors=errors,
-        employees=employees,
-        owner_link=owner_link,
-        owner_user=owner_user,
-        known_companies=KNOWN_MT_COMPANIES,
-        current_company_set=current_set,
-        custom_companies=custom_companies,
-        roster=roster,
-    )
+# /admin/settings (GET, POST) moved to
+# blueprints/admin_settings_form.py (D2 phase 29).
 
 # /admin/settings/{roster/add, roster/<id>/toggle, roster/<id>/rename,
 # team/<uid>, owner/redeem} moved to

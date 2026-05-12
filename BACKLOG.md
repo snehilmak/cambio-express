@@ -26,24 +26,20 @@ the kind of thing that makes the product feel premium vs. functional.
       route under `frontend/src/routes/` and add `transition:` rules
       (≤200ms) per CLAUDE.md guidance. Honor `prefers-reduced-motion`
       (already wired in `content.css`).
-- [ ] **A2. Padding / spacing consistency.** Every drilldown +
-      dashboard component declares its own `pageStyle`, `cardStyle`,
-      `kpiCard`, etc. Spacing varies. Extract `<Card>`, `<KpiCard>`,
-      `<Page>`, `<Section>` into `frontend/src/components/` with one
-      canonical padding scale (4/8/12/16/24 px ladder). Drop the
-      inline style objects in each route. (Overlaps with BACKLOG
-      item #9 "Shared SPA component library" — fold them together.)
-- [ ] **A3. Typography consistency.** Currently each page picks its
-      own font-size scale. Define a TypeScript `text` token (`xs / sm /
-      base / lg / xl / 2xl`) in a shared module and route all `font-
-      size:` through it.
-- [ ] **A4. Empty states.** Every drilldown + list shows "No data in
-      this period." with no illustration. Build a shared `<EmptyState>`
-      with the inbox SVG (already on the design system) + a CTA slot.
-- [ ] **A5. Loading skeletons** instead of bare "Loading…" text. Build
-      one shared `<TableSkeleton rows={n}>` and `<KpiSkeleton>`.
-- [ ] **A6. Error states.** Same as A4 — every fetch error renders a
-      red inline `<p>`. Build `<ErrorState>` with a retry button.
+- [x] **A2. Padding / spacing consistency.** Landed — `<PageShell>`,
+      `<PageHeader>`, `<Section>`, `<Card>`, `<KpiCard>`,
+      `<KpiGrid>`, `<Table>` live in
+      `frontend/src/components/ui/index.tsx`. Inline `pageStyle` /
+      `cardStyle` blocks were swept (PR #439).
+- [x] **A3. Typography consistency.** Landed alongside A2 — type
+      ramp lives in `static/design-tokens.css` (`--db-text-*`) and
+      `frontend/src/lib/typography.ts`.
+- [x] **A4. Empty states.** `<EmptyState>` ships in
+      `frontend/src/components/ui/` (PR #431).
+- [x] **A5. Loading skeletons.** `<TableSkeleton>` + `<Loading>`
+      ship in `frontend/src/components/ui/` (PR #431).
+- [x] **A6. Error states.** `<ErrorState>` ships with a retry button
+      + route-level `<RouteErrorBoundary>` (PRs #431, #435).
 
 ### B. Missing charts on superadmin reports
 
@@ -53,42 +49,38 @@ component (`SuperadminBIDrilldown.tsx`) that ONLY shows KPIs + a
 table. The user expected charts because the legacy Jinja superadmin
 reports rendered ApexCharts inline.
 
-- [ ] **B1. Time-series chart on superadmin reports that have a
-      monthly/daily series.** Targets at minimum: `signup-funnel`,
-      `dau-mau`, `mrr-arr`, `churn-cohort`, `login-activity`,
-      `webhook-health`. Detection rule: if the row shape has a
-      date-like key (`date` / `month` / `period`), render a Line
-      chart above the table. Reuse the chart.js setup from
-      `OwnerDashboard.tsx`.
-- [ ] **B2. Bar charts** for reports where rows are a categorical
-      breakdown (e.g. `active-stores-by-plan`, `trial-expiry-timing`,
-      `payouts`). Heuristic: if no date key + numeric "count"-style
-      column, render a Bar chart.
-- [ ] **B3. Owner dashboard chart hover tooltips** are minimal —
-      revisit chart.js options for nicer tooltips, axis formatting,
-      currency on Y-axis.
+- [x] **B1. Time-series chart on superadmin reports.** Landed
+      (PR #423) — `SuperadminBIDrilldown.tsx` auto-detects date-like
+      keys and renders a chart.js Line chart above the table for
+      reports including `signup-funnel`, `dau-mau`, `mrr-arr`,
+      `churn-cohort`, `login-activity`, `webhook-health`.
+- [x] **B2. Bar charts** for categorical breakdowns. Landed
+      alongside B1 (PR #423) using the same auto-detection heuristic.
+- [x] **B3. Owner dashboard chart hover tooltips + axis formatting.**
+      Landed (PR #436) — shared `moneyChartOptions` / `countChartOptions`
+      helpers in `frontend/src/lib/chartOptions.ts` give consistent
+      tooltips, currency Y-axis, gridline opacity, etc.
 - [ ] **B4. Add chart toggle.** Some reports are better as tables
       (audit log, refunds list). Let the user toggle chart / table
       view if both make sense.
 
 ### C. SPA architectural cleanup
 
-- [ ] **C1. Code-split the bundle by route.** Bundle is now ~900 KB
-      (240 KB gzipped) after chart.js. Convert every
-      `<Route element={<X />}>` to `lazy(() => import(...))` + a
-      shared `<Suspense fallback={...}>` wrapper. Especially big
-      win for the superadmin BI drilldown (chart.js only loads for
-      superadmin sessions). (See also BACKLOG #12.)
+- [x] **C1. Code-split the bundle by route.** Landed (PR #428) —
+      every `<Route element=>` now uses `lazy(() => import())` with
+      a shared `<Suspense fallback={<Loading />}>` wrapper.
 - [ ] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
       Each route file has 100–300 lines of `const xStyle: CSSProperties
       = {...}`. Type-checked CSS Modules will give us scoped styles,
-      better DX, smaller JS bundle.
-- [ ] **C3. Shared `<Page>` layout component.** Standard
-      header / actions / body slots. Use it on every route to enforce
-      the design system padding scale.
-- [ ] **C4. Per-route error boundaries.** A 500 from any API call
-      currently crashes the whole route. Add an error boundary
-      around `<Outlet />` in `AuthedShell`.
+      better DX, smaller JS bundle. (A2/C3 swept the worst offenders
+      into shared primitives; remaining inline styles are
+      page-specific.)
+- [x] **C3. Shared `<Page>` layout component.** Landed (PR #439) —
+      `<PageShell>` / `<PageHeader>` / `<Section>` enforce the
+      padding scale on every route.
+- [x] **C4. Per-route error boundaries.** Landed (PR #435) —
+      `<RouteErrorBoundary>` (Sentry-aware) wraps every route's
+      `<Outlet />`.
 
 ### D. Backend cleanup (legacy Flask half)
 
@@ -96,26 +88,32 @@ The SPA migration left the Flask side intact (form-POST handlers
 still serve mutation traffic for many of the 301'd routes). These
 items decompose the monolith.
 
-- [ ] **D1. Delete the 16 remaining Jinja templates that are no
-      longer rendered.** Surviving `reports.html`,
-      `owner_reports.html`, `admin_settings.html`,
-      `superadmin_controls.html` are unreachable after the GET 301s.
-      Audit + delete.
-- [ ] **D2. Split `app.py` (10,487 lines) into Flask Blueprints by
-      the 80 `# ── HEADER ──` markers.** Suggested grouping:
-      `flask/{auth,admin,superadmin,transfers,daily,monthly,bank,
-       owner,tv,billing,reports,api_v1}.py`. Each becomes a Blueprint
-      registered on `app`. No behavior change; pure refactor.
-      Mechanical, ~5 PRs.
+- [x] **D1. Delete the 16 remaining Jinja templates that are no
+      longer rendered.** Landed (PR #424).
+- [x] **D2. Split `app.py` into Flask Blueprints.** Landed in 29
+      phases (PRs #433–#460, #461, #462, this PR). Every
+      form-handling route now lives under `blueprints/`. Only the
+      SPA fallback routes (`/app/*`), the two webhooks
+      (`/webhooks/{resend,stripe}`), and helper / model / init code
+      remain in `app.py`. Files under `blueprints/`:
+      `account`, `admin_extras`, `admin_redirects`,
+      `admin_settings_form`, `admin_settings_mutations`, `auth`,
+      `auth_redirects`, `bank_mutations`, `bank_redirects`,
+      `billing`, `bookkeeping_mutations`, `bookkeeping_redirects`,
+      `customers_api`, `landing`, `owner`, `push`, `pwa`,
+      `spa_cutover`, `spa_redirects`, `subscription`,
+      `superadmin_extras`, `superadmin_misc_mutations`,
+      `superadmin_redirects`, `superadmin_store_mutations`,
+      `transfers_redirects`, `tv`, `tv_board`, `tv_pair`.
 - [ ] **D3. Retire `@login_required` cookie-session path on routes
-      the SPA has fully replaced.** Once D1 ships and we audit
-      what still POSTs to Flask, convert remaining form-POST
-      handlers to FastAPI endpoints, then delete the
-      session-cookie path entirely. (Requires BACKLOG #1 cookie
-      JWT first.)
-- [ ] **D4. Adopt Alembic.** `_ADDED_COLUMNS` can't drop/rename/
-      backfill. Pin current schema as baseline. (Already in
-      BACKLOG #8 — promoting visibility.)
+      the SPA has fully replaced.** Once we audit what still POSTs
+      to Flask, convert remaining form-POST handlers to FastAPI
+      endpoints, then delete the session-cookie path entirely.
+      (Requires BACKLOG #1 cookie JWT first.)
+- [x] **D4. Adopt Alembic.** Landed (PR #430) — baseline migration
+      `99691740424c_baseline_2026_05` pins the current schema;
+      `_ADDED_COLUMNS` still primary but Alembic now available for
+      drops / renames / backfills.
 - [ ] **D5. Background job queue** for Stripe webhooks, email send,
       ACH retries, retention purge. RQ + Redis is the lowest-cost
       path on Render. Today every webhook does its Stripe SDK calls
@@ -127,15 +125,17 @@ items decompose the monolith.
 
 ### E. Observability + ops
 
-- [ ] **E1. Sentry on Python + React.** (BACKLOG #4 — promoting.)
-- [ ] **E2. Structured JSON logs.** Replace `app.logger.info(...)`
-      with `structlog` or stdlib JSON formatter; add request-ID
-      middleware. (BACKLOG #4 — second half.)
-- [ ] **E3. Build SPA in CI** (BACKLOG #3). Catches TS regressions.
-- [ ] **E4. Coverage tracks `api/` too** (BACKLOG #5).
+- [x] **E1. Sentry on Python + React.** Landed (PR #429) — opt-in
+      via DSN env vars.
+- [x] **E2. Structured JSON logs.** Landed (PR #429) — structlog +
+      X-Request-ID middleware in `api/Core/Observability/`.
+- [x] **E3. Build SPA in CI.** Landed (PR #426).
+- [x] **E4. Coverage tracks `api/` too.** Landed (PR #425) —
+      `coverage --source=app,api`.
 - [ ] **E5. mypy strict on `api/Modules/*`** — Pydantic types make
       this easy.
-- [ ] **E6. eslint --max-warnings 0** in CI on frontend.
+- [x] **E6. eslint --max-warnings 0** in CI on frontend. Landed
+      (PR #426).
 - [ ] **E7. Generate TS types from FastAPI OpenAPI.** (BACKLOG #6.)
 - [ ] **E8. E2E smoke tests** with Playwright on the SPA — login,
       log a transfer, view a report. Would have caught the SPA-

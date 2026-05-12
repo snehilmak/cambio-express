@@ -21,7 +21,7 @@ tabs:
                                                  this store to that
                                                  owner's umbrella
 
-Every handler redirects back to ``url_for("admin_settings",
+Every handler redirects back to ``url_for("admin_settings_form.view",
 tab=<...>")`` so the operator lands on the same tab they started
 from. ``admin_settings`` itself stays in app.py — it's the
 GET-redirect + multi-tab form-POST handler that hasn't moved yet.
@@ -65,7 +65,7 @@ def admin_roster_add():
         name = (request.form.get("name") or "").strip()
         if not name:
             flash("Name is required.", "error")
-            return redirect(url_for("admin_settings", tab="roster"))
+            return redirect(url_for("admin_settings_form.view", tab="roster"))
         existing = StoreEmployee.query.filter(
             StoreEmployee.store_id == store.id,
             db.func.lower(StoreEmployee.name) == name.lower(),
@@ -80,11 +80,11 @@ def admin_roster_add():
                     f"{existing.name} is already on the roster.",
                     "error",
                 )
-            return redirect(url_for("admin_settings", tab="roster"))
+            return redirect(url_for("admin_settings_form.view", tab="roster"))
         db.session.add(StoreEmployee(store_id=store.id, name=name))
         db.session.commit()
         flash(f"Added {name}.", "success")
-        return redirect(url_for("admin_settings", tab="roster"))
+        return redirect(url_for("admin_settings_form.view", tab="roster"))
 
     return _h()
 
@@ -107,7 +107,7 @@ def admin_roster_toggle(eid: int):
             f"{'reactivated' if emp.is_active else 'deactivated'}.",
             "success",
         )
-        return redirect(url_for("admin_settings", tab="roster"))
+        return redirect(url_for("admin_settings_form.view", tab="roster"))
 
     return _h()
 
@@ -133,7 +133,7 @@ def admin_roster_rename(eid: int):
             emp.name = new_name
             db.session.commit()
             flash(f"Renamed to {new_name}.", "success")
-        return redirect(url_for("admin_settings", tab="roster"))
+        return redirect(url_for("admin_settings_form.view", tab="roster"))
 
     return _h()
 
@@ -169,7 +169,7 @@ def admin_reset_employee_password(uid: int):
                 f"{emp.full_name or emp.username}.",
                 "success",
             )
-        return redirect(url_for("admin_settings", tab="team"))
+        return redirect(url_for("admin_settings_form.view", tab="team"))
 
     return _h()
 
@@ -194,7 +194,7 @@ def admin_redeem_owner_code():
         code_str = request.form.get("code", "").strip().upper()
         if not code_str:
             flash("Enter the code your owner gave you.", "error")
-            return redirect(url_for("admin_settings", tab="owner"))
+            return redirect(url_for("admin_settings_form.view", tab="owner"))
         now = datetime.utcnow()
         # NOTE: TOCTOU window between lookup and commit — safe
         # under SQLite (serialised writes); a Postgres migration
@@ -207,14 +207,14 @@ def admin_redeem_owner_code():
         ).first()
         if not code:
             flash("Invalid, expired, or already-used code.", "error")
-            return redirect(url_for("admin_settings", tab="owner"))
+            return redirect(url_for("admin_settings_form.view", tab="owner"))
         owner = db.session.get(User, code.owner_id)
         if not owner or owner.role != "owner":
             flash(
                 "That code's owner account is no longer valid.",
                 "error",
             )
-            return redirect(url_for("admin_settings", tab="owner"))
+            return redirect(url_for("admin_settings_form.view", tab="owner"))
         already = StoreOwnerLink.query.filter_by(
             owner_id=owner.id, store_id=store.id,
         ).first()
@@ -223,7 +223,7 @@ def admin_redeem_owner_code():
                 "This store is already connected to that owner.",
                 "info",
             )
-            return redirect(url_for("admin_settings", tab="owner"))
+            return redirect(url_for("admin_settings_form.view", tab="owner"))
         link = StoreOwnerLink(owner_id=owner.id, store_id=store.id)
         code.used_at = now
         code.used_by_user_id = current_user().id
@@ -235,6 +235,6 @@ def admin_redeem_owner_code():
             f"{owner.full_name or owner.username}.",
             "success",
         )
-        return redirect(url_for("admin_settings", tab="owner"))
+        return redirect(url_for("admin_settings_form.view", tab="owner"))
 
     return _h()
