@@ -62,6 +62,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
+from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
@@ -98,6 +99,7 @@ app.register_blueprint(_bp_customers_api.bp)
 app.register_blueprint(_bp_transfers_redirects.bp)
 app.register_blueprint(_bp_bookkeeping_redirects.bp)
 app.register_blueprint(_bp_bank_redirects.bp)
+app.register_blueprint(_bp_admin_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -6200,21 +6202,7 @@ def _build_tax_pack_zip(store, year):
     return buf.getvalue()
 
 
-@app.route("/admin/tax-export")
-@admin_required
-def admin_tax_export():
-    """301 → /app/admin/tax-export. The year-picker page moved to
-    React; year choices come from /api/v2/admin/tax-export/years.
-    The actual ZIP build still lives below at /admin/tax-export.zip
-    — that streams a multi-MB file via Flask's send_file path and
-    composes a swathe of `_tax_pack_*_csv` helpers we don't need
-    to ship through the SPA yet. Stub keeps url_for(... ) working
-    in still-Jinja chrome (sidebar nav) and bounces old bookmarks.
-    The query string (?year=) is preserved so a deep link from
-    elsewhere lands on the right year."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/admin/tax-export" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /admin/tax-export moved to blueprints/admin_redirects.py (D2 phase 17).
 
 
 @app.route("/admin/tax-export.zip")
@@ -7109,46 +7097,8 @@ def bank_stripe_disconnect(acct_id):
     return redirect(url_for("bank_redirects.bank"))
 
 # ── Admin Users ──────────────────────────────────────────────
-@app.route("/admin/users", methods=["GET", "POST"])
-@admin_required
-def admin_users():
-    """301 → /app/admin/users. The roster + create + edit forms
-    moved to React; the SPA POSTs to /api/v2/admin/users[...]
-    directly. Stub keeps url_for('admin_users') working for
-    sidebar nav + bounces old bookmarks."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/admin/users" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-
-@app.route("/admin/audit-log")
-@admin_required
-def admin_audit_log():
-    """301 → /app/admin/audit-log. The unified operator audit log
-    moved to React. Filter + pagination logic now lives behind
-    /api/v2/admin/audit-log (target, action, user, page query
-    params preserved through the redirect). Stub keeps
-    url_for('admin_audit_log') working for sidebar nav + bounces
-    old bookmarks."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/admin/audit-log" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
-
-
-@app.route("/admin/users/new", methods=["GET", "POST"])
-@admin_required
-def admin_new_user():
-    """301 → /app/admin/users/new. Form moved to React; the SPA
-    POSTs to /api/v2/admin/users directly."""
-    return redirect("/app/admin/users/new", code=301)
-
-
-@app.route("/admin/users/<int:uid>/edit", methods=["GET", "POST"])
-@admin_required
-def admin_edit_user(uid):
-    """301 → /app/admin/users/<uid>/edit. Form moved to React; the
-    SPA PATCHes to /api/v2/admin/users/<uid> directly."""
-    return redirect(f"/app/admin/users/{uid}/edit", code=301)
+# /admin/users[/new|/<uid>/edit] + /admin/audit-log moved to
+# blueprints/admin_redirects.py (D2 phase 17).
 
 @app.route("/admin/settings", methods=["GET", "POST"])
 @admin_required
