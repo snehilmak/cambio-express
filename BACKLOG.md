@@ -411,6 +411,18 @@ impact ÷ effort. Numbers are an estimate.
       guard in `tests/test_session_cookie_hardening.py`.
 
 ## Nice to have (post-launch)
+- [ ] **Daily Book Money Transfers — editable per-company breakdown.**
+      Phase 1 + 2 of the editor redesign landed (tabbed layout +
+      auto-summary from the employee transfer log). The legacy Jinja
+      template let cashiers ALSO edit per-company amount/fees/tax/
+      commission and persist them to `MoneyTransferSummary`. Today
+      the React editor surfaces the auto-summary read-only + an
+      "Apply to receipts" button that copies the grand total into
+      the `money_transfer` field. Future pass: new
+      `GET/PUT /api/v2/daily/{store}/{date}/mt-breakdown` endpoint
+      that reads + writes `MoneyTransferSummary` rows, and the
+      Transfers tab swaps the auto-table for editable inputs per
+      company so paper-only transfers can be reconciled in-line.
 - [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers
       sharing the same employee login on different computers currently
       only see each other's edits after a page reload / filter change.
@@ -432,12 +444,14 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
 - [ ] Mask phone numbers in list views per compliance.
 - [ ] CSV export on the customer directory.
-- [ ] **Email locked-day digest to owner** — when a daily book is locked
-      via the lock button, fire off a one-page HTML/PDF summary email
-      to the store owner. Use `Store.locked_at` as the trigger so it
-      fires for the right calendar day even when the book is locked
-      late (cashiers often close out the next morning). Pairs with
-      the notifications-toggle work in the personal-settings backlog.
+- [x] **Email locked-day digest to owner** — landed. The FastAPI
+      lock controller fires `send_locked_day_digest(report)` on a
+      was-not-locked → locked transition; recipient query +
+      static copy live in
+      `api/Modules/Notifications/Services/locked_day_digest.py`,
+      template at `templates/emails/locked_day_digest.html`,
+      opt-out toggle on `User.notify_locked_day_digest` (default
+      TRUE, flipped off on Resend complaint webhook).
 
 ## Compliance (gated on check-cashing feature)
 - [ ] **OFAC SDN screening** — once we expand from remittance
