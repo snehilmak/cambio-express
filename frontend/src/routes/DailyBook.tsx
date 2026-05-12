@@ -258,7 +258,7 @@ function CalendarCell({
 
   return (
     <Link
-      to={`/app/daily/edit?date=${iso}`}
+      to={`/daily/edit?date=${iso}`}
       style={styles}
       aria-label={`Open daily book for ${iso}`}
       className="ds-card--interactive"
