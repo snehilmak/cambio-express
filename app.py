@@ -64,6 +64,9 @@ app.secret_key = os.environ.get("SECRET_KEY", "dinerobook-dev-secret-change-in-p
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
+from blueprints import (  # noqa: E402
+    bookkeeping_redirects as _bp_bookkeeping_redirects,
+)
 from blueprints import customers_api as _bp_customers_api  # noqa: E402
 from blueprints import landing as _bp_landing  # noqa: E402
 from blueprints import owner as _bp_owner  # noqa: E402
@@ -92,6 +95,7 @@ app.register_blueprint(_bp_spa_redirects.bp)
 app.register_blueprint(_bp_superadmin_redirects.bp)
 app.register_blueprint(_bp_customers_api.bp)
 app.register_blueprint(_bp_transfers_redirects.bp)
+app.register_blueprint(_bp_bookkeeping_redirects.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -5731,19 +5735,7 @@ from api.Modules.Transfers.Services import (
     store_mt_companies,
 )
 
-@app.route("/daily")
-@admin_required
-def daily_list():
-    """301 → /app/daily. The calendar view of monthly daily-reports
-    moved to React; the SPA reads /api/v2/daily/period?from=&to= for
-    the same in-period rows. Stub keeps url_for('daily_list')
-    working in still-Jinja chrome (sidebar nav + monthly-list back-
-    link) and bounces old bookmarks. Query string (year + month)
-    preserved so a deep-link to a specific month lands on the right
-    calendar."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/daily" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /daily moved to blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 def _ensure_daily_report(store_id, report_date):
     """Return the DailyReport for (store, date), creating an empty one
@@ -5954,43 +5946,8 @@ def daily_report_unlock(ds):
     return redirect(f"/app/daily/edit?date={ds}", code=301)
 
 # ── Monthly P&L ──────────────────────────────────────────────
-@app.route("/monthly")
-@admin_required
-def monthly_list():
-    """301 → /app/monthly. The list of monthly P&L reports moved
-    to React; the SPA reads /api/v2/monthly/months for the index
-    and /api/v2/monthly/<y>/<m> for each entry. Stub keeps
-    url_for('monthly_list') working in still-Jinja chrome (sidebar
-    nav) and bounces old bookmarks."""
-    return redirect("/app/monthly", code=301)
-
-
-@app.route("/monthly/<int:year>/<int:month>", methods=["GET", "POST"])
-@admin_required
-def monthly_report(year, month):
-    """301 → /app/monthly/edit?year=&month=. The P&L editor moved
-    to React; the SPA PUTs to /api/v2/monthly/<y>/<m> with the same
-    locked-fields contract — server still auto-derives + overwrites
-    daily-summed + return-check-net + bank-charge fields. Both
-    verbs redirect: GET for direct links, POST for any in-flight
-    Jinja form submission (canonical path is the SPA now)."""
-    return redirect(
-        f"/app/monthly/edit?year={year}&month={month}", code=301,
-    )
-
-
-@app.route("/monthly/new")
-@admin_required
-def monthly_new():
-    """301 → /app/monthly/edit?year=<this year>&month=<this month>.
-    The legacy /monthly/new just redirected to /monthly/<y>/<m>
-    for the current month — same contract, just bouncing into the
-    SPA editor instead."""
-    today = date.today()
-    return redirect(
-        f"/app/monthly/edit?year={today.year}&month={today.month}",
-        code=301,
-    )
+# /monthly + /monthly/<y>/<m> + /monthly/new moved to
+# blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 
 # ── Tax export pack ─────────────────────────────────────────
@@ -6404,21 +6361,8 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
     ).all()
 
 
-@app.route("/return-checks")
-@admin_required
-def return_checks():
-    """301 → /app/return-checks. Page rendering + live-search
-    moved to React; both the GET-page path and the legacy
-    `?partial=1` JSON contract are gone since no SPA code uses
-    them. The mutation routes below
-    (/return-checks/new, /payment, /loss, etc.) stay alive
-    intentionally so any in-flight Jinja form-submit during
-    rollout still works; the SPA hits /api/v2/return-checks
-    instead. Stub keeps url_for('return_checks') working for
-    sidebar nav + bounces old bookmarks."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/return-checks" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /return-checks moved to blueprints/bookkeeping_redirects.py
+# (D2 phase 15). Mutation routes (POSTs below) stay here.
 
 
 @app.route("/return-checks/new", methods=["POST"])
@@ -6431,20 +6375,20 @@ def return_check_new():
     amount_s = (request.form.get("amount") or "").strip()
     if not bounced_on_s or not customer or not amount_s:
         flash("Date, customer, and amount are required.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     try:
         bounced_on = datetime.strptime(bounced_on_s, "%Y-%m-%d").date()
     except ValueError:
         flash("Invalid bounce date.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     try:
         amount = float(amount_s)
     except ValueError:
         flash("Invalid amount.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     if amount <= 0:
         flash("Amount must be greater than zero.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
 
     rc = ReturnCheck(
         store_id=sid,
@@ -6461,7 +6405,7 @@ def return_check_new():
     db.session.commit()
     flash(f"Return check logged for {rc.customer_name} (${rc.amount:,.2f}).",
           "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 def _get_owned_return_check(rc_id):
@@ -6472,7 +6416,7 @@ def _get_owned_return_check(rc_id):
     rc = db.session.get(ReturnCheck, rc_id)
     if rc is None or rc.store_id != sid:
         flash("Return check not found.", "error")
-        return None, redirect(url_for("return_checks"))
+        return None, redirect(url_for("bookkeeping_redirects.return_checks"))
     return rc, None
 
 
@@ -6559,7 +6503,7 @@ def return_check_payment_new(rc_id):
     if rc.status in ("loss", "fraud"):
         flash("This return check is closed (loss/fraud) — reopen it first.",
               "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
 
     amt_s    = (request.form.get("amount") or "").strip()
     paid_s   = (request.form.get("paid_on") or "").strip()
@@ -6571,11 +6515,11 @@ def return_check_payment_new(rc_id):
         amt = float(amt_s)
     except ValueError:
         flash("Invalid payment amount.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     remaining = rc.remaining
     if amt <= 0:
         flash("Payment amount must be greater than zero.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     # Allow a tiny float epsilon on the cap so $999.999... rounding
     # from the front-end doesn't trip the validation.
     if amt > remaining + 0.005:
@@ -6583,13 +6527,13 @@ def return_check_payment_new(rc_id):
             f"Payment $ {amt:,.2f} exceeds remaining balance "
             f"${remaining:,.2f}. Lower the amount or split into "
             f"multiple payments.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     try:
         paid_on = (datetime.strptime(paid_s, "%Y-%m-%d").date()
                    if paid_s else date.today())
     except ValueError:
         flash("Invalid payment date.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
 
     user = current_user()
     payment = ReturnCheckPayment(
@@ -6620,7 +6564,7 @@ def return_check_payment_new(rc_id):
         f"Logged ${amt:,.2f} payment for {rc.customer_name}"
         + (f" via {method}" if method else "") + ".",
         "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 @app.route("/return-checks/<int:rc_id>/payment/<int:pid>/delete",
@@ -6637,7 +6581,7 @@ def return_check_payment_delete(rc_id, pid):
     payment = db.session.get(ReturnCheckPayment, pid)
     if payment is None or payment.return_check_id != rc.id:
         flash("Payment not found.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     _delete_daily_paybacks_for_payment(rc, payment.amount, payment.paid_on)
     db.session.delete(payment)
     db.session.flush()
@@ -6648,7 +6592,7 @@ def return_check_payment_delete(rc_id, pid):
         rc.status_changed_on = None
     db.session.commit()
     flash("Payment removed.", "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 def _close_as_writeoff(rc_id, status):
@@ -6664,7 +6608,7 @@ def _close_as_writeoff(rc_id, status):
                 if on_s else date.today())
     except ValueError:
         flash("Invalid date.", "error")
-        return redirect(url_for("return_checks"))
+        return redirect(url_for("bookkeeping_redirects.return_checks"))
     rc.status = status
     rc.status_changed_on = when
     db.session.commit()
@@ -6672,7 +6616,7 @@ def _close_as_writeoff(rc_id, status):
     flash(
         f"Marked {label}: {rc.customer_name} "
         f"(remaining balance ${rc.remaining:,.2f}).", "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 @app.route("/return-checks/<int:rc_id>/loss", methods=["POST"])
@@ -6701,7 +6645,7 @@ def return_check_reopen(rc_id):
     rc.status_changed_on = None
     db.session.commit()
     flash(f"Reopened: {rc.customer_name}.", "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 @app.route("/return-checks/<int:rc_id>/edit", methods=["POST"])
@@ -6736,7 +6680,7 @@ def return_check_edit(rc_id):
                 pass
     db.session.commit()
     flash("Return check updated.", "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 @app.route("/return-checks/<int:rc_id>/delete", methods=["POST"])
@@ -6757,7 +6701,7 @@ def return_check_delete(rc_id):
     db.session.delete(rc)
     db.session.commit()
     flash("Return check deleted.", "success")
-    return redirect(url_for("return_checks"))
+    return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
 # ── ACH Batches ──────────────────────────────────────────────
@@ -6770,48 +6714,12 @@ _BATCH_SORT_COLUMNS = {
 }
 
 
-@app.route("/batches")
-@admin_required
-def batches():
-    """301 → /app/batches. The ACH batch list moved to React; the SPA
-    reads /api/v2/batches and handles sorting client-side.
-    Stub keeps url_for('batches') working in still-Jinja chrome and
-    bounces old bookmarks. Query string (sort + dir) preserved so a
-    deep-link like ?sort=ach_date&dir=asc lands the SPA in the same
-    sort state."""
-    qs = request.query_string.decode("latin-1") if request.query_string else ""
-    target = "/app/batches" + (f"?{qs}" if qs else "")
-    return redirect(target, code=301)
+# /batches[/new|/<bid>/edit] moved to
+# blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 
-@app.route("/batches/new", methods=["GET", "POST"])
-@admin_required
-def new_batch():
-    """301 → /app/batches/new. The batch-create form moved to React;
-    the SPA POSTs to /api/v2/batches directly. Both verbs redirect
-    so any in-flight Jinja form submission lands the user on the SPA
-    create page (their data is lost, but the SPA forms have been the
-    canonical path for weeks — no real users hit the legacy POST)."""
-    return redirect("/app/batches/new", code=301)
-
-
-@app.route("/batches/<int:bid>/edit", methods=["GET", "POST"])
-@admin_required
-def edit_batch(bid):
-    """301 → /app/batches/<bid>/edit. Same pattern as new_batch —
-    GET + POST both bounce. The SPA's BatchForm.tsx PATCHes
-    /api/v2/batches/<id>; the legacy form is dead code."""
-    return redirect(f"/app/batches/{bid}/edit", code=301)
-
-
-@app.route("/batches/<int:bid>/transfers")
-@admin_required
-def batch_transfers(bid):
-    """301 → /app/batches/<bid>/edit. The legacy "batch detail"
-    template was a separate page; the SPA's BatchForm.tsx renders
-    the linked-transfers list inline alongside the form. One URL,
-    one page."""
-    return redirect(f"/app/batches/{bid}/edit", code=301)
+# /batches/<bid>/transfers moved to
+# blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 # ── Bank (Stripe Financial Connections) ─────────────────────────
 @app.route("/bank")
