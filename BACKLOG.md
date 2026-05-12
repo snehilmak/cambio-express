@@ -154,10 +154,15 @@ items decompose the monolith.
         Background job queue / RQ + Redis (PROPOSED — tracks D5).
       - [`ADR-004`](docs/architecture/ADR-004-alembic-adoption.md):
         Alembic adoption (PROPOSED — tracks D4).
-- [ ] **F2. Request-lifecycle doc.** Diagram showing
-      `client → CDN → Render → asgi.py → FastAPI / Flask
-      Blueprint → SQLAlchemy → Postgres`, plus where Sentry +
-      structured logs hook in.
+- [x] **F2. Request-lifecycle doc.** Landed —
+      [`docs/architecture/request-lifecycle.md`](docs/architecture/request-lifecycle.md).
+      Traces a request end-to-end from Cloudflare → Render edge
+      → gunicorn-uvicorn → `asgi.py` dispatcher → Flask Blueprint
+      OR FastAPI module → SQLAlchemy → Postgres. Covers the
+      observability layer (Sentry, structured logs, request-ID
+      middleware on both Flask and FastAPI sides), the SPA →
+      Flask vs SPA → FastAPI routing split, and common debugging
+      tasks.
 - [ ] **F3. Frontend component catalog.** Once C2/C3 ship, document
       each shared component with a Storybook page (or simpler:
       a `frontend/docs/components.md` with screenshots).
