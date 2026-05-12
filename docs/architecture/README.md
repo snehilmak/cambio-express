@@ -36,6 +36,14 @@ status header of the old one. The old reasoning stays readable.
 | [ADR-003](ADR-003-background-job-queue.md) | Background job queue (RQ + Redis) | PROPOSED | Tracks backlog D5. |
 | [ADR-004](ADR-004-alembic-adoption.md) | Alembic for migrations | PROPOSED — phase 1 shipped | Tracks backlog D4. Baseline migration + scaffolding live; cutover (alembic stamp + retire `_ADDED_COLUMNS`) is a follow-up PR. Workflow doc: [migrations.md](migrations.md). |
 
+## Runbooks + design docs (non-ADR)
+
+| Doc | Topic |
+|---|---|
+| [request-lifecycle.md](request-lifecycle.md) | End-to-end trace of how a request flows from Cloudflare → Render → `asgi.py` → Flask Blueprint or FastAPI module → SQLAlchemy → Postgres. Also covers Sentry / structured-logs / request-ID middleware on both sides. Tracks backlog F2. |
+| [migrations.md](migrations.md) | Alembic + `_ADDED_COLUMNS` workflow. Tracks ADR-004 phase 1. |
+| [MIGRATION_ADR.md](MIGRATION_ADR.md) | Umbrella ADR for the May 2026 SPA migration. |
+
 ## Writing a new ADR
 
 1. Pick the next number. Don't reuse a superseded one.
