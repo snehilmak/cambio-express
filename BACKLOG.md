@@ -329,8 +329,15 @@ impact ÷ effort. Numbers are an estimate.
       coverage floor, secret scan) running in GitHub Actions. Currently
       we rely on the existing "Syntax + Import + Tests" check plus
       manual `pytest` runs.
-- [ ] **Deployment runbook** — document the env-var checklist, webhook
-      config, first-boot seed, and how to recover from common failures.
+- [x] **Deployment runbook** — landed at
+      [`docs/architecture/deployment.md`](docs/architecture/deployment.md).
+      Covers the Render service / DB layout, first-time
+      setup (Stripe webhook + custom domain + secret rotation),
+      the routine deploy / roll-back flow, secret rotation
+      (Stripe LIVE swap, SECRET_KEY, SMTP, WEBAUTHN_RP_ID),
+      schema migrations + Alembic state, backup verification,
+      data-retention purge cron, and an incident playbook
+      indexed by symptom.
 - [ ] **Secrets audit** — confirm no hardcoded keys in the repo; the
       default passwords in `init_db()` (`super2025!`, `cambio2025!`)
       must be overridden via env vars in prod.
