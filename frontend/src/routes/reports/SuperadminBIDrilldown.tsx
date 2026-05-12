@@ -85,6 +85,28 @@ interface Envelope {
   [extra: string]: unknown;
 }
 
+type ViewMode = "both" | "chart" | "table";
+
+const VIEW_MODE_KEY_PREFIX = "dinerobook.bi.view-mode.";
+
+function loadViewMode(slug: string): ViewMode {
+  try {
+    const v = localStorage.getItem(VIEW_MODE_KEY_PREFIX + slug);
+    if (v === "chart" || v === "table" || v === "both") return v;
+  } catch {
+    /* localStorage blocked (private mode etc.) — fall through */
+  }
+  return "both";
+}
+
+function saveViewMode(slug: string, mode: ViewMode): void {
+  try {
+    localStorage.setItem(VIEW_MODE_KEY_PREFIX + slug, mode);
+  } catch {
+    /* localStorage blocked — silently ignore */
+  }
+}
+
 export default function SuperadminBIDrilldown() {
   const { slug } = useParams<{ slug: string }>();
   const [params, setParams] = useSearchParams();
@@ -93,6 +115,13 @@ export default function SuperadminBIDrilldown() {
   const [data, setData] = useState<Envelope | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>(
+    () => loadViewMode(slug ?? ""),
+  );
+
+  useEffect(() => {
+    if (slug) saveViewMode(slug, viewMode);
+  }, [slug, viewMode]);
 
   useEffect(() => {
     const next = new URLSearchParams(params);
@@ -198,12 +227,23 @@ export default function SuperadminBIDrilldown() {
         <EmptyState title="No data in this period." />
       )}
 
-      {data && rows.length > 0 && (
-        <ChartBlock rows={rows} title={title} />
-      )}
-
-      {data && rows.length > 0 && (
-        <table style={tableStyle}>
+      {data && rows.length > 0 && (() => {
+        const chartable = detectChart(rows) != null;
+        // No chart possible → toggle hidden, always table.
+        const effectiveMode: ViewMode = chartable ? viewMode : "table";
+        return (
+          <>
+            {chartable && (
+              <ViewModeToggle
+                mode={viewMode}
+                onChange={setViewMode}
+              />
+            )}
+            {effectiveMode !== "table" && (
+              <ChartBlock rows={rows} title={title} />
+            )}
+            {effectiveMode !== "chart" && (
+              <table style={tableStyle}>
           <thead>
             <tr>
               {rowKeys.map(k => (
@@ -233,9 +273,12 @@ export default function SuperadminBIDrilldown() {
                 })}
               </tr>
             ))}
-          </tbody>
-        </table>
-      )}
+                </tbody>
+              </table>
+            )}
+          </>
+        );
+      })()}
     </PageShell>
   );
 }
@@ -303,6 +346,50 @@ function detectChart(rows: Array<Record<string, unknown>>): ChartPlan | null {
     };
   }
   return null;
+}
+
+function ViewModeToggle({
+  mode, onChange,
+}: {
+  mode: ViewMode;
+  onChange: (m: ViewMode) => void;
+}) {
+  const opts: Array<{ value: ViewMode; label: string }> = [
+    { value: "chart", label: "Chart" },
+    { value: "table", label: "Table" },
+    { value: "both",  label: "Both"  },
+  ];
+  return (
+    <div
+      role="group"
+      aria-label="View mode"
+      style={viewToggleGroupStyle}
+    >
+      {opts.map(o => {
+        const active = mode === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(o.value)}
+            style={{
+              ...viewToggleBtnStyle,
+              background: active
+                ? tokens.surface2
+                : "transparent",
+              color: active
+                ? tokens.text
+                : tokens.textMuted,
+              fontWeight: active ? 600 : 400,
+            }}
+          >
+            {o.label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 function ChartBlock({
@@ -444,4 +531,21 @@ const muted: React.CSSProperties = {
 };
 const tableStyle: React.CSSProperties = {
   width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
+};
+const viewToggleGroupStyle: React.CSSProperties = {
+  display: "inline-flex",
+  padding: "0.2rem",
+  background: tokens.surface,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: "0.5rem",
+  alignSelf: "flex-end",
+  gap: "0.1rem",
+};
+const viewToggleBtnStyle: React.CSSProperties = {
+  padding: "0.3rem 0.75rem",
+  border: "none",
+  borderRadius: "0.35rem",
+  fontSize: "0.8rem",
+  cursor: "pointer",
+  fontFamily: "inherit",
 };

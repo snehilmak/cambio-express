@@ -68,9 +68,14 @@ reports rendered ApexCharts inline.
       Landed (PR #436) — shared `moneyChartOptions` / `countChartOptions`
       helpers in `frontend/src/lib/chartOptions.ts` give consistent
       tooltips, currency Y-axis, gridline opacity, etc.
-- [ ] **B4. Add chart toggle.** Some reports are better as tables
-      (audit log, refunds list). Let the user toggle chart / table
-      view if both make sense.
+- [x] **B4. Add chart toggle.** Landed —
+      `SuperadminBIDrilldown.tsx` now renders a 3-state segmented
+      control (Chart / Table / Both) above the chart, defaulting
+      to "Both". User's choice persists to localStorage per-report
+      slug (`dinerobook.bi.view-mode.<slug>`). When a report has
+      no detectable chart shape (no numeric column or no
+      date/string identity column) the toggle is hidden and the
+      view falls back to table-only.
 
 ### C. SPA architectural cleanup
 
