@@ -448,7 +448,17 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] Recipient autocomplete (same pattern as sender) if repeat
       recipients become common in the data.
 - [ ] Rich text / markdown links in announcements.
-- [ ] Scheduled announcements (`Announcement.starts_at` already exists).
+- [x] Scheduled announcements — landed. The Announcement create
+      endpoint accepts an optional `start_at_iso` (ISO-8601 UTC);
+      omit / empty starts the banner immediately. expires_days is
+      measured from start_at_iso so a scheduled banner gets its
+      full visibility window. The existing `active_announcements`
+      visibility helper already skipped not-yet-started rows.
+      Superadmin → Announcements form has a "Schedule for later"
+      datetime-local input; history table shows a "scheduled · in
+      4h" pill for future rows. 5 new controller tests cover the
+      future / past / empty / bad-parse / expiry-from-start_at
+      cases.
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
 - [x] Mask phone numbers in list views per compliance — landed.
       `maskPhone` helper in `frontend/src/lib/format.ts` keeps

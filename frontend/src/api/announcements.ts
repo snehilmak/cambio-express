@@ -41,6 +41,12 @@ export interface CreateAnnouncementBody {
   level?: "info" | "warning" | "error" | "success";
   expires_days?: number;
   broadcast?: boolean;
+  /** Optional ISO-8601 datetime (UTC) when the banner should go
+   *  live. Empty / omitted = start immediately. expires_days is
+   *  measured from start_at_iso when scheduled — a 7-day banner
+   *  set to start next Monday is visible Mon-Sun, not 7 days from
+   *  create time. */
+  start_at_iso?: string;
 }
 
 export async function createAnnouncement(
