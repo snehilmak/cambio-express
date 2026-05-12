@@ -1,9 +1,21 @@
 import { Link } from "react-router-dom";
 
-// Catch-all for unknown SPA routes. Any URL under /app/ that React
-// Router can't match renders this — not a Flask 404, because the
-// SPA's catch-all serves index.html for every /app/* path.
+import { getCurrentIdentity } from "../lib/auth";
+
+// Catch-all for unknown SPA routes. Mounted twice in App.tsx — once
+// inside AuthedShell (so the chrome stays put when an authed user
+// hits a typo) and once at the top level (so unauthed visitors land
+// on something other than a blank screen).
+//
+// Pick the "back to" destination based on whether we can read an
+// identity from localStorage: authed users get bounced to their
+// dashboard, anonymous ones to /login. Sending an authed user to /
+// (the marketing landing) made them feel logged out and was the
+// source of the "back went to login" UX bug.
 export default function NotFound() {
+  const identity = getCurrentIdentity();
+  const target = identity ? "/dashboard" : "/login";
+  const label = identity ? "← Back to dashboard" : "← Back to sign in";
   return (
     <main
       style={{
@@ -30,13 +42,13 @@ export default function NotFound() {
         That page hasn't been built yet.
       </p>
       <Link
-        to="/"
+        to={target}
         style={{
           color: "var(--db-accent, #3fff00)",
           fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
         }}
       >
-        ← Back to home
+        {label}
       </Link>
     </main>
   );

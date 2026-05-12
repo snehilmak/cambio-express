@@ -228,6 +228,11 @@ export default function App() {
           <Route path="tv-display"            element={<TVDisplayAdmin />} />
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
           <Route path="settings"         element={<Settings />} />
+          {/* Authed catch-all keeps the AppShell chrome around the 404
+              so a stray click doesn't make the user think they got
+              signed out (the old top-level catch-all rendered NotFound
+              outside the shell, which strips the sidebar + topbar). */}
+          <Route path="*" element={<NotFound />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>

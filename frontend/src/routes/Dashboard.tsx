@@ -117,7 +117,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
           value={d.kpis.today_report_entered ? "Entered" : "Pending"}
           sub={
             <Link
-              to="/daily/edit"
+              to={`/daily/edit?date=${d.today}`}
               className="ds-link"
               style={{ color: tokens.accent }}
             >
