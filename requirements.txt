@@ -40,3 +40,9 @@ structlog==24.4.0
 # ADR-004-alembic-adoption.md). Coexists with the legacy
 # `_ADDED_COLUMNS` boot mechanism until the cutover PR.
 alembic==1.13.3
+# Rate limiting (see BACKLOG D6 + "Before going live"). Defaults to
+# in-memory storage in dev / CI; production should set
+# RATELIMIT_STORAGE_URI=redis://... so limits hold across workers.
+# `slowapi` is the FastAPI sibling — shares the same Redis backend.
+Flask-Limiter==3.8.0
+slowapi==0.1.9

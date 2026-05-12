@@ -239,6 +239,110 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 db = SQLAlchemy(app)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
+# ── Rate limiting (BACKLOG D6 + "Before going live") ─────────
+#
+# Flask-Limiter on the high-value endpoints — login, signup,
+# password reset, webhook ingest, anything an attacker would brute-
+# force or flood. Default key function buckets by client IP; when
+# the cookie session has resolved we'd ideally bucket by user_id,
+# but IP keeps the limiter resilient against unauthenticated
+# attacks where the username changes every request.
+#
+# Storage: in-memory by default (works fine for dev / CI and for
+# single-worker prod). When RATELIMIT_STORAGE_URI is set (e.g.
+# redis://...) the limiter shares state across workers — required
+# in prod with gunicorn -w >1. The render.yaml prod manifest
+# should set RATELIMIT_STORAGE_URI on launch.
+#
+# `enabled` falls back to False during tests so the suite doesn't
+# get 429'd by the seeded admin issuing dozens of requests per
+# minute. The `_LIMITER_ENABLED` flag lets a specific test opt back
+# in via fixture (see tests/test_rate_limiting.py for the pattern).
+_RATELIMIT_STORAGE = os.environ.get(
+    "RATELIMIT_STORAGE_URI", "memory://",
+)
+_LIMITER_ENABLED = (
+    os.environ.get("RATELIMIT_ENABLED", "1") not in ("0", "false", "False")
+)
+
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[],  # opt-in per route; no blanket cap
+    storage_uri=_RATELIMIT_STORAGE,
+    strategy="fixed-window",
+    enabled=_LIMITER_ENABLED,
+    headers_enabled=True,  # echo X-RateLimit-* on every response
+)
+
+
+def _apply_rate_limits():
+    """Wire up rate limits to specific Blueprint + app endpoints.
+
+    Done after Blueprint registration (which already happened at
+    module top) AND after the `limiter` exists — Flask-Limiter's
+    decorator returns a wrapped view function that we store back
+    in ``app.view_functions``, where Flask looks handlers up at
+    request time. This avoids decorating Blueprint routes that
+    have to be imported before the limiter exists.
+
+    Read CLAUDE.md "Rate limiting" before tightening these — the
+    same limits get tripped by integration tests and by webhook
+    retry storms. Loosening is safer than the alternative.
+
+    Tuning:
+      - Auth burst limits target the unauthenticated path where an
+        attacker can change the username on every request — 10/min
+        stops most online brute force, 50/hour catches the slower
+        password-spray variant.
+      - Webhook limits are deliberately loose: Stripe retries on
+        5xx + signature verification is the real defense; we just
+        want a flood-protection ceiling so an attacker can't tarpit
+        us with a million bogus signatures.
+    """
+    # POST-only so a logged-out user hitting the GET form
+    # repeatedly doesn't burn the credit they need to actually
+    # try a password.
+    _auth_burst = limiter.limit(
+        "10 per minute; 50 per hour",
+        methods=["POST"],
+    )
+    _webhook_cap = limiter.limit("120 per minute")
+
+    # Flask Blueprint endpoints — login state machine + 2FA +
+    # passkey. The full set lives in blueprints/auth.py.
+    for endpoint in (
+        "auth.login",
+        "auth.login_store",
+        "auth.employee_login_redirect",
+        "auth.login_totp",
+        "auth.login_totp_recover",
+        "auth.login_totp_enroll",
+        "auth.passkey_login_begin",
+        "auth.passkey_login_finish",
+        "auth.passkey_register_begin",
+        "auth.passkey_register_finish",
+    ):
+        if endpoint in app.view_functions:
+            app.view_functions[endpoint] = _auth_burst(
+                app.view_functions[endpoint],
+            )
+
+    # Webhook ingest — Stripe + Resend. Both routes still live in
+    # app.py (they're tied to model state mutations; not slated
+    # for Blueprint extraction).
+    for endpoint in ("stripe_webhook", "resend_webhook"):
+        if endpoint in app.view_functions:
+            app.view_functions[endpoint] = _webhook_cap(
+                app.view_functions[endpoint],
+            )
+
+
+_apply_rate_limits()
+
 # ── Models ───────────────────────────────────────────────────
 class Store(db.Model):
     __tablename__ = "store"

@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 import jwt
 
 from api.Core.Database import get_db
+from api.Core.RateLimit import limiter as _rate_limiter
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Requests import (
     ChangePasswordRequest,
@@ -181,7 +182,9 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
 
 
 @router.post("/login", response_model=LoginResponse)
+@_rate_limiter.limit("10/minute;50/hour")
 def login_route(
+    request: Request,
     body: LoginRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -494,8 +497,11 @@ def change_password_route(
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=201)
+@_rate_limiter.limit("5/hour;20/day")
 def signup_route(
-    body: SignupRequest, db: Session = Depends(get_db),
+    request: Request,
+    body: SignupRequest,
+    db: Session = Depends(get_db),
 ) -> SignupResponse:
     """Self-service signup. Creates a (Store, admin User) pair
     and returns a JWT scoped to the new store, so the SPA can
@@ -664,8 +670,11 @@ def referral_preview_route(
 
 
 @router.post("/forgot-password")
+@_rate_limiter.limit("5/minute;20/hour")
 def forgot_password_route(
-    body: ForgotPasswordRequest, db: Session = Depends(get_db),
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: Session = Depends(get_db),
 ) -> dict:
     """Issue a reset token for the user identified by `email`.
 
@@ -739,8 +748,11 @@ def _deliver_password_reset_email(issued) -> None:
 
 
 @router.post("/reset-password")
+@_rate_limiter.limit("5/minute;20/hour")
 def reset_password_route(
-    body: ResetPasswordRequest, db: Session = Depends(get_db),
+    request: Request,
+    body: ResetPasswordRequest,
+    db: Session = Depends(get_db),
 ) -> dict:
     """Consume a one-time reset token and set a new password.
     Same validation rules as change_password (length ≥ 8 +

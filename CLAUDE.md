@@ -284,6 +284,30 @@ that was active at registration time.
       the input, not around it.
     - Reference: `templates/transfers.html` + `templates/_transfers_table.html`
       + `/transfers` route's `partial=1` branch.
+15. **Rate limiting** — every auth route, password-reset route, and
+    webhook ingest endpoint is bucketed:
+    - Flask side: `Flask-Limiter` instance is created in `app.py`
+      and applied retroactively via `_apply_rate_limits()` after
+      every Blueprint registers. Limits live in that one function;
+      change them there, not on the routes themselves.
+    - FastAPI side: shared singleton `slow_limiter` in
+      `api/Core/RateLimit.py`. Critical endpoints carry
+      `@_rate_limiter.limit(...)` decorators on their controllers
+      (look for `from api.Core.RateLimit import limiter as
+      _rate_limiter` in `api/Modules/Auth/Controllers/__init__.py`).
+    - Storage backend defaults to in-memory; prod sets
+      `RATELIMIT_STORAGE_URI=redis://...` in `render.yaml` so the
+      bucket holds across workers. `RATELIMIT_ENABLED=0` disables
+      both limiters (the test conftest sets this — never set it in
+      prod).
+    - Flask-Limiter captures `enabled` at decoration time, so
+      toggling the flag at runtime doesn't re-arm a wrapper that
+      was created with `enabled=False`. Tests that exercise the
+      429 path spawn a subprocess (see
+      `tests/test_rate_limiting.py`).
+    - Don't tighten the limits casually — integration tests and
+      Stripe webhook retries both burn rate budget. Loosening is
+      always safer than the alternative.
 
 ## Migrations (no framework)
 New columns on existing tables go in `_ADDED_COLUMNS` (list at bottom of
