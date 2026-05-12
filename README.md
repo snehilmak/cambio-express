@@ -195,6 +195,9 @@ until every item there is closed out.
 * [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
   — Render deploy runbook: env-var checklist, secret rotation,
   backup verification, incident playbook.
+* [`docs/architecture/component-catalog.md`](docs/architecture/component-catalog.md)
+  — Flat reference for every SPA primitive (`PageShell`, `Card`,
+  `KpiCard`, `Button`, etc.) + every `.ds-*` motion class.
 
 ## Contributing
 
