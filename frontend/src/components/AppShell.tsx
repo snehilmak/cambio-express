@@ -304,24 +304,33 @@ function Topbar({
       <span
         style={{
           fontSize: "0.9rem",
-          color: "var(--db-text-muted, #a3a3a3)",
+          fontWeight: 500,
+          color: "var(--db-text, #f5f5f5)",
+          letterSpacing: "-0.005em",
         }}
       >
         {identity?.username || "—"}
-        {identity?.role && (
-          <>
-            {" "}·{" "}
-            <code
-              style={{
-                fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                fontSize: "0.85rem",
-              }}
-            >
-              {identity.role}
-            </code>
-          </>
-        )}
       </span>
+      {identity?.role && (
+        <span
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "0.18rem 0.55rem",
+            borderRadius: "999px",
+            background: "rgba(63, 255, 0, 0.1)",
+            border: "1px solid rgba(63, 255, 0, 0.35)",
+            color: "var(--db-accent, #3fff00)",
+            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+            fontSize: "0.7rem",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.06em",
+          }}
+        >
+          {identity.role}
+        </span>
+      )}
       <button onClick={onSignOut} style={signOutStyle}>
         Sign out
       </button>
@@ -340,21 +349,26 @@ const navLinkStyle = ({
 }: { isActive: boolean }): React.CSSProperties => ({
   display: "flex",
   alignItems: "center",
-  gap: "0.6rem",
-  padding: "0.5rem 0.7rem",
-  borderRadius: "0.5rem",
+  gap: "0.65rem",
+  padding: "0.55rem 0.7rem 0.55rem 0.55rem",
+  borderRadius: "0.55rem",
   textDecoration: "none",
   color: isActive
     ? "var(--db-text, #f5f5f5)"
     : "var(--db-text-muted, #a3a3a3)",
+  // Match the legacy `.nav-link.active` from static/shell.css —
+  // neon glow fades from the left bar across the row instead of
+  // a flat surface inversion. Reads as "this is the live page"
+  // not "this row was clicked once."
   background: isActive
-    ? "var(--db-surface, #0a0a0a)"
+    ? "linear-gradient(90deg, rgba(63, 255, 0, 0.16), transparent 65%)"
     : "transparent",
   fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
   fontSize: "0.92rem",
+  fontWeight: isActive ? 600 : 500,
   borderLeft: isActive
-    ? "2px solid var(--db-accent, #3fff00)"
-    : "2px solid transparent",
+    ? "3px solid var(--db-accent, #3fff00)"
+    : "3px solid transparent",
   transition: "background 120ms ease, color 120ms ease",
 });
 
