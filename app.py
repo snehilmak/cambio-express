@@ -68,6 +68,9 @@ from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
 from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
 from blueprints import (  # noqa: E402
+    bookkeeping_mutations as _bp_bookkeeping_mutations,
+)
+from blueprints import (  # noqa: E402
     bookkeeping_redirects as _bp_bookkeeping_redirects,
 )
 from blueprints import customers_api as _bp_customers_api  # noqa: E402
@@ -114,6 +117,7 @@ app.register_blueprint(_bp_tv_board.bp)
 app.register_blueprint(_bp_superadmin_store_mutations.bp)
 app.register_blueprint(_bp_superadmin_misc_mutations.bp)
 app.register_blueprint(_bp_auth.bp)
+app.register_blueprint(_bp_bookkeeping_mutations.bp)
 _bp_spa_cutover.register(app)
 
 # Cache-bust query string for the shared stylesheet (and any other static
@@ -5366,7 +5370,7 @@ def _reject_if_locked(store_id, report_date, ds):
     if _wants_json():
         return jsonify({"ok": False, "error": _DAILY_LOCKED_MSG}), 403
     flash(_DAILY_LOCKED_MSG, "error")
-    return redirect(url_for("daily_report", ds=ds))
+    return redirect(url_for("bookkeeping_mutations.daily_report", ds=ds))
 
 
 
@@ -5478,15 +5482,9 @@ _DAILY_REPORT_FIELDS = [
     "cash_deposit","safe_balance","payroll_expense","over_short",
 ]
 
-@app.route("/daily/<string:ds>", methods=["GET", "POST"])
-@admin_required
-def daily_report(ds):
-    """301 → /app/daily/edit?date=<ds>. The per-day editor (with the
-    full daily-book + MT-summary spreadsheet) moved to React; the
-    SPA PUTs to /api/v2/daily/<store>/<date> with the same locked-
-    fields contract (server still derives line-item totals + the MT
-    grand total + bounces locked-day writes). Both verbs redirect."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
+# /daily/<ds> (GET, POST) moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
+
 
 def _wants_json():
     """Client explicitly asked for JSON (AJAX from the drops widget).
@@ -5506,43 +5504,10 @@ def _line_items_json_payload(kind, store_id, report_date):
     return {"ok": True, "kind": kind, "total": float(total),
             "items": [r.to_dict() for r in rows]}
 
-@app.route("/daily/<string:ds>/line-items/<string:kind>/new", methods=["POST"])
-@admin_required
-def daily_line_item_new(ds, kind):
-    """301 → /app/daily/edit?date=<ds>. The legacy AJAX endpoint
-    (drops / check-deposits widget) moved to React; the SPA POSTs
-    to /api/v2/daily/<store>/<date>/line-items with the same locked-
-    day + return-payback gates enforced server-side. Anyone still
-    holding the old form URL lands on the SPA editor."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
+# /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
+# /daily/<ds>/{lock,unlock} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
-
-@app.route("/daily/<string:ds>/line-items/<string:kind>/<int:item_id>/delete", methods=["POST"])
-@admin_required
-def daily_line_item_delete(ds, kind, item_id):
-    """301 → /app/daily/edit?date=<ds>. Delete moved to the SPA
-    (DELETE /api/v2/daily/<store>/<date>/line-items/<id>). The
-    return-check-linkage guard lives in the Service so the SPA-
-    side and Return-Checks-side delete paths can't drift."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
-
-
-@app.route("/daily/<string:ds>/lock", methods=["POST"])
-@admin_required
-def daily_report_lock(ds):
-    """301 → /app/daily/edit?date=<ds>. Lock moved to the SPA (POST
-    /api/v2/daily/<store>/<date>/lock). Audit-log row writing moved
-    with it — see api/Modules/DailyBook/Controllers `_audit_daily_lock_action`."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
-
-
-@app.route("/daily/<string:ds>/unlock", methods=["POST"])
-@admin_required
-def daily_report_unlock(ds):
-    """301 → /app/daily/edit?date=<ds>. Same migration as lock — the
-    SPA POSTs to /api/v2/daily/<store>/<date>/unlock and the audit
-    row lands on that side."""
-    return redirect(f"/app/daily/edit?date={ds}", code=301)
 
 # ── Monthly P&L ──────────────────────────────────────────────
 # /monthly + /monthly/<y>/<m> + /monthly/new moved to
@@ -5950,47 +5915,8 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
 # (D2 phase 15). Mutation routes (POSTs below) stay here.
 
 
-@app.route("/return-checks/new", methods=["POST"])
-@admin_required
-def return_check_new():
-    sid = session["store_id"]
-    user = current_user()
-    bounced_on_s = (request.form.get("bounced_on") or "").strip()
-    customer = (request.form.get("customer_name") or "").strip()
-    amount_s = (request.form.get("amount") or "").strip()
-    if not bounced_on_s or not customer or not amount_s:
-        flash("Date, customer, and amount are required.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        bounced_on = datetime.strptime(bounced_on_s, "%Y-%m-%d").date()
-    except ValueError:
-        flash("Invalid bounce date.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        amount = float(amount_s)
-    except ValueError:
-        flash("Invalid amount.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    if amount <= 0:
-        flash("Amount must be greater than zero.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    rc = ReturnCheck(
-        store_id=sid,
-        bounced_on=bounced_on,
-        customer_name=customer[:120],
-        check_number=(request.form.get("check_number") or "").strip()[:40],
-        payer_bank=(request.form.get("payer_bank") or "").strip()[:120],
-        amount=amount,
-        notes=(request.form.get("notes") or "").strip(),
-        status="pending",
-        created_by=user.id,
-    )
-    db.session.add(rc)
-    db.session.commit()
-    flash(f"Return check logged for {rc.customer_name} (${rc.amount:,.2f}).",
-          "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/new moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 def _get_owned_return_check(rc_id):
@@ -6070,114 +5996,8 @@ def _delete_daily_paybacks_for_payment(rc, payment_amount, payment_paid_on):
         db.session.delete(li)
 
 
-@app.route("/return-checks/<int:rc_id>/payment", methods=["POST"])
-@admin_required
-def return_check_payment_new(rc_id):
-    """Log one installment of repayment.
-
-    Validates the amount fits within the still-outstanding balance.
-    On a fully-paid parent we auto-flip status='recovered' so the
-    admin doesn't have to click a separate "close" button — and the
-    P&L doesn't double-count: the closing event simply marks WHEN it
-    became fully recovered, the actual recovered $ already counted at
-    the payment level.
-    """
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    if rc.status in ("loss", "fraud"):
-        flash("This return check is closed (loss/fraud) — reopen it first.",
-              "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    amt_s    = (request.form.get("amount") or "").strip()
-    paid_s   = (request.form.get("paid_on") or "").strip()
-    method   = (request.form.get("payment_method") or "").strip().lower()
-    note     = (request.form.get("note") or "").strip()
-    if method and method not in _PAYMENT_METHODS:
-        method = "other"
-    try:
-        amt = float(amt_s)
-    except ValueError:
-        flash("Invalid payment amount.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    remaining = rc.remaining
-    if amt <= 0:
-        flash("Payment amount must be greater than zero.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    # Allow a tiny float epsilon on the cap so $999.999... rounding
-    # from the front-end doesn't trip the validation.
-    if amt > remaining + 0.005:
-        flash(
-            f"Payment $ {amt:,.2f} exceeds remaining balance "
-            f"${remaining:,.2f}. Lower the amount or split into "
-            f"multiple payments.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    try:
-        paid_on = (datetime.strptime(paid_s, "%Y-%m-%d").date()
-                   if paid_s else date.today())
-    except ValueError:
-        flash("Invalid payment date.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-    user = current_user()
-    payment = ReturnCheckPayment(
-        return_check_id=rc.id,
-        amount=amt,
-        paid_on=paid_on,
-        payment_method=method,
-        note=note[:200],
-        created_by=user.id if user else None,
-    )
-    # Snapshot the prior total BEFORE adding the new row — the
-    # `payments` relationship is lazy-loaded once and won't see the
-    # uncommitted insert without an explicit refresh. Cheaper to just
-    # add the new payment's amount to what we already had.
-    prior_total = rc.recovered_total
-    db.session.add(payment)
-    db.session.flush()
-    _create_daily_payback_for(rc, payment)
-    # Auto-close when the cumulative payments reach the original
-    # amount. Use the new payment's date as status_changed_on so the
-    # dashboard's "marked recovered" badge ties back to the same day.
-    new_total = prior_total + amt
-    if new_total + 0.005 >= float(rc.amount or 0.0):
-        rc.status = "recovered"
-        rc.status_changed_on = paid_on
-    db.session.commit()
-    flash(
-        f"Logged ${amt:,.2f} payment for {rc.customer_name}"
-        + (f" via {method}" if method else "") + ".",
-        "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/payment/<int:pid>/delete",
-           methods=["POST"])
-@admin_required
-def return_check_payment_delete(rc_id, pid):
-    """Remove one installment. Drops the shadow daily-book line item
-    and, if the parent was auto-flipped to 'recovered' but the
-    deletion now leaves the balance > 0, walks status back to
-    'pending' so the row reappears in the active list."""
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    payment = db.session.get(ReturnCheckPayment, pid)
-    if payment is None or payment.return_check_id != rc.id:
-        flash("Payment not found.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
-    _delete_daily_paybacks_for_payment(rc, payment.amount, payment.paid_on)
-    db.session.delete(payment)
-    db.session.flush()
-    # If this was a recovered case and the deletion drops below full
-    # payment, reopen so the admin's UI stays accurate.
-    if rc.status == "recovered" and rc.recovered_total + 0.005 < float(rc.amount or 0.0):
-        rc.status = "pending"
-        rc.status_changed_on = None
-    db.session.commit()
-    flash("Payment removed.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/<rc_id>/payment{,/<pid>/delete} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 def _close_as_writeoff(rc_id, status):
@@ -6204,89 +6024,8 @@ def _close_as_writeoff(rc_id, status):
     return redirect(url_for("bookkeeping_redirects.return_checks"))
 
 
-@app.route("/return-checks/<int:rc_id>/loss", methods=["POST"])
-@admin_required
-def return_check_loss(rc_id):
-    return _close_as_writeoff(rc_id, "loss")
-
-
-@app.route("/return-checks/<int:rc_id>/fraud", methods=["POST"])
-@admin_required
-def return_check_fraud(rc_id):
-    return _close_as_writeoff(rc_id, "fraud")
-
-
-@app.route("/return-checks/<int:rc_id>/reopen", methods=["POST"])
-@admin_required
-def return_check_reopen(rc_id):
-    """Undo a recover / loss / fraud — returns the row to pending.
-    Payments themselves are NOT deleted (they represent real money
-    that came in); only the closing status is reverted. To remove an
-    individual payment, use the payment-delete route."""
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    rc.status = "pending"
-    rc.status_changed_on = None
-    db.session.commit()
-    flash(f"Reopened: {rc.customer_name}.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/edit", methods=["POST"])
-@admin_required
-def return_check_edit(rc_id):
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    customer = (request.form.get("customer_name") or "").strip()
-    if customer:
-        rc.customer_name = customer[:120]
-    rc.check_number = (request.form.get("check_number") or "").strip()[:40]
-    rc.payer_bank   = (request.form.get("payer_bank") or "").strip()[:120]
-    rc.notes        = (request.form.get("notes") or "").strip()
-    # Allow editing amount only on pending rows — once booked, the P&L
-    # for the closed month is fixed and we don't want a quiet retroactive
-    # change.
-    if rc.status == "pending":
-        amt_s = (request.form.get("amount") or "").strip()
-        if amt_s:
-            try:
-                amt = float(amt_s)
-                if amt > 0:
-                    rc.amount = amt
-            except ValueError:
-                pass
-        on_s = (request.form.get("bounced_on") or "").strip()
-        if on_s:
-            try:
-                rc.bounced_on = datetime.strptime(on_s, "%Y-%m-%d").date()
-            except ValueError:
-                pass
-    db.session.commit()
-    flash("Return check updated.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
-
-
-@app.route("/return-checks/<int:rc_id>/delete", methods=["POST"])
-@admin_required
-def return_check_delete(rc_id):
-    rc, err = _get_owned_return_check(rc_id)
-    if err is not None:
-        return err
-    # Sweep up the shadow line items first so the daily-book stays
-    # consistent — the FK column on DailyLineItem isn't ON DELETE
-    # CASCADE because we want to track who created which line item,
-    # so the cleanup is explicit here.
-    DailyLineItem.query.filter_by(
-        store_id=rc.store_id,
-        return_check_id=rc.id,
-        kind="return_payback",
-    ).delete(synchronize_session=False)
-    db.session.delete(rc)
-    db.session.commit()
-    flash("Return check deleted.", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+# /return-checks/<rc_id>/{loss,fraud,reopen,edit,delete} moved to
+# blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
 # ── ACH Batches ──────────────────────────────────────────────
