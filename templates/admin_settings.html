@@ -219,7 +219,7 @@
       list so you always know who processed it. Deactivate — don't delete —
       so historical transfer attribution stays intact.
     </p>
-    <form method="POST" action="{{ url_for('admin_roster_add') }}"
+    <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_add') }}"
           style="display:flex;gap:10px;align-items:flex-end;">
       <div class="field" style="flex:1;margin:0;">
         <label>Full Name</label>
@@ -242,7 +242,7 @@
         {% for e in roster %}
         <tr>
           <td>
-            <form method="POST" action="{{ url_for('admin_roster_rename', eid=e.id) }}"
+            <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_rename', eid=e.id) }}"
                   style="display:flex;gap:6px;align-items:center;margin:0;">
               <input type="text" name="name" value="{{ e.name }}"
                      style="font-size:14px;padding:6px 10px;">
@@ -258,7 +258,7 @@
           </td>
           <td class="mono text-sm text-muted">{{ e.created_at.strftime('%m/%d/%Y') }}</td>
           <td>
-            <form method="POST" action="{{ url_for('admin_roster_toggle', eid=e.id) }}"
+            <form method="POST" action="{{ url_for('admin_settings_mutations.admin_roster_toggle', eid=e.id) }}"
                   style="margin:0;">
               <button type="submit" class="btn btn-outline btn-sm">
                 {{ 'Deactivate' if e.is_active else 'Reactivate' }}
@@ -306,7 +306,7 @@
       Got a code from your owner? Enter it here to connect this store
       to their umbrella. Codes are 8 characters and valid for 7 days.
     </p>
-    <form method="POST" action="{{ url_for('admin_redeem_owner_code') }}"
+    <form method="POST" action="{{ url_for('admin_settings_mutations.admin_redeem_owner_code') }}"
           style="display:flex;gap:10px;align-items:center;">
       <input type="text" name="code" autocomplete="off" required
              pattern="[A-Z0-9]{8}" maxlength="8"
