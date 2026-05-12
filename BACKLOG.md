@@ -450,7 +450,12 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] Rich text / markdown links in announcements.
 - [ ] Scheduled announcements (`Announcement.starts_at` already exists).
 - [ ] CAPTCHA on `/forgot-password` if bot traffic shows up.
-- [ ] Mask phone numbers in list views per compliance.
+- [x] Mask phone numbers in list views per compliance — landed.
+      `maskPhone` helper in `frontend/src/lib/format.ts` keeps
+      the last 4 digits + replaces the rest with middle dots.
+      Applied to `/app/customers`, `/app/reports/top-customers`,
+      and `/app/reports/top-senders`. Customer / transfer detail
+      pages still show the full number on click-through.
 - [ ] CSV export on the customer directory.
 - [x] **Email locked-day digest to owner** — landed. The FastAPI
       lock controller fires `send_locked_day_digest(report)` on a
