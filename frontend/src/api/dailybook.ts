@@ -180,3 +180,34 @@ export function useDailyReport(date: string | undefined) {
     },
   });
 }
+
+
+// Range summary used by the calendar landing page. Returns one
+// DailyReportRow per day with a report on it inside the [from, to]
+// window plus the totals. Days that have no report are simply
+// missing from the array — the calendar renders them as empty
+// cells.
+export interface PeriodSummary {
+  rows: DailyReportRow[];
+  total_receipts: number;
+  total_disbursements: number;
+  net: number;
+  days_logged: number;
+}
+
+export function useDailyPeriod(from: string, to: string) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+
+  return useQuery<PeriodSummary>({
+    enabled:
+      Boolean(from) && Boolean(to) &&
+      storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "period", storeId, from, to],
+    queryFn: async () => {
+      return await api<PeriodSummary>(
+        `/api/v2/daily/${storeId}/period?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+      );
+    },
+  });
+}

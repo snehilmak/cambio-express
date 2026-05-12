@@ -82,7 +82,10 @@ export function PageShell({
         flex: 1,
         display: "flex",
         flexDirection: "column",
-        padding: "2rem 1.5rem",
+        // Slightly tighter horizontal padding + a more compact
+        // top so PageHeader sits closer to the chrome and the
+        // first card doesn't float in the middle of the screen.
+        padding: "1.5rem 1.5rem 2.5rem",
         maxWidth,
         margin: "0 auto",
         width: "100%",
@@ -106,32 +109,55 @@ export function PageHeader({
   return (
     <header
       style={{
-        marginBottom: "1.5rem",
+        // No extra marginBottom — PageShell's gap prop provides
+        // the breathing room. Stops the cumulative spacing that
+        // pushed the first content card down by ~3rem.
         display: "flex",
-        alignItems: "baseline",
+        alignItems: "center",
         justifyContent: "space-between",
         gap: "1rem",
         flexWrap: "wrap",
+        minHeight: "2.5rem",
       }}
     >
-      <div>
+      <div style={{ minWidth: 0 }}>
         <h1
           style={{
             fontFamily: tokens.fontDisplay,
-            fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-            fontWeight: 600,
+            fontSize: "clamp(1.55rem, 3vw, 1.95rem)",
+            fontWeight: 700,
+            letterSpacing: "-0.015em",
+            lineHeight: 1.15,
             margin: 0,
           }}
         >
           {title}
         </h1>
         {subtitle && (
-          <p style={{ margin: "0.35rem 0 0", color: tokens.textMuted }}>
+          <p
+            style={{
+              margin: "0.35rem 0 0",
+              color: tokens.textMuted,
+              fontSize: fontSize.sm,
+              lineHeight: 1.3,
+            }}
+          >
             {subtitle}
           </p>
         )}
       </div>
-      {actions}
+      {actions && (
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            flexWrap: "wrap",
+          }}
+        >
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
@@ -765,9 +791,9 @@ export function Button({
   const cls = ["ds-btn", `ds-btn--${tone}`];
   if (className) cls.push(className);
   const sizing = {
-    sm: { padding: "0.3rem 0.7rem",  fontSize: fontSize.sm },
-    md: { padding: "0.55rem 1rem",   fontSize: "0.9rem" },
-    lg: { padding: "0.7rem 1.25rem", fontSize: fontSize.base },
+    sm: { padding: "0.35rem 0.75rem", fontSize: fontSize.sm,   minHeight: "2rem"   },
+    md: { padding: "0.55rem 1rem",    fontSize: "0.9rem",      minHeight: "2.4rem" },
+    lg: { padding: "0.75rem 1.4rem",  fontSize: fontSize.base, minHeight: "2.85rem"},
   }[size];
   return (
     <button
@@ -775,13 +801,20 @@ export function Button({
       {...rest}
       className={cls.join(" ")}
       style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
         borderRadius: tone === "ghost" ? 0 : "0.5rem",
         padding: tone === "ghost" ? 0 : sizing.padding,
-        fontFamily: tone === "primary" ? tokens.fontDisplay : tokens.fontBody,
+        minHeight: tone === "ghost" ? undefined : sizing.minHeight,
+        fontFamily: tokens.fontBody,
+        letterSpacing: tone === "primary" ? "-0.005em" : undefined,
         fontSize: tone === "ghost" ? fontSize.sm : sizing.fontSize,
         fontWeight: tone === "primary" || tone === "danger" ? 600 : 500,
         cursor: dimmed ? (busy ? "wait" : "not-allowed") : "pointer",
         opacity: dimmed ? 0.6 : 1,
+        whiteSpace: "nowrap",
         ...palette,
         ...style,
       }}
@@ -809,9 +842,9 @@ export function ButtonLink({
          "style" | "children" | "href" | "className">) {
   const palette = buttonPalette[tone];
   const sizing = {
-    sm: { padding: "0.3rem 0.7rem",  fontSize: fontSize.sm },
-    md: { padding: "0.55rem 1rem",   fontSize: "0.9rem" },
-    lg: { padding: "0.7rem 1.25rem", fontSize: fontSize.base },
+    sm: { padding: "0.35rem 0.75rem", fontSize: fontSize.sm,   minHeight: "2rem"   },
+    md: { padding: "0.55rem 1rem",    fontSize: "0.9rem",      minHeight: "2.4rem" },
+    lg: { padding: "0.75rem 1.4rem",  fontSize: fontSize.base, minHeight: "2.85rem"},
   }[size];
   const cls = ["ds-btn", `ds-btn--${tone}`];
   if (className) cls.push(className);
@@ -821,13 +854,18 @@ export function ButtonLink({
       {...rest}
       className={cls.join(" ")}
       style={{
-        display: "inline-block",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.4rem",
         textDecoration: "none",
         borderRadius: "0.5rem",
         padding: sizing.padding,
-        fontFamily: tone === "primary" ? tokens.fontDisplay : tokens.fontBody,
+        minHeight: sizing.minHeight,
+        fontFamily: tokens.fontBody,
         fontSize: sizing.fontSize,
         fontWeight: tone === "primary" || tone === "danger" ? 600 : 500,
+        whiteSpace: "nowrap",
         ...palette,
         ...style,
       }}

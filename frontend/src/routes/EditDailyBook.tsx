@@ -8,7 +8,9 @@ import {
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { Loading } from "../components/ui";
+import {
+  Button, Card, EmptyState, Loading, PageHeader, PageShell, tokens,
+} from "../components/ui";
 
 // Edit page for the daily book at /app/daily/edit?date=YYYY-MM-DD.
 //
@@ -111,7 +113,7 @@ export default function EditDailyBook() {
         }
       }
       await updateDailyReport(identity.store_id, date, body);
-      navigate(`/daily?date=${date}`, { replace: true });
+      navigate("/daily", { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -125,64 +127,77 @@ export default function EditDailyBook() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit daily book</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to edit the daily book.
-        </p>
-      </main>
+      <PageShell maxWidth="70rem">
+        <PageHeader title="Edit daily book" />
+        <EmptyState title="Sign in as a store admin to edit the daily book." />
+      </PageShell>
     );
   }
   if (!date) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit daily book</h1>
-        <p style={emptyStyle}>
-          Missing date. Open a daily report first, then click Edit.
-        </p>
-      </main>
+      <PageShell maxWidth="70rem">
+        <PageHeader title="Edit daily book" />
+        <EmptyState
+          title="Missing date."
+          body="Pick a day from the calendar at /daily, then tap a cell to open the editor."
+        />
+      </PageShell>
     );
   }
   if (detail.isLoading || form == null) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="70rem">
         <Loading />
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Edit daily book</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-          }}
-        >
-          {date}
-        </p>
-        {detail.data?.locked && (
-          <p
+    <PageShell maxWidth="70rem" gap="1.25rem">
+      <PageHeader
+        title="Edit daily book"
+        subtitle={(
+          <span style={{ fontFamily: tokens.fontMono }}>
+            {formatHumanDate(date)} <span style={{ color: tokens.textMuted }}>· {date}</span>
+          </span>
+        )}
+        actions={(
+          <Button
+            tone="ghost"
+            size="sm"
+            onClick={() => navigate("/daily")}
+          >
+            ← Calendar
+          </Button>
+        )}
+      />
+
+      {detail.data?.locked && (
+        <Card padding="0.85rem 1rem">
+          <span
             style={{
-              margin: "0.5rem 0 0",
-              color: "var(--db-warning, #ffb84d)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              color: tokens.warning,
               fontSize: "0.9rem",
             }}
           >
             ⚠ This day is locked. Unlock it before editing.
-          </p>
-        )}
-      </header>
+          </span>
+        </Card>
+      )}
 
       <form
         onSubmit={onSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "1.25rem",
+        }}
       >
         {SECTIONS.map((sec) => (
-          <section key={sec} style={cardStyle}>
+          <Card key={sec} padding="1.25rem 1.5rem">
             <h2 style={sectionTitleStyle}>{sec}</h2>
             <Grid>
               {FIELDS.filter((f) => f.section === sec).map((f) => (
@@ -203,10 +218,10 @@ export default function EditDailyBook() {
                 </Field>
               ))}
             </Grid>
-          </section>
+          </Card>
         ))}
 
-        <section style={cardStyle}>
+        <Card padding="1.25rem 1.5rem">
           <h2 style={sectionTitleStyle}>Notes</h2>
           <textarea
             value={form.notes ?? ""}
@@ -214,41 +229,46 @@ export default function EditDailyBook() {
             rows={4}
             style={{ ...inputStyle, resize: "vertical", minHeight: "5rem" }}
           />
-        </section>
+        </Card>
 
         {error && (
-          <p
-            role="alert"
-            style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}
-          >
+          <p role="alert" style={errorStyle}>
             {error}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button
+        <div style={actionRowStyle}>
+          <Button
             type="button"
-            onClick={() => navigate(`/daily?date=${date}`)}
-            style={cancelBtnStyle}
+            tone="secondary"
+            onClick={() => navigate("/daily")}
             disabled={busy}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            tone="primary"
             disabled={busy || detail.data?.locked === true}
-            style={{
-              ...saveBtnStyle,
-              opacity: busy || detail.data?.locked === true ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}
           >
             {busy ? "Saving…" : "Save"}
-          </button>
+          </Button>
         </div>
       </form>
-    </main>
+    </PageShell>
   );
+}
+
+
+function formatHumanDate(iso: string): string {
+  // YYYY-MM-DD → "Mon, May 12, 2026". Falls back to the raw string
+  // on parse error so we never block the page.
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString(undefined, {
+    weekday: "short", month: "short", day: "numeric", year: "numeric",
+  });
 }
 
 function Field({
@@ -285,78 +305,48 @@ function Grid({ children }: { children: React.ReactNode }) {
   );
 }
 
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "70rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
 const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
+  fontFamily: tokens.fontDisplay,
+  fontSize: "0.85rem",
   textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
+  letterSpacing: "0.08em",
+  color: tokens.textMuted,
   margin: "0 0 1rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
+  fontWeight: 600,
 };
 
 const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
+  background: tokens.surface,
+  border: `1px solid ${tokens.border}`,
   borderRadius: "0.5rem",
   padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+  color: tokens.text,
+  fontFamily: tokens.fontMono,
   fontSize: "0.95rem",
   outline: "none",
   width: "100%",
   boxSizing: "border-box",
 };
 
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
+const actionRowStyle: React.CSSProperties = {
+  display: "flex",
+  gap: "0.75rem",
+  justifyContent: "flex-end",
+  position: "sticky",
+  bottom: 0,
+  background: tokens.surface,
+  borderTop: `1px solid ${tokens.border}`,
+  padding: "0.85rem 0",
+  marginTop: "0.5rem",
+  zIndex: 1,
 };
 
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  cursor: "pointer",
-};
-
-const emptyStyle: React.CSSProperties = {
+const errorStyle: React.CSSProperties = {
   margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
+  padding: "0.65rem 0.85rem",
+  color: tokens.negative,
+  background: "rgba(255, 59, 48, 0.08)",
+  border: `1px solid ${tokens.negative}`,
+  borderRadius: "0.5rem",
+  fontSize: "0.9rem",
 };
