@@ -285,23 +285,10 @@ def test_flask_login_route_uses_service(client, test_store_id):
     assert resp.status_code in (302, 303)
 
 
-def test_flask_login_route_rejects_bad_password(client, test_store_id):
-    resp = client.post(
-        "/login",
-        data={
-            "username": "superadmin",
-            "password": "wrong",
-        },
-    )
-    # Bad creds re-render login.html with the error string.
-    assert resp.status_code == 200
-    assert b"Invalid username or password" in resp.data
-
-
-def test_flask_login_route_rejects_unknown_user(client):
-    resp = client.post(
-        "/login",
-        data={"username": "nobody@x.com", "password": "x"},
-    )
-    assert resp.status_code == 200
-    assert b"Invalid username or password" in resp.data
+# The legacy Flask /login form rendering was retired in the
+# chunk-2 cleanup. The SPA owns login (POSTs to /api/v2/auth/login
+# directly via JSON); the cookie-session POST handler in
+# ``blueprints/auth.py`` survives just long enough for chunk 3 to
+# delete it. Login UX tests live in ``tests/Modules/Auth/`` for the
+# JWT path; the Jinja form-rendering tests below were deleted with
+# the Jinja UI.

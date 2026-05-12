@@ -68,12 +68,19 @@ def test_fastapi_openapi_includes_api_prefix_via_root_path():
     assert spec["info"]["title"] == "DineroBook API"
 
 
-def test_flask_app_still_serves_root(client):
-    """Strangler-fig: Flask continues to own / (and everything not
-    under /api/v2). If this test ever fails, we've broken the dual-
-    routing contract."""
-    resp = client.get("/login")
-    assert resp.status_code == 200
+def test_flask_app_still_serves_root_and_redirects_legacy(client):
+    """Flask still owns ``/`` (the marketing landing handler bounces
+    visitors to /app/) and the spa_cutover hook 301s legacy paths
+    like /login to /app/login. If this test fails the dual-routing
+    contract is broken."""
+    # Root → 301 to /app/ via the landing blueprint
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/"
+    # /login → 301 to /app/login via spa_cutover
+    resp = client.get("/login", follow_redirects=False)
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/login"
 
 
 def test_flask_app_dispatches_api_v2_to_fastapi(client):

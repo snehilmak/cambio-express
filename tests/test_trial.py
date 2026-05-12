@@ -93,9 +93,14 @@ def test_expired_store_redirected_to_subscribe(client):
         sess["role"] = "admin"
         sess["store_id"] = sid
 
+    # /dashboard is now redirected to /app/dashboard by the
+    # spa_cutover hook (the legacy trial gate was retired with the
+    # Jinja dashboard chrome). The SPA reads the trial state from
+    # the JWT + the dashboard endpoint and shows its own
+    # trial-expired interstitial.
     resp = client.get("/dashboard", follow_redirects=False)
-    assert resp.status_code == 302
-    assert "/subscribe" in resp.headers["Location"]
+    assert resp.status_code == 301
+    assert resp.headers["Location"] == "/app/dashboard"
 
 
 def test_active_trial_reaches_dashboard(logged_in_client):

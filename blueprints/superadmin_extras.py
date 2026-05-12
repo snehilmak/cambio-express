@@ -67,9 +67,7 @@ def superadmin_impersonate(store_id: int):
         ).first()
         if not admin:
             flash("No admin for this store.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_stores",
-            ))
+            return redirect("/app/superadmin/stores")
         record_audit(
             "impersonate_start", target_type="store",
             target_id=store.id, details=f"as {admin.username}",
@@ -84,7 +82,7 @@ def superadmin_impersonate(store_id: int):
             "to return.",
             "success",
         )
-        return redirect(url_for("spa_redirects.dashboard"))
+        return redirect("/app/dashboard")
 
     return _h()
 
@@ -105,7 +103,7 @@ def superadmin_stop_impersonation():
     imp_id = session.get("impersonator_user_id")
     if not imp_id:
         flash("Not currently impersonating.", "error")
-        return redirect(url_for("spa_redirects.dashboard"))
+        return redirect("/app/dashboard")
     imp = db.session.get(User, imp_id)
     if not imp or imp.role != "superadmin" or not imp.is_active:
         session.clear()
@@ -121,7 +119,7 @@ def superadmin_stop_impersonation():
     session.pop("impersonator_user_id", None)
     db.session.commit()
     flash("Returned to superadmin.", "success")
-    return redirect(url_for("spa_redirects.dashboard"))
+    return redirect("/app/dashboard")
 
 
 @bp.route("/superadmin/send-test-email", methods=["POST"])
@@ -151,10 +149,7 @@ def superadmin_send_test_email():
                 "nowhere to send a test to.",
                 "warning",
             )
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="overview",
-            ))
+            return redirect("/app/superadmin/controls?tab=overview")
         subject = "DineroBook test email"
         sent_at = datetime.utcnow().isoformat(timespec="seconds")
         body = (
@@ -198,9 +193,7 @@ def superadmin_send_test_email():
             f"to={to_addr} ok={ok}",
         )
         db.session.commit()
-        return redirect(url_for(
-            "superadmin_redirects.superadmin_controls", tab="overview",
-        ))
+        return redirect("/app/superadmin/controls?tab=overview")
 
     return _h()
 
@@ -226,43 +219,28 @@ def superadmin_tv_catalog_upload_logo(catalog_type: str, slug: str):
         row = _resolve_catalog_row(catalog_type, slug)
         if row is None:
             flash("Unknown catalog entry.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         f = request.files.get("logo")
         if not f or not f.filename:
             flash("Pick a file to upload.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         mime = (f.mimetype or "").lower()
         if mime not in _TV_LOGO_ALLOWED_MIMES:
             flash("File must be PNG, JPEG, WebP, or SVG.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         raw_blob = f.read()
         if len(raw_blob) == 0:
             flash("Uploaded file is empty.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
         if len(raw_blob) > _TV_LOGO_MAX_BYTES:
             flash(
                 f"Logo too large — max {_TV_LOGO_MAX_BYTES // 1024} KB.",
                 "error",
             )
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         blob, mime = _normalize_logo_blob(raw_blob, mime)
 
@@ -291,10 +269,7 @@ def superadmin_tv_catalog_upload_logo(catalog_type: str, slug: str):
         )
         db.session.commit()
         flash(f"Uploaded logo for {row.display_name}.", "success")
-        return redirect(url_for(
-            "superadmin_redirects.superadmin_controls",
-            tab="tv-catalog",
-        ))
+        return redirect("/app/superadmin/controls?tab=tv-catalog")
 
     return _h()
 
@@ -318,10 +293,7 @@ def superadmin_tv_catalog_edit(catalog_type: str, slug: str):
         row = _resolve_catalog_row(catalog_type, slug)
         if row is None:
             flash("Unknown catalog entry.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         new_name = (
             request.form.get("display_name") or ""
@@ -348,10 +320,7 @@ def superadmin_tv_catalog_edit(catalog_type: str, slug: str):
         )
         db.session.commit()
         flash(f"Saved {row.display_name}.", "success")
-        return redirect(url_for(
-            "superadmin_redirects.superadmin_controls",
-            tab="tv-catalog",
-        ))
+        return redirect("/app/superadmin/controls?tab=tv-catalog")
 
     return _h()
 
@@ -374,19 +343,13 @@ def superadmin_tv_catalog_new():
         ).strip()
         if catalog_type not in ("company", "bank"):
             flash("Pick company or bank.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
         display_name = (
             request.form.get("display_name") or ""
         ).strip()[:80]
         if not display_name:
             flash("Display name is required.", "error")
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         cc = ""
         if catalog_type == "company":
@@ -399,10 +362,7 @@ def superadmin_tv_catalog_new():
                 flash(
                     "Banks need a country code (ISO-2).", "error",
                 )
-                return redirect(url_for(
-                    "superadmin_redirects.superadmin_controls",
-                    tab="tv-catalog",
-                ))
+                return redirect("/app/superadmin/controls?tab=tv-catalog")
             base_slug = _slugify_bank_name(display_name, cc)
 
         if not base_slug:
@@ -411,10 +371,7 @@ def superadmin_tv_catalog_new():
                 "different one.",
                 "error",
             )
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         slug = _next_unique_slug(catalog_type, base_slug)
         if not slug:
@@ -422,10 +379,7 @@ def superadmin_tv_catalog_new():
                 "Too many entries with similar names — slug exhausted.",
                 "error",
             )
-            return redirect(url_for(
-                "superadmin_redirects.superadmin_controls",
-                tab="tv-catalog",
-            ))
+            return redirect("/app/superadmin/controls?tab=tv-catalog")
 
         if catalog_type == "company":
             last = (
@@ -454,10 +408,7 @@ def superadmin_tv_catalog_new():
         )
         db.session.commit()
         flash(f"Added {display_name}.", "success")
-        return redirect(url_for(
-            "superadmin_redirects.superadmin_controls",
-            tab="tv-catalog",
-        ))
+        return redirect("/app/superadmin/controls?tab=tv-catalog")
 
     return _h()
 

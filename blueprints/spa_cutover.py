@@ -1,165 +1,235 @@
-"""SPA cutover before_request hook — legacy GET → /app/<slug> 301.
+"""SPA cutover before_request hook — legacy URL → /app/<path> 301.
 
-Extracted from ``app.py`` as part of the D2 Blueprint split. This
-is a request-lifecycle hook, not a route surface — uses the
-``register(app)`` pattern (like ``blueprints/errors.py``) rather
-than Flask's ``Blueprint`` class, because:
+Permanent redirect from every legacy URL (``/dashboard``,
+``/transfers``, ``/admin/audit-log``, …) to the equivalent React SPA
+route under ``/app/*``.
 
-  * Flask Blueprint ``before_request`` hooks only fire for routes
-    registered in that Blueprint. We need this hook to intercept
-    GETs of *every* legacy Jinja URL.
-  * The hook reads request state but doesn't define endpoints.
+The redirect is a generic catch-all: any path that isn't ``/static/``,
+``/api/``, ``/app/``, ``/webhooks/``, or a known root surface gets
+``/app/<original-path>`` returned with a 301. A handful of paths need
+parameter rewriting (e.g. ``/reset-password/<token>`` → query string,
+``/daily/<date>`` → ``/daily/edit?date=…``) and live in the
+``_REWRITES`` table below.
 
-What this does
---------------
-When ``SPA_CUTOVER_ENABLED=1``, every GET of a legacy Jinja URL
-(``/dashboard``, ``/transfers``, ``/reports``, …) returns a 301 to
-the equivalent React SPA route under ``/app/*``. POST/PUT/DELETE
-fall through to the legacy handlers so an in-flight form submit on
-a cached page completes correctly.
+The redirect applies to **every HTTP method**, not just GET — the
+legacy POST surface has been retired (the SPA POSTs to ``/api/v2/*``
+directly) so a stray POST to ``/admin/users/new`` should bounce to
+the SPA rather than 404.
 
-Two route shapes:
-
-  * **Static path map** — exact match in ``_SPA_REDIRECT_MAP_STATIC``.
-  * **Dynamic patterns** — `/reset-password/<token>`,
-    `/transfers/<id>`, `/transfers/<id>/edit`, `/batches/<id>/edit`,
-    `/daily/<date>`, `/monthly/<year>/<month>`. Matched by prefix
-    + simple parsing.
-
-The default is ``OFF`` (per the production-rollback note in the
-original code). Operators flip ``SPA_CUTOVER_ENABLED=1`` per the
-cutover plan once the WSGI-wraps-ASGI bottleneck is retired.
+This is a request-lifecycle hook, not a route surface — uses the
+``register(app)`` pattern rather than Flask's ``Blueprint`` class
+because Flask Blueprint ``before_request`` hooks only fire for
+routes registered in that Blueprint. We need this hook to intercept
+*every* legacy URL across the app.
 """
 from __future__ import annotations
 
-import os
-from typing import Optional
+import re
+from typing import Callable, Optional
 
-from flask import Flask, Response, redirect, request
-
-
-# Defaults to OFF — the strangler-fig migration is mid-flight, and
-# a deploy in May 2026 surfaced a real perf regression when the
-# redirect was on by default (the FastAPI-via-WSGI bridge choked
-# under prod traffic, slowing logins to "network error" timeouts).
-# With the flag off, legacy `/login`, `/dashboard`, etc. keep
-# serving the Jinja UI directly with no bridge hop. Flip to "1" on
-# Render once the WSGI-wraps-ASGI bottleneck is retired
-# (BACKLOG.md P1 #7) or once any one store has been pilot-flipped
-# without regression.
-SPA_CUTOVER_ENABLED = os.environ.get("SPA_CUTOVER_ENABLED", "0") == "1"
+from flask import Flask, Response, current_app, redirect, request
+from werkzeug.exceptions import MethodNotAllowed, NotFound
 
 
-# Static path → SPA path. These are pages that have full SPA parity
-# today; everything else falls through to legacy Jinja.
-_SPA_REDIRECT_MAP_STATIC: dict[str, str] = {
-    "/login":                "/app/login",
-    "/signup":               "/app/signup",
-    "/forgot-password":      "/app/forgot-password",
-    "/privacy":              "/app/privacy",
-    "/dashboard":            "/app/dashboard",
-    "/transfers":            "/app/transfers",
-    "/transfers/new":        "/app/transfers/new",
-    "/daily":                "/app/daily",
-    "/reports":              "/app/reports",
-    "/batches":              "/app/batches",
-    "/batches/new":          "/app/batches/new",
-    "/monthly":              "/app/monthly",
-    "/return-checks":        "/app/return-checks",
-    "/owner/locations":      "/app/owner/locations",
-    "/owner/pl-rollup":      "/app/owner/pl-rollup",
-    "/superadmin/stores":    "/app/superadmin/stores",
-    "/superadmin/stores/new": "/app/superadmin/stores/new",
+# Paths ending with one of these file extensions are downloads /
+# raw assets that the SPA doesn't serve — Flask handles them.
+_DOWNLOAD_EXT_RE = re.compile(r"\.(csv|zip|pdf|xlsx|ics|txt|json)$")
+
+
+# GET paths with a real Flask handler we want to keep wired up.
+# Used for state-mutating GETs (impersonation, etc.) and any other
+# legacy Flask GET surface that ISN'T rendering dead Jinja chrome.
+# Without this list those paths would be 301'd into the SPA and the
+# kept handler would never run.
+_LEGACY_GET_PASS_THROUGH: tuple[str, ...] = (
+    "/superadmin/impersonate/",  # superadmin_extras.py — session GET
+)
+
+
+# Path prefixes that never redirect — owned by Flask directly.
+# These are the "live" Flask surfaces that haven't moved to the SPA
+# and shouldn't redirect to /app/*: static assets, the FastAPI
+# mount, the SPA shell itself, webhook receivers, the TV kiosk
+# public display.
+_PASS_THROUGH_PREFIXES: tuple[str, ...] = (
+    "/static/",
+    "/api/",
+    "/app/",
+    "/webhooks/",
+    "/tv/",       # blueprints/tv.py — public kiosk display
+    "/tv-pair/",  # blueprints/tv_pair.py — pairing flow
+)
+
+# Exact paths owned by Flask (root landing, PWA assets, marketing
+# pages, etc.).
+_PASS_THROUGH_EXACT: frozenset[str] = frozenset({
+    "/",                      # blueprints/landing.py
+    "/privacy",               # blueprints/landing.py
+    "/app",                   # SPA-shell trailing-slash fixer
+    "/sw.js",                 # blueprints/pwa.py
+    "/manifest.webmanifest",  # blueprints/pwa.py
+    "/offline",               # blueprints/pwa.py
+    "/favicon.ico",
+})
+
+# Login / logout / signup POSTs need to land on Flask's cookie-session
+# handler in `blueprints/auth.py` so the legacy form still works for
+# the two pages that haven't fully moved to JWT (chunk 3 retires
+# this). The GETs DO redirect to /app/login etc. — only POSTs pass
+# through.
+# Only /login + /logout + 2FA POSTs still go to Flask — those still
+# write to ``session["user_id"]`` and chunk 3 retires them. Everything
+# else (signup, forgot-password, reset-password) lives entirely on the
+# SPA / FastAPI side, so even POSTs to those legacy paths bounce.
+_AUTH_POST_PATHS: frozenset[str] = frozenset({
+    "/login",
+    "/login/2fa",
+    "/login/2fa/enroll",
+    "/login/2fa/recover",
+    "/logout",
+})
+
+
+# Legacy paths whose SPA equivalent doesn't simply prepend `/app/`.
+# Most legacy paths map 1:1 (``/dashboard`` → ``/app/dashboard``);
+# this table captures the exceptions where the SPA URL shape
+# diverges from the legacy URL shape.
+_PATH_REMAP: dict[str, str] = {
+    "/admin/settings":               "/app/settings",
+    "/bank/transactions":            "/app/bank-transactions",
     "/superadmin/reports/audit-log": "/app/superadmin/audit-log",
-    "/admin/settings":       "/app/settings",
-    "/admin/users":          "/app/admin/users",
-    "/admin/users/new":      "/app/admin/users/new",
-    "/bank/transactions":    "/app/bank-transactions",
-    # SPA-34: Stripe pricing page now on SPA. Note that
-    # /admin/subscription stays on legacy because it's a richer
-    # page (add-ons + retention info); the SPA settings page only
-    # exposes Subscribe + Manage-portal CTAs today.
-    "/subscribe":            "/app/subscribe",
-    # SPA-37: announcements live under the Platform nav group.
-    # The legacy /superadmin/controls?tab=announcements URL has a
-    # query param so the static-map can't catch it; that goes
-    # through the legacy Jinja for now.
 }
 
 
-def _redirect_with_query(target: str) -> Response:
-    qs = request.query_string.decode("utf-8")
-    return redirect(f"{target}?{qs}" if qs else target)
+# Rewrites for legacy URL shapes that don't map 1:1 to /app/<same-path>.
+# Each entry is a (prefix, rewriter) — rewriter receives the path tail
+# (everything after the prefix) and returns the target ``/app/...``
+# URL, or None to skip and fall through to the generic catch-all.
+def _rewrite_reset_password(tail: str) -> Optional[str]:
+    if tail and "/" not in tail:
+        qs = request.query_string.decode("utf-8")
+        join = "&" if qs else ""
+        return f"/app/reset-password?token={tail}{join}{qs}"
+    return None
+
+
+def _rewrite_daily(tail: str) -> Optional[str]:
+    if tail and "/" not in tail and tail != "edit":
+        return f"/app/daily/edit?date={tail}"
+    return None
+
+
+def _rewrite_monthly(tail: str) -> Optional[str]:
+    parts = tail.split("/")
+    if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+        return f"/app/monthly/edit?year={parts[0]}&month={parts[1]}"
+    return None
+
+
+_REWRITES: tuple[tuple[str, Callable[[str], Optional[str]]], ...] = (
+    ("/reset-password/", _rewrite_reset_password),
+    ("/daily/",          _rewrite_daily),
+    ("/monthly/",        _rewrite_monthly),
+)
 
 
 def _maybe_spa_redirect() -> Optional[Response]:
-    """Flask before_request hook: rewrite GETs of legacy pages to
-    their SPA equivalent. POST and other write methods are left
-    alone so legacy form submits still complete; the SPA forms POST
-    to ``/api/v2/*`` directly so the legacy POST handlers are dead
-    paths once the SPA owns the rendering."""
-    if not SPA_CUTOVER_ENABLED:
-        return None
-    if request.method != "GET":
-        return None
+    """Flask before_request hook — 301 every legacy URL to /app/<path>.
+
+    Order:
+
+      1. Pass-through list (``/``, ``/static/...``, ``/api/...``,
+         ``/app/...``, ``/webhooks/...``, PWA assets) → no redirect.
+      2. ``_AUTH_POST_PATHS`` POSTs → pass through to
+         ``blueprints/auth.py`` (chunk 3 retires the cookie-session
+         path).
+      3. Custom rewrites (``/reset-password/<token>`` etc.) → 301
+         with query-string surgery.
+      4. Path-shape exceptions in ``_PATH_REMAP`` → 301 to the SPA
+         equivalent.
+      5. Existing Flask handler for a NON-auth, NON-GET method
+         (POST/PUT/DELETE/PATCH) → pass through. We let Flask's own
+         route table own writes to surfaces like ``/superadmin/
+         send-test-email`` (POST handlers we kept) but force GETs
+         to bounce to the SPA so the dead Jinja chrome never
+         renders.
+      6. Default → 301 to ``/app/<original-path>``.
+    """
     path = request.path
-    # Static, API, webhooks, and the SPA itself never redirect.
+    method = request.method
+
+    if path in _PASS_THROUGH_EXACT:
+        return None
+    for prefix in _PASS_THROUGH_PREFIXES:
+        if path.startswith(prefix):
+            return None
+    if method == "POST" and path in _AUTH_POST_PATHS:
+        return None
+
+    # Custom rewrites for paths that need query-string surgery.
+    for prefix, rewriter in _REWRITES:
+        if path.startswith(prefix):
+            target = rewriter(path[len(prefix):].rstrip("/"))
+            if target is not None:
+                return _redirect_with_query(target, preserve_qs=False)
+            # Custom rewriter declined; fall through.
+
+    # Path-shape exceptions take precedence over the catch-all.
+    remap = _PATH_REMAP.get(path)
+    if remap is not None:
+        return _redirect_with_query(remap)
+
+    # Non-GET methods to handlers Flask still owns (POSTs to
+    # /superadmin/send-test-email, /account/passkeys/<id>/delete,
+    # /admin/tax-export, etc.) pass through. GETs of legacy paths
+    # always bounce to the SPA so the dead Jinja chrome never
+    # renders — even when auth.py still has a GET handler for
+    # /login (chunk 3 retires that).
+    if method != "GET" and _has_handler(path, method):
+        return None
+    # File-extension GETs (CSV / ZIP / PDF downloads) flow to
+    # Flask's handler if one is registered. The Jinja UI never
+    # rendered templates at these paths, so passing them through
+    # doesn't risk hitting dead chrome.
     if (
-        path.startswith("/static/")
-        or path.startswith("/api/")
-        or path.startswith("/app/")
-        or path.startswith("/webhooks/")
+        method == "GET"
+        and _DOWNLOAD_EXT_RE.search(path)
+        and _has_handler(path, method)
     ):
         return None
+    # Explicit GET pass-through for state-mutating Flask surfaces.
+    if method == "GET":
+        for prefix in _LEGACY_GET_PASS_THROUGH:
+            if path.startswith(prefix) and _has_handler(path, method):
+                return None
 
-    target = _SPA_REDIRECT_MAP_STATIC.get(path)
-    if target is not None:
-        return _redirect_with_query(target)
+    # 301 to /app/<path> so legacy bookmarks resolve.
+    target = f"/app{path}" if path.startswith("/") else f"/app/{path}"
+    return _redirect_with_query(target)
 
-    # Dynamic patterns that need parsing go here.
-    # /reset-password/<token>: legacy is path-param, SPA reads
-    # ?token=… query param.
-    if path.startswith("/reset-password/"):
-        tok = path[len("/reset-password/"):]
-        if tok and "/" not in tok:
-            qs = request.query_string.decode("utf-8")
-            join = "&" if qs else ""
-            return redirect(f"/app/reset-password?token={tok}{join}{qs}")
-    # /transfers/<int>/<edit?>
-    if path.startswith("/transfers/"):
-        tail = path[len("/transfers/"):].rstrip("/")
-        parts = tail.split("/")
-        if parts and parts[0].isdigit():
-            tid = parts[0]
-            if len(parts) == 1:
-                return _redirect_with_query(f"/app/transfers/{tid}")
-            if len(parts) == 2 and parts[1] == "edit":
-                return _redirect_with_query(f"/app/transfers/{tid}/edit")
-    # /batches/<int>/edit
-    if path.startswith("/batches/"):
-        tail = path[len("/batches/"):].rstrip("/")
-        parts = tail.split("/")
-        if (
-            len(parts) == 2 and parts[0].isdigit() and parts[1] == "edit"
-        ):
-            return _redirect_with_query(f"/app/batches/{parts[0]}/edit")
-    # /daily/<date> — legacy uses ?date= now via /daily/edit; map
-    # every dated path to /app/daily/edit?date=...
-    if path.startswith("/daily/"):
-        tail = path[len("/daily/"):].rstrip("/")
-        if tail and "/" not in tail:
-            return redirect(f"/app/daily/edit?date={tail}")
-    # /monthly/<year>/<month>
-    if path.startswith("/monthly/"):
-        parts = path[len("/monthly/"):].rstrip("/").split("/")
-        if (
-            len(parts) == 2 and parts[0].isdigit()
-            and parts[1].isdigit()
-        ):
-            return redirect(
-                f"/app/monthly/edit?year={parts[0]}&month={parts[1]}"
-            )
-    return None
+
+def _has_handler(path: str, method: str) -> bool:
+    """True when Flask has a registered route for (path, method)."""
+    adapter = current_app.url_map.bind("localhost")
+    try:
+        adapter.match(path, method=method)
+        return True
+    except MethodNotAllowed:
+        # Path exists with a different method — treat as "handled" so
+        # we surface a 405 instead of a 301 to the SPA.
+        return True
+    except NotFound:
+        return False
+    except Exception:
+        # Routing surprised us — fail open and let Flask decide.
+        return True
+
+
+def _redirect_with_query(target: str, *, preserve_qs: bool = True) -> Response:
+    qs = request.query_string.decode("utf-8")
+    if preserve_qs and qs:
+        target = f"{target}?{qs}"
+    return redirect(target, code=301)
 
 
 def register(app: Flask) -> None:

@@ -84,7 +84,7 @@ def login():
         u = current_user()
         if u and u.role == "owner":
             return redirect(url_for("owner.owner_dashboard"))
-        return redirect(url_for("spa_redirects.dashboard"))
+        return redirect("/app/dashboard")
     # On a fresh GET from a device that previously signed in to a
     # store, bounce to that store's login so installed-PWA employees
     # aren't stuck on the generic page with the address bar hidden.
@@ -140,7 +140,7 @@ def login():
                 db.session.commit()
                 if u.role == "owner":
                     return redirect(url_for("owner.owner_dashboard"))
-                return redirect(url_for("spa_redirects.dashboard"))
+                return redirect("/app/dashboard")
         else:
             error = "Invalid username or password."
     return render_template("login.html", error=error)
@@ -455,6 +455,6 @@ def passkey_login_finish():
     redirect_url = (
         url_for("owner.owner_dashboard")
         if user.role == "owner"
-        else url_for("spa_redirects.dashboard")
+        else "/app/dashboard"
     )
     return jsonify({"ok": True, "redirect": redirect_url})
