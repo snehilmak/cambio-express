@@ -192,6 +192,9 @@ until every item there is closed out.
   FastAPI → SQLAlchemy → Postgres, plus observability hooks.
 * [`docs/architecture/migrations.md`](docs/architecture/migrations.md)
   — Alembic + `_ADDED_COLUMNS` workflow.
+* [`docs/architecture/deployment.md`](docs/architecture/deployment.md)
+  — Render deploy runbook: env-var checklist, secret rotation,
+  backup verification, incident playbook.
 
 ## Contributing
 
