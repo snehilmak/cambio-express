@@ -46,7 +46,7 @@ export default function OwnerLocations() {
     identity?.role === "owner" || identity?.role === "superadmin";
   if (!isOwner) {
     return (
-      <PageShell maxWidth="82rem">
+      <PageShell>
         <PageHeader title="Owner locations" />
         <Empty>Sign in as an owner to view the multi-store umbrella.</Empty>
       </PageShell>
@@ -54,7 +54,7 @@ export default function OwnerLocations() {
   }
 
   return (
-    <PageShell maxWidth="82rem">
+    <PageShell>
       <PageHeader
         title="Locations"
         subtitle={data

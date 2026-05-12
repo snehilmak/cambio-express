@@ -65,11 +65,12 @@ export {
 // ── PageShell + PageHeader ────────────────────────────────────────────
 
 export function PageShell({
-  children, maxWidth = "78rem", gap = space.xl,
+  children, maxWidth = "100rem", gap = space.xl,
 }: {
   children: ReactNode;
-  /** Override the default max-width when the page wants a wider
-   *  table (e.g. 82rem) or narrower form (e.g. 62rem). */
+  /** Override the default max-width. Most pages take the full
+   *  100rem default; narrow forms (50-65rem) should set this
+   *  explicitly so the inputs don't stretch awkwardly wide. */
   maxWidth?: string | number;
   /** Vertical gap between top-level children (header / sections /
    *  cards). Defaults to `space.xl` (1.5rem). */

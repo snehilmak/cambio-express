@@ -57,7 +57,7 @@ export default function OwnerPLRollup() {
   }
 
   return (
-    <PageShell maxWidth="82rem">
+    <PageShell>
       <PageHeader
         title="P&L rollup"
         subtitle={

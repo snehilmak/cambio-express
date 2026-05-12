@@ -85,7 +85,7 @@ export function ReportDrilldown({
   const csvHref = `${csvUrl}?${csvParams.toString()}`;
 
   return (
-    <PageShell maxWidth="75rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <div>
         <Link to={backTo} style={backLink}>← Reports</Link>
         <PageHeader

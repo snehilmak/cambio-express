@@ -30,7 +30,7 @@ export default function OwnerDashboard() {
   const { data, isLoading, isError, error, refetch } = useOwnerDashboard(period);
 
   return (
-    <PageShell maxWidth="75rem" gap="1.25rem">
+    <PageShell gap="1.25rem">
       <PageHeader
         title="Owner Dashboard"
         actions={(
