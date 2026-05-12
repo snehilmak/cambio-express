@@ -308,6 +308,28 @@ that was active at registration time.
     - Don't tighten the limits casually — integration tests and
       Stripe webhook retries both burn rate budget. Loosening is
       always safer than the alternative.
+16. **CSRF protection** — Flask-WTF's `CSRFProtect` is installed on
+    every Flask form-POST route. Each `<form method="POST">` in
+    legacy templates MUST render `{{ csrf_token() }}` as a hidden
+    input. Don't add a new form-POST template surface without it.
+    - Webhook endpoints (`/webhooks/{stripe,resend}`) and WebAuthn
+      passkey JSON routes are `csrf.exempt(...)`-listed in
+      `_csrf_exempt_endpoints()` at the bottom of `app.py`. Add
+      new endpoints there if they have an out-of-band auth path
+      (signature header, session-only flows).
+    - FastAPI `/api/v2/*` routes don't go through Flask-WTF; they
+      use Bearer JWT in the Authorization header, which is
+      naturally CSRF-immune (browsers don't attach it to
+      cross-origin requests by default).
+    - Kill-switch: `WTF_CSRF_ENABLED=False`. The test conftest
+      sets this so the existing form-POST tests don't need to
+      mint tokens. Production keeps it on. Tests in
+      `tests/test_csrf_protection.py` re-enable it via fixture.
+    - `_csrf_exempt_endpoints()` must run AFTER every `@app.route`
+      has decorated its view. Called at the very bottom of
+      `app.py` after the FastAPI mount block. Moving it earlier
+      silently breaks webhook exemption — see git history for
+      the trap I fell into.
 
 ## Migrations (no framework)
 New columns on existing tables go in `_ADDED_COLUMNS` (list at bottom of

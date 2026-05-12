@@ -46,3 +46,9 @@ alembic==1.13.3
 # `slowapi` is the FastAPI sibling — shares the same Redis backend.
 Flask-Limiter==3.8.0
 slowapi==0.1.9
+# CSRF protection for Flask form-POST surface. The SPA talks to
+# FastAPI over Bearer JWT (not session cookies) so the FastAPI
+# side doesn't need this; only the legacy Flask routes do.
+# Webhook + JSON-only auth routes are exempted at registration
+# time — see `csrf.exempt(...)` calls in app.py.
+Flask-WTF==1.2.1
