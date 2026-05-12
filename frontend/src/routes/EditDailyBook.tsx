@@ -9,15 +9,17 @@ import {
   createLineItem,
   deleteLineItem,
   lockDailyReport,
+  replaceMTBreakdown,
   unlockDailyReport,
   updateDailyReport,
   useDailyReport,
   useLineItems,
-  useTransfersSummary,
+  useMTBreakdown,
   type DailyReportRow,
   type DailyReportUpdateBody,
   type LineItemRow,
-  type TransferCompanyTotals,
+  type MTBreakdownRow,
+  type MTBreakdownWriteRow,
 } from "../api/dailybook";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
@@ -351,10 +353,10 @@ export default function EditDailyBook() {
         )}
         {activeTab === "transfers" && (
           <TransfersPanel
-            form={form}
             set={set}
             locked={locked}
             date={date}
+            storeId={storeId}
             onJumpReceipts={() => switchTab("receipts")}
           />
         )}
@@ -592,38 +594,183 @@ function DisbursementsPanel(props: PanelProps) {
   );
 }
 
+type MTCell = "amount" | "fees" | "federal_tax" | "commission";
+
+// Editable per-company row state. Keys mirror MoneyTransferSummary
+// columns 1:1.
+interface MTRowDraft {
+  amount: number;
+  fees: number;
+  federal_tax: number;
+  commission: number;
+}
+
+function emptyDraft(): MTRowDraft {
+  return { amount: 0, fees: 0, federal_tax: 0, commission: 0 };
+}
+
+function draftFromRow(row: MTBreakdownRow): MTRowDraft {
+  // Prefer saved values (operator's last entry). Fall back to auto
+  // (transfer-log aggregate) when no saved row exists, so a fresh
+  // day pre-fills automatically.
+  const hasSaved = row.saved_total > 0;
+  return hasSaved
+    ? {
+        amount: row.saved_amount,
+        fees: row.saved_fees,
+        federal_tax: row.saved_federal_tax,
+        commission: row.saved_commission,
+      }
+    : {
+        amount: row.auto_amount,
+        fees: row.auto_fees,
+        federal_tax: row.auto_federal_tax,
+        commission: row.auto_commission,
+      };
+}
+
+function rowDraftTotal(d: MTRowDraft): number {
+  return (d.amount || 0) + (d.fees || 0) + (d.federal_tax || 0) + (d.commission || 0);
+}
+
 function TransfersPanel({
-  form, set, locked, date, onJumpReceipts,
+  set, locked, date, storeId, onJumpReceipts,
 }: {
-  form: FormState;
   set: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   locked: boolean;
   date: string;
+  storeId: number;
   onJumpReceipts: () => void;
 }) {
-  const summary = useTransfersSummary(date || undefined);
+  const queryClient = useQueryClient();
+  const breakdown = useMTBreakdown(date || undefined);
 
-  const rows = summary.data?.by_company ?? [];
-  const grandTotal = summary.data?.grand_total ?? 0;
-  const hasAuto = grandTotal > 0;
-  const drift = Math.abs((form.money_transfer || 0) - grandTotal);
-  const inSync = hasAuto && drift < 0.005;
+  // Local draft state, hydrated from the server payload. Keyed by
+  // company name so re-ordering doesn't lose edits.
+  const [drafts, setDrafts] = useState<Map<string, MTRowDraft>>(new Map());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  // Hydrate once the server payload settles.
+  useEffect(() => {
+    if (breakdown.isLoading || breakdown.isFetching) return;
+    const rows = breakdown.data?.rows ?? [];
+    const next = new Map<string, MTRowDraft>();
+    for (const r of rows) next.set(r.company, draftFromRow(r));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local draft state from server payload
+    setDrafts(next);
+  }, [breakdown.data, breakdown.isLoading, breakdown.isFetching]);
+
+  const rows = breakdown.data?.rows ?? [];
+
+  function setCell(company: string, cell: MTCell, value: number) {
+    setDrafts((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(company) ?? emptyDraft();
+      next.set(company, { ...cur, [cell]: value });
+      return next;
+    });
+  }
+
+  function resetRowToAuto(row: MTBreakdownRow) {
+    setDrafts((prev) => {
+      const next = new Map(prev);
+      next.set(row.company, {
+        amount: row.auto_amount,
+        fees: row.auto_fees,
+        federal_tax: row.auto_federal_tax,
+        commission: row.auto_commission,
+      });
+      return next;
+    });
+  }
+
+  function applyAutoAll() {
+    setDrafts((prev) => {
+      const next = new Map(prev);
+      for (const row of rows) {
+        next.set(row.company, {
+          amount: row.auto_amount,
+          fees: row.auto_fees,
+          federal_tax: row.auto_federal_tax,
+          commission: row.auto_commission,
+        });
+      }
+      return next;
+    });
+  }
+
+  const draftTotal = useMemo(() => {
+    let s = 0;
+    for (const [, d] of drafts) s += rowDraftTotal(d);
+    return s;
+  }, [drafts]);
+
+  async function onSave() {
+    if (busy || locked) return;
+    setErr(null);
+    setBusy(true);
+    try {
+      const writeRows: MTBreakdownWriteRow[] = rows.map((r) => {
+        const d = drafts.get(r.company) ?? emptyDraft();
+        return {
+          company: r.company,
+          amount: Number(d.amount) || 0,
+          fees: Number(d.fees) || 0,
+          federal_tax: Number(d.federal_tax) || 0,
+          commission: Number(d.commission) || 0,
+        };
+      });
+      await replaceMTBreakdown(storeId, date, writeRows);
+      // money_transfer was mirrored server-side; refresh the parent
+      // report so the receipts tab + totals strip pick up the new value.
+      await queryClient.invalidateQueries({
+        queryKey: ["dailybook", "report", storeId, date],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["dailybook", "mt-breakdown", storeId, date],
+      });
+      // Sync the local receipts-tab form-state too so the user sees
+      // the new money_transfer immediately on tab switch.
+      set("money_transfer", Number(draftTotal.toFixed(2)));
+      setSavedAt(new Date());
+    } catch (e) {
+      setErr(humanizeError(e, "Could not save the breakdown."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const isLoading = breakdown.isLoading || breakdown.data == null;
 
   return (
     <div style={panelGridStyle}>
       <Card padding="1.25rem 1.5rem">
-        <div style={{ display: "flex", alignItems: "baseline", gap: "0.75rem", flexWrap: "wrap" }}>
-          <PanelTitle>By company · Auto-summary</PanelTitle>
-          <Pill tone="info">Auto from transfer log</Pill>
+        <div style={mtPanelHeaderStyle}>
+          <PanelTitle>Per-company breakdown</PanelTitle>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            {savedAt && <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>}
+            <Button
+              type="button"
+              tone="secondary"
+              size="sm"
+              disabled={locked || rows.length === 0}
+              onClick={applyAutoAll}
+            >
+              Fill every row from transfer log
+            </Button>
+          </div>
         </div>
         <p style={subTextStyle}>
-          Aggregated from every active money transfer logged for this date —
-          one row per company. Cancelled transfers are excluded.
-          Tap "Apply to receipts" to copy the grand total into the
-          Money transfer line on the receipts tab.
+          One row per active company. Inputs pre-fill from the operator's
+          last save when there is one, otherwise from the day's employee
+          transfer log. Saving here writes per-company rows AND syncs the
+          grand total to the receipts tab's <em>Money transfer</em> line —
+          one round trip.
         </p>
 
-        {summary.isLoading ? (
+        {isLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
           <p style={emptyEntriesStyle}>
@@ -635,7 +782,6 @@ function TransfersPanel({
               <thead>
                 <tr>
                   <th style={mtThStyle}>Company</th>
-                  <th style={mtThNumStyle}>Transfers</th>
                   <th style={mtThNumStyle}>Amount</th>
                   <th style={mtThNumStyle}>Fees</th>
                   <th style={mtThNumStyle}>Fed. tax</th>
@@ -645,64 +791,46 @@ function TransfersPanel({
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <MTCompanyRow key={r.company} row={r} />
+                  <MTEditableRow
+                    key={r.company}
+                    row={r}
+                    draft={drafts.get(r.company) ?? emptyDraft()}
+                    locked={locked}
+                    onCellChange={(cell, value) => setCell(r.company, cell, value)}
+                    onResetToAuto={() => resetRowToAuto(r)}
+                  />
                 ))}
               </tbody>
               <tfoot>
                 <tr>
                   <td style={mtTdStrongStyle}>TOTAL</td>
                   <td style={mtTdNumMutedStyle}>
-                    {rows.reduce((s, r) => s + r.count, 0)}
+                    {fmtMoney2(sumDraftField(drafts, "amount"))}
                   </td>
                   <td style={mtTdNumMutedStyle}>
-                    {fmtMoney2(rows.reduce((s, r) => s + r.amount, 0))}
+                    {fmtMoney2(sumDraftField(drafts, "fees"))}
                   </td>
                   <td style={mtTdNumMutedStyle}>
-                    {fmtMoney2(rows.reduce((s, r) => s + r.fees, 0))}
+                    {fmtMoney2(sumDraftField(drafts, "federal_tax"))}
                   </td>
                   <td style={mtTdNumMutedStyle}>
-                    {fmtMoney2(rows.reduce((s, r) => s + r.federal_tax, 0))}
-                  </td>
-                  <td style={mtTdNumMutedStyle}>
-                    {fmtMoney2(rows.reduce((s, r) => s + r.commission, 0))}
+                    {fmtMoney2(sumDraftField(drafts, "commission"))}
                   </td>
                   <td style={mtTdNumStrongStyle}>
-                    {fmtMoney2(grandTotal)}
+                    {fmtMoney2(draftTotal)}
                   </td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
-      </Card>
 
-      <Card padding="1.25rem 1.5rem">
-        <PanelTitle>Manual override</PanelTitle>
-        <p style={subTextStyle}>
-          The receipts tab's <em>Money transfer</em> field is what lands on the
-          daily P&amp;L. Apply the auto-summary above, or override it here if a
-          paper-only transfer didn't make it into the log.
-        </p>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ flex: "0 0 14rem" }}>
-            <NumberInput
-              label="Money transfer (total)"
-              value={form.money_transfer}
-              onChange={(v) => set("money_transfer", v)}
-              disabled={locked}
-            />
-          </div>
-          <Button
-            type="button"
-            tone={inSync ? "secondary" : "primary"}
-            size="md"
-            disabled={locked || !hasAuto || inSync}
-            onClick={() => set("money_transfer", Number(grandTotal.toFixed(2)))}
-          >
-            {inSync
-              ? "✓ In sync with auto-summary"
-              : `Apply ${fmtMoney2(grandTotal)} from auto-summary`}
-          </Button>
+        {err && <ErrorRow message={err} />}
+
+        <div style={mtSaveRowStyle}>
+          <span style={{ color: tokens.textMuted, fontSize: "0.85rem", flex: 1 }}>
+            Grand total syncs to the receipts tab's Money transfer line on save.
+          </span>
           <Button
             type="button"
             tone="ghost"
@@ -711,28 +839,116 @@ function TransfersPanel({
           >
             ← Edit the rest of the receipts
           </Button>
+          <Button
+            type="button"
+            tone="primary"
+            size="md"
+            busy={busy}
+            disabled={busy || locked || isLoading}
+            onClick={onSave}
+          >
+            {busy ? "Saving…" : "Save breakdown"}
+          </Button>
         </div>
       </Card>
     </div>
   );
 }
 
-function MTCompanyRow({ row }: { row: TransferCompanyTotals }) {
-  const muted = row.count === 0;
+function MTEditableRow({
+  row, draft, locked, onCellChange, onResetToAuto,
+}: {
+  row: MTBreakdownRow;
+  draft: MTRowDraft;
+  locked: boolean;
+  onCellChange: (cell: MTCell, value: number) => void;
+  onResetToAuto: (row: MTBreakdownRow) => void;
+}) {
+  const draftTotal = rowDraftTotal(draft);
+  const hasAuto = row.auto_total > 0;
+  const matchesAuto = (
+    Math.abs(draft.amount - row.auto_amount) < 0.005 &&
+    Math.abs(draft.fees - row.auto_fees) < 0.005 &&
+    Math.abs(draft.federal_tax - row.auto_federal_tax) < 0.005 &&
+    Math.abs(draft.commission - row.auto_commission) < 0.005
+  );
+  const overridden = hasAuto && !matchesAuto;
+
   return (
-    <tr style={muted ? { opacity: 0.6 } : undefined}>
+    <tr>
       <td style={mtTdStrongStyle}>
         <span style={{ color: companyAccent(row.company) }}>•</span>{" "}
         {row.company}
+        {overridden && (
+          <button
+            type="button"
+            onClick={() => onResetToAuto(row)}
+            disabled={locked}
+            style={mtResetBtnStyle}
+            title={`Reset to auto from transfer log (${fmtMoney2(row.auto_total)})`}
+          >
+            Reset to auto
+          </button>
+        )}
+        {row.auto_count > 0 && (
+          <span style={mtRowHintStyle}>
+            {row.auto_count} {row.auto_count === 1 ? "transfer" : "transfers"} logged
+          </span>
+        )}
       </td>
-      <td style={mtTdNumStyle}>{row.count}</td>
-      <td style={mtTdNumStyle}>{fmtMoney2(row.amount)}</td>
-      <td style={mtTdNumStyle}>{fmtMoney2(row.fees)}</td>
-      <td style={mtTdNumStyle}>{fmtMoney2(row.federal_tax)}</td>
-      <td style={mtTdNumStyle}>{fmtMoney2(row.commission)}</td>
-      <td style={mtTdNumStrongStyle}>{fmtMoney2(row.total)}</td>
+      <MTCellInput
+        value={draft.amount}
+        onChange={(v) => onCellChange("amount", v)}
+        locked={locked}
+      />
+      <MTCellInput
+        value={draft.fees}
+        onChange={(v) => onCellChange("fees", v)}
+        locked={locked}
+      />
+      <MTCellInput
+        value={draft.federal_tax}
+        onChange={(v) => onCellChange("federal_tax", v)}
+        locked={locked}
+      />
+      <MTCellInput
+        value={draft.commission}
+        onChange={(v) => onCellChange("commission", v)}
+        locked={locked}
+      />
+      <td style={mtTdNumStrongStyle}>{fmtMoney2(draftTotal)}</td>
     </tr>
   );
+}
+
+function MTCellInput({
+  value, onChange, locked,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+  locked: boolean;
+}) {
+  return (
+    <td style={{ padding: "0.35rem 0.5rem", borderBottom: `1px solid ${tokens.borderSubtle}` }}>
+      <input
+        type="number"
+        step="0.01"
+        value={Number.isFinite(value) ? value : 0}
+        onChange={(e) => onChange(Number(e.target.value) || 0)}
+        disabled={locked}
+        className="ds-input"
+        style={mtCellInputStyle}
+      />
+    </td>
+  );
+}
+
+function sumDraftField(
+  drafts: Map<string, MTRowDraft>, field: keyof MTRowDraft,
+): number {
+  let s = 0;
+  for (const [, d] of drafts) s += Number(d[field]) || 0;
+  return s;
 }
 
 // Brand accent dots for the known major companies, neutral for the rest.
@@ -1428,4 +1644,58 @@ const mtTdNumMutedStyle: CSSProperties = {
   ...mtTdNumStyle,
   color: tokens.textMuted,
   borderTop: `1px solid ${tokens.border}`,
+};
+
+// Editable MT breakdown styles
+const mtPanelHeaderStyle: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "baseline",
+  gap: "0.75rem",
+  flexWrap: "wrap",
+  marginBottom: "0.4rem",
+};
+
+const mtSaveRowStyle: CSSProperties = {
+  display: "flex",
+  gap: "0.65rem",
+  alignItems: "center",
+  flexWrap: "wrap",
+  marginTop: "1rem",
+  paddingTop: "0.85rem",
+  borderTop: `1px solid ${tokens.borderSubtle}`,
+};
+
+const mtCellInputStyle: CSSProperties = {
+  background: tokens.surface2,
+  border: `1px solid ${tokens.border}`,
+  borderRadius: "0.45rem",
+  padding: "0.4rem 0.55rem",
+  color: tokens.text,
+  fontFamily: tokens.fontMono,
+  fontSize: "0.85rem",
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+  textAlign: "right",
+};
+
+const mtResetBtnStyle: CSSProperties = {
+  marginLeft: "0.55rem",
+  background: "transparent",
+  border: `1px solid ${tokens.border}`,
+  color: tokens.textMuted,
+  fontSize: "0.7rem",
+  padding: "0.15rem 0.5rem",
+  borderRadius: "0.4rem",
+  cursor: "pointer",
+};
+
+const mtRowHintStyle: CSSProperties = {
+  display: "inline-block",
+  marginLeft: "0.6rem",
+  fontFamily: tokens.fontMono,
+  fontSize: "0.7rem",
+  color: tokens.textMuted,
+  fontWeight: 500,
 };

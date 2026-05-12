@@ -411,18 +411,17 @@ impact ÷ effort. Numbers are an estimate.
       guard in `tests/test_session_cookie_hardening.py`.
 
 ## Nice to have (post-launch)
-- [ ] **Daily Book Money Transfers — editable per-company breakdown.**
-      Phase 1 + 2 of the editor redesign landed (tabbed layout +
-      auto-summary from the employee transfer log). The legacy Jinja
-      template let cashiers ALSO edit per-company amount/fees/tax/
-      commission and persist them to `MoneyTransferSummary`. Today
-      the React editor surfaces the auto-summary read-only + an
-      "Apply to receipts" button that copies the grand total into
-      the `money_transfer` field. Future pass: new
-      `GET/PUT /api/v2/daily/{store}/{date}/mt-breakdown` endpoint
-      that reads + writes `MoneyTransferSummary` rows, and the
-      Transfers tab swaps the auto-table for editable inputs per
-      company so paper-only transfers can be reconciled in-line.
+- [x] **Daily Book Money Transfers — editable per-company breakdown.**
+      Landed. New `GET/PUT /api/v2/daily/{store}/{date}/mt-breakdown`
+      endpoints back the Transfers tab: each row carries saved
+      (operator's last entry) + auto (transfer-log aggregate) so
+      the form pre-fills from saved-when-present, auto-otherwise.
+      Save fires a bulk-replace into `MoneyTransferSummary` AND
+      syncs the grand total into `DailyReport.money_transfer` in
+      one transaction. Locked-day → 403. Service + Pydantic schemas
+      + 9 unit tests (read defaults, auto/saved pull, unknown-company
+      ordering, bulk-replace, idempotency, zero-row skip, locked guard,
+      empty-rows-preserves-money_transfer).
 - [ ] **Multi-device auto-refresh on the Transfers list** — two cashiers
       sharing the same employee login on different computers currently
       only see each other's edits after a page reload / filter change.

@@ -154,6 +154,68 @@ class TransfersSummaryResponse(BaseModel):
     grand_total: float
 
 
+class MTBreakdownRowResponse(BaseModel):
+    """One company's row in the MT breakdown read response.
+
+    Carries BOTH `saved_*` (operator-edited persisted values) and
+    `auto_*` (transfer-log aggregate). The React editor pre-fills
+    each input from saved when present, falls back to auto on a
+    fresh day, and renders a "reset to auto" affordance when the
+    two diverge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    saved_amount: float
+    saved_fees: float
+    saved_federal_tax: float
+    saved_commission: float
+    saved_total: float
+    auto_amount: float
+    auto_fees: float
+    auto_federal_tax: float
+    auto_commission: float
+    auto_count: int
+    auto_total: float
+
+
+class MTBreakdownResponse(BaseModel):
+    """Per-company MT breakdown for a single (store, date). Empty
+    `rows` means the store has no MT companies configured (a fresh
+    install before the company list is populated)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[MTBreakdownRowResponse]
+    saved_total: float
+    auto_total: float
+
+
+class MTBreakdownWriteRow(BaseModel):
+    """Operator-edited per-company values. Sent as a list inside
+    MTBreakdownWriteRequest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    company: str
+    amount: float = 0.0
+    fees: float = 0.0
+    federal_tax: float = 0.0
+    commission: float = 0.0
+
+
+class MTBreakdownWriteRequest(BaseModel):
+    """Bulk-replace payload for the per-company MT breakdown. Every
+    row in `rows` becomes a `MoneyTransferSummary` insert (or no
+    insert at all when every field is zero), and the daily
+    report's `money_transfer` field is updated to the new grand
+    total in one transaction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[MTBreakdownWriteRow]
+
+
 class DailyReportUpdateRequest(BaseModel):
     """PUT body for /daily/{store_id}/{date}. Only the editable
     top-level totals + notes — line-item-derived fields

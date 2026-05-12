@@ -26,6 +26,9 @@ from api.Modules.DailyBook.Requests import (
     LineItemCreateRequest,
     LineItemListResponse,
     LineItemRow,
+    MTBreakdownResponse,
+    MTBreakdownRowResponse,
+    MTBreakdownWriteRequest,
     PeriodSummaryResponse,
     TransferCompanyTotalsResponse,
     TransfersSummaryResponse,
@@ -35,6 +38,7 @@ from api.Modules.DailyBook.Services import (
     DailyReportSummary,
     LINE_ITEM_KINDS,
     LineItemValidationError,
+    MTWriteRow,
     add_line_item,
     delete_line_item,
     field_for_kind,
@@ -42,7 +46,9 @@ from api.Modules.DailyBook.Services import (
     lock_report,
     parse_amount,
     parse_at_time,
+    read_mt_breakdown,
     recompute_line_items_total,
+    replace_mt_breakdown,
     summarize_period,
     summarize_report,
     summarize_transfers_for_day,
@@ -567,4 +573,122 @@ def transfers_summary_route(
             for row in summary.by_company
         ],
         grand_total=summary.grand_total,
+    )
+
+
+# ── Editable per-company MT breakdown ────────────────────────
+
+
+@router.get(
+    "/{store_id}/{report_date}/mt-breakdown",
+    response_model=MTBreakdownResponse,
+)
+def mt_breakdown_get_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MTBreakdownResponse:
+    """Read the per-company Money Transfer breakdown for a day.
+
+    Each row carries both `saved_*` values (from
+    `MoneyTransferSummary` — the operator's last entry, if any)
+    and `auto_*` values (from the employee transfer log). The
+    React editor pre-fills inputs from saved-when-present and
+    auto-otherwise, so a fresh day picks up the log automatically
+    and overridden days keep the operator's edits.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    breakdown = read_mt_breakdown(db, int(store_id), d)
+    return MTBreakdownResponse(
+        rows=[
+            MTBreakdownRowResponse(
+                company=row.company,
+                saved_amount=row.saved_amount,
+                saved_fees=row.saved_fees,
+                saved_federal_tax=row.saved_federal_tax,
+                saved_commission=row.saved_commission,
+                saved_total=row.saved_total,
+                auto_amount=row.auto_amount,
+                auto_fees=row.auto_fees,
+                auto_federal_tax=row.auto_federal_tax,
+                auto_commission=row.auto_commission,
+                auto_count=row.auto_count,
+                auto_total=row.auto_total,
+            )
+            for row in breakdown.rows
+        ],
+        saved_total=breakdown.saved_total,
+        auto_total=breakdown.auto_total,
+    )
+
+
+@router.put(
+    "/{store_id}/{report_date}/mt-breakdown",
+    response_model=MTBreakdownResponse,
+)
+def mt_breakdown_put_route(
+    store_id: int = Path(..., ge=1),
+    report_date: str = Path(...),
+    body: MTBreakdownWriteRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MTBreakdownResponse:
+    """Bulk-replace the per-company breakdown for one day.
+
+    Every row in `body.rows` becomes a `MoneyTransferSummary`
+    insert (zero-only rows are skipped to keep the table from
+    bloating with empty companies). After the replace, the daily
+    report's `money_transfer` field is updated to the new grand
+    total so the receipts tab + total_receipts stay consistent in
+    one transaction.
+
+    Locked-day returns 403 — same UX as the rest of the daily-book
+    write surface.
+    """
+    _require_store_match(claims, store_id)
+    d = _parse_date(report_date, field="report_date")
+    try:
+        replace_mt_breakdown(
+            db,
+            store_id=int(store_id),
+            report_date=d,
+            rows=[
+                MTWriteRow(
+                    company=r.company,
+                    amount=r.amount,
+                    fees=r.fees,
+                    federal_tax=r.federal_tax,
+                    commission=r.commission,
+                )
+                for r in body.rows
+            ],
+        )
+    except DailyReportLockedError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
+    db.commit()
+
+    # Re-read so the response carries the fresh saved + auto view.
+    breakdown = read_mt_breakdown(db, int(store_id), d)
+    return MTBreakdownResponse(
+        rows=[
+            MTBreakdownRowResponse(
+                company=row.company,
+                saved_amount=row.saved_amount,
+                saved_fees=row.saved_fees,
+                saved_federal_tax=row.saved_federal_tax,
+                saved_commission=row.saved_commission,
+                saved_total=row.saved_total,
+                auto_amount=row.auto_amount,
+                auto_fees=row.auto_fees,
+                auto_federal_tax=row.auto_federal_tax,
+                auto_commission=row.auto_commission,
+                auto_count=row.auto_count,
+                auto_total=row.auto_total,
+            )
+            for row in breakdown.rows
+        ],
+        saved_total=breakdown.saved_total,
+        auto_total=breakdown.auto_total,
     )

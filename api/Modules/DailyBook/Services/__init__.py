@@ -20,6 +20,13 @@ from api.Modules.DailyBook.Services.line_items import (
 from api.Modules.DailyBook.Services.locks import (
     is_locked as is_daily_report_locked,
 )
+from api.Modules.DailyBook.Services.mt_breakdown import (
+    MTBreakdown,
+    MTRow,
+    MTWriteRow,
+    read_mt_breakdown,
+    replace_mt_breakdown,
+)
 from api.Modules.DailyBook.Services.reports import (
     DailyReportLockedError,
     DailyReportSummary,
@@ -45,6 +52,9 @@ __all__ = [
     "EDITABLE_REPORT_FIELDS",
     "LINE_ITEM_KINDS",
     "LineItemValidationError",
+    "MTBreakdown",
+    "MTRow",
+    "MTWriteRow",
     "PeriodSummary",
     "TransfersSummary",
     "add_line_item",
@@ -58,7 +68,9 @@ __all__ = [
     "lock_report",
     "parse_amount",
     "parse_at_time",
+    "read_mt_breakdown",
     "recompute_line_items_total",
+    "replace_mt_breakdown",
     "summarize_period",
     "summarize_report",
     "summarize_transfers_for_day",

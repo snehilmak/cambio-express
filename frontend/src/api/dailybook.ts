@@ -262,6 +262,69 @@ export function useTransfersSummary(date: string | undefined) {
 }
 
 
+// ── Editable per-company MT breakdown ────────────────────────
+
+export interface MTBreakdownRow {
+  company: string;
+  saved_amount: number;
+  saved_fees: number;
+  saved_federal_tax: number;
+  saved_commission: number;
+  saved_total: number;
+  auto_amount: number;
+  auto_fees: number;
+  auto_federal_tax: number;
+  auto_commission: number;
+  auto_count: number;
+  auto_total: number;
+}
+
+export interface MTBreakdown {
+  rows: MTBreakdownRow[];
+  saved_total: number;
+  auto_total: number;
+}
+
+export interface MTBreakdownWriteRow {
+  company: string;
+  amount: number;
+  fees: number;
+  federal_tax: number;
+  commission: number;
+}
+
+// Hook: per-company saved + auto values for the editor's Money
+// Transfers tab. Each row carries BOTH saved (operator's last
+// entry) and auto (transfer-log aggregate) so the form can pre-
+// fill from saved-when-present, auto-otherwise.
+export function useMTBreakdown(date: string | undefined) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<MTBreakdown>({
+    enabled:
+      Boolean(date) && storeId !== null && storeId !== undefined,
+    queryKey: ["dailybook", "mt-breakdown", storeId, date],
+    queryFn: async () => {
+      return await api<MTBreakdown>(
+        `/api/v2/daily/${storeId}/${date}/mt-breakdown`,
+      );
+    },
+  });
+}
+
+// PUT /api/v2/daily/{store}/{date}/mt-breakdown — bulk-replace
+// every saved row + sync the grand total into the daily report's
+// `money_transfer` field in one transaction.
+export async function replaceMTBreakdown(
+  storeId: number, date: string, rows: MTBreakdownWriteRow[],
+): Promise<MTBreakdown> {
+  return api<MTBreakdown>(
+    `/api/v2/daily/${storeId}/${date}/mt-breakdown`,
+    { method: "PUT", json: { rows } },
+  );
+}
+
+
 export function useDailyPeriod(from: string, to: string) {
   const identity = getCurrentIdentity();
   const storeId = identity?.store_id;
