@@ -3134,74 +3134,6 @@ def _daily_is_locked(store_id, report_date):
 
 
 
-def _migrate_legacy_line_item_tables():
-    """One-time, idempotent migration: copy legacy DailyDrop and
-    CheckDeposit rows into DailyLineItem with discriminator kinds
-    ('drop' and 'check_deposit'). Runs at boot after Alembic upgrade.
-
-    Why this exists: DailyDrop and CheckDeposit predated the generic
-    DailyLineItem(kind=...) model. They were kept side-by-side because
-    they had the same shape but the migration cost wasn't worth it
-    until enough other kinds (return_payback, cash_purchase, etc.)
-    accumulated. Now that we want a single code path for every
-    "log multiple things in a day with time + amount + note" widget,
-    the migration is finally worth running.
-
-    Idempotency: for each legacy row, we look for a matching
-    DailyLineItem (same store_id + report_date + kind + at_time +
-    amount). If one exists we skip — a re-run inserts nothing new.
-    The legacy tables themselves are NOT dropped; their rows stay
-    intact as a safety net + forensic record. A future cleanup PR can
-    remove the model classes and tables once a few weeks of main
-    have confirmed nothing references them.
-
-    Returns the number of rows inserted (useful for boot logs +
-    test assertions). Quiet no-op on a fresh DB where neither legacy
-    table has any rows.
-    """
-    inserted = 0
-    try:
-        legacy_drops = db.session.query(DailyDrop).all()
-    except Exception:
-        # Defensive — caller wraps this whole function in a try
-        # block; this inner guard catches the case where the legacy
-        # tables were already dropped from a freshly-baselined DB.
-        legacy_drops = []
-    for dd in legacy_drops:
-        existing = db.session.query(DailyLineItem).filter_by(
-            store_id=dd.store_id, report_date=dd.report_date,
-            kind="drop", at_time=dd.drop_time,
-        ).filter(DailyLineItem.amount == dd.amount).first()
-        if existing is None:
-            db.session.add(DailyLineItem(
-                store_id=dd.store_id, report_date=dd.report_date,
-                kind="drop", at_time=dd.drop_time,
-                amount=dd.amount, note=dd.note or "",
-                created_by=dd.created_by,
-                created_at=dd.created_at or datetime.utcnow(),
-            ))
-            inserted += 1
-    try:
-        legacy_checks = db.session.query(CheckDeposit).all()
-    except Exception:
-        legacy_checks = []
-    for cd in legacy_checks:
-        existing = db.session.query(DailyLineItem).filter_by(
-            store_id=cd.store_id, report_date=cd.report_date,
-            kind="check_deposit", at_time=cd.deposit_time,
-        ).filter(DailyLineItem.amount == cd.amount).first()
-        if existing is None:
-            db.session.add(DailyLineItem(
-                store_id=cd.store_id, report_date=cd.report_date,
-                kind="check_deposit", at_time=cd.deposit_time,
-                amount=cd.amount, note=cd.note or "",
-                created_by=cd.created_by,
-                created_at=cd.created_at or datetime.utcnow(),
-            ))
-            inserted += 1
-    if inserted:
-        db.session.commit()
-    return inserted
 
 
 # Generic line-item kinds that sum into a single DailyReport field.
@@ -3727,236 +3659,71 @@ from blueprints import errors as _bp_errors  # noqa: E402
 _bp_errors.register(app, current_user)
 
 
-# Indexes safety-net. Alembic's autogenerate doesn't always pick
-# up index-only changes, so we keep an explicit `CREATE INDEX IF
-# NOT EXISTS` list that runs on boot. Idempotent — the IF NOT
-# EXISTS no-ops once the index is in place.
-#
-# Each entry is `(index_name, table, column_csv)`. When adding a
-# new index, ALSO declare it on the SQLAlchemy model so a fresh
-# Alembic baseline picks it up; this list is the bridge for
-# already-deployed DBs.
-_ADDED_INDEXES = [
-    # Transfer hot path (PR 104).
-    ("ix_transfer_store_send_date", "transfer", "store_id, send_date"),
-    ("ix_transfer_customer_id",     "transfer", "customer_id"),
-    ("ix_transfer_created_by",      "transfer", "created_by"),
-    ("ix_transfer_status",          "transfer", "status"),
-    ("ix_transfer_confirm_number",  "transfer", "confirm_number"),
-    # Customer umbrella-upsert lookup (PR 105). Non-unique on
-    # (phone_country, phone_number); the existing unique constraint
-    # on (store_id, phone_country, phone_number) stays put for
-    # duplicate prevention.
-    ("ix_customer_phone",           "customer", "phone_country, phone_number"),
-    # User cross-store username lookup (PR 106). Standalone index
-    # on `username`; the existing unique constraint on
-    # (store_id, username) stays put. `user` is a Postgres reserved
-    # word, but `_ensure_added_indexes()` already double-quotes the
-    # table name in the DDL — so the plain table name here is
-    # correct. Quoting it twice would produce `""user""`.
-    ("ix_user_username",            "user",     "username"),
-    # LoginEvent DAU/MAU covering composite (PR 107). The
-    # standalone `at` and `user_id` indexes from `index=True` stay
-    # untouched — this is purely additive.
-    ("ix_login_event_at_user",      "login_event", "at, user_id"),
-    # Missing FK indexes on `store_id` for cascade-delete + JOIN
-    # performance (PR 108). Postgres does not auto-index FKs, and
-    # the data-retention purge (`purge_expired_stores`) does
-    # `DELETE FROM <tbl> WHERE store_id = ?` on every per-store
-    # table — without these, each cascade is a full table scan.
-    # Names match SQLAlchemy's `index=True` auto-naming
-    # (`ix_<tbl>_store_id`) so fresh installs and existing-prod
-    # installs converge on the same name.
-    ("ix_store_employee_store_id",      "store_employee",      "store_id"),
-    ("ix_operator_audit_log_store_id",  "operator_audit_log",  "store_id"),
-    ("ix_transfer_audit_store_id",      "transfer_audit",      "store_id"),
-    ("ix_daily_drop_store_id",          "daily_drop",          "store_id"),
-    ("ix_check_deposit_store_id",       "check_deposit",       "store_id"),
-    ("ix_return_check_store_id",        "return_check",        "store_id"),
-    ("ix_daily_line_item_store_id",     "daily_line_item",     "store_id"),
-    ("ix_stripe_bank_account_store_id", "stripe_bank_account", "store_id"),
-    ("ix_store_owner_link_store_id",    "store_owner_link",    "store_id"),
-]
+# Bootstrap helpers (indexes safety-net, legacy table drops, feature-flag
+# seed, one-shot legacy data migrations, Alembic upgrade) live in
+# ``api.Core.Bootstrap``. The shims below preserve the legacy
+# ``from app import _X`` import paths used by a handful of tests.
+from api.Core.Bootstrap import (  # noqa: E402
+    ADDED_INDEXES as _ADDED_INDEXES,
+    DEFAULT_FEATURE_FLAGS as _DEFAULT_FEATURE_FLAGS,
+    DROPPED_TABLES as _DROPPED_TABLES,
+)
 
 
 def _ensure_added_indexes():
-    """Apply the _ADDED_INDEXES migrations. Idempotent and safe on
-    every boot.
+    from api.Core.Bootstrap import ensure_added_indexes
+    ensure_added_indexes(db.engine, app.logger)
 
-    Both sqlite and Postgres support `CREATE INDEX IF NOT EXISTS`,
-    so the same DDL works for both. Each statement runs in its own
-    transaction on Postgres so one failure doesn't poison the rest.
-    Failures log a warning instead of crashing boot — a missing
-    index slows queries but doesn't stop the app.
-    """
-    try:
-        dialect = db.engine.dialect.name
-    except Exception as e:
-        app.logger.warning(f"index migration skipped (no engine): {e}")
-        return
-    for name, table, cols in _ADDED_INDEXES:
-        ddl = f'CREATE INDEX IF NOT EXISTS {name} ON "{table}" ({cols})'
-        try:
-            if dialect == "sqlite":
-                with db.engine.connect() as conn:
-                    conn.exec_driver_sql(ddl)
-                    conn.commit()
-            else:
-                with db.engine.begin() as conn:
-                    conn.exec_driver_sql(ddl)
-        except Exception as e:
-            app.logger.warning(
-                f"{dialect} CREATE INDEX failed for {name}: {e}")
-
-
-# Legacy tables that have been removed from the model registry but may
-# still exist in production databases. DROP TABLE IF EXISTS is idempotent
-# on every restart — safe to leave forever.
-_DROPPED_TABLES = ["simplefin_config", "owner_invite_code"]
-
-def _drop_legacy_tables():
-    try:
-        for table in _DROPPED_TABLES:
-            with db.engine.begin() as conn:
-                conn.exec_driver_sql(f'DROP TABLE IF EXISTS "{table}"')
-    except Exception as e:
-        app.logger.warning(f"legacy table drop skipped: {e}")
-
-# Feature flags seeded on first boot. Each entry is (key, label, description, enabled).
-# Declaring them here means a fresh install has a real starting set for the UI.
-_DEFAULT_FEATURE_FLAGS = [
-    ("addon_tv_display", "Add-on: TV Display & Rates",
-     "Show the TV Display add-on in the subscription page.", True),
-    ("bank_sync", "Bank sync (Stripe)",
-     "Enable the Pro-tier Stripe Financial Connections bank sync for stores.", True),
-    ("multi_store_owner", "Multi-store owner portal",
-     "Allow store admins to generate owner invite codes.", True),
-]
-
-def _seed_feature_flags():
-    for key, label, description, enabled in _DEFAULT_FEATURE_FLAGS:
-        if not db.session.query(FeatureFlag).filter_by(key=key).first():
-            db.session.add(FeatureFlag(
-                key=key, label=label, description=description,
-                enabled_by_default=enabled,
-            ))
-    db.session.commit()
-
-def _rename_maxi_transfer_to_maxi():
-    """One-time idempotent backfill: rename legacy 'Maxi Transfer' to 'Maxi'
-    in every place a company name is persisted. Safe on every boot — after
-    the first run, nothing matches and the update is a no-op."""
-    try:
-        db.session.query(Transfer).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
-        db.session.query(ACHBatch).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
-        db.session.query(MoneyTransferSummary).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
-        # Store.companies is a comma-separated string — split, replace, rejoin.
-        for s in db.session.query(Store).filter(Store.companies.like("%Maxi Transfer%")).all():
-            parts = [p.strip() for p in (s.companies or "").split(",") if p.strip()]
-            s.companies = ",".join(["Maxi" if p == "Maxi Transfer" else p for p in parts])
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        app.logger.warning(f"Maxi Transfer rename backfill skipped: {e}")
 
 def _apply_schema():
-    """Bring the DB schema up to the latest Alembic revision.
+    from api.Core.Bootstrap import apply_schema
+    apply_schema(db.engine, app.logger)
 
-    Three cases:
 
-    1. **Empty DB** (no ``alembic_version``, no app tables) — fresh
-       install. Alembic ``upgrade head`` runs every revision from
-       the baseline, creating every table.
-    2. **Pre-Alembic DB** (no ``alembic_version`` BUT app tables
-       already exist) — the production prod database before chunk
-       1 + a few dev databases that were created via the old
-       ``db.create_all()`` + ``_ADDED_COLUMNS`` path. Running
-       ``upgrade head`` here would try to ``CREATE TABLE`` on
-       tables that already exist and crash boot.
+def _drop_legacy_tables():
+    from api.Core.Bootstrap import drop_legacy_tables
+    drop_legacy_tables(db.engine, app.logger)
 
-       Recovery: ``alembic stamp head`` — record "we're at head"
-       without running any DDL. The schema is already current
-       because ``db.create_all()`` + ``_ADDED_COLUMNS`` produced
-       the same shape the baseline migration produces. Future
-       boots see ``alembic_version`` and take case 3.
-    3. **Managed DB** (``alembic_version`` exists) — normal path.
-       ``upgrade head`` applies any new revisions since the last
-       boot. No-op when already at head.
 
-    Critical for the production deploy after the chunk-1 cleanup —
-    without the case-2 stamp, the first boot post-merge crashed
-    with ``relation feature_flag already exists`` and the
-    gunicorn worker exited.
+def _seed_feature_flags():
+    from api.Core.Bootstrap import seed_feature_flags
+    seed_feature_flags(db.session)
 
-    Flask's existing DB connection is passed in via
-    ``cfg.attributes`` so both Alembic and Flask run against the
-    SAME database — matters for the in-memory SQLite the tests
-    use (each engine creates its own private DB, so an Alembic-
-    owned engine would migrate a DB the Flask app can't see).
-    """
-    from alembic import command
-    from alembic.config import Config
-    from sqlalchemy import inspect
 
-    cfg = Config("alembic.ini")
-    cfg.set_main_option("sqlalchemy.url", str(db.engine.url))
+def _rename_maxi_transfer_to_maxi():
+    from api.Core.Bootstrap import rename_maxi_transfer_to_maxi
+    rename_maxi_transfer_to_maxi(db.session, app.logger)
 
-    prev_skip = os.environ.get("DINEROBOOK_SKIP_INIT_DB")
-    try:
-        # ``engine.begin()`` opens a transaction and commits on exit
-        # (vs ``engine.connect()`` which silently rolls back). Alembic's
-        # own ``context.begin_transaction()`` opens a SAVEPOINT inside
-        # ours; both commit cleanly on success. The explicit commit is
-        # critical for SQLite in-memory tests + StaticPool — without it
-        # the upgrade DDL evaporates when the connection returns to the
-        # pool and the test suite finds no tables.
-        with db.engine.begin() as connection:
-            cfg.attributes["connection"] = connection
-            inspector = inspect(connection)
-            table_names = set(inspector.get_table_names())
-            has_alembic_table = "alembic_version" in table_names
-            has_app_tables = bool(
-                table_names - {"alembic_version"}
-            )
-            if not has_alembic_table and has_app_tables:
-                # Case 2: schema exists from the pre-Alembic boot
-                # path (db.create_all + _ADDED_COLUMNS). Stamp head
-                # without running any DDL so the next upgrade lands
-                # cleanly.
-                command.stamp(cfg, "head")
-                app.logger.info(
-                    "Alembic stamped 'head' on pre-managed DB "
-                    "(%d existing tables)",
-                    len(table_names),
-                )
-            else:
-                # Case 1 (fresh DB) and case 3 (already managed)
-                # both take the standard upgrade path.
-                command.upgrade(cfg, "head")
-                app.logger.info("Alembic upgrade head: OK")
-    finally:
-        if prev_skip is None:
-            os.environ.pop("DINEROBOOK_SKIP_INIT_DB", None)
-        else:
-            os.environ["DINEROBOOK_SKIP_INIT_DB"] = prev_skip
+
+def _migrate_legacy_line_item_tables():
+    from api.Core.Bootstrap import migrate_legacy_line_item_tables
+    return migrate_legacy_line_item_tables(db.session)
 
 
 def init_db():
+    from api.Core.Bootstrap import (
+        apply_schema as _bs_apply_schema,
+        drop_legacy_tables as _bs_drop_legacy,
+        ensure_added_indexes as _bs_ensure_indexes,
+        migrate_legacy_line_item_tables as _bs_migrate_line_items,
+        rename_maxi_transfer_to_maxi as _bs_rename_maxi,
+        seed_feature_flags as _bs_seed_flags,
+    )
     with app.app_context():
         # Alembic builds + upgrades the schema. No db.create_all,
         # no _ADDED_COLUMNS — every schema change is a revision.
-        _apply_schema()
-        _ensure_added_indexes()
-        _drop_legacy_tables()
-        _rename_maxi_transfer_to_maxi()
+        _bs_apply_schema(db.engine, app.logger)
+        _bs_ensure_indexes(db.engine, app.logger)
+        _bs_drop_legacy(db.engine, app.logger)
+        _bs_rename_maxi(db.session, app.logger)
         # One-time copy of legacy DailyDrop + CheckDeposit rows into
         # the generic DailyLineItem table. Idempotent — safe on every
         # boot, no-op once the data has been migrated.
         try:
-            _migrate_legacy_line_item_tables()
+            _bs_migrate_line_items(db.session)
         except Exception as e:
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
-        _seed_feature_flags()
+        _bs_seed_flags(db.session)
         # TV-display catalog seed (curated company/bank pickers,
         # drop-in logo import, country-code backfill) lives in
         # ``api.Modules.TVDisplay.Services.seed`` now. The Service is
