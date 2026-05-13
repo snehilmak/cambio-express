@@ -805,8 +805,6 @@ def _superadmin_dashboard_context():
 # legacy `/reports/<slug>` URL surface) can be deleted entirely.
 #
 # Tracking: BACKLOG.md item D3-followup.
-def login_required(f):
-    return f
 
 
 def admin_required(f):
@@ -821,8 +819,6 @@ def owner_required(f):
     return f
 
 
-def pro_required(f):
-    return f
 
 
 # `current_user()` and `current_store()` are defined further up
@@ -987,14 +983,6 @@ def stripe_mode():
     from api.Modules.Billing.Services import stripe_mode as _svc
     return _svc()
 
-def _stripe_price_ids():
-    """Resolve {plan_key: price_id} for all four plan tiers. Single
-    source of truth lives in
-    `api.Modules.Billing.Services.resolve_price_ids` (PR 43); this
-    Flask-scope wrapper exists so the legacy callers (subscribe page,
-    webhook handler, health check) keep their existing call shape."""
-    from api.Modules.Billing.Services import resolve_price_ids
-    return resolve_price_ids()
 
 def ensure_stripe_customer(store):
     """Return a Stripe customer id for this store, creating one if needed.
@@ -1026,42 +1014,7 @@ def refresh_bank_balances(store):
     from api.Modules.BankSync.Services import refresh_bank_balances
     return refresh_bank_balances(db.session, store)
 
-def _can_sync_bank_transactions(store, now=None):
-    """Rate-limit gate for manual bank-transaction syncs.
 
-    Returns (allowed, reason, retry_after_seconds). Resets the daily
-    counter lazily when a new UTC day rolls over.
-    """
-    now = now or datetime.utcnow()
-    today = now.date()
-    if store.bank_sync_count_date != today:
-        # Lazy daily reset. Caller commits after recording the sync.
-        store.bank_sync_count_today = 0
-        store.bank_sync_count_date = today
-    if (store.bank_sync_count_today or 0) >= MAX_BANK_SYNCS_PER_DAY:
-        return (False,
-                f"Daily limit reached ({MAX_BANK_SYNCS_PER_DAY} syncs). Resets at midnight UTC.",
-                0)
-    if store.bank_sync_last_at:
-        elapsed = (now - store.bank_sync_last_at).total_seconds()
-        cooldown = BANK_SYNC_COOLDOWN_MINUTES * 60
-        if elapsed < cooldown:
-            wait = int(cooldown - elapsed)
-            mins = max(1, (wait + 59) // 60)
-            return (False,
-                    f"Please wait {mins} more minute(s) between syncs.",
-                    wait)
-    return True, "", 0
-
-def _record_bank_sync(store, now=None):
-    """Bump the rate-limit counters. Caller commits."""
-    now = now or datetime.utcnow()
-    today = now.date()
-    if store.bank_sync_count_date != today:
-        store.bank_sync_count_today = 0
-        store.bank_sync_count_date = today
-    store.bank_sync_count_today = (store.bank_sync_count_today or 0) + 1
-    store.bank_sync_last_at = now
 
 def _upsert_bank_transaction(store_id, account_row, api_obj):
     """Persist (or refresh) a Stripe FC Transaction into our cache.
@@ -1184,28 +1137,7 @@ def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
     )
 
 
-def _categorize_bank_transaction(txn, target_kind, rule=None,
-                                  post_to_daily=True, report_date=None):
-    """Flask-side adapter for the categorize Service. Caller commits.
 
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.categorize_transaction` (PR 36);
-    this wrapper forwards `db.session` + the legacy
-    `_is_daily_book_kind` predicate so the existing call sites keep
-    their shape during the migration window.
-    """
-    from api.Modules.BankSync.Services import categorize_transaction
-    return categorize_transaction(
-        db.session, txn, target_kind,
-        rule=rule, post_to_daily=post_to_daily,
-        report_date=report_date,
-        is_daily_book_kind=_is_daily_book_kind,
-    )
-
-def _uncategorize_bank_transaction(txn):
-    """Flask-side adapter for the uncategorize Service. Caller commits."""
-    from api.Modules.BankSync.Services import uncategorize_transaction
-    return uncategorize_transaction(db.session, txn)
 
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
@@ -1371,14 +1303,6 @@ def _set_last_store_slug_cookie(resp, slug):
                     secure=request.is_secure)
     return resp
 
-def _active_store_from_cookie():
-    slug = request.cookies.get(LAST_STORE_SLUG_COOKIE)
-    if not slug:
-        return None
-    store = db.session.query(Store).filter_by(slug=slug).first()
-    if store and store.is_active:
-        return store
-    return None
 
 # `/` (landing) and `/privacy` moved to blueprints/landing.py
 # (D2 phase 8). The cookie helpers above (_active_store_from_cookie,
@@ -1402,69 +1326,18 @@ TOTP_ISSUER = "DineroBook"
 # call shape during the migration window.
 from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 
-def _needs_totp(user):
-    """Which roles must use 2FA. Keep this the single gatekeeper."""
-    from api.Modules.Auth.Services import needs_totp
-    return needs_totp(user)
 
-def _totp_is_enrolled(user):
-    from api.Modules.Auth.Services import is_enrolled
-    return is_enrolled(user)
 
 def _pending_auth_user():
     uid = session.get("pending_auth_user_id")
     return db.session.get(User, uid) if uid else None
 
-def _hash_recovery_code(raw):
-    from api.Modules.Auth.Services import hash_recovery_code
-    return hash_recovery_code(raw)
 
-def _format_recovery_code(raw):
-    from api.Modules.Auth.Services import format_recovery_code
-    return format_recovery_code(raw)
 
-def _generate_recovery_codes(user):
-    """Wipe any existing codes for this user and mint a fresh batch.
-    Caller is responsible for the surrounding transaction; we commit
-    here for backwards-compat with existing call sites that never
-    saw the flush."""
-    from api.Modules.Auth.Services import generate_recovery_codes
-    codes = generate_recovery_codes(db.session, user)
-    db.session.commit()
-    return codes
 
-def _consume_recovery_code(user, raw):
-    """Return True if `raw` matches an unused code for `user` and
-    mark it used. Commits on hit so legacy callers don't need to."""
-    from api.Modules.Auth.Services import consume_recovery_code
-    hit = consume_recovery_code(db.session, user, raw)
-    if hit:
-        db.session.commit()
-    return hit
 
-def _verify_totp(user, token):
-    from api.Modules.Auth.Services import verify_totp_token
-    return verify_totp_token(user, token)
 
-def _totp_qr_svg(secret, username):
-    """SVG <svg>…</svg> string encoding the TOTP provisioning URI.
-    Pure-Python (no Pillow) via qrcode.image.svg. Embeddable directly."""
-    uri = pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name=TOTP_ISSUER)
-    img = qrcode.make(uri, image_factory=qrcode.image.svg.SvgPathImage,
-                      box_size=8, border=2)
-    buf = io.BytesIO()
-    img.save(buf)
-    return buf.getvalue().decode("utf-8")
 
-def _finalize_2fa_login(user):
-    """Promote the partial-auth session to a full-auth session after
-    successful TOTP/recovery-code verification or first enrollment."""
-    session.pop("pending_auth_user_id", None)
-    session.pop("totp_enrollment_codes", None)
-    session["user_id"]  = user.id
-    session["role"]     = user.role
-    session["store_id"] = user.store_id
-    _record_login(user); db.session.commit()
 
 # ── Passkeys (WebAuthn) ──────────────────────────────────────
 #
@@ -1507,24 +1380,7 @@ def _passkey_eligible(user):
     from api.Modules.Auth.Services import passkey_is_eligible
     return passkey_is_eligible(user)
 
-def _update_user_password(user, current_pw, new_pw, confirm_pw):
-    """Validate + apply a self-service password change. Returns
-    `{}` on success or `{field: message}` on failure. Single source
-    of truth lives in `api.Modules.Auth.Services.change_password`
-    (PR 40); this wrapper is here for legacy call sites."""
-    from api.Modules.Auth.Services import change_password
-    return change_password(db.session, user, current_pw, new_pw, confirm_pw)
 
-def _update_user_display_name(user, raw):
-    """Validate + apply a display-name change. Same return contract as
-    _update_user_password — empty dict means apply, else field errors."""
-    name = (raw or "").strip()
-    if not name:
-        return {"full_name": "Display name cannot be empty."}
-    if len(name) > 120:
-        return {"full_name": "Display name is too long (max 120 characters)."}
-    user.full_name = name
-    return {}
 
 # Loose email regex — RFC 5322 is famously underspecified, so we just
 # require "something@something.something" to catch obvious typos. Final
@@ -1535,37 +1391,6 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # that — region codes vary too much for a one-size validator.
 _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 
-def _update_user_profile(user, raw_full_name, raw_email, raw_phone, raw_tz):
-    """Validate + apply a profile change in one shot. All four fields
-    are optional except full_name; empty string clears phone/email/tz."""
-    errors = {}
-    name = (raw_full_name or "").strip()
-    if not name:
-        errors["full_name"] = "Display name cannot be empty."
-    elif len(name) > 120:
-        errors["full_name"] = "Display name is too long (max 120 characters)."
-
-    email = (raw_email or "").strip().lower()
-    if email and not _EMAIL_RE.match(email):
-        errors["email"] = "Enter a valid email address."
-    elif len(email) > 255:
-        errors["email"] = "Email is too long (max 255 characters)."
-
-    phone_clean = re.sub(r"[\s\-\(\)]", "", raw_phone or "")
-    if phone_clean and not _PHONE_DIGITS_RE.match(phone_clean):
-        errors["phone"] = "Enter a valid phone number (7–20 digits, optional leading +)."
-
-    tz = (raw_tz or "").strip()
-    if tz and tz not in PROFILE_TIMEZONES:
-        errors["timezone"] = "Pick a timezone from the list."
-
-    if errors:
-        return errors
-    user.full_name = name
-    user.email = email
-    user.phone = phone_clean
-    user.timezone = tz
-    return {}
 
 # Curated timezone list — Americas + the handful of Asia/Europe zones
 # our owner-operators have actually asked for. Adding a zone is one
@@ -1608,16 +1433,6 @@ def _record_login(user, *, method=""):
         method=method, at=datetime.utcnow(),
     ))
 
-def _require_pending_auth():
-    """Shared guard for /login/2fa* routes: redirect back to /login if
-    there's no partial-auth in flight (expired session, direct visit,
-    etc.). Returns the pending user, or None (caller must return the
-    redirect)."""
-    u = _pending_auth_user()
-    if not u or not u.is_active:
-        session.pop("pending_auth_user_id", None)
-        return None
-    return u
 
 # /login + /login/2fa/* + /login/<slug> + /employee-login moved to
 # blueprints/auth.py (D2 phase 25).
@@ -1664,9 +1479,6 @@ def _require_pending_auth():
 # ── Password reset ───────────────────────────────────────────
 PASSWORD_RESET_TTL_HOURS = 1
 
-def _hash_token(raw):
-    """sha256-hex — matches the column size and is fine for single-use tokens."""
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 # Last SMTP attempt state. Updated by _send_email() on every call so the
 # superadmin Overview can surface the most recent delivery outcome
@@ -1817,24 +1629,6 @@ def store_has_addon(store, addon_key):
 #                                          (declared with the rest of
 #                                          the per-store actions)
 
-def _tv_required(allow_employee=True):
-    """Guard for /tv-display/* routes. Returns either:
-      - (user, store) tuple on success, or
-      - a Flask Response the caller should return verbatim
-        (redirect to subscription page when add-on isn't active)
-    Hard failures (no session / wrong role) `abort(404)` immediately."""
-    user = current_user()
-    store = current_store()
-    if not user or not store:
-        abort(404)
-    roles = ("admin", "employee") if allow_employee else ("admin",)
-    if user.role not in roles:
-        abort(404)
-    if not store_has_addon(store, "tv_display"):
-        flash("The TV Display add-on isn't active for this store. "
-              "Turn it on from your subscription page.", "warning")
-        return redirect(url_for("subscription.admin_subscription"))
-    return (user, store)
 
 def _ensure_tv_display(store):
     """Get-or-create the store's TVDisplay row + initial token."""
@@ -2466,22 +2260,6 @@ def _fees_vs_tax_data(store_ids, d_from, d_to):
 
 
 # ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
-def _period_comparison_kpis(totals, rows, extra):
-    def _row(label):
-        return next((r for r in rows if r["label"] == label), None)
-    inc, net, txn = (_row("Total Income"), _row("Net Income"),
-                     _row("Transfers"))
-    return [
-        {"label": "Income Δ",
-         "value": f"{inc['pct']:+.1f}%" if inc else "—",
-         "tone":  "primary"},
-        {"label": "Net Δ",
-         "value": f"{net['pct']:+.1f}%" if net else "—",
-         "tone":  "neon" if (net and net["pct"] >= 0) else "muted"},
-        {"label": "Transfers Δ",
-         "value": f"{txn['pct']:+.1f}%" if txn else "—",
-         "tone":  "muted"},
-    ]
 
 
 # ── Report-route registry ───────────────────────────────────
@@ -3390,17 +3168,6 @@ def _transfer_snapshot(t):
     from api.Modules.Transfers.Services import transfer_snapshot
     return transfer_snapshot(t)
 
-def _transfer_form_ctx(store):
-    return dict(
-        today=date.today().isoformat(),
-        phone_country_codes=PHONE_COUNTRY_CODES,
-        mt_companies=store_mt_companies(store),
-        service_types=SERVICE_TYPES,
-        tax_exempt_services=sorted(_TAX_EXEMPT_SERVICES),
-        transfer_countries=TRANSFER_COUNTRIES,
-        tax_exempt_countries=sorted(_DOMESTIC_COUNTRIES),
-        federal_tax_rate=(store.federal_tax_rate or 0),
-    )
 
 # /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete
 # moved to blueprints/transfers_redirects.py (D2 phase 14).
@@ -3426,15 +3193,6 @@ from api.Modules.Transfers.Services import (
 
 # /daily moved to blueprints/bookkeeping_redirects.py (D2 phase 15).
 
-def _ensure_daily_report(store_id, report_date):
-    """Return the DailyReport for (store, date), creating an empty one
-    if needed. Single source of truth lives in
-    `api.Modules.DailyBook.Services.ensure_daily_report` (PR 34); this
-    Flask-scope wrapper exists so the legacy callers
-    (_recompute_line_items_total, daily_report POST) keep their
-    existing call shape during the migration window."""
-    from api.Modules.DailyBook.Services import ensure_daily_report
-    return ensure_daily_report(db.session, store_id, report_date)
 
 _DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
 
@@ -3446,17 +3204,6 @@ def _daily_is_locked(store_id, report_date):
     from api.Modules.DailyBook.Services import is_daily_report_locked
     return is_daily_report_locked(db.session, store_id, report_date)
 
-def _reject_if_locked(store_id, report_date, ds):
-    """Shared guard for every daily-book write route. Returns a Flask
-    response to return to the client when locked, or None when the
-    caller may proceed. JSON callers get a 403 payload; HTML callers
-    get a flash + redirect back to the report."""
-    if not _daily_is_locked(store_id, report_date):
-        return None
-    if _wants_json():
-        return jsonify({"ok": False, "error": _DAILY_LOCKED_MSG}), 403
-    flash(_DAILY_LOCKED_MSG, "error")
-    return redirect(url_for("bookkeeping_mutations.daily_report", ds=ds))
 
 
 
@@ -3544,18 +3291,6 @@ from api.Modules.DailyBook.Services import (
     kind_or_404 as _line_item_kind_or_404,
 )
 
-def _recompute_line_items_total(kind, store_id, report_date):
-    """Sum DailyLineItem rows of the given kind and push the total
-    onto the matching DailyReport field. Single source of truth lives
-    in `api.Modules.DailyBook.Services.recompute_line_items_total`
-    (PR 42); this Flask-scope wrapper resolves the kind→field
-    mapping from the legacy `_LINE_ITEM_KINDS` map and forwards."""
-    from api.Modules.DailyBook.Services import recompute_line_items_total
-    field, _, _ = _LINE_ITEM_KINDS[kind]
-    return recompute_line_items_total(
-        db.session, store_id, report_date,
-        kind=kind, daily_report_field=field,
-    )
 
 # Fields on DailyReport the main form still edits. Derived fields
 # (outside_cash_drops, checks_deposit, and every DailyReport field
@@ -3581,14 +3316,6 @@ def _wants_json():
     accept = request.accept_mimetypes
     return bool(accept and accept.best == "application/json")
 
-def _line_items_json_payload(kind, store_id, report_date):
-    """Current state of a generic line-item widget for a given day + kind."""
-    rows = (db.session.query(DailyLineItem)
-            .filter_by(store_id=store_id, report_date=report_date, kind=kind)
-            .order_by(DailyLineItem.at_time).all())
-    total = sum(r.amount for r in rows)
-    return {"ok": True, "kind": kind, "total": float(total),
-            "items": [r.to_dict() for r in rows]}
 
 # /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
 # /daily/<ds>/{lock,unlock} moved to
@@ -3739,24 +3466,9 @@ STORES_PER_PAGE = 20
 
 
 # ── Per-store actions (superadmin) ───────────────────────────
-def _store_or_404(store_id): return db.session.get(Store, store_id) or abort(404)
-
-def _parse_extend_days(form, default, maximum):
-    """Read `days` from the POST form, default to `default`, clamp to
-    [1, maximum]. Used by every route that pushes a deadline forward;
-    centralizes the bounds so an admin can't accidentally extend a
-    trial by 10,000 days."""
-    return max(1, min(int(form.get("days", default) or default), maximum))
 
 
-def _extended_deadline(existing, days):
-    """Push `existing` (a UTC datetime) forward by `days` — but if
-    it's already in the past (or unset), push from `now()` instead.
-    This avoids the regression where re-extending an already-lapsed
-    trial just adds days to a stale past date and stays expired."""
-    now = datetime.utcnow()
-    base = existing if (existing and existing > now) else now
-    return base + timedelta(days=days)
+
 
 
 # /superadmin/stores/<int:store_id>/{extend-trial,comp-plan,toggle-active,
@@ -3803,61 +3515,13 @@ def _slugify_catalog_name(name):
     return slugify(name, separator="_", lowercase=True,
                     max_length=60, word_boundary=False)
 
-def _slugify_bank_name(name, country_code):
-    """Banks slug as <iso2>_<name>. Multiple countries can have a
-    "BAC Credomatic" (GT/HN/SV); the country prefix keeps them
-    distinct so each can carry its own logo."""
-    base = _slugify_catalog_name(name)
-    if not base:
-        return ""
-    cc = (country_code or "").strip().lower()
-    if cc:
-        return (cc + "_" + base)[:60]
-    return base
 
-def _next_unique_slug(catalog_type, base_slug):
-    """If base_slug exists already, append _2, _3, … until we find
-    a free one. Caps at 99 attempts (operationally impossible to
-    hit; bails out rather than infinite-looping on a pathological
-    state)."""
-    if not base_slug:
-        return ""
-    if _resolve_catalog_row(catalog_type, base_slug) is None:
-        return base_slug
-    for n in range(2, 100):
-        candidate = f"{base_slug}_{n}"[:60]
-        if _resolve_catalog_row(catalog_type, candidate) is None:
-            return candidate
-    return ""  # exhausted; caller flashes the duplicate-slug error
 
 # /superadmin/tv-catalog/new moved to
 # blueprints/superadmin_extras.py (D2 phase 28).
 
 
 # ── Discount codes (superadmin) ──────────────────────────────
-def _sync_discount_to_stripe(dc):
-    """Best-effort mirror of a DiscountCode into Stripe as a coupon + promotion code.
-
-    Silent on Stripe errors — the local record is still usable for bookkeeping,
-    and the operator will see the missing IDs in the UI.
-    """
-    try:
-        coupon_kwargs = {"duration": dc.duration, "name": dc.label or dc.code}
-        if dc.percent_off: coupon_kwargs["percent_off"] = dc.percent_off
-        if dc.amount_off_cents:
-            coupon_kwargs["amount_off"] = dc.amount_off_cents
-            coupon_kwargs["currency"] = "usd"
-        if dc.duration == "repeating" and dc.duration_in_months:
-            coupon_kwargs["duration_in_months"] = dc.duration_in_months
-        if dc.max_redemptions: coupon_kwargs["max_redemptions"] = dc.max_redemptions
-        if dc.expires_at:
-            coupon_kwargs["redeem_by"] = int(dc.expires_at.timestamp())
-        coupon = stripe.Coupon.create(**coupon_kwargs)
-        promo = stripe.PromotionCode.create(coupon=coupon.id, code=dc.code)
-        dc.stripe_coupon_id = coupon.id
-        dc.stripe_promotion_code_id = promo.id
-    except Exception as e:
-        app.logger.warning(f"Stripe discount sync failed for {dc.code}: {e}")
 
 # /superadmin/discounts/{new,<id>/toggle} +
 # /superadmin/features/{new,<key>/toggle-global,
