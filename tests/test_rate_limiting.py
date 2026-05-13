@@ -32,18 +32,10 @@ def test_limiter_objects_have_expected_enabled_state():
     assert slow_limiter.enabled is False
 
 
-def test_flask_login_no_limit_when_disabled(client):
-    """With the limiter disabled (test default) 20 login attempts
-    in a row must all complete — this is the path every other test
-    in the suite implicitly depends on."""
-    statuses = []
-    for _ in range(20):
-        r = client.post(
-            "/login",
-            data={"username": "x@y.z", "password": "wrong"},
-        )
-        statuses.append(r.status_code)
-    assert all(s != 429 for s in statuses), statuses
+# The legacy Flask `/login` form was retired in chunk 3 — the SPA
+# owns login via `/api/v2/auth/login` only. The Flask-side rate-
+# limit smoke test was deleted with the form; the slowapi-side
+# test below covers the SPA path.
 
 
 # ── Subprocess-based assertions ───────────────────────────────
@@ -80,27 +72,6 @@ def _run_in_subprocess(script: str) -> tuple[int, str, str]:
         env=env, capture_output=True, text=True, timeout=60,
     )
     return res.returncode, res.stdout, res.stderr
-
-
-def test_flask_login_429_with_limiter_enabled_at_boot():
-    """A fresh process with RATELIMIT_ENABLED=1: 11 bad logins from
-    one IP must trip a 429."""
-    script = (
-        "import app\n"
-        "with app.app.test_client() as c:\n"
-        "    statuses = []\n"
-        "    for _ in range(15):\n"
-        "        r = c.post('/login', data={'username':'x','password':'y'})\n"
-        "        statuses.append(r.status_code)\n"
-        "        if r.status_code == 429:\n"
-        "            break\n"
-        "assert 429 in statuses, f'never saw 429: {statuses}'\n"
-        "assert statuses.index(429) <= 11, statuses\n"
-        "print('OK')\n"
-    )
-    rc, out, err = _run_in_subprocess(script)
-    assert rc == 0, f"stderr:\n{err}\nstdout:\n{out}"
-    assert "OK" in out
 
 
 def test_fastapi_login_429_with_limiter_enabled_at_boot():

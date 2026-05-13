@@ -269,26 +269,8 @@ def test_verify_password_cross_store_handles_empty_inputs():
 # ── Flask /login route end-to-end ───────────────────────────
 
 
-def test_flask_login_route_uses_service(client, test_store_id):
-    """Smoke test for the PR 30 flip: the Flask /login route should
-    accept valid credentials via the Service layer and establish the
-    session."""
-    resp = client.post(
-        "/login",
-        data={
-            "username": "superadmin",
-            "password": "super2025!",
-        },
-        follow_redirects=False,
-    )
-    # Successful POST redirects to the dashboard.
-    assert resp.status_code in (302, 303)
-
-
-# The legacy Flask /login form rendering was retired in the
-# chunk-2 cleanup. The SPA owns login (POSTs to /api/v2/auth/login
-# directly via JSON); the cookie-session POST handler in
-# ``blueprints/auth.py`` survives just long enough for chunk 3 to
-# delete it. Login UX tests live in ``tests/Modules/Auth/`` for the
-# JWT path; the Jinja form-rendering tests below were deleted with
-# the Jinja UI.
+# The legacy Flask `/login` form + cookie-session POST handler was
+# retired in chunk 3. The SPA owns login entirely via POST
+# `/api/v2/auth/login` (JSON in / JWT out). UI tests for the JWT
+# path live in tests/Modules/Auth/ alongside this module; the
+# Jinja form-rendering tests were deleted with the Jinja UI.
