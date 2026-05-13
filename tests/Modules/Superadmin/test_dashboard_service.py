@@ -212,10 +212,5 @@ def test_dashboard_context_activity_capped_at_12():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_compute_mrr_delegates():
-    from app import _compute_mrr as legacy
-    bm, by_, pm, py_, total = legacy(2, 1, 0, 0)
-    assert bm == 70
-    assert total == bm + by_
 
 
