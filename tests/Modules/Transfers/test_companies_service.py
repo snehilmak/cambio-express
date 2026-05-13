@@ -90,21 +90,3 @@ def test_preserves_company_order_from_csv():
     assert result == ["Zelle", "Apple Pay", "Cash App"]
 
 
-# ── legacy Flask wrappers ─────────────────────────────────
-
-
-def test_legacy_default_re_exported():
-    from app import DEFAULT_MT_COMPANIES as legacy
-    from api.Modules.Transfers.Services import (
-        DEFAULT_MT_COMPANIES as service,
-    )
-    assert legacy is service
-
-
-def test_legacy_store_mt_companies_delegates():
-    from app import store_mt_companies as legacy
-    result = legacy(_store("Intermex,Maxi"))
-    assert result == ["Intermex", "Maxi"]
-    # Default fallback works through the legacy wrapper too.
-    from api.Modules.Transfers.Services import DEFAULT_MT_COMPANIES
-    assert legacy(None) == DEFAULT_MT_COMPANIES

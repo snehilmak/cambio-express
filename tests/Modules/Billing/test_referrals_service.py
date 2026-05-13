@@ -157,12 +157,10 @@ def test_lookup_referral_code_filters_active_only():
     )
 
 
-def test_legacy_app_constants_unchanged():
-    """The $100 / $50 rates are part of the public PR contract.
-    If you change these, every store with an existing ReferralCode
-    keeps its old rate (the row stores them); but new mints will
-    use the new constant. Reviewers should see this as an explicit
-    change."""
-    from app import REFERRAL_REFEREE_CENTS, REFERRAL_SELF_CENTS
+def test_constants_unchanged():
+    """The $100 / $50 rates are part of the public PR contract."""
+    from api.Modules.Billing.Services import (
+        REFERRAL_REFEREE_CENTS, REFERRAL_SELF_CENTS,
+    )
     assert REFERRAL_SELF_CENTS == 10000
     assert REFERRAL_REFEREE_CENTS == 5000

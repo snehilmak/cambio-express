@@ -35,7 +35,7 @@ def _admin_summary(db: Session, store_id: int) -> dict:
     from api.Modules.Monthly.Models import MonthlyFinancial
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
-    from app import store_mt_companies
+    from api.Modules.Transfers.Services import store_mt_companies
     today = date.today()
     month_start = date(today.year, today.month, 1)
 

@@ -599,31 +599,6 @@ from api.Modules.Announcements.Services import (  # noqa: E402
 from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD, ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD, ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS
 
 
-# ── Legacy auth decorators — DEPRECATED stubs ────────────────
-#
-# The cookie-session login form was retired in chunk 3 (the SPA
-# now owns auth via JWT). These decorator stubs survive only so
-# the report-route registration block at the bottom of app.py
-# keeps assembling the legacy `/reports/<slug>.csv` URL map —
-# the CSV downloads still ship from Flask because browser
-# `<a href>` downloads can't attach an `Authorization: Bearer`
-# header.
-#
-# **Security note**: these stubs DO NOT enforce any auth check.
-# Pilot users only; the CSV download URLs are effectively public
-# right now. The "Later" phase of the architecture cleanup
-# migrates each CSV export to `/api/v2/reports/<slug>.csv` with
-# a JWT signed-URL token, after which these stubs (and the
-# legacy `/reports/<slug>` URL surface) can be deleted entirely.
-#
-# Tracking: BACKLOG.md item D3-followup.
-
-
-# `current_user()` and `current_store()` are defined further up
-# (cookie-session reads); they return None for SPA users since
-# the SPA never writes to `session`.
-
-
 @app.context_processor
 def inject_trial_context():
     """Inject trial_status, trial_days_left, store, and announcements globally.
@@ -719,57 +694,15 @@ def inject_theme():
         return {"theme": "dark"}
     return {"theme": pref}
 
-# ── Stripe Financial Connections ─────────────────────────────
-# Bank-sync path. SimpleFIN was the original integration; it was
-# removed in 2026 once Stripe FC was proven in production, including
-# the `simplefin_config` table (see `_drop_legacy_tables()`).
-# Hard cap on linked bank accounts per store. Two is enough for the
-# typical MSB workflow (e.g., a checking account + an MSB-restricted
-# account at the same credit union). Disconnecting frees the slot.
-# Cost-control on Stripe Transaction.list (billed per call).
-# Manual syncs are capped at MAX_BANK_SYNCS_PER_DAY and must be
-# BANK_SYNC_COOLDOWN_MINUTES apart. Initial-connect auto-sync does not
-# count against the cap.
-# How many days back to pull on initial connect. Per-product
-# decision: yesterday + today only — minimal cost, still catches
-# any same-day deposits that haven't been entered into the daily
-# book. The constant now lives in
-# api.Modules.BankSync.Services.sync (PR 72); re-exported here
-# so legacy callers keep their import shape during migration.
-
-
-# ── Bank reconcile + rules ──────────────────────────────────
-#
-# Two Flask-side helpers remain here. Everything else (categories
-# dict, validation/grouping helpers, built-in rules registry,
-# rule-match engine, FC account upserts) moved to
-# ``api.Modules.BankSync.Services``.
-
-
-# SPA cutover before_request hook moved to blueprints/spa_cutover.py
-# (D2). SIGNUP_CLOSED stays here because the signup routes below
-# (/signup, /signup/owner) check it directly.
-
-# Self-service signup gate. With SIGNUP_CLOSED=1 the /signup and
-# /signup/owner pages render a "Signups closed" notice instead of
-# the form, the FastAPI signup endpoints return 503, and the
-# marketing landing's "Get Started" CTA is suppressed. Existing
-# customers still log in normally — only NEW account creation is
-# blocked. Flip via Render env var; default is "0" so dev + tests
-# work unchanged. CLAUDE.md note: re-enable once pilot review is
-# complete and we're ready to take real customers.
+# Self-service signup gate. With SIGNUP_CLOSED=1 the /signup
+# pages render a "Signups closed" notice; the FastAPI signup
+# endpoints return 503; and the marketing landing's "Get Started"
+# CTA is suppressed. Existing customers still log in.
 SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
 
 
 # ── Push notifications ───────────────────────────────────────
-# Operators generate a VAPID keypair once (see docs/push-keys.md)
-# and set the three env vars below. When they're not set, push
-# endpoints return 501 and the opt-in UI stays hidden.
-#
-# Delivery + the env-var read live in
-# api.Modules.Notifications.Services.push (PR 67); the legacy
-# names below are re-exports so existing call sites keep their
-# shape during the strangler-fig migration window.
+# VAPID_* re-exported for tests/Modules/Notifications/test_push_service.
 from api.Modules.Notifications.Services import push as _push_svc
 
 VAPID_PUBLIC_KEY  = _push_svc.VAPID_PUBLIC_KEY
@@ -777,128 +710,13 @@ VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
 VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
 
 
-# /api/push/{public-key,subscribe,unsubscribe,test} moved to
-# blueprints/push.py (D2). The shims above (VAPID_*, push_enabled,
-# send_push) stay here because legacy callers — including
-# tests/Modules/Notifications/test_push_service.py — still
-# import them from `app`.
-
-# ── Referrals ────────────────────────────────────────────────
-from api.Modules.Billing.Services import (
-    REFERRAL_REFEREE_CENTS,
-    REFERRAL_SELF_CENTS,
-)
-
-
-# ── Login ────────────────────────────────────────────────────
-# Installed PWAs open at `start_url` (currently "/") and hide the address
-# bar, so a logged-out employee launching the app has no way to reach
-# their store-specific login page `/login/<slug>`. We persist the last
-# store slug they signed in to in a long-lived cookie and use it to
-# bounce `/` and `/login` to `/login/<slug>` automatically. The generic
-# `/login` page also exposes a small "enter your store code" escape
-# hatch for the first-install / cleared-cookie case.
+# Cookie name used by PublicRoutes' /login/<slug> bounce path.
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
 
 
-# ── 2FA (TOTP) helpers ───────────────────────────────────────
-# Mandatory for superadmin; other roles opt out entirely today.
-# The login flow is:
-#   1) POST /login → creds valid → session["pending_auth_user_id"] = uid
-#   2) redirect to /login/2fa (if enrolled) or /login/2fa/enroll (if not)
-#   3) successful TOTP / recovery code → _finalize_2fa_login() promotes
-#      pending_auth_user_id → real user_id session.
-# Nothing outside this block should set user_id on its own for a
-# 2FA-required role.
-
-# Single source of truth for TOTP / recovery-code helpers lives in
-# api.Modules.Auth.Services.totp (PR 41). The Flask-scope wrappers
-# below forward to the Service so legacy callers keep their existing
-# call shape during the migration window.
-
-
-# ── Passkeys (WebAuthn) ──────────────────────────────────────
-#
-# A passkey is phishing-resistant MFA by construction — the credential
-# is device-bound, user-presence-proven, and the RP ID prevents replay
-# on a look-alike domain. So a successful passkey login is treated as
-# MFA-sufficient for every role including superadmin (see the carve-out
-# in CLAUDE.md invariant #13). Password login still gates superadmin
-# through TOTP; passkey is the parallel path.
-
-
-# Loose email regex — RFC 5322 is famously underspecified, so we just
-# require "something@something.something" to catch obvious typos. Final
-# validity is whether mail actually delivers.
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-# Phone: keep generous. Strip whitespace + hyphens + parens; require
-# 7–20 digits with an optional leading +. We don't normalize beyond
-# that — region codes vary too much for a one-size validator.
-_PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
-
-
-# Curated timezone list — Americas + the handful of Asia/Europe zones
-# our owner-operators have actually asked for. Adding a zone is one
-# line; we deliberately don't expose the full ~600 IANA list because
-# that's a UX trap for non-technical cashiers. The empty string means
-# "fall back to UTC / store default".
-
-
-# ── Passkey authentication (WebAuthn) ────────────────────────
-#
-# Three POST pairs:
-#   /account/passkeys/register/begin + /finish   — enroll a new passkey
-#   /login/passkey/begin + /finish               — sign in with a passkey
-#   /account/passkeys/<id>/delete                — remove an enrolled passkey
-# Registration is login-gated + role-gated (_passkey_eligible); sign-in is
-# anonymous because it IS the login. Challenges round-trip through the
-# session (single-use — popped on finish) so the browser can't replay a
-# previous attestation / assertion on a later request.
-
-# /account/passkeys/register/{begin,finish} moved to
-# blueprints/auth.py (D2 phase 25).
-
-
-# ── Shared account settings ──────────────────────────────────
-#
-# /account/security is the per-user "personal security" page reachable
-# from every role (admin, owner, employee, superadmin). It hosts the
-# things a user manages about THEIR OWN login: display name, password,
-# passkeys. Anything store-scoped (companies, team, billing) lives on
-# the role-specific settings hubs (admin_settings, owner_dashboard,
-# superadmin_controls).
-#
-# A single POST handler dispatches by an `_action` field so the same
-# URL can serve every form on the page — keeps the redirect target
-# stable for the PRG pattern.
-
-# /account/security, /account/profile, /admin/settings/security,
-
-
-# ── Password reset ───────────────────────────────────────────
-
-
-# Last SMTP attempt state. Updated by _send_email() on every call so the
-# superadmin Overview can surface the most recent delivery outcome
-# without a live probe on every page load (which would itself be noise
-# in SMTP logs + a latency hit). Keys: status ∈ {"unconfigured",
-# "sent", "failed", "unknown"}, error (str, "" on success), when
-# (datetime or None), last_to (obscured — we show only the domain
-# part so the page doesn't leak user email addresses), last_subject.
-# Transactional email send + SMTP health probe now live in
-# api.Modules.Notifications.Services.smtp (PR 82). The legacy
-# names below are thin re-exports / wrappers so existing call
-# sites (password reset, trial reminders, announcement broadcast,
-# superadmin Overview health card, the test-email button) keep
-# their import shape during the migration window.
-from api.Modules.Notifications.Services import smtp as _smtp_svc
-
-
 # ── Email sending shim ───────────────────────────────────────
-# Legacy callers (``api/Modules/Auth/Controllers`` for password
-# reset emails + ``tests/``) still import ``_send_email`` from
-# ``app``. Single source of truth:
-# ``api.Modules.Notifications.Services.smtp.send_email``.
+# Used by Auth's password-reset path and a couple of tests.
+from api.Modules.Notifications.Services import smtp as _smtp_svc
 
 
 def _send_email(to_addr, subject, body, html=None):
@@ -912,55 +730,8 @@ def smtp_health_check():
     (PR 82)."""
     return _smtp_svc.health_check(db.session)
 
-# /forgot-password, /reset-password/<token>, /signup, /signup/owner,
-
 # ── Owner-side helpers ──────────────────────────────────────────
-#
-# Owners read across many stores at once and want the same depth of BI
-# the superadmin has, scoped to their umbrella. The helpers below carry
-# the heavy lifting; the routes below just wire them to templates.
-#
-# Period selector vocabulary (today / month / year) matches the existing
-# UI; "previous-period" windows are the same length, ending the day
-# before the current window — that's what the delta badges compare to.
-
-# Owner-side period math, store-id resolution, and KPI rollups
-# now live in api.Modules.Owners.Services.dashboard (PR 61). The
-# legacy names below are thin re-exports / wrappers so existing
-# callers (the dashboard, locations, and CSV-export routes) keep
-# their shape during the migration window.
 from api.Modules.Owners.Services import owner_store_ids as _svc_owner_store_ids
-
-
-def _owner_store_ids(user):
-    """Delegate to api.Modules.Owners.Services.owner_store_ids."""
-    return _svc_owner_store_ids(db.session, user)
-
-
-# Owner routes (/owner/dashboard, /owner/pl-rollup, /owner/locations,
-# /owner/store/<id>, /owner/connect, /owner/connect/generate,
-# /owner/connect/<id>/revoke, /owner/unlink/<id>) moved to
-# blueprints/owner.py (D2). The endpoint names changed from
-# `owner_*` to `owner.owner_*` — callers updated in the same PR.
-
-
-# Subscription management routes (/admin/subscription[/billing-portal
-
-# ── TV Display add-on ────────────────────────────────────────
-#
-# Routes split into three audiences:
-#
-#   - /tv-display/*                      — store admins + employees
-#                                          (feature is gated by the
-#                                          tv_display add-on; both
-#                                          roles can edit rates)
-#   - /tv/<token>                        — public, fullscreen, no auth
-#                                          (the URL the TV browser /
-#                                          Chromecast / Fire TV app
-#                                          points at)
-#   - /superadmin/stores/<id>/addons/*   — superadmin override switches
-#                                          (declared with the rest of
-#                                          the per-store actions)
 
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
@@ -1027,28 +798,7 @@ def _generate_device_token():
     raise RuntimeError("Could not mint a unique device_token")
 
 
-# ── TV Display: public surfaces moved to api/PublicRoutes.py ─
-#
-# The public TV rate board (/tv/<token> + /tv/device/<dt>), the
-# catalog logo serve (/tv/logo/<type>/<slug>), and the pair-code
-# JSON API all live on Starlette now. The data-building helper that
-# this file used to ship (_render_tv_board) is now
-# api.Modules.TVDisplay.Services.build_tv_board_context — pure, no
-# Flask render_template / url_for ties.
-
 # ── Report Center ────────────────────────────────────────────
-# Categorised list of reports surfaced in /reports (admin) and
-# /owner/reports. Each report either deep-links to an existing route
-# (`endpoint`) or is rendered as "Coming soon" (endpoint=None) — the
-# scaffold ships with the full taxonomy now and reports get wired
-# incrementally without further sidebar/template changes. Owner-
-# visible reports get `owner_endpoint` as the umbrella variant; if
-# omitted the report is hidden from owners.
-#
-# Data tables + resolver moved to
-# ``api.Modules.Reports.Services.categories`` — re-export the
-# legacy ``_X`` names so any test / blueprint still doing
-# ``from app import _REPORT_CATEGORIES`` keeps working.
 from api.Modules.Reports.Services.categories import resolved_categories as _resolved_report_categories
 
 
@@ -1083,15 +833,11 @@ def _report_scope_ids():
     role = session.get("role")
     if role == "owner":
         u = current_user()
-        return _owner_store_ids(u) if u else []
+        return _svc_owner_store_ids(db.session, u) if u else []
     sid = session.get("store_id")
     return [sid] if sid else []
 
 
-# Calendar-date → naive datetime boundary helpers now live in
-# api.Modules.Reports.Services.date_helpers (PR 83). Re-exports
-# below preserve the legacy import shape during the migration
-# window.
 from api.Modules.Reports.Services import (
     day_end as _day_end,
     day_start as _day_start,
@@ -1690,13 +1436,7 @@ _make_superadmin_report_routes(
 
 
 # ── Customers (per-store directory) ──────────────────────────
-# Ordered roughly by likelihood for a US-based remittance storefront; the
-# picker displays these in order so the common choices stay on top.
-# Phone-country-code reference list for the customer + transfer
-# forms now lives in
-# `api.Modules.Customers.Services.phone_codes` (PR 79). Re-exported
-# here so legacy callers (the transfer-form context, autocomplete
-# response shape) keep their existing import shape.
+# PHONE_COUNTRY_CODES re-exported for the transfer-form context.
 from api.Modules.Customers.Services import PHONE_COUNTRY_CODES
 
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
@@ -1729,88 +1469,20 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 # resolution + pagination to the Service layer.
 
 
-# Fields whose changes are interesting to surface in the audit log summary.
-# Sender PII edits are included (addr/phone/dob) since the customer directory
-# propagates them across sibling stores and admins want to see who edited.
-# Transfer audit-log helpers + the audited-fields registry now
-# live in api.Modules.Transfers.Services.audit (PR 77). The
-# legacy name is re-exported so any tooling that imported
-# `_TRANSFER_AUDIT_FIELDS` directly keeps working during the
-# strangler-fig migration window.
+# TRANSFER_AUDIT_FIELDS re-exported for tests/Modules/Transfers/test_audit_service.py.
 from api.Modules.Transfers.Services import (
     TRANSFER_AUDIT_FIELDS as _TRANSFER_AUDIT_FIELDS,
 )
 
-# Service types other than Money Transfer don't carry the 1% federal tax —
-# bill payments, top-ups, and recharges aren't ACH-withdrawal flows where
-# tax would be remitted. The transfer form's dropdown options must match
-# this set exactly. Server-side check is the gate; the JS preview just
-# mirrors the same rule for live feedback.
-# Service type / tax constants + helpers now live in
-# api.Modules.Transfers.Services.tax (PR 76). The legacy names
-# below are re-exports / wrappers so existing call sites
-# (new_transfer, edit_transfer, _transfer_form_ctx, the JS
-# preview's hidden-form keys, the dropdown population) keep
-# their shape during the strangler-fig migration window.
-from api.Modules.Transfers.Services import (
-    DOMESTIC_COUNTRIES as _DOMESTIC_COUNTRIES,
-    SERVICE_TYPES,
-    TAX_EXEMPT_SERVICES as _TAX_EXEMPT_SERVICES,
-    TRANSFER_COUNTRIES,
-)
-
-
-# /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete
-
 
 # ── Daily Book ───────────────────────────────────────────────
-# Companies a new store can pick from on the settings page. The daily book
-# and transfer form both pull per-store from Store.companies (resolved via
-# store_mt_companies), so this is only the catalog — not a hardcoded list.
-# Money-transfer company list resolution now lives in
-# api.Modules.Transfers.Services.companies (PR 80). Re-exports
-# below preserve the legacy import shape during the migration
-# window.
-from api.Modules.Transfers.Services import (
-    DEFAULT_MT_COMPANIES,
-    store_mt_companies,
-)
-
-
-# Generic line-item kinds that sum into a single DailyReport field.
-# Each entry: (daily_report_field, singular_label, plural_label_for_count).
-# Adding a new kind is: one line here + one disclosure widget on the
-# daily-report template + removing the field from _DAILY_REPORT_FIELDS.
-# Daily-book line-item kind registry now lives in
-# api.Modules.DailyBook.Services.kinds (PR 68). The legacy names
-# below are re-exports / wrappers so existing call sites
-# (daily-report routes, _bank_category_label, monthly P&L feed)
+# Legacy re-exports for tests / app.py-internal use; canonical homes
+# are api.Modules.DailyBook.Services and api.Modules.Transfers.Services.
 # keep their shape during the strangler-fig migration window.
 from api.Modules.DailyBook.Services import (
     LINE_ITEM_KINDS as _LINE_ITEM_KINDS,
     kind_or_404 as _line_item_kind_or_404,
 )
-
-
-# Fields on DailyReport the main form still edits. Derived fields
-# (outside_cash_drops, checks_deposit, and every DailyReport field
-# in _LINE_ITEM_KINDS) are intentionally omitted — each is recomputed
-# from its own line-item rows.
-
-
-# ── Return Checks ────────────────────────────────────────────
-#
-# Replaces the legacy "Return Check (G/L)" hand-edited line on the
-# monthly P&L. Cashiers now log every bounced check here and mark each
-# one recovered / loss / fraud — the P&L pulls the netted G/L for the
-# month automatically (locked field, like check_cashing_fees).
-#
-# Pending balance and aging come straight off the same table, so the
-# admin list page + owner dashboard share queries.
-
-
-
-
 
 
 # ── Resend webhook (delivery events) ─────────────────────────
