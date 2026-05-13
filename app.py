@@ -1044,31 +1044,10 @@ from api.Modules.BankSync.Services import (
 # — they don't need explicit registry entries.
 
 
-def _bank_category_label(slug):
-    """Operator-friendly label for a category slug. Single source
-    of truth lives in
-    `api.Modules.BankSync.Services.bank_category_label` (PR 69).
-    """
-    from api.Modules.BankSync.Services import bank_category_label
-    return bank_category_label(slug)
 
 
-def _is_valid_bank_category(slug, store_id):
-    """True iff `slug` is an acceptable target for a manual bank-
-    transaction tag or a BankRule. Single source of truth lives in
-    `api.Modules.BankSync.Services.is_valid_bank_category` (PR 69).
-    """
-    from api.Modules.BankSync.Services import is_valid_bank_category
-    return is_valid_bank_category(db.session, slug, store_id)
 
 
-def _bank_category_groups(store_id=None):
-    """Grouped dropdown options for the bank-category picker.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.bank_category_groups` (PR 69).
-    """
-    from api.Modules.BankSync.Services import bank_category_groups
-    return bank_category_groups(db.session, store_id)
 
 
 def _is_daily_book_kind(slug):
@@ -1079,34 +1058,9 @@ def _is_daily_book_kind(slug):
     from api.Modules.BankSync.Services import is_daily_book_kind
     return is_daily_book_kind(slug)
 
-def _bank_rule_matches(rule, txn):
-    """True iff every set condition on `rule` matches `txn`.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.rule_matches` (PR 70)."""
-    from api.Modules.BankSync.Services import rule_matches
-    return rule_matches(rule, txn)
 
 
-def _find_matching_rule(store_id, txn):
-    """First enabled rule (lowest priority first) that matches.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.find_matching_rule` (PR 70)."""
-    from api.Modules.BankSync.Services import find_matching_rule
-    return find_matching_rule(db.session, store_id, txn)
 
-def _apply_rules_to_uncategorized_row(row, account, *, allow_auto_post):
-    """Run the rule chain (operator BankRule → built-in) against
-    an uncategorised bank transaction and tag it. Single source of
-    truth lives in
-    `api.Modules.BankSync.Services.apply_rules_to_uncategorized_row`
-    (PR 71).
-    """
-    from api.Modules.BankSync.Services import (
-        apply_rules_to_uncategorized_row,
-    )
-    return apply_rules_to_uncategorized_row(
-        db.session, row, account, allow_auto_post=allow_auto_post,
-    )
 
 
 
@@ -1122,26 +1076,8 @@ def sync_bank_transactions(store, since=None, until=None):
     return sync_bank_transactions(db.session, store, since, until)
 
 
-def _migrate_generic_bank_charge_per_account(store_id):
-    """One-shot legacy migration of generic `bank_charge` rows.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.migrate_generic_bank_charge_per_account`
-    (PR 72)."""
-    from api.Modules.BankSync.Services import (
-        migrate_generic_bank_charge_per_account,
-    )
-    return migrate_generic_bank_charge_per_account(db.session, store_id)
 
 
-def _backfill_uncategorized_rows(store_id):
-    """Run the rule chain against every uncategorised BankTransaction
-    in the store. Single source of truth lives in
-    `api.Modules.BankSync.Services.backfill_uncategorized_rows`
-    (PR 72)."""
-    from api.Modules.BankSync.Services import (
-        backfill_uncategorized_rows,
-    )
-    return backfill_uncategorized_rows(db.session, store_id)
 
 
 # SPA cutover before_request hook moved to blueprints/spa_cutover.py
@@ -2486,28 +2422,10 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 
 # /transfers moved to blueprints/transfers_redirects.py (D2 phase 14).
 
-def _parse_dob(raw):
-    """Parse a YYYY-MM-DD date string from the form, or None when
-    blank/bad. Single source of truth lives in
-    `api.Modules.Transfers.Services.parse_dob` (PR 78)."""
-    from api.Modules.Transfers.Services import parse_dob
-    return parse_dob(raw)
 
 
-def _active_roster(store_id):
-    """Names available in the "Processed by" dropdown. Single
-    source of truth lives in
-    `api.Modules.Transfers.Services.active_roster` (PR 78)."""
-    from api.Modules.Transfers.Services import active_roster
-    return active_roster(db.session, store_id)
 
 
-def _pick_employee(store_id, raw_id):
-    """Resolve a form `employee_id` value against the roster.
-    Single source of truth lives in
-    `api.Modules.Transfers.Services.pick_employee` (PR 78)."""
-    from api.Modules.Transfers.Services import pick_employee
-    return pick_employee(db.session, store_id, raw_id)
 
 # Fields whose changes are interesting to surface in the audit log summary.
 # Sender PII edits are included (addr/phone/dob) since the customer directory
@@ -2540,52 +2458,13 @@ from api.Modules.Transfers.Services import (
 )
 
 
-def _normalize_service_type(raw):
-    """Coerce the form input to a known service type. Single
-    source of truth lives in
-    `api.Modules.Transfers.Services.normalize_service_type`
-    (PR 76)."""
-    from api.Modules.Transfers.Services import normalize_service_type
-    return normalize_service_type(raw)
 
 
-def _federal_tax_for(send_amount, service_type, store, country=None):
-    """The single source of truth for transfer tax. Single source
-    of truth lives in
-    `api.Modules.Transfers.Services.federal_tax_for` (PR 76).
-    """
-    from api.Modules.Transfers.Services import federal_tax_for
-    return federal_tax_for(send_amount, service_type, store, country)
-
-def _summarize_transfer_changes(before, after, max_fields=4):
-    """Format a before/after diff into the audit-log summary
-    string. Single source of truth lives in
-    `api.Modules.Transfers.Services.summarize_transfer_changes`
-    (PR 77)."""
-    from api.Modules.Transfers.Services import (
-        summarize_transfer_changes,
-    )
-    return summarize_transfer_changes(before, after, max_fields)
 
 
-def _record_transfer_audit(transfer, user, action, employee_id,
-                            employee_name, summary):
-    """Append a TransferAudit row. Single source of truth lives
-    in `api.Modules.Transfers.Services.record_transfer_audit`
-    (PR 77)."""
-    from api.Modules.Transfers.Services import record_transfer_audit
-    return record_transfer_audit(
-        db.session, transfer, user, action,
-        employee_id, employee_name, summary,
-    )
 
 
-def _transfer_snapshot(t):
-    """Capture the audited subset of `t` as a dict. Single source
-    of truth lives in
-    `api.Modules.Transfers.Services.transfer_snapshot` (PR 77)."""
-    from api.Modules.Transfers.Services import transfer_snapshot
-    return transfer_snapshot(t)
+
 
 
 # /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete

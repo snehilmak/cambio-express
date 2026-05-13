@@ -404,28 +404,8 @@ def test_legacy_upsert_delegates():
         assert row.amount_cents == -50
 
 
-def test_legacy_backfill_delegates():
-    from api.Modules.BankSync.Models import BankTransaction
-    from app import app as flask_app, db
-    from app import _backfill_uncategorized_rows as legacy
-    with flask_app.app_context():
-        BankTransaction.query.delete()
-        db.session.commit()
-        s, _ = _store_with_account(db.session, slug="legacy-backfill")
-        # Empty → 0
-        assert legacy(s.id) == 0
 
 
-def test_legacy_migrate_delegates():
-    from api.Modules.BankSync.Models import BankTransaction
-    from app import app as flask_app, db
-    from app import _migrate_generic_bank_charge_per_account as legacy
-    with flask_app.app_context():
-        BankTransaction.query.delete()
-        db.session.commit()
-        s, _ = _store_with_account(db.session, slug="legacy-migrate")
-        # No legacy rows → 0
-        assert legacy(s.id) == 0
 
 
 def test_legacy_constant_re_exported():

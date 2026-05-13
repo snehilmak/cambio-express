@@ -260,20 +260,5 @@ def test_find_matching_rule_filters_by_store():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_bank_rule_matches_delegates():
-    from app import _bank_rule_matches as legacy
-    r = _rule(desc_match_type="contains",
-              desc_match_value="REMOTE")
-    assert legacy(r, _txn(description="remote fee")) is True
-    assert legacy(r, _txn(description="wire")) is False
 
 
-def test_legacy_find_matching_rule_delegates():
-    from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
-    from app import _find_matching_rule as legacy
-    with flask_app.app_context():
-        BankRule.query.delete()
-        db.session.commit()
-        # Empty rule table → None
-        assert legacy(1, _txn()) is None

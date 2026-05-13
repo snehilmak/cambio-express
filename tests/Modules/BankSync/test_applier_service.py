@@ -263,19 +263,3 @@ def test_allow_auto_post_true_creates_daily_line_item():
 # ── legacy Flask wrapper ──────────────────────────────────
 
 
-def test_legacy_apply_rules_delegates():
-    from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
-    from app import _apply_rules_to_uncategorized_row as legacy
-    with flask_app.app_context():
-        BankRule.query.delete()
-        db.session.commit()
-        s, a = _store_with_account(
-            db.session, slug="legacy-applier", last4="9999",
-        )
-        # No rule, no built-in match → False
-        t = _add_uncategorized_txn(
-            db.session, s.id, a.id,
-            description="WHATEVER",
-        )
-        assert legacy(t, a, allow_auto_post=True) is False

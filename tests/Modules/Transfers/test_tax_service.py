@@ -173,17 +173,8 @@ def test_transfer_countries_includes_us_and_other():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_normalize_service_type_delegates():
-    from app import _normalize_service_type as legacy
-    assert legacy("Bill Payment") == "Bill Payment"
-    assert legacy("garbage") == "Money Transfer"
 
 
-def test_legacy_federal_tax_for_delegates():
-    from app import _federal_tax_for as legacy
-    s = _store(rate=0.01)
-    assert legacy(1000.0, "Money Transfer", s, "Mexico") == 10.0
-    assert legacy(1000.0, "Money Transfer", s, "United States") == 0.0
 
 
 def test_legacy_constants_re_exported():
