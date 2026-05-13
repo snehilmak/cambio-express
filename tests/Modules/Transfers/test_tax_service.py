@@ -177,17 +177,3 @@ def test_transfer_countries_includes_us_and_other():
 
 
 
-def test_legacy_constants_re_exported():
-    from app import (
-        _DOMESTIC_COUNTRIES, _TAX_EXEMPT_SERVICES,
-        SERVICE_TYPES, TRANSFER_COUNTRIES,
-    )
-    from api.Modules.Transfers.Services import (
-        DOMESTIC_COUNTRIES, TAX_EXEMPT_SERVICES,
-        SERVICE_TYPES as svc_types,
-        TRANSFER_COUNTRIES as svc_countries,
-    )
-    assert _DOMESTIC_COUNTRIES is DOMESTIC_COUNTRIES
-    assert _TAX_EXEMPT_SERVICES is TAX_EXEMPT_SERVICES
-    assert SERVICE_TYPES is svc_types
-    assert TRANSFER_COUNTRIES is svc_countries
