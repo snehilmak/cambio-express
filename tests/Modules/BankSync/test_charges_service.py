@@ -234,17 +234,3 @@ def test_breakdown_handles_missing_description_with_placeholder(test_store_id):
         assert result[0]["description"] == "(no description)"
 
 
-# ── legacy Flask wrappers ──────────────────────────────────
-
-
-def test_legacy_for_month_delegates(test_store_id):
-    from app import app as flask_app, db
-    from app import _bank_charges_for_month as legacy
-    with flask_app.app_context():
-        _add_txn(db.session, test_store_id,
-                 amount_cents=-210, posted_at=datetime(2026, 5, 15),
-                 slug="bank_charge_230")
-        assert legacy(test_store_id, 2026, 5,
-                      category_slug="bank_charge_230") == 2.10
-
-

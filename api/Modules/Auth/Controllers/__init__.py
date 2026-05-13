@@ -539,8 +539,8 @@ def signup_route(
     referred_by_code_id: int | None = None
     ref_raw = (body.ref_code or "").strip().upper()
     if ref_raw:
-        from app import lookup_referral_code
-        ref = lookup_referral_code(ref_raw)
+        from api.Modules.Billing.Services import lookup_referral_code
+        ref = lookup_referral_code(db, ref_raw)
         if ref is not None:
             referred_by_code_id = ref.id
     try:
@@ -653,7 +653,7 @@ def signup_owner_route(
 
 @router.get("/referral/{code}", response_model=ReferralPreviewResponse)
 def referral_preview_route(
-    code: str, db: Session = Depends(get_db),  # noqa: ARG001
+    code: str, db: Session = Depends(get_db),
 ) -> ReferralPreviewResponse:
     """Resolve a referral code so the SPA's /signup page can show
     the green '$X off your first paid month' banner. Returns 404
@@ -661,8 +661,8 @@ def referral_preview_route(
     behaviour where an unknown code silently dropped without a
     banner. The actual application-of-credit happens at signup
     time inside `create_store_and_admin`."""
-    from app import lookup_referral_code
-    ref = lookup_referral_code((code or "").strip().upper())
+    from api.Modules.Billing.Services import lookup_referral_code
+    ref = lookup_referral_code(db, (code or "").strip().upper())
     if ref is None:
         raise HTTPException(status_code=404, detail="Referral code not found")
     return ReferralPreviewResponse(

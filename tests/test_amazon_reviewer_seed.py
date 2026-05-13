@@ -7,9 +7,10 @@ addon active, sample data populated) so future refactors can't
 accidentally drop the reviewer to "trial" or "admin"."""
 import re
 
+from api.Modules.Billing.Services import store_has_addon
 from api.Modules.TVDisplay.Models import TVDisplay, TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
 from api.Modules.Tenancy.Models import Store, User
-from app import db, store_has_addon
+from app import db
 
 
 REVIEWER_SLUG = "amazon-reviewer"

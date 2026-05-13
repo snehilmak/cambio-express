@@ -138,23 +138,3 @@ def test_store_has_addon_blank():
     assert store_has_addon(s, "tv_display") is False
 
 
-# ── legacy Flask wrapper smoke ─────────────────────────────
-
-
-def test_legacy_app_helper_delegates():
-    """The Flask wrapper at app.store_feature_enabled now hands the
-    active session to the Service. Prove the delegation works
-    end-to-end against the real ORM models."""
-    from app import app as flask_app
-    from app import store_feature_enabled as legacy_store_feature_enabled
-    with flask_app.app_context():
-        # Undeclared flag → fail-open True (matches Service contract)
-        assert legacy_store_feature_enabled(None, "totally_made_up") is True
-
-
-def test_legacy_app_has_addon_delegates():
-    from app import store_has_addon as legacy_store_has_addon
-    s = MagicMock()
-    s.addons = "tv_display"
-    assert legacy_store_has_addon(s, "tv_display") is True
-    assert legacy_store_has_addon(None, "tv_display") is False

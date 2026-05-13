@@ -353,9 +353,3 @@ def test_monthly_pl_uses_loss_positive_convention():
 
 
 
-def test_legacy_monthly_pl_delegates():
-    from app import app as flask_app, db
-    from app import _return_check_monthly_pl as legacy
-    with flask_app.app_context():
-        # No checks → pl is 0.0
-        assert legacy(99999, 2026, 5) == 0.0
