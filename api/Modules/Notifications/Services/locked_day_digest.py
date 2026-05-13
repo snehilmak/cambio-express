@@ -1,4 +1,4 @@
-"""Locked-day digest email — recipients + static copy.
+"""Locked-day digest email — recipients + fanout orchestrator.
 
 Fired when a daily book is locked via the React editor's
 "Lock day" button (or the legacy /daily/<date>/lock route, while
@@ -6,9 +6,13 @@ that still serves). Sends a one-page summary to the store's admins
 + linked owners so the owner sees the day's close-out without
 having to dig into the SPA.
 
-Per the trial-reminder pattern (PR #65) only the static copy +
-recipient query live in this Service; the actual SMTP delivery +
-Flask template render stay in app.py (`send_locked_day_digest`).
+Two halves:
+
+  - **Pure queries**: ``eligible_recipients`` returns rows without
+    sending anything. Easy to unit-test.
+  - **Side-effect orchestrator**: ``run(session, report,
+    base_url=None)`` is the SMTP fanout — renders the email body
+    + delivers via ``smtp.send_email``.
 
 Idempotency note: we DON'T stamp a "digest_sent_at" on the
 DailyReport — re-locking after an unlock + edit cycle is a
@@ -19,8 +23,27 @@ only fires once per click).
 """
 from __future__ import annotations
 
+import logging
+import os
+from datetime import datetime
+
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
+from api.Modules.Notifications.Services.smtp import send_email
+from api.Modules.Notifications.Services.templates import render_email_template
+
+
+_log = logging.getLogger(__name__)
+
+
+def _fmt_money_2(n: float) -> str:
+    """Mirror the React editor's mono money format so the digest
+    line items look the same in the inbox as on screen."""
+    try:
+        return "${:,.2f}".format(float(n or 0))
+    except (TypeError, ValueError):
+        return "$0.00"
 
 
 LOCKED_DAY_SUBJECT = "Daily book locked — {store_name}, {date_human}"
@@ -79,3 +102,99 @@ def eligible_recipients(db: Session, store) -> list:
           .all()
     )
     return list({u.id: u for u in candidates}.values())
+
+
+def run(session: Session, report, base_url: str | None = None) -> int:
+    """Mail the daily-book close-out summary to every eligible
+    recipient (admins + linked owners with the toggle on). Returns
+    the count of emails actually sent.
+
+    Safe to call inside the lock route — failures during email
+    send don't roll back the lock (we catch + log, matching the
+    trial-reminder cron's policy of "deliverability is
+    best-effort, don't punish the user for a flaky SMTP").
+
+    The caller owns the session lifecycle.
+    """
+    from api.Modules.Tenancy.Models import Store, User
+
+    if report is None or report.store_id is None:
+        return 0
+    store = session.get(Store, report.store_id)
+    if store is None:
+        return 0
+    base_url = (
+        base_url
+        or os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+    ).rstrip("/")
+    date_iso = report.report_date.isoformat() if report.report_date else ""
+    date_human = (
+        report.report_date.strftime("%B %d, %Y")
+        if report.report_date else ""
+    )
+    locked_by_user = (
+        session.get(User, report.locked_by) if report.locked_by else None
+    )
+    locked_by_name = (
+        (locked_by_user.full_name or locked_by_user.username)
+        if locked_by_user else "an admin"
+    )
+    view_url = f"{base_url}/app/daily/edit?date={date_iso}"
+    notifications_url = f"{base_url}/app/account/notifications"
+
+    receipts = float(report.total_receipts or 0)
+    disbursements = float(report.total_disbursements or 0)
+    over_short = float(report.over_short or 0)
+    net = receipts - disbursements + over_short
+
+    try:
+        recipients = eligible_recipients(session, store)
+    except Exception:
+        _log.exception("locked-day digest: recipient query failed")
+        return 0
+
+    sent = 0
+    for u in recipients:
+        body = LOCKED_DAY_BODY.format(
+            name=u.full_name or u.username,
+            store_name=store.name,
+            date_human=date_human,
+            locked_by=locked_by_name,
+            receipts=_fmt_money_2(receipts),
+            disbursements=_fmt_money_2(disbursements),
+            over_short=_fmt_money_2(over_short),
+            net=_fmt_money_2(net),
+            view_url=view_url,
+            notifications_url=notifications_url,
+        )
+        try:
+            html = render_email_template(
+                "emails/locked_day_digest.html",
+                preheader=(
+                    f"Daily book locked for {store.name} on "
+                    f"{date_human}. Net {_fmt_money_2(net)}."
+                ),
+                name=u.full_name or "",
+                store_name=store.name,
+                date_human=date_human,
+                locked_by=locked_by_name,
+                receipts=_fmt_money_2(receipts),
+                disbursements=_fmt_money_2(disbursements),
+                over_short=_fmt_money_2(over_short),
+                net=_fmt_money_2(net),
+                net_negative=(net < 0),
+                view_url=view_url,
+                notifications_url=notifications_url,
+                year=datetime.utcnow().year,
+                base_url=base_url,
+            )
+            subject = LOCKED_DAY_SUBJECT.format(
+                store_name=store.name, date_human=date_human,
+            )
+            if send_email(session, u.email, subject, body, html):
+                sent += 1
+        except Exception:
+            _log.exception(
+                "locked-day digest: send failed for user_id=%s", u.id,
+            )
+    return sent

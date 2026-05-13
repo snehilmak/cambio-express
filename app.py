@@ -3600,111 +3600,17 @@ def send_trial_reminders_cmd():
 # api.Modules.Notifications.Services.locked_day_digest. Email
 # delivery + Flask render glue stay here so the Service stays pure.
 
-from api.Modules.Notifications.Services.locked_day_digest import (
-    LOCKED_DAY_BODY as _LOCKED_DAY_BODY,
-    LOCKED_DAY_SUBJECT as _LOCKED_DAY_SUBJECT,
-    eligible_recipients as _locked_day_recipients_svc,
-)
-
-
-def _fmt_money_2(n: float) -> str:
-    """Mirror the React editor's mono money format so the digest
-    line items look the same in the inbox as on screen."""
-    try:
-        return "${:,.2f}".format(float(n or 0))
-    except (TypeError, ValueError):
-        return "$0.00"
-
-
 def send_locked_day_digest(report, base_url: str | None = None) -> int:
-    """Mail the daily-book close-out summary to every eligible
-    recipient (admins + linked owners with the toggle on). Returns
-    the count of emails actually sent.
+    """Back-compat wrapper. Canonical source of truth:
+    ``api.Modules.Notifications.Services.locked_day_digest.run``.
 
-    Safe to call inside the lock route — failures during email
-    send don't roll back the lock (we catch + log, matching the
-    trial-reminder cron's policy of "deliverability is
-    best-effort, don't punish the user for a flaky SMTP").
+    Called from the FastAPI lock endpoint with the current
+    ``db.session`` — passes through to the Service ``run()``.
     """
-    from app import Store, User
-    if report is None or report.store_id is None:
-        return 0
-    store = db.session.get(Store, report.store_id)
-    if store is None:
-        return 0
-    base_url = (base_url or os.environ.get("APP_BASE_URL",
-                                           "https://dinerobook.com")).rstrip("/")
-    date_iso = report.report_date.isoformat() if report.report_date else ""
-    date_human = (
-        report.report_date.strftime("%B %d, %Y")
-        if report.report_date else ""
+    from api.Modules.Notifications.Services.locked_day_digest import (
+        run as _svc_run,
     )
-    locked_by_user = (
-        db.session.get(User, report.locked_by) if report.locked_by else None
-    )
-    locked_by_name = (
-        (locked_by_user.full_name or locked_by_user.username)
-        if locked_by_user else "an admin"
-    )
-    view_url = f"{base_url}/app/daily/edit?date={date_iso}"
-    notifications_url = f"{base_url}/app/account/notifications"
-
-    receipts = float(report.total_receipts or 0)
-    disbursements = float(report.total_disbursements or 0)
-    over_short = float(report.over_short or 0)
-    net = receipts - disbursements + over_short
-
-    sent = 0
-    try:
-        recipients = _locked_day_recipients_svc(db.session, store)
-    except Exception:
-        logger.exception("locked-day digest: recipient query failed")
-        return 0
-
-    for u in recipients:
-        body = _LOCKED_DAY_BODY.format(
-            name=u.full_name or u.username,
-            store_name=store.name,
-            date_human=date_human,
-            locked_by=locked_by_name,
-            receipts=_fmt_money_2(receipts),
-            disbursements=_fmt_money_2(disbursements),
-            over_short=_fmt_money_2(over_short),
-            net=_fmt_money_2(net),
-            view_url=view_url,
-            notifications_url=notifications_url,
-        )
-        try:
-            html = render_email_template(
-                "emails/locked_day_digest.html",
-                preheader=(
-                    f"Daily book locked for {store.name} on "
-                    f"{date_human}. Net {_fmt_money_2(net)}."
-                ),
-                name=u.full_name or "",
-                store_name=store.name,
-                date_human=date_human,
-                locked_by=locked_by_name,
-                receipts=_fmt_money_2(receipts),
-                disbursements=_fmt_money_2(disbursements),
-                over_short=_fmt_money_2(over_short),
-                net=_fmt_money_2(net),
-                net_negative=(net < 0),
-                view_url=view_url,
-                notifications_url=notifications_url,
-                year=datetime.utcnow().year,
-                base_url=base_url,
-            )
-            subject = _LOCKED_DAY_SUBJECT.format(
-                store_name=store.name, date_human=date_human,
-            )
-            if _send_email(u.email, subject, body, html=html):
-                sent += 1
-        except Exception:
-            logger.exception(
-                "locked-day digest: send failed for user_id=%s", u.id,
-            )
-    return sent
+    return _svc_run(db.session, report, base_url=base_url)
 
 # ── Announcement broadcast email ─────────────────────────────
 #
