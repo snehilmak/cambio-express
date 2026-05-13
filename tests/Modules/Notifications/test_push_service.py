@@ -236,12 +236,3 @@ def test_send_push_payload_drops_none_values(monkeypatch):
 
 
 
-def test_legacy_send_push_delegates(monkeypatch):
-    import api.Modules.Notifications.Services.push as push_svc
-    monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "")
-    monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "")
-    from app import app as flask_app
-    from app import send_push as legacy
-    with flask_app.app_context():
-        # Disabled → 0
-        assert legacy(1, "hi") == 0

@@ -74,22 +74,3 @@ def test_mode_test_for_unknown_prefix(monkeypatch):
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_app_helpers_delegate(monkeypatch):
-    """All three legacy helpers in app.py now delegate to the
-    Service. Smoke-test the round trip."""
-    from app import (
-        stripe_is_configured as legacy_is_configured,
-        stripe_mode as legacy_mode,
-        stripe_publishable_key as legacy_pk,
-    )
-    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_live_x")
-    monkeypatch.setenv("STRIPE_PUBLISHABLE_KEY", "pk_live_x")
-    assert legacy_is_configured() is True
-    assert legacy_mode() == "live"
-    assert legacy_pk() == "pk_live_x"
-
-    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
-    monkeypatch.delenv("STRIPE_PUBLISHABLE_KEY", raising=False)
-    assert legacy_is_configured() is False
-    assert legacy_mode() == ""
-    assert legacy_pk() == ""

@@ -625,27 +625,6 @@ def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
     return compute_mrr(basic_monthly, basic_yearly,
                        pro_monthly, pro_yearly)
 
-def record_audit(action, target_type="", target_id="", details=""):
-    """Append a row to the superadmin audit log.
-
-    Safe to call from any request — reads the current user from
-    session so it can stamp admin_name even if the User row is
-    later deleted. Single source of truth lives in
-    `api.Modules.Audit.Services.record_superadmin_action` (PR 52).
-    """
-    from api.Modules.Audit.Services import record_superadmin_action
-    u = current_user()
-    if not u:
-        return
-    return record_superadmin_action(
-        db.session,
-        admin_id=u.id,
-        admin_name=u.full_name or u.username or "",
-        action=action,
-        target_type=target_type,
-        target_id=target_id,
-        details=details,
-    )
 
 
 
@@ -859,56 +838,13 @@ def inject_theme():
 # so legacy callers keep their import shape during migration.
 from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 
-def stripe_is_configured():
-    """We can only start an FC session if Stripe is wired up.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.stripe_is_configured` (PR 54).
-    """
-    from api.Modules.Billing.Services import stripe_is_configured as _svc
-    return _svc()
-
-def stripe_publishable_key():
-    """The pk_test_/pk_live_ key the browser uses to load Stripe.js.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.stripe_publishable_key` (PR 54).
-    """
-    from api.Modules.Billing.Services import stripe_publishable_key as _svc
-    return _svc()
-
-def stripe_mode():
-    """'live' / 'test' / '' depending on STRIPE_SECRET_KEY.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.stripe_mode` (PR 54).
-    """
-    from api.Modules.Billing.Services import stripe_mode as _svc
-    return _svc()
-
-
-def ensure_stripe_customer(store):
-    """Return a Stripe customer id for this store, creating one if needed.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.ensure_stripe_customer` (PR 56).
-    Self-heals when the cached id was created in a different
-    Stripe mode (e.g. test → live migration).
-    """
-    from api.Modules.Billing.Services import ensure_stripe_customer as _svc
-    return _svc(db.session, store)
 
 
 
-def refresh_bank_balances(store):
-    """Pull fresh balances for every enabled account on the store.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.refresh_bank_balances` (PR 73).
 
-    Returns `(updated_count, error_message_or_empty)`.
-    """
-    from api.Modules.BankSync.Services import refresh_bank_balances
-    return refresh_bank_balances(db.session, store)
+
+
+
 
 
 
@@ -1029,14 +965,6 @@ VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
 
 
 
-def send_push(user_id: int, title: str, body: str = "",
-              url: str = "/", tag: str | None = None) -> int:
-    """Deliver a push notification to every device the user has
-    subscribed. Single source of truth lives in
-    `api.Modules.Notifications.Services.send_push` (PR 67).
-    """
-    from api.Modules.Notifications.Services import send_push as _svc
-    return _svc(db.session, user_id, title, body, url, tag)
 
 # /api/push/{public-key,subscribe,unsubscribe,test} moved to
 # blueprints/push.py (D2). The shims above (VAPID_*, push_enabled,
@@ -1077,20 +1005,6 @@ def lookup_referral_code(raw):
     )
     return _svc_lookup_referral_code(db.session, raw)
 
-def apply_pending_referral_credits(referee_store):
-    """Apply Stripe customer-balance credits on the referee's paid
-    conversion + record a ReferralRedemption row so webhook retries
-    can't double-credit.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.apply_pending_referral_credits`
-    (PR 51). Caller commits — same transactional contract as
-    before.
-    """
-    from api.Modules.Billing.Services import (
-        apply_pending_referral_credits as _svc_apply_pending,
-    )
-    return _svc_apply_pending(db.session, referee_store)
 
 # ── Login ────────────────────────────────────────────────────
 # Installed PWAs open at `start_url` (currently "/") and hide the address
@@ -1293,9 +1207,6 @@ from api.Modules.Owners.Services import (
 )
 
 
-def _owner_period_window(period, today):
-    """Delegate to api.Modules.Owners.Services.owner_period_window."""
-    return _svc_owner_period_window(period, today)
 
 
 def _owner_store_ids(user):
