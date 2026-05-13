@@ -111,7 +111,10 @@ services:
   - type: cron
     name: dinerobook-data-retention-purge
     runtime: python
-    plan: free
+    # Render deprecated free-tier cron jobs in 2026 ("free not a
+    # valid plan for service type cron" in Blueprint sync). Cheapest
+    # paid tier — the purge runs once a day, so the cost is minimal.
+    plan: starter
     buildCommand: pip install -r requirements.txt
     # 03:15 UTC daily — off-peak for every operator timezone.
     schedule: "15 3 * * *"
