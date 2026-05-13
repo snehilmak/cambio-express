@@ -2066,14 +2066,23 @@ _REPORT_CATEGORIES = [
 
 def _resolved_report_categories(registry, endpoint_prefix=""):
     """Return `registry` with each report enriched with a rendered URL
-    when its endpoint exists, plus a `status` flag the template uses
-    to swap between "View" button and "Coming soon" pill. Computed at
-    request time so url_for picks up the active blueprint context.
+    plus a `status` flag the template uses to swap between "View"
+    button and "Coming soon" pill.
 
-    `endpoint_prefix` lets the owner Report Center reuse the admin
+    URL derivation order:
+      1. Literal ``url`` on the registry entry (wins outright).
+      2. ``url_for(endpoint)`` if Flask has a matching route.
+      3. ``_url_from_endpoint(endpoint)`` — convention-based fallback
+         (``report_X_Y`` → ``/reports/x-y``). Needed because the HTML
+         drilldown routes no longer register Flask handlers; they
+         redirect to the SPA via the ``spa_cutover`` before_request
+         hook, so the endpoint name only encodes the URL we want to
+         link to.
+
+    ``endpoint_prefix`` lets the owner Report Center reuse the admin
     registry while routing to owner-prefixed mirrors (every
-    `report_<x>` admin endpoint has an `owner_report_<x>` mirror via
-    _register_owner_report_mirrors)."""
+    ``report_<x>`` admin endpoint maps to ``owner_report_<x>``).
+    """
     out = []
     for cat in registry:
         reports = []
@@ -2081,10 +2090,6 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
             ep = r.get("endpoint")
             url = r.get("url")  # literal URL takes precedence
             if not url and ep:
-                # Owner Report Center reuses the admin registry but
-                # routes go to the owner-prefixed mirrors registered
-                # by _register_owner_report_mirrors. Endpoint names
-                # follow the `owner_<endpoint>` convention.
                 effective_ep = ep
                 if endpoint_prefix and not ep.startswith(endpoint_prefix):
                     effective_ep = endpoint_prefix + ep
@@ -2092,7 +2097,7 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
                     url = url_for(effective_ep,
                                   **(r.get("endpoint_args") or {}))
                 except Exception:
-                    url = None
+                    url = _url_from_endpoint(effective_ep)
             reports.append({
                 **r,
                 "url": url,
@@ -2100,6 +2105,28 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
             })
         out.append({**cat, "reports": reports})
     return out
+
+
+def _url_from_endpoint(endpoint: str) -> str | None:
+    """Convention-based reverse of the report-route endpoint names.
+
+      ``report_<slug_underscored>``            → ``/reports/<slug>``
+      ``owner_report_<slug_underscored>``      → ``/owner/reports/<slug>``
+      ``superadmin_report_<slug_underscored>`` → ``/superadmin/reports/<slug>``
+
+    Returns None for names that don't match the convention so the
+    Report Center can still flag those as ``coming_soon``.
+    """
+    if endpoint.startswith("owner_report_"):
+        slug = endpoint[len("owner_report_"):].replace("_", "-")
+        return f"/owner/reports/{slug}"
+    if endpoint.startswith("superadmin_report_"):
+        slug = endpoint[len("superadmin_report_"):].replace("_", "-")
+        return f"/superadmin/reports/{slug}"
+    if endpoint.startswith("report_"):
+        slug = endpoint[len("report_"):].replace("_", "-")
+        return f"/reports/{slug}"
+    return None
 
 
 # /reports + /owner/reports moved to blueprints/spa_redirects.py
@@ -2142,30 +2169,6 @@ def _report_scope_ids():
     return [sid] if sid else []
 
 
-def _is_owner_request():
-    """True when the request is being served via an /owner/* route.
-    Used by the report-render helpers to choose the back-link
-    endpoint and the CSV-export endpoint."""
-    return (request.endpoint or "").startswith("owner_")
-
-
-def _slug_to_endpoint(slug, *, owner=False, csv=False):
-    """Map a report slug like 'sales-by-company' to its registered
-    endpoint name. Centralised so the render helpers + the
-    Report-Center registry resolver agree on the convention."""
-    base = "report_" + slug.replace("-", "_")
-    if csv:
-        base += "_csv"
-    return ("owner_" + base) if owner else base
-
-
-_VIEW_LABELS = {"summary": "Summary", "graph": "Graph", "detail": "Detail"}
-_GENERIC_VIEW_TEMPLATES = {
-    "graph":  "_report_graph_view.html",
-    "detail": "_report_detail_view.html",
-}
-
-
 # Calendar-date → naive datetime boundary helpers now live in
 # api.Modules.Reports.Services.date_helpers (PR 83). Re-exports
 # below preserve the legacy import shape during the migration
@@ -2175,87 +2178,6 @@ from api.Modules.Reports.Services import (
     day_start as _day_start,
 )
 
-
-def _render_report_generic(template, data_fn, *,
-                            slug, title, result_unit, kpis_fn,
-                            scope,           # "store" | "platform"
-                            extra_args=None,
-                            views=None,
-                            graph_label_field=None,
-                            graph_value_field=None,
-                            detail_columns=None,
-                            **template_kwargs):
-    """Shared core for `_render_report` (admin/owner) and
-    `_render_superadmin_report` (platform-wide). `scope` flips the
-    data-fn signature, the `back_endpoint`, and the CSV-export
-    endpoint name; everything else is identical.
-    """
-    extra_args = extra_args or {}
-    available_views = views or ["summary"]
-    requested_view = (request.args.get("view") or "").strip().lower()
-    if requested_view not in available_views:
-        requested_view = available_views[0]
-
-    d_from, d_to, period_label = _report_period(request.args)
-    if scope == "platform":
-        rows, totals = data_fn(d_from, d_to, **extra_args)
-        back_endpoint = "superadmin_reports"
-        csv_endpoint = f"superadmin_report_{slug.replace('-', '_')}_csv"
-    else:
-        rows, totals = data_fn(_report_scope_ids(), d_from, d_to,
-                               **extra_args)
-        is_owner = _is_owner_request()
-        back_endpoint = "owner_reports" if is_owner else "reports"
-        csv_endpoint = _slug_to_endpoint(slug, owner=is_owner, csv=True)
-
-    n = len(rows) if isinstance(rows, list) else int(totals.get("count", 0))
-    actual_template = _GENERIC_VIEW_TEMPLATES.get(requested_view, template)
-
-    return render_template(actual_template,
-        user=current_user(),
-        report_title=title,
-        back_endpoint=back_endpoint,
-        date_from=d_from.isoformat(),
-        date_to=d_to.isoformat(),
-        period_label=period_label,
-        result_count=n,
-        result_unit=result_unit[0] if n == 1 else result_unit[1],
-        kpis=kpis_fn(totals, rows, extra_args),
-        export_url=url_for(csv_endpoint, **{
-            "from": d_from.isoformat(),
-            "to":   d_to.isoformat(),
-            **{k: v for k, v in extra_args.items() if v is not None},
-        }),
-        rows=rows,
-        totals=totals,
-        active_view=requested_view,
-        available_views=[(v, _VIEW_LABELS.get(v, v.title()))
-                         for v in available_views],
-        graph_label_field=graph_label_field,
-        graph_value_field=graph_value_field,
-        detail_columns=detail_columns,
-        **extra_args,
-        **template_kwargs,
-    )
-
-
-def _render_report(template, data_fn, *,
-                   slug, title, result_unit, kpis_fn,
-                   extra_args=None,
-                   views=None,
-                   graph_label_field=None, graph_value_field=None,
-                   detail_columns=None,
-                   **template_kwargs):
-    """Admin / owner report — store-scoped data fn. Thin wrapper
-    around `_render_report_generic`."""
-    return _render_report_generic(template, data_fn,
-        slug=slug, title=title, result_unit=result_unit,
-        kpis_fn=kpis_fn, scope="store",
-        extra_args=extra_args, views=views,
-        graph_label_field=graph_label_field,
-        graph_value_field=graph_value_field,
-        detail_columns=detail_columns,
-        **template_kwargs)
 
 
 def _run_report_csv(data_fn, *, scope, columns, row_fn,
@@ -2301,35 +2223,6 @@ def _export_report_csv(data_fn, *, columns, row_fn,
         fname_prefix=fname_prefix, extra_args=extra_args)
 
 
-# Reports whose HTML drilldown has migrated to the SPA. GET on
-# /reports/<slug> + /owner/reports/<slug> 301s to /app/reports/<slug>
-# (and /app/owner/reports/<slug>) — the CSV export route stays on
-# Flask as a direct downloadable URL.
-_MIGRATED_REPORT_DRILLDOWNS: set[str] = {
-    "sales-by-company",
-    "sales-by-service-type",
-    "sales-by-employee",
-    "cashier-productivity",
-    "top-customers",
-    "top-senders",
-    "top-recipients",
-    "new-vs-returning",
-    "by-destination-country",
-    "fees-vs-tax",
-    "high-value-transfers",
-    "cancelled-transfers",
-    "ach-volume",
-    "returned-check-status",
-    "bank-transactions-breakdown",
-    "daily-drops",
-    "check-deposits",
-    "bank-rule-audit",
-    "bank-charges-by-account",
-    "period-comparison",
-    "employee-activity",
-    "period-pl",
-}
-
 
 def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                          kpis_fn, csv_columns, csv_row_fn,
@@ -2338,36 +2231,31 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
                          views=None,
                          graph_label_field=None, graph_value_field=None,
                          detail_columns=None):
-    """Register admin (`/reports/<slug>`) + owner
-    (`/owner/reports/<slug>`) HTML and CSV routes for a single report.
-    Endpoints follow the convention `report_<slug_underscored>(_csv)?`
-    for admin and the same with an `owner_` prefix for owner.
+    """Register admin (``/reports/<slug>.csv``) + owner
+    (``/owner/reports/<slug>.csv``) **CSV-only** routes for a single
+    report. Both endpoints follow the convention
+    ``report_<slug_underscored>_csv`` (admin) /
+    ``owner_report_<slug_underscored>_csv`` (owner).
 
-    The same closures back both admin + owner — the decorators differ
-    (`admin_required` vs `owner_required`) but the data scope comes
-    from `_report_scope_ids()` which reads role from the session, so
-    owner gets the umbrella store list automatically.
+    The HTML drilldown lives on the React SPA — the
+    ``spa_cutover`` ``before_request`` hook 301s every legacy GET
+    of ``/reports/<slug>`` or ``/owner/reports/<slug>`` to the SPA
+    URL before any Flask handler runs, so this function doesn't
+    register HTML routes at all.
 
-    `extra_args_fn()` is called per-request for reports that take
-    extra query params (e.g. high-value-transfers reads `?threshold=`).
+    ``title``, ``template``, ``result_unit``, ``kpis_fn``,
+    ``views``, and the ``graph_*`` + ``detail_columns`` args are
+    legacy parameters from the Jinja era; they're accepted for
+    signature compatibility but unused. They'll drop from the
+    signature in a follow-up alongside the call sites.
+
+    ``extra_args_fn()`` is called per-request for reports that
+    take extra query params (e.g. ``high-value-transfers`` reads
+    ``?threshold=``).
     """
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
     underscored = slug.replace("-", "_")
-
-    def _view():
-        if slug in _MIGRATED_REPORT_DRILLDOWNS:
-            qs = request.query_string.decode("latin-1") if request.query_string else ""
-            target = f"/app/reports/{slug}" + (f"?{qs}" if qs else "")
-            return redirect(target, code=301)
-        return _render_report(template, data_fn,
-            slug=slug, title=title, result_unit=result_unit,
-            kpis_fn=kpis_fn, extra_args=extra_args_fn(),
-            views=views,
-            graph_label_field=graph_label_field,
-            graph_value_field=graph_value_field,
-            detail_columns=detail_columns,
-        )
 
     def _csv():
         return _export_report_csv(data_fn,
@@ -2377,25 +2265,16 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
             extra_args=extra_args_fn(),
         )
 
-    # Admin routes.
-    app.add_url_rule(f"/reports/{slug}",
-                     endpoint=f"report_{underscored}",
-                     view_func=admin_required(_view), methods=["GET"])
+    def _owner_csv():
+        return _csv()
+
+    # Admin + owner CSV routes. The HTML GET to /reports/<slug>
+    # (and /owner/reports/<slug>) doesn't need a registered handler
+    # — spa_cutover's before_request hook 301s it to the SPA path
+    # before route matching runs.
     app.add_url_rule(f"/reports/{slug}.csv",
                      endpoint=f"report_{underscored}_csv",
                      view_func=admin_required(_csv), methods=["GET"])
-    # Owner mirror — distinct functions so endpoint names don't collide.
-    def _owner_view():
-        if slug in _MIGRATED_REPORT_DRILLDOWNS:
-            qs = request.query_string.decode("latin-1") if request.query_string else ""
-            target = f"/app/owner/reports/{slug}" + (f"?{qs}" if qs else "")
-            return redirect(target, code=301)
-        return _view()
-    def _owner_csv():
-        return _csv()
-    app.add_url_rule(f"/owner/reports/{slug}",
-                     endpoint=f"owner_report_{underscored}",
-                     view_func=owner_required(_owner_view), methods=["GET"])
     app.add_url_rule(f"/owner/reports/{slug}.csv",
                      endpoint=f"owner_report_{underscored}_csv",
                      view_func=owner_required(_owner_csv), methods=["GET"])
@@ -3308,25 +3187,6 @@ _SUPERADMIN_REPORT_CATEGORIES = [
 # @superadmin_required. Data functions don't take store_ids —
 # superadmin reports always query platform-wide.
 
-def _render_superadmin_report(template, data_fn, *,
-                               slug, title, result_unit, kpis_fn,
-                               extra_args=None,
-                               views=None,
-                               graph_label_field=None,
-                               graph_value_field=None,
-                               detail_columns=None,
-                               **template_kwargs):
-    """Superadmin report — platform-wide data fn. Thin wrapper around
-    `_render_report_generic`."""
-    return _render_report_generic(template, data_fn,
-        slug=slug, title=title, result_unit=result_unit,
-        kpis_fn=kpis_fn, scope="platform",
-        extra_args=extra_args, views=views,
-        graph_label_field=graph_label_field,
-        graph_value_field=graph_value_field,
-        detail_columns=detail_columns,
-        **template_kwargs)
-
 
 def _export_superadmin_report_csv(data_fn, *, columns, row_fn,
                                     totals_row_fn=None, fname_prefix,
@@ -3347,24 +3207,23 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
                                      graph_label_field=None,
                                      graph_value_field=None,
                                      detail_columns=None):
-    """Register `/superadmin/reports/<slug>(.csv)?` routes for a
-    superadmin report. Same idea as `_make_report_routes` but
+    """Register the ``/superadmin/reports/<slug>.csv`` route for a
+    superadmin report. Same idea as ``_make_report_routes`` but
     superadmin-only — no owner mirror.
 
     Every superadmin BI drilldown migrated to the SPA in one batch
     (the legacy Jinja templates were structurally similar — KPI
-    strip + row table — so a single generic React component handles
-    all of them via `/api/v2/superadmin/reports/<slug>`). The GET
-    here unconditionally 301s; the CSV variant stays on Flask for
-    direct downloads."""
+    strip + row table — so a single generic React component
+    handles all of them via ``/api/v2/superadmin/reports/<slug>``).
+    The HTML GET 301s via ``spa_cutover``'s before_request hook,
+    so no Flask handler for the HTML path is registered here.
+
+    Same caveat about legacy unused-param noise as
+    ``_make_report_routes``.
+    """
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
     underscored = slug.replace("-", "_")
-
-    def _view():
-        qs = request.query_string.decode("latin-1") if request.query_string else ""
-        target = f"/app/superadmin/reports/{slug}" + (f"?{qs}" if qs else "")
-        return redirect(target, code=301)
 
     def _csv():
         return _export_superadmin_report_csv(data_fn,
@@ -3374,10 +3233,6 @@ def _make_superadmin_report_routes(slug, *, title, data_fn, template,
             extra_args=extra_args_fn(),
         )
 
-    app.add_url_rule(f"/superadmin/reports/{slug}",
-                     endpoint=f"superadmin_report_{underscored}",
-                     view_func=superadmin_required(_view),
-                     methods=["GET"])
     app.add_url_rule(f"/superadmin/reports/{slug}.csv",
                      endpoint=f"superadmin_report_{underscored}_csv",
                      view_func=superadmin_required(_csv),
