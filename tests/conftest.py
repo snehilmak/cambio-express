@@ -133,20 +133,17 @@ from werkzeug.middleware.dispatcher import DispatcherMiddleware as _DM
 from a2wsgi import ASGIMiddleware as _A2W
 
 
-def _swap_in_testclient_bridge() -> None:
-    """Swap the /api/v2 ASGIMiddleware mount for a TestClient-backed
-    handler. Idempotent — safe to call once at module import."""
-    bridge = flask_app.wsgi_app
-    if not isinstance(bridge, _DM):
-        return
-    asgi_mw = bridge.mounts.get("/api/v2")
-    if asgi_mw is None or not isinstance(asgi_mw, _A2W):
-        return
-    fastapi_app = asgi_mw.app
+def _make_testclient_bridge(asgi_app):
+    """Build a WSGI handler that funnels requests into ``asgi_app``
+    via a starlette ``TestClient``. anyio's blocking-portal gives a
+    well-defined task lifecycle that the leaky ``a2wsgi`` bridge
+    doesn't — see the long comment above the call site. The
+    returned handler conforms to the WSGI app signature so it can
+    replace an ``ASGIMiddleware`` in the dispatcher mounts dict."""
     # Use _OrigTestClient (unpatched starlette class) so the bridge's
     # client is NOT registered with the autouse close-between-tests
     # fixture above. The bridge stays alive for the full session.
-    tc = _OrigTestClient(fastapi_app)
+    tc = _OrigTestClient(asgi_app)
     tc.__enter__()  # spin up the portal + lifespan task
 
     def _wsgi_handler(environ, start_response):
@@ -177,7 +174,21 @@ def _swap_in_testclient_bridge() -> None:
         start_response(status_line, out_headers)
         return [resp.content]
 
-    bridge.mounts["/api/v2"] = _wsgi_handler
+    return _wsgi_handler
+
+
+def _swap_in_testclient_bridge() -> None:
+    """Swap both ASGIMiddleware mounts (``/api/v2`` and ``/app``) for
+    TestClient-backed handlers. Idempotent — safe to call once at
+    module import."""
+    bridge = flask_app.wsgi_app
+    if not isinstance(bridge, _DM):
+        return
+    for mount_prefix in ("/api/v2", "/app"):
+        asgi_mw = bridge.mounts.get(mount_prefix)
+        if asgi_mw is None or not isinstance(asgi_mw, _A2W):
+            continue
+        bridge.mounts[mount_prefix] = _make_testclient_bridge(asgi_mw.app)
 
 
 _swap_in_testclient_bridge()

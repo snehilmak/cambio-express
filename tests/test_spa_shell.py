@@ -1,17 +1,20 @@
-"""SPA-1 — Flask serves the React/Vite SPA at /app/*.
+"""SPA-1 — the Starlette ``spa_app`` serves the React/Vite SPA at /app/*.
 
 Pins the contract that lets the SPA coexist with the legacy Jinja
 site during the migration:
 
   • /app/                 → 200, serves index.html
+  • /app                  → 200, serves index.html (same as /app/ —
+                            the trailing slash isn't load-bearing
+                            because React Router's basename matches
+                            either form)
   • /app/<any-path>       → 200, serves index.html (SPA fallback so
                             React Router can handle client-side
                             routes after a hard refresh)
-  • /app                  → 301 redirect to /app/
   • /app/assets/<file>    → 200 with immutable cache header
-  • /                     → still served by Jinja (regression guard
-                            so the SPA mount doesn't accidentally
-                            shadow the legacy landing page)
+  • /                     → 301 to /app/ (regression guard so the
+                            SPA mount doesn't accidentally shadow
+                            the legacy root redirect)
 
 When `frontend/dist/index.html` doesn't exist (i.e. the SPA wasn't
 built), `/app/` returns a 503 with a helpful message. We test
@@ -107,12 +110,14 @@ def test_spa_shell_fallback_for_client_routes(client, stub_spa_build):
     assert '<div id="root">' in r.get_data(as_text=True)
 
 
-def test_spa_shell_no_slash_redirects(client):
-    """Bare /app must 301 → /app/ so the React Router basename
-    resolves and assets load correctly."""
+def test_spa_shell_no_slash_serves_index(client, stub_spa_build):
+    """Bare /app (no trailing slash) must serve the same SPA shell
+    as /app/. The historical 301 redirect was a Flask-era artifact;
+    under Starlette ``spa_app`` both URLs resolve to index.html and
+    React Router's basename (``/app``) matches either form."""
     r = client.get("/app", follow_redirects=False)
-    assert r.status_code == 301
-    assert r.headers["Location"].endswith("/app/")
+    assert r.status_code == 200
+    assert '<div id="root">' in r.get_data(as_text=True)
 
 
 def test_spa_asset_served_with_immutable_cache(client, stub_spa_build):
@@ -150,11 +155,11 @@ def test_missing_spa_build_returns_503(client, monkeypatch):
     """If `frontend/dist/index.html` doesn't exist, /app/ returns a
     503 with a clear "build the SPA" message — surfaces the
     deploy-misconfiguration story instead of a confusing 404."""
-    import app as app_module
-    bogus_dir = "/tmp/_dinerobook_spa_dir_that_does_not_exist"
-    if os.path.exists(bogus_dir):
-        shutil.rmtree(bogus_dir, ignore_errors=True)
-    monkeypatch.setattr(app_module, "_SPA_DIR", bogus_dir)
+    from api import spa as spa_module
+    bogus_index = "/tmp/_dinerobook_spa_index_that_does_not_exist.html"
+    if os.path.exists(bogus_index):
+        os.remove(bogus_index)
+    monkeypatch.setattr(spa_module, "_SPA_INDEX", bogus_index)
     r = client.get("/app/")
     assert r.status_code == 503
     body = r.get_data(as_text=True)

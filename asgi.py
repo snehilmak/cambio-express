@@ -22,6 +22,9 @@ and the leaky thread is never in the request path.
 Routing
 -------
 * ``/api/v2/*`` → FastAPI native ASGI (path prefix stripped)
+* ``/webhooks/*`` → FastAPI (Stripe + Resend ingest)
+* ``/app`` + ``/app/*`` → Starlette SPA app (``api.spa.spa_app``;
+  served natively as ASGI, no WSGI bridge)
 * everything else → Flask via ``a2wsgi.WSGIMiddleware`` (the
   WSGI-direction bridge is stateless — no accumulating tasks)
 * ``lifespan`` scope → forwarded to the FastAPI app so its
@@ -43,6 +46,7 @@ from a2wsgi import WSGIMiddleware
 # registration) to fire exactly once at boot.
 from app import app as flask_app
 from api.main import api_app as _api_app
+from api.spa import spa_app as _spa_app
 
 
 _flask_asgi = WSGIMiddleware(flask_app.wsgi_app)
@@ -85,6 +89,16 @@ async def asgi_app(scope, receive, send):
         # `include_router(prefix="/webhooks")`).
         if path == "/webhooks" or path.startswith("/webhooks/"):
             await _api_app(scope, receive, send)
+            return
+        # SPA shell + Vite-built assets — served directly from
+        # frontend/dist by the Starlette app in api/spa.py. Strip
+        # the ``/app`` prefix before forwarding so routes inside
+        # ``spa_app`` can be declared relative (mirrors the
+        # ``/api/v2`` pattern above).
+        if path == "/app" or path.startswith("/app/"):
+            new_path = path[len("/app"):] or "/"
+            new_scope = {**scope, "path": new_path, "root_path": "/app"}
+            await _spa_app(new_scope, receive, send)
             return
 
     await _flask_asgi(scope, receive, send)
