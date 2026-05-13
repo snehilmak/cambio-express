@@ -234,70 +234,9 @@ def test_passkey_adoption_zero_users_returns_empty_rows():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_bank_sync_adoption_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_bank_sync_adoption_data
-    from api.Modules.Superadmin.Services import bank_sync_adoption
-    with flask_app.app_context():
-        StripeBankAccount.query.delete()
-        Store.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="bsa-leg")
-        _add_account(db.session, s.id)
-        legacy = _sa_bank_sync_adoption_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = bank_sync_adoption(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_tv_display_adoption_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_tv_display_adoption_data
-    from api.Modules.Superadmin.Services import tv_display_adoption
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="tvda-leg", plan="basic",
-                   addons="tv_display")
-        legacy = _sa_tv_display_adoption_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = tv_display_adoption(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_owner_adoption_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_owner_adoption_data
-    from api.Modules.Superadmin.Services import owner_adoption
-    with flask_app.app_context():
-        StoreOwnerLink.query.delete()
-        db.session.commit()
-        legacy = _sa_owner_adoption_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = owner_adoption(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_passkey_adoption_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_passkey_adoption_data
-    from api.Modules.Superadmin.Services import passkey_adoption
-    with flask_app.app_context():
-        Passkey.query.delete()
-        db.session.commit()
-        legacy = _sa_passkey_adoption_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = passkey_adoption(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc

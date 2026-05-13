@@ -1850,6 +1850,32 @@ def _service_fn(service):
     return _inner
 
 
+# Adapter for the 20 superadmin Reports services. Same shape as
+# ``_service_fn`` above, but the platform-scoped Reports.Service
+# signature is ``service(db, d_from, d_to, **kwargs)`` (no
+# ``store_ids``), so the adapter binds ``db.session`` and forwards
+# the period + extras. Used by ``_make_superadmin_report_routes``
+# call sites below.
+from api.Modules.Superadmin.Services import (  # noqa: E402
+    active_stores_by_plan, bank_sync_adoption, churn_cohort,
+    conversion_rate, dau_mau, failed_payments, login_activity,
+    mrr_arr, owner_adoption, passkey_adoption, password_resets,
+    payouts, refunds, retention_queue, signup_funnel,
+    suspended_stores, time_to_convert, trial_expiry_timing,
+    tv_display_adoption, webhook_health,
+)
+
+
+def _sa_service_fn(service):
+    """Bind ``db.session`` + forward the period to a Reports.Service
+    so the result fits the ``(d_from, d_to, **kwargs)`` data_fn
+    signature ``_make_superadmin_report_routes`` expects."""
+    def _inner(d_from, d_to, **kwargs):
+        return service(db.session, d_from, d_to, **kwargs)
+    return _inner
+
+
+
 def _new_vs_returning_data(store_ids, d_from, d_to):
     """Split senders into new / returning / walk-in buckets.
     Single source of truth lives in
@@ -2306,186 +2332,54 @@ def _make_superadmin_report_routes(slug, *, data_fn,
 
 
 # ── Superadmin report data functions ─────────────────────────
-def _sa_active_stores_by_plan_data(d_from, d_to):
-    """Headcount of stores per plan. Single source of truth lives
-    in `api.Modules.Superadmin.Services.active_stores_by_plan`
-    (PR 97)."""
-    from api.Modules.Superadmin.Services import active_stores_by_plan
-    return active_stores_by_plan(db.session, d_from, d_to)
 
 
-def _sa_signup_funnel_data(d_from, d_to):
-    """Stores created in the period bucketed by current plan.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.signup_funnel` (PR 97)."""
-    from api.Modules.Superadmin.Services import signup_funnel
-    return signup_funnel(db.session, d_from, d_to)
 
 
-def _sa_login_activity_data(d_from, d_to):
-    """Per-role unique login counts in the period. Single source
-    of truth lives in
-    `api.Modules.Superadmin.Services.login_activity` (PR 97)."""
-    from api.Modules.Superadmin.Services import login_activity
-    return login_activity(db.session, d_from, d_to)
 
 
-def _sa_mrr_arr_data(d_from, d_to):
-    """MRR + ARR by plan/cycle. Single source of truth lives in
-    `api.Modules.Superadmin.Services.mrr_arr` (PR 98)."""
-    from api.Modules.Superadmin.Services import mrr_arr
-    return mrr_arr(db.session, d_from, d_to)
 
 
-def _sa_churn_cohort_data(d_from, d_to):
-    """Stores cancelled in the period by signup-month cohort.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.churn_cohort` (PR 98)."""
-    from api.Modules.Superadmin.Services import churn_cohort
-    return churn_cohort(db.session, d_from, d_to)
 
 
-def _sa_conversion_rate_data(d_from, d_to):
-    """Single summary of trial→paid conversion in the period.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.conversion_rate` (PR 99)."""
-    from api.Modules.Superadmin.Services import conversion_rate
-    return conversion_rate(db.session, d_from, d_to)
 
 
-def _sa_time_to_convert_data(d_from, d_to):
-    """Days-since-signup for paid stores. Single source of truth
-    lives in `api.Modules.Superadmin.Services.time_to_convert`
-    (PR 99)."""
-    from api.Modules.Superadmin.Services import time_to_convert
-    return time_to_convert(db.session, d_from, d_to)
 
 
-def _sa_trial_expiry_timing_data(d_from, d_to):
-    """Bucket trial stores by where they are in their trial window.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.trial_expiry_timing` (PR 99)."""
-    from api.Modules.Superadmin.Services import trial_expiry_timing
-    return trial_expiry_timing(db.session, d_from, d_to)
 
 
-def _sa_bank_sync_adoption_data(d_from, d_to):
-    """Stores with at least one connected StripeBankAccount, by plan.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.bank_sync_adoption` (PR 100)."""
-    from api.Modules.Superadmin.Services import bank_sync_adoption
-    return bank_sync_adoption(db.session, d_from, d_to)
 
 
-def _sa_tv_display_adoption_data(d_from, d_to):
-    """Stores with the TV-display add-on enabled. Single source of
-    truth lives in
-    `api.Modules.Superadmin.Services.tv_display_adoption` (PR 100)."""
-    from api.Modules.Superadmin.Services import tv_display_adoption
-    return tv_display_adoption(db.session, d_from, d_to)
 
 
-def _sa_owner_adoption_data(d_from, d_to):
-    """Owners with multiple linked stores. Single source of truth
-    lives in `api.Modules.Superadmin.Services.owner_adoption`
-    (PR 100)."""
-    from api.Modules.Superadmin.Services import owner_adoption
-    return owner_adoption(db.session, d_from, d_to)
 
 
-def _sa_passkey_adoption_data(d_from, d_to):
-    """Users with at least one passkey, by role. Single source of
-    truth lives in
-    `api.Modules.Superadmin.Services.passkey_adoption` (PR 100)."""
-    from api.Modules.Superadmin.Services import passkey_adoption
-    return passkey_adoption(db.session, d_from, d_to)
 
 
-def _sa_password_resets_data(d_from, d_to):
-    """Password-reset token activity. Single source of truth lives
-    in `api.Modules.Superadmin.Services.password_resets` (PR 101)."""
-    from api.Modules.Superadmin.Services import password_resets
-    return password_resets(db.session, d_from, d_to)
 
 
-def _sa_suspended_stores_data(d_from, d_to):
-    """Stores currently suspended or inactive. Single source of
-    truth lives in
-    `api.Modules.Superadmin.Services.suspended_stores` (PR 101)."""
-    from api.Modules.Superadmin.Services import suspended_stores
-    return suspended_stores(db.session, d_from, d_to)
 
 
-def _sa_retention_queue_data(d_from, d_to):
-    """Stores in the data-retention delete queue. Single source
-    of truth lives in
-    `api.Modules.Superadmin.Services.retention_queue` (PR 101)."""
-    from api.Modules.Superadmin.Services import retention_queue
-    return retention_queue(db.session, d_from, d_to)
 
 
-def _stripe_period_unix(d_from, d_to):
-    """Return (gte, lte) Unix timestamps covering [d_from, d_to]
-    inclusive. Stripe list APIs filter on `created` with this shape."""
-    start = _day_start(d_from)
-    end   = _day_end(d_to)
-    return int(start.timestamp()), int(end.timestamp())
 
 
-def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
-                 **kwargs):
-    """Page through a Stripe `list` API. Caps total rows at
-    `max_total` so a high-volume month doesn't tie up the page."""
-    if not stripe.api_key:
-        raise RuntimeError("Stripe API key not configured")
-    items = []
-    for obj in list_call(**kwargs, limit=limit_per_call).auto_paging_iter():
-        items.append(obj)
-        if len(items) >= max_total:
-            break
-    return items
 
 
-def _sa_refunds_data(d_from, d_to):
-    """Stripe refunds in the period. Single source of truth lives
-    in `api.Modules.Superadmin.Services.refunds` (PR 102)."""
-    from api.Modules.Superadmin.Services import refunds
-    return refunds(db.session, d_from, d_to)
 
 
-def _sa_failed_payments_data(d_from, d_to):
-    """Recent failed Stripe charges. Single source of truth lives
-    in `api.Modules.Superadmin.Services.failed_payments` (PR 102)."""
-    from api.Modules.Superadmin.Services import failed_payments
-    return failed_payments(db.session, d_from, d_to)
 
 
-def _sa_payouts_data(d_from, d_to):
-    """Stripe payouts to the platform. Single source of truth lives
-    in `api.Modules.Superadmin.Services.payouts` (PR 102)."""
-    from api.Modules.Superadmin.Services import payouts
-    return payouts(db.session, d_from, d_to)
 
 
-def _sa_dau_mau_data(d_from, d_to):
-    """Distinct-user counts per day. Single source of truth lives
-    in `api.Modules.Superadmin.Services.dau_mau` (PR 103)."""
-    from api.Modules.Superadmin.Services import dau_mau
-    return dau_mau(db.session, d_from, d_to)
 
 
-def _sa_webhook_health_data(d_from, d_to):
-    """Inbound Stripe webhooks by status. Single source of truth
-    lives in `api.Modules.Superadmin.Services.webhook_health`
-    (PR 103)."""
-    from api.Modules.Superadmin.Services import webhook_health
-    return webhook_health(db.session, d_from, d_to)
 
 
 # ── Superadmin reports: registry of routes ───────────────────
 _make_superadmin_report_routes(
     'active-stores-by-plan',
-    data_fn=_sa_active_stores_by_plan_data,
+    data_fn=_sa_service_fn(active_stores_by_plan),
     csv_columns=['Plan', 'Stores'],
     csv_row_fn=lambda r: [r['plan'], r['count']],
     csv_totals_fn=lambda t: ['TOTAL', t['count']],
@@ -2494,7 +2388,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'signup-funnel',
-    data_fn=_sa_signup_funnel_data,
+    data_fn=_sa_service_fn(signup_funnel),
     csv_columns=['Plan', 'Signups'],
     csv_row_fn=lambda r: [r['plan'], r['count']],
     csv_totals_fn=lambda t: ['TOTAL', t['count']],
@@ -2502,7 +2396,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'login-activity',
-    data_fn=_sa_login_activity_data,
+    data_fn=_sa_service_fn(login_activity),
     csv_columns=['Role', 'Active Users'],
     csv_row_fn=lambda r: [r['role'], r['count']],
     csv_totals_fn=lambda t: ['TOTAL', t['count']],
@@ -2510,7 +2404,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'mrr-arr',
-    data_fn=_sa_mrr_arr_data,
+    data_fn=_sa_service_fn(mrr_arr),
     csv_columns=['Plan', 'Cycle', 'Stores', 'MRR', 'ARR'],
     csv_row_fn=lambda r: [r['plan'], r['cycle'], r['stores'], f"{r['mrr']:.2f}", f"{r['arr']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', '', t['stores'], f"{t['mrr']:.2f}", f"{t['arr']:.2f}"],
@@ -2518,14 +2412,14 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'churn-cohort',
-    data_fn=_sa_churn_cohort_data,
+    data_fn=_sa_service_fn(churn_cohort),
     csv_columns=['Cohort', 'Cancelled', 'Still Active', 'Churn %'],
     csv_row_fn=lambda r: [r['cohort'], r['cancelled'], r['active'], f"{r['churn_pct']:.1f}%"],
 )
 
 _make_superadmin_report_routes(
     'conversion-rate',
-    data_fn=_sa_conversion_rate_data,
+    data_fn=_sa_service_fn(conversion_rate),
     csv_columns=['Status', 'Stores'],
     csv_row_fn=lambda r: [r['label'], r['count']],
     csv_totals_fn=lambda t: ['TOTAL', t['total']],
@@ -2533,70 +2427,70 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'time-to-convert',
-    data_fn=_sa_time_to_convert_data,
+    data_fn=_sa_service_fn(time_to_convert),
     csv_columns=['Slug', 'Name', 'Plan', 'Signed Up', 'Days Active'],
     csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['signed_up'].isoformat(), r['days']],
 )
 
 _make_superadmin_report_routes(
     'trial-expiry-timing',
-    data_fn=_sa_trial_expiry_timing_data,
+    data_fn=_sa_service_fn(trial_expiry_timing),
     csv_columns=['Bucket', 'Stores'],
     csv_row_fn=lambda r: [r['bucket'], r['count']],
 )
 
 _make_superadmin_report_routes(
     'bank-sync-adoption',
-    data_fn=_sa_bank_sync_adoption_data,
+    data_fn=_sa_service_fn(bank_sync_adoption),
     csv_columns=['Plan', 'Connected', 'Total', 'Adoption %'],
     csv_row_fn=lambda r: [r['plan'], r['connected'], r['total'], f"{r['rate_pct']:.1f}%"],
 )
 
 _make_superadmin_report_routes(
     'tv-display-adoption',
-    data_fn=_sa_tv_display_adoption_data,
+    data_fn=_sa_service_fn(tv_display_adoption),
     csv_columns=['Slug', 'Name', 'Plan'],
     csv_row_fn=lambda r: [r['slug'], r['name'], r['plan']],
 )
 
 _make_superadmin_report_routes(
     'owner-adoption',
-    data_fn=_sa_owner_adoption_data,
+    data_fn=_sa_service_fn(owner_adoption),
     csv_columns=['Owner', 'Email', 'Linked Stores'],
     csv_row_fn=lambda r: [r['owner'], r['email'], r['stores']],
 )
 
 _make_superadmin_report_routes(
     'passkey-adoption',
-    data_fn=_sa_passkey_adoption_data,
+    data_fn=_sa_service_fn(passkey_adoption),
     csv_columns=['Role', 'Users with Passkey'],
     csv_row_fn=lambda r: [r['role'], r['count']],
 )
 
 _make_superadmin_report_routes(
     'password-resets',
-    data_fn=_sa_password_resets_data,
+    data_fn=_sa_service_fn(password_resets),
     csv_columns=['Created', 'Username', 'Role', 'Status'],
     csv_row_fn=lambda r: [r['created_at'].isoformat() if r['created_at'] else '', r['username'], r['role'], r['status']],
 )
 
 _make_superadmin_report_routes(
     'suspended-stores',
-    data_fn=_sa_suspended_stores_data,
+    data_fn=_sa_service_fn(suspended_stores),
     csv_columns=['Slug', 'Name', 'Plan', 'Reason'],
     csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['reason']],
 )
 
 _make_superadmin_report_routes(
     'retention-queue',
-    data_fn=_sa_retention_queue_data,
+    data_fn=_sa_service_fn(retention_queue),
     csv_columns=['Slug', 'Name', 'Plan', 'Purge Date', 'Days Left'],
     csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['until'].isoformat() if r['until'] else '', r['days_left']],
 )
 
 _make_superadmin_report_routes(
     'refunds',
-    data_fn=_sa_refunds_data,
+    data_fn=_sa_service_fn(refunds),
     csv_columns=['Reason', 'Count', 'Amount'],
     csv_row_fn=lambda r: [r['reason'], r['count'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
@@ -2604,7 +2498,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'failed-payments',
-    data_fn=_sa_failed_payments_data,
+    data_fn=_sa_service_fn(failed_payments),
     csv_columns=['Reason', 'Count', 'Amount'],
     csv_row_fn=lambda r: [r['reason'], r['count'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
@@ -2612,7 +2506,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'payouts',
-    data_fn=_sa_payouts_data,
+    data_fn=_sa_service_fn(payouts),
     csv_columns=['Payout ID', 'Amount', 'Status', 'Method', 'Arrival'],
     csv_row_fn=lambda r: [r['id'], f"{r['amount']:.2f}", r['status'], r['method'], r['arrival'].isoformat() if r['arrival'] else ''],
     csv_totals_fn=lambda t: ['TOTAL', f"{t['amount']:.2f}", '', '', ''],
@@ -2620,7 +2514,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'dau-mau',
-    data_fn=_sa_dau_mau_data,
+    data_fn=_sa_service_fn(dau_mau),
     csv_columns=['Date', 'Active Users'],
     csv_row_fn=lambda r: [str(r['day']), r['users']],
     csv_totals_fn=lambda t: ['TOTAL (MAU)', t['mau']],
@@ -2628,7 +2522,7 @@ _make_superadmin_report_routes(
 
 _make_superadmin_report_routes(
     'webhook-health',
-    data_fn=_sa_webhook_health_data,
+    data_fn=_sa_service_fn(webhook_health),
     csv_columns=['Status', 'Count'],
     csv_row_fn=lambda r: [r['status'], r['count']],
     csv_totals_fn=lambda t: ['TOTAL', t['count']],

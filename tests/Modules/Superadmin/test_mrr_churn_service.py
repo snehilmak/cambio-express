@@ -191,42 +191,5 @@ def test_churn_cohort_empty_when_no_cancellations():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_mrr_arr_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_mrr_arr_data
-    from api.Modules.Superadmin.Services import mrr_arr
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="ma-legacy", plan="basic",
-                   billing_cycle="monthly",
-                   created_at=datetime(2026, 4, 1))
-        legacy_rows, legacy_totals = _sa_mrr_arr_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = mrr_arr(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_churn_cohort_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_churn_cohort_data
-    from api.Modules.Superadmin.Services import churn_cohort
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="cc-legacy",
-                   plan="inactive",
-                   created_at=datetime(2026, 1, 5),
-                   canceled_at=datetime(2026, 5, 10))
-        legacy_rows, legacy_totals = _sa_churn_cohort_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = churn_cohort(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

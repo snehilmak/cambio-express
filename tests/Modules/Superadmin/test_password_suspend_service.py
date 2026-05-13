@@ -214,57 +214,7 @@ def test_retention_queue_ready_to_purge_when_days_negative():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_password_resets_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_password_resets_data
-    from api.Modules.Superadmin.Services import password_resets
-    with flask_app.app_context():
-        PasswordResetToken.query.delete()
-        db.session.commit()
-        u = _add_user(db.session, role="admin")
-        _add_token(db.session, u.id,
-                   created_at=datetime(2026, 5, 5),
-                   expires_at=datetime.utcnow() + timedelta(hours=1))
-        legacy = _sa_password_resets_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = password_resets(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_suspended_stores_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_suspended_stores_data
-    from api.Modules.Superadmin.Services import suspended_stores
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="ss-leg", plan="inactive")
-        legacy = _sa_suspended_stores_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = suspended_stores(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_retention_queue_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_retention_queue_data
-    from api.Modules.Superadmin.Services import retention_queue
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="rq-leg", plan="inactive",
-                   data_retention_until=datetime.utcnow()
-                       + timedelta(days=10))
-        legacy = _sa_retention_queue_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = retention_queue(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc

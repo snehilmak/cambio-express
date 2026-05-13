@@ -189,58 +189,7 @@ def test_trial_expiry_timing_skips_empty_buckets():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_conversion_rate_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_conversion_rate_data
-    from api.Modules.Superadmin.Services import conversion_rate
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="cr-leg", plan="basic",
-                   created_at=datetime(2026, 5, 5))
-        legacy_rows, legacy_totals = _sa_conversion_rate_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = conversion_rate(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_time_to_convert_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_time_to_convert_data
-    from api.Modules.Superadmin.Services import time_to_convert
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="ttc-leg", plan="basic",
-                   created_at=datetime(2026, 5, 5))
-        legacy_rows, legacy_totals = _sa_time_to_convert_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = time_to_convert(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_trial_expiry_timing_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_trial_expiry_timing_data
-    from api.Modules.Superadmin.Services import trial_expiry_timing
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="tet-leg", plan="trial",
-                   created_at=datetime.utcnow() - timedelta(days=3))
-        legacy_rows, legacy_totals = _sa_trial_expiry_timing_data(
-            date(2026, 5, 1), date(2030, 12, 31),
-        )
-        svc_rows, svc_totals = trial_expiry_timing(
-            db.session, date(2026, 5, 1), date(2030, 12, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
