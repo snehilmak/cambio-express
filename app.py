@@ -563,29 +563,6 @@ def current_store(): return db.session.get(Store, session["store_id"]) if sessio
 # Routes a trial-expired store can still reach (so the operator can
 # pay or sign out without bouncing). Matched against
 # `request.endpoint` so Blueprint-namespaced endpoints work too.
-_TRIAL_EXEMPT = {
-    # Subscribe flow
-    "billing.subscribe",
-    "billing.subscribe_checkout",
-    "billing.subscribe_success",
-    # Sign-out path
-    "auth_redirects.logout",
-    # Owner umbrella (per-store gate happens on the inner pages)
-    "owner.owner_dashboard",
-    "owner.owner_locations",
-    "owner.owner_store_detail",
-    "owner.owner_connect",
-    "owner.owner_connect_generate",
-    "owner.owner_connect_revoke",
-    "owner.owner_unlink_store",
-    # Manage-subscription surface
-    "subscription.admin_subscription",
-    "subscription.admin_subscription_billing_portal",
-    "subscription.admin_subscription_toggle_addon",
-    "subscription.admin_subscription_cancel",
-    # Theme toggle (cosmetic, fine to reach even when expired)
-    "account.account_theme",
-}
 
 # ── Add-ons catalog ──────────────────────────────────────────
 # Each add-on has a stable key used in the Store.addons CSV column.
@@ -937,17 +914,13 @@ def inject_theme():
 # Bank-sync path. SimpleFIN was the original integration; it was
 # removed in 2026 once Stripe FC was proven in production, including
 # the `simplefin_config` table (see `_drop_legacy_tables()`).
-BANK_BALANCE_STALE_SECONDS = 600  # 10 minutes
 # Hard cap on linked bank accounts per store. Two is enough for the
 # typical MSB workflow (e.g., a checking account + an MSB-restricted
 # account at the same credit union). Disconnecting frees the slot.
-MAX_BANK_ACCOUNTS_PER_STORE = 2
 # Cost-control on Stripe Transaction.list (billed per call).
 # Manual syncs are capped at MAX_BANK_SYNCS_PER_DAY and must be
 # BANK_SYNC_COOLDOWN_MINUTES apart. Initial-connect auto-sync does not
 # count against the cap.
-BANK_SYNC_COOLDOWN_MINUTES = 15
-MAX_BANK_SYNCS_PER_DAY = 5
 # How many days back to pull on initial connect. Per-product
 # decision: yesterday + today only — minimal cost, still catches
 # any same-day deposits that haven't been entered into the daily
@@ -1069,7 +1042,6 @@ from api.Modules.BankSync.Services import (
 # dynamic per-account (bank_charge_<last4>) and roll up to
 # bank_charges_total via the prefix-match in _bank_charges_for_month
 # — they don't need explicit registry entries.
-_BANK_CATEGORY_PL_FIELD = {}
 
 
 def _bank_category_label(slug):
@@ -1319,7 +1291,6 @@ def _set_last_store_slug_cookie(resp, slug):
 # Nothing outside this block should set user_id on its own for a
 # 2FA-required role.
 
-TOTP_ISSUER = "DineroBook"
 # Single source of truth for TOTP / recovery-code helpers lives in
 # api.Modules.Auth.Services.totp (PR 41). The Flask-scope wrappers
 # below forward to the Service so legacy callers keep their existing
@@ -1328,9 +1299,6 @@ from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 
 
 
-def _pending_auth_user():
-    uid = session.get("pending_auth_user_id")
-    return db.session.get(User, uid) if uid else None
 
 
 
@@ -1397,41 +1365,7 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # line; we deliberately don't expose the full ~600 IANA list because
 # that's a UX trap for non-technical cashiers. The empty string means
 # "fall back to UTC / store default".
-PROFILE_TIMEZONES = [
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Phoenix",
-    "America/Los_Angeles",
-    "America/Anchorage",
-    "Pacific/Honolulu",
-    "America/Mexico_City",
-    "America/Bogota",
-    "America/Lima",
-    "America/Santiago",
-    "America/Buenos_Aires",
-    "America/Sao_Paulo",
-    "Europe/London",
-    "Europe/Madrid",
-    "Asia/Manila",
-    "Asia/Karachi",
-    "UTC",
-]
 
-def _record_login(user, *, method=""):
-    """Stamp last_login_at on a successful sign-in AND append a
-    LoginEvent row for the DAU/MAU report. Called by every login
-    path (password, store-scoped, owner, passkey). Caller must
-    commit; we don't, because some login paths batch other writes
-    (sign_count update on passkey login) into the same transaction.
-
-    `method` is "password" / "passkey" / "totp" / "" (unspecified).
-    """
-    user.last_login_at = datetime.utcnow()
-    db.session.add(LoginEvent(
-        user_id=user.id, role=user.role or "",
-        method=method, at=datetime.utcnow(),
-    ))
 
 
 # /login + /login/2fa/* + /login/<slug> + /employee-login moved to
@@ -1477,7 +1411,6 @@ def _record_login(user, *, method=""):
 # /login/passkey/{begin,finish} moved to blueprints/auth.py (D2 phase 25).
 
 # ── Password reset ───────────────────────────────────────────
-PASSWORD_RESET_TTL_HOURS = 1
 
 
 # Last SMTP attempt state. Updated by _send_email() on every call so the
@@ -3177,11 +3110,6 @@ def _transfer_snapshot(t):
 # Companies a new store can pick from on the settings page. The daily book
 # and transfer form both pull per-store from Store.companies (resolved via
 # store_mt_companies), so this is only the catalog — not a hardcoded list.
-KNOWN_MT_COMPANIES = [
-    "Intermex", "Maxi", "Barri", "Ria", "Vigo",
-    "Inter Cambio", "Sigue", "MoneyGram", "Western Union",
-    "Dolex", "Viamericas", "Transfast", "Pangea", "Boss Revolution",
-]
 # Money-transfer company list resolution now lives in
 # api.Modules.Transfers.Services.companies (PR 80). Re-exports
 # below preserve the legacy import shape during the migration
@@ -3194,7 +3122,6 @@ from api.Modules.Transfers.Services import (
 # /daily moved to blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 
-_DAILY_LOCKED_MSG = "This daily report is locked. Unlock it before making changes."
 
 def _daily_is_locked(store_id, report_date):
     """True iff DailyReport for (store, date) is locked. Single
@@ -3296,25 +3223,11 @@ from api.Modules.DailyBook.Services import (
 # (outside_cash_drops, checks_deposit, and every DailyReport field
 # in _LINE_ITEM_KINDS) are intentionally omitted — each is recomputed
 # from its own line-item rows.
-_DAILY_REPORT_FIELDS = [
-    "taxable_sales","non_taxable","sales_tax","bill_payment_charge","phone_recargas",
-    "boost_mobile","money_transfer","money_order","check_cashing_fees","return_check_hold_fees",
-    "forward_balance","from_bank","rebates_commissions",
-    "cash_deposit","safe_balance","payroll_expense","over_short",
-]
 
 # /daily/<ds> (GET, POST) moved to
 # blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
-def _wants_json():
-    """Client explicitly asked for JSON (AJAX from the drops widget).
-
-    Keeping the drop routes dual-mode means they still work as plain HTML
-    form posts if JS is off, so the feature degrades gracefully.
-    """
-    accept = request.accept_mimetypes
-    return bool(accept and accept.best == "application/json")
 
 
 # /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
@@ -3408,13 +3321,6 @@ def _return_check_monthly_series(store_ids, today=None):
 
 
 # ── ACH Batches ──────────────────────────────────────────────
-_BATCH_SORT_COLUMNS = {
-    "date":     ACHBatch.ach_date,
-    "company":  ACHBatch.company,
-    "ref":      ACHBatch.batch_ref,
-    "amount":   ACHBatch.ach_amount,
-    "status":   ACHBatch.status,
-}
 
 
 # /batches[/new|/<bid>/edit] moved to
@@ -3457,7 +3363,6 @@ _BATCH_SORT_COLUMNS = {
 
 
 # ── Superadmin control panel ─────────────────────────────────
-STORES_PER_PAGE = 20
 
 # /superadmin/controls moved to blueprints/superadmin_redirects.py (D2 phase 18).
 
@@ -3483,15 +3388,6 @@ STORES_PER_PAGE = 20
 # soft-deactivate retired entries. Companies are global; banks are
 # scoped to a country (ISO-2).
 
-def _resolve_catalog_row(catalog_type, slug):
-    """Returns the parent catalog row for a (type, slug) pair, or
-    None if neither table has a match. Used by the upload + edit
-    endpoints to validate the slug before they touch the DB."""
-    if catalog_type == "company":
-        return db.session.query(TVCompanyCatalog).filter_by(slug=slug).first()
-    if catalog_type == "bank":
-        return db.session.query(TVBankCatalog).filter_by(slug=slug).first()
-    return None
 
 # /superadmin/tv-catalog/<type>/<slug>/logo moved to
 # blueprints/superadmin_extras.py (D2 phase 28).
@@ -3501,19 +3397,6 @@ def _resolve_catalog_row(catalog_type, slug):
 # blueprints/superadmin_extras.py (D2 phase 28).
 
 
-def _slugify_catalog_name(name):
-    """Display name → URL-safe lowercase slug. Wraps python-slugify
-    with our catalog conventions: '_' separator, max length 60,
-    accents stripped, non-alnum collapsed.
-
-      "BBVA Bancomer"      → "bbva_bancomer"
-      "Banamex México"     → "banamex_mexico"
-      "Cibao Express, S.A." → "cibao_express_s_a"
-    """
-    if not name:
-        return ""
-    return slugify(name, separator="_", lowercase=True,
-                    max_length=60, word_boundary=False)
 
 
 
