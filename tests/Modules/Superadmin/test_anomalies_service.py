@@ -311,14 +311,3 @@ def test_compute_ranks_high_before_medium():
 
 
 
-def test_legacy_constants_re_exported():
-    """Threshold constants are re-exported on app.py for any
-    legacy caller that imported them by name."""
-    from app import (
-        _ANOMALY_OVERSHORT_HIGH_THRESHOLD,
-        _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
-        _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS,
-    )
-    assert _ANOMALY_OVERSHORT_HIGH_THRESHOLD == 200.0
-    assert _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD == 100.0
-    assert _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS == 5

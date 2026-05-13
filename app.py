@@ -37,17 +37,9 @@ app = Flask(__name__)
 install_request_id(app)
 
 # ── SECRET_KEY safety gate ────────────────────────────────────
-#
-# Flask's session cookie is signed with `app.secret_key`. If a
-# prod deploy boots with the dev fallback value below, anyone
-# who reads the value out of the public Git history can forge
-# session cookies and impersonate any user — including
-# superadmin. We REFUSE to start in that state.
-#
-# "Prod" is detected by APP_BASE_URL starting with `https://`
-# (same gate the session-cookie hardening + SMTP / Stripe URL
-# builders use). Local dev and CI run over plain HTTP and keep
-# the dev fallback so the test suite can boot without ceremony.
+# Refuse to boot in prod with the public dev-fallback secret —
+# session cookies signed with it would be forgeable by anyone
+# reading the repo. "Prod" = APP_BASE_URL starts with https://.
 _SECRET_KEY_DEV_FALLBACK = "dinerobook-dev-secret-change-in-prod"
 _secret_key_env = os.environ.get("SECRET_KEY", "")
 app.secret_key = _secret_key_env or _SECRET_KEY_DEV_FALLBACK
@@ -65,14 +57,10 @@ if (
         "context."
     )
 
-# Seed-password safety warning. The init_db() seed step (way at
-# the bottom of this file) hardcodes `super2025!` / `cambio2025!`
-# for the first-boot users when SUPERADMIN_PASSWORD /
-# ADMIN_PASSWORD aren't set. Once an operator changes the
-# password in the UI those defaults become irrelevant, but a
-# fresh-deploy admin reading this from the docs is the most
-# obvious takeover path. Loud structured-log warning so
-# Sentry / Render → Logs picks it up.
+# Seed-password safety warning — the init_db() seed step uses
+# public defaults (super2025! / cambio2025!) if the env vars
+# aren't set. Loud structured-log warning so Render Logs picks
+# it up. Set both env vars in prod.
 _seed_pw_missing = []
 if (
     os.environ.get("APP_BASE_URL", "").startswith("https://")
@@ -91,32 +79,14 @@ if (
             ", ".join(_seed_pw_missing),
         )
 
-# Blueprints — sections that have been peeled off into
-# ``blueprints/`` per BACKLOG D2. Registration happens here, right
-# after the Flask app exists, so a Blueprint route lookup behaves
-# identically to the original @app.route decorator.
+# spa_cutover registers the before_request hook that 301s legacy
+# GET URLs (/dashboard, /transfers, …) to /app/*.
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
 
-# Public + PWA + kiosk surfaces (landing redirect, /sw.js, /offline,
-# TV display + pair-code API) now run on Starlette via
-# ``api.PublicRoutes.public_app`` — see ``asgi.py``'s dispatcher.
-# The Flask side keeps the spa_cutover hook for legacy GET URL
-# redirects (/dashboard, /transfers, …) until those routes also
-# migrate.
-
-# spa_cutover.register() installs the always-on before_request hook
-# that 301s legacy GET URLs (/dashboard, /transfers, …) to /app/*.
 _bp_spa_cutover.register(app)
 
 
-# CSRF exemptions live below, after `csrf = CSRFProtect(app)` is
-# created (see "CSRF protection" block).
-
-# Cache-bust query string for the shared stylesheet (and any other static
-# asset we want to force-refresh on deploy). Computed once at boot from
-# the file's mtime so every new deploy yields a different `?v=...` and
-# browsers that still have the previous app.css cached will re-fetch.
-# Fallback to the Python start time if the file is missing for any reason.
+# Cache-bust query string for the shared stylesheet on deploy.
 _APP_CSS_PATH = os.path.join(os.path.dirname(__file__), "static", "app.css")
 try:
     STATIC_VERSION = str(int(os.path.getmtime(_APP_CSS_PATH)))
@@ -126,15 +96,8 @@ except OSError:
 app.jinja_env.globals["STATIC_VERSION"] = STATIC_VERSION
 
 def _country_flag_emoji(code):
-    """ISO-2 country code → flag emoji. "MX" → "🇲🇽". Two regional-
-    indicator code points concatenated. Returns "" for empty/invalid
-    input so the template can still call it unconditionally.
-
-    Kept for places that need a string (titles, aria-labels, alt
-    attrs). For visual flag rendering use country_flag_html() —
-    emoji flags don't render on Windows browsers (show as country-
-    code letter pairs in tofu boxes), and the flag-icons SVG flags
-    we wire up there cover that gap."""
+    """ISO-2 → flag emoji. Use country_flag_html() for visual
+    rendering — emoji flags show as tofu on Windows."""
     code = (code or "").strip().upper()
     if len(code) != 2 or not code.isalpha():
         return ""
@@ -142,21 +105,11 @@ def _country_flag_emoji(code):
 app.jinja_env.globals["_country_flag_emoji"] = _country_flag_emoji
 
 def country_flag_html(code, size="1em"):
-    """ISO-2 → <span class="fi fi-xx" style="..."> markup that
-    renders via the flag-icons CSS (CDN linked from base.html and
-    tv_display_public.html). Returns "" on bad input so templates
-    can call unconditionally.
-
-    Why over emoji: emoji flags don't render on Windows browsers —
-    operators on a Windows desktop see "MX" in a tofu box instead
-    of 🇲🇽. flag-icons ships SVG flags that render uniformly
-    everywhere. MIT-licensed (no nominative-use concerns)."""
+    """ISO-2 → flag-icons SVG <span>. MIT-licensed; renders
+    uniformly across browsers (unlike emoji flags on Windows)."""
     code = (code or "").strip().lower()
     if len(code) != 2 or not code.isalpha():
         return ""
-    # Inline width/height so the flag matches the surrounding text
-    # without requiring per-template CSS. Aspect ratio is 4:3
-    # (flag-icons default).
     style = f"width:{size};height:{size};"
     from markupsafe import Markup
     return Markup(
@@ -164,80 +117,24 @@ def country_flag_html(code, size="1em"):
     )
 app.jinja_env.globals["country_flag_html"] = country_flag_html
 
-# Engine + session machinery live in api/Core/Database/session.py —
-# single source of truth for both the legacy Flask routes and the
-# FastAPI strangler-fig side. The engine builds itself from
-# `settings.database_url` (env-driven, same DATABASE_URL the legacy
-# Flask config used to read). The `db` shim further down rebinds
-# `db.session` + `db.engine` to that shared engine, so legacy
-# request handlers and FastAPI controllers hit one pool.
-
-# Session-cookie hardening. The Flask `session` cookie carries the
-# logged-in user id; an attacker who exfiltrates it gets full account
-# access until logout. Three defenses against the common attack
-# surfaces:
-#
-#   - HTTPOnly: no JavaScript can read `document.cookie` and ship
-#     it off. Flask defaults this to True; we set it explicitly so
-#     a future refactor that toggles cookie config doesn't silently
-#     turn it off.
-#   - SameSite=Lax: the browser will not attach the session cookie
-#     to most cross-site requests (top-level GET navigations still
-#     do, which preserves the "click a deeplink in email and stay
-#     logged in" UX). Mitigates CSRF without breaking the SPA.
-#   - Secure: only sent over HTTPS. Required in prod (TLS-terminated
-#     at the Render edge). MUST stay False in dev / CI / sqlite
-#     mode or sessions silently fail to set over HTTP, which makes
-#     the test suite log everyone out between requests.
-#
-# Production is detected by APP_BASE_URL pointing at https:// — the
-# render.yaml env block sets it, and the SMTP / Stripe URL builders
-# already gate on the same value (search `APP_BASE_URL` for the
-# other call sites).
+# Session-cookie hardening. HTTPOnly + SameSite=Lax + Secure (prod
+# only — must stay False in dev/CI/sqlite mode or sessions silently
+# fail to set over HTTP). Prod = APP_BASE_URL starts with https://.
 _app_base_url = os.environ.get("APP_BASE_URL", "")
 _is_https_prod = _app_base_url.startswith("https://")
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_SECURE"] = _is_https_prod
-# Disallow the legacy default of an unbounded session — bound to the
-# browser session by default so a forgotten signed-in laptop in a
-# coffee shop stops being a key to the kingdom after a reboot.
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
 # ── SQLAlchemy `db` shim (Flask-SQLAlchemy retirement) ───────
-#
-# Flask-SQLAlchemy is gone. The `db` namespace below replicates just
-# the slice the legacy Flask code relies on:
-#
-#   - ``db.Model``        — the shared declarative Base.
-#   - ``db.session``      — thread-local scoped session (the same
-#                           shape Flask-SQLAlchemy used to expose,
-#                           with ``.add``, ``.commit``, ``.query``,
-#                           ``.remove`` etc).
-#   - ``db.engine``       — the singleton SQLAlchemy Engine, shared
-#                           with FastAPI via ``api.Core.Database``.
-#   - ``db.create_all`` / ``db.drop_all`` — used by the test
-#                           conftest to spin up + tear down the
-#                           in-memory schema.
-#   - ``db.relationship`` / ``db.func`` / ``db.or_`` / column types
-#                           (``db.Column``, ``db.Integer``, etc) —
-#                           transparent re-exports from
-#                           ``sqlalchemy``, so every existing model
-#                           declaration ``class Foo(db.Model): id =
-#                           db.Column(db.Integer, primary_key=True)``
-#                           keeps working unchanged.
-#
-# Legacy ``Model.query`` keeps working too: ``Base.query`` is wired
-# to the scoped session below. CLAUDE.md invariant #11 still says
-# new code should use ``db.session.query(Model)`` (or
-# ``db.session.get(Model, id)``); ``Model.query`` survives for the
-# test suite + a handful of in-flight CLI code paths.
-#
-# A Flask ``teardown_appcontext`` hook calls ``_scoped_session.
-# remove()`` after every request so the session is short-lived
-# (matches Flask-SQLAlchemy's behaviour). FastAPI's controllers
-# get their own session per request via ``Depends(get_db)`` —
-# different machinery, same engine.
+# Drop-in replacement for the slice of Flask-SQLAlchemy the
+# legacy Flask code relies on (``db.Model``, ``db.session``,
+# ``db.engine``, ``db.create_all``/``drop_all``, ``db.relationship``,
+# transparent re-exports of ``Column``, ``Integer``, ``func`` etc).
+# Legacy ``Model.query`` keeps working via the scoped-session
+# query property below — CLAUDE.md invariant #11 still says new
+# code uses ``db.session.query(Model)``.
 import sqlalchemy as _sa  # noqa: E402
 from sqlalchemy.orm import (  # noqa: E402
     relationship as _sa_relationship,
@@ -253,11 +150,6 @@ _Session = _sessionmaker(
     autocommit=False, autoflush=False, bind=_engine, future=True,
 )
 _scoped_session = _scoped_session_cls(_Session)
-# Inject the legacy ``Model.query`` property onto every subclass of
-# Base. Production code uses ``db.session.query(Model)`` (CLAUDE.md
-# invariant #11), but the test suite + a handful of helpers still
-# go through the shorthand — keep it alive rather than rewriting
-# ~565 test-side call sites.
 Base.query = _scoped_session.query_property()
 
 
@@ -279,11 +171,6 @@ class _DB:
         Base.metadata.drop_all(bind=_engine)
 
     def __getattr__(self, name):
-        # Re-export the rest of the sqlalchemy namespace — Column,
-        # String, Integer, Float, DateTime, Date, Time, Boolean,
-        # Text, ForeignKey, UniqueConstraint, Index, LargeBinary,
-        # BigInteger, func, or_, and_, desc, asc, case … so legacy
-        # ``db.Column(db.Integer, ...)`` declarations keep working.
         return getattr(_sa, name)
 
 
@@ -298,24 +185,11 @@ def _remove_db_session(exc):  # noqa: ARG001 (Flask passes the exception)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # ── Rate limiting (BACKLOG D6 + "Before going live") ─────────
-#
-# Flask-Limiter on the high-value endpoints — login, signup,
-# password reset, webhook ingest, anything an attacker would brute-
-# force or flood. Default key function buckets by client IP; when
-# the cookie session has resolved we'd ideally bucket by user_id,
-# but IP keeps the limiter resilient against unauthenticated
-# attacks where the username changes every request.
-#
-# Storage: in-memory by default (works fine for dev / CI and for
-# single-worker prod). When RATELIMIT_STORAGE_URI is set (e.g.
-# redis://...) the limiter shares state across workers — required
-# in prod with gunicorn -w >1. The render.yaml prod manifest
-# should set RATELIMIT_STORAGE_URI on launch.
-#
-# `enabled` falls back to False during tests so the suite doesn't
-# get 429'd by the seeded admin issuing dozens of requests per
-# minute. The `_LIMITER_ENABLED` flag lets a specific test opt back
-# in via fixture (see tests/test_rate_limiting.py for the pattern).
+# Flask-Limiter on auth + webhook endpoints. Default key is client
+# IP. Storage is in-memory by default; prod sets
+# RATELIMIT_STORAGE_URI=redis://... in render.yaml so the bucket
+# spans workers. Tests set RATELIMIT_ENABLED=0 so they don't get
+# 429'd by the seeded admin.
 _RATELIMIT_STORAGE = os.environ.get(
     "RATELIMIT_STORAGE_URI", "memory://",
 )
@@ -329,38 +203,19 @@ from flask_limiter.util import get_remote_address
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    default_limits=[],  # opt-in per route; no blanket cap
+    default_limits=[],
     storage_uri=_RATELIMIT_STORAGE,
     strategy="fixed-window",
     enabled=_LIMITER_ENABLED,
-    headers_enabled=True,  # echo X-RateLimit-* on every response
+    headers_enabled=True,
 )
 
 
 def _apply_rate_limits():
-    """Wire up rate limits to specific Blueprint + app endpoints.
-
-    Done after Blueprint registration (which already happened at
-    module top) AND after the `limiter` exists — Flask-Limiter's
-    decorator returns a wrapped view function that we store back
-    in ``app.view_functions``, where Flask looks handlers up at
-    request time. This avoids decorating Blueprint routes that
-    have to be imported before the limiter exists.
-
-    Read CLAUDE.md "Rate limiting" before tightening these — the
-    same limits get tripped by integration tests and by webhook
-    retry storms. Loosening is safer than the alternative.
-
-    Tuning:
-      - Auth burst limits target the unauthenticated path where an
-        attacker can change the username on every request — 10/min
-        stops most online brute force, 50/hour catches the slower
-        password-spray variant.
-      - Webhook limits are deliberately loose: Stripe retries on
-        5xx + signature verification is the real defense; we just
-        want a flood-protection ceiling so an attacker can't tarpit
-        us with a million bogus signatures.
-    """
+    """Apply rate limits to Blueprint + app endpoints AFTER
+    Blueprint registration. See CLAUDE.md "Rate limiting" before
+    tightening — integration tests + webhook retry storms share
+    these buckets. Loosening is safer than the alternative."""
     # POST-only so a logged-out user hitting the GET form
     # repeatedly doesn't burn the credit they need to actually
     # try a password.
@@ -402,102 +257,27 @@ def _apply_rate_limits():
 _apply_rate_limits()
 
 
-# ── CSRF protection (Before-going-live) ──────────────────────
-#
-# Flask-WTF's CSRFProtect installs a before_request hook that
-# rejects any POST/PUT/PATCH/DELETE not carrying a valid
-# `csrf_token` form field (or `X-CSRFToken` header). The token is
-# derived from the Flask session, so a foreign-origin form-POST
-# can't forge it.
-#
-# Scope:
-#   - Flask form routes: PROTECTED. Every <form method="POST">
-#     in the legacy templates renders {{ csrf_token() }} so the
-#     token rides along.
-#   - FastAPI /api/v2/*: NOT protected by this — those use a
-#     Bearer JWT in the Authorization header, which is not
-#     auto-attached to cross-origin requests. CSRF is moot there.
-#     Flask-WTF still never sees those requests (the
-#     DispatcherMiddleware routes them straight into the FastAPI
-#     ASGI app).
-#   - Webhooks (`/webhooks/{stripe,resend}`): EXEMPTED via
-#     `csrf.exempt(...)` after blueprint registration; external
-#     callers can't carry our session-bound token. Signature
-#     verification is the actual auth on those routes.
-#   - WebAuthn passkey JSON routes: EXEMPTED. POST a JSON body
-#     not a form; the session itself guards them.
-#
-# Kill-switch: `WTF_CSRF_ENABLED` config. The test conftest sets
-# it to False so existing form-POST tests don't need to mint
-# tokens. Production keeps it on.
+# ── CSRF protection ──────────────────────────────────────────
+# CLAUDE.md invariant #16. CSRFProtect rejects POST/PUT/PATCH/DELETE
+# without a valid csrf_token. FastAPI /api/v2/* uses Bearer JWT (CSRF
+# is moot — not attached cross-origin). WTF_CSRF_ENABLED=0 kill-switch
+# is used by the test conftest.
 from flask_wtf.csrf import CSRFProtect
 
-# Reads from env so the conftest can flip the kill-switch with a
-# single `os.environ` write — `app.config["WTF_CSRF_ENABLED"]` is
-# what Flask-WTF actually checks, so we mirror the env value
-# there.
 _CSRF_ENABLED = os.environ.get("WTF_CSRF_ENABLED", "True") not in (
     "0", "false", "False",
 )
 app.config["WTF_CSRF_ENABLED"] = _CSRF_ENABLED
-app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60 * 24 * 7  # 7 days
+app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60 * 24 * 7
 app.config["WTF_CSRF_SSL_STRICT"] = _is_https_prod
 
 csrf = CSRFProtect(app)
 
 
-def _csrf_exempt_endpoints():
-    """Remove specific endpoints from CSRF enforcement.
-
-    Webhooks were retired from Flask in the Later-phase cleanup
-    (moved to ``api.Modules.Webhooks``). The legacy passkey JSON
-    endpoints in ``blueprints/auth.py`` + ``blueprints/account.py``
-    were also retired with the cookie-session auth path.
-
-    This shim is kept so future Flask form-POST endpoints (if any)
-    can register here without re-introducing the wiring. As of
-    chunk 3 + Later phase 1 there are no Flask endpoints left that
-    need CSRF exemption.
-    """
-    # Intentionally empty — see docstring.
-    return
-
-
-# Note: _csrf_exempt_endpoints() is only CALLED at the bottom of
-# this module (after the FastAPI mount block) — after every
-# @app.route decoration in this file has registered its view
-# function. Calling here would miss the in-app webhook endpoints
-# (stripe_webhook, resend_webhook) which are defined further
-# down. Look for the matching invocation at the bottom of app.py.
-
-
 # ── Models live in api/Modules/<domain>/Models ──────────────────
-#
-# The canonical SQLAlchemy class definitions all moved out of
-# ``app.py`` into per-domain Models packages under ``api/Modules/``.
-# This block re-exports each name so every legacy ``from app
-# import Store, User, …`` call site (blueprints, services, tests)
-# keeps working unchanged. After Flask itself is deleted (Step 8
-# end-state), these re-exports go away with the rest of ``app.py``;
-# every consumer will import from its module's Models package
-# directly.
-#
-# Domain → package map (also visible in the imports below):
-#
-#   Announcements → api.Modules.Announcements.Models
-#   Audit         → api.Modules.Audit.Models
-#   Auth          → api.Modules.Auth.Models
-#   BankSync      → api.Modules.BankSync.Models
-#   Batches       → api.Modules.Batches.Models
-#   Billing       → api.Modules.Billing.Models
-#   Customers     → api.Modules.Customers.Models
-#   DailyBook     → api.Modules.DailyBook.Models
-#   Monthly       → api.Modules.Monthly.Models
-#   ReturnChecks  → api.Modules.ReturnChecks.Models
-#   Tenancy       → api.Modules.Tenancy.Models
-#   Transfers     → api.Modules.Transfers.Models
-#   TVDisplay     → api.Modules.TVDisplay.Models  (extracted in PR #495)
-#   Webhooks      → api.Modules.Webhooks.Models
+# Re-exported here so legacy ``from app import Store, User, …``
+# call sites keep working. New code imports from the Models
+# package directly.
 from api.Modules.Announcements.Models import (  # noqa: E402
     Announcement, PushSubscription,
 )
@@ -587,16 +367,6 @@ DATA_RETENTION_DAYS = 180  # 6 months
 from api.Modules.Announcements.Services import (  # noqa: E402
     active_announcements,
 )
-
-
-# ── Platform anomaly detector ──────────────────────────────────
-# Surfaced on the superadmin overview tab. Returns a list of
-# Platform anomaly rules + the entry point now live in
-# `api.Modules.Superadmin.Services.anomalies` (PR 60). The
-# threshold constants are re-exported here so legacy callers
-# (any test that read them off the module, future rule tweaks)
-# keep their existing import paths during the migration window.
-from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD, ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD, ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS
 
 
 @app.context_processor
@@ -1769,42 +1539,16 @@ if not os.environ.get("DINEROBOOK_SKIP_INIT_DB"):
     init_db()
 
 # ── FastAPI + SPA strangler-fig dispatcher ──────────────────────
-#
-# SPA shell + Vite-built assets live in ``frontend/dist/`` and are
-# served by the Starlette app in ``api/spa.py`` — mounted below
-# at ``/app`` via DispatcherMiddleware so Flask's pytest
-# ``test_client`` reaches them. Production routing in ``asgi.py``
-# forwards the same paths to ``spa_app`` natively (no WSGI hop).
-#
-# The new modular FastAPI backend (under api/) is being built
-# alongside this Flask monolith per docs/architecture/MIGRATION_ADR.md.
-# Routes under /api/v2/* are forwarded into the FastAPI app via
-# Werkzeug's DispatcherMiddleware. Flask continues to handle /
-# and the rest of the URL space unchanged.
-#
-# Wrapped in try/except so a broken FastAPI import doesn't break
-# the Flask app — during early-stage migration, half the FastAPI
-# routers may not exist yet.
-#
-# **Why this block still exists** even though production runs from
-# `asgi.py` (uvicorn) and never traverses the inner a2wsgi bridge:
-# the pytest suite uses Flask's `test_client()` and hits /api/v2/*
-# URLs through this dispatcher. Tests are short-lived single-call
-# requests, so the leaked-task pathology that crashed gunicorn
-# workers in May 2026 doesn't manifest. Once every test moves to
-# the ASGI client (httpx + ASGITransport on `asgi:asgi_app`), this
-# block + the a2wsgi dependency can be deleted.
+# Mounts /api/v2 and /app onto Flask's wsgi_app so Flask's
+# test_client can reach them. Production routes via asgi.py and
+# bypasses this entirely; conftest.py swaps the ASGIMiddleware
+# wrappers for TestClient-backed bridges to avoid the a2wsgi
+# leaked-task pathology under coverage.
 try:
     from api.main import api_app as _fastapi_app
     from api.spa import spa_app as _spa_app
     from a2wsgi import ASGIMiddleware
     from werkzeug.middleware.dispatcher import DispatcherMiddleware
-    # /api/v2 → FastAPI; /app → Starlette SPA serving (frontend/dist).
-    # Production routing in asgi.py bypasses this dispatcher entirely
-    # for both paths — this mount only exists so Flask's test_client
-    # can reach them in pytest. conftest.py swaps both ASGIMiddleware
-    # wrappers for TestClient-backed bridges to avoid the a2wsgi
-    # leaked-task pathology under coverage.
     app.wsgi_app = DispatcherMiddleware(
         app.wsgi_app,
         {
@@ -1816,31 +1560,10 @@ try:
         "FastAPI mounted at /api/v2 + SPA at /app (strangler-fig)"
     )
 except Exception as _fastapi_err:
-    # Don't break Flask boot if the new backend fails to import.
-    # Log it loudly so it doesn't go unnoticed in dev.
     app.logger.warning(f"FastAPI mount skipped: {_fastapi_err}")
 
 
-# Run CSRF exemption registration AFTER every @app.route + every
-# Blueprint route + the FastAPI mount have settled. By this point
-# `app.view_functions` is complete and the exempts can find every
-# endpoint name they target. See `_csrf_exempt_endpoints` at the
-# top of the file for the function body.
-_csrf_exempt_endpoints()
-
-
 if __name__=="__main__":
-    # Dev server — uvicorn pointing at `asgi:asgi_app`, the same
-    # entrypoint production uses (`render.yaml` startCommand:
-    # `gunicorn asgi:asgi_app -k uvicorn.workers.UvicornWorker`).
-    # This means dev /api/v2/* requests go through the native
-    # ASGI path, NOT the in-app a2wsgi.ASGIMiddleware bridge.
-    # Prod-parity is the point: any latency / lifecycle / cookie
-    # surprise the cashier hits in prod shows up in dev too.
-    #
-    # Module-level imports above mounted the dispatcher onto
-    # `app.wsgi_app` for the test suite's benefit — uvicorn ignores
-    # it because we point it at `asgi:asgi_app`, not `app:app`.
     import uvicorn
     port = int(os.environ.get("PORT", 5000))
     print(f"🚀 DineroBook → http://0.0.0.0:{port}  (uvicorn/ASGI)")
@@ -1848,10 +1571,6 @@ if __name__=="__main__":
         "asgi:asgi_app",
         host="0.0.0.0",
         port=port,
-        # reload=False matches prod; flip via env if a contributor
-        # wants hot-reload on file edits. The Vite dev server at
-        # :5173 owns SPA hot-reload already so most edits don't
-        # need a Python reload.
         reload=bool(os.environ.get("DEV_RELOAD")),
         log_level="info",
     )
