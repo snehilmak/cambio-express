@@ -287,16 +287,14 @@ def lock_daily_route(
     # Owner digest — fired only on a was-not-locked → locked
     # state transition so re-clicking the lock button doesn't spam
     # the inbox. Delivery failures are caught + logged inside the
-    # glue function; we never roll back the lock on email errors.
+    # Service; we never roll back the lock on email errors.
     if just_locked:
         try:
-            from app import send_locked_day_digest
-            send_locked_day_digest(rpt)
+            from api.Modules.Notifications.Services.locked_day_digest import (
+                run as _send_locked_day_digest,
+            )
+            _send_locked_day_digest(db, rpt)
         except Exception:
-            # Last-ditch guard — Flask glue should already swallow
-            # its own SMTP errors, but if the import itself trips
-            # (e.g. in a unit test that mocks app), the lock still
-            # succeeds.
             import logging
             logging.getLogger(__name__).exception(
                 "locked-day digest fan-out failed for report_id=%s",
