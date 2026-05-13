@@ -616,14 +616,13 @@ def store_feature_enabled(store, flag_key):
     return _svc_store_feature_enabled(db.session, store, flag_key)
 
 
-def active_announcements():
-    """Currently-visible announcements (active, within start/expiry window).
-
-    Single source of truth lives in
-    `api.Modules.Announcements.Services.active_announcements` (PR 55).
-    """
-    from api.Modules.Announcements.Services import active_announcements as _svc
-    return _svc(db.session)
+# ``active_announcements`` lives in
+# ``api.Modules.Announcements.Services``. Imported at module-load
+# time so the trial-context processor below doesn't re-do the
+# lookup on every request.
+from api.Modules.Announcements.Services import (  # noqa: E402
+    active_announcements,
+)
 
 
 # ── Platform anomaly detector ──────────────────────────────────
@@ -703,7 +702,7 @@ def inject_trial_context():
     so the superadmin can reach the whole audience with one message.
     """
     try:
-        announcements = active_announcements()
+        announcements = active_announcements(db.session)
     except Exception:
         # Defensive — context processor runs on every request; if the
         # announcement table can't be queried for any reason, treat as
@@ -1396,14 +1395,6 @@ def _run_report_csv(data_fn, *, scope, columns, row_fn,
         f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
 
 
-def _export_report_csv(data_fn, *, columns, row_fn,
-                        totals_row_fn=None, fname_prefix,
-                        extra_args=None):
-    """Admin / owner CSV — store-scoped data fn. Thin wrapper around
-    `_run_report_csv`."""
-    return _run_report_csv(data_fn, scope="store",
-        columns=columns, row_fn=row_fn, totals_row_fn=totals_row_fn,
-        fname_prefix=fname_prefix, extra_args=extra_args)
 
 
 
@@ -1431,7 +1422,7 @@ def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
     underscored = slug.replace("-", "_")
 
     def _csv():
-        return _export_report_csv(data_fn,
+        return _run_report_csv(data_fn, scope="store",
             columns=csv_columns, row_fn=csv_row_fn,
             totals_row_fn=csv_totals_fn,
             fname_prefix=fname_prefix,
@@ -1832,13 +1823,6 @@ _register_owner_report_mirrors()
 # superadmin reports always query platform-wide.
 
 
-def _export_superadmin_report_csv(data_fn, *, columns, row_fn,
-                                    totals_row_fn=None, fname_prefix,
-                                    extra_args=None):
-    """Superadmin CSV — thin wrapper around `_run_report_csv`."""
-    return _run_report_csv(data_fn, scope="platform",
-        columns=columns, row_fn=row_fn, totals_row_fn=totals_row_fn,
-        fname_prefix=fname_prefix, extra_args=extra_args)
 
 
 def _make_superadmin_report_routes(slug, *, data_fn,
@@ -1860,7 +1844,7 @@ def _make_superadmin_report_routes(slug, *, data_fn,
     underscored = slug.replace("-", "_")
 
     def _csv():
-        return _export_superadmin_report_csv(data_fn,
+        return _run_report_csv(data_fn, scope="platform",
             columns=csv_columns, row_fn=csv_row_fn,
             totals_row_fn=csv_totals_fn,
             fname_prefix=fname_prefix,
