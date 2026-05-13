@@ -274,24 +274,3 @@ def test_totals_sum_count_sent_cancels():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _employee_activity_data
-    from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="ea-legacy")
-        u = _add_user(db.session, s.id)
-        _add_transfer(db.session, s.id,
-                      send_date=date(2026, 5, 5),
-                      created_by=u.id)
-        legacy_rows, legacy_totals = _employee_activity_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = employee_activity(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

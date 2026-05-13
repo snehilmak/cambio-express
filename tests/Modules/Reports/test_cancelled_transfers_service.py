@@ -266,24 +266,3 @@ def test_filters_by_send_date_window():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _cancelled_transfers_data
-    from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="ct-legacy")
-        _add_transfer(db.session, s.id,
-                      send_date=date(2026, 5, 5),
-                      status="Canceled",
-                      send_amount=42.0)
-        legacy_rows, legacy_totals = _cancelled_transfers_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = cancelled_transfers(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

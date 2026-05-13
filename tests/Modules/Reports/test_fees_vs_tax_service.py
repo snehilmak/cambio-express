@@ -228,19 +228,3 @@ def test_filters_by_store_ids():
 # ── legacy Flask wrapper ─────────────────────────────────
 
 
-def test_legacy_fees_vs_tax_data_delegates():
-    from app import app as flask_app, db
-    from app import _fees_vs_tax_data as legacy
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-ft")
-        _add_transfer(
-            db.session, s.id, send_date=date(2026, 5, 1),
-            fee=10.0, federal_tax=2.0,
-        )
-        rows, totals = legacy(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert totals["fees"] == 10.0
-        assert totals["tax"] == 2.0

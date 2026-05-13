@@ -279,23 +279,3 @@ def test_filters_by_bounced_on_window():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _returned_check_status_data
-    from api.Modules.Reports.Services import returned_check_status
-    with flask_app.app_context():
-        ReturnCheck.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="rc-legacy")
-        _add_rc(db.session, s.id,
-                bounced_on=date(2026, 5, 5),
-                status="pending", amount=42.0)
-        legacy_rows, legacy_totals = _returned_check_status_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = returned_check_status(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

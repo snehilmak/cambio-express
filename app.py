@@ -1829,6 +1829,17 @@ def _service_fn(service):
         return service(db.session, store_ids, d_from, d_to, **kwargs)
     return _inner
 
+# Eager-imports for the Reports services backing the CSV routes
+# below — each one used to have an ``_X_data`` Flask-bound shim
+# but ``_service_fn`` handles the session-binding for all of them.
+from api.Modules.Reports.Services import (  # noqa: E402
+    ach_volume, bank_charges_by_account, bank_rule_audit,
+    bank_txn_breakdown, cancelled_transfers, check_deposits,
+    daily_drops, employee_activity, fees_vs_tax,
+    high_value_transfers, period_comparison, period_pl,
+    returned_check_status,
+)
+
 from api.Modules.Reports.Services import new_vs_returning  # noqa: E402
 
 
@@ -1869,50 +1880,18 @@ def _csv_response(buf, fname):
 
 
 # ── Returned Check Status ────────────────────────────────────
-def _returned_check_status_data(store_ids, d_from, d_to):
-    """Group ReturnCheck rows bounced in the period by status.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.returned_check_status` (PR 90)."""
-    from api.Modules.Reports.Services import returned_check_status
-    return returned_check_status(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank Transactions Breakdown ──────────────────────────────
-def _bank_txn_breakdown_data(store_ids, d_from, d_to):
-    """Group BankTransaction rows by category_slug. Single source
-    of truth lives in
-    `api.Modules.Reports.Services.bank_txn_breakdown` (PR 91)."""
-    from api.Modules.Reports.Services import bank_txn_breakdown
-    return bank_txn_breakdown(db.session, store_ids, d_from, d_to)
 
 
 # ── Daily Drops ──────────────────────────────────────────────
-def _daily_drops_data(store_ids, d_from, d_to):
-    """Sum DailyDrop rows in the period, grouped by report_date.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.daily_drops` (PR 92)."""
-    from api.Modules.Reports.Services import daily_drops
-    return daily_drops(db.session, store_ids, d_from, d_to)
 
 
 # ── Check Deposits ───────────────────────────────────────────
-def _check_deposits_data(store_ids, d_from, d_to):
-    """Sum CheckDeposit rows in the period, grouped by report_date.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.check_deposits` (PR 92)."""
-    from api.Modules.Reports.Services import check_deposits
-    return check_deposits(db.session, store_ids, d_from, d_to)
 
 
 # ── High-Value Transfers ─────────────────────────────────────
-def _high_value_transfers_data(store_ids, d_from, d_to, threshold):
-    """List active transfers in the period >= threshold. Single
-    source of truth lives in
-    `api.Modules.Reports.Services.high_value_transfers` (PR 93)."""
-    from api.Modules.Reports.Services import high_value_transfers
-    return high_value_transfers(
-        db.session, store_ids, d_from, d_to, threshold,
-    )
 
 
 def _parse_threshold(args, default=3000):
@@ -1924,29 +1903,12 @@ def _parse_threshold(args, default=3000):
 
 
 # ── Employee Activity ────────────────────────────────────────
-def _employee_activity_data(store_ids, d_from, d_to):
-    """Per-employee activity audit. Single source of truth lives
-    in `api.Modules.Reports.Services.employee_activity` (PR 94)."""
-    from api.Modules.Reports.Services import employee_activity
-    return employee_activity(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank-Rule Audit Log ──────────────────────────────────────
-def _bank_rule_audit_data(store_ids, d_from, d_to):
-    """Per-rule audit of operator-defined BankRule firings.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.bank_rule_audit` (PR 95)."""
-    from api.Modules.Reports.Services import bank_rule_audit
-    return bank_rule_audit(db.session, store_ids, d_from, d_to)
 
 
 # ── Cancelled Transfers ──────────────────────────────────────
-def _cancelled_transfers_data(store_ids, d_from, d_to):
-    """List Cancelled / Rejected transfers in the period.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.cancelled_transfers` (PR 96)."""
-    from api.Modules.Reports.Services import cancelled_transfers
-    return cancelled_transfers(db.session, store_ids, d_from, d_to)
 
 
 # ── Period P&L ───────────────────────────────────────────────
@@ -1962,53 +1924,18 @@ from api.Modules.Reports.Services import (
 )
 
 
-def _period_pl_data(store_ids, d_from, d_to):
-    """Aggregate DailyReport + Transfer fees in the period into a
-    daily-book P&L. Single source of truth lives in
-    `api.Modules.Reports.Services.period_pl` (PR 87)."""
-    from api.Modules.Reports.Services import period_pl
-    return period_pl(db.session, store_ids, d_from, d_to)
 
 
 # ── ACH Volume ───────────────────────────────────────────────
-def _ach_volume_data(store_ids, d_from, d_to):
-    """Group ACHBatch rows in the period by company. Single source
-    of truth lives in `api.Modules.Reports.Services.ach_volume`
-    (PR 88)."""
-    from api.Modules.Reports.Services import ach_volume
-    return ach_volume(db.session, store_ids, d_from, d_to)
 
 
 # ── Bank Charges by Account ──────────────────────────────────
-def _bank_charges_by_account_data(store_ids, d_from, d_to):
-    """Sum BankTransaction rows tagged as bank charges, grouped
-    by account. Single source of truth lives in
-    `api.Modules.Reports.Services.bank_charges_by_account`
-    (PR 84)."""
-    from api.Modules.Reports.Services import bank_charges_by_account
-    return bank_charges_by_account(db.session, store_ids, d_from, d_to)
 
 
 # ── Period Comparison ────────────────────────────────────────
-def _period_comparison_data(store_ids, d_from, d_to,
-                              *, compare_from=None, compare_to=None):
-    """Compare the chosen period against another period. Single
-    source of truth lives in
-    `api.Modules.Reports.Services.period_comparison` (PR 86)."""
-    from api.Modules.Reports.Services import period_comparison
-    return period_comparison(
-        db.session, store_ids, d_from, d_to,
-        compare_from=compare_from, compare_to=compare_to,
-    )
 
 
 # ── Fees vs. Federal Tax ─────────────────────────────────────
-def _fees_vs_tax_data(store_ids, d_from, d_to):
-    """Side-by-side: total fees vs. federal tax. Single source of
-    truth lives in `api.Modules.Reports.Services.fees_vs_tax`
-    (PR 85)."""
-    from api.Modules.Reports.Services import fees_vs_tax
-    return fees_vs_tax(db.session, store_ids, d_from, d_to)
 
 
 # ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
@@ -2102,7 +2029,7 @@ _make_report_routes(
 
 _make_report_routes(
     'returned-check-status',
-    data_fn=_returned_check_status_data,
+    data_fn=_service_fn(returned_check_status),
     csv_columns=['Status', 'Count', 'Amount', 'Recovered'],
     csv_row_fn=lambda r: [r['status'], r['count'], f"{r['amount']:.2f}", f"{r['recovered']:.2f}"],
     csv_totals_fn=lambda t: [['TOTAL', t['count'], f"{t['amount']:.2f}", f"{t['recovered']:.2f}"], ['NET G/L', '', '', f"{t['net_gl']:.2f}"]],
@@ -2111,7 +2038,7 @@ _make_report_routes(
 
 _make_report_routes(
     'bank-transactions-breakdown',
-    data_fn=_bank_txn_breakdown_data,
+    data_fn=_service_fn(bank_txn_breakdown),
     csv_columns=['Category', 'Count', 'Signed Amount', 'Absolute Amount'],
     csv_row_fn=lambda r: [r['label'], r['count'], f"{r['signed']:.2f}", f"{r['amount']:.2f}"],
     csv_fname_prefix='bank-txn-breakdown',
@@ -2119,7 +2046,7 @@ _make_report_routes(
 
 _make_report_routes(
     'daily-drops',
-    data_fn=_daily_drops_data,
+    data_fn=_service_fn(daily_drops),
     csv_columns=['Date', 'Drop Count', 'Total Dropped'],
     csv_row_fn=lambda r: [r['date'].isoformat(), r['count'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
@@ -2127,7 +2054,7 @@ _make_report_routes(
 
 _make_report_routes(
     'check-deposits',
-    data_fn=_check_deposits_data,
+    data_fn=_service_fn(check_deposits),
     csv_columns=['Date', 'Deposit Count', 'Total Deposited'],
     csv_row_fn=lambda r: [r['date'].isoformat(), r['count'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
@@ -2135,7 +2062,7 @@ _make_report_routes(
 
 _make_report_routes(
     'high-value-transfers',
-    data_fn=_high_value_transfers_data,
+    data_fn=_service_fn(high_value_transfers),
     csv_columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Send Amount', 'Fee', 'Federal Tax', 'Confirm #'],
     csv_row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], f"{r['amount']:.2f}", f"{r['fee']:.2f}", f"{r['tax']:.2f}", r['confirm']],
     extra_args_fn=lambda: {'threshold': _parse_threshold(request.args)},
@@ -2143,28 +2070,28 @@ _make_report_routes(
 
 _make_report_routes(
     'employee-activity',
-    data_fn=_employee_activity_data,
+    data_fn=_service_fn(employee_activity),
     csv_columns=['Employee', 'Username', 'Active Transfers', 'Total Sent', 'Cancelled / Rejected', 'Last Activity'],
     csv_row_fn=lambda r: [r['employee'], r['username'], r['count'], f"{r['sent']:.2f}", r['cancels'], r['last_activity'].isoformat() if r['last_activity'] else ''],
 )
 
 _make_report_routes(
     'bank-rule-audit',
-    data_fn=_bank_rule_audit_data,
+    data_fn=_service_fn(bank_rule_audit),
     csv_columns=['Rule', 'Match', 'Target', 'Matched Count', 'Total Amount'],
     csv_row_fn=lambda r: [r['label'], r['match'], r['target'], r['count'], f"{r['amount']:.2f}"],
 )
 
 _make_report_routes(
     'cancelled-transfers',
-    data_fn=_cancelled_transfers_data,
+    data_fn=_service_fn(cancelled_transfers),
     csv_columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Status', 'Send Amount', 'Notes', 'Confirm #'],
     csv_row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], r['status'], f"{r['amount']:.2f}", r['status_notes'], r['confirm']],
 )
 
 _make_report_routes(
     'period-pl',
-    data_fn=_period_pl_data,
+    data_fn=_service_fn(period_pl),
     csv_columns=['Section', 'Line', 'Amount'],
     csv_row_fn=lambda r: [r['section'], r['label'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: [['', 'Total Income', f"{t['income']:.2f}"], ['', 'Total Expenses', f"{t['expenses']:.2f}"], ['', 'Net', f"{t['net']:.2f}"]],
@@ -2172,7 +2099,7 @@ _make_report_routes(
 
 _make_report_routes(
     'ach-volume',
-    data_fn=_ach_volume_data,
+    data_fn=_service_fn(ach_volume),
     csv_columns=['Company', 'Batch Count', 'Total ACH', 'Avg / Batch'],
     csv_row_fn=lambda r: [r['company'], r['count'], f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}", ''],
@@ -2180,7 +2107,7 @@ _make_report_routes(
 
 _make_report_routes(
     'bank-charges-by-account',
-    data_fn=_bank_charges_by_account_data,
+    data_fn=_service_fn(bank_charges_by_account),
     csv_columns=['Account', 'Last 4', 'Charge Count', 'Total Charges', 'Avg / Charge'],
     csv_row_fn=lambda r: [r['account'], r['last4'], r['count'], f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
 )
@@ -2204,7 +2131,7 @@ def _parse_compare_dates(args):
 
 _make_report_routes(
     'period-comparison',
-    data_fn=_period_comparison_data,
+    data_fn=_service_fn(period_comparison),
     csv_columns=lambda t: ['Metric', t['current_label'], t['prior_label'], 'Delta', '% Change'],
     csv_row_fn=lambda r: [r['label'], f"{r['current']:.2f}" if r['is_money'] else f"{int(r['current'])}", f"{r['prior']:.2f}" if r['is_money'] else f"{int(r['prior'])}", f"{r['delta']:.2f}" if r['is_money'] else f"{int(r['delta'])}", f"{r['pct']:+.1f}%"],
     extra_args_fn=lambda: _parse_compare_dates(request.args),
@@ -2212,7 +2139,7 @@ _make_report_routes(
 
 _make_report_routes(
     'fees-vs-tax',
-    data_fn=_fees_vs_tax_data,
+    data_fn=_service_fn(fees_vs_tax),
     csv_columns=['Line', 'Amount'],
     csv_row_fn=lambda r: [r['label'], f"{r['amount']:.2f}"],
     csv_totals_fn=lambda t: ['Tax / Fee Ratio', f"{t['ratio']:.2f}"],

@@ -354,20 +354,3 @@ def test_uses_account_label_for_display():
 # ── legacy Flask wrapper ─────────────────────────────────
 
 
-def test_legacy_bank_charges_by_account_data_delegates():
-    from app import app as flask_app, db
-    from app import _bank_charges_by_account_data as legacy
-    with flask_app.app_context():
-        BankTransaction.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-bc")
-        a = _add_account(db.session, s.id)
-        _add_charge(
-            db.session, s.id, a.id, amount_cents=-150,
-            posted_at=datetime(2026, 5, 5),
-        )
-        rows, totals = legacy(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert len(rows) == 1
-        assert totals["amount"] == 1.5

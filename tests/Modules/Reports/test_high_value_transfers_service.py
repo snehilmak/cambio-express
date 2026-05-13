@@ -252,24 +252,3 @@ def test_empty_window_returns_empty_rows_and_zero_totals():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _high_value_transfers_data
-    from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="hv-legacy")
-        _add_transfer(db.session, s.id,
-                      send_date=date(2026, 5, 5),
-                      send_amount=4242.0)
-        legacy_rows, legacy_totals = _high_value_transfers_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31), 3000.0,
-        )
-        svc_rows, svc_totals = high_value_transfers(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-            threshold=3000.0,
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

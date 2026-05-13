@@ -215,24 +215,3 @@ def test_empty_window_returns_empty_rows_and_zero_totals():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    """The legacy `_ach_volume_data` shim in app.py routes to the
-    Service. Asserts identical output for a small fixture."""
-    from app import app as flask_app, db
-    from app import _ach_volume_data
-    from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
-        ACHBatch.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="ach-legacy")
-        _add_batch(db.session, s.id, ach_date=date(2026, 5, 5),
-                   company="Intermex", ach_amount=42.0)
-        legacy_rows, legacy_totals = _ach_volume_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = ach_volume(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

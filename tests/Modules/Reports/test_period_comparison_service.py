@@ -322,19 +322,6 @@ def test_pl_expense_lines_includes_core_columns():
 # ── legacy Flask wrapper ─────────────────────────────────
 
 
-def test_legacy_period_comparison_data_delegates():
-    from app import app as flask_app, db
-    from app import _period_comparison_data as legacy
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="pc-legacy")
-        rows, totals = legacy(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert len(rows) == 7
-        assert "current_label" in totals
-        assert "prior_label" in totals
 
 
 def test_legacy_pl_constants_re_exported():
