@@ -394,27 +394,18 @@ csrf = CSRFProtect(app)
 def _csrf_exempt_endpoints():
     """Remove specific endpoints from CSRF enforcement.
 
-    Webhooks: external callers can't carry our session-bound
-    token. Stripe + Resend both sign their requests; signature
-    verification is the actual auth.
+    Webhooks were retired from Flask in the Later-phase cleanup
+    (moved to ``api.Modules.Webhooks``). The legacy passkey JSON
+    endpoints in ``blueprints/auth.py`` + ``blueprints/account.py``
+    were also retired with the cookie-session auth path.
 
-    WebAuthn passkey JSON: POST a JSON body not a form. The
-    session itself guards these routes; CSRF tokens add no
-    value when the client must already prove a valid session.
+    This shim is kept so future Flask form-POST endpoints (if any)
+    can register here without re-introducing the wiring. As of
+    chunk 3 + Later phase 1 there are no Flask endpoints left that
+    need CSRF exemption.
     """
-    for endpoint in (
-        # Webhooks
-        "stripe_webhook",
-        "resend_webhook",
-        # WebAuthn passkey ceremonies (JSON, session-protected)
-        "auth.passkey_login_begin",
-        "auth.passkey_login_finish",
-        "auth.passkey_register_begin",
-        "auth.passkey_register_finish",
-        "account.passkey_delete",
-    ):
-        if endpoint in app.view_functions:
-            csrf.exempt(app.view_functions[endpoint])
+    # Intentionally empty — see docstring.
+    return
 
 
 # Note: _csrf_exempt_endpoints() is only CALLED at the bottom of
@@ -2970,6 +2961,39 @@ from api.Modules.Notifications.Services import smtp as _smtp_svc
 # `_smtp_svc.last_attempt` directly so reads always see the
 # Service's canonical dict — direct mutation isn't supported.
 _last_smtp_attempt = _smtp_svc.last_attempt
+
+
+# ── Email template rendering — standalone Jinja2 ──────────────
+#
+# Email templates render through a standalone Jinja2 environment
+# (not Flask's ``render_template``). The Flask version required a
+# request context, which forced ``send_trial_reminders`` /
+# ``send_locked_day_digest`` etc. to fabricate one with
+# ``app.test_request_context("/")``. Cron commands, FastAPI
+# webhook handlers, and any future non-Flask caller couldn't use
+# the old path without that dance. The standalone env has zero
+# dependency on the Flask app — pure str-in, str-out.
+from jinja2 import (  # noqa: E402  (placed near smtp setup intentionally)
+    Environment as _JinjaEnvironment,
+    FileSystemLoader as _JinjaFSLoader,
+    select_autoescape as _jinja_autoescape,
+)
+
+_EMAIL_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
+_email_env = _JinjaEnvironment(
+    loader=_JinjaFSLoader(_EMAIL_TEMPLATES_DIR),
+    autoescape=_jinja_autoescape(["html", "xml"]),
+)
+
+
+def render_email_template(name: str, **ctx) -> str:
+    """Render an email template by path (e.g.
+    ``"emails/trial_reminder.html"``). The Jinja2 env is rooted at
+    ``templates/`` so the relative ``{% extends "emails/_base.html"
+    %}`` declarations in the email templates keep working."""
+    tmpl = _email_env.get_template(name)
+    return tmpl.render(**ctx)
+
 
 
 def _send_email(to_addr, subject, body, html=None):
@@ -6473,126 +6497,6 @@ def _apply_resend_side_effects(event_type, to_addr, bounce_type):
             u.notify_locked_day_digest = False
             # Future notify_* columns should be flipped here too.
 
-@app.route("/webhooks/resend", methods=["POST"])
-def resend_webhook():
-    """Resend delivery-event receiver. See comment above for the full
-    shape and policy."""
-    secret = os.environ.get("RESEND_WEBHOOK_SECRET", "")
-    raw = request.get_data()
-    svix_id        = request.headers.get("svix-id", "")
-    svix_timestamp = request.headers.get("svix-timestamp", "")
-    svix_signature = request.headers.get("svix-signature", "")
-    if not _verify_resend_signature(secret, svix_id, svix_timestamp,
-                                     svix_signature, raw):
-        return jsonify({"error": "Invalid signature"}), 400
-
-    try:
-        event = request.get_json(force=True, silent=False)
-    except Exception:
-        return jsonify({"error": "Invalid JSON"}), 400
-    event_type = (event or {}).get("type", "") or ""
-    data = (event or {}).get("data", {}) or {}
-    message_id = data.get("email_id") or ""
-    bounce_type = ""
-    if isinstance(data.get("bounce"), dict):
-        bounce_type = data["bounce"].get("type", "") or ""
-    recipients = data.get("to") or []
-    if isinstance(recipients, str):
-        recipients = [recipients]
-
-    # One EmailEvent row per (event, recipient) tuple so we can query
-    # "has this address bounced" without joining through a message.
-    payload_json = ""
-    try:
-        payload_json = json.dumps(event)[:8000]
-    except Exception:
-        payload_json = ""
-    for raw_to in recipients:
-        to_norm = (raw_to or "").strip().lower()
-        user_id = None
-        if to_norm:
-            matched = (db.session.query(User.id)
-                       .filter(db.func.lower(User.email) == to_norm)
-                       .first())
-            user_id = matched[0] if matched else None
-        db.session.add(EmailEvent(
-            message_id=message_id[:80], to_addr=to_norm[:255],
-            user_id=user_id, event_type=event_type[:40],
-            bounce_type=bounce_type[:16], payload=payload_json,
-        ))
-        _apply_resend_side_effects(event_type, to_norm, bounce_type)
-    db.session.commit()
-    return jsonify({"ok": True})
-
-@app.route("/webhooks/stripe", methods=["POST"])
-def stripe_webhook():
-    """Stripe webhook receiver.
-
-    HTTP-facing wrapper. The verified-event dispatch + per-event
-    business logic lives in
-    `api.Modules.Billing.Services.handle_stripe_event` (PR 59).
-    The route owns:
-      - the request body / Stripe-Signature header pull
-      - the WebhookEvent log-row write (signature_err / ok /
-        processing_err) so the Webhook Health report has data
-      - the HTTP response shape (400 on bad sig, 200 on accepted
-        delivery so Stripe doesn't retry handler bugs forever)
-    """
-    from api.Modules.Billing.Services import (
-        InvalidWebhookSignatureError,
-        handle_stripe_event,
-        verify_webhook_signature,
-    )
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature", "")
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
-    try:
-        event = verify_webhook_signature(payload, sig_header, webhook_secret)
-    except InvalidWebhookSignatureError as e:
-        # Log the rejected delivery so Webhook Health surfaces it.
-        try:
-            db.session.add(WebhookEvent(
-                source="stripe", status="signature_err",
-                error=str(e)[:500]))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-        return jsonify({"error": "Invalid signature"}), 400
-
-    # Log every verified delivery up-front so the Webhook Health
-    # report reflects volume + failure rate. We update `status` to
-    # "processing_err" if the handler below raises.
-    log_row = WebhookEvent(source="stripe",
-                           event_id=event.get("id", "") or "",
-                           event_type=event.get("type", "") or "",
-                           status="ok")
-    try:
-        db.session.add(log_row)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-        log_row = None
-
-    try:
-        handle_stripe_event(
-            db.session, event, retention_days=DATA_RETENTION_DAYS,
-        )
-    except Exception as e:
-        # Don't let a handler bug 500 a Stripe delivery — log + ack.
-        # Stripe retries on non-2xx, so a 200 with logged error keeps
-        # the queue moving while the Webhook Health report shows
-        # failures for the operator to investigate.
-        if log_row is not None:
-            try:
-                log_row.status = "processing_err"
-                log_row.error = (str(e) or type(e).__name__)[:500]
-                db.session.commit()
-            except Exception:
-                db.session.rollback()
-        app.logger.exception(
-            f"Stripe webhook handler failed for {event.get('type')}")
-    return jsonify({"received": True}), 200
-
 # ── Data retention purge ─────────────────────────────────────
 # Per-store model registry + retention-purge implementation now
 # live in api.Modules.Billing.Services.retention (PR 64). The
@@ -6686,25 +6590,22 @@ def send_trial_reminders(now=None, base_url=None):
                 subscribe_url=subscribe_url,
                 notifications_url=notifications_url,
             )
-            # Context processors (inject_trial_context / impersonation)
-            # read request / session state, which isn't present when
-            # `flask send-trial-reminders` runs from cron. Fabricate a
-            # minimal request context so render_template works. The URL
-            # we feed it doesn't matter — the template references nothing
-            # that depends on it.
-            with app.test_request_context("/"):
-                html = render_template(
-                    "emails/trial_reminder.html",
-                    preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
-                    name=u.full_name or "",
-                    store_name=store.name,
-                    trial_end_date=trial_end_str,
-                    days=days_left,
-                    subscribe_url=subscribe_url,
-                    notifications_url=notifications_url,
-                    year=now.year,
-                    base_url=base_url,
-                )
+            # Standalone Jinja2 — no Flask request context needed
+            # (the legacy ``render_template`` call required one
+            # because Flask's context processors expected request
+            # state we didn't have under cron).
+            html = render_email_template(
+                "emails/trial_reminder.html",
+                preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
+                name=u.full_name or "",
+                store_name=store.name,
+                trial_end_date=trial_end_str,
+                days=days_left,
+                subscribe_url=subscribe_url,
+                notifications_url=notifications_url,
+                year=now.year,
+                base_url=base_url,
+            )
             subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
             _send_email(u.email, subject, body, html=html)
             any_sent = True
@@ -6809,27 +6710,26 @@ def send_locked_day_digest(report, base_url: str | None = None) -> int:
             notifications_url=notifications_url,
         )
         try:
-            with app.test_request_context("/"):
-                html = render_template(
-                    "emails/locked_day_digest.html",
-                    preheader=(
-                        f"Daily book locked for {store.name} on "
-                        f"{date_human}. Net {_fmt_money_2(net)}."
-                    ),
-                    name=u.full_name or "",
-                    store_name=store.name,
-                    date_human=date_human,
-                    locked_by=locked_by_name,
-                    receipts=_fmt_money_2(receipts),
-                    disbursements=_fmt_money_2(disbursements),
-                    over_short=_fmt_money_2(over_short),
-                    net=_fmt_money_2(net),
-                    net_negative=(net < 0),
-                    view_url=view_url,
-                    notifications_url=notifications_url,
-                    year=datetime.utcnow().year,
-                    base_url=base_url,
-                )
+            html = render_email_template(
+                "emails/locked_day_digest.html",
+                preheader=(
+                    f"Daily book locked for {store.name} on "
+                    f"{date_human}. Net {_fmt_money_2(net)}."
+                ),
+                name=u.full_name or "",
+                store_name=store.name,
+                date_human=date_human,
+                locked_by=locked_by_name,
+                receipts=_fmt_money_2(receipts),
+                disbursements=_fmt_money_2(disbursements),
+                over_short=_fmt_money_2(over_short),
+                net=_fmt_money_2(net),
+                net_negative=(net < 0),
+                view_url=view_url,
+                notifications_url=notifications_url,
+                year=datetime.utcnow().year,
+                base_url=base_url,
+            )
             subject = _LOCKED_DAY_SUBJECT.format(
                 store_name=store.name, date_human=date_human,
             )
@@ -6894,18 +6794,17 @@ def broadcast_announcement(announcement_id, base_url=None):
     )
     sent = 0
     for u in recipients:
-        with app.test_request_context("/"):
-            html = render_template(
-                "emails/announcement.html",
-                preheader=ann.message[:120],
-                subject=subject,
-                message=ann.message,
-                level=ann.level or "info",
-                app_url=base_url,
-                notifications_url=notifications_url,
-                year=now.year,
-                base_url=base_url,
-            )
+        html = render_email_template(
+            "emails/announcement.html",
+            preheader=ann.message[:120],
+            subject=subject,
+            message=ann.message,
+            level=ann.level or "info",
+            app_url=base_url,
+            notifications_url=notifications_url,
+            year=now.year,
+            base_url=base_url,
+        )
         _send_email(u.email, subject, plain_body, html=html)
         sent += 1
     ann.broadcast_sent_at = now

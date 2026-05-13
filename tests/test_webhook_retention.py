@@ -30,7 +30,7 @@ def _post(client, event):
     """POST a webhook event with a mocked signature check."""
     with patch("stripe.Webhook.construct_event", return_value=event):
         return client.post(
-            "/webhooks/stripe",
+            "/api/v2/webhooks/stripe",
             data=json.dumps(event).encode(),
             headers={"Stripe-Signature": "valid",
                      "Content-Type": "application/json"},
@@ -233,7 +233,7 @@ def test_unhandled_event_type_returns_200_without_mutation(client):
 def test_webhook_rejects_bad_signature_without_patching(client):
     """Without mocking construct_event, signature verification must fail."""
     resp = client.post(
-        "/webhooks/stripe",
+        "/api/v2/webhooks/stripe",
         data=b'{"type":"checkout.session.completed"}',
         headers={"Stripe-Signature": "t=0,v1=deadbeef",
                  "Content-Type": "application/json"},
