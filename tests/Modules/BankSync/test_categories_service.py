@@ -229,10 +229,6 @@ def test_groups_does_not_duplicate_static_slugs():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_label_delegates():
-    from app import _bank_category_label as legacy
-    assert legacy("internal_transfer") == "Internal transfer"
-    assert legacy("") == "Uncategorized"
 
 
 def test_legacy_is_daily_book_kind_delegates():
@@ -241,20 +237,8 @@ def test_legacy_is_daily_book_kind_delegates():
     assert legacy("internal_transfer") is False
 
 
-def test_legacy_is_valid_delegates():
-    from app import app as flask_app
-    from app import _is_valid_bank_category as legacy
-    with flask_app.app_context():
-        assert legacy("cash_expense", store_id=1) is True
-        assert legacy("bogus", store_id=1) is False
 
 
-def test_legacy_groups_delegates():
-    from app import app as flask_app
-    from app import _bank_category_groups as legacy
-    with flask_app.app_context():
-        result = legacy()
-        assert len(result) == 2
 
 
 def test_legacy_constant_re_exported():

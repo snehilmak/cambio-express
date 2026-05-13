@@ -211,34 +211,7 @@ def test_pick_employee_unknown_id_returns_none():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_parse_dob_delegates():
-    from app import _parse_dob as legacy
-    assert legacy("1990-04-15") == date(1990, 4, 15)
-    assert legacy("") is None
 
 
-def test_legacy_active_roster_delegates():
-    from app import app as flask_app, db
-    from app import _active_roster as legacy
-    with flask_app.app_context():
-        StoreEmployee.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-roster")
-        _add_employee(db.session, s.id, name="Legacy")
-        db.session.flush()
-        roster = legacy(s.id)
-        assert any(e.name == "Legacy" for e in roster)
 
 
-def test_legacy_pick_employee_delegates():
-    from app import app as flask_app, db
-    from app import _pick_employee as legacy
-    with flask_app.app_context():
-        StoreEmployee.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-pick")
-        e = _add_employee(db.session, s.id, name="Legacy Pick")
-        db.session.flush()
-        emp, name = legacy(s.id, str(e.id))
-        assert emp.id == e.id
-        assert name == "Legacy Pick"

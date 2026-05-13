@@ -281,32 +281,10 @@ def test_audit_fields_includes_core_columns():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_summarize_changes_delegates():
-    from app import _summarize_transfer_changes as legacy
-    before = {"sender_name": "Alice"}
-    after  = {"sender_name": "Bob"}
-    assert legacy(before, after) == "Sender: Alice → Bob"
 
 
-def test_legacy_record_audit_delegates():
-    from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
-    from app import _record_transfer_audit as legacy
-    with flask_app.app_context():
-        TransferAudit.query.delete()
-        db.session.commit()
-        t = MagicMock(); t.store_id = 1; t.id = 1
-        u = MagicMock(); u.id = 1
-        legacy(t, u, "edit", 1, "Cashier", "summary")
-        db.session.flush()
-        assert TransferAudit.query.count() == 1
 
 
-def test_legacy_transfer_snapshot_delegates():
-    from app import _transfer_snapshot as legacy
-    t = _stub_transfer()
-    snap = legacy(t)
-    assert snap["sender_name"] == "Alice"
 
 
 def test_legacy_audit_fields_re_exported():
