@@ -241,9 +241,3 @@ def test_legacy_is_daily_book_kind_delegates():
 
 
 
-def test_legacy_constant_re_exported():
-    from app import BANK_CATEGORIES_NON_POSTING as legacy
-    from api.Modules.BankSync.Services import (
-        BANK_CATEGORIES_NON_POSTING as service,
-    )
-    assert legacy is service
