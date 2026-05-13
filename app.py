@@ -598,13 +598,6 @@ def data_retention_days_left(store):
     return _svc_data_retention_days_left(store)
 
 # ── Superadmin helpers ───────────────────────────────────────
-def _compute_mrr(basic_monthly, basic_yearly, pro_monthly, pro_yearly):
-    """Return MRR components and total from subscriber counts.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.compute_mrr` (PR 75)."""
-    from api.Modules.Superadmin.Services import compute_mrr
-    return compute_mrr(basic_monthly, basic_yearly,
-                       pro_monthly, pro_yearly)
 
 
 
@@ -991,12 +984,6 @@ def lookup_referral_code(raw):
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
 LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
-def _set_last_store_slug_cookie(resp, slug):
-    resp.set_cookie(LAST_STORE_SLUG_COOKIE, slug,
-                    max_age=LAST_STORE_SLUG_MAX_AGE,
-                    samesite="Lax", httponly=True,
-                    secure=request.is_secure)
-    return resp
 
 
 # `/` (landing) and `/privacy` moved to blueprints/landing.py
@@ -1169,7 +1156,7 @@ def smtp_health_check():
 # legacy names below are thin re-exports / wrappers so existing
 # callers (the dashboard, locations, and CSV-export routes) keep
 # their shape during the migration window.
-from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED, owner_store_ids as _svc_owner_store_ids
+from api.Modules.Owners.Services import owner_store_ids as _svc_owner_store_ids
 
 
 
