@@ -371,17 +371,10 @@ from api.Modules.Announcements.Services import (  # noqa: E402
 
 @app.context_processor
 def inject_trial_context():
-    """Inject trial_status, trial_days_left, store, and announcements globally.
-
-    Announcements are visible on every page for every role (including logged-out)
-    so the superadmin can reach the whole audience with one message.
-    """
+    """trial_status, trial_days_left, store, announcements, my_referral_code."""
     try:
         announcements = active_announcements(db.session)
     except Exception:
-        # Defensive — context processor runs on every request; if the
-        # announcement table can't be queried for any reason, treat as
-        # "no banner" so the page still renders.
         announcements = []
     user = current_user()
     if not user:
@@ -400,9 +393,6 @@ def inject_trial_context():
     if store and store.trial_ends_at:
         delta = store.trial_ends_at - datetime.utcnow()
         days_left = max(0, delta.days)
-    # The topbar crown reads `my_referral_code` directly — only filled in
-    # for admins on a paid plan so the button hides itself for trials and
-    # employees without any template-level conditional.
     my_referral_code = ""
     if (user.role == "admin"
         and store is not None
@@ -421,10 +411,7 @@ def inject_trial_context():
 
 @app.context_processor
 def inject_impersonation_context():
-    """Surfaces the impersonation banner's state. Kept as a small separate
-    processor so other surfaces (trial, referrals, announcements) don't
-    care about it. Returns is_impersonating=False + empty name by default
-    so templates can unconditionally render `{% if is_impersonating %}`."""
+    """is_impersonating + impersonated_store_name for the banner."""
     if "impersonator_user_id" not in session:
         return {"is_impersonating": False, "impersonated_store_name": ""}
     sid = session.get("store_id")
@@ -437,25 +424,13 @@ def inject_impersonation_context():
 
 @app.context_processor
 def inject_active_addons():
-    """Expose the current store's active add-ons to every template
-    so the sidebar / topbar can conditionally show feature links
-    (e.g. "TV Display" only when `tv_display` is on)."""
+    """active_addons set for sidebar feature-link gating."""
     store = current_store()
     return {"active_addons": store_addon_keys(store)}
 
 @app.context_processor
 def inject_theme():
-    """Expose the active UI theme to every template.
-
-    Logged-in users get whatever they've saved on their profile
-    (defaults to 'dark' for new accounts and any legacy row that
-    pre-dates the column). Logged-out pages always render dark — the
-    theme preference is per-user, so it has no meaning before login,
-    and dark is the historical default + landing-page hero design.
-
-    `theme` should be wired into the base templates via
-    `<html data-theme="{{ theme }}">` so design tokens flip in unison.
-    """
+    """Active UI theme: user preference or 'dark' default."""
     user = current_user()
     if user is None:
         return {"theme": "dark"}
@@ -505,66 +480,33 @@ from api.Modules.Owners.Services import owner_store_ids as _svc_owner_store_ids
 
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
+# TV-initiated flow (mirrors Netflix/YouTube/Disney+ on TV):
+# 1) TV POSTs /api/tv-pair/init → server mints code + device_token,
+#    returns both, TV polls /api/tv-pair/status.
+# 2) Operator types code on /tv-display claim panel.
+# 3) Server revokes any prior active TVPairing on the display and
+#    creates a fresh one reusing the pending device_token.
+# 4) TV's next poll returns "claimed" + per-device URL; rate board
+#    loads. addon=tv_display is required to claim.
 #
-# Inverted (TV-initiated) flow — matches every other TV pairing UX
-# (Netflix, YouTube, Disney+, Apple TV apps):
-#
-#   1. Fire TV opens the app → app POSTs /api/tv-pair/init.
-#   2. Server creates a TVPendingPair row with a fresh 6-char code
-#      and a stable device_token. Returns both to the Fire TV.
-#   3. Fire TV displays the code (with "go to dinerobook.com/...")
-#      and starts polling /api/tv-pair/status with its device_token
-#      every 2 seconds.
-#   4. Operator on /tv-display types the code into the claim panel.
-#      Server validates → revokes any prior active TVPairing on
-#      their display → creates a fresh TVPairing reusing the
-#      device_token from the pending row → marks the pending row
-#      claimed.
-#   5. Fire TV's next /status poll returns "claimed" + the
-#      per-device URL. App transitions to the rate board.
-#
-# Why this flow over operator-initiated:
-#   - Operator types on a real keyboard (phone/computer browser),
-#     not a Fire TV remote. ~3s vs ~15s.
-#   - Each Fire TV self-identifies on launch — visually obvious
-#     "this device wants to pair." Less ambiguous than "code
-#     belongs to the store."
-#   - Better failure feedback (errors render in the admin browser
-#     with full HTML, not a tiny Fire TV toast).
-#   - Matches every other TV pairing flow customers have used.
-#
-# Single-Fire-TV-per-subscription enforcement is identical to the
-# old flow: a successful claim revokes any prior active TVPairing
-# on the same display. Pairing a new Fire TV immediately retires
-# the old one (the old TV's WebView 404s on its next 30s refresh
-# and routes back to the pairing screen).
-#
-# Anyone can install the companion app (it lives on the Amazon
-# Appstore unrestricted) but the claim endpoint refuses to bind a
-# code unless the admin's store currently has the tv_display addon
-# active. Stripe is the gatekeeper, not Amazon.
-#
-# Ambiguous chars excluded: O / 0 / I / 1 / L / B / 8.
+# Ambiguous chars excluded from the alphabet: O / 0 / I / 1 / L / B / 8.
 _PAIR_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXYZ234579"
 _PAIR_CODE_LIFETIME = timedelta(minutes=10)
 
 def _generate_pair_code():
-    """6-char code. Not cryptographic — combined with the 10-min
-    expiry and addon gating, brute-force is impractical (27**6 ~
-    387M, /status is 404-everything for unknown tokens)."""
+    """6-char code from _PAIR_CODE_ALPHABET. Brute-force resistance
+    comes from the 10-min expiry + addon gate, not the code length
+    (27**6 ~ 387M)."""
     return "".join(secrets.choice(_PAIR_CODE_ALPHABET) for _ in range(6))
 
 def _generate_device_token():
-    """32-byte URL-safe random. Same shape as public_token. Loops on
-    the (vanishingly rare) collision against either pending or
-    paired tables."""
+    """32-byte URL-safe random. Loops 8x on collision against
+    TVPairing or TVPendingPair before raising."""
     for _ in range(8):
         t = secrets.token_urlsafe(24)
         if (not db.session.query(TVPairing).filter_by(device_token=t).first()
                 and not db.session.query(TVPendingPair).filter_by(device_token=t).first()):
             return t
-    # All 8 collided — implausible but raise rather than silently
-    # reuse a token.
     raise RuntimeError("Could not mint a unique device_token")
 
 
@@ -573,10 +515,8 @@ from api.Modules.Reports.Services.categories import resolved_categories as _reso
 
 
 # ── Reports: shared period helpers ───────────────────────────
-# Report pages use a consistent ?from=YYYY-MM-DD&to=YYYY-MM-DD
-# query convention with current-month default. Shared here so each
-# report doesn't reimplement parsing + defaults.
 def _report_period(args):
+    """Parse ?from=YYYY-MM-DD&to=YYYY-MM-DD; default current month."""
     today = date.today()
     default_from = date(today.year, today.month, 1)
     raw_from = (args.get("from") or "").strip()
@@ -596,10 +536,8 @@ def _report_period(args):
 
 
 def _report_scope_ids():
-    """Return the list of store_ids the current request should query.
-    Admin → just their store; owner → every linked store. Centralising
-    this lets the same data helpers back both /reports/<slug> (admin)
-    and /owner/reports/<slug> (owner) — only the scope changes."""
+    """Admin → [own store_id]; owner → every linked store_id.
+    Logged-out / unauthorised → []."""
     role = session.get("role")
     if role == "owner":
         u = current_user()
@@ -650,22 +588,8 @@ def _run_report_csv(data_fn, *, scope, columns, row_fn,
 def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
                          csv_totals_fn=None, csv_fname_prefix=None,
                          extra_args_fn=None):
-    """Register admin (``/reports/<slug>.csv``) + owner
-    (``/owner/reports/<slug>.csv``) CSV download routes for a
-    single report. Endpoints follow the convention
-    ``report_<slug_underscored>_csv`` (admin) /
-    ``owner_report_<slug_underscored>_csv`` (owner).
-
-    The HTML drilldown lives on the React SPA — the
-    ``spa_cutover`` ``before_request`` hook 301s every legacy GET
-    of ``/reports/<slug>`` or ``/owner/reports/<slug>`` to the SPA
-    URL before any Flask handler runs, so this function doesn't
-    register HTML routes at all.
-
-    ``extra_args_fn()`` is called per-request for reports that
-    take extra query params (e.g. ``high-value-transfers`` reads
-    ``?threshold=``).
-    """
+    """Register admin + owner CSV download routes for one report.
+    The HTML drilldown lives on the SPA (spa_cutover redirects)."""
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
     underscored = slug.replace("-", "_")
@@ -686,27 +610,13 @@ def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
                      view_func=_csv, methods=["GET"])
 
 
-# Adapter for the seven Reports services that used to be wrapped by
-# `_*_data` shims in this file. The shims existed during PRs 2-4 of
-# the strangler-fig migration so legacy callers (`_make_report_routes`
-# below) could keep their `(store_ids, d_from, d_to)` signature
-# while the business logic moved into `api.Modules.Reports.Services`.
-# Now that the services are stable and unit-tested (and exposed via
-# the FastAPI router at /api/v2/reports/*), the shims add no value —
-# call sites use this adapter inline.
 def _service_fn(service):
-    """Wraps a Reports service (which takes the SQLAlchemy Session as
-    its first argument) in the legacy `data_fn(store_ids, d_from, d_to,
-    **kwargs)` signature `_make_report_routes` expects. The Flask
-    route binds to `db.session`; the FastAPI route binds to its own
-    request-scoped session via `Depends(get_db)`."""
+    """Bind db.session to a (store_ids, d_from, d_to, **kw) Reports
+    service so _make_report_routes' data_fn signature lines up."""
     def _inner(store_ids, d_from, d_to, **kwargs):
         return service(db.session, store_ids, d_from, d_to, **kwargs)
     return _inner
 
-# Eager-imports for the Reports services backing the CSV routes
-# below — each one used to have an ``_X_data`` Flask-bound shim
-# but ``_service_fn`` handles the session-binding for all of them.
 from api.Modules.Reports.Services import (  # noqa: E402
     ach_volume, bank_charges_by_account, bank_rule_audit,
     bank_txn_breakdown, cancelled_transfers, check_deposits,
@@ -718,12 +628,6 @@ from api.Modules.Reports.Services import (  # noqa: E402
 from api.Modules.Reports.Services import new_vs_returning  # noqa: E402
 
 
-# Adapter for the 20 superadmin Reports services. Same shape as
-# ``_service_fn`` above, but the platform-scoped Reports.Service
-# signature is ``service(db, d_from, d_to, **kwargs)`` (no
-# ``store_ids``), so the adapter binds ``db.session`` and forwards
-# the period + extras. Used by ``_make_superadmin_report_routes``
-# call sites below.
 from api.Modules.Superadmin.Services import (  # noqa: E402
     active_stores_by_plan, bank_sync_adoption, churn_cohort,
     conversion_rate, dau_mau, failed_payments, login_activity,
@@ -735,18 +639,13 @@ from api.Modules.Superadmin.Services import (  # noqa: E402
 
 
 def _sa_service_fn(service):
-    """Bind ``db.session`` + forward the period to a Reports.Service
-    so the result fits the ``(d_from, d_to, **kwargs)`` data_fn
-    signature ``_make_superadmin_report_routes`` expects."""
+    """Bind db.session to a (d_from, d_to, **kw) Superadmin service."""
     def _inner(d_from, d_to, **kwargs):
         return service(db.session, d_from, d_to, **kwargs)
     return _inner
 
 
 def _csv_response(buf, fname):
-    """Wrap a StringIO buffer as a downloadable text/csv response.
-    Pulled out so each report's CSV route stops repeating the
-    Content-Disposition incantation."""
     return Response(buf.getvalue(), mimetype="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
@@ -770,12 +669,7 @@ from api.Modules.Reports.Services import (
 
 
 # ── Report-route registry ───────────────────────────────────
-# Each call registers admin (`/reports/<slug>`) + owner
-# (`/owner/reports/<slug>`) HTML and CSV routes via
-# `_make_report_routes`. Per-report config is the kpis_fn closure +
-# CSV column / row / totals lambdas. New reports go here — no
-# per-route boilerplate, no per-route owner wiring (the auto-mirror
-# below covers it).
+# Each _make_report_routes() registers admin + owner CSV routes.
 from api.Modules.Reports.Services import (  # noqa: E402
     by_destination_country as _svc_by_destination_country,
     cashier_productivity as _svc_cashier_productivity,
@@ -974,13 +868,9 @@ _make_report_routes(
 )
 
 
-# Owner mirror routes — every /reports/<slug>(.csv)? admin route gets a
-# matching /owner/reports/<slug>(.csv)? endpoint that calls the SAME
-# handler. Scope (single store vs. owner umbrella) is decided inside
-# the handler via _report_scope_ids() reading session role; the back-
-# link target + CSV-export endpoint flip the same way via
-# _is_owner_request(). This way new reports get owner support for free
-# — add an admin route, the mirror appears automatically.
+# Owner mirror: every /reports/<slug>.csv admin route gets a matching
+# /owner/reports/<slug>.csv endpoint reusing the same handler. Scope
+# flips via _report_scope_ids() reading session role.
 def _register_owner_report_mirrors():
     for rule in list(app.url_map.iter_rules()):
         if not rule.rule.startswith("/reports/"):
@@ -992,29 +882,19 @@ def _register_owner_report_mirrors():
         if owner_ep in app.view_functions:
             continue
         wrapped = app.view_functions[ep]
-        # admin_required uses functools.wraps, so __wrapped__ is the
-        # original undecorated handler.
         original = getattr(wrapped, "__wrapped__", wrapped)
-        owner_handler = original
         owner_path = "/owner" + rule.rule
         app.add_url_rule(owner_path, endpoint=owner_ep,
-                         view_func=owner_handler,
+                         view_func=original,
                          methods=list(rule.methods - {"HEAD", "OPTIONS"}))
 
 
 _register_owner_report_mirrors()
 
 
-# Superadmin Report Center — platform-level metrics and audit views.
-# Read-only by design; mutate-on-the-platform routes stay in
-# /superadmin/controls.
-
-
 # ── Superadmin reports: shared route helpers ─────────────────
-# Same shape as the admin/owner _make_report_routes helper but
-# scoped to /superadmin/reports/<slug>(.csv)? and gated with
-# @superadmin_required. Data functions don't take store_ids —
-# superadmin reports always query platform-wide.
+# Same shape as _make_report_routes but scoped to
+# /superadmin/reports/<slug>.csv. Data functions don't take store_ids.
 
 
 def _make_superadmin_report_routes(slug, *, data_fn,
@@ -1022,15 +902,8 @@ def _make_superadmin_report_routes(slug, *, data_fn,
                                      csv_totals_fn=None,
                                      csv_fname_prefix=None,
                                      extra_args_fn=None):
-    """Register the ``/superadmin/reports/<slug>.csv`` route for a
-    superadmin report. Same idea as ``_make_report_routes`` but
-    superadmin-only — no owner mirror.
-
-    Every superadmin BI drilldown migrated to the SPA in one batch
-    via ``/api/v2/superadmin/reports/<slug>``. The HTML GET 301s
-    via ``spa_cutover``'s before_request hook, so no Flask handler
-    for the HTML path is registered here.
-    """
+    """Register the ``/superadmin/reports/<slug>.csv`` route. HTML
+    drilldown lives on the SPA (spa_cutover redirects)."""
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
     underscored = slug.replace("-", "_")
@@ -1211,44 +1084,18 @@ from api.Modules.Customers.Services import PHONE_COUNTRY_CODES
 
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
                              address="", dob=None, customer_id=None):
-    """Return the Customer row for this sender, creating / updating as needed.
-
-    Lookup priority:
-      1. explicit customer_id — only accepted if the target Customer lives
-         in one of the current store's sibling stores (owner umbrella);
-      2. (phone_country, phone_number) across the owner umbrella — a match
-         in any sibling store is reused so repeat senders get one record
-         per person per owner, not per store;
-      3. otherwise create a new record pinned to the current store_id.
-
-    Any non-empty argument overwrites the stored value — last write wins,
-    so the customer record always tracks the latest info a cashier saw
-    anywhere in the owner's portfolio.
-    """
+    """Find-or-create a Customer row scoped to the owner umbrella
+    (see CLAUDE.md invariant #5). Last write wins on PII fields."""
     from api.Modules.Customers.Services import upsert as _customers_upsert
     return _customers_upsert(
         db.session, store_id, full_name, phone_country, phone_number,
         address=address, dob=dob, customer_id=customer_id,
     )
 
-# /api/customers/search + /api/customers/<int:cid>/recent-recipients
-
-# ── Transfers ────────────────────────────────────────────────
-# Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
-# (PR 13). The Flask /transfers route delegates filter parsing + sort
-# resolution + pagination to the Service layer.
-
-
-# TRANSFER_AUDIT_FIELDS re-exported for tests/Modules/Transfers/test_audit_service.py.
+# Legacy re-exports for tests / app.py-internal use.
 from api.Modules.Transfers.Services import (
     TRANSFER_AUDIT_FIELDS as _TRANSFER_AUDIT_FIELDS,
 )
-
-
-# ── Daily Book ───────────────────────────────────────────────
-# Legacy re-exports for tests / app.py-internal use; canonical homes
-# are api.Modules.DailyBook.Services and api.Modules.Transfers.Services.
-# keep their shape during the strangler-fig migration window.
 from api.Modules.DailyBook.Services import (
     LINE_ITEM_KINDS as _LINE_ITEM_KINDS,
     kind_or_404 as _line_item_kind_or_404,
@@ -1256,37 +1103,20 @@ from api.Modules.DailyBook.Services import (
 
 
 # ── Resend webhook (delivery events) ─────────────────────────
-#
-# Resend posts events to this endpoint as each message moves through
-# its lifecycle: sent → delivered → (opened → clicked) OR (bounced |
-# complained | delivery_delayed). We persist everything and react to
-# two events that matter for sending hygiene:
-#   - email.bounced with bounce.type=hard → stamp User.email_bounced_at
-#     so future _send_email calls skip the address.
-#   - email.complained → same stamp, plus flip every notify_* toggle
-#     to False. A spam-report is the strongest "stop emailing me" signal
-#     a user can send short of unsubscribing.
-#
-# Resend signs webhook requests using Svix-style headers
-# (svix-id, svix-timestamp, svix-signature). Secret is a whsec_...
-# string set via RESEND_WEBHOOK_SECRET. We verify with HMAC-SHA256
-# over `{id}.{timestamp}.{raw_body}` and reject mismatches with 400.
+# Svix-signed webhook (svix-id/svix-timestamp/svix-signature headers,
+# HMAC-SHA256 over "{id}.{timestamp}.{body}" with whsec_... secret).
+# On hard-bounce + complained we stamp User.email_bounced_at so
+# _send_email skips the address; complained also turns off every
+# notify_* toggle.
 
-_RESEND_REPLAY_WINDOW_SECONDS = 5 * 60  # 5 minutes
+_RESEND_REPLAY_WINDOW_SECONDS = 5 * 60
 
 def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
                               raw_body):
-    """Return True if `raw_body` carries a valid Svix signature under
-    `secret`. `secret` is the whsec_... string Resend gave us.
-
-    The signed value is `{id}.{timestamp}.{body}`. The sig header can
-    contain multiple space-separated `v1,{base64}` entries (older keys
-    after rotation); we accept any match.
-    """
+    """Verify a Svix-style signature. Header may carry multiple
+    space-separated 'v1,{base64}' entries (key rotation); accept any."""
     if not (secret and svix_id and svix_timestamp and svix_signature):
         return False
-    # Replay-window check — reject messages older than the window. Prevents
-    # an attacker who captured a valid webhook from replaying it later.
     try:
         ts_int = int(svix_timestamp)
         now_int = int(datetime.utcnow().timestamp())
@@ -1294,7 +1124,6 @@ def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
             return False
     except ValueError:
         return False
-    # secret looks like "whsec_BASE64". Strip the prefix and decode.
     if not secret.startswith("whsec_"):
         return False
     try:
@@ -1304,7 +1133,6 @@ def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
     signed_payload = f"{svix_id}.{svix_timestamp}.".encode() + raw_body
     expected = hmac.new(secret_bytes, signed_payload, hashlib.sha256).digest()
     expected_b64 = base64.b64encode(expected).decode()
-    # Header may carry multiple versions: "v1,sig1 v1,sig2"
     for sig in svix_signature.split():
         if "," not in sig:
             continue
@@ -1316,9 +1144,8 @@ def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
     return False
 
 def _apply_resend_side_effects(event_type, to_addr, bounce_type):
-    """For a bounce/complaint event, stamp the matching User row. For
-    a complaint, also flip every notify_* toggle off — the user is
-    actively telling receivers this was spam."""
+    """Hard-bounce → stamp email_bounced_at. Complaint → same, plus
+    flip every notify_* toggle off."""
     if not to_addr:
         return
     users = (db.session.query(User)
@@ -1335,14 +1162,10 @@ def _apply_resend_side_effects(event_type, to_addr, bounce_type):
             u.notify_trial_reminders = False
             u.notify_announcement_email = False
             u.notify_locked_day_digest = False
-            # Future notify_* columns should be flipped here too.
 
-# ── Data retention purge ─────────────────────────────────────
-# Per-store model registry + retention-purge implementation now
-# live in api.Modules.Billing.Services.retention (PR 64). The
-# legacy names below are re-exported / wrapped so any operator
-# tool that imported them by name keeps working during the
-# strangler-fig migration window.
+# ── Operator CLI commands ────────────────────────────────────
+# Re-exports for legacy callers; canonical home is
+# api.Modules.Billing.Services.retention.
 from api.Modules.Billing.Services import (
     STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES,
     STORE_OWNED_MODELS as _STORE_OWNED_MODELS,
@@ -1350,18 +1173,8 @@ from api.Modules.Billing.Services import (
 
 
 def purge_expired_stores():
-    """Hard-delete inactive stores whose retention window has elapsed.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.purge_expired_stores`. Per
-    CLAUDE.md invariant #4 the retention window is 180 days; this
-    CLI walks every store past that window.
-
-    Uses plain SQLAlchemy via ``SessionLocal()`` so the function
-    runs cleanly outside any Flask request context (CLI + tests
-    both call it directly). The Service commits internally; the
-    outer ``with`` block closes the session on exit.
-    """
+    """Hard-delete inactive stores past their retention window
+    (CLAUDE.md invariant #4 = 180 days). Used by the daily cron."""
     from api.Modules.Billing.Services import purge_expired_stores as _svc
     from api.Core.Database import SessionLocal
     with SessionLocal() as s:
@@ -1373,10 +1186,6 @@ def purge_expired_stores_cmd():
     n = purge_expired_stores()
     print(f"Purged {n} expired store(s).")
 
-# ── Trial-reminder emails ───────────────────────────────────
-# Logic + templates live in
-# ``api.Modules.Notifications.Services.trial_reminders``. Cron
-# entrypoint also available as ``python -m scripts.send_trial_reminders``.
 
 @app.cli.command("send-trial-reminders")
 def send_trial_reminders_cmd():
@@ -1398,15 +1207,14 @@ def broadcast_announcement_cmd(announcement_id):
         n = _run(s, announcement_id)
     print(f"Broadcast announcement {announcement_id}: {n} email(s) sent.")
 
+
 @app.cli.command("reset-superadmin")
 @click.argument("username", required=False)
 @click.option("--reset-2fa", is_flag=True,
-              help="Also wipe TOTP secret + recovery codes, forcing fresh enrollment.")
+              help="Also wipe TOTP secret + recovery codes.")
 def reset_superadmin_cmd(username, reset_2fa):
-    """Reset a superadmin's password (and optionally their 2FA). Run from
-    the Render shell. Prompts for the new password; doesn't touch
-    non-superadmin accounts. This is the recovery path for a locked-out
-    superadmin, since /forgot-password intentionally skips the role."""
+    """Recover a locked-out superadmin from the Render shell.
+    /forgot-password intentionally skips this role."""
     q = db.session.query(User).filter_by(role="superadmin")
     if username:
         q = q.filter_by(username=username.strip())
@@ -1429,27 +1237,7 @@ def reset_superadmin_cmd(username, reset_2fa):
     db.session.commit()
     click.echo("Done.")
 
-# ── Amazon Appstore reviewer seed ────────────────────────────
-#
-# The DineroBook TV Fire TV app gates pairing on the tv_display
-# add-on. Amazon's reviewers don't have a paid subscription, so
-# without a comped account they'd hit the addon gate and fail
-# review with "couldn't pair." This CLI provisions (or refreshes)
-# a single sandbox store and employee user with the addon comped
-# and a few sample rates pre-seeded, so the reviewer:
-#   1. Logs in at /login/amazon-reviewer with the printed creds.
-#   2. Lands on /dashboard, navigates to TV Display in the sidebar.
-#   3. Clicks "Generate code" on /tv-display.
-#   4. Pairs the test Fire TV — sees a populated rate board.
-#
-# Idempotent: re-running rotates the password, refreshes plan +
-# addons, and tops off any missing sample data. Safe to schedule
-# via cron if you ever want pre-review password rotation.
 
-# seed-amazon-reviewer body moved to scripts/seed_amazon_reviewer.py.
-# The Flask CLI command here is a thin back-compat shim — operators
-# running ``flask seed-amazon-reviewer`` get the same behaviour as
-# ``python -m scripts.seed_amazon_reviewer``.
 @app.cli.command("seed-amazon-reviewer")
 @click.option("--password", default=None,
               help="Override the auto-generated password (>= 12 chars). "
@@ -1469,15 +1257,12 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     if rc != 0:
         raise click.Abort()
 
-# 404 + 500 error handlers moved to blueprints/errors.py (D2).
 from blueprints import errors as _bp_errors  # noqa: E402
 _bp_errors.register(app, current_user)
 
 
-# Bootstrap helpers (indexes safety-net, legacy table drops, feature-flag
-# seed, one-shot legacy data migrations, Alembic upgrade) live in
-# ``api.Core.Bootstrap``. The shims below preserve the legacy
-# ``from app import _X`` import paths used by a handful of tests.
+# Bootstrap shims for legacy ``from app import _X`` test imports;
+# canonical home is api.Core.Bootstrap.
 from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
 
 
@@ -1487,6 +1272,9 @@ def _ensure_added_indexes():
 
 
 def init_db():
+    """Boot-time DB init: Alembic upgrade + index safety-net + legacy
+    drops + line-item migration + feature-flag seed + TV catalog seed
+    + superadmin seed. Idempotent on every boot."""
     from api.Core.Bootstrap import (
         apply_schema as _bs_apply_schema,
         drop_legacy_tables as _bs_drop_legacy,
@@ -1496,25 +1284,15 @@ def init_db():
         seed_feature_flags as _bs_seed_flags,
     )
     with app.app_context():
-        # Alembic builds + upgrades the schema. No db.create_all,
-        # no _ADDED_COLUMNS — every schema change is a revision.
         _bs_apply_schema(db.engine, app.logger)
         _bs_ensure_indexes(db.engine, app.logger)
         _bs_drop_legacy(db.engine, app.logger)
         _bs_rename_maxi(db.session, app.logger)
-        # One-time copy of legacy DailyDrop + CheckDeposit rows into
-        # the generic DailyLineItem table. Idempotent — safe on every
-        # boot, no-op once the data has been migrated.
         try:
             _bs_migrate_line_items(db.session)
         except Exception as e:
             app.logger.warning(f"Legacy line-item migration skipped: {e}")
         _bs_seed_flags(db.session)
-        # TV-display catalog seed (curated company/bank pickers,
-        # drop-in logo import, country-code backfill) lives in
-        # ``api.Modules.TVDisplay.Services.seed`` now. The Service is
-        # fully session-driven; pass ``db.session`` + the Flask app
-        # root path so the disk-scan finds ``static/seed-logos/``.
         try:
             from api.Modules.TVDisplay.Services.seed import run as _seed_tv
             n_imported = _seed_tv(db.session, app.root_path)
@@ -1526,15 +1304,9 @@ def init_db():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
             print("✅ Superadmin: superadmin / super2025!")
-        # No demo store on fresh boot — this is a live SaaS, the operator
-        # creates their own stores. The superadmin seed above is the only
-        # row a fresh DB needs. (2FA is mandatory and enforced at login.)
 
-# Skip the boot-time DB init when invoked from Alembic — env.py
-# imports `app` purely to harvest `db.metadata`, and running
-# init_db() would populate the same DB Alembic is about to diff
-# against (yielding an empty migration). The env var is unset
-# everywhere else.
+# DINEROBOOK_SKIP_INIT_DB is set by alembic/env.py (it imports app
+# only to harvest db.metadata).
 if not os.environ.get("DINEROBOOK_SKIP_INIT_DB"):
     init_db()
 
