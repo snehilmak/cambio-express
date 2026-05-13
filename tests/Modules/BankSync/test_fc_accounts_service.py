@@ -267,12 +267,3 @@ def test_refresh_records_stripe_error_in_last_error(monkeypatch):
 
 
 
-def test_legacy_refresh_bank_balances_delegates(monkeypatch):
-    from app import app as flask_app, db
-    from app import refresh_bank_balances as legacy
-    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
-    with flask_app.app_context():
-        s = _add_store(db.session, slug="legacy-refresh")
-        updated, err = legacy(s)
-        assert updated == 0
-        assert "not configured" in err.lower()

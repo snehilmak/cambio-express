@@ -265,11 +265,3 @@ def test_credit_amounts_are_negative_and_use_row_rates(monkeypatch):
 # ── legacy Flask wrapper ───────────────────────────────────
 
 
-def test_legacy_app_helper_delegates(monkeypatch):
-    """The Flask wrapper now hands the active session to the Service.
-    Smoke-test the early-return path against the real ORM."""
-    from app import app as flask_app
-    from app import apply_pending_referral_credits as legacy_apply
-    with flask_app.app_context():
-        # None store is a no-op.
-        legacy_apply(None)

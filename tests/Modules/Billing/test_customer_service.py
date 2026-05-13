@@ -183,16 +183,3 @@ def test_propagates_create_failure(monkeypatch):
 # ── legacy Flask wrapper ───────────────────────────────────
 
 
-def test_legacy_app_helper_delegates(monkeypatch):
-    """app.ensure_stripe_customer now hands the active session to
-    the Service. Smoke-test the cache-hit path."""
-    import stripe
-    from app import app as flask_app
-    from app import ensure_stripe_customer as legacy
-    monkeypatch.setattr(
-        stripe.Customer, "retrieve",
-        MagicMock(return_value=MagicMock(id="cus_existing")),
-    )
-    s = _store(customer_id="cus_existing")
-    with flask_app.app_context():
-        assert legacy(s) == "cus_existing"

@@ -222,12 +222,6 @@ def test_owner_kpis_filters_window():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_period_window_delegates():
-    from app import _owner_period_window as legacy
-    today = date(2026, 5, 6)
-    s, e, ps, pe, label = legacy("month", today)
-    assert s == date(2026, 5, 1)
-    assert label == "vs prior month"
 
 
 

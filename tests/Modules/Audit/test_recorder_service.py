@@ -189,14 +189,5 @@ def test_operator_does_not_commit():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_record_audit_no_op_when_no_user():
-    """Without a logged-in user the legacy wrapper bails — old
-    contract preserved."""
-    from app import app as flask_app
-    from app import record_audit
-    with flask_app.test_request_context():
-        # No session set up, so current_user() returns None.
-        result = record_audit("test_action")
-        assert result is None
 
 
