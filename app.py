@@ -7444,45 +7444,85 @@ def _rename_maxi_transfer_to_maxi():
         app.logger.warning(f"Maxi Transfer rename backfill skipped: {e}")
 
 def _apply_schema():
-    """Run ``alembic upgrade head`` against the Flask app's DB.
+    """Bring the DB schema up to the latest Alembic revision.
 
-    Alembic is the sole source of schema truth. Fresh DBs are built
-    by the baseline migration; existing DBs upgrade in place. New
-    columns, tables, indexes — all go through
-    ``alembic revision --autogenerate -m '…'``, then commit the
-    generated file under ``alembic/versions/``.
+    Three cases:
 
-    We pass Flask's existing DB connection into Alembic via
-    ``cfg.attributes`` so both run against the SAME database. This
-    matters for in-memory SQLite (tests): each engine creates its
-    own private DB, so if Alembic opens a fresh engine it migrates
-    a DB the Flask app can't see, and the suite blows up on the
-    first query against a missing table.
+    1. **Empty DB** (no ``alembic_version``, no app tables) — fresh
+       install. Alembic ``upgrade head`` runs every revision from
+       the baseline, creating every table.
+    2. **Pre-Alembic DB** (no ``alembic_version`` BUT app tables
+       already exist) — the production prod database before chunk
+       1 + a few dev databases that were created via the old
+       ``db.create_all()`` + ``_ADDED_COLUMNS`` path. Running
+       ``upgrade head`` here would try to ``CREATE TABLE`` on
+       tables that already exist and crash boot.
 
-    ``DINEROBOOK_SKIP_INIT_DB`` is set inside Alembic's ``env.py``
-    via ``os.environ.setdefault`` so the Alembic CLI doesn't
-    recursively boot Flask. We save + restore the value so the side
-    effect doesn't leak into pytest's subprocesses (some tests
-    spawn Python subprocesses that re-import ``app`` — a leaked
-    ``DINEROBOOK_SKIP_INIT_DB=1`` would silently skip ``init_db``).
+       Recovery: ``alembic stamp head`` — record "we're at head"
+       without running any DDL. The schema is already current
+       because ``db.create_all()`` + ``_ADDED_COLUMNS`` produced
+       the same shape the baseline migration produces. Future
+       boots see ``alembic_version`` and take case 3.
+    3. **Managed DB** (``alembic_version`` exists) — normal path.
+       ``upgrade head`` applies any new revisions since the last
+       boot. No-op when already at head.
+
+    Critical for the production deploy after the chunk-1 cleanup —
+    without the case-2 stamp, the first boot post-merge crashed
+    with ``relation feature_flag already exists`` and the
+    gunicorn worker exited.
+
+    Flask's existing DB connection is passed in via
+    ``cfg.attributes`` so both Alembic and Flask run against the
+    SAME database — matters for the in-memory SQLite the tests
+    use (each engine creates its own private DB, so an Alembic-
+    owned engine would migrate a DB the Flask app can't see).
     """
     from alembic import command
     from alembic.config import Config
+    from sqlalchemy import inspect
 
     cfg = Config("alembic.ini")
     cfg.set_main_option("sqlalchemy.url", str(db.engine.url))
 
     prev_skip = os.environ.get("DINEROBOOK_SKIP_INIT_DB")
     try:
-        with db.engine.connect() as connection:
+        # ``engine.begin()`` opens a transaction and commits on exit
+        # (vs ``engine.connect()`` which silently rolls back). Alembic's
+        # own ``context.begin_transaction()`` opens a SAVEPOINT inside
+        # ours; both commit cleanly on success. The explicit commit is
+        # critical for SQLite in-memory tests + StaticPool — without it
+        # the upgrade DDL evaporates when the connection returns to the
+        # pool and the test suite finds no tables.
+        with db.engine.begin() as connection:
             cfg.attributes["connection"] = connection
-            command.upgrade(cfg, "head")
+            inspector = inspect(connection)
+            table_names = set(inspector.get_table_names())
+            has_alembic_table = "alembic_version" in table_names
+            has_app_tables = bool(
+                table_names - {"alembic_version"}
+            )
+            if not has_alembic_table and has_app_tables:
+                # Case 2: schema exists from the pre-Alembic boot
+                # path (db.create_all + _ADDED_COLUMNS). Stamp head
+                # without running any DDL so the next upgrade lands
+                # cleanly.
+                command.stamp(cfg, "head")
+                app.logger.info(
+                    "Alembic stamped 'head' on pre-managed DB "
+                    "(%d existing tables)",
+                    len(table_names),
+                )
+            else:
+                # Case 1 (fresh DB) and case 3 (already managed)
+                # both take the standard upgrade path.
+                command.upgrade(cfg, "head")
+                app.logger.info("Alembic upgrade head: OK")
     finally:
         if prev_skip is None:
             os.environ.pop("DINEROBOOK_SKIP_INIT_DB", None)
         else:
             os.environ["DINEROBOOK_SKIP_INIT_DB"] = prev_skip
-    app.logger.info("Alembic upgrade head: OK")
 
 
 def init_db():
