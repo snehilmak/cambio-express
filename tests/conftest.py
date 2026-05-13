@@ -167,7 +167,14 @@ def _make_testclient_bridge(asgi_app):
             headers["content-type"] = ct
         if cl:
             headers["content-length"] = cl
-        resp = tc.request(method, url, headers=headers, content=body)
+        # Never follow redirects at this layer — Flask's
+        # ``test_client(follow_redirects=…)`` flag isn't part of the
+        # WSGI environ. If we let httpx auto-follow, the outer
+        # Flask client never sees the 301 and tests asserting on
+        # the redirect status fail (was a real bug — see
+        # ``tests/test_spa_shell.py::test_legacy_root_redirects_to_app``).
+        resp = tc.request(method, url, headers=headers, content=body,
+                          follow_redirects=False)
         status_line = f"{resp.status_code} {resp.reason_phrase or ''}".strip()
         out_headers = [(k, v) for k, v in resp.headers.items()
                        if k.lower() != "transfer-encoding"]
@@ -192,6 +199,38 @@ def _swap_in_testclient_bridge() -> None:
 
 
 _swap_in_testclient_bridge()
+
+
+# Public-route bridge: asgi.py dispatches a handful of root-mounted
+# paths (``/``, ``/privacy``, ``/sw.js``, ``/offline``, ``/tv/*``,
+# ``/api/tv-pair/*``) to the Starlette ``api.PublicRoutes.public_app``
+# rather than Flask. The Flask ``test_client`` doesn't know about
+# asgi.py, so those paths would 404 inside the tests. Wrap
+# ``flask_app.wsgi_app`` with a thin pre-router that mirrors asgi.py's
+# decision and forwards matching paths to a TestClient bridge.
+from api.PublicRoutes import (
+    PUBLIC_ROUTE_PATHS as _PUBLIC_PATHS,
+    PUBLIC_ROUTE_PREFIXES as _PUBLIC_PREFIXES,
+    public_app as _public_app,
+)
+
+
+def _install_public_routes_bridge() -> None:
+    public_bridge = _make_testclient_bridge(_public_app)
+    inner = flask_app.wsgi_app
+
+    def _wsgi_router(environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if path in _PUBLIC_PATHS or any(
+            path.startswith(p) for p in _PUBLIC_PREFIXES
+        ):
+            return public_bridge(environ, start_response)
+        return inner(environ, start_response)
+
+    flask_app.wsgi_app = _wsgi_router
+
+
+_install_public_routes_bridge()
 
 
 # Stable TOTP secret for the seeded superadmin so test helpers can

@@ -46,6 +46,11 @@ from a2wsgi import WSGIMiddleware
 # registration) to fire exactly once at boot.
 from app import app as flask_app
 from api.main import api_app as _api_app
+from api.PublicRoutes import (
+    PUBLIC_ROUTE_PATHS as _PUBLIC_PATHS,
+    PUBLIC_ROUTE_PREFIXES as _PUBLIC_PREFIXES,
+    public_app as _public_app,
+)
 from api.spa import spa_app as _spa_app
 
 
@@ -99,6 +104,16 @@ async def asgi_app(scope, receive, send):
             new_path = path[len("/app"):] or "/"
             new_scope = {**scope, "path": new_path, "root_path": "/app"}
             await _spa_app(new_scope, receive, send)
+            return
+        # Public root-mounted routes (landing redirect, PWA chrome,
+        # TV display, TV pair-code API). These used to live in
+        # ``blueprints/`` and ran on Flask; the new home is a
+        # Starlette app in ``api/PublicRoutes.py``. No prefix-strip
+        # — these routes declare their literal paths.
+        if path in _PUBLIC_PATHS or any(
+            path.startswith(p) for p in _PUBLIC_PREFIXES
+        ):
+            await _public_app(scope, receive, send)
             return
 
     await _flask_asgi(scope, receive, send)
