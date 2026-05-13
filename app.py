@@ -1689,36 +1689,15 @@ from api.Modules.Notifications.Services import smtp as _smtp_svc
 _last_smtp_attempt = _smtp_svc.last_attempt
 
 
-# ── Email template rendering — standalone Jinja2 ──────────────
+# ── Email template rendering ────────────────────────────────
 #
-# Email templates render through a standalone Jinja2 environment
-# (not Flask's ``render_template``). The Flask version required a
-# request context, which forced ``send_trial_reminders`` /
-# ``send_locked_day_digest`` etc. to fabricate one with
-# ``app.test_request_context("/")``. Cron commands, FastAPI
-# webhook handlers, and any future non-Flask caller couldn't use
-# the old path without that dance. The standalone env has zero
-# dependency on the Flask app — pure str-in, str-out.
-from jinja2 import (  # noqa: E402  (placed near smtp setup intentionally)
-    Environment as _JinjaEnvironment,
-    FileSystemLoader as _JinjaFSLoader,
-    select_autoescape as _jinja_autoescape,
+# Canonical home: ``api.Modules.Notifications.Services.templates``.
+# Re-export here for the legacy in-file callers (``send_trial_reminders``,
+# ``send_locked_day_digest``, ``broadcast_announcement``) until they
+# migrate into Services themselves.
+from api.Modules.Notifications.Services.templates import (  # noqa: E402
+    render_email_template,
 )
-
-_EMAIL_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
-_email_env = _JinjaEnvironment(
-    loader=_JinjaFSLoader(_EMAIL_TEMPLATES_DIR),
-    autoescape=_jinja_autoescape(["html", "xml"]),
-)
-
-
-def render_email_template(name: str, **ctx) -> str:
-    """Render an email template by path (e.g.
-    ``"emails/trial_reminder.html"``). The Jinja2 env is rooted at
-    ``templates/`` so the relative ``{% extends "emails/_base.html"
-    %}`` declarations in the email templates keep working."""
-    tmpl = _email_env.get_template(name)
-    return tmpl.render(**ctx)
 
 
 
@@ -1866,9 +1845,6 @@ def _ensure_tv_display(store):
         db.session.add(d); db.session.commit()
     return d
 
-def _csv_split(s):
-    return [x.strip() for x in (s or "").split(",") if x.strip()]
-
 # /tv-display moved to blueprints/tv.py (D2).
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
@@ -1940,105 +1916,14 @@ def _generate_device_token():
 # blueprints/admin_extras.py (D2 phase 28).
 
 
-def _render_tv_board(display, store, session=None):
-    """Build the section payload + render the public TV template.
-
-    Resolves catalog slugs to display_name so the public board shows
-    "BBVA Bancomer" not "mx_bbva_bancomer". Lookups include INACTIVE
-    catalog rows so legacy references keep rendering even after the
-    superadmin retires a catalog entry.
-
-    `session` is a plain SQLAlchemy session — passed in from the
-    public TV blueprint (`blueprints/tv_board.py`) so this helper
-    doesn't depend on Flask-SQLAlchemy's `Model.query`. Falls back
-    to `db.session` for any caller that hasn't migrated yet.
-    """
-    s = session if session is not None else db.session
-
-    # Resolve all catalog slugs in one query rather than per-section.
-    company_name_by_slug = {c.slug: c.display_name
-                             for c in s.query(TVCompanyCatalog).all()}
-    bank_name_by_slug = {b.slug: b.display_name
-                          for b in s.query(TVBankCatalog).all()}
-    # Logo URL maps with cache-bust suffix. Only includes catalog
-    # rows whose logo_url is populated; entries without uploads are
-    # absent and the template falls back to display_name text.
-    logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
-                      for r in s.query(TVCatalogLogo).all()}
-    company_logo_by_slug = {}
-    for c in s.query(TVCompanyCatalog).all():
-        if c.logo_url:
-            v = logo_versions.get(("company", c.slug), 0)
-            company_logo_by_slug[c.slug] = (
-                url_for("tv.tv_catalog_logo", catalog_type="company", slug=c.slug)
-                + (f"?v={v}" if v else "")
-            )
-    bank_logo_by_slug = {}
-    for b in s.query(TVBankCatalog).all():
-        if b.logo_url:
-            v = logo_versions.get(("bank", b.slug), 0)
-            bank_logo_by_slug[b.slug] = (
-                url_for("tv.tv_catalog_logo", catalog_type="bank", slug=b.slug)
-                + (f"?v={v}" if v else "")
-            )
-
-    countries = (s.query(TVDisplayCountry)
-                  .filter_by(display_id=display.id)
-                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id)
-                  .all())
-    sections = []
-    seen = set()
-    global_companies = []
-    for c in countries:
-        for slug in _csv_split(c.mt_companies):
-            if slug not in seen:
-                seen.add(slug)
-                global_companies.append(slug)
-    global_company_labels = [company_name_by_slug.get(s_, s_) for s_ in global_companies]
-    global_company_logos  = [company_logo_by_slug.get(s_, "") for s_ in global_companies]
-
-    for c in countries:
-        banks = (s.query(TVDisplayPayoutBank)
-                  .filter_by(country_id=c.id)
-                  .order_by(TVDisplayPayoutBank.sort_order,
-                            TVDisplayPayoutBank.id).all())
-        rate_map = {}
-        if banks:
-            for r in (s.query(TVDisplayRate)
-                       .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
-                       .all()):
-                rate_map[(r.bank_id, r.mt_company)] = r.rate
-        sections.append({
-            "country": c,
-            "banks":   banks,
-            "rates":   rate_map,
-        })
-    return render_template("tv_display_public.html",
-                            display=display, store=store, sections=sections,
-                            global_companies=global_companies,
-                            global_company_labels=global_company_labels,
-                            global_company_logos=global_company_logos,
-                            bank_name_by_slug=bank_name_by_slug,
-                            bank_logo_by_slug=bank_logo_by_slug)
-
-# ── Catalog logo serve ──────────────────────────────────────
+# ── TV Display: public surfaces moved to api/PublicRoutes.py ─
 #
-# Public, no auth — the TV display itself is public-by-token, and
-# the logos shown on it can't reasonably be auth-gated. Brute-force
-# enumeration is not a concern (logos are intentionally displayed
-# on-screen for customers in the shop). We DO want aggressive
-# browser caching so the rate board doesn't re-fetch every logo on
-# every 30s refresh; templates append ?v=<updated_at_unix> to bust
-# the cache when an admin re-uploads.
-
-# MIME types accepted on upload AND served back. Anything not in
-# this set returns a 404 — keeps a corrupted DB row from spitting
-# arbitrary bytes at a browser.
-_TV_LOGO_ALLOWED_MIMES = {
-    "image/png", "image/jpeg", "image/webp", "image/svg+xml",
-}
-
-# /tv/<token> + /tv/device/<dt> moved to blueprints/tv_board.py (D2 phase 20).
+# The public TV rate board (/tv/<token> + /tv/device/<dt>), the
+# catalog logo serve (/tv/logo/<type>/<slug>), and the pair-code
+# JSON API all live on Starlette now. The data-building helper that
+# this file used to ship (_render_tv_board) is now
+# api.Modules.TVDisplay.Services.build_tv_board_context — pure, no
+# Flask render_template / url_for ties.
 
 # ── Report Center ────────────────────────────────────────────
 # Categorised list of reports surfaced in /reports (admin) and
