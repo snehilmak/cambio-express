@@ -378,9 +378,3 @@ def test_legacy_smtp_health_check_delegates():
         assert "configured" in result
 
 
-def test_legacy_last_smtp_attempt_aliases_service_state():
-    """app._last_smtp_attempt is the SAME dict as the Service's
-    `last_attempt` — reads must always see the canonical state."""
-    from app import _last_smtp_attempt as legacy
-    from api.Modules.Notifications.Services import smtp as smtp_svc
-    assert legacy is smtp_svc.last_attempt

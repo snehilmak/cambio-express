@@ -1099,10 +1099,6 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # their import shape during the migration window.
 from api.Modules.Notifications.Services import smtp as _smtp_svc
 
-# Live module-level alias for the health-card state. Uses
-# `_smtp_svc.last_attempt` directly so reads always see the
-# Service's canonical dict — direct mutation isn't supported.
-_last_smtp_attempt = _smtp_svc.last_attempt
 
 
 # ── Email template rendering ────────────────────────────────
@@ -1206,14 +1202,6 @@ def store_has_addon(store, addon_key):
 #                                          the per-store actions)
 
 
-def _ensure_tv_display(store):
-    """Get-or-create the store's TVDisplay row + initial token."""
-    d = db.session.query(TVDisplay).filter_by(store_id=store.id).first()
-    if d is None:
-        d = TVDisplay(store_id=store.id,
-                       public_token=secrets.token_urlsafe(24))
-        db.session.add(d); db.session.commit()
-    return d
 
 # /tv-display moved to blueprints/tv.py (D2).
 
