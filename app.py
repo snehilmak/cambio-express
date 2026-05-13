@@ -115,20 +115,10 @@ if (
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
-from blueprints import account as _bp_account  # noqa: E402
-from blueprints import admin_extras as _bp_admin_extras  # noqa: E402
-from blueprints import auth as _bp_auth  # noqa: E402
-from blueprints import billing as _bp_billing  # noqa: E402
-from blueprints import customers_api as _bp_customers_api  # noqa: E402
 from blueprints import landing as _bp_landing  # noqa: E402
-from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
-from blueprints import subscription as _bp_subscription  # noqa: E402
-from blueprints import (  # noqa: E402
-    superadmin_extras as _bp_superadmin_extras,
-)
 from blueprints import tv as _bp_tv  # noqa: E402
 from blueprints import tv_board as _bp_tv_board  # noqa: E402
 from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
@@ -140,22 +130,6 @@ app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_tv.bp)
 app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
-
-# Auth + billing + Stripe webhooks (chunk 3 retires auth's cookie
-# session path; for now Flask still owns /login + /logout + the
-# webhook receivers).
-app.register_blueprint(_bp_auth.bp)
-app.register_blueprint(_bp_billing.bp)
-app.register_blueprint(_bp_subscription.bp)
-app.register_blueprint(_bp_customers_api.bp)
-
-# Legacy authed UI surfaces — chunk 3 retires the Jinja views
-# inside these. For now their POST handlers + tax-export downloads
-# are still alive.
-app.register_blueprint(_bp_account.bp)
-app.register_blueprint(_bp_admin_extras.bp)
-app.register_blueprint(_bp_owner.bp)
-app.register_blueprint(_bp_superadmin_extras.bp)
 
 # spa_cutover.register() installs the always-on before_request hook
 # that 301s legacy GET URLs (/dashboard, /transfers, …) to /app/*.
@@ -2095,94 +2069,49 @@ def _superadmin_dashboard_context():
     )
     return superadmin_dashboard_context(db.session)
 
+
+# ── Legacy auth decorators — DEPRECATED stubs ────────────────
+#
+# The cookie-session login form was retired in chunk 3 (the SPA
+# now owns auth via JWT). These decorator stubs survive only so
+# the report-route registration block at the bottom of app.py
+# keeps assembling the legacy `/reports/<slug>.csv` URL map —
+# the CSV downloads still ship from Flask because browser
+# `<a href>` downloads can't attach an `Authorization: Bearer`
+# header.
+#
+# **Security note**: these stubs DO NOT enforce any auth check.
+# Pilot users only; the CSV download URLs are effectively public
+# right now. The "Later" phase of the architecture cleanup
+# migrates each CSV export to `/api/v2/reports/<slug>.csv` with
+# a JWT signed-URL token, after which these stubs (and the
+# legacy `/reports/<slug>` URL surface) can be deleted entirely.
+#
+# Tracking: BACKLOG.md item D3-followup.
 def login_required(f):
-    @wraps(f)
-    def d(*a, **k):
-        if "user_id" not in session:
-            return redirect(url_for("auth.login"))
-        user = current_user()
-        # Trial-expired stores can still reach a fixed set of routes
-        # (subscribe, billing portal, logout, owner pages, …) so
-        # they can pay or sign out without bouncing. The exempt set
-        # is matched against `request.endpoint` so it works both for
-        # bare-app routes (endpoint == function name) and Blueprint
-        # routes (endpoint == "bp.func"). When called outside a
-        # request context (rare — backfills, tests), fall through
-        # without the exempt check.
-        if user and user.role != "superadmin":
-            from flask import has_request_context
-            endpoint = request.endpoint if has_request_context() else None
-            if endpoint not in _TRIAL_EXEMPT:
-                store = current_store()
-                if store and get_trial_status(store) == "expired":
-                    return redirect(url_for("billing.subscribe"))
-        return f(*a, **k)
-    return d
+    return f
+
 
 def admin_required(f):
-    @wraps(f)
-    def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("auth.login"))
-        u=current_user()
-        if not u or u.role not in ("admin","superadmin"):
-            flash("Admin access required.","error"); return redirect("/app/dashboard")
-        return f(*a,**k)
-    return d
+    return f
 
-def pro_required(f):
-    """Admin-required + the store must have Pro-tier feature access.
-
-    Bank sync (Stripe Financial Connections, transaction sync, rules,
-    reconcile) is gated behind:
-      - plan == "pro"      — paid Pro subscriber
-      - plan == "trial"    — 7-day trial grants Pro features by default
-                             (until get_trial_status reports "expired")
-    Stores on plan == "basic" or "inactive" are bounced to /subscribe
-    with a flash. Superadmin bypasses the gate so platform debugging
-    works regardless of impersonation context.
-    """
-    @wraps(f)
-    def d(*a, **k):
-        if "user_id" not in session:
-            return redirect(url_for("auth.login"))
-        u = current_user()
-        if not u or u.role not in ("admin", "superadmin"):
-            flash("Admin access required.", "error")
-            return redirect("/app/dashboard")
-        if u.role == "superadmin":
-            return f(*a, **k)
-        store = current_store()
-        if not store:
-            flash("Bank sync requires a store context.", "error")
-            return redirect("/app/dashboard")
-        if store.plan == "pro":
-            return f(*a, **k)
-        if store.plan == "trial" and get_trial_status(store) != "expired":
-            return f(*a, **k)
-        flash("Bank sync is a Pro plan feature. Upgrade to enable it.", "error")
-        return redirect(url_for("billing.subscribe"))
-    return d
 
 def superadmin_required(f):
-    @wraps(f)
-    def d(*a,**k):
-        if "user_id" not in session: return redirect(url_for("auth.login"))
-        u=current_user()
-        if not u or u.role!="superadmin":
-            flash("Superadmin access required.","error"); return redirect("/app/dashboard")
-        return f(*a,**k)
-    return d
+    return f
+
 
 def owner_required(f):
-    @wraps(f)
-    def d(*a, **k):
-        if "user_id" not in session:
-            return redirect(url_for("auth.login"))
-        u = current_user()
-        if not u or u.role != "owner":
-            abort(403)
-        return f(*a, **k)
-    return d
+    return f
+
+
+def pro_required(f):
+    return f
+
+
+# `current_user()` and `current_store()` are defined further up
+# (cookie-session reads); they return None for SPA users since
+# the SPA never writes to `session`.
+
 
 # ── Trial Status ─────────────────────────────────────────────
 def get_trial_status(store):

@@ -304,10 +304,11 @@ def test_claim_400_when_pending_already_claimed(client, test_store_id):
 
 def _populate_one_country(client, store_id, jwt):
     """Set up a country with one bank for the public-render tests.
-    Country header via JSON; the bank gets added through the legacy
-    Flask country-editor POST until that page's migration lands.
-    The country-editor POST needs a Flask session — we mint a one-shot
-    test client with the seeded admin's session here."""
+    Country header via JSON; the bank gets added directly through
+    SQLAlchemy because the legacy `/tv-display/countries/<id>`
+    Flask form-POST handler was retired in chunk 3 and no
+    `/api/v2/tv-display/payout-banks` endpoint exists yet (it lands
+    in the Later phase of the architecture cleanup)."""
     _activate_addon(client, store_id)
     create = client.post(
         "/api/v2/tv-display/countries",
@@ -316,19 +317,12 @@ def _populate_one_country(client, store_id, jwt):
         headers={"Authorization": f"Bearer {jwt}"},
     )
     country_id = create.get_json()["id"]
-    from app import User, app as flask_app
+    from app import TVDisplayPayoutBank, app as flask_app, db
     with flask_app.app_context():
-        admin_id = User.query.filter_by(username="admin@test.com").one().id
-    sess_client = flask_app.test_client()
-    with sess_client.session_transaction() as sess:
-        sess["user_id"] = admin_id
-        sess["role"] = "admin"
-        sess["store_id"] = store_id
-    sess_client.post(f"/tv-display/countries/{country_id}", data={
-        "country_name": "Mexico", "country_code": "MX",
-        "mt_companies": "Maxi, Vigo",
-        "new_bank_name": "Bancomer",
-    })
+        db.session.add(TVDisplayPayoutBank(
+            country_id=country_id, bank_name="Bancomer", sort_order=0,
+        ))
+        db.session.commit()
 
 
 def test_device_url_renders_full_board(client, test_store_id):
