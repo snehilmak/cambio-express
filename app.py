@@ -1,6 +1,6 @@
 from flask import Flask, request, session, Response
 from datetime import datetime, date, timedelta
-import base64, os, logging, re, secrets, hashlib, hmac, smtplib, csv, io, sys
+import csv, io, logging, os, secrets, smtplib, sys
 
 # When run via `python app.py` the running module is `__main__`, not
 # `app`. Submodules in api/Modules/*/Models/__init__.py do
@@ -223,7 +223,6 @@ def _apply_rate_limits():
         "10 per minute; 50 per hour",
         methods=["POST"],
     )
-    _webhook_cap = limiter.limit("120 per minute")
 
     # Flask Blueprint endpoints — login state machine + 2FA +
     # passkey. The full set lives in blueprints/auth.py.
@@ -241,15 +240,6 @@ def _apply_rate_limits():
     ):
         if endpoint in app.view_functions:
             app.view_functions[endpoint] = _auth_burst(
-                app.view_functions[endpoint],
-            )
-
-    # Webhook ingest — Stripe + Resend. Both routes still live in
-    # app.py (they're tied to model state mutations; not slated
-    # for Blueprint extraction).
-    for endpoint in ("stripe_webhook", "resend_webhook"):
-        if endpoint in app.view_functions:
-            app.view_functions[endpoint] = _webhook_cap(
                 app.view_functions[endpoint],
             )
 
@@ -1108,60 +1098,6 @@ from api.Modules.DailyBook.Services import (
 # On hard-bounce + complained we stamp User.email_bounced_at so
 # _send_email skips the address; complained also turns off every
 # notify_* toggle.
-
-_RESEND_REPLAY_WINDOW_SECONDS = 5 * 60
-
-def _verify_resend_signature(secret, svix_id, svix_timestamp, svix_signature,
-                              raw_body):
-    """Verify a Svix-style signature. Header may carry multiple
-    space-separated 'v1,{base64}' entries (key rotation); accept any."""
-    if not (secret and svix_id and svix_timestamp and svix_signature):
-        return False
-    try:
-        ts_int = int(svix_timestamp)
-        now_int = int(datetime.utcnow().timestamp())
-        if abs(now_int - ts_int) > _RESEND_REPLAY_WINDOW_SECONDS:
-            return False
-    except ValueError:
-        return False
-    if not secret.startswith("whsec_"):
-        return False
-    try:
-        secret_bytes = base64.b64decode(secret[len("whsec_"):])
-    except Exception:
-        return False
-    signed_payload = f"{svix_id}.{svix_timestamp}.".encode() + raw_body
-    expected = hmac.new(secret_bytes, signed_payload, hashlib.sha256).digest()
-    expected_b64 = base64.b64encode(expected).decode()
-    for sig in svix_signature.split():
-        if "," not in sig:
-            continue
-        version, value = sig.split(",", 1)
-        if version != "v1":
-            continue
-        if hmac.compare_digest(value, expected_b64):
-            return True
-    return False
-
-def _apply_resend_side_effects(event_type, to_addr, bounce_type):
-    """Hard-bounce → stamp email_bounced_at. Complaint → same, plus
-    flip every notify_* toggle off."""
-    if not to_addr:
-        return
-    users = (db.session.query(User)
-             .filter(db.func.lower(User.email) == to_addr.lower())
-             .all())
-    if not users:
-        return
-    now = datetime.utcnow()
-    for u in users:
-        if event_type == "email.bounced" and bounce_type == "hard":
-            u.email_bounced_at = now
-        elif event_type == "email.complained":
-            u.email_bounced_at = now
-            u.notify_trial_reminders = False
-            u.notify_announcement_email = False
-            u.notify_locked_day_digest = False
 
 # ── Operator CLI commands ────────────────────────────────────
 # Re-exports for legacy callers; canonical home is

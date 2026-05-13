@@ -43,23 +43,20 @@ async def resend_webhook(request: Request, db: Session = Depends(get_db)):
       * ``email.complained``                         → suppress
         + flip every ``notify_*`` toggle off on the User row
     """
-    # Late import — these helpers + models live in app.py for now.
-    # Once the SQLAlchemy migration off Flask-SQLAlchemy lands the
-    # helpers move into a pure module too. We wrap the DB writes
-    # in a Flask app_context() so the Flask-SQLAlchemy session
-    # binds correctly (FastAPI's own scoped session isn't on the
-    # same engine).
     from api.Modules.Tenancy.Models import User
     from api.Modules.Webhooks.Models import EmailEvent
-    from app import _apply_resend_side_effects, _verify_resend_signature, app as flask_app, db as flask_db
+    from api.Modules.Webhooks.Services import (
+        apply_resend_side_effects,
+        verify_resend_signature,
+    )
 
     secret = os.environ.get("RESEND_WEBHOOK_SECRET", "")
     raw = await request.body()
     svix_id        = request.headers.get("svix-id", "")
     svix_timestamp = request.headers.get("svix-timestamp", "")
     svix_signature = request.headers.get("svix-signature", "")
-    if not _verify_resend_signature(secret, svix_id, svix_timestamp,
-                                     svix_signature, raw):
+    if not verify_resend_signature(secret, svix_id, svix_timestamp,
+                                    svix_signature, raw):
         return JSONResponse({"error": "Invalid signature"}, status_code=400)
 
     try:
@@ -83,22 +80,22 @@ async def resend_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception:
         payload_json = ""
 
-    with flask_app.app_context():
-        for raw_to in recipients:
-            to_norm = (raw_to or "").strip().lower()
-            user_id = None
-            if to_norm:
-                matched = (flask_db.session.query(User.id)
-                           .filter(flask_db.func.lower(User.email) == to_norm)
-                           .first())
-                user_id = matched[0] if matched else None
-            flask_db.session.add(EmailEvent(
-                message_id=message_id[:80], to_addr=to_norm[:255],
-                user_id=user_id, event_type=event_type[:40],
-                bounce_type=bounce_type[:16], payload=payload_json,
-            ))
-            _apply_resend_side_effects(event_type, to_norm, bounce_type)
-        flask_db.session.commit()
+    from sqlalchemy import func
+    for raw_to in recipients:
+        to_norm = (raw_to or "").strip().lower()
+        user_id = None
+        if to_norm:
+            matched = (db.query(User.id)
+                       .filter(func.lower(User.email) == to_norm)
+                       .first())
+            user_id = matched[0] if matched else None
+        db.add(EmailEvent(
+            message_id=message_id[:80], to_addr=to_norm[:255],
+            user_id=user_id, event_type=event_type[:40],
+            bounce_type=bounce_type[:16], payload=payload_json,
+        ))
+        apply_resend_side_effects(db, event_type, to_norm, bounce_type)
+    db.commit()
     return {"ok": True}
 
 

@@ -21,7 +21,8 @@ from datetime import datetime, timedelta
 
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Webhooks.Models import EmailEvent
-from app import _send_email, _verify_resend_signature, db, purge_expired_stores, smtp_health_check
+from api.Modules.Webhooks.Services import verify_resend_signature as _verify_resend_signature
+from app import _send_email, db, purge_expired_stores, smtp_health_check
 
 
 # ── Signature helpers ──────────────────────────────────────────
