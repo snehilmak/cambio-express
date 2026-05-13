@@ -1,10 +1,6 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, make_response, Response
-from werkzeug.security import generate_password_hash, check_password_hash
+from flask import Flask, request, session, Response
 from datetime import datetime, date, timedelta
-from functools import wraps
-from calendar import monthrange, month_name
-import requests, base64, os, logging, re, secrets, string, hashlib, hmac, smtplib, json, csv, io, zipfile, sys
-from email.message import EmailMessage
+import base64, os, logging, re, secrets, hashlib, hmac, smtplib, csv, io, sys
 
 # When run via `python app.py` the running module is `__main__`, not
 # `app`. Submodules in api/Modules/*/Models/__init__.py do
@@ -17,25 +13,10 @@ if __name__ == "__main__" and "app" not in sys.modules:
     sys.modules["app"] = sys.modules[__name__]
 import stripe
 import click
-import pyotp
-import qrcode
-import qrcode.image.svg
-from slugify import slugify
 # WebAuthn / passkeys. The library ships both verify_* helpers and the
 # structs we need to build registration options. Lazy imports inside
 # helper bodies would work too, but these are cheap and centralizing
 # them here keeps the passkey routes lean.
-from webauthn import (
-    generate_registration_options, verify_registration_response,
-    generate_authentication_options, verify_authentication_response,
-    options_to_json, base64url_to_bytes,
-)
-from webauthn.helpers import bytes_to_base64url
-from webauthn.helpers.structs import (
-    AuthenticatorSelectionCriteria, ResidentKeyRequirement,
-    UserVerificationRequirement, PublicKeyCredentialDescriptor,
-)
-from sqlalchemy import case
 
 logging.basicConfig(level=logging.INFO)
 
@@ -659,14 +640,7 @@ def active_announcements():
 # threshold constants are re-exported here so legacy callers
 # (any test that read them off the module, future rule tweaks)
 # keep their existing import paths during the migration window.
-from api.Modules.Superadmin.Services import (
-    ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD,
-    ANOMALY_OVERSHORT_LOOKBACK_DAYS as _ANOMALY_OVERSHORT_LOOKBACK_DAYS,
-    ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
-    ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS as _ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS,
-    ANOMALY_QUIET_LOOKBACK_QUIET_DAYS as _ANOMALY_QUIET_LOOKBACK_QUIET_DAYS,
-    ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS,
-)
+from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD, ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD, ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS
 
 
 
@@ -1044,7 +1018,6 @@ def _set_last_store_slug_cookie(resp, slug):
 # api.Modules.Auth.Services.totp (PR 41). The Flask-scope wrappers
 # below forward to the Service so legacy callers keep their existing
 # call shape during the migration window.
-from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 
 
 
@@ -1162,9 +1135,6 @@ _last_smtp_attempt = _smtp_svc.last_attempt
 # Re-export here for the legacy in-file callers (``send_trial_reminders``,
 # ``send_locked_day_digest``, ``broadcast_announcement``) until they
 # migrate into Services themselves.
-from api.Modules.Notifications.Services.templates import (  # noqa: E402
-    render_email_template,
-)
 
 
 
@@ -1199,12 +1169,7 @@ def smtp_health_check():
 # legacy names below are thin re-exports / wrappers so existing
 # callers (the dashboard, locations, and CSV-export routes) keep
 # their shape during the migration window.
-from api.Modules.Owners.Services import (
-    OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
-    owner_kpis as _svc_owner_kpis,
-    owner_period_window as _svc_owner_period_window,
-    owner_store_ids as _svc_owner_store_ids,
-)
+from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED, owner_store_ids as _svc_owner_store_ids
 
 
 
@@ -1367,12 +1332,7 @@ def _generate_device_token():
 # ``api.Modules.Reports.Services.categories`` — re-export the
 # legacy ``_X`` names so any test / blueprint still doing
 # ``from app import _REPORT_CATEGORIES`` keeps working.
-from api.Modules.Reports.Services.categories import (  # noqa: E402
-    REPORT_CATEGORIES as _REPORT_CATEGORIES,
-    SUPERADMIN_REPORT_CATEGORIES as _SUPERADMIN_REPORT_CATEGORIES,
-    resolved_categories as _resolved_report_categories,
-    url_from_endpoint as _url_from_endpoint,
-)
+from api.Modules.Reports.Services.categories import resolved_categories as _resolved_report_categories
 
 
 # /reports + /owner/reports moved to blueprints/spa_redirects.py
@@ -2570,12 +2530,7 @@ def purge_expired_stores_cmd():
 # live in api.Modules.Notifications.Services.trial_reminders
 # (PR 65). The Flask-bound rendering + delivery (render_template,
 # _send_email, request-context fabrication for cron) stay here.
-from api.Modules.Notifications.Services import (
-    TRIAL_REMINDER_BODY as _TRIAL_REMINDER_BODY,
-    TRIAL_REMINDER_SUBJECT as _TRIAL_REMINDER_SUBJECT,
-    eligible_recipients as _trial_reminder_recipients_svc,
-    stores_due_for_reminder as _stores_due_for_reminder,
-)
+from api.Modules.Notifications.Services import TRIAL_REMINDER_BODY as _TRIAL_REMINDER_BODY, TRIAL_REMINDER_SUBJECT as _TRIAL_REMINDER_SUBJECT
 
 
 def send_trial_reminders(now=None, base_url=None):
@@ -2745,11 +2700,7 @@ _bp_errors.register(app, current_user)
 # seed, one-shot legacy data migrations, Alembic upgrade) live in
 # ``api.Core.Bootstrap``. The shims below preserve the legacy
 # ``from app import _X`` import paths used by a handful of tests.
-from api.Core.Bootstrap import (  # noqa: E402
-    ADDED_INDEXES as _ADDED_INDEXES,
-    DEFAULT_FEATURE_FLAGS as _DEFAULT_FEATURE_FLAGS,
-    DROPPED_TABLES as _DROPPED_TABLES,
-)
+from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
 
 
 def _ensure_added_indexes():
