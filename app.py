@@ -995,16 +995,14 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 from api.Modules.Notifications.Services import smtp as _smtp_svc
 
 
-# ── Email template rendering ────────────────────────────────
-#
-# Canonical home: ``api.Modules.Notifications.Services.templates``.
-# Re-export here for the legacy in-file callers (``send_trial_reminders``,
-# ``broadcast_announcement``) until they migrate into Services themselves.
+# ── Email sending shim ───────────────────────────────────────
+# Legacy callers (``api/Modules/Auth/Controllers`` for password
+# reset emails + ``tests/``) still import ``_send_email`` from
+# ``app``. Single source of truth:
+# ``api.Modules.Notifications.Services.smtp.send_email``.
 
 
 def _send_email(to_addr, subject, body, html=None):
-    """Send a transactional email. Single source of truth lives
-    in `api.Modules.Notifications.Services.send_email` (PR 82)."""
     return _smtp_svc.send_email(db.session, to_addr, subject, body, html)
 
 
@@ -2191,90 +2189,28 @@ def purge_expired_stores_cmd():
     print(f"Purged {n} expired store(s).")
 
 # ── Trial-reminder emails ───────────────────────────────────
-#
-# send_trial_reminders() is the only notification sender v1 ships
-# beyond the password-reset one at /forgot-password. It runs daily
-# via `flask send-trial-reminders` (hook to cron alongside
-# purge-expired-stores). Logic:
-#
-#   - Find every store in "expiring_soon" status (trial ends within
-#     3 days — see get_trial_status).
-#   - Skip stores already stamped trial_reminder_sent_at.
-#   - For each, find admin/owner users who (a) have `email` set,
-#     (b) have `notify_trial_reminders` True. Send them an email
-#     with the trial end date + a subscribe CTA.
-#   - Stamp trial_reminder_sent_at on the store so we don't resend
-#     tomorrow. Cleared on resubscribe by the Stripe webhook so a
-#     second trial (post-reactivation) gets its own fresh reminder.
-
-# Trial-reminder eligibility queries + subject/body templates now
-# live in api.Modules.Notifications.Services.trial_reminders
-# (PR 65). The Flask-bound rendering + delivery (render_template,
-# _send_email, request-context fabrication for cron) stay here.
-from api.Modules.Notifications.Services import TRIAL_REMINDER_BODY as _TRIAL_REMINDER_BODY, TRIAL_REMINDER_SUBJECT as _TRIAL_REMINDER_SUBJECT
-
-
-def send_trial_reminders(now=None, base_url=None):
-    """Back-compat wrapper. Canonical source of truth:
-    ``api.Modules.Notifications.Services.trial_reminders.run``.
-
-    Opens its own ``SessionLocal`` because callers (the Flask CLI +
-    legacy ad-hoc invocations) don't carry a session in. Returns
-    the count of emails sent — same contract as before.
-    """
-    from api.Core.Database import SessionLocal
-    from api.Modules.Notifications.Services.trial_reminders import (
-        run as _svc_run,
-    )
-
-    with SessionLocal() as s:
-        return _svc_run(s, now=now, base_url=base_url)
-
+# Logic + templates live in
+# ``api.Modules.Notifications.Services.trial_reminders``. Cron
+# entrypoint also available as ``python -m scripts.send_trial_reminders``.
 
 @app.cli.command("send-trial-reminders")
 def send_trial_reminders_cmd():
     """Email admins/owners of stores in expiring_soon. Run daily."""
-    n = send_trial_reminders()
+    from api.Core.Database import SessionLocal
+    from api.Modules.Notifications.Services.trial_reminders import run as _run
+    with SessionLocal() as s:
+        n = _run(s)
     print(f"Sent {n} trial reminder email(s).")
 
-
-# ── Announcement broadcast email ─────────────────────────────
-#
-# `broadcast_announcement(announcement_id)` is the sender. Called:
-#   1) Inline from POST /superadmin/announcements/new when the
-#      superadmin tickcd the broadcast checkbox.
-#   2) Ad-hoc via `flask broadcast-announcement <id>` — lets us
-#      resend if the first run partially failed, since the sender is
-#      idempotent on broadcast_sent_at.
-#
-# Recipient filter:
-#   - User.is_active = True
-#   - User.email != ''
-#   - User.notify_announcement_email = True (opt-in; default False)
-#   - User.email_bounced_at IS NULL (suppression, from PR A)
-# Each send goes through _send_email() which also runs the suppression
-# check — belt-and-suspenders so a race (bounce arrives mid-broadcast)
-# still protects the sender.
-
-def broadcast_announcement(announcement_id, base_url=None):
-    """Back-compat wrapper. Canonical source of truth:
-    ``api.Modules.Notifications.Services.broadcasts.run``.
-
-    Opens its own ``SessionLocal`` because callers (the Flask CLI +
-    a few legacy in-app callers) don't carry a session in. Returns
-    the count of emails attempted — same contract as before.
-    """
-    from api.Core.Database import SessionLocal
-    from api.Modules.Notifications.Services.broadcasts import run as _svc_run
-
-    with SessionLocal() as s:
-        return _svc_run(s, announcement_id, base_url=base_url)
 
 @app.cli.command("broadcast-announcement")
 @click.argument("announcement_id", type=int)
 def broadcast_announcement_cmd(announcement_id):
     """Resend an announcement email (no-op if already broadcast)."""
-    n = broadcast_announcement(announcement_id)
+    from api.Core.Database import SessionLocal
+    from api.Modules.Notifications.Services.broadcasts import run as _run
+    with SessionLocal() as s:
+        n = _run(s, announcement_id)
     print(f"Broadcast announcement {announcement_id}: {n} email(s) sent.")
 
 @app.cli.command("reset-superadmin")
