@@ -239,7 +239,15 @@ app.config["SESSION_COOKIE_SECURE"] = _is_https_prod
 # coffee shop stops being a key to the kingdom after a reboot.
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-db = SQLAlchemy(app)
+# Share the SQLAlchemy declarative base with the FastAPI side. Models
+# declared as ``class Foo(db.Model)`` below now inherit from
+# ``api.Core.Database.Base`` — same metadata, same registry. After
+# this change ``db.session`` (Flask-SQLAlchemy) and ``SessionLocal()``
+# (plain SQLAlchemy via api/Core/Database) are interchangeable: both
+# bind to the same engine and see the same mappers. Step 1 of the
+# Final-phase Flask removal (see BACKLOG.md).
+from api.Core.Database import Base  # noqa: E402
+db = SQLAlchemy(app, model_class=Base)
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # ── Rate limiting (BACKLOG D6 + "Before going live") ─────────
