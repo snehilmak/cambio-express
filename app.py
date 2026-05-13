@@ -829,10 +829,6 @@ from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 # that import it by name (rules engine, categorize service, the
 # operator categorisation form) keep their shape during the
 # migration window.
-from api.Modules.BankSync.Services import (
-    BANK_CATEGORIES_NON_POSTING,
-)
-
 # Built-in (platform-managed) rules that fire after user-defined rules
 # don't match. Used for transaction descriptions that are STANDARD across
 # all customers of a given bank — e.g. Nizari Progressive's RDC fee
@@ -847,12 +843,6 @@ from api.Modules.BankSync.Services import (
 # names below are kept as thin re-exports so existing call sites
 # (categorization sweep, rule-conflict UI) keep their shape during
 # the strangler-fig migration window.
-from api.Modules.BankSync.Services import (
-    BUILTIN_BANK_RULES as _BUILTIN_BANK_RULES,
-    is_bank_charge_slug as _is_bank_charge_slug,
-    match_builtin_bank_rule as _match_builtin_bank_rule,
-)
-
 # Registry: bank-transaction category_slug → MonthlyFinancial column.
 # Reserved for future non-bank-charge auto-feeds (e.g. credit-card
 # fees, money-order rent). Currently empty: bank-charge slugs are

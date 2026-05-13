@@ -145,23 +145,7 @@ def test_builtin_substrings_returns_all_descriptions():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_match_delegates():
-    """app._match_builtin_bank_rule is now an alias for the Service."""
-    from app import _match_builtin_bank_rule as legacy
-    assert legacy(
-        _txn("REMOTE DEPOSIT FEE"), _account("0230"),
-    ) == "bank_charge_230"
 
 
-def test_legacy_is_bank_charge_slug_delegates():
-    from app import _is_bank_charge_slug as legacy
-    assert legacy("bank_charge_210") is True
-    assert legacy("cash_expense") is False
 
 
-def test_legacy_constant_is_same_object():
-    """app._BUILTIN_BANK_RULES is the same list object as the
-    Service's BUILTIN_BANK_RULES (re-exported, not copied)."""
-    from app import _BUILTIN_BANK_RULES as legacy
-    from api.Modules.BankSync.Services import BUILTIN_BANK_RULES
-    assert legacy is BUILTIN_BANK_RULES
