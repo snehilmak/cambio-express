@@ -5175,60 +5175,20 @@ from api.Modules.Notifications.Services import (
 
 
 def send_trial_reminders(now=None, base_url=None):
-    """Mail every eligible user whose store is in expiring_soon.
-    Returns the count of emails actually sent (skipping users with
-    no email or ``notify_trial_reminders=False``). Idempotent on
-    ``trial_reminder_sent_at``; same-day reruns are a no-op.
+    """Back-compat wrapper. Canonical source of truth:
+    ``api.Modules.Notifications.Services.trial_reminders.run``.
 
-    Eligibility queries live in
-    ``api.Modules.Notifications.Services.trial_reminders``; this
-    wrapper handles email rendering + SMTP delivery. Uses plain
-    SQLAlchemy via ``SessionLocal()`` so the function runs cleanly
-    outside any Flask request context.
+    Opens its own ``SessionLocal`` because callers (the Flask CLI +
+    legacy ad-hoc invocations) don't carry a session in. Returns
+    the count of emails sent — same contract as before.
     """
     from api.Core.Database import SessionLocal
+    from api.Modules.Notifications.Services.trial_reminders import (
+        run as _svc_run,
+    )
 
-    now = now or datetime.utcnow()
-    base_url = base_url or os.environ.get("APP_BASE_URL",
-                                          "https://dinerobook.com")
-    sent = 0
     with SessionLocal() as s:
-        for store in _stores_due_for_reminder(s, now):
-            days_left = max(0, (store.trial_ends_at - now).days)
-            trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
-            subscribe_url = f"{base_url}/subscribe"
-            notifications_url = f"{base_url}/account/notifications"
-            any_sent = False
-            for u in _trial_reminder_recipients_svc(s, store):
-                body = _TRIAL_REMINDER_BODY.format(
-                    name=u.full_name or u.username,
-                    store_name=store.name,
-                    trial_end_date=trial_end_str,
-                    days=days_left,
-                    subscribe_url=subscribe_url,
-                    notifications_url=notifications_url,
-                )
-                html = render_email_template(
-                    "emails/trial_reminder.html",
-                    preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
-                    name=u.full_name or "",
-                    store_name=store.name,
-                    trial_end_date=trial_end_str,
-                    days=days_left,
-                    subscribe_url=subscribe_url,
-                    notifications_url=notifications_url,
-                    year=now.year,
-                    base_url=base_url,
-                )
-                subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
-                _send_email(u.email, subject, body, html=html)
-                any_sent = True
-                sent += 1
-            if any_sent:
-                store.trial_reminder_sent_at = now
-        if sent:
-            s.commit()
-    return sent
+        return _svc_run(s, now=now, base_url=base_url)
 
 
 @app.cli.command("send-trial-reminders")

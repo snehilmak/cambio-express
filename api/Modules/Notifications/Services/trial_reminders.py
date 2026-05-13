@@ -1,24 +1,22 @@
-"""Trial-reminder Service: who gets the reminder + the static
-subject/body templates the reminder uses.
+"""Trial-reminder Service: eligibility queries + the daily-cron
+``run()`` orchestrator.
 
-The actual mail delivery + template rendering stay in app.py for
-now (they need Flask's `render_template` + the Resend SDK
-wrapper). What this module owns:
+Two halves:
 
-  - `TRIAL_REMINDER_SUBJECT` / `TRIAL_REMINDER_BODY` constants
-    (changing copy means editing one place).
-  - `stores_due_for_reminder(db, now)` — every trial store whose
-    trial ends in ≤ 3 days and hasn't been reminded yet.
-  - `eligible_recipients(db, store)` — admins + owners of the
-    store with email + `notify_trial_reminders=True`.
-    Owners that live in another store's user row but are linked
-    via `StoreOwnerLink` count too.
+  - **Pure queries**: ``stores_due_for_reminder`` and
+    ``eligible_recipients`` return rows without sending anything,
+    so they're easy to unit-test.
+  - **Side-effect orchestrator**: ``run(session, now=None,
+    base_url=None)`` is the cron entry point — it fans out an
+    email to every eligible recipient and stamps
+    ``Store.trial_reminder_sent_at`` for dedup.
 
 Per CLAUDE.md the trial-reminder dedup flag is
-`Store.trial_reminder_sent_at`. The cron caller stamps it after
+``Store.trial_reminder_sent_at``. ``run()`` stamps it after
 sending; the cancellation Service clears it on resubscribe so a
 second trial (post-reactivation) gets its own fresh reminder.
 """
+import os
 from datetime import datetime
 
 from sqlalchemy import or_
@@ -28,6 +26,8 @@ from api.Modules.Billing.Services.trial import (
     EXPIRING_SOON_THRESHOLD_DAYS,
     get_trial_status,
 )
+from api.Modules.Notifications.Services.smtp import send_email
+from api.Modules.Notifications.Services.templates import render_email_template
 
 
 TRIAL_REMINDER_SUBJECT = "Your DineroBook trial ends in {days} days"
@@ -115,3 +115,66 @@ def eligible_recipients(db: Session, store) -> list:
     )
     # Same user could be an owner AND an admin of this store.
     return list({u.id: u for u in candidates}.values())
+
+
+def run(
+    session: Session,
+    *,
+    now: datetime | None = None,
+    base_url: str | None = None,
+) -> int:
+    """Send the trial-ending reminder to every eligible recipient.
+
+    Returns the count of emails actually sent (skipping users with
+    no email or ``notify_trial_reminders=False``). Idempotent on
+    ``trial_reminder_sent_at``; same-day reruns are a no-op.
+
+    The caller owns the session lifecycle — this function commits
+    inside the session when at least one email goes out (so the
+    dedup stamp lands), but never closes the session.
+    """
+    if now is None:
+        now = datetime.utcnow()
+    if base_url is None:
+        base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+
+    sent = 0
+    for store in stores_due_for_reminder(session, now):
+        days_left = max(0, (store.trial_ends_at - now).days)
+        trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
+        subscribe_url = f"{base_url}/subscribe"
+        notifications_url = f"{base_url}/account/notifications"
+        any_sent = False
+        for u in eligible_recipients(session, store):
+            body = TRIAL_REMINDER_BODY.format(
+                name=u.full_name or u.username,
+                store_name=store.name,
+                trial_end_date=trial_end_str,
+                days=days_left,
+                subscribe_url=subscribe_url,
+                notifications_url=notifications_url,
+            )
+            html = render_email_template(
+                "emails/trial_reminder.html",
+                preheader=(
+                    f"Your DineroBook trial for {store.name} "
+                    f"ends on {trial_end_str}."
+                ),
+                name=u.full_name or "",
+                store_name=store.name,
+                trial_end_date=trial_end_str,
+                days=days_left,
+                subscribe_url=subscribe_url,
+                notifications_url=notifications_url,
+                year=now.year,
+                base_url=base_url,
+            )
+            subject = TRIAL_REMINDER_SUBJECT.format(days=days_left)
+            send_email(session, u.email, subject, body, html)
+            any_sent = True
+            sent += 1
+        if any_sent:
+            store.trial_reminder_sent_at = now
+    if sent:
+        session.commit()
+    return sent
