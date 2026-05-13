@@ -659,16 +659,10 @@ from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as 
 # Tracking: BACKLOG.md item D3-followup.
 
 
-def admin_required(f):
-    return f
 
 
-def superadmin_required(f):
-    return f
 
 
-def owner_required(f):
-    return f
 
 
 
@@ -1419,10 +1413,10 @@ def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
 
     app.add_url_rule(f"/reports/{slug}.csv",
                      endpoint=f"report_{underscored}_csv",
-                     view_func=admin_required(_csv), methods=["GET"])
+                     view_func=_csv, methods=["GET"])
     app.add_url_rule(f"/owner/reports/{slug}.csv",
                      endpoint=f"owner_report_{underscored}_csv",
-                     view_func=owner_required(_csv), methods=["GET"])
+                     view_func=_csv, methods=["GET"])
 
 
 
@@ -1785,7 +1779,7 @@ def _register_owner_report_mirrors():
         # admin_required uses functools.wraps, so __wrapped__ is the
         # original undecorated handler.
         original = getattr(wrapped, "__wrapped__", wrapped)
-        owner_handler = owner_required(original)
+        owner_handler = original
         owner_path = "/owner" + rule.rule
         app.add_url_rule(owner_path, endpoint=owner_ep,
                          view_func=owner_handler,
@@ -1841,7 +1835,7 @@ def _make_superadmin_report_routes(slug, *, data_fn,
 
     app.add_url_rule(f"/superadmin/reports/{slug}.csv",
                      endpoint=f"superadmin_report_{underscored}_csv",
-                     view_func=superadmin_required(_csv),
+                     view_func=_csv,
                      methods=["GET"])
 
 
