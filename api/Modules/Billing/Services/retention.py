@@ -31,23 +31,24 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 
-# Per-store model classes wiped before the Store row itself.
-# Add new per-store models here when introducing them.
+# Per-store models, in purge order. Kept as a list of class-name
+# strings (not class references) so this module can be imported
+# without forcing every domain Models package to load — useful for
+# test introspection, schema audits, and back-compat with the
+# legacy ``app._STORE_OWNED_MODELS`` re-export. The actual purge
+# walk uses ``_store_owned_models()`` below which resolves these
+# names to class refs.
+#
+# Order matters: a class must purge before any class that FKs to
+# it. Add new per-store models here when introducing them.
 STORE_OWNED_MODELS: list[str] = [
-    # TransferAudit must purge before Transfer (FK to transfer.id),
-    # and StoreEmployee before any row that FKs to it.
     "TransferAudit", "OperatorAuditLog",
     "Transfer", "ACHBatch", "DailyReport", "DailyDrop", "CheckDeposit",
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
-    # BankTransaction + BankRule must purge before StripeBankAccount
-    # — both FK to it.
     "MonthlyFinancial", "BankRule", "BankTransaction",
     "StripeBankAccount", "StoreOwnerLink",
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
-    # TVDisplay (store-keyed) — children handled by the explicit
-    # chain in the purge function. Listing it here covers the
-    # parent row itself.
     "TVDisplay",
     "User",
 ]
@@ -59,9 +60,69 @@ STORE_FK_OVERRIDES: dict[str, str] = {
 }
 
 
+def _store_owned_models() -> list[tuple[type, str]]:
+    """Returns (model_class, fk_column_name) pairs in purge order.
+
+    Built lazily on first call so the Models imports don't fire at
+    module-import time — keeps cheap imports of this module (e.g.
+    type hints, test introspection of ``STORE_OWNED_MODELS``)
+    Flask-free.
+    """
+    from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
+    from api.Modules.BankSync.Models import (
+        BankRule, BankTransaction, StripeBankAccount,
+    )
+    from api.Modules.Batches.Models import ACHBatch
+    from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
+    from api.Modules.Customers.Models import Customer
+    from api.Modules.DailyBook.Models import (
+        CheckDeposit, DailyDrop, DailyLineItem, DailyReport,
+        MoneyTransferSummary,
+    )
+    from api.Modules.Monthly.Models import MonthlyFinancial
+    from api.Modules.ReturnChecks.Models import ReturnCheck
+    from api.Modules.Tenancy.Models import (
+        StoreEmployee, StoreOwnerLink, User,
+    )
+    from api.Modules.Transfers.Models import Transfer
+    from api.Modules.TVDisplay.Models import TVDisplay
+
+    return [
+        # TransferAudit must purge before Transfer (FK to transfer.id),
+        # and StoreEmployee before any row that FKs to it.
+        (TransferAudit, "store_id"),
+        (OperatorAuditLog, "store_id"),
+        (Transfer, "store_id"),
+        (ACHBatch, "store_id"),
+        (DailyReport, "store_id"),
+        (DailyDrop, "store_id"),
+        (CheckDeposit, "store_id"),
+        (DailyLineItem, "store_id"),
+        (MoneyTransferSummary, "store_id"),
+        (ReturnCheck, "store_id"),
+        # BankTransaction + BankRule must purge before StripeBankAccount
+        # — both FK to it.
+        (MonthlyFinancial, "store_id"),
+        (BankRule, "store_id"),
+        (BankTransaction, "store_id"),
+        (StripeBankAccount, "store_id"),
+        (StoreOwnerLink, "store_id"),
+        (StoreEmployee, "store_id"),
+        (Customer, "store_id"),
+        # Referral tables key on a different column.
+        (ReferralCode, "owner_store_id"),
+        (ReferralRedemption, "referee_store_id"),
+        # TVDisplay (store-keyed) — children handled by the explicit
+        # chain in the purge function. Listing it here covers the
+        # parent row itself.
+        (TVDisplay, "store_id"),
+        (User, "store_id"),
+    ]
+
+
 def _expired_stores(db: Session, now: datetime):
     """Stores that crossed their retention deadline."""
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     return (
         db.query(Store)
           .filter(
@@ -77,7 +138,9 @@ def _purge_user_scoped_rows(db: Session, store_id: int) -> None:
     """Wipe Passkey rows + null EmailEvent.user_id for users in
     this store before the User rows themselves are deleted by
     the generic loop."""
-    from app import EmailEvent, Passkey, User
+    from api.Modules.Auth.Models import Passkey
+    from api.Modules.Tenancy.Models import User
+    from api.Modules.Webhooks.Models import EmailEvent
     user_ids = [
         uid for (uid,) in
         db.query(User.id).filter_by(store_id=store_id).all()
@@ -114,7 +177,7 @@ def _purge_tv_display_chain(db: Session, store_id: int) -> None:
     The TVDisplay row itself is wiped by the generic loop in
     `STORE_OWNED_MODELS`.
     """
-    from app import (
+    from api.Modules.TVDisplay.Models import (
         TVDisplay,
         TVDisplayCountry,
         TVDisplayPayoutBank,
@@ -183,16 +246,11 @@ def _purge_tv_display_chain(db: Session, store_id: int) -> None:
 
 
 def _purge_store_owned_rows(db: Session, store_id: int) -> None:
-    """Loop the static `STORE_OWNED_MODELS` registry, wiping every
-    row owned by this store. Skips models that aren't installed
-    in the current build (graceful for branches that haven't run
-    `db.create_all()` yet)."""
-    import app as _app
-    for model_name in STORE_OWNED_MODELS:
-        model = getattr(_app, model_name, None)
-        if model is None:
-            continue
-        fk = STORE_FK_OVERRIDES.get(model_name, "store_id")
+    """Loop the static ``STORE_OWNED_MODELS`` registry, wiping every
+    row owned by this store. The registry holds (model, fk_column)
+    pairs so the purge walk doesn't depend on a getattr indirection
+    through ``app.py``."""
+    for model, fk in _store_owned_models():
         (
             db.query(model)
               .filter_by(**{fk: store_id})
@@ -208,7 +266,7 @@ def purge_expired_stores(db: Session) -> int:
     transactional — a partial-purge crash rolls back, the cron
     job retries on the next run.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     now = datetime.utcnow()
     expired = _expired_stores(db, now)
     purged = 0

@@ -50,19 +50,35 @@ if _db_url:
 # section and break observability tests.
 
 
-# Import the Flask app to register every SQLAlchemy model on
-# db.metadata. We pull the metadata from the SQLAlchemy instance
-# (``app.db.metadata``) which is what autogenerate diffs against.
-#
-# Setting ``DINEROBOOK_SKIP_INIT_DB`` BEFORE the import skips the
-# boot-time ``db.create_all()`` + ``_ensure_added_columns`` work —
-# otherwise that runs against the same DB Alembic is about to diff,
-# producing an empty migration. Models still register on
-# ``db.metadata`` via class-definition side effects regardless.
-os.environ.setdefault("DINEROBOOK_SKIP_INIT_DB", "1")
-from app import db  # noqa: E402  (intentional late import)
+# Import every domain's Models package so its classes register on
+# the shared ``Base.metadata``. After model extraction (PRs #495 +
+# #496) the canonical class definitions live in
+# ``api/Modules/<domain>/Models/`` — we no longer need to import
+# ``app.py`` (and pay the Flask + FastAPI boot cost) just to get the
+# metadata.
+from api.Core.Database import Base  # noqa: E402
 
-target_metadata = db.metadata
+# Force-load every Models package so the ``class Foo(Base)``
+# side-effect registrations populate ``Base.metadata``. The
+# ``noqa: F401`` markers suppress "unused import" — these imports
+# exist for their import-time side effects, not for the names
+# themselves.
+from api.Modules.Announcements import Models as _announcements_models  # noqa: F401, E402
+from api.Modules.Audit import Models as _audit_models  # noqa: F401, E402
+from api.Modules.Auth import Models as _auth_models  # noqa: F401, E402
+from api.Modules.BankSync import Models as _banksync_models  # noqa: F401, E402
+from api.Modules.Batches import Models as _batches_models  # noqa: F401, E402
+from api.Modules.Billing import Models as _billing_models  # noqa: F401, E402
+from api.Modules.Customers import Models as _customers_models  # noqa: F401, E402
+from api.Modules.DailyBook import Models as _dailybook_models  # noqa: F401, E402
+from api.Modules.Monthly import Models as _monthly_models  # noqa: F401, E402
+from api.Modules.ReturnChecks import Models as _returnchecks_models  # noqa: F401, E402
+from api.Modules.Tenancy import Models as _tenancy_models  # noqa: F401, E402
+from api.Modules.Transfers import Models as _transfers_models  # noqa: F401, E402
+from api.Modules.TVDisplay import Models as _tvdisplay_models  # noqa: F401, E402
+from api.Modules.Webhooks import Models as _webhooks_models  # noqa: F401, E402
+
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
