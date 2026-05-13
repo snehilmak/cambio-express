@@ -1361,21 +1361,6 @@ def _csv_response(buf, fname):
         headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
-# ── Returned Check Status ────────────────────────────────────
-
-
-# ── Bank Transactions Breakdown ──────────────────────────────
-
-
-# ── Daily Drops ──────────────────────────────────────────────
-
-
-# ── Check Deposits ───────────────────────────────────────────
-
-
-# ── High-Value Transfers ─────────────────────────────────────
-
-
 def _parse_threshold(args, default=3000):
     try:
         v = float(args.get("threshold") or default)
@@ -1384,41 +1369,14 @@ def _parse_threshold(args, default=3000):
     return max(0.0, v)
 
 
-# ── Employee Activity ────────────────────────────────────────
-
-
-# ── Bank-Rule Audit Log ──────────────────────────────────────
-
-
-# ── Cancelled Transfers ──────────────────────────────────────
-
-
-# ── Period P&L ───────────────────────────────────────────────
-# Daily-book lines that flow into the P&L. The (label, attr,
-# section) tuples drive the line-item rendering + CSV.
-# Daily-book P&L line constants now live in
-# api.Modules.Reports.Services.period_comparison (PR 86).
-# Re-exported here so existing call sites (period P&L, period
-# comparison, monthly P&L feed) keep their import shape.
+# Daily-book P&L line constants are re-exported here so existing
+# call sites (period P&L, period comparison, monthly P&L feed)
+# keep their import shape. Canonical source:
+# api.Modules.Reports.Services.period_comparison.
 from api.Modules.Reports.Services import (
     PL_EXPENSE_LINES as _PL_EXPENSE_LINES,
     PL_INCOME_LINES as _PL_INCOME_LINES,
 )
-
-
-# ── ACH Volume ───────────────────────────────────────────────
-
-
-# ── Bank Charges by Account ──────────────────────────────────
-
-
-# ── Period Comparison ────────────────────────────────────────
-
-
-# ── Fees vs. Federal Tax ─────────────────────────────────────
-
-
-# ── Period-comparison KPIs (multi-statement; can't be a lambda) ──
 
 
 # ── Report-route registry ───────────────────────────────────
