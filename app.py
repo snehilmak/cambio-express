@@ -746,7 +746,7 @@ class ACHBatch(db.Model):
     @property
     def variance(self): return round(self.ach_amount-self.transfers_total,2)
     @property
-    def transfer_count(self): return Transfer.query.filter_by(store_id=self.store_id,batch_id=self.batch_ref).count()
+    def transfer_count(self): return db.session.query(Transfer).filter_by(store_id=self.store_id,batch_id=self.batch_ref).count()
 
 class DailyReport(db.Model):
     __tablename__ = "daily_report"
@@ -2161,7 +2161,7 @@ def inject_trial_context():
         and store is not None
         and store.plan in ("basic", "pro")):
         try:
-            rc = ReferralCode.query.filter_by(owner_store_id=store.id).first()
+            rc = db.session.query(ReferralCode).filter_by(owner_store_id=store.id).first()
             if rc is None:
                 rc = ensure_referral_code(store)
                 db.session.commit()
@@ -2655,7 +2655,7 @@ def _active_store_from_cookie():
     slug = request.cookies.get(LAST_STORE_SLUG_COOKIE)
     if not slug:
         return None
-    store = Store.query.filter_by(slug=slug).first()
+    store = db.session.query(Store).filter_by(slug=slug).first()
     if store and store.is_active:
         return store
     return None
@@ -3139,7 +3139,7 @@ def _tv_required(allow_employee=True):
 
 def _ensure_tv_display(store):
     """Get-or-create the store's TVDisplay row + initial token."""
-    d = TVDisplay.query.filter_by(store_id=store.id).first()
+    d = db.session.query(TVDisplay).filter_by(store_id=store.id).first()
     if d is None:
         d = TVDisplay(store_id=store.id,
                        public_token=secrets.token_urlsafe(24))
@@ -3207,8 +3207,8 @@ def _generate_device_token():
     paired tables."""
     for _ in range(8):
         t = secrets.token_urlsafe(24)
-        if (not TVPairing.query.filter_by(device_token=t).first()
-                and not TVPendingPair.query.filter_by(device_token=t).first()):
+        if (not db.session.query(TVPairing).filter_by(device_token=t).first()
+                and not db.session.query(TVPendingPair).filter_by(device_token=t).first()):
             return t
     # All 8 collided — implausible but raise rather than silently
     # reuse a token.
@@ -5525,14 +5525,14 @@ def _migrate_legacy_line_item_tables():
     """
     inserted = 0
     try:
-        legacy_drops = DailyDrop.query.all()
+        legacy_drops = db.session.query(DailyDrop).all()
     except Exception:
         # Defensive — caller wraps this whole function in a try
         # block; this inner guard catches the case where the legacy
         # tables were already dropped from a freshly-baselined DB.
         legacy_drops = []
     for dd in legacy_drops:
-        existing = DailyLineItem.query.filter_by(
+        existing = db.session.query(DailyLineItem).filter_by(
             store_id=dd.store_id, report_date=dd.report_date,
             kind="drop", at_time=dd.drop_time,
         ).filter(DailyLineItem.amount == dd.amount).first()
@@ -5546,11 +5546,11 @@ def _migrate_legacy_line_item_tables():
             ))
             inserted += 1
     try:
-        legacy_checks = CheckDeposit.query.all()
+        legacy_checks = db.session.query(CheckDeposit).all()
     except Exception:
         legacy_checks = []
     for cd in legacy_checks:
-        existing = DailyLineItem.query.filter_by(
+        existing = db.session.query(DailyLineItem).filter_by(
             store_id=cd.store_id, report_date=cd.report_date,
             kind="check_deposit", at_time=cd.deposit_time,
         ).filter(DailyLineItem.amount == cd.amount).first()
@@ -5621,7 +5621,7 @@ def _wants_json():
 
 def _line_items_json_payload(kind, store_id, report_date):
     """Current state of a generic line-item widget for a given day + kind."""
-    rows = (DailyLineItem.query
+    rows = (db.session.query(DailyLineItem)
             .filter_by(store_id=store_id, report_date=report_date, kind=kind)
             .order_by(DailyLineItem.at_time).all())
     total = sum(r.amount for r in rows)
@@ -5693,14 +5693,14 @@ def _tax_pack_transfers_csv(store_id, year):
         "Total Collected", "Confirm #", "Batch", "Status",
         "Cashier", "Created By", "Notes",
     ])
-    rows = (Transfer.query.filter(
+    rows = (db.session.query(Transfer).filter(
                 Transfer.store_id == store_id,
                 Transfer.send_date >= date(year, 1, 1),
                 Transfer.send_date <= date(year, 12, 31),
             ).order_by(Transfer.send_date, Transfer.id).all())
     user_ids = {t.created_by for t in rows if t.created_by}
     users = ({u.id: u for u in
-              User.query.filter(User.id.in_(user_ids)).all()}
+              db.session.query(User).filter(User.id.in_(user_ids)).all()}
              if user_ids else {})
     for t in rows:
         u = users.get(t.created_by) if t.created_by else None
@@ -5734,7 +5734,7 @@ def _tax_pack_monthly_pl_csv(store_id, year):
     plus a derived net_income line so the accountant doesn't have to
     sum manually."""
     rows = {r.month: r for r in
-            MonthlyFinancial.query.filter_by(
+            db.session.query(MonthlyFinancial).filter_by(
                 store_id=store_id, year=year).all()}
     # Pull a representative row to discover columns dynamically; falls
     # back to a hardcoded subset if the table is empty for this year.
@@ -5767,7 +5767,7 @@ def _tax_pack_daily_summary_csv(store_id, year):
     """One row per DailyReport in the year. Receipts + Disbursements +
     over/short are the headline numbers an accountant cross-checks
     against the bank statement."""
-    rows = (DailyReport.query.filter(
+    rows = (db.session.query(DailyReport).filter(
                 DailyReport.store_id == store_id,
                 DailyReport.report_date >= date(year, 1, 1),
                 DailyReport.report_date <= date(year, 12, 31),
@@ -5804,7 +5804,7 @@ def _tax_pack_customers_csv(store_id, year):
      .order_by(db.desc(db.func.sum(Transfer.send_amount))).all())
     cust_ids = {cid for cid, *_ in rows if cid is not None}
     customers = ({c.id: c for c in
-                  Customer.query.filter(Customer.id.in_(cust_ids)).all()}
+                  db.session.query(Customer).filter(Customer.id.in_(cust_ids)).all()}
                  if cust_ids else {})
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -5977,7 +5977,7 @@ def _return_check_list_payload(store_id, status, query, date_from, date_to):
     """Filtered list rows for /return-checks. Status filter values:
     'pending' (default), 'recovered', 'loss', 'fraud', 'closed'
     (recovered+loss+fraud), 'all'."""
-    q = ReturnCheck.query.filter_by(store_id=store_id)
+    q = db.session.query(ReturnCheck).filter_by(store_id=store_id)
     if status == "pending":
         q = q.filter(ReturnCheck.status == "pending")
     elif status == "recovered":
@@ -6099,7 +6099,7 @@ def _delete_daily_paybacks_for_payment(rc, payment_amount, payment_paid_on):
     deletes the next one if needed. Better than ambiguously deleting
     all of them.
     """
-    li = DailyLineItem.query.filter_by(
+    li = db.session.query(DailyLineItem).filter_by(
         store_id=rc.store_id,
         return_check_id=rc.id,
         kind="return_payback",
@@ -6328,9 +6328,9 @@ def _resolve_catalog_row(catalog_type, slug):
     None if neither table has a match. Used by the upload + edit
     endpoints to validate the slug before they touch the DB."""
     if catalog_type == "company":
-        return TVCompanyCatalog.query.filter_by(slug=slug).first()
+        return db.session.query(TVCompanyCatalog).filter_by(slug=slug).first()
     if catalog_type == "bank":
-        return TVBankCatalog.query.filter_by(slug=slug).first()
+        return db.session.query(TVBankCatalog).filter_by(slug=slug).first()
     return None
 
 # /superadmin/tv-catalog/<type>/<slug>/logo moved to
@@ -6488,7 +6488,7 @@ def _apply_resend_side_effects(event_type, to_addr, bounce_type):
     actively telling receivers this was spam."""
     if not to_addr:
         return
-    users = (User.query
+    users = (db.session.query(User)
              .filter(db.func.lower(User.email) == to_addr.lower())
              .all())
     if not users:
@@ -6839,7 +6839,7 @@ def reset_superadmin_cmd(username, reset_2fa):
     the Render shell. Prompts for the new password; doesn't touch
     non-superadmin accounts. This is the recovery path for a locked-out
     superadmin, since /forgot-password intentionally skips the role."""
-    q = User.query.filter_by(role="superadmin")
+    q = db.session.query(User).filter_by(role="superadmin")
     if username:
         q = q.filter_by(username=username.strip())
     sa = q.first()
@@ -6856,7 +6856,7 @@ def reset_superadmin_cmd(username, reset_2fa):
     if reset_2fa:
         sa.totp_secret = None
         sa.totp_enrolled_at = None
-        RecoveryCode.query.filter_by(user_id=sa.id).delete()
+        db.session.query(RecoveryCode).filter_by(user_id=sa.id).delete()
         click.echo("2FA wiped — re-enrollment will be forced on next login.")
     db.session.commit()
     click.echo("Done.")
@@ -6925,7 +6925,7 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     REVIEWER_STORE_NAME = "Amazon Reviewer Sandbox"
 
     # 1. Find or create the store.
-    store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+    store = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
     if store is None:
         store = Store(
             name=REVIEWER_STORE_NAME, slug=REVIEWER_SLUG,
@@ -6948,7 +6948,7 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     store.is_active = True
 
     # 2. Find or create the employee user.
-    user = User.query.filter_by(
+    user = db.session.query(User).filter_by(
         store_id=store.id, username=REVIEWER_USERNAME).first()
     if user is None:
         user = User(
@@ -6983,7 +6983,7 @@ def seed_amazon_reviewer_cmd(password, keep_data):
     #    already exists. Reseeding is destructive (wipes prior
     #    countries + banks + rates) so the reviewer always sees the
     #    same canonical view; --keep-data preserves whatever's there.
-    has_existing_data = TVDisplayCountry.query.filter_by(
+    has_existing_data = db.session.query(TVDisplayCountry).filter_by(
         display_id=display.id).first() is not None
     seeded_counts = {"countries": 0, "banks": 0, "rates": 0}
     if not (keep_data and has_existing_data):
@@ -6992,17 +6992,17 @@ def seed_amazon_reviewer_cmd(password, keep_data):
         # removes the deleted rows from the session identity map —
         # otherwise re-inserts on the same PKs (SQLite reuses freed
         # auto-increment PKs aggressively) trip a collision warning.
-        existing_countries = TVDisplayCountry.query.filter_by(
+        existing_countries = db.session.query(TVDisplayCountry).filter_by(
             display_id=display.id).all()
         for c in existing_countries:
-            existing_banks = TVDisplayPayoutBank.query.filter_by(
+            existing_banks = db.session.query(TVDisplayPayoutBank).filter_by(
                 country_id=c.id).all()
             for b in existing_banks:
-                TVDisplayRate.query.filter_by(bank_id=b.id).delete(
+                db.session.query(TVDisplayRate).filter_by(bank_id=b.id).delete(
                     synchronize_session="fetch")
-            TVDisplayPayoutBank.query.filter_by(
+            db.session.query(TVDisplayPayoutBank).filter_by(
                 country_id=c.id).delete(synchronize_session="fetch")
-        TVDisplayCountry.query.filter_by(
+        db.session.query(TVDisplayCountry).filter_by(
             display_id=display.id).delete(synchronize_session="fetch")
         db.session.commit()
 
@@ -7172,7 +7172,7 @@ _DEFAULT_FEATURE_FLAGS = [
 
 def _seed_feature_flags():
     for key, label, description, enabled in _DEFAULT_FEATURE_FLAGS:
-        if not FeatureFlag.query.filter_by(key=key).first():
+        if not db.session.query(FeatureFlag).filter_by(key=key).first():
             db.session.add(FeatureFlag(
                 key=key, label=label, description=description,
                 enabled_by_default=enabled,
@@ -7305,13 +7305,13 @@ def _seed_tv_catalogs():
     re-running only inserts entries with new slugs, so superadmin
     edits are preserved across deploys."""
     for slug, display_name, sort_order in _DEFAULT_TV_COMPANIES:
-        if not TVCompanyCatalog.query.filter_by(slug=slug).first():
+        if not db.session.query(TVCompanyCatalog).filter_by(slug=slug).first():
             db.session.add(TVCompanyCatalog(
                 slug=slug, display_name=display_name,
                 sort_order=sort_order, is_active=True,
             ))
     for slug, display_name, country_code, sort_order in _DEFAULT_TV_BANKS:
-        if not TVBankCatalog.query.filter_by(slug=slug).first():
+        if not db.session.query(TVBankCatalog).filter_by(slug=slug).first():
             db.session.add(TVBankCatalog(
                 slug=slug, display_name=display_name,
                 country_code=country_code,
@@ -7367,12 +7367,13 @@ def _seed_tv_logos_from_disk():
             # Skip files that don't match a known catalog row —
             # silently, since dropping logos for entries we'll add
             # later shouldn't crash the boot.
-            parent = (TVCompanyCatalog if catalog_type == "company"
-                       else TVBankCatalog).query.filter_by(slug=slug).first()
+            parent_cls = (TVCompanyCatalog if catalog_type == "company"
+                           else TVBankCatalog)
+            parent = db.session.query(parent_cls).filter_by(slug=slug).first()
             if parent is None:
                 continue
             # Don't override an operator's existing upload.
-            if TVCatalogLogo.query.filter_by(
+            if db.session.query(TVCatalogLogo).filter_by(
                     catalog_type=catalog_type, slug=slug).first() is not None:
                 continue
             try:
@@ -7425,7 +7426,7 @@ def _backfill_tv_country_codes():
         "costa rica":            "CR",
     })
     fixed = 0
-    rows = TVDisplayCountry.query.filter(
+    rows = db.session.query(TVDisplayCountry).filter(
         db.or_(TVDisplayCountry.country_code.is_(None),
                TVDisplayCountry.country_code == "")
     ).all()
@@ -7443,11 +7444,11 @@ def _rename_maxi_transfer_to_maxi():
     in every place a company name is persisted. Safe on every boot — after
     the first run, nothing matches and the update is a no-op."""
     try:
-        Transfer.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
-        ACHBatch.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
-        MoneyTransferSummary.query.filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        db.session.query(Transfer).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        db.session.query(ACHBatch).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
+        db.session.query(MoneyTransferSummary).filter_by(company="Maxi Transfer").update({"company": "Maxi"})
         # Store.companies is a comma-separated string — split, replace, rejoin.
-        for s in Store.query.filter(Store.companies.like("%Maxi Transfer%")).all():
+        for s in db.session.query(Store).filter(Store.companies.like("%Maxi Transfer%")).all():
             parts = [p.strip() for p in (s.companies or "").split(",") if p.strip()]
             s.companies = ",".join(["Maxi" if p == "Maxi Transfer" else p for p in parts])
         db.session.commit()
@@ -7573,7 +7574,7 @@ def init_db():
                 app.logger.info(f"Imported {n_imported} TV logos from static/seed-logos/.")
         except Exception as e:
             app.logger.warning(f"TV logo seed-disk import skipped: {e}")
-        if not User.query.filter_by(username="superadmin",store_id=None).first():
+        if not db.session.query(User).filter_by(username="superadmin",store_id=None).first():
             sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
             sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
             print("✅ Superadmin: superadmin / super2025!")
