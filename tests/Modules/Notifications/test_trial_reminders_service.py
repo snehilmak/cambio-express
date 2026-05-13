@@ -294,22 +294,10 @@ def test_body_template_has_named_placeholders():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_recipients_delegates():
-    from app import app as flask_app, db
-    from app import _trial_reminder_recipients as legacy
-    with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-co")
-        u = _add_user(
-            db.session, store_id=s.id, role="admin",
-            username="legacy-admin@test.com",
-            email="legacy-admin@test.com",
-        )
-        result = legacy(s)
-        assert u in result
+# The legacy ``app._trial_reminder_recipients`` wrapper was deleted
+# in Final step 2 — ``send_trial_reminders`` now calls
+# ``eligible_recipients`` directly with a ``SessionLocal()``
+# session. Its delegation test went with it.
 
 
 def test_legacy_constants_re_exported():

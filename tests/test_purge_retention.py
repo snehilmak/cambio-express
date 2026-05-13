@@ -45,6 +45,11 @@ def test_purge_deletes_inactive_store_past_retention(client):
         sid = s.id
         purged = purge_expired_stores()
         assert purged == 1
+        # ``purge_expired_stores`` now runs on a separate
+        # ``SessionLocal()`` session; the Flask-SQLAlchemy session's
+        # identity map still holds the deleted row. Expire it so the
+        # next ``get()`` round-trips to the DB.
+        db.session.expire_all()
         assert db.session.get(Store, sid) is None
 
 

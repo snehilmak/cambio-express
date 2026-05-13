@@ -6520,13 +6520,19 @@ def purge_expired_stores():
     """Hard-delete inactive stores whose retention window has elapsed.
 
     Single source of truth lives in
-    `api.Modules.Billing.Services.purge_expired_stores` (PR 64).
-    Per CLAUDE.md invariant #4 the retention window is set to
-    180 days when the cancellation Service flips a store to
-    `inactive`; this CLI walks every store past that window.
+    `api.Modules.Billing.Services.purge_expired_stores`. Per
+    CLAUDE.md invariant #4 the retention window is 180 days; this
+    CLI walks every store past that window.
+
+    Uses plain SQLAlchemy via ``SessionLocal()`` so the function
+    runs cleanly outside any Flask request context (CLI + tests
+    both call it directly). The Service commits internally; the
+    outer ``with`` block closes the session on exit.
     """
     from api.Modules.Billing.Services import purge_expired_stores as _svc
-    return _svc(db.session)
+    from api.Core.Database import SessionLocal
+    with SessionLocal() as s:
+        return _svc(s)
 
 @app.cli.command("purge-expired-stores")
 def purge_expired_stores_cmd():
@@ -6563,65 +6569,62 @@ from api.Modules.Notifications.Services import (
 )
 
 
-def _trial_reminder_recipients(store):
-    """Delegate to api.Modules.Notifications.Services.eligible_recipients."""
-    return _trial_reminder_recipients_svc(db.session, store)
-
-
 def send_trial_reminders(now=None, base_url=None):
-    """Mail every eligible user whose store is in expiring_soon. Returns
-    the count of emails actually sent (not counting users skipped for
-    no-email or notify_trial_reminders=False). Idempotent thanks to
-    trial_reminder_sent_at; rerunning on the same day is a no-op.
+    """Mail every eligible user whose store is in expiring_soon.
+    Returns the count of emails actually sent (skipping users with
+    no email or ``notify_trial_reminders=False``). Idempotent on
+    ``trial_reminder_sent_at``; same-day reruns are a no-op.
 
     Eligibility queries live in
-    `api.Modules.Notifications.Services.trial_reminders` (PR 65);
-    this wrapper keeps the Flask-bound rendering + delivery glue.
+    ``api.Modules.Notifications.Services.trial_reminders``; this
+    wrapper handles email rendering + SMTP delivery. Uses plain
+    SQLAlchemy via ``SessionLocal()`` so the function runs cleanly
+    outside any Flask request context.
     """
+    from api.Core.Database import SessionLocal
+
     now = now or datetime.utcnow()
     base_url = base_url or os.environ.get("APP_BASE_URL",
                                           "https://dinerobook.com")
     sent = 0
-    for store in _stores_due_for_reminder(db.session, now):
-        days_left = max(0, (store.trial_ends_at - now).days)
-        trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
-        subscribe_url = f"{base_url}/subscribe"
-        notifications_url = f"{base_url}/account/notifications"
-        any_sent = False
-        for u in _trial_reminder_recipients(store):
-            body = _TRIAL_REMINDER_BODY.format(
-                name=u.full_name or u.username,
-                store_name=store.name,
-                trial_end_date=trial_end_str,
-                days=days_left,
-                subscribe_url=subscribe_url,
-                notifications_url=notifications_url,
-            )
-            # Standalone Jinja2 — no Flask request context needed
-            # (the legacy ``render_template`` call required one
-            # because Flask's context processors expected request
-            # state we didn't have under cron).
-            html = render_email_template(
-                "emails/trial_reminder.html",
-                preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
-                name=u.full_name or "",
-                store_name=store.name,
-                trial_end_date=trial_end_str,
-                days=days_left,
-                subscribe_url=subscribe_url,
-                notifications_url=notifications_url,
-                year=now.year,
-                base_url=base_url,
-            )
-            subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
-            _send_email(u.email, subject, body, html=html)
-            any_sent = True
-            sent += 1
-        if any_sent:
-            store.trial_reminder_sent_at = now
-    if sent:
-        db.session.commit()
+    with SessionLocal() as s:
+        for store in _stores_due_for_reminder(s, now):
+            days_left = max(0, (store.trial_ends_at - now).days)
+            trial_end_str = store.trial_ends_at.strftime("%B %d, %Y")
+            subscribe_url = f"{base_url}/subscribe"
+            notifications_url = f"{base_url}/account/notifications"
+            any_sent = False
+            for u in _trial_reminder_recipients_svc(s, store):
+                body = _TRIAL_REMINDER_BODY.format(
+                    name=u.full_name or u.username,
+                    store_name=store.name,
+                    trial_end_date=trial_end_str,
+                    days=days_left,
+                    subscribe_url=subscribe_url,
+                    notifications_url=notifications_url,
+                )
+                html = render_email_template(
+                    "emails/trial_reminder.html",
+                    preheader=f"Your DineroBook trial for {store.name} ends on {trial_end_str}.",
+                    name=u.full_name or "",
+                    store_name=store.name,
+                    trial_end_date=trial_end_str,
+                    days=days_left,
+                    subscribe_url=subscribe_url,
+                    notifications_url=notifications_url,
+                    year=now.year,
+                    base_url=base_url,
+                )
+                subject = _TRIAL_REMINDER_SUBJECT.format(days=days_left)
+                _send_email(u.email, subject, body, html=html)
+                any_sent = True
+                sent += 1
+            if any_sent:
+                store.trial_reminder_sent_at = now
+        if sent:
+            s.commit()
     return sent
+
 
 @app.cli.command("send-trial-reminders")
 def send_trial_reminders_cmd():
@@ -6777,6 +6780,7 @@ def broadcast_announcement(announcement_id, base_url=None):
     (PR 66); this wrapper keeps the Flask-bound HTML rendering +
     delivery glue.
     """
+    from api.Core.Database import SessionLocal
     from api.Modules.Notifications.Services import (
         BROADCAST_PLAIN_BODY,
         broadcast_eligible_recipients,
@@ -6785,37 +6789,38 @@ def broadcast_announcement(announcement_id, base_url=None):
     base_url = base_url or os.environ.get(
         "APP_BASE_URL", "https://dinerobook.com",
     )
-    ann = db.session.get(Announcement, announcement_id)
-    if ann is None:
-        return 0
-    if ann.broadcast_sent_at is not None:
-        return 0  # already sent — idempotent
-    subject = derive_broadcast_subject(ann.message)
-    recipients = broadcast_eligible_recipients(db.session)
-    now = datetime.utcnow()
-    notifications_url = f"{base_url}/account/notifications"
-    plain_body = BROADCAST_PLAIN_BODY.format(
-        message=ann.message,
-        base_url=base_url,
-        notifications_url=notifications_url,
-    )
     sent = 0
-    for u in recipients:
-        html = render_email_template(
-            "emails/announcement.html",
-            preheader=ann.message[:120],
-            subject=subject,
+    with SessionLocal() as s:
+        ann = s.get(Announcement, announcement_id)
+        if ann is None:
+            return 0
+        if ann.broadcast_sent_at is not None:
+            return 0  # already sent — idempotent
+        subject = derive_broadcast_subject(ann.message)
+        recipients = broadcast_eligible_recipients(s)
+        now = datetime.utcnow()
+        notifications_url = f"{base_url}/account/notifications"
+        plain_body = BROADCAST_PLAIN_BODY.format(
             message=ann.message,
-            level=ann.level or "info",
-            app_url=base_url,
-            notifications_url=notifications_url,
-            year=now.year,
             base_url=base_url,
+            notifications_url=notifications_url,
         )
-        _send_email(u.email, subject, plain_body, html=html)
-        sent += 1
-    ann.broadcast_sent_at = now
-    db.session.commit()
+        for u in recipients:
+            html = render_email_template(
+                "emails/announcement.html",
+                preheader=ann.message[:120],
+                subject=subject,
+                message=ann.message,
+                level=ann.level or "info",
+                app_url=base_url,
+                notifications_url=notifications_url,
+                year=now.year,
+                base_url=base_url,
+            )
+            _send_email(u.email, subject, plain_body, html=html)
+            sent += 1
+        ann.broadcast_sent_at = now
+        s.commit()
     return sent
 
 @app.cli.command("broadcast-announcement")
