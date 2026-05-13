@@ -78,5 +78,13 @@ async def asgi_app(scope, receive, send):
             new_scope = {**scope, "path": new_path, "root_path": "/api/v2"}
             await _api_app(new_scope, receive, send)
             return
+        # Webhook receivers (Stripe + Resend) live on FastAPI too,
+        # but the provider URLs are ``/webhooks/stripe`` and
+        # ``/webhooks/resend`` — no /api/v2 prefix. Forward straight
+        # to the FastAPI app (its route table has those paths via
+        # `include_router(prefix="/webhooks")`).
+        if path == "/webhooks" or path.startswith("/webhooks/"):
+            await _api_app(scope, receive, send)
+            return
 
     await _flask_asgi(scope, receive, send)

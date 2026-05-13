@@ -114,7 +114,7 @@ def test_signature_accepts_multiple_versions_in_header(client):
 
 def test_webhook_rejects_missing_signature(client):
     _set_webhook_secret()
-    resp = client.post("/webhooks/resend", data=_webhook_body("email.sent"),
+    resp = client.post("/api/v2/webhooks/resend", data=_webhook_body("email.sent"),
                         content_type="application/json")
     assert resp.status_code == 400
 
@@ -122,7 +122,7 @@ def test_webhook_rejects_missing_signature(client):
 def test_webhook_rejects_bad_signature(client):
     _set_webhook_secret()
     body = _webhook_body("email.sent")
-    resp = client.post("/webhooks/resend", data=body,
+    resp = client.post("/api/v2/webhooks/resend", data=body,
                         content_type="application/json",
                         headers={"svix-id": "m", "svix-timestamp":
                                  str(int(datetime.utcnow().timestamp())),
@@ -133,7 +133,7 @@ def test_webhook_rejects_bad_signature(client):
 def test_webhook_persists_event_on_valid_request(client):
     _set_webhook_secret()
     body = _webhook_body("email.delivered", to="ok@example.com")
-    resp = client.post("/webhooks/resend", data=body,
+    resp = client.post("/api/v2/webhooks/resend", data=body,
                         content_type="application/json",
                         headers=_sign(body))
     assert resp.status_code == 200
@@ -154,7 +154,7 @@ def test_webhook_hard_bounce_stamps_user(client, test_admin_id):
         db.session.commit()
     body = _webhook_body("email.bounced", to="admin@test.com",
                           bounce_type="hard")
-    client.post("/webhooks/resend", data=body,
+    client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
     with client.application.app_context():
         u = db.session.get(User, test_admin_id)
@@ -171,7 +171,7 @@ def test_webhook_soft_bounce_does_not_stamp(client, test_admin_id):
         db.session.commit()
     body = _webhook_body("email.bounced", to="admin@test.com",
                           bounce_type="soft")
-    client.post("/webhooks/resend", data=body,
+    client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
     with client.application.app_context():
         u = db.session.get(User, test_admin_id)
@@ -188,7 +188,7 @@ def test_webhook_complaint_stamps_and_flips_toggles(client, test_admin_id):
         u.notify_trial_reminders = True
         db.session.commit()
     body = _webhook_body("email.complained", to="admin@test.com")
-    client.post("/webhooks/resend", data=body,
+    client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
     with client.application.app_context():
         u = db.session.get(User, test_admin_id)
@@ -201,7 +201,7 @@ def test_webhook_handles_unmatched_email(client):
     to a personal gmail) still persist — useful for forensics."""
     _set_webhook_secret()
     body = _webhook_body("email.delivered", to="stranger@gmail.com")
-    resp = client.post("/webhooks/resend", data=body,
+    resp = client.post("/api/v2/webhooks/resend", data=body,
                         content_type="application/json", headers=_sign(body))
     assert resp.status_code == 200
     with client.application.app_context():
@@ -221,7 +221,7 @@ def test_webhook_handles_non_bounce_events_without_side_effects(client, test_adm
     for kind in ("email.sent", "email.delivered", "email.opened",
                  "email.clicked", "email.delivery_delayed"):
         body = _webhook_body(kind, to="admin@test.com", email_id=kind)
-        resp = client.post("/webhooks/resend", data=body,
+        resp = client.post("/api/v2/webhooks/resend", data=body,
                             content_type="application/json",
                             headers=_sign(body, svix_id=kind))
         assert resp.status_code == 200

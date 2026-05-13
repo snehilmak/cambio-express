@@ -171,6 +171,18 @@ def _register_routers(app: FastAPI) -> None:
         dashboard_router, prefix="/dashboard", tags=["dashboard"],
     )
 
+    # Webhooks — Stripe + Resend delivery-event receivers. Routes
+    # mount at /webhooks/stripe and /webhooks/resend so the existing
+    # provider URLs keep working through the asgi.py routing
+    # (which forwards /webhooks/* directly to FastAPI). They're
+    # ALSO reachable at /api/v2/webhooks/* via the dispatcher.
+    from api.Modules.Webhooks.Controllers import (
+        router as webhooks_router,
+    )
+    app.include_router(
+        webhooks_router, prefix="/webhooks", tags=["webhooks"],
+    )
+
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app.

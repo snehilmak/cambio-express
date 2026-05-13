@@ -4,6 +4,56 @@ Tracked work we're deferring. Anything in **Before going live** must be
 closed out before public / paid launch; the other sections can happen on
 any cadence.
 
+## Final phase — Flask-SQLAlchemy → plain SQLAlchemy (defer Flask removal)
+
+The architecture cleanup ran through chunks 1–3 (legacy Jinja UI,
+redirect/mutation blueprints, cookie-session auth) plus the Later phase
+(webhooks → FastAPI, emails → standalone Jinja2). What's left to actually
+delete Flask is the Flask-SQLAlchemy → plain SQLAlchemy migration.
+
+**Scope** (verified May 2026):
+- **44 model classes** in `app.py` declared as `class Foo(db.Model)`.
+  Each migrates to `api/Modules/<domain>/Models/` and switches to
+  `class Foo(Base)` where `Base = api.Core.Database.Base` (shared
+  declarative base, already wired in `api/Core/Database/session.py`).
+- **~200 occurrences** of `db.session.X` or `Model.query.X` in `app.py`.
+  Each call site migrates to a FastAPI `Session` via `Depends(get_db)`
+  or, for cron commands, to `SessionLocal()`.
+- **~20 occurrences** across the surviving `blueprints/` (`push.py`,
+  `tv.py`, `tv_pair.py`, `tv_board.py`).
+- The Flask-SQLAlchemy bridge (`db = SQLAlchemy(app)`) gets deleted once
+  no references to `db.session` / `Model.query` remain.
+- CLI commands (`@app.cli.command`) migrate to standalone scripts that do
+  `from api.Core.Database import SessionLocal; with SessionLocal() as s:`.
+- Static + SPA shell serving migrate to FastAPI `StaticFiles`.
+- `app.py` deletes; `asgi:asgi_app` becomes the sole entry.
+
+**Order of operations** (each step lands as its own PR):
+1. Move models out of `app.py` into `api/Modules/<domain>/Models/__init__.py`,
+   re-export them from `app.py` for back-compat. Keep `db.Model` for one
+   release cycle so the diff is mechanical.
+2. Switch the inheritance via Flask-SQLAlchemy's `model_class=` arg:
+   `db = SQLAlchemy(app, model_class=api.Core.Database.Base)`. Now both
+   worlds share the same metadata / declarative base — no schema double-up.
+3. Migrate `db.session.X` call sites blueprint-by-blueprint to
+   `SessionLocal()` or the FastAPI dep. Tests must stay green after each
+   blueprint.
+4. Migrate `Model.query.filter_by(...)` to
+   `session.query(Model).filter_by(...)` blueprint-by-blueprint.
+5. Once `app.py` has zero references to `db.session` or `Model.query`,
+   delete `from flask_sqlalchemy import SQLAlchemy` + `db = SQLAlchemy(app)`.
+6. Migrate CLI commands to standalone scripts. Update Render's cron
+   service definitions.
+7. Migrate static + SPA shell serving (`@app.route("/app/...")`
+   + `send_from_directory`) to FastAPI `StaticFiles`.
+8. Delete `app.py` + every surviving blueprint. `asgi:asgi_app`
+   becomes the sole entrypoint; `requirements.txt` drops Flask,
+   Flask-SQLAlchemy, Flask-WTF, Flask-Limiter.
+
+**Risk** is high — touches every route and a substantial fraction of every
+model file. Recommended to spread across multiple deploy windows, not
+ship as a single big-bang PR.
+
 ## Post-SPA-migration cleanup (new — work top-down)
 
 The SPA migration finished in May 2026 (PRs #395–#419). Every landing
