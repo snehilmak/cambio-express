@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash, abort, send_from_directory, make_response, Response
-from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 from functools import wraps
@@ -189,21 +188,13 @@ def country_flag_html(code, size="1em"):
     )
 app.jinja_env.globals["country_flag_html"] = country_flag_html
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///dinerobook.db")
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-app.config["SQLALCHEMY_DATABASE_URI"]        = DATABASE_URL
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-_engine_opts: dict = {"pool_pre_ping": True}
-# SQLite :memory: gets its own DB per connection by default, which
-# breaks the test suite — the seeded fixture row is invisible to the
-# request-handling connection. StaticPool keeps a single shared
-# connection so seed data is visible to every code path.
-if ":memory:" in DATABASE_URL:
-    from sqlalchemy.pool import StaticPool
-    _engine_opts["poolclass"] = StaticPool
-    _engine_opts["connect_args"] = {"check_same_thread": False}
-app.config["SQLALCHEMY_ENGINE_OPTIONS"]      = _engine_opts
+# Engine + session machinery live in api/Core/Database/session.py —
+# single source of truth for both the legacy Flask routes and the
+# FastAPI strangler-fig side. The engine builds itself from
+# `settings.database_url` (env-driven, same DATABASE_URL the legacy
+# Flask config used to read). The `db` shim further down rebinds
+# `db.session` + `db.engine` to that shared engine, so legacy
+# request handlers and FastAPI controllers hit one pool.
 
 # Session-cookie hardening. The Flask `session` cookie carries the
 # logged-in user id; an attacker who exfiltrates it gets full account
@@ -237,15 +228,97 @@ app.config["SESSION_COOKIE_SECURE"] = _is_https_prod
 # coffee shop stops being a key to the kingdom after a reboot.
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
 
-# Share the SQLAlchemy declarative base with the FastAPI side. Models
-# declared as ``class Foo(db.Model)`` below now inherit from
-# ``api.Core.Database.Base`` — same metadata, same registry. After
-# this change ``db.session`` (Flask-SQLAlchemy) and ``SessionLocal()``
-# (plain SQLAlchemy via api/Core/Database) are interchangeable: both
-# bind to the same engine and see the same mappers. Step 1 of the
-# Final-phase Flask removal (see BACKLOG.md).
+# ── SQLAlchemy `db` shim (Flask-SQLAlchemy retirement) ───────
+#
+# Flask-SQLAlchemy is gone. The `db` namespace below replicates just
+# the slice the legacy Flask code relies on:
+#
+#   - ``db.Model``        — the shared declarative Base.
+#   - ``db.session``      — thread-local scoped session (the same
+#                           shape Flask-SQLAlchemy used to expose,
+#                           with ``.add``, ``.commit``, ``.query``,
+#                           ``.remove`` etc).
+#   - ``db.engine``       — the singleton SQLAlchemy Engine, shared
+#                           with FastAPI via ``api.Core.Database``.
+#   - ``db.create_all`` / ``db.drop_all`` — used by the test
+#                           conftest to spin up + tear down the
+#                           in-memory schema.
+#   - ``db.relationship`` / ``db.func`` / ``db.or_`` / column types
+#                           (``db.Column``, ``db.Integer``, etc) —
+#                           transparent re-exports from
+#                           ``sqlalchemy``, so every existing model
+#                           declaration ``class Foo(db.Model): id =
+#                           db.Column(db.Integer, primary_key=True)``
+#                           keeps working unchanged.
+#
+# Legacy ``Model.query`` keeps working too: ``Base.query`` is wired
+# to the scoped session below. CLAUDE.md invariant #11 still says
+# new code should use ``db.session.query(Model)`` (or
+# ``db.session.get(Model, id)``); ``Model.query`` survives for the
+# test suite + a handful of in-flight CLI code paths.
+#
+# A Flask ``teardown_appcontext`` hook calls ``_scoped_session.
+# remove()`` after every request so the session is short-lived
+# (matches Flask-SQLAlchemy's behaviour). FastAPI's controllers
+# get their own session per request via ``Depends(get_db)`` —
+# different machinery, same engine.
+import sqlalchemy as _sa  # noqa: E402
+from sqlalchemy.orm import (  # noqa: E402
+    relationship as _sa_relationship,
+    scoped_session as _scoped_session_cls,
+    sessionmaker as _sessionmaker,
+)
+
 from api.Core.Database import Base  # noqa: E402
-db = SQLAlchemy(app, model_class=Base)
+from api.Core.Database.session import _get_engine  # noqa: E402
+
+_engine = _get_engine()
+_Session = _sessionmaker(
+    autocommit=False, autoflush=False, bind=_engine, future=True,
+)
+_scoped_session = _scoped_session_cls(_Session)
+# Inject the legacy ``Model.query`` property onto every subclass of
+# Base. Production code uses ``db.session.query(Model)`` (CLAUDE.md
+# invariant #11), but the test suite + a handful of helpers still
+# go through the shorthand — keep it alive rather than rewriting
+# ~565 test-side call sites.
+Base.query = _scoped_session.query_property()
+
+
+class _DB:
+    """Drop-in replacement for the Flask-SQLAlchemy ``db`` object."""
+
+    Model = Base
+    metadata = Base.metadata
+    engine = _engine
+    session = _scoped_session
+    relationship = staticmethod(_sa_relationship)
+
+    @staticmethod
+    def create_all():
+        Base.metadata.create_all(bind=_engine)
+
+    @staticmethod
+    def drop_all():
+        Base.metadata.drop_all(bind=_engine)
+
+    def __getattr__(self, name):
+        # Re-export the rest of the sqlalchemy namespace — Column,
+        # String, Integer, Float, DateTime, Date, Time, Boolean,
+        # Text, ForeignKey, UniqueConstraint, Index, LargeBinary,
+        # BigInteger, func, or_, and_, desc, asc, case … so legacy
+        # ``db.Column(db.Integer, ...)`` declarations keep working.
+        return getattr(_sa, name)
+
+
+db = _DB()
+
+
+@app.teardown_appcontext
+def _remove_db_session(exc):  # noqa: ARG001 (Flask passes the exception)
+    _scoped_session.remove()
+
+
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 
 # ── Rate limiting (BACKLOG D6 + "Before going live") ─────────
