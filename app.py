@@ -114,19 +114,14 @@ if (
 # ``blueprints/`` per BACKLOG D2. Registration happens here, right
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
-from blueprints import landing as _bp_landing  # noqa: E402
-from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
-from blueprints import tv as _bp_tv  # noqa: E402
-from blueprints import tv_board as _bp_tv_board  # noqa: E402
-from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
 
-# Public + PWA + kiosk surfaces — Flask still owns these.
-app.register_blueprint(_bp_pwa.bp)
-app.register_blueprint(_bp_landing.bp)
-app.register_blueprint(_bp_tv.bp)
-app.register_blueprint(_bp_tv_pair.bp)
-app.register_blueprint(_bp_tv_board.bp)
+# Public + PWA + kiosk surfaces (landing redirect, /sw.js, /offline,
+# TV display + pair-code API) now run on Starlette via
+# ``api.PublicRoutes.public_app`` — see ``asgi.py``'s dispatcher.
+# The Flask side keeps the spa_cutover hook for legacy GET URL
+# redirects (/dashboard, /transfers, …) until those routes also
+# migrate.
 
 # spa_cutover.register() installs the always-on before_request hook
 # that 301s legacy GET URLs (/dashboard, /transfers, …) to /app/*.

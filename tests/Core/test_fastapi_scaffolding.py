@@ -68,16 +68,37 @@ def test_fastapi_openapi_includes_api_prefix_via_root_path():
     assert spec["info"]["title"] == "DineroBook API"
 
 
-def test_flask_app_still_serves_root_and_redirects_legacy(client):
-    """Flask still owns ``/`` (the marketing landing handler bounces
-    visitors to /app/) and the spa_cutover hook 301s legacy paths
-    like /login to /app/login. If this test fails the dual-routing
-    contract is broken."""
-    # Root → 301 to /app/ via the landing blueprint
-    resp = client.get("/", follow_redirects=False)
+def test_root_redirects_legacy_paths_to_spa(client):
+    """The legacy GET URL contract is preserved across the dual
+    Flask + Starlette stack:
+
+      - ``/`` 301s to ``/app/`` (now via
+        ``api/PublicRoutes.py``'s Starlette app — used to live in
+        ``blueprints/landing.py``)
+      - ``/login`` 301s to ``/app/login`` (still Flask via
+        ``blueprints/spa_cutover.py``)
+
+    We hit ``/`` through the ASGI client (since Flask no longer
+    owns root paths) and ``/login`` through the Flask client
+    (where the spa_cutover hook still runs)."""
+    import asyncio
+
+    import httpx
+
+    from asgi import asgi_app
+
+    async def go():
+        transport = httpx.ASGITransport(app=asgi_app)
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://testserver",
+        ) as ac:
+            return await ac.get("/", follow_redirects=False)
+
+    resp = asyncio.new_event_loop().run_until_complete(go())
     assert resp.status_code == 301
-    assert resp.headers["Location"] == "/app/"
-    # /login → 301 to /app/login via spa_cutover
+    assert resp.headers["location"] == "/app/"
+
+    # /login → 301 to /app/login via spa_cutover (still Flask)
     resp = client.get("/login", follow_redirects=False)
     assert resp.status_code == 301
     assert resp.headers["Location"] == "/app/login"
