@@ -232,20 +232,8 @@ def test_send_push_payload_drops_none_values(monkeypatch):
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_push_enabled_delegates(monkeypatch):
-    import api.Modules.Notifications.Services.push as push_svc
-    monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
-    monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import push_enabled as legacy
-    assert legacy() is True
 
 
-def test_legacy_push_enabled_false_when_unconfigured(monkeypatch):
-    import api.Modules.Notifications.Services.push as push_svc
-    monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "")
-    monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "")
-    from app import push_enabled as legacy
-    assert legacy() is False
 
 
 def test_legacy_send_push_delegates(monkeypatch):

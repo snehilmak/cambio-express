@@ -248,14 +248,3 @@ def test_legacy_for_month_delegates(test_store_id):
                       category_slug="bank_charge_230") == 2.10
 
 
-def test_legacy_breakdown_delegates(test_store_id):
-    from app import app as flask_app, db
-    from app import _bank_charges_breakdown_for_month as legacy
-    with flask_app.app_context():
-        _add_txn(db.session, test_store_id,
-                 amount_cents=-210, posted_at=datetime(2026, 5, 15),
-                 slug="bank_charge_230",
-                 description="REMOTE DEPOSIT FEE")
-        result = legacy(test_store_id, 2026, 5)
-        assert result[0]["description"] == "REMOTE DEPOSIT FEE"
-        assert result[0]["total"] == 2.10

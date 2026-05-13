@@ -292,25 +292,5 @@ def test_locations_payload_companies_sorted_by_volume():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_dashboard_context_delegates():
-    from app import app as flask_app, db
-    from app import _owner_dashboard_context as legacy
-    with flask_app.app_context():
-        owner, _ = _make_owner_with_stores(
-            db.session, slug="legacy-ctx", num_stores=0,
-        )
-        ctx = legacy(owner, "month")
-        assert "agg_transfers" in ctx
-        assert ctx["store_count"] == 0
 
 
-def test_legacy_locations_payload_delegates():
-    from app import app as flask_app, db
-    from app import _owner_locations_payload as legacy
-    with flask_app.app_context():
-        owner, _ = _make_owner_with_stores(
-            db.session, slug="legacy-loc", num_stores=0,
-        )
-        rows, total = legacy(owner, "month", None)
-        assert rows == []
-        assert total == 0

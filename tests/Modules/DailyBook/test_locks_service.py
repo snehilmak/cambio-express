@@ -93,19 +93,3 @@ def test_is_locked_filters_by_store_and_date():
 # ── legacy Flask wrapper ──────────────────────────────────
 
 
-def test_legacy_daily_is_locked_delegates():
-    from app import app as flask_app, db
-    from app import _daily_is_locked as legacy
-    with flask_app.app_context():
-        DailyReport.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-locks")
-        # No row → False
-        assert legacy(s.id, date.today()) is False
-        # Locked row → True
-        d = date(2026, 5, 1)
-        _add_report(
-            db.session, s.id, report_date=d,
-            locked_at=datetime.utcnow(),
-        )
-        assert legacy(s.id, d) is True

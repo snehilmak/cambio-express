@@ -309,17 +309,6 @@ def test_compute_ranks_high_before_medium():
 # ── legacy Flask wrapper ───────────────────────────────────
 
 
-def test_legacy_compute_delegates():
-    from app import app as flask_app, db
-    from app import _compute_platform_anomalies as legacy
-    with flask_app.app_context():
-        # Just smoke-test the round-trip; the empty-DB case
-        # returns an empty list.
-        Transfer.query.delete()
-        DailyReport.query.delete()
-        db.session.commit()
-        result = legacy()
-        assert result == []
 
 
 def test_legacy_constants_re_exported():

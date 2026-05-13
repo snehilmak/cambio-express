@@ -230,10 +230,6 @@ def test_legacy_period_window_delegates():
     assert label == "vs prior month"
 
 
-def test_legacy_owner_kpis_delegates():
-    from app import app as flask_app, _owner_kpis as legacy
-    with flask_app.app_context():
-        assert legacy([], date.today(), date.today()) == (0, 0.0, 0.0)
 
 
 def test_legacy_constants_re_exported():

@@ -254,10 +254,3 @@ def test_fc_unexpected_exception_recorded(monkeypatch):
 # ── legacy Flask wrapper ───────────────────────────────────
 
 
-def test_legacy_app_helper_delegates(monkeypatch):
-    """app.stripe_health_check now calls the Service."""
-    from app import stripe_health_check as legacy
-    _set_stripe_env(monkeypatch, secret="")
-    result = legacy()
-    assert result["ok"] is False
-    assert "STRIPE_SECRET_KEY is not configured" in result["error"]
