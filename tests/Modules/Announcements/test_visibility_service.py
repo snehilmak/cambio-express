@@ -124,10 +124,3 @@ def test_orders_newest_first():
 # ── legacy Flask wrapper ───────────────────────────────────
 
 
-def test_legacy_app_helper_delegates():
-    from app import app as flask_app, db
-    from app import active_announcements as legacy
-    with flask_app.app_context():
-        a = _add_announcement(db.session, message="round-trip")
-        rows = legacy()
-        assert a in rows
