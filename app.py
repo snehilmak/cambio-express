@@ -828,7 +828,6 @@ def sync_bank_transactions(store, since=None, until=None):
 SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
 
 
-# PWA routes (/sw.js, /offline) moved to blueprints/pwa.py (D2).
 
 # ── Push notifications ───────────────────────────────────────
 # Operators generate a VAPID keypair once (see docs/push-keys.md)
@@ -896,10 +895,6 @@ def lookup_referral_code(raw):
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
 
 
-# `/` (landing) and `/privacy` moved to blueprints/landing.py
-# (D2 phase 8). The cookie helpers above (_active_store_from_cookie,
-# _set_last_store_slug_cookie, LAST_STORE_SLUG_COOKIE) stay here
-# because the legacy /login routes still write the cookie.
 
 # ── 2FA (TOTP) helpers ───────────────────────────────────────
 # Mandatory for superadmin; other roles opt out entirely today.
@@ -961,7 +956,6 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # /account/passkeys/register/{begin,finish} moved to
 # blueprints/auth.py (D2 phase 25).
 
-# /account/passkeys/<id>/delete moved to blueprints/account.py (D2 phase 21).
 
 # ── Shared account settings ──────────────────────────────────
 #
@@ -977,14 +971,10 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # stable for the PRG pattern.
 
 # /account/security, /account/profile, /admin/settings/security,
-# /account/referrals moved to blueprints/account.py (D2 phase 10).
 
 
-# /account/theme moved to blueprints/account.py (D2 phase 21).
 
-# /account/notifications moved to blueprints/account.py (D2 phase 21).
 
-# /login/passkey/{begin,finish} moved to blueprints/auth.py (D2 phase 25).
 
 # ── Password reset ───────────────────────────────────────────
 
@@ -1027,7 +1017,6 @@ def smtp_health_check():
     return _smtp_svc.health_check(db.session)
 
 # /forgot-password, /reset-password/<token>, /signup, /signup/owner,
-# /logout moved to blueprints/auth_redirects.py (D2 phase 7).
 
 # ── Owner-side helpers ──────────────────────────────────────────
 #
@@ -1061,12 +1050,8 @@ def _owner_store_ids(user):
 # /subscribe, /subscribe/checkout, /subscribe/success moved to
 # blueprints/billing.py (D2 phase 9).
 
-# /account/referrals moved to blueprints/account.py (D2 phase 10).
 
 # Subscription management routes (/admin/subscription[/billing-portal
-# /cancel/addons/<key>]) moved to blueprints/subscription.py (D2).
-# store_has_addon() stays here because many other parts of app.py
-# import it for the addon-gate predicate.
 
 def store_has_addon(store, addon_key):
     """Single predicate every gated route uses, so future Stripe-driven
@@ -1097,7 +1082,6 @@ def store_has_addon(store, addon_key):
 #                                          the per-store actions)
 
 
-# /tv-display moved to blueprints/tv.py (D2).
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
 #
@@ -1162,7 +1146,6 @@ def _generate_device_token():
     # reuse a token.
     raise RuntimeError("Could not mint a unique device_token")
 
-# /api/tv-pair/{init,status} moved to blueprints/tv_pair.py (D2 phase 19).
 
 # /tv-display/countries/<id> (GET, POST) moved to
 # blueprints/admin_extras.py (D2 phase 28).
@@ -1193,8 +1176,6 @@ def _generate_device_token():
 from api.Modules.Reports.Services.categories import resolved_categories as _resolved_report_categories
 
 
-# /reports + /owner/reports moved to blueprints/spa_redirects.py
-# (D2 phase 11).
 
 
 # ── Reports: shared period helpers ───────────────────────────
@@ -1880,7 +1861,6 @@ _make_superadmin_report_routes(
 )
 
 
-# /dashboard moved to blueprints/spa_redirects.py (D2 phase 11).
 
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
@@ -1924,7 +1904,6 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
     )
 
 # /api/customers/search + /api/customers/<int:cid>/recent-recipients
-# moved to blueprints/customers_api.py (D2 phase 13).
 
 # ── Transfers ────────────────────────────────────────────────
 # Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
@@ -1932,7 +1911,6 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 # resolution + pagination to the Service layer.
 
 
-# /transfers moved to blueprints/transfers_redirects.py (D2 phase 14).
 
 
 # Fields whose changes are interesting to surface in the audit log summary.
@@ -1967,7 +1945,6 @@ from api.Modules.Transfers.Services import (
 
 
 # /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete
-# moved to blueprints/transfers_redirects.py (D2 phase 14).
 
 
 # ── Daily Book ───────────────────────────────────────────────
@@ -1983,7 +1960,6 @@ from api.Modules.Transfers.Services import (
     store_mt_companies,
 )
 
-# /daily moved to blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 
 # Generic line-item kinds that sum into a single DailyReport field.
@@ -2062,7 +2038,6 @@ def _return_check_monthly_pl(store_id, year, month):
 # blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 # ── Bank (Stripe Financial Connections) ─────────────────────────
-# /bank moved to blueprints/bank_redirects.py (D2 phase 16).
 
 # /bank/stripe/{connect,return,refresh,sync-transactions,nickname/<id>,disconnect/<id>},
 # /bank/transactions/<id>/{categorize,uncategorize,move-date},
@@ -2095,7 +2070,6 @@ def _return_check_monthly_pl(store_id, year, month):
 
 # ── Superadmin control panel ─────────────────────────────────
 
-# /superadmin/controls moved to blueprints/superadmin_redirects.py (D2 phase 18).
 
 # /superadmin/send-test-email moved to
 # blueprints/superadmin_extras.py (D2 phase 28).
@@ -2135,7 +2109,6 @@ def _return_check_monthly_pl(store_id, year, month):
 # /superadmin/features/{new,<key>/toggle-global,
 # <key>/stores/<store_id>} +
 # /superadmin/announcements/{new,<id>/toggle,<id>/delete}
-# moved to blueprints/superadmin_misc_mutations.py (D2 phase 23).
 
 # /superadmin/controls/audit.csv moved to
 # blueprints/superadmin_extras.py (D2 phase 28).
