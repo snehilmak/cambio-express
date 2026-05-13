@@ -600,8 +600,6 @@ def data_retention_days_left(store):
 # ── Superadmin helpers ───────────────────────────────────────
 
 
-
-
 def store_feature_enabled(store, flag_key):
     """Resolve a feature flag for a store: per-store override > global default > True.
 
@@ -635,10 +633,6 @@ from api.Modules.Announcements.Services import (  # noqa: E402
 from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as _ANOMALY_OVERSHORT_HIGH_THRESHOLD, ANOMALY_OVERSHORT_MEDIUM_THRESHOLD as _ANOMALY_OVERSHORT_MEDIUM_THRESHOLD, ANOMALY_QUIET_MIN_PRIOR_TRANSFERS as _ANOMALY_QUIET_MIN_PRIOR_TRANSFERS
 
 
-
-
-
-
 # ── Legacy auth decorators — DEPRECATED stubs ────────────────
 #
 # The cookie-session login form was retired in chunk 3 (the SPA
@@ -657,14 +651,6 @@ from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as 
 # legacy `/reports/<slug>` URL surface) can be deleted entirely.
 #
 # Tracking: BACKLOG.md item D3-followup.
-
-
-
-
-
-
-
-
 
 
 # `current_user()` and `current_store()` are defined further up
@@ -799,55 +785,12 @@ def inject_theme():
 from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 
 
-
-
-
-
-
-
-
-
-
-
 # ── Bank reconcile + rules ──────────────────────────────────
-# Categories that can appear on a BankTransaction.category_slug. The
-# canonical set is _LINE_ITEM_KINDS (which auto-creates a DailyLineItem
-# on the transaction's date) plus these non-posting tags for cases
-# where the transaction is reconciled but shouldn't double-count in
-# the daily book — internal transfers between own accounts, MT ACH
-# withdrawals that already match an ACHBatch, or "ignore" for noise.
-# Static bank category dict + the label / validation / grouping
-# helpers now live in api.Modules.BankSync.Services.categories
-# (PR 69). The constant is re-exported here so existing call sites
-# that import it by name (rules engine, categorize service, the
-# operator categorisation form) keep their shape during the
-# migration window.
-# Built-in (platform-managed) rules that fire after user-defined rules
-# don't match. Used for transaction descriptions that are STANDARD across
-# all customers of a given bank — e.g. Nizari Progressive's RDC fee
-# always appears as "REMOTE DEPOSIT FEE" on the MSB ••0230 account.
-# Operators don't need to set up their own rule for these, and they
-# can't be edited via /bank/rules.
 #
-# Each entry: (description_substring, account_last4_or_None, target_kind).
-# An empty `account_last4` matches any account.
-# Built-in bank rules + the bank-charge slug predicate live in
-# api.Modules.BankSync.Services.builtin_rules (PR 58). The legacy
-# names below are kept as thin re-exports so existing call sites
-# (categorization sweep, rule-conflict UI) keep their shape during
-# the strangler-fig migration window.
-# Registry: bank-transaction category_slug → MonthlyFinancial column.
-# Reserved for future non-bank-charge auto-feeds (e.g. credit-card
-# fees, money-order rent). Currently empty: bank-charge slugs are
-# dynamic per-account (bank_charge_<last4>) and roll up to
-# bank_charges_total via the prefix-match in _bank_charges_for_month
-# — they don't need explicit registry entries.
-
-
-
-
-
-
+# Two Flask-side helpers remain here. Everything else (categories
+# dict, validation/grouping helpers, built-in rules registry,
+# rule-match engine, FC account upserts) moved to
+# ``api.Modules.BankSync.Services``.
 
 
 def _is_daily_book_kind(slug):
@@ -859,12 +802,6 @@ def _is_daily_book_kind(slug):
     return is_daily_book_kind(slug)
 
 
-
-
-
-
-
-
 def sync_bank_transactions(store, since=None, until=None):
     """Pull transactions from every enabled FC account on the store.
     Single source of truth lives in
@@ -874,10 +811,6 @@ def sync_bank_transactions(store, since=None, until=None):
     """
     from api.Modules.BankSync.Services import sync_bank_transactions
     return sync_bank_transactions(db.session, store, since, until)
-
-
-
-
 
 
 # SPA cutover before_request hook moved to blueprints/spa_cutover.py
@@ -913,9 +846,6 @@ VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
 VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
 
 
-
-
-
 # /api/push/{public-key,subscribe,unsubscribe,test} moved to
 # blueprints/push.py (D2). The shims above (VAPID_*, push_enabled,
 # send_push) stay here because legacy callers — including
@@ -927,7 +857,6 @@ from api.Modules.Billing.Services import (
     REFERRAL_REFEREE_CENTS,
     REFERRAL_SELF_CENTS,
 )
-
 
 
 def ensure_referral_code(store):
@@ -965,8 +894,6 @@ def lookup_referral_code(raw):
 # `/login` page also exposes a small "enter your store code" escape
 # hatch for the first-install / cleared-cookie case.
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
-LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
-
 
 
 # `/` (landing) and `/privacy` moved to blueprints/landing.py
@@ -990,15 +917,6 @@ LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # call shape during the migration window.
 
 
-
-
-
-
-
-
-
-
-
 # ── Passkeys (WebAuthn) ──────────────────────────────────────
 #
 # A passkey is phishing-resistant MFA by construction — the credential
@@ -1007,12 +925,6 @@ LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # MFA-sufficient for every role including superadmin (see the carve-out
 # in CLAUDE.md invariant #13). Password login still gates superadmin
 # through TOTP; passkey is the parallel path.
-
-
-
-
-
-
 
 
 # Loose email regex — RFC 5322 is famously underspecified, so we just
@@ -1030,7 +942,6 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # line; we deliberately don't expose the full ~600 IANA list because
 # that's a UX trap for non-technical cashiers. The empty string means
 # "fall back to UTC / store default".
-
 
 
 # /login + /login/2fa/* + /login/<slug> + /employee-login moved to
@@ -1094,14 +1005,12 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 from api.Modules.Notifications.Services import smtp as _smtp_svc
 
 
-
 # ── Email template rendering ────────────────────────────────
 #
 # Canonical home: ``api.Modules.Notifications.Services.templates``.
 # Re-export here for the legacy in-file callers (``send_trial_reminders``,
 # ``send_locked_day_digest``, ``broadcast_announcement``) until they
 # migrate into Services themselves.
-
 
 
 def _send_email(to_addr, subject, body, html=None):
@@ -1138,17 +1047,9 @@ def smtp_health_check():
 from api.Modules.Owners.Services import owner_store_ids as _svc_owner_store_ids
 
 
-
-
 def _owner_store_ids(user):
     """Delegate to api.Modules.Owners.Services.owner_store_ids."""
     return _svc_owner_store_ids(db.session, user)
-
-
-
-
-
-
 
 
 # Owner routes (/owner/dashboard, /owner/pl-rollup, /owner/locations,
@@ -1194,7 +1095,6 @@ def store_has_addon(store, addon_key):
 #   - /superadmin/stores/<id>/addons/*   — superadmin override switches
 #                                          (declared with the rest of
 #                                          the per-store actions)
-
 
 
 # /tv-display moved to blueprints/tv.py (D2).
@@ -1343,7 +1243,6 @@ from api.Modules.Reports.Services import (
 )
 
 
-
 def _run_report_csv(data_fn, *, scope, columns, row_fn,
                      totals_row_fn=None, fname_prefix,
                      extra_args=None):
@@ -1375,9 +1274,6 @@ def _run_report_csv(data_fn, *, scope, columns, row_fn,
                 w.writerow(trow)
     return _csv_response(buf,
         f"{fname_prefix}_{d_from.isoformat()}_{d_to.isoformat()}.csv")
-
-
-
 
 
 def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
@@ -1417,10 +1313,6 @@ def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
     app.add_url_rule(f"/owner/reports/{slug}.csv",
                      endpoint=f"owner_report_{underscored}_csv",
                      view_func=_csv, methods=["GET"])
-
-
-
-
 
 
 # Adapter for the seven Reports services that used to be wrapped by
@@ -1480,9 +1372,6 @@ def _sa_service_fn(service):
     return _inner
 
 
-
-
-
 def _csv_response(buf, fname):
     """Wrap a StringIO buffer as a downloadable text/csv response.
     Pulled out so each report's CSV route stops repeating the
@@ -1534,8 +1423,6 @@ from api.Modules.Reports.Services import (
     PL_EXPENSE_LINES as _PL_EXPENSE_LINES,
     PL_INCOME_LINES as _PL_INCOME_LINES,
 )
-
-
 
 
 # ── ACH Volume ───────────────────────────────────────────────
@@ -1805,8 +1692,6 @@ _register_owner_report_mirrors()
 # superadmin reports always query platform-wide.
 
 
-
-
 def _make_superadmin_report_routes(slug, *, data_fn,
                                      csv_columns, csv_row_fn,
                                      csv_totals_fn=None,
@@ -1840,48 +1725,6 @@ def _make_superadmin_report_routes(slug, *, data_fn,
 
 
 # ── Superadmin report data functions ─────────────────────────
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # ── Superadmin reports: registry of routes ───────────────────
@@ -2092,10 +1935,6 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 # /transfers moved to blueprints/transfers_redirects.py (D2 phase 14).
 
 
-
-
-
-
 # Fields whose changes are interesting to surface in the audit log summary.
 # Sender PII edits are included (addr/phone/dob) since the customer directory
 # propagates them across sibling stores and admins want to see who edited.
@@ -2127,15 +1966,6 @@ from api.Modules.Transfers.Services import (
 )
 
 
-
-
-
-
-
-
-
-
-
 # /transfers/new + /transfers/<int>/edit + /transfers/<int>/delete
 # moved to blueprints/transfers_redirects.py (D2 phase 14).
 
@@ -2154,13 +1984,6 @@ from api.Modules.Transfers.Services import (
 )
 
 # /daily moved to blueprints/bookkeeping_redirects.py (D2 phase 15).
-
-
-
-
-
-
-
 
 
 # Generic line-item kinds that sum into a single DailyReport field.
@@ -2187,8 +2010,6 @@ from api.Modules.DailyBook.Services import (
 # blueprints/bookkeeping_mutations.py (D2 phase 26).
 
 
-
-
 # /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
 # /daily/<ds>/{lock,unlock} moved to
 # blueprints/bookkeeping_mutations.py (D2 phase 26).
@@ -2210,11 +2031,6 @@ from api.Modules.DailyBook.Services import (
 # admin list page + owner dashboard share queries.
 
 
-
-
-
-
-
 def _bank_charges_for_month(store_id, year, month, category_slug=None,
                              *, prefix=None):
     """Sum the absolute amount of BankTransactions tagged for the given
@@ -2233,8 +2049,6 @@ def _return_check_monthly_pl(store_id, year, month):
     """
     from api.Modules.Owners.Services import return_check_monthly_pl
     return return_check_monthly_pl(db.session, store_id, year, month)
-
-
 
 
 # ── ACH Batches ──────────────────────────────────────────────
@@ -2290,9 +2104,6 @@ def _return_check_monthly_pl(store_id, year, month):
 # ── Per-store actions (superadmin) ───────────────────────────
 
 
-
-
-
 # /superadmin/stores/<int:store_id>/{extend-trial,comp-plan,toggle-active,
 # extend-retention,revert-to-trial,addons/<key>/toggle} moved to
 # blueprints/superadmin_store_mutations.py (D2 phase 22).
@@ -2312,9 +2123,6 @@ def _return_check_monthly_pl(store_id, year, month):
 
 # /superadmin/tv-catalog/<type>/<slug>/edit moved to
 # blueprints/superadmin_extras.py (D2 phase 28).
-
-
-
 
 
 # /superadmin/tv-catalog/new moved to
@@ -2649,16 +2457,6 @@ from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
 def _ensure_added_indexes():
     from api.Core.Bootstrap import ensure_added_indexes
     ensure_added_indexes(db.engine, app.logger)
-
-
-
-
-
-
-
-
-
-
 
 
 def init_db():
