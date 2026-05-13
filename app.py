@@ -116,7 +116,6 @@ if (
 # after the Flask app exists, so a Blueprint route lookup behaves
 # identically to the original @app.route decorator.
 from blueprints import landing as _bp_landing  # noqa: E402
-from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
 from blueprints import tv as _bp_tv  # noqa: E402
@@ -126,7 +125,6 @@ from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
 # Public + PWA + kiosk surfaces — Flask still owns these.
 app.register_blueprint(_bp_pwa.bp)
 app.register_blueprint(_bp_landing.bp)
-app.register_blueprint(_bp_push.bp)
 app.register_blueprint(_bp_tv.bp)
 app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
@@ -3222,28 +3220,33 @@ def _generate_device_token():
 # blueprints/admin_extras.py (D2 phase 28).
 
 
-def _render_tv_board(display, store):
+def _render_tv_board(display, store, session=None):
     """Build the section payload + render the public TV template.
-    Shared by the legacy /tv/<public_token> route and the per-device
-    /tv/device/<device_token> route — same content, different keys
-    in front of it.
 
     Resolves catalog slugs to display_name so the public board shows
     "BBVA Bancomer" not "mx_bbva_bancomer". Lookups include INACTIVE
     catalog rows so legacy references keep rendering even after the
-    superadmin retires a catalog entry."""
+    superadmin retires a catalog entry.
+
+    `session` is a plain SQLAlchemy session — passed in from the
+    public TV blueprint (`blueprints/tv_board.py`) so this helper
+    doesn't depend on Flask-SQLAlchemy's `Model.query`. Falls back
+    to `db.session` for any caller that hasn't migrated yet.
+    """
+    s = session if session is not None else db.session
+
     # Resolve all catalog slugs in one query rather than per-section.
     company_name_by_slug = {c.slug: c.display_name
-                             for c in TVCompanyCatalog.query.all()}
+                             for c in s.query(TVCompanyCatalog).all()}
     bank_name_by_slug = {b.slug: b.display_name
-                          for b in TVBankCatalog.query.all()}
+                          for b in s.query(TVBankCatalog).all()}
     # Logo URL maps with cache-bust suffix. Only includes catalog
     # rows whose logo_url is populated; entries without uploads are
     # absent and the template falls back to display_name text.
     logo_versions = {(r.catalog_type, r.slug): int(r.updated_at.timestamp())
-                      for r in TVCatalogLogo.query.all()}
+                      for r in s.query(TVCatalogLogo).all()}
     company_logo_by_slug = {}
-    for c in TVCompanyCatalog.query.all():
+    for c in s.query(TVCompanyCatalog).all():
         if c.logo_url:
             v = logo_versions.get(("company", c.slug), 0)
             company_logo_by_slug[c.slug] = (
@@ -3251,7 +3254,7 @@ def _render_tv_board(display, store):
                 + (f"?v={v}" if v else "")
             )
     bank_logo_by_slug = {}
-    for b in TVBankCatalog.query.all():
+    for b in s.query(TVBankCatalog).all():
         if b.logo_url:
             v = logo_versions.get(("bank", b.slug), 0)
             bank_logo_by_slug[b.slug] = (
@@ -3259,15 +3262,11 @@ def _render_tv_board(display, store):
                 + (f"?v={v}" if v else "")
             )
 
-    countries = (TVDisplayCountry.query
+    countries = (s.query(TVDisplayCountry)
                   .filter_by(display_id=display.id)
-                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id).all())
+                  .order_by(TVDisplayCountry.sort_order, TVDisplayCountry.id)
+                  .all())
     sections = []
-    # Global company list, deduplicated by first appearance — every
-    # country uses the same column structure, so the public board
-    # renders ONE shared top header row instead of per-country headers.
-    # If a country happens to omit a global company, its rate cells
-    # render as "—" via the rate_map fallback (see _CELL_PLACEHOLDER).
     seen = set()
     global_companies = []
     for c in countries:
@@ -3275,17 +3274,17 @@ def _render_tv_board(display, store):
             if slug not in seen:
                 seen.add(slug)
                 global_companies.append(slug)
-    global_company_labels = [company_name_by_slug.get(s, s) for s in global_companies]
-    global_company_logos  = [company_logo_by_slug.get(s, "") for s in global_companies]
+    global_company_labels = [company_name_by_slug.get(s_, s_) for s_ in global_companies]
+    global_company_logos  = [company_logo_by_slug.get(s_, "") for s_ in global_companies]
 
     for c in countries:
-        banks = (TVDisplayPayoutBank.query
+        banks = (s.query(TVDisplayPayoutBank)
                   .filter_by(country_id=c.id)
                   .order_by(TVDisplayPayoutBank.sort_order,
                             TVDisplayPayoutBank.id).all())
         rate_map = {}
         if banks:
-            for r in (TVDisplayRate.query
+            for r in (s.query(TVDisplayRate)
                        .filter(TVDisplayRate.bank_id.in_([b.id for b in banks]))
                        .all()):
                 rate_map[(r.bank_id, r.mt_company)] = r.rate
