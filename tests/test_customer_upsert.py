@@ -41,14 +41,16 @@ def _link(owner, store):
 def test_sibling_ids_solo_store_returns_itself(client):
     """Store with no owner links is its own sole sibling — not an empty list."""
     from api.Modules.Tenancy.Models import Store
-    from app import sibling_store_ids
+    from api.Modules.Customers.Repositories import sibling_store_ids
+    from app import db
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
-        assert sibling_store_ids(sid) == [sid]
+        assert sibling_store_ids(db.session, sid) == [sid]
 
 
 def test_sibling_ids_spans_all_stores_with_shared_owner(client):
-    from app import db, sibling_store_ids
+    from api.Modules.Customers.Repositories import sibling_store_ids
+    from app import db
     with client.application.app_context():
         a = _make_store("A", "store-a")
         b = _make_store("B", "store-b")
@@ -56,13 +58,14 @@ def test_sibling_ids_spans_all_stores_with_shared_owner(client):
         owner = _make_owner()
         _link(owner, a); _link(owner, b); _link(owner, c)
         db.session.commit()
-        siblings = sibling_store_ids(a.id)
+        siblings = sibling_store_ids(db.session, a.id)
         assert set(siblings) == {a.id, b.id, c.id}
 
 
 def test_sibling_ids_isolates_unrelated_stores(client):
     """Two owners with disjoint portfolios must never see each other's stores."""
-    from app import db, sibling_store_ids
+    from api.Modules.Customers.Repositories import sibling_store_ids
+    from app import db
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         x = _make_store("X", "store-x"); y = _make_store("Y", "store-y")
@@ -71,13 +74,14 @@ def test_sibling_ids_isolates_unrelated_stores(client):
         _link(o1, a); _link(o1, b)
         _link(o2, x); _link(o2, y)
         db.session.commit()
-        assert set(sibling_store_ids(a.id)) == {a.id, b.id}
-        assert set(sibling_store_ids(x.id)) == {x.id, y.id}
+        assert set(sibling_store_ids(db.session, a.id)) == {a.id, b.id}
+        assert set(sibling_store_ids(db.session, x.id)) == {x.id, y.id}
 
 
 def test_sibling_ids_merges_across_shared_owner(client):
     """If one owner sits in both A and B, A sees B — even if only owner2 is in X."""
-    from app import db, sibling_store_ids
+    from api.Modules.Customers.Repositories import sibling_store_ids
+    from app import db
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         x = _make_store("X", "store-x")
@@ -89,8 +93,8 @@ def test_sibling_ids_merges_across_shared_owner(client):
         # Walking from A via o1 reaches B, and via B's o2 reaches X.
         # The function does one hop (direct owners of A), so A → {A, B}.
         # X has o2 only; o2 is in B too, so X → {X, B}.
-        assert set(sibling_store_ids(a.id)) == {a.id, b.id}
-        assert set(sibling_store_ids(x.id)) == {x.id, b.id}
+        assert set(sibling_store_ids(db.session, a.id)) == {a.id, b.id}
+        assert set(sibling_store_ids(db.session, x.id)) == {x.id, b.id}
 
 
 # ── find_or_upsert_customer ─────────────────────────────────────────────────

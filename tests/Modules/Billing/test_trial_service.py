@@ -101,9 +101,3 @@ def test_threshold_constant_exposed():
     assert EXPIRING_SOON_THRESHOLD_DAYS == 3
 
 
-def test_legacy_app_helper_delegates():
-    """Smoke test the Flask wrapper still returns the same value."""
-    from app import get_trial_status as legacy_get_trial_status
-    assert legacy_get_trial_status(None) == "exempt"
-    s = _store(plan="basic")
-    assert legacy_get_trial_status(s) == "exempt"

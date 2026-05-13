@@ -157,30 +157,6 @@ def test_lookup_referral_code_filters_active_only():
     )
 
 
-# ── legacy Flask wrappers ──────────────────────────────────
-
-
-def test_legacy_app_lookup_referral_code():
-    """Wrapper at app.lookup_referral_code now hands the active
-    session to the Service. Smoke test against the real ORM."""
-    from app import app as flask_app
-    from app import lookup_referral_code as legacy_lookup
-    with flask_app.app_context():
-        # No code was ever minted in the empty test DB.
-        assert legacy_lookup(None) is None
-        assert legacy_lookup("") is None
-        assert legacy_lookup("ZZNOTREAL") is None
-
-
-
-
-def test_legacy_app_ensure_referral_code_returns_none_for_no_store():
-    from app import app as flask_app
-    from app import ensure_referral_code as legacy_ensure
-    with flask_app.app_context():
-        assert legacy_ensure(None) is None
-
-
 def test_legacy_app_constants_unchanged():
     """The $100 / $50 rates are part of the public PR contract.
     If you change these, every store with an existing ReferralCode

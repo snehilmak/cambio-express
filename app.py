@@ -580,23 +580,6 @@ from api.Modules.Billing.Services import (
 # ── Cancellation & data retention ────────────────────────────
 DATA_RETENTION_DAYS = 180  # 6 months
 
-# ── Superadmin helpers ───────────────────────────────────────
-
-
-def store_feature_enabled(store, flag_key):
-    """Resolve a feature flag for a store: per-store override > global default > True.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.store_feature_enabled` (PR 49).
-    This Flask wrapper just hands the active session over so legacy
-    callers don't have to thread `db.session` through the call sites.
-    """
-    from api.Modules.Billing.Services import (
-        store_feature_enabled as _svc_store_feature_enabled,
-    )
-    return _svc_store_feature_enabled(db.session, store, flag_key)
-
-
 # ``active_announcements`` lives in
 # ``api.Modules.Announcements.Services``. Imported at module-load
 # time so the trial-context processor below doesn't re-do the
@@ -641,22 +624,6 @@ from api.Modules.Superadmin.Services import ANOMALY_OVERSHORT_HIGH_THRESHOLD as 
 # the SPA never writes to `session`.
 
 
-# ── Trial Status ─────────────────────────────────────────────
-def get_trial_status(store):
-    """Return trial status string for the given store.
-
-    Returns: "exempt" | "active" | "expiring_soon" | "grace" | "expired"
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.get_trial_status` (PR 47); this
-    Flask-scope wrapper is here for the dozen+ legacy callers that
-    use the bare `get_trial_status(store)` shape.
-    """
-    from api.Modules.Billing.Services import (
-        get_trial_status as _svc_get_trial_status,
-    )
-    return _svc_get_trial_status(store)
-
 @app.context_processor
 def inject_trial_context():
     """Inject trial_status, trial_days_left, store, and announcements globally.
@@ -678,8 +645,12 @@ def inject_trial_context():
     if user.role in ("superadmin", "owner"):
         return {"trial_status": "exempt", "trial_days_left": 0, "store": None,
                 "announcements": announcements}
+    from api.Modules.Billing.Services import (
+        ensure_referral_code as _svc_ensure_referral_code,
+        get_trial_status as _svc_get_trial_status,
+    )
     store = current_store()
-    status = get_trial_status(store)
+    status = _svc_get_trial_status(store)
     days_left = 0
     if store and store.trial_ends_at:
         delta = store.trial_ends_at - datetime.utcnow()
@@ -694,7 +665,7 @@ def inject_trial_context():
         try:
             rc = db.session.query(ReferralCode).filter_by(owner_store_id=store.id).first()
             if rc is None:
-                rc = ensure_referral_code(store)
+                rc = _svc_ensure_referral_code(db.session, store)
                 db.session.commit()
             my_referral_code = rc.code if rc else ""
         except Exception as e:
@@ -817,32 +788,6 @@ from api.Modules.Billing.Services import (
     REFERRAL_REFEREE_CENTS,
     REFERRAL_SELF_CENTS,
 )
-
-
-def ensure_referral_code(store):
-    """Return the store's ReferralCode, creating it on demand.
-
-    Delegates to `api.Modules.Billing.Services.ensure_referral_code`
-    (PR 50). Admins only see the crown once they're on a paid plan,
-    so call sites should already have checked
-    `store.plan in {basic, pro}`.
-    """
-    from api.Modules.Billing.Services import (
-        ensure_referral_code as _svc_ensure_referral_code,
-    )
-    return _svc_ensure_referral_code(db.session, store)
-
-def lookup_referral_code(raw):
-    """Return the active ReferralCode matching the raw input, or None.
-
-    Delegates to `api.Modules.Billing.Services.lookup_referral_code`
-    (PR 50). Accepts either the code string or a URL — URL extraction
-    happens at the form-parse boundary.
-    """
-    from api.Modules.Billing.Services import (
-        lookup_referral_code as _svc_lookup_referral_code,
-    )
-    return _svc_lookup_referral_code(db.session, raw)
 
 
 # ── Login ────────────────────────────────────────────────────
@@ -1000,18 +945,6 @@ def _owner_store_ids(user):
 
 
 # Subscription management routes (/admin/subscription[/billing-portal
-
-def store_has_addon(store, addon_key):
-    """Single predicate every gated route uses, so future Stripe-driven
-    `customer.subscription.updated` syncs flip every gated surface in
-    one shot.
-
-    Delegates to `api.Modules.Billing.Services.store_has_addon` (PR 49).
-    """
-    from api.Modules.Billing.Services import (
-        store_has_addon as _svc_store_has_addon,
-    )
-    return _svc_store_has_addon(store, addon_key)
 
 # ── TV Display add-on ────────────────────────────────────────
 #
@@ -1766,15 +1699,6 @@ _make_superadmin_report_routes(
 # response shape) keep their existing import shape.
 from api.Modules.Customers.Services import PHONE_COUNTRY_CODES
 
-def sibling_store_ids(store_id):
-    """Owner-umbrella resolution. Single source of truth lives in
-    `api.Modules.Customers.Repositories`; this Flask-scoped helper
-    just delegates so legacy callers (transfer routes, recent-recipients,
-    superadmin reports) keep their existing call shape during the
-    migration window."""
-    from api.Modules.Customers.Repositories import sibling_store_ids as _impl
-    return _impl(db.session, store_id)
-
 def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
                              address="", dob=None, customer_id=None):
     """Return the Customer row for this sender, creating / updating as needed.
@@ -1885,24 +1809,6 @@ from api.Modules.DailyBook.Services import (
 # admin list page + owner dashboard share queries.
 
 
-def _bank_charges_for_month(store_id, year, month, category_slug=None,
-                             *, prefix=None):
-    """Sum the absolute amount of BankTransactions tagged for the given
-    month. Single source of truth lives in
-    `api.Modules.BankSync.Services.bank_charges_for_month` (PR 57).
-    """
-    from api.Modules.BankSync.Services import bank_charges_for_month as _svc
-    return _svc(db.session, store_id, year, month, category_slug,
-                prefix=prefix)
-
-
-def _return_check_monthly_pl(store_id, year, month):
-    """Signed value for the monthly P&L's Return Check (G/L) line,
-    using EXPENSE convention. Single source of truth lives in
-    `api.Modules.Owners.Services.return_check_monthly_pl` (PR 62).
-    """
-    from api.Modules.Owners.Services import return_check_monthly_pl
-    return return_check_monthly_pl(db.session, store_id, year, month)
 
 
 

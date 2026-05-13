@@ -82,23 +82,19 @@ def _sum_daily(
 def _auto_return_check_gl(
     db: Session, store_id: int, year: int, month: int,
 ) -> float:
-    """Wraps the legacy `_return_check_monthly_pl` helper which
-    lives in app.py — single source for the recoveries-minus-
-    losses math."""
-    from app import _return_check_monthly_pl  # lazy
-    _ = db  # sentinel — helper uses app.db.session under the hood
-    return float(_return_check_monthly_pl(store_id, year, month) or 0)
+    """Net Return Check (G/L) value for the monthly P&L."""
+    from api.Modules.Owners.Services import return_check_monthly_pl
+    return float(return_check_monthly_pl(db, store_id, year, month) or 0)
 
 
 def _auto_bank_charges_total(
     db: Session, store_id: int, year: int, month: int,
 ) -> float:
-    """Wraps `_bank_charges_for_month` from app.py."""
-    from app import _bank_charges_for_month
-    _ = db
+    """Sum of bank-charge BankTransactions for the month."""
+    from api.Modules.BankSync.Services import bank_charges_for_month
     return float(
-        _bank_charges_for_month(
-            store_id, year, month, prefix="bank_charge",
+        bank_charges_for_month(
+            db, store_id, year, month, prefix="bank_charge",
         ) or 0
     )
 

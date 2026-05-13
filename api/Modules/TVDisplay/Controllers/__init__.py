@@ -63,8 +63,8 @@ def _require_tv_store(claims: dict, db: Session):
         raise HTTPException(status_code=404, detail="Not found")
     if claims.get("role") not in ("admin", "employee"):
         raise HTTPException(status_code=404, detail="Not found")
+    from api.Modules.Billing.Services import store_has_addon
     from api.Modules.Tenancy.Models import Store
-    from app import store_has_addon
     store = db.query(Store).filter(Store.id == int(sid)).one_or_none()
     if store is None:
         raise HTTPException(status_code=404, detail="Not found")

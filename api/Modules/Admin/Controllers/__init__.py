@@ -261,11 +261,11 @@ def subscription_summary_route(
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
-    from app import (
-        ADDONS_CATALOG, DATA_RETENTION_DAYS, data_retention_days_left,
-        get_trial_status, store_addon_keys, store_feature_enabled,
-        store_has_paid_plan,
+    from api.Modules.Billing.Services import (
+        data_retention_days_left, get_trial_status, store_addon_keys,
+        store_feature_enabled, store_has_paid_plan,
     )
+    from app import ADDONS_CATALOG, DATA_RETENTION_DAYS
     plan_labels = {
         "trial": "Free Trial", "basic": "Basic", "pro": "Pro",
         "inactive": "Inactive",
@@ -274,7 +274,7 @@ def subscription_summary_route(
     active_keys = store_addon_keys(store)
     addon_rows = []
     for key, addon in ADDONS_CATALOG.items():
-        if not store_feature_enabled(store, f"addon_{key}"):
+        if not store_feature_enabled(db, store, f"addon_{key}"):
             continue
         addon_rows.append({
             "key": key,
@@ -328,10 +328,10 @@ def list_addons_route(
     Toggle button should be enabled — add-ons require an active
     Basic or Pro subscription per the legacy contract."""
     sid = _require_store(claims)
-    from app import (
-        ADDONS_CATALOG, store_addon_keys, store_feature_enabled,
-        store_has_paid_plan,
+    from api.Modules.Billing.Services import (
+        store_addon_keys, store_feature_enabled, store_has_paid_plan,
     )
+    from app import ADDONS_CATALOG
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -339,7 +339,7 @@ def list_addons_route(
     rows: list[AddonRow] = []
     for key, addon in ADDONS_CATALOG.items():
         # Hide flag-gated add-ons whose flag is OFF for this store.
-        if not store_feature_enabled(store, f"addon_{key}"):
+        if not store_feature_enabled(db, store, f"addon_{key}"):
             continue
         rows.append(_adapt_addon(
             key, addon, is_active=(key in active_keys),
@@ -361,9 +361,10 @@ def toggle_addon_route(
     active paid plan; coming-soon add-ons can be requested but
     not flipped on."""
     sid = _require_store(claims)
-    from app import (
-        ADDONS_CATALOG, store_addon_keys, store_has_paid_plan,
+    from api.Modules.Billing.Services import (
+        store_addon_keys, store_has_paid_plan,
     )
+    from app import ADDONS_CATALOG
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
