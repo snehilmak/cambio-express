@@ -3364,29 +3364,14 @@ def _ensure_added_indexes():
     ensure_added_indexes(db.engine, app.logger)
 
 
-def _apply_schema():
-    from api.Core.Bootstrap import apply_schema
-    apply_schema(db.engine, app.logger)
 
 
-def _drop_legacy_tables():
-    from api.Core.Bootstrap import drop_legacy_tables
-    drop_legacy_tables(db.engine, app.logger)
 
 
-def _seed_feature_flags():
-    from api.Core.Bootstrap import seed_feature_flags
-    seed_feature_flags(db.session)
 
 
-def _rename_maxi_transfer_to_maxi():
-    from api.Core.Bootstrap import rename_maxi_transfer_to_maxi
-    rename_maxi_transfer_to_maxi(db.session, app.logger)
 
 
-def _migrate_legacy_line_item_tables():
-    from api.Core.Bootstrap import migrate_legacy_line_item_tables
-    return migrate_legacy_line_item_tables(db.session)
 
 
 def init_db():
