@@ -298,27 +298,3 @@ def test_totals_sum_across_all_buckets():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    """The legacy `_new_vs_returning_data` shim in app.py routes
-    to the Service. Asserts identical output for a small fixture."""
-    from app import app as flask_app, db
-    from app import _new_vs_returning_data
-    from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
-        Transfer.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="cs-legacy")
-        c = _add_customer(db.session, s.id, name="cs-legacy-c")
-        _add_transfer(
-            db.session, s.id, send_date=date(2026, 5, 15),
-            customer_id=c.id, send_amount=42.0,
-        )
-        legacy_rows, legacy_totals = _new_vs_returning_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = new_vs_returning(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

@@ -1807,28 +1807,8 @@ def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
                      view_func=owner_required(_csv), methods=["GET"])
 
 
-def _active_transfers_period_filters(store_ids, d_from, d_to):
-    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
-
-    The query logic now lives in the new layered module per the
-    migration ADR. This wrapper keeps every existing caller in
-    app.py working without changes; eventually those callers also
-    move into Reports services and this function disappears with
-    the cleanup PR."""
-    from api.Modules.Reports.Repositories.transfers import period_filters
-    return period_filters(store_ids, d_from, d_to)
 
 
-def _aggregate_transfers(store_ids, d_from, d_to, group_col):
-    """LEGACY shim — delegates to api.Modules.Reports.Repositories.
-
-    See `_active_transfers_period_filters` above for the shim
-    rationale. Same single-source-of-truth principle: aggregation
-    SQL exists in exactly one place (the new repository), called
-    from both Flask and FastAPI paths during the strangler-fig
-    migration window."""
-    from api.Modules.Reports.Repositories.transfers import aggregate
-    return aggregate(db.session, store_ids, d_from, d_to, group_col)
 
 
 # Adapter for the seven Reports services that used to be wrapped by
@@ -1848,6 +1828,8 @@ def _service_fn(service):
     def _inner(store_ids, d_from, d_to, **kwargs):
         return service(db.session, store_ids, d_from, d_to, **kwargs)
     return _inner
+
+from api.Modules.Reports.Services import new_vs_returning  # noqa: E402
 
 
 # Adapter for the 20 superadmin Reports services. Same shape as
@@ -1876,12 +1858,6 @@ def _sa_service_fn(service):
 
 
 
-def _new_vs_returning_data(store_ids, d_from, d_to):
-    """Split senders into new / returning / walk-in buckets.
-    Single source of truth lives in
-    `api.Modules.Reports.Services.new_vs_returning` (PR 89)."""
-    from api.Modules.Reports.Services import new_vs_returning
-    return new_vs_returning(db.session, store_ids, d_from, d_to)
 
 
 def _csv_response(buf, fname):
@@ -2118,7 +2094,7 @@ _make_report_routes(
 
 _make_report_routes(
     'new-vs-returning',
-    data_fn=_new_vs_returning_data,
+    data_fn=_service_fn(new_vs_returning),
     csv_columns=['Bucket', 'Customers', 'Transfers', 'Total Sent'],
     csv_row_fn=lambda r: [r['bucket'], r['customers'], r['txns'], f"{r['sent']:.2f}"],
     csv_totals_fn=lambda t: ['TOTAL', t['customers'], t['txns'], f"{t['sent']:.2f}"],
