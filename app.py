@@ -2224,16 +2224,12 @@ def _export_report_csv(data_fn, *, columns, row_fn,
 
 
 
-def _make_report_routes(slug, *, title, data_fn, template, result_unit,
-                         kpis_fn, csv_columns, csv_row_fn,
+def _make_report_routes(slug, *, data_fn, csv_columns, csv_row_fn,
                          csv_totals_fn=None, csv_fname_prefix=None,
-                         extra_args_fn=None,
-                         views=None,
-                         graph_label_field=None, graph_value_field=None,
-                         detail_columns=None):
+                         extra_args_fn=None):
     """Register admin (``/reports/<slug>.csv``) + owner
-    (``/owner/reports/<slug>.csv``) **CSV-only** routes for a single
-    report. Both endpoints follow the convention
+    (``/owner/reports/<slug>.csv``) CSV download routes for a
+    single report. Endpoints follow the convention
     ``report_<slug_underscored>_csv`` (admin) /
     ``owner_report_<slug_underscored>_csv`` (owner).
 
@@ -2242,12 +2238,6 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
     of ``/reports/<slug>`` or ``/owner/reports/<slug>`` to the SPA
     URL before any Flask handler runs, so this function doesn't
     register HTML routes at all.
-
-    ``title``, ``template``, ``result_unit``, ``kpis_fn``,
-    ``views``, and the ``graph_*`` + ``detail_columns`` args are
-    legacy parameters from the Jinja era; they're accepted for
-    signature compatibility but unused. They'll drop from the
-    signature in a follow-up alongside the call sites.
 
     ``extra_args_fn()`` is called per-request for reports that
     take extra query params (e.g. ``high-value-transfers`` reads
@@ -2265,19 +2255,12 @@ def _make_report_routes(slug, *, title, data_fn, template, result_unit,
             extra_args=extra_args_fn(),
         )
 
-    def _owner_csv():
-        return _csv()
-
-    # Admin + owner CSV routes. The HTML GET to /reports/<slug>
-    # (and /owner/reports/<slug>) doesn't need a registered handler
-    # — spa_cutover's before_request hook 301s it to the SPA path
-    # before route matching runs.
     app.add_url_rule(f"/reports/{slug}.csv",
                      endpoint=f"report_{underscored}_csv",
                      view_func=admin_required(_csv), methods=["GET"])
     app.add_url_rule(f"/owner/reports/{slug}.csv",
                      endpoint=f"owner_report_{underscored}_csv",
-                     view_func=owner_required(_owner_csv), methods=["GET"])
+                     view_func=owner_required(_csv), methods=["GET"])
 
 
 def _active_transfers_period_filters(store_ids, d_from, d_to):
@@ -2519,444 +2502,157 @@ from api.Modules.Reports.Services import (  # noqa: E402
 )
 
 _make_report_routes(
-    "sales-by-company",
-    title="Sales by Company",
+    'sales-by-company',
     data_fn=_service_fn(_svc_sales_by_company),
-    template="report_sales_by_company.html",
-    result_unit=("company", "companies"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-        {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-    ],
-    csv_columns=["Company", "Count", "Total Sent", "Total Fees",
-                 "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["company"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"],
-                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
-                             f"{t['tax']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="company", graph_value_field="sent",
-    detail_columns=[
-        ("Company", "company"), ("Count", "count"),
-        ("Total Sent", "sent"), ("Fees", "fees"),
-        ("Federal Tax", "tax"), ("Avg", "avg"),
-    ],
+    csv_columns=['Company', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['company'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", ''],
 )
 
 _make_report_routes(
-    "sales-by-service-type",
-    title="Sales by Service Type",
+    'sales-by-service-type',
     data_fn=_service_fn(_svc_sales_by_service),
-    template="report_sales_by_service_type.html",
-    result_unit=("service type", "service types"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}",  "tone": "primary"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",  "tone": "neon"},
-        {"label": "Total Fed Tax",  "value": f"${totals['tax']:,.2f}",   "tone": "muted"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",     "tone": "muted"},
-    ],
-    csv_columns=["Service Type", "Count", "Total Sent", "Total Fees",
-                 "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["service_type"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"],
-                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
-                             f"{t['tax']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="service_type", graph_value_field="sent",
-    detail_columns=[
-        ("Service Type", "service_type"), ("Count", "count"),
-        ("Total Sent", "sent"), ("Fees", "fees"),
-        ("Federal Tax", "tax"), ("Avg", "avg"),
-    ],
+    csv_columns=['Service Type', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['service_type'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", ''],
 )
 
 _make_report_routes(
-    "sales-by-employee",
-    title="Sales by Employee",
+    'sales-by-employee',
     data_fn=_service_fn(_svc_sales_by_employee),
-    template="report_sales_by_employee.html",
-    result_unit=("employee", "employees"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}", "tone": "primary"},
-        {"label": "Total Fees",       "value": f"${totals['fees']:,.2f}", "tone": "neon"},
-        {"label": "Active Employees", "value": f"{len(rows)}",            "tone": "muted"},
-        {"label": "Transfer Count",   "value": f"{totals['count']:,}",    "tone": "muted"},
-    ],
-    csv_columns=["Employee", "Username", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["employee"], r["username"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
-                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
-                             f"{t['tax']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="employee", graph_value_field="sent",
-    detail_columns=[
-        ("Employee", "employee"), ("Username", "username"),
-        ("Count", "count"), ("Total Sent", "sent"),
-        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
-    ],
+    csv_columns=['Employee', 'Username', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['employee'], r['username'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', '', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", ''],
 )
 
 _make_report_routes(
-    "cashier-productivity",
-    title="Cashier Productivity",
+    'cashier-productivity',
     data_fn=_service_fn(_svc_cashier_productivity),
-    template="report_cashier_productivity.html",
-    result_unit=("cashier", "cashiers"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Transfer Count",   "value": f"{totals['count']:,}",    "tone": "primary"},
-        {"label": "Total Sent",       "value": f"${totals['sent']:,.2f}", "tone": "neon"},
-        {"label": "Total Fees",       "value": f"${totals['fees']:,.2f}", "tone": "muted"},
-        {"label": "Cashiers",          "value": f"{len(rows)}",            "tone": "muted"},
-    ],
-    csv_columns=["Cashier", "Active", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["cashier"], "yes" if r["is_active"] else "no",
-                          r["count"], f"{r['sent']:.2f}",
-                          f"{r['fees']:.2f}", f"{r['tax']:.2f}",
-                          f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", "", t["count"],
-                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
-                             f"{t['tax']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="cashier", graph_value_field="count",
-    detail_columns=[
-        ("Cashier", "cashier"), ("Active", "is_active"),
-        ("Count", "count"), ("Total Sent", "sent"),
-        ("Fees", "fees"), ("Federal Tax", "tax"), ("Avg", "avg"),
-    ],
+    csv_columns=['Cashier', 'Active', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['cashier'], 'yes' if r['is_active'] else 'no', r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', '', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", ''],
 )
 
 _make_report_routes(
-    "top-customers",
-    title="Top Customers by Volume",
+    'top-customers',
     data_fn=_service_fn(_svc_top_customers),
-    template="report_top_customers.html",
-    result_unit=("customer", "customers"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "neon"},
-        {"label": "Customer Count", "value": f"{len(rows)}",            "tone": "muted"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
-    ],
-    csv_columns=["Customer", "Phone", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["customer"], r["phone"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_columns=['Customer', 'Phone', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['customer'], r['phone'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
 )
 
 _make_report_routes(
-    "top-senders",
-    title="Top Senders",
-    data_fn=_service_fn(
-        lambda db_session, store_ids, d_from, d_to, **_: _svc_top_customers(
-            db_session, store_ids, d_from, d_to, sort_by="count",
-        ),
-    ),
-    template="report_top_customers.html",  # identical layout
-    result_unit=("sender", "senders"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
-        {"label": "Sender Count",   "value": f"{len(rows)}",            "tone": "neon"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "muted"},
-    ],
-    csv_columns=["Customer", "Phone", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["customer"], r["phone"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    'top-senders',
+    data_fn=_service_fn(lambda db_session, store_ids, d_from, d_to, **_: _svc_top_customers(db_session, store_ids, d_from, d_to, sort_by='count')),
+    csv_columns=['Customer', 'Phone', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['customer'], r['phone'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
 )
 
 _make_report_routes(
-    "top-recipients",
-    title="Top Recipients",
+    'top-recipients',
     data_fn=_service_fn(_svc_top_recipients),
-    template="report_top_recipients.html",
-    result_unit=("recipient", "recipients"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",      "value": f"${totals['sent']:,.2f}", "tone": "primary"},
-        {"label": "Recipient Count", "value": f"{len(rows)}",            "tone": "neon"},
-        {"label": "Transfer Count",  "value": f"{totals['count']:,}",    "tone": "muted"},
-        {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}", "tone": "muted"},
-    ],
-    csv_columns=["Recipient", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["recipient"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_columns=['Recipient', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['recipient'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
 )
 
 _make_report_routes(
-    "by-destination-country",
-    title="By Destination Country",
+    'by-destination-country',
     data_fn=_service_fn(_svc_by_destination_country),
-    template="report_by_destination_country.html",
-    result_unit=("country", "countries"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Sent",     "value": f"${totals['sent']:,.2f}", "tone": "primary"},
-        {"label": "Country Count",  "value": f"{len(rows)}",            "tone": "neon"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",    "tone": "muted"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}", "tone": "muted"},
-    ],
-    csv_columns=["Country", "Count", "Total Sent",
-                 "Total Fees", "Federal Tax", "Avg Transfer"],
-    csv_row_fn=lambda r: [r["country"], r["count"],
-                          f"{r['sent']:.2f}", f"{r['fees']:.2f}",
-                          f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"],
-                             f"{t['sent']:.2f}", f"{t['fees']:.2f}",
-                             f"{t['tax']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="country", graph_value_field="sent",
-    detail_columns=[
-        ("Country", "country"), ("Count", "count"),
-        ("Total Sent", "sent"), ("Fees", "fees"),
-        ("Federal Tax", "tax"), ("Avg", "avg"),
-    ],
+    csv_columns=['Country', 'Count', 'Total Sent', 'Total Fees', 'Federal Tax', 'Avg Transfer'],
+    csv_row_fn=lambda r: [r['country'], r['count'], f"{r['sent']:.2f}", f"{r['fees']:.2f}", f"{r['tax']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['sent']:.2f}", f"{t['fees']:.2f}", f"{t['tax']:.2f}", ''],
 )
 
 _make_report_routes(
-    "new-vs-returning",
-    title="New vs. Returning Senders",
+    'new-vs-returning',
     data_fn=_new_vs_returning_data,
-    template="report_new_vs_returning.html",
-    result_unit=("bucket", "buckets"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Senders", "value": f"{totals['customers']:,}",       "tone": "primary"},
-        {"label": "New",           "value": f"{totals['new_count']:,}",       "tone": "neon"},
-        {"label": "Returning",     "value": f"{totals['returning_count']:,}", "tone": "muted"},
-        {"label": "Total Sent",    "value": f"${totals['sent']:,.2f}",        "tone": "muted"},
-    ],
-    csv_columns=["Bucket", "Customers", "Transfers", "Total Sent"],
-    csv_row_fn=lambda r: [r["bucket"], r["customers"], r["txns"],
-                          f"{r['sent']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["customers"], t["txns"],
-                             f"{t['sent']:.2f}"],
+    csv_columns=['Bucket', 'Customers', 'Transfers', 'Total Sent'],
+    csv_row_fn=lambda r: [r['bucket'], r['customers'], r['txns'], f"{r['sent']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['customers'], t['txns'], f"{t['sent']:.2f}"],
 )
 
 _make_report_routes(
-    "returned-check-status",
-    title="Returned Check Status",
+    'returned-check-status',
     data_fn=_returned_check_status_data,
-    template="report_returned_check_status.html",
-    result_unit=("status", "statuses"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Checks", "value": f"{totals['count']:,}",         "tone": "primary"},
-        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",    "tone": "muted"},
-        {"label": "Recovered",    "value": f"${totals['recovered']:,.2f}", "tone": "neon"},
-        {"label": "Net G/L",      "value": f"${totals['net_gl']:,.2f}",
-         "tone":  "neon" if totals["net_gl"] >= 0 else "muted"},
-    ],
-    csv_columns=["Status", "Count", "Amount", "Recovered"],
-    csv_row_fn=lambda r: [r["status"], r["count"],
-                          f"{r['amount']:.2f}", f"{r['recovered']:.2f}"],
-    csv_totals_fn=lambda t: [
-        ["TOTAL",   t["count"],
-         f"{t['amount']:.2f}", f"{t['recovered']:.2f}"],
-        ["NET G/L", "", "", f"{t['net_gl']:.2f}"],
-    ],
-    csv_fname_prefix="returned-checks",
+    csv_columns=['Status', 'Count', 'Amount', 'Recovered'],
+    csv_row_fn=lambda r: [r['status'], r['count'], f"{r['amount']:.2f}", f"{r['recovered']:.2f}"],
+    csv_totals_fn=lambda t: [['TOTAL', t['count'], f"{t['amount']:.2f}", f"{t['recovered']:.2f}"], ['NET G/L', '', '', f"{t['net_gl']:.2f}"]],
+    csv_fname_prefix='returned-checks',
 )
 
 _make_report_routes(
-    "bank-transactions-breakdown",
-    title="Bank Transactions Breakdown",
+    'bank-transactions-breakdown',
     data_fn=_bank_txn_breakdown_data,
-    template="report_bank_txn_breakdown.html",
-    result_unit=("category", "categories"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Inflows",           "value": f"${totals['inflow']:,.2f}",        "tone": "neon"},
-        {"label": "Outflows",          "value": f"${abs(totals['outflow']):,.2f}",  "tone": "muted"},
-        {"label": "Net Flow",          "value": f"${(totals['inflow'] + totals['outflow']):,.2f}", "tone": "primary"},
-        {"label": "Transaction Count", "value": f"{totals['count']:,}",              "tone": "muted"},
-    ],
-    csv_columns=["Category", "Count", "Signed Amount", "Absolute Amount"],
-    csv_row_fn=lambda r: [r["label"], r["count"],
-                          f"{r['signed']:.2f}", f"{r['amount']:.2f}"],
-    csv_fname_prefix="bank-txn-breakdown",
+    csv_columns=['Category', 'Count', 'Signed Amount', 'Absolute Amount'],
+    csv_row_fn=lambda r: [r['label'], r['count'], f"{r['signed']:.2f}", f"{r['amount']:.2f}"],
+    csv_fname_prefix='bank-txn-breakdown',
 )
 
 _make_report_routes(
-    "daily-drops",
-    title="Daily Drops",
+    'daily-drops',
     data_fn=_daily_drops_data,
-    template="report_daily_drops.html",
-    result_unit=("day", "days"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Dropped", "value": f"${totals['amount']:,.2f}",     "tone": "primary"},
-        {"label": "Drop Count",    "value": f"{totals['count']:,}",           "tone": "neon"},
-        {"label": "Active Days",   "value": f"{len(rows)}",                   "tone": "muted"},
-        {"label": "Avg / Day",     "value": f"${totals['avg_per_day']:,.2f}", "tone": "muted"},
-    ],
-    csv_columns=["Date", "Drop Count", "Total Dropped"],
-    csv_row_fn=lambda r: [r["date"].isoformat(), r["count"],
-                          f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+    csv_columns=['Date', 'Drop Count', 'Total Dropped'],
+    csv_row_fn=lambda r: [r['date'].isoformat(), r['count'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
 )
 
 _make_report_routes(
-    "check-deposits",
-    title="Check Deposits",
+    'check-deposits',
     data_fn=_check_deposits_data,
-    template="report_check_deposits.html",
-    result_unit=("day", "days"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Deposited", "value": f"${totals['amount']:,.2f}",     "tone": "primary"},
-        {"label": "Deposit Count",   "value": f"{totals['count']:,}",           "tone": "neon"},
-        {"label": "Active Days",     "value": f"{len(rows)}",                   "tone": "muted"},
-        {"label": "Avg / Day",       "value": f"${totals['avg_per_day']:,.2f}", "tone": "muted"},
-    ],
-    csv_columns=["Date", "Deposit Count", "Total Deposited"],
-    csv_row_fn=lambda r: [r["date"].isoformat(), r["count"],
-                          f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+    csv_columns=['Date', 'Deposit Count', 'Total Deposited'],
+    csv_row_fn=lambda r: [r['date'].isoformat(), r['count'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
 )
 
 _make_report_routes(
-    "high-value-transfers",
-    title="High-Value Transfers",
+    'high-value-transfers',
     data_fn=_high_value_transfers_data,
-    template="report_high_value_transfers.html",
-    result_unit=("transfer", "transfers"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Threshold",      "value": f"≥ ${extra.get('threshold', 0):,.0f}", "tone": "primary"},
-        {"label": "Total Volume",   "value": f"${totals['amount']:,.2f}",            "tone": "neon"},
-        {"label": "Transfer Count", "value": f"{totals['count']:,}",                  "tone": "muted"},
-        {"label": "Total Fees",     "value": f"${totals['fees']:,.2f}",              "tone": "muted"},
-    ],
-    csv_columns=["Date", "Sender", "Recipient", "Country", "Company",
-                 "Send Amount", "Fee", "Federal Tax", "Confirm #"],
-    csv_row_fn=lambda r: [r["send_date"].isoformat(),
-                          r["sender_name"], r["recipient_name"], r["country"],
-                          r["company"], f"{r['amount']:.2f}",
-                          f"{r['fee']:.2f}", f"{r['tax']:.2f}", r["confirm"]],
-    extra_args_fn=lambda: {"threshold": _parse_threshold(request.args)},
+    csv_columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Send Amount', 'Fee', 'Federal Tax', 'Confirm #'],
+    csv_row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], f"{r['amount']:.2f}", f"{r['fee']:.2f}", f"{r['tax']:.2f}", r['confirm']],
+    extra_args_fn=lambda: {'threshold': _parse_threshold(request.args)},
 )
 
 _make_report_routes(
-    "employee-activity",
-    title="Employee Activity",
+    'employee-activity',
     data_fn=_employee_activity_data,
-    template="report_employee_activity.html",
-    result_unit=("employee", "employees"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Active Employees",      "value": f"{len(rows)}",            "tone": "primary"},
-        {"label": "Active Transfers",      "value": f"{totals['count']:,}",     "tone": "neon"},
-        {"label": "Total Sent",            "value": f"${totals['sent']:,.2f}",  "tone": "muted"},
-        {"label": "Cancelled / Rejected",  "value": f"{totals['cancels']:,}",   "tone": "muted"},
-    ],
-    csv_columns=["Employee", "Username", "Active Transfers", "Total Sent",
-                 "Cancelled / Rejected", "Last Activity"],
-    csv_row_fn=lambda r: [r["employee"], r["username"], r["count"],
-                          f"{r['sent']:.2f}", r["cancels"],
-                          (r["last_activity"].isoformat() if r["last_activity"] else "")],
+    csv_columns=['Employee', 'Username', 'Active Transfers', 'Total Sent', 'Cancelled / Rejected', 'Last Activity'],
+    csv_row_fn=lambda r: [r['employee'], r['username'], r['count'], f"{r['sent']:.2f}", r['cancels'], r['last_activity'].isoformat() if r['last_activity'] else ''],
 )
 
 _make_report_routes(
-    "bank-rule-audit",
-    title="Bank-Rule Audit Log",
+    'bank-rule-audit',
     data_fn=_bank_rule_audit_data,
-    template="report_bank_rule_audit.html",
-    result_unit=("rule", "rules"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Active Rules",     "value": f"{totals['rules']}",        "tone": "primary"},
-        {"label": "Auto-tagged Txns", "value": f"{totals['count']:,}",       "tone": "neon"},
-        {"label": "Total Amount",     "value": f"${totals['amount']:,.2f}",  "tone": "muted"},
-    ],
-    csv_columns=["Rule", "Match", "Target", "Matched Count", "Total Amount"],
-    csv_row_fn=lambda r: [r["label"], r["match"], r["target"],
-                          r["count"], f"{r['amount']:.2f}"],
+    csv_columns=['Rule', 'Match', 'Target', 'Matched Count', 'Total Amount'],
+    csv_row_fn=lambda r: [r['label'], r['match'], r['target'], r['count'], f"{r['amount']:.2f}"],
 )
 
 _make_report_routes(
-    "cancelled-transfers",
-    title="Cancelled Transfers",
+    'cancelled-transfers',
     data_fn=_cancelled_transfers_data,
-    template="report_cancelled_transfers.html",
-    result_unit=("transfer", "transfers"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total",        "value": f"{totals['count']:,}",        "tone": "primary"},
-        {"label": "Canceled",     "value": f"{totals['canceled']:,}",     "tone": "muted"},
-        {"label": "Rejected",     "value": f"{totals['rejected']:,}",     "tone": "muted"},
-        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",   "tone": "muted"},
-    ],
-    csv_columns=["Date", "Sender", "Recipient", "Country", "Company",
-                 "Status", "Send Amount", "Notes", "Confirm #"],
-    csv_row_fn=lambda r: [r["send_date"].isoformat(),
-                          r["sender_name"], r["recipient_name"], r["country"],
-                          r["company"], r["status"], f"{r['amount']:.2f}",
-                          r["status_notes"], r["confirm"]],
+    csv_columns=['Date', 'Sender', 'Recipient', 'Country', 'Company', 'Status', 'Send Amount', 'Notes', 'Confirm #'],
+    csv_row_fn=lambda r: [r['send_date'].isoformat(), r['sender_name'], r['recipient_name'], r['country'], r['company'], r['status'], f"{r['amount']:.2f}", r['status_notes'], r['confirm']],
 )
 
 _make_report_routes(
-    "period-pl",
-    title="Period P&L",
+    'period-pl',
     data_fn=_period_pl_data,
-    template="report_period_pl.html",
-    result_unit=("line", "line"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Income",   "value": f"${totals['income']:,.2f}",   "tone": "neon"},
-        {"label": "Total Expenses", "value": f"${totals['expenses']:,.2f}", "tone": "muted"},
-        {"label": "Net Income",     "value": f"${totals['net']:,.2f}",
-         "tone":  "primary" if totals["net"] >= 0 else "muted"},
-        {"label": "Active Days",    "value": f"{totals['days']}",            "tone": "muted"},
-    ],
-    csv_columns=["Section", "Line", "Amount"],
-    csv_row_fn=lambda r: [r["section"], r["label"], f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: [
-        ["", "Total Income",   f"{t['income']:.2f}"],
-        ["", "Total Expenses", f"{t['expenses']:.2f}"],
-        ["", "Net",            f"{t['net']:.2f}"],
-    ],
+    csv_columns=['Section', 'Line', 'Amount'],
+    csv_row_fn=lambda r: [r['section'], r['label'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: [['', 'Total Income', f"{t['income']:.2f}"], ['', 'Total Expenses', f"{t['expenses']:.2f}"], ['', 'Net', f"{t['net']:.2f}"]],
 )
 
 _make_report_routes(
-    "ach-volume",
-    title="ACH Volume",
+    'ach-volume',
     data_fn=_ach_volume_data,
-    template="report_ach_volume.html",
-    result_unit=("company", "companies"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total ACH",   "value": f"${totals['amount']:,.2f}", "tone": "primary"},
-        {"label": "Batch Count", "value": f"{totals['count']:,}",       "tone": "neon"},
-    ],
-    csv_columns=["Company", "Batch Count", "Total ACH", "Avg / Batch"],
-    csv_row_fn=lambda r: [r["company"], r["count"],
-                          f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}", ""],
-    views=["summary", "graph", "detail"],
-    graph_label_field="company", graph_value_field="amount",
-    detail_columns=[
-        ("Company", "company"), ("Batch Count", "count"),
-        ("Total ACH", "amount"), ("Avg / Batch", "avg"),
-    ],
+    csv_columns=['Company', 'Batch Count', 'Total ACH', 'Avg / Batch'],
+    csv_row_fn=lambda r: [r['company'], r['count'], f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}", ''],
 )
 
 _make_report_routes(
-    "bank-charges-by-account",
-    title="Bank Charges by Account",
+    'bank-charges-by-account',
     data_fn=_bank_charges_by_account_data,
-    template="report_bank_charges_by_account.html",
-    result_unit=("account", "accounts"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Charges", "value": f"${totals['amount']:,.2f}", "tone": "primary"},
-        {"label": "Charge Count",  "value": f"{totals['count']:,}",       "tone": "neon"},
-        {"label": "Account Count", "value": f"{len(rows)}",               "tone": "muted"},
-    ],
-    csv_columns=["Account", "Last 4", "Charge Count", "Total Charges",
-                 "Avg / Charge"],
-    csv_row_fn=lambda r: [r["account"], r["last4"], r["count"],
-                          f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
+    csv_columns=['Account', 'Last 4', 'Charge Count', 'Total Charges', 'Avg / Charge'],
+    csv_row_fn=lambda r: [r['account'], r['last4'], r['count'], f"{r['amount']:.2f}", f"{r['avg']:.2f}"],
 )
 
 def _parse_compare_dates(args):
@@ -2977,39 +2673,19 @@ def _parse_compare_dates(args):
 
 
 _make_report_routes(
-    "period-comparison",
-    title="Period Comparison",
+    'period-comparison',
     data_fn=_period_comparison_data,
-    template="report_period_comparison.html",
-    result_unit=("metric", "metrics"),
-    kpis_fn=_period_comparison_kpis,
-    csv_columns=lambda t: ["Metric", t["current_label"], t["prior_label"],
-                           "Delta", "% Change"],
-    csv_row_fn=lambda r: [
-        r["label"],
-        f"{r['current']:.2f}" if r["is_money"] else f"{int(r['current'])}",
-        f"{r['prior']:.2f}"   if r["is_money"] else f"{int(r['prior'])}",
-        f"{r['delta']:.2f}"   if r["is_money"] else f"{int(r['delta'])}",
-        f"{r['pct']:+.1f}%",
-    ],
+    csv_columns=lambda t: ['Metric', t['current_label'], t['prior_label'], 'Delta', '% Change'],
+    csv_row_fn=lambda r: [r['label'], f"{r['current']:.2f}" if r['is_money'] else f"{int(r['current'])}", f"{r['prior']:.2f}" if r['is_money'] else f"{int(r['prior'])}", f"{r['delta']:.2f}" if r['is_money'] else f"{int(r['delta'])}", f"{r['pct']:+.1f}%"],
     extra_args_fn=lambda: _parse_compare_dates(request.args),
 )
 
 _make_report_routes(
-    "fees-vs-tax",
-    title="Fees vs. Federal Tax",
+    'fees-vs-tax',
     data_fn=_fees_vs_tax_data,
-    template="report_fees_vs_tax.html",
-    result_unit=("line", "line"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Fees",      "value": f"${totals['fees']:,.2f}",   "tone": "neon"},
-        {"label": "Federal Tax",     "value": f"${totals['tax']:,.2f}",    "tone": "muted"},
-        {"label": "Tax / Fee Ratio", "value": f"{totals['ratio']:.2f}",     "tone": "muted"},
-        {"label": "Transfer Count",  "value": f"{totals['count']:,}",       "tone": "muted"},
-    ],
-    csv_columns=["Line", "Amount"],
-    csv_row_fn=lambda r: [r["label"], f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: ["Tax / Fee Ratio", f"{t['ratio']:.2f}"],
+    csv_columns=['Line', 'Amount'],
+    csv_row_fn=lambda r: [r['label'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ['Tax / Fee Ratio', f"{t['ratio']:.2f}"],
 )
 
 
@@ -3197,29 +2873,19 @@ def _export_superadmin_report_csv(data_fn, *, columns, row_fn,
         fname_prefix=fname_prefix, extra_args=extra_args)
 
 
-def _make_superadmin_report_routes(slug, *, title, data_fn, template,
-                                     result_unit, kpis_fn,
+def _make_superadmin_report_routes(slug, *, data_fn,
                                      csv_columns, csv_row_fn,
                                      csv_totals_fn=None,
                                      csv_fname_prefix=None,
-                                     extra_args_fn=None,
-                                     views=None,
-                                     graph_label_field=None,
-                                     graph_value_field=None,
-                                     detail_columns=None):
+                                     extra_args_fn=None):
     """Register the ``/superadmin/reports/<slug>.csv`` route for a
     superadmin report. Same idea as ``_make_report_routes`` but
     superadmin-only — no owner mirror.
 
     Every superadmin BI drilldown migrated to the SPA in one batch
-    (the legacy Jinja templates were structurally similar — KPI
-    strip + row table — so a single generic React component
-    handles all of them via ``/api/v2/superadmin/reports/<slug>``).
-    The HTML GET 301s via ``spa_cutover``'s before_request hook,
-    so no Flask handler for the HTML path is registered here.
-
-    Same caveat about legacy unused-param noise as
-    ``_make_report_routes``.
+    via ``/api/v2/superadmin/reports/<slug>``. The HTML GET 301s
+    via ``spa_cutover``'s before_request hook, so no Flask handler
+    for the HTML path is registered here.
     """
     fname_prefix = csv_fname_prefix or slug
     extra_args_fn = extra_args_fn or (lambda: {})
@@ -3418,318 +3084,154 @@ def _sa_webhook_health_data(d_from, d_to):
 
 # ── Superadmin reports: registry of routes ───────────────────
 _make_superadmin_report_routes(
-    "active-stores-by-plan",
-    title="Active Stores by Plan",
+    'active-stores-by-plan',
     data_fn=_sa_active_stores_by_plan_data,
-    template="report_sa_simple_count.html",
-    result_unit=("plan", "plans"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Stores", "value": f"{totals['count']:,}", "tone": "primary"},
-        {"label": "Plans Tracked","value": f"{totals['plans']}",   "tone": "neon"},
-    ],
-    csv_columns=["Plan", "Stores"],
-    csv_row_fn=lambda r: [r["plan"], r["count"]],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
-    csv_fname_prefix="active-stores-by-plan",
+    csv_columns=['Plan', 'Stores'],
+    csv_row_fn=lambda r: [r['plan'], r['count']],
+    csv_totals_fn=lambda t: ['TOTAL', t['count']],
+    csv_fname_prefix='active-stores-by-plan',
 )
 
 _make_superadmin_report_routes(
-    "signup-funnel",
-    title="Signup Funnel",
+    'signup-funnel',
     data_fn=_sa_signup_funnel_data,
-    template="report_sa_simple_count.html",
-    result_unit=("plan", "plans"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Signups", "value": f"{totals['count']:,}", "tone": "primary"},
-    ],
-    csv_columns=["Plan", "Signups"],
-    csv_row_fn=lambda r: [r["plan"], r["count"]],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+    csv_columns=['Plan', 'Signups'],
+    csv_row_fn=lambda r: [r['plan'], r['count']],
+    csv_totals_fn=lambda t: ['TOTAL', t['count']],
 )
 
 _make_superadmin_report_routes(
-    "login-activity",
-    title="Login Activity",
+    'login-activity',
     data_fn=_sa_login_activity_data,
-    template="report_sa_simple_count.html",
-    result_unit=("role", "roles"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Active Users", "value": f"{totals['count']:,}", "tone": "primary"},
-    ],
-    csv_columns=["Role", "Active Users"],
-    csv_row_fn=lambda r: [r["role"], r["count"]],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+    csv_columns=['Role', 'Active Users'],
+    csv_row_fn=lambda r: [r['role'], r['count']],
+    csv_totals_fn=lambda t: ['TOTAL', t['count']],
 )
 
 _make_superadmin_report_routes(
-    "mrr-arr",
-    title="MRR / ARR",
+    'mrr-arr',
     data_fn=_sa_mrr_arr_data,
-    template="report_sa_mrr_arr.html",
-    result_unit=("tier", "tiers"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "MRR",          "value": f"${totals['mrr']:,.2f}", "tone": "neon"},
-        {"label": "ARR",          "value": f"${totals['arr']:,.2f}", "tone": "primary"},
-        {"label": "Paid Stores",  "value": f"{totals['stores']:,}",  "tone": "muted"},
-    ],
-    csv_columns=["Plan", "Cycle", "Stores", "MRR", "ARR"],
-    csv_row_fn=lambda r: [r["plan"], r["cycle"], r["stores"],
-                          f"{r['mrr']:.2f}", f"{r['arr']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", "", t["stores"],
-                             f"{t['mrr']:.2f}", f"{t['arr']:.2f}"],
+    csv_columns=['Plan', 'Cycle', 'Stores', 'MRR', 'ARR'],
+    csv_row_fn=lambda r: [r['plan'], r['cycle'], r['stores'], f"{r['mrr']:.2f}", f"{r['arr']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', '', t['stores'], f"{t['mrr']:.2f}", f"{t['arr']:.2f}"],
 )
 
 _make_superadmin_report_routes(
-    "churn-cohort",
-    title="Churn Cohort",
+    'churn-cohort',
     data_fn=_sa_churn_cohort_data,
-    template="report_sa_churn_cohort.html",
-    result_unit=("cohort", "cohorts"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Cancelled in period", "value": f"{totals['cancelled']:,}", "tone": "muted"},
-        {"label": "Active from cohorts", "value": f"{totals['active']:,}",    "tone": "neon"},
-    ],
-    csv_columns=["Cohort", "Cancelled", "Still Active", "Churn %"],
-    csv_row_fn=lambda r: [r["cohort"], r["cancelled"], r["active"],
-                          f"{r['churn_pct']:.1f}%"],
+    csv_columns=['Cohort', 'Cancelled', 'Still Active', 'Churn %'],
+    csv_row_fn=lambda r: [r['cohort'], r['cancelled'], r['active'], f"{r['churn_pct']:.1f}%"],
 )
 
 _make_superadmin_report_routes(
-    "conversion-rate",
-    title="Trial → Paid Conversion",
+    'conversion-rate',
     data_fn=_sa_conversion_rate_data,
-    template="report_sa_conversion.html",
-    result_unit=("bucket", "buckets"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Conversion Rate", "value": f"{totals['rate']:.1f}%",   "tone": "primary"},
-        {"label": "Cohort Size",     "value": f"{totals['total']:,}",      "tone": "neon"},
-        {"label": "Paid",            "value": f"{totals['paid']:,}",       "tone": "muted"},
-    ],
-    csv_columns=["Status", "Stores"],
-    csv_row_fn=lambda r: [r["label"], r["count"]],
-    csv_totals_fn=lambda t: ["TOTAL", t["total"]],
+    csv_columns=['Status', 'Stores'],
+    csv_row_fn=lambda r: [r['label'], r['count']],
+    csv_totals_fn=lambda t: ['TOTAL', t['total']],
 )
 
 _make_superadmin_report_routes(
-    "time-to-convert",
-    title="Time to Convert",
+    'time-to-convert',
     data_fn=_sa_time_to_convert_data,
-    template="report_sa_time_to_convert.html",
-    result_unit=("store", "stores"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Paid Stores",     "value": f"{totals['count']:,}",      "tone": "primary"},
-        {"label": "Avg Days Active", "value": f"{totals['avg_days']:.0f}", "tone": "neon"},
-    ],
-    csv_columns=["Slug", "Name", "Plan", "Signed Up", "Days Active"],
-    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
-                          r["signed_up"].isoformat(), r["days"]],
+    csv_columns=['Slug', 'Name', 'Plan', 'Signed Up', 'Days Active'],
+    csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['signed_up'].isoformat(), r['days']],
 )
 
 _make_superadmin_report_routes(
-    "trial-expiry-timing",
-    title="Trial Expiry Timing",
+    'trial-expiry-timing',
     data_fn=_sa_trial_expiry_timing_data,
-    template="report_sa_simple_count.html",
-    result_unit=("bucket", "buckets"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Active Trials",   "value": f"{totals['trials_total']:,}", "tone": "primary"},
-        {"label": "Buckets Tracked", "value": f"{len(rows)}",                "tone": "muted"},
-    ],
-    csv_columns=["Bucket", "Stores"],
-    csv_row_fn=lambda r: [r["bucket"], r["count"]],
+    csv_columns=['Bucket', 'Stores'],
+    csv_row_fn=lambda r: [r['bucket'], r['count']],
 )
 
 _make_superadmin_report_routes(
-    "bank-sync-adoption",
-    title="Bank Sync Adoption",
+    'bank-sync-adoption',
     data_fn=_sa_bank_sync_adoption_data,
-    template="report_sa_adoption.html",
-    result_unit=("plan", "plans"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Adoption",      "value": f"{totals['rate_pct']:.1f}%",  "tone": "primary"},
-        {"label": "Connected",     "value": f"{totals['connected']:,}",     "tone": "neon"},
-        {"label": "Total Stores",  "value": f"{totals['total']:,}",         "tone": "muted"},
-    ],
-    csv_columns=["Plan", "Connected", "Total", "Adoption %"],
-    csv_row_fn=lambda r: [r["plan"], r["connected"], r["total"],
-                          f"{r['rate_pct']:.1f}%"],
+    csv_columns=['Plan', 'Connected', 'Total', 'Adoption %'],
+    csv_row_fn=lambda r: [r['plan'], r['connected'], r['total'], f"{r['rate_pct']:.1f}%"],
 )
 
 _make_superadmin_report_routes(
-    "tv-display-adoption",
-    title="TV Display Add-on",
+    'tv-display-adoption',
     data_fn=_sa_tv_display_adoption_data,
-    template="report_sa_store_list.html",
-    result_unit=("store", "stores"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Active Installs", "value": f"{totals['count']:,}",         "tone": "primary"},
-        {"label": "Total Stores",    "value": f"{totals['total_stores']:,}",  "tone": "muted"},
-        {"label": "Adoption",        "value": (
-            f"{(totals['count'] / totals['total_stores'] * 100.0):.1f}%"
-            if totals['total_stores'] else "0.0%"),                            "tone": "neon"},
-    ],
-    csv_columns=["Slug", "Name", "Plan"],
-    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"]],
+    csv_columns=['Slug', 'Name', 'Plan'],
+    csv_row_fn=lambda r: [r['slug'], r['name'], r['plan']],
 )
 
 _make_superadmin_report_routes(
-    "owner-adoption",
-    title="Multi-store Owners",
+    'owner-adoption',
     data_fn=_sa_owner_adoption_data,
-    template="report_sa_owner_adoption.html",
-    result_unit=("owner", "owners"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Multi-store Owners", "value": f"{totals['owners']:,}",  "tone": "primary"},
-        {"label": "Linked Stores",      "value": f"{totals.get('stores', 0):,}", "tone": "neon"},
-    ],
-    csv_columns=["Owner", "Email", "Linked Stores"],
-    csv_row_fn=lambda r: [r["owner"], r["email"], r["stores"]],
+    csv_columns=['Owner', 'Email', 'Linked Stores'],
+    csv_row_fn=lambda r: [r['owner'], r['email'], r['stores']],
 )
 
 _make_superadmin_report_routes(
-    "passkey-adoption",
-    title="Passkey Adoption",
+    'passkey-adoption',
     data_fn=_sa_passkey_adoption_data,
-    template="report_sa_simple_count.html",
-    result_unit=("role", "roles"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Adoption",            "value": f"{totals['rate_pct']:.1f}%",         "tone": "primary"},
-        {"label": "Users w/ Passkey",    "value": f"{totals['users_with_passkey']:,}",  "tone": "neon"},
-        {"label": "Total Users",         "value": f"{totals['total_users']:,}",         "tone": "muted"},
-    ],
-    csv_columns=["Role", "Users with Passkey"],
-    csv_row_fn=lambda r: [r["role"], r["count"]],
+    csv_columns=['Role', 'Users with Passkey'],
+    csv_row_fn=lambda r: [r['role'], r['count']],
 )
 
 _make_superadmin_report_routes(
-    "password-resets",
-    title="Password Resets",
+    'password-resets',
     data_fn=_sa_password_resets_data,
-    template="report_sa_password_resets.html",
-    result_unit=("token", "tokens"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Tokens", "value": f"{totals['count']:,}",   "tone": "primary"},
-        {"label": "Used",         "value": f"{totals['used']:,}",    "tone": "neon"},
-        {"label": "Expired",      "value": f"{totals['expired']:,}", "tone": "muted"},
-        {"label": "Open",         "value": f"{totals['open']:,}",    "tone": "muted"},
-    ],
-    csv_columns=["Created", "Username", "Role", "Status"],
-    csv_row_fn=lambda r: [r["created_at"].isoformat() if r["created_at"] else "",
-                          r["username"], r["role"], r["status"]],
+    csv_columns=['Created', 'Username', 'Role', 'Status'],
+    csv_row_fn=lambda r: [r['created_at'].isoformat() if r['created_at'] else '', r['username'], r['role'], r['status']],
 )
 
 _make_superadmin_report_routes(
-    "suspended-stores",
-    title="Suspended / Inactive Stores",
+    'suspended-stores',
     data_fn=_sa_suspended_stores_data,
-    template="report_sa_store_list.html",
-    result_unit=("store", "stores"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Stores", "value": f"{totals['count']:,}", "tone": "primary"},
-    ],
-    csv_columns=["Slug", "Name", "Plan", "Reason"],
-    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"], r["reason"]],
+    csv_columns=['Slug', 'Name', 'Plan', 'Reason'],
+    csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['reason']],
 )
 
 _make_superadmin_report_routes(
-    "retention-queue",
-    title="Retention Queue",
+    'retention-queue',
     data_fn=_sa_retention_queue_data,
-    template="report_sa_retention.html",
-    result_unit=("store", "stores"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Pending Purge",    "value": f"{totals['count']:,}",         "tone": "primary"},
-        {"label": "Ready (≤ 0 days)", "value": f"{totals['ready_to_purge']:,}", "tone": "muted"},
-    ],
-    csv_columns=["Slug", "Name", "Plan", "Purge Date", "Days Left"],
-    csv_row_fn=lambda r: [r["slug"], r["name"], r["plan"],
-                          r["until"].isoformat() if r["until"] else "",
-                          r["days_left"]],
+    csv_columns=['Slug', 'Name', 'Plan', 'Purge Date', 'Days Left'],
+    csv_row_fn=lambda r: [r['slug'], r['name'], r['plan'], r['until'].isoformat() if r['until'] else '', r['days_left']],
 )
 
 _make_superadmin_report_routes(
-    "refunds",
-    title="Refunds",
+    'refunds',
     data_fn=_sa_refunds_data,
-    template="report_sa_stripe_amount.html",
-    result_unit=("reason", "reasons"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Refunds",  "value": f"{totals['count']:,}",            "tone": "primary"},
-        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "neon"},
-    ],
-    csv_columns=["Reason", "Count", "Amount"],
-    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+    csv_columns=['Reason', 'Count', 'Amount'],
+    csv_row_fn=lambda r: [r['reason'], r['count'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
 )
 
 _make_superadmin_report_routes(
-    "failed-payments",
-    title="Failed Payments",
+    'failed-payments',
     data_fn=_sa_failed_payments_data,
-    template="report_sa_stripe_amount.html",
-    result_unit=("reason", "reasons"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Failed Charges", "value": f"{totals['count']:,}",            "tone": "primary"},
-        {"label": "Total Amount",   "value": f"${totals['amount']:,.2f}",       "tone": "muted"},
-    ],
-    csv_columns=["Reason", "Count", "Amount"],
-    csv_row_fn=lambda r: [r["reason"], r["count"], f"{r['amount']:.2f}"],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"], f"{t['amount']:.2f}"],
+    csv_columns=['Reason', 'Count', 'Amount'],
+    csv_row_fn=lambda r: [r['reason'], r['count'], f"{r['amount']:.2f}"],
+    csv_totals_fn=lambda t: ['TOTAL', t['count'], f"{t['amount']:.2f}"],
 )
 
 _make_superadmin_report_routes(
-    "payouts",
-    title="Payouts",
+    'payouts',
     data_fn=_sa_payouts_data,
-    template="report_sa_payouts.html",
-    result_unit=("payout", "payouts"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Amount", "value": f"${totals['amount']:,.2f}",   "tone": "primary"},
-        {"label": "Paid",         "value": f"{totals['paid']:,}",         "tone": "neon"},
-        {"label": "Pending",      "value": f"{totals['pending']:,}",      "tone": "muted"},
-        {"label": "Failed",       "value": f"{totals['failed']:,}",       "tone": "muted"},
-    ],
-    csv_columns=["Payout ID", "Amount", "Status", "Method", "Arrival"],
-    csv_row_fn=lambda r: [r["id"], f"{r['amount']:.2f}", r["status"],
-                          r["method"],
-                          r["arrival"].isoformat() if r["arrival"] else ""],
-    csv_totals_fn=lambda t: ["TOTAL", f"{t['amount']:.2f}", "", "", ""],
+    csv_columns=['Payout ID', 'Amount', 'Status', 'Method', 'Arrival'],
+    csv_row_fn=lambda r: [r['id'], f"{r['amount']:.2f}", r['status'], r['method'], r['arrival'].isoformat() if r['arrival'] else ''],
+    csv_totals_fn=lambda t: ['TOTAL', f"{t['amount']:.2f}", '', '', ''],
 )
 
 _make_superadmin_report_routes(
-    "dau-mau",
-    title="Daily / Monthly Actives",
+    'dau-mau',
     data_fn=_sa_dau_mau_data,
-    template="report_sa_dau_mau.html",
-    result_unit=("day", "days"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "DAU (today)",    "value": f"{totals['dau']:,}",            "tone": "primary"},
-        {"label": "MAU (period)",   "value": f"{totals['mau']:,}",             "tone": "neon"},
-        {"label": "Stickiness",     "value": f"{totals['stickiness']:.1f}%",   "tone": "muted"},
-        {"label": "Avg / Active Day","value": f"{totals['avg_per_day']:.1f}",   "tone": "muted"},
-    ],
-    csv_columns=["Date", "Active Users"],
-    csv_row_fn=lambda r: [str(r["day"]), r["users"]],
-    csv_totals_fn=lambda t: ["TOTAL (MAU)", t["mau"]],
+    csv_columns=['Date', 'Active Users'],
+    csv_row_fn=lambda r: [str(r['day']), r['users']],
+    csv_totals_fn=lambda t: ['TOTAL (MAU)', t['mau']],
 )
 
 _make_superadmin_report_routes(
-    "webhook-health",
-    title="Stripe Webhook Health",
+    'webhook-health',
     data_fn=_sa_webhook_health_data,
-    template="report_sa_webhook_health.html",
-    result_unit=("status", "statuses"),
-    kpis_fn=lambda totals, rows, extra: [
-        {"label": "Total Deliveries", "value": f"{totals['count']:,}",           "tone": "primary"},
-        {"label": "OK",               "value": f"{totals['ok']:,}",               "tone": "neon"},
-        {"label": "Errors",           "value": f"{totals['errors']:,}",
-         "tone":  "muted" if totals["errors"] == 0 else "muted"},
-        {"label": "Failure %",        "value": f"{totals['failure_pct']:.1f}%",
-         "tone":  "neon" if totals["failure_pct"] < 1 else "muted"},
-    ],
-    csv_columns=["Status", "Count"],
-    csv_row_fn=lambda r: [r["status"], r["count"]],
-    csv_totals_fn=lambda t: ["TOTAL", t["count"]],
+    csv_columns=['Status', 'Count'],
+    csv_row_fn=lambda r: [r['status'], r['count']],
+    csv_totals_fn=lambda t: ['TOTAL', t['count']],
 )
 
 
