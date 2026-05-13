@@ -115,39 +115,24 @@ services:
     buildCommand: pip install -r requirements.txt
     # 03:15 UTC daily — off-peak for every operator timezone.
     schedule: "15 3 * * *"
-    startCommand: flask purge-expired-stores
+    # Standalone Python script (see scripts/purge_expired_stores.py).
+    # Replaced the legacy `flask purge-expired-stores` invocation
+    # which booted the whole Flask app to run a single Service call.
+    # The standalone form only imports api/Core + api/Modules/Billing,
+    # so cron startup is faster and doesn't depend on Flask.
+    startCommand: python -m scripts.purge_expired_stores
     envVars:
       # Reuse the same database the web service writes to.
       - key: DATABASE_URL
         fromDatabase:
           name: dinerobook-db
           property: connectionString
-      # Flask CLI loads app.py which reads SECRET_KEY at boot. The
-      # cron context doesn't issue session cookies, but the prod
-      # safety gate in app.py demands a real value when
-      # APP_BASE_URL is https://. Mirror both env vars from the
-      # web service.
-      - key: SECRET_KEY
-        fromService:
-          type: web
-          name: dinerobook
-          envVarKey: SECRET_KEY
-      - key: APP_BASE_URL
-        value: https://dinerobook.com
+      # The standalone script reads `settings.database_url` directly
+      # via api/Core/Config — it does NOT boot the Flask app or
+      # touch SECRET_KEY / APP_BASE_URL. The web service still mirrors
+      # those values for itself; this cron just needs the database.
       - key: PYTHON_VERSION
         value: 3.11.0
-      # Stripe keys are imported by app.py at module level but the
-      # purge CLI itself never calls Stripe. Wire the env vars
-      # anyway so the import succeeds. sync: false → Render shares
-      # the values you entered on the web service.
-      - key: STRIPE_SECRET_KEY
-        sync: false
-      - key: STRIPE_BASIC_PRICE_ID
-        sync: false
-      - key: STRIPE_PRO_PRICE_ID
-        sync: false
-      - key: STRIPE_WEBHOOK_SECRET
-        sync: false
 
 databases:
   - name: dinerobook-db
