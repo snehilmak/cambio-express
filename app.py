@@ -828,7 +828,6 @@ def sync_bank_transactions(store, since=None, until=None):
 SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
 
 
-
 # ── Push notifications ───────────────────────────────────────
 # Operators generate a VAPID keypair once (see docs/push-keys.md)
 # and set the three env vars below. When they're not set, push
@@ -895,7 +894,6 @@ def lookup_referral_code(raw):
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
 
 
-
 # ── 2FA (TOTP) helpers ───────────────────────────────────────
 # Mandatory for superadmin; other roles opt out entirely today.
 # The login flow is:
@@ -939,9 +937,6 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # "fall back to UTC / store default".
 
 
-# /login + /login/2fa/* + /login/<slug> + /employee-login moved to
-# blueprints/auth.py (D2 phase 25).
-
 # ── Passkey authentication (WebAuthn) ────────────────────────
 #
 # Three POST pairs:
@@ -971,9 +966,6 @@ _PHONE_DIGITS_RE = re.compile(r"^\+?\d{7,20}$")
 # stable for the PRG pattern.
 
 # /account/security, /account/profile, /admin/settings/security,
-
-
-
 
 
 # ── Password reset ───────────────────────────────────────────
@@ -1044,9 +1036,6 @@ def _owner_store_ids(user):
 # blueprints/owner.py (D2). The endpoint names changed from
 # `owner_*` to `owner.owner_*` — callers updated in the same PR.
 
-# /subscribe, /subscribe/checkout, /subscribe/success moved to
-# blueprints/billing.py (D2 phase 9).
-
 
 # Subscription management routes (/admin/subscription[/billing-portal
 
@@ -1077,7 +1066,6 @@ def store_has_addon(store, addon_key):
 #   - /superadmin/stores/<id>/addons/*   — superadmin override switches
 #                                          (declared with the rest of
 #                                          the per-store actions)
-
 
 
 # ── Pair-code system for the Fire TV / Google TV companion app ─
@@ -1144,10 +1132,6 @@ def _generate_device_token():
     raise RuntimeError("Could not mint a unique device_token")
 
 
-# /tv-display/countries/<id> (GET, POST) moved to
-# blueprints/admin_extras.py (D2 phase 28).
-
-
 # ── TV Display: public surfaces moved to api/PublicRoutes.py ─
 #
 # The public TV rate board (/tv/<token> + /tv/device/<dt>), the
@@ -1171,8 +1155,6 @@ def _generate_device_token():
 # legacy ``_X`` names so any test / blueprint still doing
 # ``from app import _REPORT_CATEGORIES`` keeps working.
 from api.Modules.Reports.Services.categories import resolved_categories as _resolved_report_categories
-
-
 
 
 # ── Reports: shared period helpers ───────────────────────────
@@ -1617,10 +1599,6 @@ _register_owner_report_mirrors()
 # /superadmin/controls.
 
 
-# /superadmin/reports + /superadmin/reports/audit-log moved to
-# blueprints/superadmin_redirects.py (D2 phase 12).
-
-
 # ── Superadmin reports: shared route helpers ─────────────────
 # Same shape as the admin/owner _make_report_routes helper but
 # scoped to /superadmin/reports/<slug>(.csv)? and gated with
@@ -1816,7 +1794,6 @@ _make_superadmin_report_routes(
 )
 
 
-
 # ── Customers (per-store directory) ──────────────────────────
 # Ordered roughly by likelihood for a US-based remittance storefront; the
 # picker displays these in order so the common choices stay on top.
@@ -1864,8 +1841,6 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
 # Sort-column whitelist moved to api.Modules.Transfers.Repositories.transfers
 # (PR 13). The Flask /transfers route delegates filter parsing + sort
 # resolution + pagination to the Service layer.
-
-
 
 
 # Fields whose changes are interesting to surface in the audit log summary.
@@ -1916,7 +1891,6 @@ from api.Modules.Transfers.Services import (
 )
 
 
-
 # Generic line-item kinds that sum into a single DailyReport field.
 # Each entry: (daily_report_field, singular_label, plural_label_for_count).
 # Adding a new kind is: one line here + one disclosure widget on the
@@ -1936,19 +1910,6 @@ from api.Modules.DailyBook.Services import (
 # (outside_cash_drops, checks_deposit, and every DailyReport field
 # in _LINE_ITEM_KINDS) are intentionally omitted — each is recomputed
 # from its own line-item rows.
-
-# /daily/<ds> (GET, POST) moved to
-# blueprints/bookkeeping_mutations.py (D2 phase 26).
-
-
-# /daily/<ds>/line-items/<kind>/{new,/<id>/delete},
-# /daily/<ds>/{lock,unlock} moved to
-# blueprints/bookkeeping_mutations.py (D2 phase 26).
-
-
-# ── Monthly P&L ──────────────────────────────────────────────
-# /monthly + /monthly/<y>/<m> + /monthly/new moved to
-# blueprints/bookkeeping_redirects.py (D2 phase 15).
 
 
 # ── Return Checks ────────────────────────────────────────────
@@ -1982,94 +1943,8 @@ def _return_check_monthly_pl(store_id, year, month):
     return return_check_monthly_pl(db.session, store_id, year, month)
 
 
-# ── ACH Batches ──────────────────────────────────────────────
 
 
-# /batches[/new|/<bid>/edit] moved to
-# blueprints/bookkeeping_redirects.py (D2 phase 15).
-
-
-# /batches/<bid>/transfers moved to
-# blueprints/bookkeeping_redirects.py (D2 phase 15).
-
-# ── Bank (Stripe Financial Connections) ─────────────────────────
-
-# /bank/stripe/{connect,return,refresh,sync-transactions,nickname/<id>,disconnect/<id>},
-# /bank/transactions/<id>/{categorize,uncategorize,move-date},
-# /bank/rules/{new,<id>/edit,<id>/toggle,<id>/delete} moved to
-# blueprints/bank_mutations.py (D2 phase 27).
-
-# ── Admin Users ──────────────────────────────────────────────
-# /admin/users[/new|/<uid>/edit] + /admin/audit-log moved to
-# blueprints/admin_redirects.py (D2 phase 17).
-
-# /admin/settings (GET, POST) moved to
-# blueprints/admin_settings_form.py (D2 phase 29).
-
-# /admin/settings/{roster/add, roster/<id>/toggle, roster/<id>/rename,
-# team/<uid>, owner/redeem} moved to
-# blueprints/admin_settings_mutations.py (D2 phase 24).
-
-
-# ── Superadmin ───────────────────────────────────────────────
-# /superadmin/stores + /superadmin/stores/new moved to
-# blueprints/superadmin_redirects.py (D2 phase 18).
-
-# /superadmin/impersonate/<store_id> moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# /superadmin/stop-impersonation moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# ── Superadmin control panel ─────────────────────────────────
-
-
-# /superadmin/send-test-email moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# ── Per-store actions (superadmin) ───────────────────────────
-
-
-# /superadmin/stores/<int:store_id>/{extend-trial,comp-plan,toggle-active,
-# extend-retention,revert-to-trial,addons/<key>/toggle} moved to
-# blueprints/superadmin_store_mutations.py (D2 phase 22).
-
-# ── TV catalog admin (superadmin) ────────────────────────────
-#
-# Curate the dropdown options operators see in the country editor:
-# add new MT companies / banks, rename existing ones (display_name
-# only — slugs are immutable), upload nominative-use logos, and
-# soft-deactivate retired entries. Companies are global; banks are
-# scoped to a country (ISO-2).
-
-
-# /superadmin/tv-catalog/<type>/<slug>/logo moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# /superadmin/tv-catalog/<type>/<slug>/edit moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# /superadmin/tv-catalog/new moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# ── Discount codes (superadmin) ──────────────────────────────
-
-# /superadmin/discounts/{new,<id>/toggle} +
-# /superadmin/features/{new,<key>/toggle-global,
-# <key>/stores/<store_id>} +
-# /superadmin/announcements/{new,<id>/toggle,<id>/delete}
-
-# /superadmin/controls/audit.csv moved to
-# blueprints/superadmin_extras.py (D2 phase 28).
-
-
-# ── Stripe webhook ───────────────────────────────────────────
 # ── Resend webhook (delivery events) ─────────────────────────
 #
 # Resend posts events to this endpoint as each message moves through
