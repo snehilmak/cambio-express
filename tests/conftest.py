@@ -262,12 +262,13 @@ def login_superadmin(client) -> str:
 
 def seed_test_data():
     from api.Modules.Tenancy.Models import Store, User
-    from app import _seed_tv_catalogs
+    from api.Modules.TVDisplay.Services.seed import seed_catalogs
+    from app import db
     # TV-display catalogs (companies + banks) are seeded by init_db
     # in production but the test fixture drop_all/create_all cycle
     # resets every table — we rebuild them here so picker UI tests
     # see the same canonical 12 + 34 entries production does.
-    _seed_tv_catalogs()
+    seed_catalogs(db.session)
     if not User.query.filter_by(username="superadmin", store_id=None).first():
         # Pre-enrol the seeded superadmin so SPA login returns a real
         # access_token directly via the TOTP exchange step. The flow

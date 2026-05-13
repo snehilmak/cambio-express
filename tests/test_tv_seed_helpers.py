@@ -4,8 +4,20 @@ the safety + idempotency invariants both rely on."""
 import os
 
 from api.Modules.TVDisplay.Models import TVBankCatalog, TVCatalogLogo, TVCompanyCatalog, TVDisplay, TVDisplayCountry
+from api.Modules.TVDisplay.Services.seed import (
+    backfill_country_codes,
+    seed_logos_from_disk,
+)
 from api.Modules.Tenancy.Models import Store, User
-from app import _backfill_tv_country_codes, _seed_tv_logos_from_disk, app as flask_app, db
+from app import app as flask_app, db
+
+
+def _backfill_tv_country_codes():
+    return backfill_country_codes(db.session)
+
+
+def _seed_tv_logos_from_disk():
+    return seed_logos_from_disk(db.session, flask_app.root_path)
 
 
 # ── Country-code backfill ──────────────────────────────────────
