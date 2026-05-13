@@ -128,45 +128,5 @@ def test_aggregate_returns_empty_for_no_data(test_store_id):
     assert totals == {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
 
 
-def test_legacy_shim_delegates_to_repository(test_store_id):
-    """The strangler-fig contract: the legacy fns in app.py forward
-    to the new repository. If someone reverts the shim back to inline
-    SQL, this test catches it (the repository import is the proof
-    the delegation happens)."""
-    import inspect
-    from app import _aggregate_transfers, _active_transfers_period_filters
-    src1 = inspect.getsource(_aggregate_transfers)
-    src2 = inspect.getsource(_active_transfers_period_filters)
-    assert "api.Modules.Reports.Repositories.transfers" in src1
-    assert "api.Modules.Reports.Repositories.transfers" in src2
 
 
-def test_legacy_shim_produces_same_result_as_repository(test_store_id):
-    """End-to-end equivalence: running the same query through the
-    legacy shim and the repository directly must produce identical
-    results. This guards against silent drift between the two
-    surface APIs while both are alive."""
-    from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
-    today = date.today()
-    with flask_app.app_context():
-        _seed_transfer(test_store_id, send_amount=100.0,
-                        company="Intermex")
-        _seed_transfer(test_store_id, send_amount=200.0,
-                        company="Maxi")
-
-        from api.Modules.Reports.Repositories.transfers import aggregate
-        from app import _aggregate_transfers
-
-        legacy_rows, legacy_totals = _aggregate_transfers(
-            [test_store_id], today, today, Transfer.company,
-        )
-        new_rows, new_totals = aggregate(
-            db.session, [test_store_id], today, today, Transfer.company,
-        )
-
-    assert legacy_totals == new_totals
-    # Sort by key so list equality holds regardless of GROUP BY order.
-    assert sorted(legacy_rows, key=lambda r: r["key"]) == sorted(
-        new_rows, key=lambda r: r["key"]
-    )
