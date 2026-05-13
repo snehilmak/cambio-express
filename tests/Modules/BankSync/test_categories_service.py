@@ -231,10 +231,6 @@ def test_groups_does_not_duplicate_static_slugs():
 
 
 
-def test_legacy_is_daily_book_kind_delegates():
-    from app import _is_daily_book_kind as legacy
-    assert legacy("cash_expense") is True
-    assert legacy("internal_transfer") is False
 
 
 

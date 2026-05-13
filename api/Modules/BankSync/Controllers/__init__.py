@@ -266,13 +266,11 @@ def categorize_route(
     """
     sid = _require_store_scope(claims)
     txn = _find_owned_txn(db, sid, txn_id)
-    # Reuse the legacy app.py predicate for "is this a daily-book
-    # kind?" — kind registry stays there until its own migration.
-    from app import _is_daily_book_kind
+    from api.Modules.BankSync.Services import is_daily_book_kind
     categorize_transaction(
         db, txn, body.target_kind,
         post_to_daily=body.post_to_daily,
-        is_daily_book_kind=_is_daily_book_kind,
+        is_daily_book_kind=is_daily_book_kind,
     )
     db.commit()
     db.refresh(txn)
