@@ -17,9 +17,13 @@ from api.Modules.ReturnChecks.Models import ReturnCheck
 from api.Modules.Tenancy.Models import Store, StoreEmployee, User
 from api.Modules.Transfers.Models import Transfer
 
-# Reports-internal constant; lives in app.py until the helpers
-# migration pulls it into a Reports Service module.
-from app import _OWNER_TRANSFER_EXCLUDED  # noqa: E402
+# Reports-internal constant: status values to exclude from owner
+# rollups. Canonical home is ``api.Modules.Owners.Services``;
+# re-exported here under the legacy underscore name so existing
+# Reports consumers don't have to change their import.
+from api.Modules.Owners.Services import (
+    OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
+)
 
 __all__ = [
     "ACHBatch",
