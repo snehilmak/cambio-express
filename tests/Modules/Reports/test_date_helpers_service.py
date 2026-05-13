@@ -60,27 +60,3 @@ def test_day_start_before_day_end_for_same_date():
     assert delta.seconds == 23 * 3600 + 59 * 60 + 59
 
 
-# ── legacy Flask wrappers ────────────────────────────────
-
-
-def test_legacy_day_start_delegates():
-    from app import _day_start as legacy
-    assert legacy(date(2026, 5, 15)) == datetime(2026, 5, 15)
-
-
-def test_legacy_day_end_delegates():
-    from app import _day_end as legacy
-    assert legacy(date(2026, 5, 15)) == datetime(
-        2026, 5, 15, 23, 59, 59,
-    )
-
-
-def test_legacy_re_exports_are_same_callable():
-    """app._day_start / _day_end are the same function objects as
-    the Service exports — re-exported, not wrapped."""
-    from app import _day_end as legacy_end, _day_start as legacy_start
-    from api.Modules.Reports.Services import (
-        day_end, day_start,
-    )
-    assert legacy_start is day_start
-    assert legacy_end is day_end

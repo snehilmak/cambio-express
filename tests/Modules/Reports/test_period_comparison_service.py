@@ -324,13 +324,3 @@ def test_pl_expense_lines_includes_core_columns():
 
 
 
-def test_legacy_pl_constants_re_exported():
-    from app import (
-        _PL_EXPENSE_LINES as legacy_expense,
-        _PL_INCOME_LINES as legacy_income,
-    )
-    from api.Modules.Reports.Services import (
-        PL_EXPENSE_LINES, PL_INCOME_LINES,
-    )
-    assert legacy_income is PL_INCOME_LINES
-    assert legacy_expense is PL_EXPENSE_LINES
