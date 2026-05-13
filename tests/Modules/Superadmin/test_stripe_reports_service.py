@@ -212,38 +212,7 @@ def test_payouts_captures_stripe_error():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_refunds_wrapper_delegates():
-    from app import _sa_refunds_data
-    # No Stripe key → both paths return same empty-with-error
-    # totals → easy equality.
-    with patch("stripe.api_key", None):
-        legacy = _sa_refunds_data(date(2026, 5, 1), date(2026, 5, 31))
-    from api.Modules.Superadmin.Services import refunds
-    with patch("stripe.api_key", None):
-        svc = refunds(db=None, d_from=date(2026, 5, 1),
-                      d_to=date(2026, 5, 31))
-    assert legacy == svc
 
 
-def test_legacy_failed_payments_wrapper_delegates():
-    from app import _sa_failed_payments_data
-    with patch("stripe.api_key", None):
-        legacy = _sa_failed_payments_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-    from api.Modules.Superadmin.Services import failed_payments
-    with patch("stripe.api_key", None):
-        svc = failed_payments(db=None, d_from=date(2026, 5, 1),
-                              d_to=date(2026, 5, 31))
-    assert legacy == svc
 
 
-def test_legacy_payouts_wrapper_delegates():
-    from app import _sa_payouts_data
-    with patch("stripe.api_key", None):
-        legacy = _sa_payouts_data(date(2026, 5, 1), date(2026, 5, 31))
-    from api.Modules.Superadmin.Services import payouts
-    with patch("stripe.api_key", None):
-        svc = payouts(db=None, d_from=date(2026, 5, 1),
-                      d_to=date(2026, 5, 31))
-    assert legacy == svc

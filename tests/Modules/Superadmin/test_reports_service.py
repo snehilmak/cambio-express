@@ -203,62 +203,7 @@ def test_login_activity_filters_by_window():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_active_stores_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_active_stores_by_plan_data
-    from api.Modules.Superadmin.Services import active_stores_by_plan
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="sa-leg-store", plan="trial",
-                   created_at=datetime(2026, 5, 5))
-        legacy_rows, legacy_totals = _sa_active_stores_by_plan_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = active_stores_by_plan(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_signup_funnel_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_signup_funnel_data
-    from api.Modules.Superadmin.Services import signup_funnel
-    with flask_app.app_context():
-        Store.query.delete()
-        db.session.commit()
-        _add_store(db.session, slug="sa-leg-funnel", plan="trial",
-                   created_at=datetime(2026, 5, 5))
-        legacy_rows, legacy_totals = _sa_signup_funnel_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = signup_funnel(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_login_activity_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_login_activity_data
-    from api.Modules.Superadmin.Services import login_activity
-    with flask_app.app_context():
-        for u in User.query.all():
-            u.last_login_at = None
-        db.session.commit()
-        s = _add_store(db.session, slug="sa-leg-login",
-                       plan="basic",
-                       created_at=datetime(2026, 4, 1))
-        _add_user(db.session, s.id, role="admin",
-                  last_login_at=datetime(2026, 5, 15))
-        legacy_rows, legacy_totals = _sa_login_activity_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = login_activity(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

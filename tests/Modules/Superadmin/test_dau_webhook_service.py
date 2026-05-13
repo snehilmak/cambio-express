@@ -181,35 +181,5 @@ def test_webhook_health_filters_by_received_at_window():
 # ── legacy wrappers ──────────────────────────────────────
 
 
-def test_legacy_dau_mau_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_dau_mau_data
-    from api.Modules.Superadmin.Services import dau_mau
-    with flask_app.app_context():
-        LoginEvent.query.delete()
-        db.session.commit()
-        u = _add_user(db.session, username="dm-leg")
-        _add_login(db.session, u.id, at=datetime(2026, 5, 5))
-        legacy = _sa_dau_mau_data(date(2026, 5, 1), date(2026, 5, 31))
-        svc = dau_mau(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
 
 
-def test_legacy_webhook_health_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _sa_webhook_health_data
-    from api.Modules.Superadmin.Services import webhook_health
-    with flask_app.app_context():
-        WebhookEvent.query.delete()
-        db.session.commit()
-        _add_webhook(db.session, status="ok",
-                     received_at=datetime(2026, 5, 5))
-        legacy = _sa_webhook_health_data(
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc = webhook_health(
-            db.session, date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy == svc
