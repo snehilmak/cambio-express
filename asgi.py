@@ -98,11 +98,20 @@ async def asgi_app(scope, receive, send):
         # SPA shell + Vite-built assets — served directly from
         # frontend/dist by the Starlette app in api/spa.py. Strip
         # the ``/app`` prefix before forwarding so routes inside
-        # ``spa_app`` can be declared relative (mirrors the
-        # ``/api/v2`` pattern above).
+        # ``spa_app`` can be declared relative.
+        #
+        # Important: do NOT set ``root_path`` here. Starlette's
+        # ``StaticFiles`` Mount checks the scope's ``root_path`` and
+        # 404s asset requests when it's non-empty (the
+        # ``check_config`` path treats the dir as missing). The SPA
+        # shell + assets don't need root_path-aware URL generation —
+        # the bundle hard-codes ``/app/assets/...`` paths via Vite's
+        # ``base`` config. Leaving root_path empty makes Mount match
+        # cleanly. Tested with a minimal repro: root_path='/app' →
+        # 404; no root_path → 200.
         if path == "/app" or path.startswith("/app/"):
             new_path = path[len("/app"):] or "/"
-            new_scope = {**scope, "path": new_path, "root_path": "/app"}
+            new_scope = {**scope, "path": new_path}
             await _spa_app(new_scope, receive, send)
             return
         # Public root-mounted routes (landing redirect, PWA chrome,
