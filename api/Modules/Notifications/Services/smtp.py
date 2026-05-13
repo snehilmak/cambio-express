@@ -78,7 +78,7 @@ def send_email(
     is expected to log enough context that a superadmin can
     retrieve the link manually.
     """
-    from app import User
+    from api.Modules.Tenancy.Models import User
 
     host = os.environ.get("SMTP_HOST")
     user = os.environ.get("SMTP_USER")
@@ -170,7 +170,8 @@ def health_check(db: Session) -> dict:
     `last_attempt` (updated on every send) and joins delivery-
     event totals from `EmailEvent` (updated by the Resend webhook).
     """
-    from app import EmailEvent, User
+    from api.Modules.Tenancy.Models import User
+    from api.Modules.Webhooks.Models import EmailEvent
 
     env = {
         "host":           bool(os.environ.get("SMTP_HOST")),

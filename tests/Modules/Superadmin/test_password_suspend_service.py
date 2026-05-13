@@ -3,11 +3,8 @@ retention_queue services (PR 101).
 """
 from datetime import date, datetime, timedelta
 
-from app import (
-    PasswordResetToken,
-    Store,
-    User,
-)
+from api.Modules.Auth.Models import PasswordResetToken
+from api.Modules.Tenancy.Models import Store, User
 
 
 _USER_COUNTER = 0

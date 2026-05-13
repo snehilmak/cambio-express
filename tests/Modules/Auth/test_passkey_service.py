@@ -67,7 +67,9 @@ def test_origin_preserves_port():
 
 
 def test_exclude_credentials_returns_descriptors_for_user():
-    from app import app as flask_app, db, Passkey, User
+    from api.Modules.Auth.Models import Passkey
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import passkey_exclude_credentials
     with flask_app.app_context():
         # Create a user + 2 passkeys
@@ -97,7 +99,8 @@ def test_exclude_credentials_returns_descriptors_for_user():
 
 
 def test_exclude_credentials_empty_for_user_without_passkeys():
-    from app import app as flask_app, db, User
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import passkey_exclude_credentials
     with flask_app.app_context():
         u = User(
@@ -168,7 +171,8 @@ def test_legacy_passkey_eligible_delegates():
 
 def test_legacy_passkey_exclude_list_delegates():
     """Legacy wrapper hands db.session to the Service."""
-    from app import app as flask_app, db, User
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from app import _passkey_exclude_list as legacy
     with flask_app.app_context():
         u = User(

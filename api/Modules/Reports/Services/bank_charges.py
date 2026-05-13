@@ -36,7 +36,7 @@ def bank_charges_by_account(
     Empty `store_ids` → empty rows + zero totals (caller doesn't
     need to short-circuit).
     """
-    from app import BankTransaction, StripeBankAccount
+    from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 
     if not store_ids:
         return [], {"count": 0, "amount": 0.0}

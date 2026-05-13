@@ -29,7 +29,8 @@ def _stripe_txn_dict(*, txn_id=None, amount=-210, currency="usd",
 
 
 def _store_with_account(db, *, slug="sync-store", last4="0230"):
-    from app import Store, StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from api.Modules.Tenancy.Models import Store
     s = Store(name=slug, slug=slug, plan="basic",
               email=f"{slug}@example.com")
     db.add(s); db.flush()
@@ -47,7 +48,8 @@ def _store_with_account(db, *, slug="sync-store", last4="0230"):
 
 
 def test_upsert_inserts_new_row():
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -67,7 +69,8 @@ def test_upsert_inserts_new_row():
 def test_upsert_idempotent_on_existing_id():
     """Same stripe_transaction_id → update existing row, return
     inserted=False."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -89,7 +92,8 @@ def test_upsert_idempotent_on_existing_id():
 
 def test_upsert_truncates_long_description():
     """description column caps at 500 — defensive truncation."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -102,7 +106,8 @@ def test_upsert_truncates_long_description():
 
 def test_upsert_handles_none_amount():
     """Defensive: None amount → 0 cents, doesn't crash."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -117,7 +122,8 @@ def test_upsert_handles_none_amount():
 
 
 def test_backfill_zero_when_no_uncategorized():
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         backfill_uncategorized_rows,
     )
@@ -140,7 +146,8 @@ def test_backfill_zero_when_no_uncategorized():
 def test_backfill_tags_uncategorized_via_builtin():
     """An uncategorised REMOTE DEPOSIT FEE on 0230 gets tagged
     by the built-in rule chain on backfill."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         backfill_uncategorized_rows,
     )
@@ -171,7 +178,8 @@ def test_migrate_relabels_generic_bank_charge():
     """A row with the legacy `bank_charge` slug + a description
     that matches a current built-in gets retagged to
     `bank_charge_<last4>`."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
@@ -201,7 +209,8 @@ def test_migrate_skips_rows_without_matching_builtin_substring():
     """A `bank_charge`-tagged row whose description doesn't match
     any current built-in is treated as an operator override and
     left alone."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
@@ -229,10 +238,9 @@ def test_migrate_skips_rows_without_matching_builtin_substring():
 
 def test_migrate_skips_rows_without_account_last4():
     """No last4 → can't build the per-account slug → skip."""
-    from app import (
-        app as flask_app, db, BankTransaction,
-        Store, StripeBankAccount,
-    )
+    from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
@@ -283,7 +291,8 @@ def test_sync_iterates_accounts_and_tags_transactions(monkeypatch):
     """Happy path: Stripe configured, one account, two
     transactions (one matching the Nizari built-in, one not).
     Both get inserted; the matching one gets tagged."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
@@ -334,7 +343,8 @@ def test_sync_iterates_accounts_and_tags_transactions(monkeypatch):
 def test_sync_records_account_error_in_last_error(monkeypatch):
     """Stripe API failure on Transaction.list → captured into
     last_error, sync still returns (doesn't crash)."""
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     import stripe
@@ -381,7 +391,8 @@ def test_legacy_sync_bank_transactions_delegates(monkeypatch):
 
 
 def test_legacy_upsert_delegates():
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from app import _upsert_bank_transaction as legacy
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -394,7 +405,8 @@ def test_legacy_upsert_delegates():
 
 
 def test_legacy_backfill_delegates():
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from app import _backfill_uncategorized_rows as legacy
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -405,7 +417,8 @@ def test_legacy_backfill_delegates():
 
 
 def test_legacy_migrate_delegates():
-    from app import app as flask_app, db, BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import app as flask_app, db
     from app import _migrate_generic_bank_charge_per_account as legacy
     with flask_app.app_context():
         BankTransaction.query.delete()

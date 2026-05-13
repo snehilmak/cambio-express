@@ -21,7 +21,7 @@ def is_locked(
     Returns False both when the row doesn't exist (nothing to
     lock yet) and when it exists but is unlocked.
     """
-    from app import DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
     rpt = (
         db.query(DailyReport)
           .filter_by(store_id=store_id, report_date=report_date)

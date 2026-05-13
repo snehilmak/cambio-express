@@ -2,7 +2,8 @@
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from app import Store, StripeBankAccount
+from api.Modules.BankSync.Models import StripeBankAccount
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug="fc-acct-store"):

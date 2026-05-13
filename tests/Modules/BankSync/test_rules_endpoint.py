@@ -20,7 +20,8 @@ def _login(client, store_id):
 def _seed_rule(store_id, *, target_kind="bank_charge_210",
                priority=100, enabled=True, desc_match_value="",
                account_filter_id=None):
-    from app import BankRule, db
+    from api.Modules.BankSync.Models import BankRule
+    from app import db
     r = BankRule(
         store_id=store_id,
         target_kind=target_kind,
@@ -35,7 +36,8 @@ def _seed_rule(store_id, *, target_kind="bank_charge_210",
 
 
 def _seed_account(store_id, *, last4="0000", nickname=""):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -118,7 +120,8 @@ def test_rules_endpoint_decorates_account_filter_label(client, test_store_id):
 
 
 def test_rules_endpoint_excludes_other_stores(client, test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-rules",
                    email="o@x.com", plan="trial")

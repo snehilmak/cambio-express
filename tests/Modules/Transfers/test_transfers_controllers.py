@@ -14,7 +14,8 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     sender_name="S", recipient_name="R",
                     confirm_number=None, status="Sent",
                     batch_id=""):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -171,7 +172,8 @@ def test_list_filters_date_range_string_input(test_store_id):
 
 
 def test_list_multi_store_aggregation(test_store_id):
-    from app import app as flask_app, Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-tx-cc",
                     email="o@x.com", plan="trial")
@@ -246,7 +248,8 @@ def _login_admin_token(client_, test_store_id):
 def _seed_employee(store_id, *, name="Cashier 1", is_active=True):
     """Add a roster row so the create endpoint's pick_employee
     has something to resolve to."""
-    from app import StoreEmployee, db
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from app import db
     e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
     db.session.add(e); db.session.commit()
     return e.id
@@ -317,7 +320,8 @@ def test_create_returns_201_and_persists(client, test_store_id):
     assert row["total_collected"] == row["send_amount"] + row["fee"] + row["federal_tax"]
 
     # Verify it persisted.
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     with flask_app.app_context():
         t = db.session.get(Transfer, row["id"])
         assert t is not None
@@ -444,7 +448,9 @@ def test_create_jwt_without_store_returns_403(client):
 def test_update_returns_200_and_persists(client, test_store_id):
     """End-to-end: seed a transfer, log in, PUT new fields,
     verify the row + the audit log."""
-    from app import app as flask_app, Transfer, TransferAudit, db
+    from api.Modules.Audit.Models import TransferAudit
+    from api.Modules.Transfers.Models import Transfer
+    from app import app as flask_app, db
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="EE-edit")
         tid = _seed_transfer(
@@ -561,7 +567,8 @@ def test_employees_returns_active_roster(client, test_store_id):
     """Roster endpoint returns the JWT principal's store roster,
     filtered to active employees only — feeds the SPA's
     'Processed by' dropdown."""
-    from app import app as flask_app, StoreEmployee, db
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from app import app as flask_app, db
     with flask_app.app_context():
         e1 = StoreEmployee(store_id=test_store_id, name="Alice", is_active=True)
         e2 = StoreEmployee(store_id=test_store_id, name="Bob", is_active=True)
@@ -622,7 +629,8 @@ def test_update_status_only_records_status_changed_audit(
     the freshly-seeded row differ from the request body and the
     audit (correctly) sees those as changes too.
     """
-    from app import app as flask_app, TransferAudit, db
+    from api.Modules.Audit.Models import TransferAudit
+    from app import app as flask_app, db
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="EE-status")
         tid = _seed_transfer(

@@ -21,7 +21,8 @@ def trial_toggle_applies(db: Session, user: User) -> bool:
         return False
     if user.store_id is None:
         return False
-    from app import Store, get_trial_status
+    from api.Modules.Tenancy.Models import Store
+    from app import get_trial_status
     store = db.get(Store, user.store_id)
     if store is None:
         return False

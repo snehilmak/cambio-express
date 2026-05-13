@@ -10,7 +10,8 @@ from datetime import date
 
 
 def _admin_login(client, store_id):
-    from app import User, Store, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -25,7 +26,8 @@ def _admin_login(client, store_id):
 
 
 def _make_employee(client, store_id, *, name, is_active=True):
-    from app import StoreEmployee, db
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from app import db
     with client.application.app_context():
         e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
         db.session.add(e); db.session.commit()
@@ -34,7 +36,8 @@ def _make_employee(client, store_id, *, name, is_active=True):
 
 def _make_transfer(client, store_id, *, send_date, amount, fee=2.0,
                    employee_id=None, employee_name=""):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     with client.application.app_context():
         t = Transfer(
             store_id=store_id, send_date=send_date,

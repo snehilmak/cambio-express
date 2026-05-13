@@ -87,7 +87,7 @@ def list_route(
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagListResponse:
     _require_superadmin_user(db, claims)
-    from app import FeatureFlag
+    from api.Modules.Billing.Models import FeatureFlag
     rows = (
         db.query(FeatureFlag).order_by(FeatureFlag.key.asc()).all()
     )
@@ -103,7 +103,7 @@ def create_route(
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagResponse:
     user = _require_superadmin_user(db, claims)
-    from app import FeatureFlag
+    from api.Modules.Billing.Models import FeatureFlag
     if db.query(FeatureFlag).filter(FeatureFlag.key == body.key).one_or_none():
         raise HTTPException(
             status_code=409,
@@ -136,7 +136,7 @@ def toggle_route(
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagResponse:
     user = _require_superadmin_user(db, claims)
-    from app import FeatureFlag
+    from api.Modules.Billing.Models import FeatureFlag
     f = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if f is None:
         raise HTTPException(status_code=404, detail="Feature flag not found")
@@ -157,7 +157,7 @@ def delete_route(
     claims: dict = Depends(get_principal),
 ) -> None:
     user = _require_superadmin_user(db, claims)
-    from app import FeatureFlag, StoreFeatureOverride
+    from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
     f = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if f is None:
         raise HTTPException(status_code=404, detail="Feature flag not found")
@@ -200,7 +200,8 @@ def list_overrides_route(
     store name. Useful for the superadmin to see which customers
     have a non-default value at a glance."""
     _require_superadmin_user(db, claims)
-    from app import Store, StoreFeatureOverride
+    from api.Modules.Billing.Models import StoreFeatureOverride
+    from api.Modules.Tenancy.Models import Store
     rows = (
         db.query(StoreFeatureOverride)
           .filter(StoreFeatureOverride.flag_key == key)
@@ -233,7 +234,8 @@ def upsert_override_route(
     globally; the target store must exist. Idempotent."""
     user = _require_superadmin_user(db, claims)
     from datetime import datetime
-    from app import FeatureFlag, Store, StoreFeatureOverride
+    from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
+    from api.Modules.Tenancy.Models import Store
     flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if flag is None:
         raise HTTPException(status_code=404, detail="Feature flag not found")
@@ -278,7 +280,7 @@ def clear_override_route(
     flag's global default. 404 only when no override exists, so
     DELETE is idempotent for existing overrides."""
     user = _require_superadmin_user(db, claims)
-    from app import StoreFeatureOverride
+    from api.Modules.Billing.Models import StoreFeatureOverride
     o = (
         db.query(StoreFeatureOverride)
           .filter(

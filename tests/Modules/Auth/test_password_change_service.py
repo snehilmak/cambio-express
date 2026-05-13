@@ -2,7 +2,8 @@
 
 
 def _seed_user(store_id, *, username, password="oldpassword"):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(
         store_id=store_id, username=username, role="employee",
     )

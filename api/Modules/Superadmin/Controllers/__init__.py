@@ -129,7 +129,7 @@ def list_stores_route(
     claims: dict = Depends(get_principal),
 ) -> SuperadminStoreListResponse:
     _require_superadmin(claims)
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     stores = db.query(Store).order_by(Store.created_at.desc()).all()
     rows = [
         SuperadminStoreRow(
@@ -165,7 +165,7 @@ def get_store_route(
     every field the edit form binds against (identity + plan +
     federal_tax_rate). 404 when the row doesn't exist."""
     _require_superadmin(claims)
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     s = db.query(Store).filter(Store.id == store_id).one_or_none()
     if s is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -193,7 +193,7 @@ def create_store_route(
     handler. Duplicate slugs return 409 with `field=slug` so the SPA
     can render the field-level error inline."""
     user = _require_superadmin_user(db, claims)
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     slug = _normalize_slug(body.slug)
     if not slug:
         raise HTTPException(
@@ -262,7 +262,7 @@ def update_store_route(
     actions + side effects (cancel-related state cleanup, retention
     timer reset, etc.)."""
     user = _require_superadmin_user(db, claims)
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     s = db.query(Store).filter(Store.id == store_id).one_or_none()
     if s is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -338,7 +338,7 @@ def list_audit_route(
     `/superadmin/reports/audit-log` covers the same data; this
     endpoint feeds the SPA equivalent."""
     _require_superadmin(claims)
-    from app import SuperadminAuditLog
+    from api.Modules.Audit.Models import SuperadminAuditLog
     q = db.query(SuperadminAuditLog)
     if action:
         q = q.filter(SuperadminAuditLog.action.ilike(f"%{action}%"))
@@ -443,7 +443,7 @@ def list_discounts_route(
     This endpoint only renders + toggles; it never makes Stripe
     API calls."""
     _require_superadmin(claims)
-    from app import DiscountCode
+    from api.Modules.Billing.Models import DiscountCode
     rows = (
         db.query(DiscountCode)
           .order_by(DiscountCode.created_at.desc())
@@ -469,7 +469,7 @@ def toggle_discount_route(
     invoices keep their references) but new Checkout sessions
     that try to apply them are rejected by `is_redeemable`."""
     _require_superadmin(claims)
-    from app import DiscountCode
+    from api.Modules.Billing.Models import DiscountCode
     d = db.query(DiscountCode).filter(
         DiscountCode.id == discount_id,
     ).one_or_none()

@@ -1,7 +1,9 @@
 """Unit tests for SA dau_mau + webhook_health services (PR 103)."""
 from datetime import date, datetime, timedelta
 
-from app import LoginEvent, User, WebhookEvent
+from api.Modules.Auth.Models import LoginEvent
+from api.Modules.Tenancy.Models import User
+from api.Modules.Webhooks.Models import WebhookEvent
 
 
 def _add_user(db, *, role="admin", username):

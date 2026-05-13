@@ -52,7 +52,8 @@ def test_notifications_trial_toggle_off_for_paid_store(
 ):
     """Admin on a paid plan: trial reminder is informational
     (toggle is shown disabled in the SPA)."""
-    from app import Store, app as flask_app, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s = db.session.get(Store, test_store_id)
         s.plan = "basic"
@@ -69,7 +70,8 @@ def test_notifications_trial_toggle_off_for_employee(
     client, test_store_id,
 ):
     """Employees don't own a trial — toggle never applies."""
-    from app import User, app as flask_app, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="cashier-pref@x.com",
@@ -113,7 +115,8 @@ def test_notifications_update_persists_trial_pref(
 ):
     """Trial pref defaults True; flip it off via PUT and confirm
     persistence."""
-    from app import User, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -131,7 +134,8 @@ def test_notifications_update_persists_trial_pref(
 def test_notifications_update_persists_announcement_pref(
     client, test_store_id,
 ):
-    from app import User, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -165,7 +169,8 @@ def test_notifications_update_partial_leaves_others_alone(
     client, test_store_id,
 ):
     """Updating one pref doesn't reset the other."""
-    from app import User, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app
     token = _login(client, test_store_id)
     # Set both first.
     client.put(

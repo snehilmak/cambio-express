@@ -57,7 +57,9 @@ def superadmin_dashboard_context(db: Session) -> dict:
     Returns the kwargs dict that `dashboard_superadmin.html`
     expects.
     """
-    from app import ReferralCode, Store, Transfer
+    from api.Modules.Billing.Models import ReferralCode
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Transfers.Models import Transfer
 
     now = datetime.utcnow()
     today_d = date.today()

@@ -30,7 +30,7 @@ def new_vs_returning(
       - totals: cross-bucket sums + `new_count` / `returning_count`
         for the headline KPI.
     """
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
     from api.Modules.Reports.Repositories.transfers import period_filters
 

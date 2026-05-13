@@ -9,7 +9,8 @@ from datetime import date, datetime, timedelta
 def _seed_account(store_id, *, nickname="", display_name="",
                     institution_name="Bank", last4="0000",
                     stripe_account_id=None):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     acc = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=stripe_account_id or f"fcacc_{last4}",
@@ -25,7 +26,8 @@ def _seed_account(store_id, *, nickname="", display_name="",
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
                 description="X", category_slug="",
                 posted_at=None, stripe_transaction_id=None):
-    from app import BankTransaction, db
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -44,7 +46,8 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
 
 def _seed_rule(store_id, *, target_kind="bank_charge_210",
                 priority=100, enabled=True, desc_match_value=""):
-    from app import BankRule, db
+    from api.Modules.BankSync.Models import BankRule
+    from app import db
     r = BankRule(
         store_id=store_id,
         target_kind=target_kind,
@@ -83,7 +86,8 @@ def test_list_accounts_orders_by_label(test_store_id):
 
 
 def test_list_accounts_excludes_other_stores(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Repositories import list_accounts
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-bank",

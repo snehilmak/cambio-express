@@ -1,11 +1,9 @@
 """Unit tests for Reports.Services.period_pl (PR 87)."""
 from datetime import date
 
-from app import (
-    DailyReport,
-    Store,
-    Transfer,
-)
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, slug="ppl-store"):

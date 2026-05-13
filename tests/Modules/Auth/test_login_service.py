@@ -4,7 +4,8 @@ import pytest
 
 def _seed_user(store_id, *, username, password, role="employee",
                 full_name="", is_active=True):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(
         store_id=store_id, username=username, role=role,
         full_name=full_name, is_active=is_active,
@@ -227,7 +228,8 @@ def test_verify_password_cross_store_returns_none_for_unknown_user():
 def test_verify_password_cross_store_rejects_disabled_user(test_store_id):
     """Disabled accounts must fail the same way as wrong password —
     no enumeration of "exists but disabled" via the response."""
-    from app import app as flask_app, db, User
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import verify_password_cross_store
     with flask_app.app_context():
         u_obj = User(

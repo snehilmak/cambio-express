@@ -9,7 +9,7 @@ def _ensure_account(db, store_id):
     """Ensure a default StripeBankAccount exists for this store and
     return it. BankTransaction.stripe_bank_account_id is NOT NULL,
     so every test row needs a parent account row."""
-    from app import StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
     existing = StripeBankAccount.query.filter_by(store_id=store_id).first()
     if existing is not None:
         return existing
@@ -25,7 +25,7 @@ def _ensure_account(db, store_id):
 
 def _add_txn(db, store_id, *, amount_cents, posted_at, slug,
              description="REMOTE DEPOSIT FEE", account_id=None):
-    from app import BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
     if account_id is None:
         account_id = _ensure_account(db, store_id).id
     _TXN_COUNTER[0] += 1
@@ -44,7 +44,7 @@ def _add_txn(db, store_id, *, amount_cents, posted_at, slug,
 
 
 def _make_account(db, store_id, *, last4="0230", nickname="MSB ••0230"):
-    from app import StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacct_{last4}",
@@ -133,7 +133,8 @@ def test_for_month_prefix_match_rolls_up(test_store_id):
 
 def test_for_month_filters_by_store(test_store_id):
     """Transactions in another store don't count."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_charges_for_month
     with flask_app.app_context():
         # Create a second store + a charge for it.

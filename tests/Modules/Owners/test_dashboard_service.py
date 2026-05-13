@@ -1,13 +1,9 @@
 """Unit tests for Owners.Services.dashboard (PR 61)."""
 from datetime import date, timedelta
 
-from app import (
-    DailyReport,
-    Store,
-    StoreOwnerLink,
-    Transfer,
-    User,
-)
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from api.Modules.Transfers.Models import Transfer
 
 
 # ── owner_period_window (pure date math) ───────────────────

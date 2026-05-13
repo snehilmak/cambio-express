@@ -4,7 +4,8 @@ from datetime import date
 
 def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",
                 home_store_slug="boss-pl-home"):
-    from app import Store, User, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     s = Store(name="Boss PL Home", slug=home_store_slug,
               email=username, plan="basic")
     db.session.add(s); db.session.commit()
@@ -18,7 +19,8 @@ def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",
 
 
 def _link(owner_id, *, store_name, store_slug, plan="basic"):
-    from app import Store, StoreOwnerLink, db
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    from app import db
     s = Store(name=store_name, slug=store_slug,
               email=f"{store_slug}@x.com", plan=plan)
     db.session.add(s); db.session.commit()
@@ -34,7 +36,8 @@ def _seed_pl(store_id, year, month, *, revenue=0.0, purchases=0.0,
     canonical raw columns (`taxable_sales`, `cash_purchases`,
     `cash_expenses`) so the response carries the expected totals.
     `net_income` is derived: rev - pur - exp + over_short."""
-    from app import MonthlyFinancial, db
+    from api.Modules.Monthly.Models import MonthlyFinancial
+    from app import db
     mf = MonthlyFinancial(
         store_id=store_id, year=year, month=month,
         taxable_sales=revenue,
@@ -177,7 +180,8 @@ def test_pl_rollup_year_choices_includes_distinct_years(client):
 
 
 def test_pl_rollup_excludes_unrelated_stores(client):
-    from app import Store, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Mine", store_slug="mine-pl")

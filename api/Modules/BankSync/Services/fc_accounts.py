@@ -60,7 +60,7 @@ def upsert_fc_account(db: Session, store_id: int, api_obj):
         first value.
       - `as_of` is a unix timestamp.
     """
-    from app import StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
 
     acct_id = _read(api_obj, "id")
     existing = (
@@ -136,7 +136,7 @@ def refresh_bank_balances(db: Session, store) -> tuple[int, str]:
     caller can surface `error_message` in a flash so the operator
     sees *why* a refresh failed without grepping the server log.
     """
-    from app import StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
 
     if not stripe_is_configured():
         return 0, "Stripe is not configured."

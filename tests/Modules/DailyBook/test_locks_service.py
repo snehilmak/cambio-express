@@ -1,7 +1,8 @@
 """Unit tests for DailyBook.Services.locks (PR 81)."""
 from datetime import date, datetime
 
-from app import DailyReport, Store
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug="locks-store"):

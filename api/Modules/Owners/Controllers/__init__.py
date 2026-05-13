@@ -129,7 +129,8 @@ def owner_pl_rollup_route(
     y = year or today.year
     m = month or today.month
 
-    from app import MonthlyFinancial, Store
+    from api.Modules.Monthly.Models import MonthlyFinancial
+    from api.Modules.Tenancy.Models import Store
     sids = owner_store_ids(db, user)
 
     stores = (
@@ -230,7 +231,7 @@ def owner_connect_codes_list_route(
     """Every code the owner has minted (active + redeemed +
     revoked + expired). Newest first."""
     user = _require_owner_principal(db, claims)
-    from app import OwnerConnectCode, Store
+    from api.Modules.Tenancy.Models import OwnerConnectCode, Store
     rows = (
         db.query(OwnerConnectCode)
           .filter(OwnerConnectCode.owner_id == user.id)
@@ -264,7 +265,7 @@ def owner_connect_codes_generate_route(
     import secrets
     from datetime import datetime, timedelta
     user = _require_owner_principal(db, claims)
-    from app import OwnerConnectCode
+    from api.Modules.Tenancy.Models import OwnerConnectCode
     # 8 hex chars uppercased — collision-resistant + readable when
     # the owner reads it aloud.
     raw = secrets.token_hex(4).upper()
@@ -290,7 +291,7 @@ def owner_connect_codes_revoke_route(
     flow is /owner/unlink/{store_id} instead."""
     from datetime import datetime
     user = _require_owner_principal(db, claims)
-    from app import OwnerConnectCode
+    from api.Modules.Tenancy.Models import OwnerConnectCode
     c = (
         db.query(OwnerConnectCode)
           .filter(
@@ -324,7 +325,7 @@ def owner_unlink_store_route(
     P&L, etc.) but the owner can no longer see it."""
     _ = body  # request body is empty today, schema kept for future
     user = _require_owner_principal(db, claims)
-    from app import StoreOwnerLink
+    from api.Modules.Tenancy.Models import StoreOwnerLink
     link = (
         db.query(StoreOwnerLink)
           .filter(
@@ -432,7 +433,9 @@ def owner_store_detail_route(
     Read-only. Returns period KPIs, the company breakdown, the
     30-day over/short + receipts series, and recent activity."""
     from datetime import date as ddate, timedelta
-    from app import DailyReport, Store, StoreOwnerLink, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Owners.Services import (
         OWNER_TRANSFER_EXCLUDED as _OWNER_TRANSFER_EXCLUDED,
         owner_period_window as _owner_period_window,

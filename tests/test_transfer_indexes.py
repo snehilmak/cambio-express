@@ -31,7 +31,7 @@ def test_transfer_indexes_declared_on_model(client):
     """The model's `__table_args__` must declare every index, so a
     fresh `db.create_all()` install picks them up without relying
     on the boot-time migration helper."""
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     declared = {
         ix.name: tuple(c.name for c in ix.columns)
         for ix in Transfer.__table__.indexes
@@ -67,7 +67,8 @@ def test_added_indexes_registry_matches_model(client):
     transfer table must also be declared on the model. This catches
     drift where someone adds an entry to the registry but forgets
     the model decl (fresh installs would silently skip it)."""
-    from app import _ADDED_INDEXES, Transfer
+    from api.Modules.Transfers.Models import Transfer
+    from app import _ADDED_INDEXES
     declared_names = {ix.name for ix in Transfer.__table__.indexes}
     for name, table, _cols in _ADDED_INDEXES:
         if table != "transfer":

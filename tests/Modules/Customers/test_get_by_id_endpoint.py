@@ -3,7 +3,8 @@ from fastapi.testclient import TestClient
 
 
 def _seed_customer(store_id, *, full_name, phone_number=""):
-    from app import Customer, db
+    from api.Modules.Customers.Models import Customer
+    from app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country="+1", phone_number=phone_number,
@@ -13,7 +14,8 @@ def _seed_customer(store_id, *, full_name, phone_number=""):
 
 
 def _seed_owner(username="owner-cgbi@x.com"):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -21,14 +23,16 @@ def _seed_owner(username="owner-cgbi@x.com"):
 
 
 def _seed_store(slug, name="X"):
-    from app import Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import db
     s = Store(name=name, slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
 
 
 def _link(owner_id, store_id):
-    from app import StoreOwnerLink, db
+    from api.Modules.Tenancy.Models import StoreOwnerLink
+    from app import db
     l = StoreOwnerLink(owner_id=owner_id, store_id=store_id)
     db.session.add(l); db.session.commit()
 

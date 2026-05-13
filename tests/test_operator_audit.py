@@ -10,7 +10,8 @@ from datetime import date
 
 
 def _admin_login(client, store_id):
-    from app import User, Store, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -52,7 +53,8 @@ def test_daily_report_lock_writes_audit(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    from app import OperatorAuditLog, app as flask_app
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from app import app as flask_app
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
             store_id=test_store_id, action="lock").all()
@@ -70,7 +72,8 @@ def test_daily_report_unlock_writes_audit(client, test_store_id):
     headers = {"Authorization": f"Bearer {token}"}
     client.post(f"/api/v2/daily/{test_store_id}/{today}/lock", headers=headers)
     client.post(f"/api/v2/daily/{test_store_id}/{today}/unlock", headers=headers)
-    from app import OperatorAuditLog, app as flask_app
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from app import app as flask_app
     with flask_app.app_context():
         actions = [r.action for r in OperatorAuditLog.query.filter_by(
             store_id=test_store_id, target_type="daily_report").all()]
@@ -113,7 +116,8 @@ def test_new_batch_writes_create_audit(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201, resp.get_data(as_text=True)
-    from app import OperatorAuditLog, app as flask_app
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from app import app as flask_app
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
             store_id=test_store_id, target_type="batch", action="create").all()
@@ -127,7 +131,8 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
     handler 301'd; audit row now lands when the SPA PUTs to
     /api/v2/batches/<id>."""
     _admin_login(client, test_store_id)
-    from app import ACHBatch, db, app as flask_app
+    from api.Modules.Batches.Models import ACHBatch
+    from app import app as flask_app, db
     with flask_app.app_context():
         b = ACHBatch(store_id=test_store_id, ach_date=date.today(),
                      company="Maxi", batch_ref="B-EDIT",
@@ -150,7 +155,7 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200, resp.get_data(as_text=True)
-    from app import OperatorAuditLog
+    from api.Modules.Audit.Models import OperatorAuditLog
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
             store_id=test_store_id, target_type="batch", action="update").all()
@@ -165,7 +170,8 @@ def test_delete_transfer_writes_audit(client, test_store_id):
     with it: every delete still appends an OperatorAuditLog row
     with the same label format."""
     _admin_login(client, test_store_id)
-    from app import Transfer, db, app as flask_app
+    from api.Modules.Transfers.Models import Transfer
+    from app import app as flask_app, db
     with flask_app.app_context():
         t = Transfer(
             store_id=test_store_id, send_date=date.today(),
@@ -182,7 +188,7 @@ def test_delete_transfer_writes_audit(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204, resp.get_data(as_text=True)
-    from app import OperatorAuditLog
+    from api.Modules.Audit.Models import OperatorAuditLog
     with flask_app.app_context():
         rows = OperatorAuditLog.query.filter_by(
             store_id=test_store_id, target_type="transfer", action="delete").all()
@@ -221,7 +227,8 @@ def test_audit_log_query_string_preserved_on_redirect(
 
 def test_audit_log_employee_role_blocked(client, test_store_id):
     """Employees can't see the activity log — admin_required gates."""
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     with client.application.app_context():
         u = User(username="cashier@audit.com", store_id=test_store_id,
                  role="employee", full_name="Cashier")

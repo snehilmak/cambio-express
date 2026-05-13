@@ -20,7 +20,8 @@ def _login(client_, store_id):
 
 
 def _seed_monthly(store_id, *, year=2026, month=1, **fields):
-    from app import MonthlyFinancial, db
+    from api.Modules.Monthly.Models import MonthlyFinancial
+    from app import db
     row = MonthlyFinancial(
         store_id=store_id, year=year, month=month, **fields,
     )
@@ -156,7 +157,8 @@ def test_put_rejects_extra_fields(client, test_store_id):
 
 def test_put_rejects_employee_role(client):
     """Cashier role cannot save monthly P&L."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="emp_monthly_test",

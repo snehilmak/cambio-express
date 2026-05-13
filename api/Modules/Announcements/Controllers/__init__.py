@@ -117,7 +117,7 @@ def list_route(
     rows so the superadmin has the full history; the SPA can dim
     the rows where `is_visible` is False."""
     _require_superadmin_user(db, claims)
-    from app import Announcement
+    from api.Modules.Announcements.Models import Announcement
     rows = (
         db.query(Announcement)
           .order_by(Announcement.created_at.desc())
@@ -144,7 +144,7 @@ def create_route(
     silently waits until its time arrives. Empty / unparseable
     falls back to "start now"."""
     user = _require_superadmin_user(db, claims)
-    from app import Announcement
+    from api.Modules.Announcements.Models import Announcement
     now = datetime.utcnow()
     starts_at = _parse_starts_at(body.start_at_iso, fallback=now)
     # expires_days is measured from the start time so a scheduled
@@ -215,7 +215,7 @@ def toggle_route(
     claims: dict = Depends(get_principal),
 ) -> AnnouncementResponse:
     user = _require_superadmin_user(db, claims)
-    from app import Announcement
+    from api.Modules.Announcements.Models import Announcement
     a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
     if a is None:
         raise HTTPException(status_code=404, detail="Announcement not found")
@@ -236,7 +236,7 @@ def delete_route(
     claims: dict = Depends(get_principal),
 ) -> None:
     user = _require_superadmin_user(db, claims)
-    from app import Announcement
+    from api.Modules.Announcements.Models import Announcement
     a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
     if a is None:
         raise HTTPException(status_code=404, detail="Announcement not found")

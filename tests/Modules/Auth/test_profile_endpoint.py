@@ -64,7 +64,8 @@ def test_profile_includes_metadata_fields(client, test_store_id):
 
 
 def test_profile_update_persists_full_name(client, test_store_id):
-    from app import User, app as flask_app, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     token = _login(client, test_store_id)
     resp = client.put(
         "/api/v2/auth/profile",
@@ -117,7 +118,8 @@ def test_profile_update_accepts_valid_timezone(
 
 def test_profile_update_clears_blanked_fields(client, test_store_id):
     """Empty string explicitly clears email / phone / timezone."""
-    from app import User, app as flask_app, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     token = _login(client, test_store_id)
     # Set first.
     client.put(

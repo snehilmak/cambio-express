@@ -106,7 +106,7 @@ def bank_category_groups(
     ]
     other = dict(BANK_CATEGORIES_NON_POSTING)  # copy so we can extend
     if store_id is not None:
-        from app import StripeBankAccount
+        from api.Modules.BankSync.Models import StripeBankAccount
         accounts = (
             db.query(StripeBankAccount)
               .filter_by(store_id=store_id)
@@ -145,7 +145,7 @@ def is_valid_bank_category(
         last4 = slug[len("bank_charge_"):]
         if not last4:
             return False
-        from app import StripeBankAccount
+        from api.Modules.BankSync.Models import StripeBankAccount
         accounts = (
             db.query(StripeBankAccount)
               .filter_by(store_id=store_id)

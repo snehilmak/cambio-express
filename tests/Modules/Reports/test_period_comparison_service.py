@@ -1,11 +1,9 @@
 """Unit tests for Reports.Services.period_comparison (PR 86)."""
 from datetime import date, timedelta
 
-from app import (
-    DailyReport,
-    Store,
-    Transfer,
-)
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, slug="pc-store"):

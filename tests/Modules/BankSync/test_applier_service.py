@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 
 def _store_with_account(db, *, slug="applier-store", last4="0210"):
     """Set up a store + a connected `StripeBankAccount`."""
-    from app import Store, StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from api.Modules.Tenancy.Models import Store
     s = Store(name=slug, slug=slug, plan="basic",
               email=f"{slug}@example.com")
     db.add(s); db.flush()
@@ -24,7 +25,7 @@ _TXN_COUNTER = [0]
 def _add_uncategorized_txn(db, store_id, account_id,
                             *, description="REMOTE DEPOSIT FEE",
                             amount_cents=-210):
-    from app import BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
     _TXN_COUNTER[0] += 1
     t = BankTransaction(
         store_id=store_id,
@@ -67,7 +68,8 @@ def test_already_categorized_row_is_skipped():
 def test_matches_builtin_when_no_operator_rule():
     """REMOTE DEPOSIT FEE on the 0230 MSB account fires the
     Nizari built-in. Built-ins never post to the daily book."""
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -90,7 +92,8 @@ def test_matches_builtin_when_no_operator_rule():
 
 
 def test_no_match_leaves_row_uncategorised():
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -118,7 +121,8 @@ def test_no_match_leaves_row_uncategorised():
 def test_operator_rule_wins_over_builtin():
     """Operator rules fire before built-ins. Rule chain order
     matters."""
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -153,7 +157,8 @@ def test_operator_rule_wins_over_builtin():
 def test_operator_rule_increments_match_count():
     """When an operator rule fires, its match_count goes up +
     last_matched_at gets stamped."""
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -187,7 +192,9 @@ def test_operator_rule_increments_match_count():
 def test_allow_auto_post_false_skips_daily_line_item():
     """allow_auto_post=False (backfill mode) → don't create
     DailyLineItem even when rule.auto_post=True."""
-    from app import app as flask_app, db, BankRule, DailyLineItem
+    from api.Modules.BankSync.Models import BankRule
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -222,7 +229,9 @@ def test_allow_auto_post_false_skips_daily_line_item():
 def test_allow_auto_post_true_creates_daily_line_item():
     """allow_auto_post=True + rule.auto_post=True + daily-book
     target → DailyLineItem created."""
-    from app import app as flask_app, db, BankRule, DailyLineItem
+    from api.Modules.BankSync.Models import BankRule
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -255,7 +264,8 @@ def test_allow_auto_post_true_creates_daily_line_item():
 
 
 def test_legacy_apply_rules_delegates():
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from app import _apply_rules_to_uncategorized_row as legacy
     with flask_app.app_context():
         BankRule.query.delete()

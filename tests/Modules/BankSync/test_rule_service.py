@@ -3,7 +3,8 @@ import pytest
 
 
 def _seed_account(store_id, *, last4="0000"):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id, stripe_account_id=f"fcacc_{last4}",
         institution_name="Bank", last4=last4, enabled=True,
@@ -202,7 +203,8 @@ def test_parse_rule_form_rejects_min_greater_than_max(test_store_id):
 
 def test_parse_rule_form_account_filter_must_belong_to_store(test_store_id):
     """Cross-store account_filter_id references must be rejected."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -258,7 +260,8 @@ def test_parse_rule_form_truncates_long_description(test_store_id):
 
 
 def test_create_rule_inserts_row(test_store_id):
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule,
     )
@@ -319,7 +322,8 @@ def test_update_rule_updates_in_place(test_store_id):
 
 
 def test_update_rule_raises_when_cross_store(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, RuleNotFoundError, create_rule, update_rule,
     )
@@ -368,7 +372,8 @@ def test_toggle_rule_flips_enabled(test_store_id):
 
 
 def test_delete_rule_removes_row(test_store_id):
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule, delete_rule,
     )
@@ -391,7 +396,8 @@ def test_delete_rule_removes_row(test_store_id):
 
 
 def test_delete_rule_raises_when_cross_store(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, RuleNotFoundError, create_rule, delete_rule,
     )

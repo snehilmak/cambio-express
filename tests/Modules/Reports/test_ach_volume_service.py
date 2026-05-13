@@ -1,7 +1,8 @@
 """Unit tests for Reports.Services.ach_volume (PR 88)."""
 from datetime import date
 
-from app import ACHBatch, Store
+from api.Modules.Batches.Models import ACHBatch
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug="ach-store"):

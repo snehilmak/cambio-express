@@ -29,7 +29,7 @@ def returned_check_status(
       - totals: `count`, `amount`, `recovered`, `loss_fraud`,
         `net_gl` (recovered - loss_fraud).
     """
-    from app import RETURN_CHECK_STATUSES, ReturnCheck
+    from api.Modules.ReturnChecks.Models import RETURN_CHECK_STATUSES, ReturnCheck
 
     rows_q = (
         db.query(ReturnCheck)

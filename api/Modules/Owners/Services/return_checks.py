@@ -35,7 +35,7 @@ from sqlalchemy.orm import Session
 def _models():
     """Lazy-import the ORM models so this module can be imported
     before app.py finishes wiring up the model registry."""
-    from app import ReturnCheck, ReturnCheckPayment
+    from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
     return ReturnCheck, ReturnCheckPayment
 
 

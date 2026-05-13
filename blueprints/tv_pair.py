@@ -44,10 +44,8 @@ def tv_pair_init():
     """The Fire TV app calls this on launch. Creates a
     TVPendingPair with a fresh code + device_token and returns
     both."""
-    from app import (
-        TVPendingPair, _PAIR_CODE_LIFETIME,
-        _generate_device_token, _generate_pair_code,
-    )
+    from api.Modules.TVDisplay.Models import TVPendingPair
+    from app import _PAIR_CODE_LIFETIME, _generate_device_token, _generate_pair_code
 
     payload = request.get_json(silent=True) or {}
     device_label = (payload.get("device_label") or "").strip()[:80]
@@ -84,9 +82,9 @@ def tv_pair_status():
     """The Fire TV polls this with its device_token. Always 200 so
     the Fire TV can branch off the JSON. Unknown tokens get treated
     as "expired" so a fresh /init is the recovery path."""
-    from app import (
-        Store, TVDisplay, TVPairing, TVPendingPair, store_has_addon,
-    )
+    from api.Modules.TVDisplay.Models import TVDisplay, TVPairing, TVPendingPair
+    from api.Modules.Tenancy.Models import Store
+    from app import store_has_addon
 
     token = (request.args.get("token") or "").strip()
     if not token:

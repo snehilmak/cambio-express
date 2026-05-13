@@ -40,7 +40,7 @@ def active_roster(db: Session, store_id: int) -> list:
     Inactive roster rows are hidden so cashiers can't credit
     new transfers to former employees.
     """
-    from app import StoreEmployee
+    from api.Modules.Tenancy.Models import StoreEmployee
     return (
         db.query(StoreEmployee)
           .filter_by(store_id=store_id, is_active=True)
@@ -62,7 +62,7 @@ def pick_employee(
     Bad input (non-int, blank) returns `(None, "")` so the
     route can flash an error.
     """
-    from app import StoreEmployee
+    from api.Modules.Tenancy.Models import StoreEmployee
     try:
         eid = int(raw_id) if raw_id else None
     except (TypeError, ValueError):

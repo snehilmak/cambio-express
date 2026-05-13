@@ -105,7 +105,7 @@ def read_mt_breakdown(
     against them under that name (carry-over from a deleted
     company entry). Unknowns sort alphabetically after the
     configured list."""
-    from app import MoneyTransferSummary
+    from api.Modules.DailyBook.Models import MoneyTransferSummary
 
     auto_summary = summarize_transfers_for_day(db, store_id, report_date)
     auto_by_co = {row.company: row for row in auto_summary.by_company}
@@ -176,7 +176,7 @@ def replace_mt_breakdown(
     Empty `rows` is valid (clears every saved row for the day +
     sets `money_transfer` to 0).
     """
-    from app import MoneyTransferSummary
+    from api.Modules.DailyBook.Models import MoneyTransferSummary
 
     report = ensure_daily_report(db, store_id, report_date)
     if report.locked_at is not None:

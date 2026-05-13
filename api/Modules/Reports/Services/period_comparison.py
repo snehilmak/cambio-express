@@ -45,7 +45,8 @@ PL_EXPENSE_LINES: list[tuple[str, str]] = [
 def _bundle(db: Session, store_ids: list[int], s: date, e: date) -> dict:
     """Aggregate a single period into the metric dict the
     comparison view consumes."""
-    from app import DailyReport, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Reports.Repositories.transfers import (
         period_filters,
     )

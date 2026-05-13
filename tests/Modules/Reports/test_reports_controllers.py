@@ -25,7 +25,8 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
                     recipient_name="R", status="Sent",
                     created_by=None, employee_id=None,
                     customer_id=None, send_date=None):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -201,7 +202,8 @@ def test_top_recipients_rejects_out_of_range_limit(test_store_id):
 
 
 def test_top_customers_respects_sort_by(test_store_id):
-    from app import app as flask_app, Customer, db
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         c = Customer(
@@ -234,7 +236,8 @@ def test_top_customers_rejects_invalid_sort_by(test_store_id):
 
 
 def test_sales_by_employee_resolves_user(test_store_id):
-    from app import app as flask_app, User, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="cash@x.com",
@@ -255,7 +258,8 @@ def test_sales_by_employee_resolves_user(test_store_id):
 
 
 def test_cashier_productivity_resolves_storeemployee(test_store_id):
-    from app import app as flask_app, StoreEmployee, db
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from app import app as flask_app, db
     with flask_app.app_context():
         e = StoreEmployee(
             store_id=test_store_id, name="Maria", is_active=True,
@@ -278,7 +282,8 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id):
 
 def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
     """Comma-separated `store_ids=1,2` must aggregate across both."""
-    from app import app as flask_app, Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-store",
                     email="o@test.com", plan="trial")

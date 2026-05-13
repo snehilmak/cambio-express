@@ -63,7 +63,8 @@ def _require_tv_store(claims: dict, db: Session):
         raise HTTPException(status_code=404, detail="Not found")
     if claims.get("role") not in ("admin", "employee"):
         raise HTTPException(status_code=404, detail="Not found")
-    from app import Store, store_has_addon
+    from api.Modules.Tenancy.Models import Store
+    from app import store_has_addon
     store = db.query(Store).filter(Store.id == int(sid)).one_or_none()
     if store is None:
         raise HTTPException(status_code=404, detail="Not found")
@@ -90,7 +91,7 @@ def _ensure_display(db: Session, store):
     """Get-or-create the store's TVDisplay row. Mirrors legacy
     `_ensure_tv_display()` but routes through the FastAPI session."""
     import secrets
-    from app import TVDisplay
+    from api.Modules.TVDisplay.Models import TVDisplay
     d = db.query(TVDisplay).filter(TVDisplay.store_id == store.id).one_or_none()
     if d is None:
         d = TVDisplay(
@@ -112,7 +113,7 @@ def overview_route(
     landing page renders — just JSON-shaped."""
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
-    from app import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate, TVPairing
+    from api.Modules.TVDisplay.Models import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate, TVPairing
     countries = (
         db.query(TVDisplayCountry)
           .filter(TVDisplayCountry.display_id == display.id)
@@ -196,7 +197,7 @@ def country_detail_route(
     — the country must belong to the principal's TVDisplay row."""
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
-    from app import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
+    from api.Modules.TVDisplay.Models import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
     country = (
         db.query(TVDisplayCountry)
           .filter(
@@ -324,9 +325,8 @@ def claim_pair_code_route(
     # Reuse the legacy code alphabet + lifetime — these are owned by
     # the Flask /api/tv-pair/init endpoint that mints the pending row,
     # so the validator must agree on what's a valid char.
-    from app import (
-        TVPairing, TVPendingPair, _PAIR_CODE_ALPHABET,
-    )
+    from api.Modules.TVDisplay.Models import TVPairing, TVPendingPair
+    from app import _PAIR_CODE_ALPHABET
 
     raw = (payload.code or "").strip().upper()
     code = "".join(c for c in raw if c in _PAIR_CODE_ALPHABET)
@@ -386,7 +386,7 @@ def revoke_pairing_route(
     return 404 (opaque)."""
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
-    from app import TVPairing
+    from api.Modules.TVDisplay.Models import TVPairing
     pairing = (
         db.query(TVPairing)
           .filter(TVPairing.id == pairing_id,
@@ -417,7 +417,7 @@ def create_country_route(
     to the country editor next to fill those in."""
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
-    from app import TVDisplayCountry
+    from api.Modules.TVDisplay.Models import TVDisplayCountry
 
     name = (payload.country_name or "").strip()[:80]
     if not name:
@@ -460,7 +460,7 @@ def delete_country_route(
     on other stores' displays return 404."""
     store = _require_tv_store(claims, db)
     display = _ensure_display(db, store)
-    from app import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
+    from api.Modules.TVDisplay.Models import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
     country = (
         db.query(TVDisplayCountry)
           .filter(TVDisplayCountry.id == country_id,

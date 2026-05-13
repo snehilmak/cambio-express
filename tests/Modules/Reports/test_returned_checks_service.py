@@ -1,7 +1,8 @@
 """Unit tests for Reports.Services.returned_check_status (PR 90)."""
 from datetime import date
 
-from app import ReturnCheck, ReturnCheckPayment, Store
+from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug="rc-store"):

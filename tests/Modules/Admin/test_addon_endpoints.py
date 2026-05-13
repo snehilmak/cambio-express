@@ -23,7 +23,8 @@ def _set_paid_plan(store_id, plan="basic"):
     """Flip the seeded test store onto a paid plan so the toggle
     endpoint accepts the request (legacy contract: add-ons need
     Basic or Pro)."""
-    from app import Store, app as flask_app, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s = Store.query.filter_by(id=store_id).first()
         s.plan = plan
@@ -63,7 +64,8 @@ def test_list_returns_catalog_with_active_flag(client, test_store_id):
 def test_list_marks_active_addon(client, test_store_id):
     """A store with `addons="tv_display"` should surface
     is_active=true on that row."""
-    from app import Store, app as flask_app, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s = Store.query.filter_by(id=test_store_id).first()
         s.addons = "tv_display"

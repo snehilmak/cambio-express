@@ -1,5 +1,5 @@
 """Unit tests for BankSync.Services.categories (PR 69)."""
-from app import StripeBankAccount
+from api.Modules.BankSync.Models import StripeBankAccount
 
 
 # ── bank_category_label ────────────────────────────────────
@@ -114,7 +114,8 @@ def test_is_valid_rejects_unknown_slug():
 def test_is_valid_accepts_dynamic_bank_charge_for_connected_account():
     """bank_charge_<last4> validates against the store's
     connected `StripeBankAccount` rows."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -181,7 +182,8 @@ def test_groups_includes_static_non_posting_tags():
 def test_groups_augments_other_with_per_account_bank_charges():
     """Connected accounts get dynamic bank_charge_<last4> entries
     in the Other group."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -204,7 +206,8 @@ def test_groups_augments_other_with_per_account_bank_charges():
 def test_groups_does_not_duplicate_static_slugs():
     """If an account's last4 maps to a slug already in the static
     dict (210/230), don't double-add it."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         StripeBankAccount.query.delete()

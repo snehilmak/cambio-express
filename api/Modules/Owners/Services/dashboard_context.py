@@ -48,7 +48,9 @@ def dashboard_context(db: Session, user, period: str) -> dict:
 
     Returns a dict suitable for `**kwargs` into render_template.
     """
-    from app import DailyReport, Store, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Transfers.Models import Transfer
 
     today = date.today()
     start, end, prev_start, prev_end, prev_label = owner_period_window(
@@ -233,7 +235,9 @@ def locations_payload(
     is the unfiltered umbrella size (used by the template to
     distinguish "no stores" from "search returned no results").
     """
-    from app import DailyReport, Store, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Transfers.Models import Transfer
 
     today = date.today()
     start, end, *_ = owner_period_window(period, today)

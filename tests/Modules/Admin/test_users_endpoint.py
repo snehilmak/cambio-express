@@ -46,7 +46,8 @@ def test_users_patch_requires_jwt(client):
 
 def test_users_endpoints_reject_employee_role(client, test_store_id):
     """Cashier role can't manage the user roster."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="cashier_users_admin",
@@ -125,7 +126,8 @@ def test_users_list_returns_envelope(client, test_store_id):
 def test_users_list_does_not_leak_cross_store(client, test_store_id):
     """Users from a different store must not appear in this store's
     roster."""
-    from app import Store, User, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store, User
+    from app import app as flask_app, db
     with flask_app.app_context():
         other = Store(name="Other Store", slug="other-store",
                       email="ops@other.com", plan="trial")
@@ -191,7 +193,8 @@ def test_users_create_hashes_password(client, test_store_id):
     assert create.status_code == 201
     new_id = create.get_json()["id"]
 
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         row = db.session.get(User, new_id)
         assert row is not None
@@ -268,7 +271,8 @@ def test_users_get_returns_detail(client, test_store_id, test_admin_id):
 
 def test_users_get_404_for_cross_store(client, test_store_id):
     """Cross-store user IDs surface as 404 — opaque tenancy."""
-    from app import Store, User, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store, User
+    from app import app as flask_app, db
     with flask_app.app_context():
         other = Store(name="Other 2", slug="other-2",
                       email="o2@x.com", plan="trial")
@@ -338,7 +342,8 @@ def test_users_patch_password_only_when_provided(
 ):
     """Empty / missing password leaves the existing hash alone;
     a non-blank password value reseats it."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
@@ -425,7 +430,8 @@ def test_users_patch_404_for_cross_store(client, test_store_id):
 def test_users_patch_records_audit_row(client, test_store_id):
     """Mutating endpoints append to OperatorAuditLog so the audit
     log surfaces who changed what."""
-    from app import OperatorAuditLog, db, app as flask_app
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from app import app as flask_app, db
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",

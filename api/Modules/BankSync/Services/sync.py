@@ -64,7 +64,7 @@ def upsert_bank_transaction(
     `(row, inserted)` where `inserted` is True iff this call
     created the row.
     """
-    from app import BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
 
     txn_id = (
         api_obj.get("id") if isinstance(api_obj, dict)
@@ -139,7 +139,7 @@ def migrate_generic_bank_charge_per_account(
     alone. Once every store has been migrated, this is a
     permanent no-op.
     """
-    from app import BankTransaction, StripeBankAccount
+    from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 
     accounts = {
         a.id: a for a in
@@ -181,7 +181,7 @@ def backfill_uncategorized_rows(db: Session, store_id: int) -> int:
     without it, historical rows would stay uncategorised forever
     because Stripe won't re-yield them through `Transaction.list`.
     """
-    from app import BankTransaction, StripeBankAccount
+    from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 
     rows = (
         db.query(BankTransaction)
@@ -229,7 +229,7 @@ def sync_bank_transactions(
       - `total_seen`: count of every row touched
       - `last_error`: empty unless one or more accounts errored
     """
-    from app import StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
 
     if not stripe_is_configured():
         return 0, 0, "Stripe is not configured."

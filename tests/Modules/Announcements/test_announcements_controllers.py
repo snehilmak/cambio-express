@@ -28,7 +28,8 @@ def _login_superadmin(client):
 
 def _seed(message="Heads up", level="info", is_active=True,
           starts_at=None, expires_at=None):
-    from app import Announcement, db
+    from api.Modules.Announcements.Models import Announcement
+    from app import db
     a = Announcement(
         message=message, level=level, is_active=is_active,
         starts_at=starts_at, expires_at=expires_at,
@@ -173,7 +174,8 @@ def test_toggle_404_when_missing(client):
 
 
 def test_delete_removes_row(client):
-    from app import app as flask_app, Announcement
+    from api.Modules.Announcements.Models import Announcement
+    from app import app as flask_app
     with flask_app.app_context():
         ann_id = _seed(message="zap")
     token = _login_superadmin(client)
@@ -201,7 +203,8 @@ def test_delete_404_when_missing(client):
 def test_create_records_audit_entry(client):
     """Every superadmin mutation must record_audit (CLAUDE.md
     invariant #7). Confirms the Controller calls it."""
-    from app import app as flask_app, SuperadminAuditLog
+    from api.Modules.Audit.Models import SuperadminAuditLog
+    from app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/announcements",

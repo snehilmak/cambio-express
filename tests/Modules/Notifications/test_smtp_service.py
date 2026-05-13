@@ -2,7 +2,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
-from app import EmailEvent, User
+from api.Modules.Tenancy.Models import User
+from api.Modules.Webhooks.Models import EmailEvent
 
 
 def _add_user(db, *, email, store_id=1, bounced=False):

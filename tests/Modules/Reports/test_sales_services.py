@@ -13,7 +13,8 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
                     federal_tax=1.0, company="Intermex",
                     service_type="Money Transfer", country="MX",
                     recipient_name="R", status="Sent"):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=date.today(),

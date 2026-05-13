@@ -270,7 +270,7 @@ def lock_daily_route(
     # Snapshot the prior lock state — the audit row only fires on
     # a state transition (matches the legacy /daily/<ds>/lock
     # `was_locked` guard).
-    from app import DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
     existing = (
         db.query(DailyReport)
           .filter_by(store_id=int(store_id), report_date=d)
@@ -336,7 +336,7 @@ def unlock_daily_route(
                 "daily book."
             ),
         )
-    from app import DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
     existing = (
         db.query(DailyReport)
           .filter_by(store_id=int(store_id), report_date=d)

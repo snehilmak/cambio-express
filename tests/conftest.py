@@ -222,7 +222,8 @@ def login_superadmin(client) -> str:
 
 
 def seed_test_data():
-    from app import User, Store, _seed_tv_catalogs
+    from api.Modules.Tenancy.Models import Store, User
+    from app import _seed_tv_catalogs
     # TV-display catalogs (companies + banks) are seeded by init_db
     # in production but the test fixture drop_all/create_all cycle
     # resets every table — we rebuild them here so picker UI tests
@@ -277,7 +278,7 @@ def clean_db():
         # Verify seed actually persisted — if a leaked async task
         # rolled back the seed transaction, the row is gone before
         # the test even starts. Retry once to make CI deterministic.
-        from app import Store
+        from api.Modules.Tenancy.Models import Store
         if Store.query.filter_by(slug="test-store").first() is None:
             db.session.remove()
             db.drop_all()
@@ -297,7 +298,7 @@ def logged_in_client():
     """Client pre-authenticated as the test store admin."""
     c = flask_app.test_client()
     with flask_app.app_context():
-        from app import User
+        from api.Modules.Tenancy.Models import User
         u = User.query.filter_by(username="admin@test.com").first()
         assert u is not None, "admin@test.com user not found — did seed_test_data run?"
         uid, sid = u.id, u.store_id
@@ -319,7 +320,7 @@ def logged_in_client():
 @pytest.fixture
 def test_store_id():
     """The Store.id of the seeded test-store fixture row."""
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     with flask_app.app_context():
         return Store.query.filter_by(slug="test-store").first().id
 
@@ -327,7 +328,7 @@ def test_store_id():
 @pytest.fixture
 def test_admin_id():
     """The User.id of the seeded admin@test.com user."""
-    from app import User
+    from api.Modules.Tenancy.Models import User
     with flask_app.app_context():
         return User.query.filter_by(username="admin@test.com").first().id
 
@@ -336,7 +337,7 @@ def make_employee_client(store_id, *, username_suffix="emp"):
     """Return a Flask test client authenticated as a new employee user
     at the given store. Each call creates a fresh User row so tests
     that need multiple employees can call this multiple times."""
-    from app import User
+    from api.Modules.Tenancy.Models import User
     c = flask_app.test_client()
     with flask_app.app_context():
         emp = User(
@@ -364,7 +365,7 @@ def seed_transfer(store_id, creator_id, *, send_date=None,
     new transfer's id. federal_tax follows the default 1% rate —
     callers that need a specific tax value can .query the row and
     override after."""
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     with flask_app.app_context():
         t = Transfer(
             store_id=store_id,

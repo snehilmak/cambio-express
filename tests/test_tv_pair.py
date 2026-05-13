@@ -17,10 +17,9 @@ These tests pin the security-relevant invariants:
 """
 from datetime import datetime, timedelta
 
-from app import (
-    db, User, Store, TVDisplay, TVPairing, TVPendingPair,
-    _PAIR_CODE_ALPHABET, _PAIR_CODE_LIFETIME,
-)
+from api.Modules.TVDisplay.Models import TVDisplay, TVPairing, TVPendingPair
+from api.Modules.Tenancy.Models import Store, User
+from app import _PAIR_CODE_ALPHABET, _PAIR_CODE_LIFETIME, db
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -317,7 +316,8 @@ def _populate_one_country(client, store_id, jwt):
         headers={"Authorization": f"Bearer {jwt}"},
     )
     country_id = create.get_json()["id"]
-    from app import TVDisplayPayoutBank, app as flask_app, db
+    from api.Modules.TVDisplay.Models import TVDisplayPayoutBank
+    from app import app as flask_app, db
     with flask_app.app_context():
         db.session.add(TVDisplayPayoutBank(
             country_id=country_id, bank_name="Bancomer", sort_order=0,

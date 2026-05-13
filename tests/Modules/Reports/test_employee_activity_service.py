@@ -1,7 +1,8 @@
 """Unit tests for Reports.Services.employee_activity (PR 94)."""
 from datetime import date
 
-from app import Store, Transfer, User
+from api.Modules.Tenancy.Models import Store, User
+from api.Modules.Transfers.Models import Transfer
 
 
 _USER_COUNTER = 0

@@ -31,7 +31,8 @@ def employee_activity(
         by total activity (count + cancels) desc.
       - totals: cross-employee sums of count + sent + cancels.
     """
-    from app import Transfer, User
+    from api.Modules.Tenancy.Models import User
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
 
     active_q = (

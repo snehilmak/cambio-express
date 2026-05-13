@@ -100,7 +100,7 @@ def find_matching_rule(db: Session, store_id: int, txn):
     Tie-break on `id` so the order is deterministic when two
     rules share a priority.
     """
-    from app import BankRule
+    from api.Modules.BankSync.Models import BankRule
     rules = (
         db.query(BankRule)
           .filter_by(store_id=store_id, enabled=True)

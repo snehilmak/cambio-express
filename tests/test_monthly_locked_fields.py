@@ -24,7 +24,7 @@ from app import app as flask_app, db
 
 def _seed_daily_report(store_id, report_date, **fields):
     """Drop a DailyReport row with the given daily-book numbers."""
-    from app import DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
     with flask_app.app_context():
         r = DailyReport(store_id=store_id, report_date=report_date, **fields)
         db.session.add(r)
@@ -58,7 +58,7 @@ def _put_monthly(client, store_id, year, month, body):
 def test_locked_fields_populate_from_daily_sums_on_save(client, test_store_id):
     """PUT a notes-only payload → server must populate the five
     daily-derived fields from the DailyReport rows for the month."""
-    from app import MonthlyFinancial
+    from api.Modules.Monthly.Models import MonthlyFinancial
     y, m = 2026, 4
     _seed_daily_report(test_store_id, date(y, m, 3),
                        cash_purchases=100.0, check_purchases=50.0,
@@ -81,7 +81,7 @@ def test_locked_fields_populate_from_daily_sums_on_save(client, test_store_id):
 
 def test_check_cashing_fees_auto_populates(client, test_store_id):
     """Same daily-derived contract for check_cashing_fees."""
-    from app import MonthlyFinancial
+    from api.Modules.Monthly.Models import MonthlyFinancial
     y, m = 2026, 8
     _seed_daily_report(test_store_id, date(y, m, 4),  check_cashing_fees=12.50)
     _seed_daily_report(test_store_id, date(y, m, 19), check_cashing_fees=37.75)
@@ -134,7 +134,7 @@ def test_unlocked_fields_save_submitted_values(client, test_store_id):
     """The lock is scoped to the daily-derived fields. Manually-
     entered fields (mt_commission_in_bank, other_income_1, etc.)
     take whatever the user typed."""
-    from app import MonthlyFinancial
+    from api.Modules.Monthly.Models import MonthlyFinancial
     y, m = 2026, 6
     resp = _put_monthly(client, test_store_id, y, m, {
         "mt_commission_in_bank": 250.0,
@@ -156,7 +156,8 @@ def test_resaving_picks_up_fresh_daily_sums(client, test_store_id):
     next save should reflect the NEW sum rather than whatever was
     stored. The locked-field contract is "always trust the daily
     ledger, never the stored MonthlyFinancial value"."""
-    from app import DailyReport, MonthlyFinancial
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Monthly.Models import MonthlyFinancial
     y, m = 2026, 7
     _seed_daily_report(test_store_id, date(y, m, 5), cash_expense=100.0)
     _put_monthly(client, test_store_id, y, m, {"notes": ""})

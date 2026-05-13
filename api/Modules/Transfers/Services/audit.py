@@ -109,7 +109,7 @@ def record_audit(
     No commit — caller wraps the audit row in the same
     transaction as the underlying transfer mutation.
     """
-    from app import TransferAudit
+    from api.Modules.Audit.Models import TransferAudit
     db.add(TransferAudit(
         store_id=transfer.store_id,
         transfer_id=transfer.id,

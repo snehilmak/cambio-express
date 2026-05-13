@@ -23,7 +23,8 @@ def _login(client, store_id):
 
 
 def _seed_account(store_id, *, last4="0000"):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -37,7 +38,8 @@ def _seed_account(store_id, *, last4="0000"):
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
               description="X", category_slug="",
               stripe_transaction_id=None):
-    from app import BankTransaction, db
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -173,7 +175,8 @@ def test_categorize_idempotent_replaces_prior_kind(client, test_store_id):
 
 def test_categorize_rejects_other_stores_txn(client, test_store_id):
     """A txn that belongs to a different store must 404, not 200."""
-    from app import Store, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         other = Store(name="Other", slug="other-bs", plan="trial")
         db.session.add(other); db.session.commit()

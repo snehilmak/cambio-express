@@ -21,7 +21,8 @@ def _login(client, store_id):
 def _seed_account(store_id, *, last4="0000", nickname="",
                   display_name="", institution_name="Bank",
                   enabled=True):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}_{nickname or display_name or institution_name}",
@@ -122,7 +123,8 @@ def test_accounts_endpoint_includes_disconnected(client, test_store_id):
 
 
 def test_accounts_endpoint_excludes_other_stores(client, test_store_id):
-    from app import app as flask_app, Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-bank-acc",
                    email="o@x.com", plan="trial")

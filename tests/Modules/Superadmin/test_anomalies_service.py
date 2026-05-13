@@ -9,7 +9,9 @@ behavior; the Flask route gets a real URL.
 """
 from datetime import date, timedelta
 
-from app import Store, Transfer, DailyReport
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, name="Test Co", slug=None,

@@ -11,7 +11,8 @@ def _make_owner(*, username="boss@example.com", password="ownerpass1!",
     """Create an owner User + their home store, return (user_id,
     home_store_id, raw_password). The owner can then be linked to
     additional stores via _link()."""
-    from app import Store, User, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     s = Store(name="Boss Home", slug=home_store_slug,
               email=username, plan="basic")
     db.session.add(s); db.session.commit()
@@ -25,7 +26,8 @@ def _make_owner(*, username="boss@example.com", password="ownerpass1!",
 
 
 def _link(owner_id, *, store_name="Sibling", store_slug="sibling"):
-    from app import Store, StoreOwnerLink, db
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+    from app import db
     s = Store(name=store_name, slug=store_slug,
               email=f"{store_slug}@x.com", plan="basic")
     db.session.add(s); db.session.commit()
@@ -36,7 +38,8 @@ def _link(owner_id, *, store_name="Sibling", store_slug="sibling"):
 
 def _seed_transfer(store_id, *, send_amount=500.0, company="Intermex",
                    send_date_=None):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date_ or date.today(),
@@ -171,7 +174,8 @@ def test_locations_excludes_unrelated_stores(client):
         s1 = _link(owner_id, store_name="Mine", store_slug="mine")
         _seed_transfer(s1, send_amount=50.0)
         # Unlinked store — should NOT appear
-        from app import Store, db
+        from api.Modules.Tenancy.Models import Store
+        from app import db
         other = Store(name="Theirs", slug="theirs",
                       email="t@x.com", plan="basic")
         db.session.add(other); db.session.commit()

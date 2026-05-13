@@ -1,13 +1,10 @@
 """Unit tests for Owners.Services.return_checks (PR 62)."""
 from datetime import date, timedelta
 
-from app import (
-    DailyReport,
-    ReturnCheck,
-    ReturnCheckPayment,
-    Store,
-    Transfer,
-)
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, slug="rc-store"):

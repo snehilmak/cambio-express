@@ -3,7 +3,8 @@ from datetime import date, datetime, time
 
 
 def _seed_account(store_id, *, last4="0000"):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id, stripe_account_id=f"fcacc_{last4}",
         institution_name="Bank", last4=last4, enabled=True,
@@ -14,7 +15,8 @@ def _seed_account(store_id, *, last4="0000"):
 
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
                 description="X", category_slug=""):
-    from app import BankTransaction, db
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -55,7 +57,8 @@ def test_categorize_sets_category_slug(test_store_id):
 def test_categorize_creates_daily_line_item_for_daily_kind(test_store_id):
     """A daily-book kind + post_to_daily=True creates a linked
     DailyLineItem."""
-    from app import app as flask_app, db, DailyLineItem
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import categorize_transaction
     with flask_app.app_context():
         a = _seed_account(test_store_id)
@@ -93,7 +96,8 @@ def test_categorize_skips_daily_for_non_daily_kind(test_store_id):
 def test_categorize_idempotent_on_re_categorize(test_store_id):
     """Re-categorizing should drop the prior DailyLineItem before
     creating a fresh one — no orphan rows."""
-    from app import app as flask_app, db, DailyLineItem
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import categorize_transaction
     with flask_app.app_context():
         a = _seed_account(test_store_id)
@@ -118,7 +122,8 @@ def test_categorize_idempotent_on_re_categorize(test_store_id):
 
 
 def test_categorize_with_rule_increments_match_count(test_store_id):
-    from app import app as flask_app, db, BankRule
+    from api.Modules.BankSync.Models import BankRule
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import categorize_transaction
     with flask_app.app_context():
         a = _seed_account(test_store_id)
@@ -143,7 +148,8 @@ def test_categorize_with_rule_increments_match_count(test_store_id):
 def test_categorize_uses_report_date_override(test_store_id):
     """When report_date is passed, the DailyLineItem uses that date
     instead of the transaction's posted_at date."""
-    from app import app as flask_app, db, DailyLineItem
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import categorize_transaction
     with flask_app.app_context():
         a = _seed_account(test_store_id)
@@ -163,7 +169,8 @@ def test_categorize_uses_report_date_override(test_store_id):
 
 
 def test_uncategorize_clears_slug_and_removes_line(test_store_id):
-    from app import app as flask_app, db, DailyLineItem
+    from api.Modules.DailyBook.Models import DailyLineItem
+    from app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         categorize_transaction, uncategorize_transaction,
     )

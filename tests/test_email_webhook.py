@@ -19,11 +19,9 @@ import json
 import os
 from datetime import datetime, timedelta
 
-from app import (
-    db, User, Store, EmailEvent,
-    _verify_resend_signature, _send_email, smtp_health_check,
-    purge_expired_stores,
-)
+from api.Modules.Tenancy.Models import Store, User
+from api.Modules.Webhooks.Models import EmailEvent
+from app import _send_email, _verify_resend_signature, db, purge_expired_stores, smtp_health_check
 
 
 # ── Signature helpers ──────────────────────────────────────────

@@ -11,7 +11,8 @@ from datetime import date, datetime, timedelta
 
 def _seed_customer(store_id, *, full_name, phone_country="+1",
                     phone_number="", address=""):
-    from app import Customer, db
+    from api.Modules.Customers.Models import Customer
+    from app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country=phone_country, phone_number=phone_number,
@@ -22,7 +23,8 @@ def _seed_customer(store_id, *, full_name, phone_country="+1",
 
 
 def _seed_owner(username="owner@x.com"):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -30,14 +32,16 @@ def _seed_owner(username="owner@x.com"):
 
 
 def _seed_store(slug, name="X"):
-    from app import Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import db
     s = Store(name=name, slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
 
 
 def _link(owner_id, store_id):
-    from app import StoreOwnerLink, db
+    from api.Modules.Tenancy.Models import StoreOwnerLink
+    from app import db
     l = StoreOwnerLink(owner_id=owner_id, store_id=store_id)
     db.session.add(l); db.session.commit()
 
@@ -63,7 +67,8 @@ def test_upsert_creates_new_customer(test_store_id):
 
 def test_upsert_reuses_existing_phone_match(test_store_id):
     """Repeat phone_number → no new row, just update last-write-wins fields."""
-    from app import app as flask_app, db, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         cid = _seed_customer(test_store_id, full_name="Alice Old",
@@ -86,7 +91,8 @@ def test_upsert_reuses_existing_phone_match(test_store_id):
 def test_upsert_unifies_across_owner_umbrella(test_store_id):
     """Cashier at Store A logs a sender; cashier at Store B (same owner)
     finds the same row via phone match — no duplicate created."""
-    from app import app as flask_app, db, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         oid = _seed_owner()
@@ -115,7 +121,8 @@ def test_upsert_unifies_across_owner_umbrella(test_store_id):
 def test_upsert_isolates_unrelated_stores(test_store_id):
     """Same phone in two unrelated stores → two separate rows.
     Owner-umbrella isolation is the security property."""
-    from app import app as flask_app, db, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         s2 = _seed_store("isolated")
@@ -245,7 +252,8 @@ def test_search_fuzzy_suggestions_catch_spelling_drift(test_store_id):
 def test_search_skips_fuzzy_when_matches_full(test_store_id):
     """5+ exact matches → no fuzzy pass; the cashier already has
     plenty to pick from."""
-    from app import app as flask_app, db, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         # 6 exact matches on substring "Test"
@@ -346,7 +354,8 @@ def test_legacy_upsert_matches_service(test_store_id):
     PR 9 will flip it to call the Service — until then, both surfaces
     must produce identical results from identical input. This test
     runs each independently and compares row counts + content."""
-    from app import app as flask_app, db, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import app as flask_app, db
     from app import find_or_upsert_customer
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():

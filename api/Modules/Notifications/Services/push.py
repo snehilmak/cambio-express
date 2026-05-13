@@ -84,7 +84,7 @@ def send_push(
         logger.warning("pywebpush not installed; skipping send_push")
         return 0
 
-    from app import PushSubscription
+    from api.Modules.Announcements.Models import PushSubscription
 
     payload_dict = {
         "title": title,

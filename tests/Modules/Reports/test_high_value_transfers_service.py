@@ -1,7 +1,8 @@
 """Unit tests for Reports.Services.high_value_transfers (PR 93)."""
 from datetime import date
 
-from app import Store, Transfer
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, slug="hv-store"):

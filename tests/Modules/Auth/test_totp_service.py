@@ -5,7 +5,8 @@ import pyotp
 
 
 def _seed_user(role="employee", *, totp_secret=None, totp_enrolled_at=None):
-    from app import User, db, Store
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     s = Store.query.filter_by(slug="test-store").first()
     u = User(
         store_id=s.id, username=f"u-{role}-{datetime.utcnow().timestamp()}@x.com",
@@ -147,7 +148,8 @@ def test_format_recovery_code():
 
 
 def test_generate_recovery_codes_creates_count_rows():
-    from app import app as flask_app, db, RecoveryCode
+    from api.Modules.Auth.Models import RecoveryCode
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import generate_recovery_codes
     with flask_app.app_context():
         u = _seed_user(role="superadmin")
@@ -159,7 +161,8 @@ def test_generate_recovery_codes_creates_count_rows():
 
 
 def test_generate_recovery_codes_replaces_existing():
-    from app import app as flask_app, db, RecoveryCode
+    from api.Modules.Auth.Models import RecoveryCode
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import generate_recovery_codes
     with flask_app.app_context():
         u = _seed_user(role="superadmin")
@@ -191,7 +194,8 @@ def test_generate_recovery_codes_format():
 
 
 def test_consume_recovery_code_marks_used_and_returns_true():
-    from app import app as flask_app, db, RecoveryCode
+    from api.Modules.Auth.Models import RecoveryCode
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_recovery_code, generate_recovery_codes,
     )

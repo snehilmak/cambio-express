@@ -62,7 +62,7 @@ def daily_drops(
     d_to: date,
 ) -> tuple[list[dict], dict]:
     """Aggregate `DailyDrop` rows in the period, grouped by date."""
-    from app import DailyDrop
+    from api.Modules.DailyBook.Models import DailyDrop
     return _by_report_date(db, DailyDrop, store_ids, d_from, d_to)
 
 
@@ -73,5 +73,5 @@ def check_deposits(
     d_to: date,
 ) -> tuple[list[dict], dict]:
     """Aggregate `CheckDeposit` rows in the period, grouped by date."""
-    from app import CheckDeposit
+    from api.Modules.DailyBook.Models import CheckDeposit
     return _by_report_date(db, CheckDeposit, store_ids, d_from, d_to)

@@ -16,7 +16,8 @@ _MIGRATED_BATCH = [
 
 
 def _admin_session_login(client, store_id):
-    from app import User, Store, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id

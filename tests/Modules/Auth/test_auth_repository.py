@@ -3,7 +3,8 @@
 
 def _seed_user(store_id, *, username, role="employee", full_name="",
                 is_active=True):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(
         store_id=store_id, username=username, role=role,
         full_name=full_name, is_active=is_active,
@@ -51,7 +52,8 @@ def test_find_user_by_username_in_store_returns_none_for_other_store(test_store_
     """Cross-store lookup must miss — the unique constraint allows the
     same username at different stores, but each request scope is one
     store."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username_in_store
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-auth",
@@ -163,7 +165,8 @@ def test_list_users_in_store_active_only(test_store_id):
 
 
 def test_list_users_in_store_isolates_other_stores(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.Auth.Repositories import list_users_in_store
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-auth-list",
