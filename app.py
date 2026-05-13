@@ -999,8 +999,7 @@ from api.Modules.Notifications.Services import smtp as _smtp_svc
 #
 # Canonical home: ``api.Modules.Notifications.Services.templates``.
 # Re-export here for the legacy in-file callers (``send_trial_reminders``,
-# ``send_locked_day_digest``, ``broadcast_announcement``) until they
-# migrate into Services themselves.
+# ``broadcast_announcement``) until they migrate into Services themselves.
 
 
 def _send_email(to_addr, subject, body, html=None):
@@ -2238,30 +2237,6 @@ def send_trial_reminders_cmd():
     n = send_trial_reminders()
     print(f"Sent {n} trial reminder email(s).")
 
-
-# ── Locked-day digest email ──────────────────────────────────
-#
-# `send_locked_day_digest(report)` is the fan-out. Called from the
-# FastAPI lock endpoint immediately after a successful lock + audit
-# write. We do NOT stamp a "digest_sent" flag — re-locking after an
-# unlock + edit cycle is a legitimate trigger (a corrected close-out)
-# and the audit already records the state transition.
-#
-# Recipients + static body live in
-# api.Modules.Notifications.Services.locked_day_digest. Email
-# delivery + Flask render glue stay here so the Service stays pure.
-
-def send_locked_day_digest(report, base_url: str | None = None) -> int:
-    """Back-compat wrapper. Canonical source of truth:
-    ``api.Modules.Notifications.Services.locked_day_digest.run``.
-
-    Called from the FastAPI lock endpoint with the current
-    ``db.session`` — passes through to the Service ``run()``.
-    """
-    from api.Modules.Notifications.Services.locked_day_digest import (
-        run as _svc_run,
-    )
-    return _svc_run(db.session, report, base_url=base_url)
 
 # ── Announcement broadcast email ─────────────────────────────
 #
