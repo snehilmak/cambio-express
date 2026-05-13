@@ -130,57 +130,13 @@ def test_is_eligible_false_for_none():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_rp_id_delegates(monkeypatch):
-    from app import app as flask_app
-    from app import _webauthn_rp_id as legacy
-    monkeypatch.setenv("WEBAUTHN_RP_ID", "dinerobook.com")
-    with flask_app.test_request_context("/"):
-        assert legacy() == "dinerobook.com"
 
 
-def test_legacy_rp_id_uses_request_host(monkeypatch):
-    from app import app as flask_app
-    from app import _webauthn_rp_id as legacy
-    monkeypatch.delenv("WEBAUTHN_RP_ID", raising=False)
-    with flask_app.test_request_context(
-        "/", base_url="http://localhost:5000",
-    ):
-        assert legacy() == "localhost"
 
 
-def test_legacy_rp_name_delegates():
-    from app import _webauthn_rp_name as legacy
-    assert legacy() == "DineroBook"
 
 
-def test_legacy_origin_delegates():
-    from app import app as flask_app
-    from app import _webauthn_origin as legacy
-    with flask_app.test_request_context(
-        "/", base_url="https://dinerobook.com",
-    ):
-        assert legacy() == "https://dinerobook.com"
 
 
-def test_legacy_passkey_eligible_delegates():
-    from app import _passkey_eligible as legacy
-    user = MagicMock()
-    assert legacy(user) is True
-    assert legacy(None) is False
 
 
-def test_legacy_passkey_exclude_list_delegates():
-    """Legacy wrapper hands db.session to the Service."""
-    from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
-    from app import _passkey_exclude_list as legacy
-    with flask_app.app_context():
-        u = User(
-            username="exclude-list@test.com",
-            password_hash="x", role="admin",
-            full_name="x", email="exclude-list@test.com",
-            store_id=1,
-        )
-        db.session.add(u); db.session.flush()
-        # No passkeys → empty list
-        assert legacy(u) == []

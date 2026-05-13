@@ -345,37 +345,12 @@ def test_monthly_pl_uses_loss_positive_convention():
 # ── legacy Flask wrappers ──────────────────────────────────
 
 
-def test_legacy_writeoff_delegates():
-    from app import app as flask_app, db
-    from app import _return_check_writeoff_total as legacy
-    with flask_app.app_context():
-        assert legacy([], date(2026, 1, 1), date(2026, 12, 31),
-                      "loss") == 0.0
 
 
-def test_legacy_period_aggregates_delegates():
-    from app import app as flask_app, db
-    from app import _return_check_period_aggregates as legacy
-    with flask_app.app_context():
-        result = legacy([], date(2026, 1, 1), date(2026, 12, 31))
-        assert result["recoveries"] == 0.0
-        assert result["pending"] == 0.0
 
 
-def test_legacy_aging_buckets_delegates():
-    from app import app as flask_app, db
-    from app import _return_check_aging_buckets as legacy
-    with flask_app.app_context():
-        result = legacy([], today=date(2026, 5, 6))
-        assert len(result) == 4
 
 
-def test_legacy_monthly_series_delegates():
-    from app import app as flask_app, db
-    from app import _return_check_monthly_series as legacy
-    with flask_app.app_context():
-        labels, _, _ = legacy([], today=date(2026, 5, 6))
-        assert len(labels) == 12
 
 
 def test_legacy_monthly_pl_delegates():

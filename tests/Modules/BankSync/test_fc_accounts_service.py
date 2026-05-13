@@ -265,17 +265,6 @@ def test_refresh_records_stripe_error_in_last_error(monkeypatch):
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_upsert_fc_account_delegates():
-    from app import app as flask_app, db
-    from app import _upsert_fc_account as legacy
-    with flask_app.app_context():
-        StripeBankAccount.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="legacy-upsert-fc")
-        api = _stripe_account_dict(account_id="fcacct_legacy")
-        row = legacy(s.id, api)
-        assert row.stripe_account_id == "fcacct_legacy"
-        assert row.enabled is True
 
 
 def test_legacy_refresh_bank_balances_delegates(monkeypatch):

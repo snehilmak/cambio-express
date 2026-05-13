@@ -200,12 +200,3 @@ def test_legacy_record_audit_no_op_when_no_user():
         assert result is None
 
 
-def test_legacy_record_op_audit_no_op_when_no_store_id():
-    """Without store_id in session the legacy wrapper bails."""
-    from app import app as flask_app
-    from app import record_op_audit
-    with flask_app.test_request_context():
-        result = record_op_audit(
-            "create", "transfer", "1", label="x", summary="y",
-        )
-        assert result is None

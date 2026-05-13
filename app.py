@@ -648,43 +648,6 @@ def record_audit(action, target_type="", target_id="", details=""):
     )
 
 
-def record_op_audit(action, target_type, target_id, *, label="", summary=""):
-    """Append a row to the per-store operator audit log.
-
-    Captures user identity + role from session so the audit row
-    stays useful even after the User row is deleted. Single source
-    of truth lives in
-    `api.Modules.Audit.Services.record_operator_action` (PR 52).
-
-    Target types: see the canonical list in
-    `api.Modules.Audit.Services.recorder.record_operator_action`'s
-    docstring. As of 2026-05 the set is 'transfer', 'daily_report',
-    'batch', 'return_check', 'roster_member', 'user', 'owner_link'.
-
-    Actions: 'create', 'update', 'delete', 'lock', 'unlock',
-    'reactivate', 'deactivate', 'rename', 'mark_loss', 'mark_fraud',
-    'reopen', 'payment', 'delete_payment', 'reset_password',
-    'connect'.
-    """
-    from api.Modules.Audit.Services import record_operator_action
-    sid = session.get("store_id")
-    if not sid:
-        return
-    u = current_user()
-    if not u:
-        return
-    return record_operator_action(
-        db.session,
-        store_id=sid,
-        user_id=u.id,
-        user_name=u.full_name or u.username or "",
-        user_role=u.role or "",
-        target_type=target_type,
-        target_id=target_id,
-        target_label=label,
-        action=action,
-        summary=summary,
-    )
 
 def store_feature_enabled(store, flag_key):
     """Resolve a feature flag for a store: per-store override > global default > True.
@@ -699,17 +662,6 @@ def store_feature_enabled(store, flag_key):
     )
     return _svc_store_feature_enabled(db.session, store, flag_key)
 
-def stripe_health_check():
-    """Return a dict describing the Stripe integration state.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.check_stripe_integration` (PR 53).
-    Used by the superadmin Overview tab to surface env-var
-    presence, account reachability, per-price validation, key-mode
-    pairing, and Financial Connections availability.
-    """
-    from api.Modules.Billing.Services import check_stripe_integration
-    return check_stripe_integration()
 
 def active_announcements():
     """Currently-visible announcements (active, within start/expiry window).
@@ -738,30 +690,8 @@ from api.Modules.Superadmin.Services import (
 )
 
 
-def _compute_platform_anomalies():
-    """Aggregate every anomaly rule into a single ranked list.
-
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.compute_platform_anomalies`
-    (PR 60). The Service hands back the same dict shape the
-    superadmin Overview tab expects, so templates render
-    bit-for-bit identical badges.
-    """
-    from api.Modules.Superadmin.Services import compute_platform_anomalies
-    return compute_platform_anomalies(db.session)
 
 
-def _superadmin_dashboard_context():
-    """Platform-wide BI metrics for the superadmin Dashboard.
-    Single source of truth lives in
-    `api.Modules.Superadmin.Services.superadmin_dashboard_context`
-    (PR 75). Returns the kwargs dict
-    `dashboard_superadmin.html` expects.
-    """
-    from api.Modules.Superadmin.Services import (
-        superadmin_dashboard_context,
-    )
-    return superadmin_dashboard_context(db.session)
 
 
 # ── Legacy auth decorators — DEPRECATED stubs ────────────────
@@ -968,13 +898,6 @@ def ensure_stripe_customer(store):
     from api.Modules.Billing.Services import ensure_stripe_customer as _svc
     return _svc(db.session, store)
 
-def _upsert_fc_account(store_id, api_obj):
-    """Persist (or refresh) a FinancialConnectionsAccount into our
-    cache. Single source of truth lives in
-    `api.Modules.BankSync.Services.upsert_fc_account` (PR 73).
-    """
-    from api.Modules.BankSync.Services import upsert_fc_account
-    return upsert_fc_account(db.session, store_id, api_obj)
 
 
 def refresh_bank_balances(store):
@@ -989,15 +912,6 @@ def refresh_bank_balances(store):
 
 
 
-def _upsert_bank_transaction(store_id, account_row, api_obj):
-    """Persist (or refresh) a Stripe FC Transaction into our cache.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.upsert_bank_transaction` (PR 72).
-    """
-    from api.Modules.BankSync.Services import upsert_bank_transaction
-    return upsert_bank_transaction(
-        db.session, store_id, account_row, api_obj,
-    )
 
 # ── Bank reconcile + rules ──────────────────────────────────
 # Categories that can appear on a BankTransaction.category_slug. The
@@ -1113,11 +1027,6 @@ VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
 VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
 
 
-def push_enabled() -> bool:
-    """Single source of truth lives in
-    `api.Modules.Notifications.Services.push_is_enabled` (PR 67)."""
-    from api.Modules.Notifications.Services import push_is_enabled
-    return push_is_enabled()
 
 
 def send_push(user_id: int, title: str, body: str = "",
@@ -1142,16 +1051,6 @@ from api.Modules.Billing.Services import (
 )
 
 
-def _new_referral_code():
-    """Mint an 8-char uppercase alphanumeric referral code.
-
-    Single source of truth lives in
-    `api.Modules.Billing.Services.new_referral_code` (PR 50).
-    """
-    from api.Modules.Billing.Services import (
-        new_referral_code as _svc_new_referral_code,
-    )
-    return _svc_new_referral_code(db.session)
 
 def ensure_referral_code(store):
     """Return the store's ReferralCode, creating it on demand.
@@ -1252,37 +1151,10 @@ from api.Modules.Auth.Services import RECOVERY_CODES_PER_USER  # noqa: E402
 # in CLAUDE.md invariant #13). Password login still gates superadmin
 # through TOTP; passkey is the parallel path.
 
-def _webauthn_rp_id():
-    """The effective RP ID. Single source of truth lives in
-    `api.Modules.Auth.Services.passkey_rp_id` (PR 63)."""
-    from api.Modules.Auth.Services import passkey_rp_id
-    return passkey_rp_id(request.host)
 
-def _webauthn_rp_name():
-    """Brand label shown by the OS picker. Single source of truth
-    lives in `api.Modules.Auth.Services.passkey_rp_name` (PR 63)."""
-    from api.Modules.Auth.Services import passkey_rp_name
-    return passkey_rp_name()
 
-def _webauthn_origin():
-    """Expected Origin header for WebAuthn verification. Single
-    source of truth lives in
-    `api.Modules.Auth.Services.passkey_origin` (PR 63)."""
-    from api.Modules.Auth.Services import passkey_origin
-    return passkey_origin(request.scheme, request.host)
 
-def _passkey_exclude_list(user):
-    """Credential descriptors for every passkey this user already has.
-    Single source of truth lives in
-    `api.Modules.Auth.Services.passkey_exclude_credentials` (PR 63)."""
-    from api.Modules.Auth.Services import passkey_exclude_credentials
-    return passkey_exclude_credentials(db.session, user)
 
-def _passkey_eligible(user):
-    """Whether a user may enroll passkeys. Single source of truth
-    lives in `api.Modules.Auth.Services.passkey_is_eligible` (PR 63)."""
-    from api.Modules.Auth.Services import passkey_is_eligible
-    return passkey_is_eligible(user)
 
 
 
@@ -1431,27 +1303,10 @@ def _owner_store_ids(user):
     return _svc_owner_store_ids(db.session, user)
 
 
-def _owner_kpis(store_ids, start, end):
-    """Delegate to api.Modules.Owners.Services.owner_kpis."""
-    return _svc_owner_kpis(db.session, store_ids, start, end)
 
 
-def _owner_dashboard_context(user, period):
-    """Rich metrics for /owner/dashboard. Single source of truth
-    lives in `api.Modules.Owners.Services.owner_dashboard_context`
-    (PR 74).
-    """
-    from api.Modules.Owners.Services import owner_dashboard_context
-    return owner_dashboard_context(db.session, user, period)
 
 
-def _owner_locations_payload(user, period, query):
-    """Per-store rows for /owner/locations. Single source of truth
-    lives in `api.Modules.Owners.Services.owner_locations_payload`
-    (PR 74).
-    """
-    from api.Modules.Owners.Services import owner_locations_payload
-    return owner_locations_payload(db.session, user, period, query)
 
 
 # Owner routes (/owner/dashboard, /owner/pl-rollup, /owner/locations,
@@ -2488,13 +2343,6 @@ from api.Modules.Transfers.Services import (
 
 
 
-def _daily_is_locked(store_id, report_date):
-    """True iff DailyReport for (store, date) is locked. Single
-    source of truth lives in
-    `api.Modules.DailyBook.Services.is_daily_report_locked` (PR 81).
-    """
-    from api.Modules.DailyBook.Services import is_daily_report_locked
-    return is_daily_report_locked(db.session, store_id, report_date)
 
 
 
@@ -2547,35 +2395,10 @@ from api.Modules.DailyBook.Services import (
 # Pending balance and aging come straight off the same table, so the
 # admin list page + owner dashboard share queries.
 
-def _return_check_writeoff_total(store_ids, start, end, status_value):
-    """Sum the still-owed balance of return checks marked `status_value`.
-    Single source of truth lives in
-    `api.Modules.Owners.Services.return_check_writeoff_total` (PR 62).
-    """
-    from api.Modules.Owners.Services import return_check_writeoff_total
-    return return_check_writeoff_total(
-        db.session, store_ids, start, end, status_value,
-    )
 
 
-def _return_check_period_aggregates(store_ids, start, end):
-    """Sum recoveries / losses / fraud / pending balance for the
-    window. Single source of truth lives in
-    `api.Modules.Owners.Services.return_check_period_aggregates`
-    (PR 62). Returns gain-positive `net_gl`; `_return_check_monthly_pl`
-    flips the sign for the P&L expense column.
-    """
-    from api.Modules.Owners.Services import return_check_period_aggregates
-    return return_check_period_aggregates(db.session, store_ids, start, end)
 
 
-def _return_check_aging_buckets(store_ids, today=None):
-    """Pending balance sliced into 0–30 / 31–60 / 61–90 / 90+ day
-    buckets. Single source of truth lives in
-    `api.Modules.Owners.Services.return_check_aging_buckets` (PR 62).
-    """
-    from api.Modules.Owners.Services import return_check_aging_buckets
-    return return_check_aging_buckets(db.session, store_ids, today=today)
 
 
 def _bank_charges_for_month(store_id, year, month, category_slug=None,
@@ -2588,16 +2411,6 @@ def _bank_charges_for_month(store_id, year, month, category_slug=None,
     return _svc(db.session, store_id, year, month, category_slug,
                 prefix=prefix)
 
-def _bank_charges_breakdown_for_month(store_id, year, month):
-    """Two-level breakdown feeding the expandable Bank Charges block on
-    the monthly P&L. Single source of truth lives in
-    `api.Modules.BankSync.Services.bank_charges_breakdown_for_month`
-    (PR 57).
-    """
-    from api.Modules.BankSync.Services import (
-        bank_charges_breakdown_for_month as _svc,
-    )
-    return _svc(db.session, store_id, year, month)
 
 def _return_check_monthly_pl(store_id, year, month):
     """Signed value for the monthly P&L's Return Check (G/L) line,
@@ -2608,13 +2421,6 @@ def _return_check_monthly_pl(store_id, year, month):
     return return_check_monthly_pl(db.session, store_id, year, month)
 
 
-def _return_check_monthly_series(store_ids, today=None):
-    """12-month bars for the owner dashboard. Single source of truth
-    lives in `api.Modules.Owners.Services.return_check_monthly_series`
-    (PR 62).
-    """
-    from api.Modules.Owners.Services import return_check_monthly_series
-    return return_check_monthly_series(db.session, store_ids, today=today)
 
 
 # ── ACH Batches ──────────────────────────────────────────────

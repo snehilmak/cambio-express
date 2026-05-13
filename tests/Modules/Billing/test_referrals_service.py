@@ -172,13 +172,6 @@ def test_legacy_app_lookup_referral_code():
         assert legacy_lookup("ZZNOTREAL") is None
 
 
-def test_legacy_app_new_referral_code():
-    from app import app as flask_app
-    from app import _new_referral_code as legacy_new
-    with flask_app.app_context():
-        code = legacy_new()
-        assert len(code) == 8
-        assert code.isalnum()
 
 
 def test_legacy_app_ensure_referral_code_returns_none_for_no_store():

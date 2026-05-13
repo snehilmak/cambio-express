@@ -219,10 +219,3 @@ def test_legacy_compute_mrr_delegates():
     assert total == bm + by_
 
 
-def test_legacy_dashboard_context_delegates():
-    from app import app as flask_app
-    from app import _superadmin_dashboard_context as legacy
-    with flask_app.app_context():
-        ctx = legacy()
-        assert "total_stores" in ctx
-        assert "estimated_mrr" in ctx

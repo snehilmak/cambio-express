@@ -390,18 +390,6 @@ def test_legacy_sync_bank_transactions_delegates(monkeypatch):
         assert "not configured" in err.lower()
 
 
-def test_legacy_upsert_delegates():
-    from api.Modules.BankSync.Models import BankTransaction
-    from app import app as flask_app, db
-    from app import _upsert_bank_transaction as legacy
-    with flask_app.app_context():
-        BankTransaction.query.delete()
-        db.session.commit()
-        s, a = _store_with_account(db.session, slug="legacy-upsert")
-        api = _stripe_txn_dict(amount=-50, description="LEGACY")
-        row, inserted = legacy(s.id, a, api)
-        assert inserted is True
-        assert row.amount_cents == -50
 
 
 
