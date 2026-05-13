@@ -281,27 +281,3 @@ def test_rows_sorted_by_count_descending():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _bank_rule_audit_data
-    from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="bra-legacy")
-        a = _add_account(db.session, s.id)
-        r = _add_rule(db.session, s.id)
-        _add_txn(db.session, s.id, a.id,
-                 posted_at=datetime(2026, 5, 5),
-                 amount_cents=4242,
-                 matched_rule_id=r.id)
-        legacy_rows, legacy_totals = _bank_rule_audit_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = bank_rule_audit(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

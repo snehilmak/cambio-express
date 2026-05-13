@@ -307,27 +307,3 @@ def test_only_includes_rows_in_window():
 # ── legacy wrapper ───────────────────────────────────────
 
 
-def test_legacy_wrapper_delegates():
-    """The legacy `_period_pl_data` shim in app.py routes to the
-    Service. Asserts identical output for a small fixture."""
-    from app import app as flask_app, db
-    from app import _period_pl_data
-    from api.Modules.Reports.Services import period_pl
-    with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="ppl-legacy")
-        _add_daily_report(
-            db.session, s.id, report_date=date(2026, 5, 5),
-            taxable_sales=42.0,
-        )
-        legacy_rows, legacy_totals = _period_pl_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = period_pl(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals

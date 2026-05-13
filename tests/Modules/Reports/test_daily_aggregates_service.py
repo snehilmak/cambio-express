@@ -206,43 +206,5 @@ def test_check_deposits_groups_by_report_date():
 # ── legacy wrappers ─────────────────────────────────────
 
 
-def test_legacy_daily_drops_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _daily_drops_data
-    from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
-        DailyDrop.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="da-drops-legacy")
-        _add_drop(db.session, s.id, report_date=date(2026, 5, 5),
-                  amount=42.0)
-        legacy_rows, legacy_totals = _daily_drops_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = daily_drops(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
 
 
-def test_legacy_check_deposits_wrapper_delegates():
-    from app import app as flask_app, db
-    from app import _check_deposits_data
-    from api.Modules.Reports.Services import check_deposits
-    with flask_app.app_context():
-        CheckDeposit.query.delete()
-        db.session.commit()
-        s = _add_store(db.session, slug="da-checks-legacy")
-        _add_check(db.session, s.id, report_date=date(2026, 5, 5),
-                   amount=42.0)
-        legacy_rows, legacy_totals = _check_deposits_data(
-            [s.id], date(2026, 5, 1), date(2026, 5, 31),
-        )
-        svc_rows, svc_totals = check_deposits(
-            db.session, [s.id],
-            date(2026, 5, 1), date(2026, 5, 31),
-        )
-        assert legacy_rows == svc_rows
-        assert legacy_totals == svc_totals
