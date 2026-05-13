@@ -450,23 +450,19 @@ class ReportListResponse(BaseModel):
 
 
 def _build_report_list(prefix: str = "") -> ReportListResponse:
-    """Resolve `_REPORT_CATEGORIES` from app.py through the same
-    `_resolved_report_categories` helper the legacy /reports +
-    /owner/reports Flask routes use, then adapt to the SPA-shaped
-    envelope. `prefix` mirrors the legacy `endpoint_prefix='owner_'`
-    knob: empty for the admin index, 'owner_' for the owner index."""
-    from app import (
-        _REPORT_CATEGORIES, _resolved_report_categories,
-        app as flask_app,
+    """Resolve ``REPORT_CATEGORIES`` through the same resolver the
+    legacy ``/reports`` + ``/owner/reports`` Flask routes used, then
+    adapt to the SPA-shaped envelope. ``prefix`` mirrors the
+    legacy ``endpoint_prefix='owner_'`` knob: empty for the admin
+    index, ``'owner_'`` for the owner index."""
+    from api.Modules.Reports.Services.categories import (
+        REPORT_CATEGORIES, resolved_categories,
     )
-    # Flask's url_for needs a request context to render relative URLs
-    # — the FastAPI handler runs outside Flask's request scope (the
-    # WSGI dispatcher forwards before request binding). Push a
-    # synthetic context so url_for resolves cleanly.
-    with flask_app.test_request_context():
-        resolved = _resolved_report_categories(
-            _REPORT_CATEGORIES, endpoint_prefix=prefix,
-        )
+    # Pure resolver — no Flask request context needed (the old
+    # ``url_for`` lookup was a dead path after PR #503 deleted the
+    # HTML drilldown routes; the convention-based fallback handled
+    # every endpoint in practice).
+    resolved = resolved_categories(REPORT_CATEGORIES, endpoint_prefix=prefix)
     return ReportListResponse(categories=[
         ReportCategory(
             key=cat["key"],

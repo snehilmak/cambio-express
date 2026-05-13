@@ -495,22 +495,17 @@ def list_reports_route(
     back into the legacy render path on click. As each report
     migrates, its URL will start pointing at /app/superadmin/reports/<slug>.
 
-    The same registry that backs the legacy Jinja page (`_SUPERADMIN_REPORT_CATEGORIES`
-    in app.py) is reused here so categories never drift between the
-    two surfaces."""
+    The same registry that backs the legacy Jinja page is reused
+    here (canonical home: ``api.Modules.Reports.Services.categories``)
+    so categories never drift between the two surfaces."""
     _require_superadmin(claims)
-    # `_resolved_report_categories` calls Flask's url_for to render
-    # each drilldown URL. url_for needs a Flask request context to
-    # build relative URLs — the FastAPI handler runs outside Flask's
-    # request scope (the WSGI dispatcher forwards before request
-    # binding). Push a synthetic request context so url_for resolves
-    # cleanly without falling back to None.
-    from app import (
-        _SUPERADMIN_REPORT_CATEGORIES, _resolved_report_categories,
-        app as flask_app,
+    from api.Modules.Reports.Services.categories import (
+        SUPERADMIN_REPORT_CATEGORIES, resolved_categories,
     )
-    with flask_app.test_request_context():
-        resolved = _resolved_report_categories(_SUPERADMIN_REPORT_CATEGORIES)
+    # Pure resolver — no Flask request context needed (every
+    # superadmin drilldown is SPA-served, so the legacy ``url_for``
+    # path always raised + fell through to the convention helper).
+    resolved = resolved_categories(SUPERADMIN_REPORT_CATEGORIES)
     out: list[SuperadminReportCategory] = []
     for cat in resolved:
         out.append(SuperadminReportCategory(
