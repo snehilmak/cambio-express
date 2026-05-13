@@ -567,35 +567,18 @@ ADDONS_CATALOG = {
     },
 }
 
-def store_addon_keys(store):
-    """Return the set of add-on keys currently active for a store.
-    Single source of truth lives in
-    `api.Modules.Billing.Services.store_addon_keys` (PR 48); this
-    Flask-scope wrapper exists for legacy callers."""
-    from api.Modules.Billing.Services import (
-        store_addon_keys as _svc_store_addon_keys,
-    )
-    return _svc_store_addon_keys(store)
-
-def store_has_paid_plan(store):
-    """Single source of truth lives in
-    `api.Modules.Billing.Services.store_has_paid_plan` (PR 48)."""
-    from api.Modules.Billing.Services import (
-        store_has_paid_plan as _svc_store_has_paid_plan,
-    )
-    return _svc_store_has_paid_plan(store)
+# Add-on / plan / retention helpers live in
+# ``api.Modules.Billing.Services``. Re-exported here for legacy
+# callers (admin referrals service, context processors, tests)
+# that ``from app import …``.
+from api.Modules.Billing.Services import (
+    data_retention_days_left,
+    store_addon_keys,
+    store_has_paid_plan,
+)
 
 # ── Cancellation & data retention ────────────────────────────
 DATA_RETENTION_DAYS = 180  # 6 months
-
-def data_retention_days_left(store):
-    """Days until cancelled-store data is purged. Returns None if not scheduled.
-    Single source of truth lives in
-    `api.Modules.Billing.Services.data_retention_days_left` (PR 48)."""
-    from api.Modules.Billing.Services import (
-        data_retention_days_left as _svc_data_retention_days_left,
-    )
-    return _svc_data_retention_days_left(store)
 
 # ── Superadmin helpers ───────────────────────────────────────
 
@@ -782,7 +765,6 @@ def inject_theme():
 # book. The constant now lives in
 # api.Modules.BankSync.Services.sync (PR 72); re-exported here
 # so legacy callers keep their import shape during migration.
-from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 
 
 # ── Bank reconcile + rules ──────────────────────────────────
@@ -791,26 +773,6 @@ from api.Modules.BankSync.Services import INITIAL_SYNC_DAYS_BACK
 # dict, validation/grouping helpers, built-in rules registry,
 # rule-match engine, FC account upserts) moved to
 # ``api.Modules.BankSync.Services``.
-
-
-def _is_daily_book_kind(slug):
-    """True iff `slug` is a registered DailyBook line-item kind.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.is_daily_book_kind` (PR 69).
-    """
-    from api.Modules.BankSync.Services import is_daily_book_kind
-    return is_daily_book_kind(slug)
-
-
-def sync_bank_transactions(store, since=None, until=None):
-    """Pull transactions from every enabled FC account on the store.
-    Single source of truth lives in
-    `api.Modules.BankSync.Services.sync_bank_transactions` (PR 72).
-
-    Returns `(new_rows, total_seen, last_error)`.
-    """
-    from api.Modules.BankSync.Services import sync_bank_transactions
-    return sync_bank_transactions(db.session, store, since, until)
 
 
 # SPA cutover before_request hook moved to blueprints/spa_cutover.py

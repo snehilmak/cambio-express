@@ -373,32 +373,5 @@ def test_sync_records_account_error_in_last_error(monkeypatch):
         assert "upstream down" in last_error
 
 
-# ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_sync_bank_transactions_delegates(monkeypatch):
-    from app import app as flask_app, db
-    from app import sync_bank_transactions as legacy
-    monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
-    with flask_app.app_context():
-        s, _ = _store_with_account(db.session, slug="legacy-sync")
-        # Without Stripe configured, returns the not-configured
-        # short-circuit response.
-        new_rows, total, err = legacy(s)
-        assert new_rows == 0
-        assert total == 0
-        assert "not configured" in err.lower()
-
-
-
-
-
-
-
-
-def test_legacy_constant_re_exported():
-    from app import INITIAL_SYNC_DAYS_BACK as legacy
-    from api.Modules.BankSync.Services import (
-        INITIAL_SYNC_DAYS_BACK as service,
-    )
-    assert legacy == service == 1
