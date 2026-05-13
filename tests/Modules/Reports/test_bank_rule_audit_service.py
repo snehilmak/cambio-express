@@ -1,12 +1,8 @@
 """Unit tests for Reports.Services.bank_rule_audit (PR 95)."""
 from datetime import date, datetime
 
-from app import (
-    BankRule,
-    BankTransaction,
-    Store,
-    StripeBankAccount,
-)
+from api.Modules.BankSync.Models import BankRule, BankTransaction, StripeBankAccount
+from api.Modules.Tenancy.Models import Store
 
 
 _TXN_COUNTER = 0

@@ -58,7 +58,7 @@ def eligible_recipients(db: Session, store) -> list:
     `User` row often sits in a different store, but
     `StoreOwnerLink` carries them in here.
     """
-    from app import StoreOwnerLink, User
+    from api.Modules.Tenancy.Models import StoreOwnerLink, User
 
     owner_user_ids = [
         link.owner_id for link in

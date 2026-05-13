@@ -3,7 +3,8 @@ from datetime import datetime, timedelta
 
 
 def _seed_account(store_id, *, last4="0000"):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -17,7 +18,8 @@ def _seed_account(store_id, *, last4="0000"):
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
                 description="X", category_slug="",
                 posted_at=None, stripe_transaction_id=None):
-    from app import BankTransaction, db
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -164,7 +166,7 @@ def test_response_schema_validates_service_output(test_store_id):
         page = list_transactions_page(
             db.session, [test_store_id], BankTransactionFilters(),
         )
-        from app import StripeBankAccount
+        from api.Modules.BankSync.Models import StripeBankAccount
         acc = db.session.get(StripeBankAccount, a)
         rows = [
             BankTransactionRow(

@@ -49,10 +49,9 @@ async def resend_webhook(request: Request, db: Session = Depends(get_db)):
     # in a Flask app_context() so the Flask-SQLAlchemy session
     # binds correctly (FastAPI's own scoped session isn't on the
     # same engine).
-    from app import (
-        EmailEvent, User, app as flask_app, db as flask_db,
-        _verify_resend_signature, _apply_resend_side_effects,
-    )
+    from api.Modules.Tenancy.Models import User
+    from api.Modules.Webhooks.Models import EmailEvent
+    from app import _apply_resend_side_effects, _verify_resend_signature, app as flask_app, db as flask_db
 
     secret = os.environ.get("RESEND_WEBHOOK_SECRET", "")
     raw = await request.body()
@@ -113,10 +112,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     Stripe doesn't retry-storm a buggy handler — operator sees the
     failure rate via the Webhook Health page.
     """
-    from app import (
-        DATA_RETENTION_DAYS, WebhookEvent,
-        app as flask_app, db as flask_db,
-    )
+    from api.Modules.Webhooks.Models import WebhookEvent
+    from app import DATA_RETENTION_DAYS, app as flask_app, db as flask_db
     from api.Modules.Billing.Services import (
         InvalidWebhookSignatureError,
         handle_stripe_event,

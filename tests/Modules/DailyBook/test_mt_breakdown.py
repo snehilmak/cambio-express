@@ -5,7 +5,7 @@ from datetime import date, datetime
 
 def _add_summary(db, *, store_id, report_date, company, amount=0.0,
                  fees=0.0, federal_tax=0.0, commission=0.0):
-    from app import MoneyTransferSummary
+    from api.Modules.DailyBook.Models import MoneyTransferSummary
     s = MoneyTransferSummary(
         store_id=store_id, report_date=report_date, company=company,
         amount=amount, fees=fees, federal_tax=federal_tax,
@@ -18,7 +18,7 @@ def _add_summary(db, *, store_id, report_date, company, amount=0.0,
 def _add_transfer(db, *, store_id, send_date, company="Intermex",
                   send_amount=100.0, fee=5.0, federal_tax=1.0,
                   commission=2.0, status="Sent"):
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     t = Transfer(
         store_id=store_id, send_date=send_date, company=company,
         service_type="Money Transfer", sender_name="Test",
@@ -118,7 +118,8 @@ def test_read_unknown_companies_sort_after_configured(test_store_id):
 def test_replace_inserts_rows_and_updates_money_transfer(test_store_id):
     """Bulk-replace inserts MT rows + writes the grand total into
     DailyReport.money_transfer."""
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         read_mt_breakdown,
@@ -158,7 +159,8 @@ def test_replace_inserts_rows_and_updates_money_transfer(test_store_id):
 def test_replace_is_bulk_idempotent(test_store_id):
     """Re-calling replace with different rows fully clears the old
     set (no orphaned rows from the previous save)."""
-    from app import app as flask_app, db, MoneyTransferSummary
+    from api.Modules.DailyBook.Models import MoneyTransferSummary
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,
@@ -198,7 +200,8 @@ def test_replace_is_bulk_idempotent(test_store_id):
 def test_replace_skips_zero_rows(test_store_id):
     """Companies with every-field-zero are not persisted — the
     read-side falls back to auto values for those."""
-    from app import app as flask_app, db, MoneyTransferSummary
+    from api.Modules.DailyBook.Models import MoneyTransferSummary
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,
@@ -228,7 +231,8 @@ def test_replace_refuses_locked_day(test_store_id):
     """Locked day → DailyReportLockedError (the controller surfaces
     as HTTP 403)."""
     import pytest
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import (
         DailyReportLockedError,
         MTWriteRow,
@@ -258,7 +262,8 @@ def test_replace_empty_rows_preserves_money_transfer(test_store_id):
     wipe a manually-typed `money_transfer` on the daily report.
     Use the standard PUT /daily/{store}/{date} endpoint to zero
     that field if the operator really wants to clear it."""
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,

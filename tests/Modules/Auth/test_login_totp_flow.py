@@ -26,7 +26,8 @@ def _make_enrolled_superadmin(*, slug="ts2fa"):
     """Create a brand-new superadmin User with TOTP enrolled.
     Returns (username, password, totp_secret). Each test gets its
     own row so we don't mutate the shared seeded `superadmin`."""
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     secret = pyotp.random_base32()
     username = f"{slug}@superadmin"
     user = User(
@@ -42,7 +43,9 @@ def _make_enrolled_superadmin(*, slug="ts2fa"):
 def _add_recovery_code(username, raw_code="ABCD1234"):
     """Stash a single recovery code for the given ephemeral
     superadmin (created by `_make_enrolled_superadmin`)."""
-    from app import RecoveryCode, User, db
+    from api.Modules.Auth.Models import RecoveryCode
+    from api.Modules.Tenancy.Models import User
+    from app import db
     from api.Modules.Auth.Services.totp import hash_recovery_code
     sa = User.query.filter_by(username=username).first()
     db.session.add(RecoveryCode(
@@ -91,7 +94,8 @@ def test_login_unenrolled_superadmin_returns_enroll_required(client):
     /auth/login/totp/enroll/* set. We create a fresh User here
     rather than mutate the seeded `superadmin` (which is pre-
     enrolled in conftest)."""
-    from app import app as flask_app, User, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="ne@super",
@@ -201,7 +205,8 @@ def test_login_totp_rejects_access_token_used_as_pending(client, test_store_id):
 
 
 def test_login_recovery_consumes_code_and_issues_token(client):
-    from app import app as flask_app, RecoveryCode
+    from api.Modules.Auth.Models import RecoveryCode
+    from app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t5")
         _add_recovery_code(username, "WXYZ7890")
@@ -309,7 +314,8 @@ def _make_unenrolled_superadmin(*, slug="tsne"):
     """Brand-new superadmin with no TOTP secret yet. Returns
     (username, password). The /login response will carry
     `requires_totp=True, enroll_required=True`."""
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     username = f"{slug}@superadmin"
     user = User(
         store_id=None, username=username,
@@ -394,7 +400,8 @@ def test_enroll_finish_rejects_bad_code(client):
 
 
 def test_enroll_finish_marks_user_enrolled(client):
-    from app import User, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app
     pending, start = _start_enroll_for(client, "te5")
     code = pyotp.TOTP(start["secret"]).now()
     client.post(

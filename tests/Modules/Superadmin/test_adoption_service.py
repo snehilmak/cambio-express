@@ -4,13 +4,9 @@ passkey_adoption.
 """
 from datetime import date, datetime
 
-from app import (
-    Passkey,
-    Store,
-    StoreOwnerLink,
-    StripeBankAccount,
-    User,
-)
+from api.Modules.Auth.Models import Passkey
+from api.Modules.BankSync.Models import StripeBankAccount
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 
 
 _USER_COUNTER = 0

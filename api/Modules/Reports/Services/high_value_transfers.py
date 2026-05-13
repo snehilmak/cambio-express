@@ -32,7 +32,7 @@ def high_value_transfers(
     automatically excluded — same active-transfer definition as
     the other reports.
     """
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Reports.Repositories.transfers import period_filters
 
     rows_q = (

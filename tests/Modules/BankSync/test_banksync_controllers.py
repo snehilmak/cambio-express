@@ -21,7 +21,8 @@ def _login(client, store_id):
 
 
 def _seed_account(store_id, *, last4="0000", nickname=""):
-    from app import StripeBankAccount, db
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -36,7 +37,8 @@ def _seed_account(store_id, *, last4="0000", nickname=""):
 def _seed_txn(store_id, account_id, *, amount_cents=-100,
               description="X", category_slug="",
               posted_at=None, stripe_transaction_id=None):
-    from app import BankTransaction, db
+    from api.Modules.BankSync.Models import BankTransaction
+    from app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -212,7 +214,8 @@ def test_list_scoped_to_principal_store(client, test_store_id):
     """Even if a sibling store has transactions, the JWT-scoped list
     only sees the principal's store. Confirms that the dropped
     `store_ids` query param can't be smuggled back in via the URL."""
-    from app import Store, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="MINE",

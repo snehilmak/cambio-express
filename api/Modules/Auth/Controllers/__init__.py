@@ -170,7 +170,8 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
     `app._record_login`, but uses the FastAPI request-scoped session
     rather than Flask's. Caller is responsible for committing."""
     from datetime import datetime
-    from app import LoginEvent, User
+    from api.Modules.Auth.Models import LoginEvent
+    from api.Modules.Tenancy.Models import User
     u = db.query(User).filter(User.id == user_id).first()
     if u is None:
         return
@@ -211,7 +212,7 @@ def login_route(
     # remember it in the cookie so legacy /-route fallbacks redirect
     # the user to their store's URL on next visit.
     if body.store_id is not None:
-        from app import Store
+        from api.Modules.Tenancy.Models import Store
         store = db.query(Store).filter(Store.id == body.store_id).first()
         if store is not None and store.slug:
             _set_last_store_slug_cookie(response, store.slug)
@@ -234,7 +235,7 @@ def store_by_slug_route(
     private detail (Stripe IDs, plan, retention dates) is exposed
     here — that lives behind the JWT-protected /admin/store-info
     endpoint."""
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     s = (
         db.query(Store)
           .filter(Store.slug == (slug or "").strip().lower())
@@ -801,7 +802,7 @@ def passkey_register_begin_route(
     the SPA echoes back on `/passkeys/register/finish` so the
     server can verify the credential against the same challenge.
     """
-    from app import User
+    from api.Modules.Tenancy.Models import User
     from webauthn import generate_registration_options, options_to_json
     from webauthn.helpers import bytes_to_base64url
     from webauthn.helpers.structs import (
@@ -866,7 +867,8 @@ def passkey_register_finish_route(
     new passkey's metadata (matches the GET /passkeys row shape so
     the SPA can append it client-side without a refetch)."""
     import jwt as _jwt
-    from app import Passkey, User
+    from api.Modules.Auth.Models import Passkey
+    from api.Modules.Tenancy.Models import User
     from webauthn import verify_registration_response
     from webauthn.helpers import base64url_to_bytes
     from api.Modules.Auth.Services import (
@@ -955,7 +957,7 @@ def list_passkeys_route(
     sub = claims.get("sub")
     if sub is None:
         raise HTTPException(status_code=401, detail="JWT missing sub claim")
-    from app import Passkey
+    from api.Modules.Auth.Models import Passkey
     rows = (
         db.query(Passkey)
           .filter(Passkey.user_id == int(sub))
@@ -990,7 +992,7 @@ def delete_passkey_route(
     sub = claims.get("sub")
     if sub is None:
         raise HTTPException(status_code=401, detail="JWT missing sub claim")
-    from app import Passkey
+    from api.Modules.Auth.Models import Passkey
     p = (
         db.query(Passkey)
           .filter(

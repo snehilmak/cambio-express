@@ -64,7 +64,7 @@ def quiet_store_anomalies(db: Session, today: date) -> list[dict]:
     """
     # Models pulled lazily so the Service can be imported before
     # app.py finishes wiring up the Transfer model registry.
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
 
     cutoff_active = today - timedelta(days=ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS)
     cutoff_quiet  = today - timedelta(days=ANOMALY_QUIET_LOOKBACK_QUIET_DAYS)
@@ -116,7 +116,7 @@ def big_over_short_anomalies(db: Session, today: date) -> list[dict]:
     threshold. Big variance = either a counting mistake or
     something worse; either way superadmin should know.
     """
-    from app import DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
 
     cutoff = today - timedelta(days=ANOMALY_OVERSHORT_LOOKBACK_DAYS)
     rows = (

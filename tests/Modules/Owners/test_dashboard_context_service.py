@@ -1,13 +1,9 @@
 """Unit tests for Owners.Services.dashboard_context (PR 74)."""
 from datetime import date, timedelta
 
-from app import (
-    DailyReport,
-    Store,
-    StoreOwnerLink,
-    Transfer,
-    User,
-)
+from api.Modules.DailyBook.Models import DailyReport
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from api.Modules.Transfers.Models import Transfer
 
 
 def _make_owner_with_stores(db, *, slug="ctx-owner",

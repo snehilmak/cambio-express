@@ -5,7 +5,8 @@ from fastapi.testclient import TestClient
 
 
 def _seed_report(store_id, report_date, **kwargs):
-    from app import DailyReport, db
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import db
     r = DailyReport(
         store_id=store_id, report_date=report_date, **kwargs,
     )
@@ -195,7 +196,8 @@ def test_put_updates_existing_report(client, test_store_id):
 
 
 def test_put_rejects_locked_report(client, test_store_id):
-    from app import app as flask_app, DailyReport, db
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     today = date.today()
     from datetime import datetime as _dt
     with flask_app.app_context():

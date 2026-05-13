@@ -57,7 +57,8 @@ def test_anomalies_returns_envelope(client):
 def test_anomalies_surfaces_big_over_short(client, test_store_id):
     """A daily report with absolute over/short above the medium
     threshold should appear in the anomalies feed."""
-    from app import DailyReport, app as flask_app, db
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.Superadmin.Services.anomalies import (
         ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
     )

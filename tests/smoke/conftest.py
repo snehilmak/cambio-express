@@ -173,7 +173,8 @@ def admin_page(page, smoke_server):
 def owner_page(page, smoke_server):
     """A `page` signed in as a freshly-created owner with one linked
     store. Created on demand inside the smoke DB."""
-    from app import app as flask_app, db, User, Store, StoreOwnerLink
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+    from app import app as flask_app, db
     with flask_app.app_context():
         # Idempotent: reuse if a previous test already created this owner.
         existing = User.query.filter_by(username="owner-smoke@x.com").first()

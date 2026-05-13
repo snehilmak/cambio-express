@@ -32,7 +32,7 @@ def tv_catalog_logo(catalog_type: str, slug: str):
     cache-bust by ``?v=<unix>`` on the embedding template."""
     if catalog_type not in ("company", "bank"):
         abort(404)
-    from app import TVCatalogLogo
+    from api.Modules.TVDisplay.Models import TVCatalogLogo
     with SessionLocal() as s:
         row = (
             s.query(TVCatalogLogo)

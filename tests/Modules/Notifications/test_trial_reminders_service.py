@@ -1,11 +1,7 @@
 """Unit tests for Notifications.Services.trial_reminders (PR 65)."""
 from datetime import datetime, timedelta
 
-from app import (
-    Store,
-    StoreOwnerLink,
-    User,
-)
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 
 
 def _add_store(db, *, slug, plan="trial", trial_ends_at=None,

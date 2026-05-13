@@ -11,7 +11,8 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     service_type="Money Transfer", country="MX",
                     recipient_name="R", confirm_number=None,
                     status="Sent"):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -132,7 +133,8 @@ def test_list_transfers_empty_set_safe(test_store_id):
 def test_list_transfers_handles_null_fee_and_tax(test_store_id):
     """Legacy rows can have NULL fee/federal_tax — page_amount must
     treat them as zero, not crash on the addition."""
-    from app import app as flask_app, db, Transfer
+    from api.Modules.Transfers.Models import Transfer
+    from app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -156,7 +158,8 @@ def test_list_transfers_handles_null_fee_and_tax(test_store_id):
 
 
 def test_delete_transfer_removes_row(test_store_id):
-    from app import app as flask_app, db, Transfer
+    from api.Modules.Transfers.Models import Transfer
+    from app import app as flask_app, db
     from api.Modules.Transfers.Services import delete_transfer
     with flask_app.app_context():
         tid = _seed_transfer(test_store_id, send_amount=100.0)
@@ -169,7 +172,8 @@ def test_delete_transfer_removes_row(test_store_id):
 def test_delete_transfer_cascades_audit_rows(test_store_id):
     """TransferAudit rows referencing the transfer must be removed
     before the transfer itself (the FK doesn't ON DELETE CASCADE)."""
-    from app import app as flask_app, db, TransferAudit
+    from api.Modules.Audit.Models import TransferAudit
+    from app import app as flask_app, db
     from api.Modules.Transfers.Services import delete_transfer
     with flask_app.app_context():
         tid = _seed_transfer(test_store_id, send_amount=100.0)
@@ -191,7 +195,8 @@ def test_delete_transfer_cascades_audit_rows(test_store_id):
 
 
 def test_delete_transfer_raises_when_cross_store(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.Transfers.Services import (
         TransferNotFoundError, delete_transfer,
     )

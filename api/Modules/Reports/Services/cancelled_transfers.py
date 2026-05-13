@@ -30,7 +30,7 @@ def cancelled_transfers(
         (`canceled`, `rejected`) so the template can show the
         split without re-iterating the list.
     """
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Owners.Services import OWNER_TRANSFER_EXCLUDED
 
     rows_q = (

@@ -3,12 +3,9 @@ of logo files. Both run from init_db() on every boot; tests pin
 the safety + idempotency invariants both rely on."""
 import os
 
-from app import (
-    db, app as flask_app,
-    TVDisplay, TVDisplayCountry, Store, User,
-    TVCompanyCatalog, TVBankCatalog, TVCatalogLogo,
-    _backfill_tv_country_codes, _seed_tv_logos_from_disk,
-)
+from api.Modules.TVDisplay.Models import TVBankCatalog, TVCatalogLogo, TVCompanyCatalog, TVDisplay, TVDisplayCountry
+from api.Modules.Tenancy.Models import Store, User
+from app import _backfill_tv_country_codes, _seed_tv_logos_from_disk, app as flask_app, db
 
 
 # ── Country-code backfill ──────────────────────────────────────

@@ -1,9 +1,7 @@
 """Unit tests for Notifications.Services.broadcasts (PR 66)."""
 from datetime import datetime
 
-from app import (
-    User,
-)
+from api.Modules.Tenancy.Models import User
 
 
 def _add_user(db, *, store_id=1, role="admin",

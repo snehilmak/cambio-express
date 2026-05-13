@@ -64,7 +64,7 @@ def eligible_recipients(db: Session) -> list:
 
     Read-only — no DB writes.
     """
-    from app import User
+    from api.Modules.Tenancy.Models import User
     return (
         db.query(User)
           .filter(

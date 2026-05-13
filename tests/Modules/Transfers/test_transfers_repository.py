@@ -14,7 +14,8 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     sender_name="S", recipient_name="R",
                     confirm_number=None, status="Sent",
                     batch_id=""):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -272,7 +273,7 @@ def test_list_isolates_other_stores(test_store_id):
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-tx",
                     email="o@x.com", plan="trial")
@@ -315,7 +316,8 @@ def test_get_by_id_returns_row_in_scope(test_store_id):
 
 def test_get_by_id_returns_none_outside_scope(test_store_id):
     """Cross-tenant lookup must return None (callers translate to 404)."""
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.Transfers.Repositories import get_by_id_in_stores
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-scope",

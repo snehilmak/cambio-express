@@ -1,11 +1,8 @@
 """Unit tests for Reports.Services.bank_charges (PR 84)."""
 from datetime import date, datetime
 
-from app import (
-    BankTransaction,
-    Store,
-    StripeBankAccount,
-)
+from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
+from api.Modules.Tenancy.Models import Store
 
 
 _TXN_COUNTER = [0]

@@ -1,10 +1,8 @@
 """Unit tests for Reports.Services.fees_vs_tax (PR 85)."""
 from datetime import date
 
-from app import (
-    Store,
-    Transfer,
-)
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 _TXN_COUNTER = [0]

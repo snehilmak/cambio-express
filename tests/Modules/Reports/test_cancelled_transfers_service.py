@@ -1,7 +1,8 @@
 """Unit tests for Reports.Services.cancelled_transfers (PR 96)."""
 from datetime import date
 
-from app import Store, Transfer
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, slug="ct-store"):

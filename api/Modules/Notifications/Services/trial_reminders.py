@@ -61,7 +61,7 @@ def stores_due_for_reminder(db: Session, now: datetime | None = None):
     The status check is delegated to `get_trial_status` so the
     "expiring_soon" definition stays in one place.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     if now is None:
         now = datetime.utcnow()
     candidates = (
@@ -87,7 +87,7 @@ def eligible_recipients(db: Session, store) -> list:
     Deduplicated — the same user could be both admin of this
     store and an owner-link target.
     """
-    from app import StoreOwnerLink, User
+    from api.Modules.Tenancy.Models import StoreOwnerLink, User
     # NOTE: the legacy `app._trial_reminder_recipients` referenced
     # `link.user_id` which doesn't exist on `StoreOwnerLink` (the
     # FK column is `owner_id`). That code path never fired in

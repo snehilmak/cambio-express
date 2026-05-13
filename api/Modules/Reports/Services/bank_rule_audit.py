@@ -33,7 +33,7 @@ def bank_rule_audit(
         `"Rule #<id> (deleted)"`. Sorted by count desc.
       - totals: `count`, `amount`, `rules` (distinct rule count).
     """
-    from app import BankRule, BankTransaction
+    from api.Modules.BankSync.Models import BankRule, BankTransaction
     from api.Modules.BankSync.Services import bank_category_label
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,

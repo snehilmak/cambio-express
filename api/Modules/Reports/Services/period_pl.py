@@ -35,7 +35,8 @@ def period_pl(
       - totals: `income`, `expenses`, `net`, `days`. `days` is the
         number of `DailyReport` rows in the window (NOT the date span).
     """
-    from app import DailyReport, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Reports.Repositories.transfers import period_filters
 
     daily = (

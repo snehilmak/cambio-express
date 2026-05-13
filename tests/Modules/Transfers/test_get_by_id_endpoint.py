@@ -7,7 +7,8 @@ from fastapi.testclient import TestClient
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
                     federal_tax=1.0, company="Intermex",
                     confirm_number=None):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id, send_date=date.today(),
         company=company, service_type="Money Transfer",
@@ -54,7 +55,8 @@ def test_get_transfer_404_for_missing(test_store_id):
 def test_get_transfer_404_for_other_store(test_store_id):
     """Cross-tenant lookup returns 404 (never 403) so tenancy
     boundaries stay opaque."""
-    from app import app as flask_app, Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-tx-get",
                     email="o@x.com", plan="trial")
@@ -86,7 +88,8 @@ def test_get_transfer_rejects_zero_id(test_store_id):
 def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id):
     """`store_ids=1,2` finds a transfer in either store — same shape
     as the list endpoint."""
-    from app import app as flask_app, Store, db
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-tx-umbrella",
                     email="o@x.com", plan="trial")

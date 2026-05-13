@@ -22,7 +22,8 @@ def _login_admin(client, store_id):
 
 
 def _seed_employee(store_id):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     e = User(
         store_id=store_id, username="emp@test.com",
         full_name="Emp", role="employee",
@@ -34,7 +35,7 @@ def _seed_employee(store_id):
 def _login_employee(client, store_id):
     from app import app as flask_app
     with flask_app.app_context():
-        from app import User
+        from api.Modules.Tenancy.Models import User
         if not User.query.filter_by(username="emp@test.com").first():
             _seed_employee(store_id)
     resp = client.post(
@@ -52,7 +53,8 @@ def _set_store_customer_id(store_id, customer_id):
     """Stripe doesn't mint a customer until the first checkout. The
     /billing/portal endpoint requires one to exist — this helper
     bypasses the real Stripe call by writing the ID directly."""
-    from app import Store, db, app as flask_app
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     with flask_app.app_context():
         s = Store.query.filter_by(id=store_id).first()
         s.stripe_customer_id = customer_id

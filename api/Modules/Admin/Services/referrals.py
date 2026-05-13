@@ -27,10 +27,9 @@ def get_referral_payload(
     embeds it directly so a cashier on the SPA doesn't have to
     derive the canonical hostname client-side.
     """
-    from app import (
-        ReferralCode, ReferralRedemption, Store,
-        ensure_referral_code, store_has_paid_plan,
-    )
+    from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
+    from api.Modules.Tenancy.Models import Store
+    from app import ensure_referral_code, store_has_paid_plan
     store = db.get(Store, store_id)
     if store is None:
         raise ValueError("Store not found")

@@ -31,7 +31,7 @@ def fees_vs_tax(
     Empty `store_ids` → empty rows + zero totals (caller doesn't
     need to short-circuit).
     """
-    from app import Transfer
+    from api.Modules.Transfers.Models import Transfer
     from api.Modules.Reports.Repositories.transfers import period_filters
 
     if not store_ids:

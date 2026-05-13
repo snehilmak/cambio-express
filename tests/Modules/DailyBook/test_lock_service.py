@@ -6,7 +6,8 @@ from datetime import date, datetime
 
 
 def test_ensure_creates_when_missing(test_store_id):
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import ensure_daily_report
     today = date.today()
     with flask_app.app_context():
@@ -22,7 +23,8 @@ def test_ensure_creates_when_missing(test_store_id):
 
 
 def test_ensure_returns_existing(test_store_id):
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import ensure_daily_report
     today = date.today()
     with flask_app.app_context():
@@ -55,7 +57,8 @@ def test_lock_report_sets_locked_at_and_locked_by(test_store_id, test_admin_id):
 
 def test_lock_report_creates_empty_when_missing(test_store_id, test_admin_id):
     """Locking an empty day creates the DailyReport row first."""
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import lock_report
     today = date.today()
     with flask_app.app_context():
@@ -119,7 +122,8 @@ def test_unlock_report_clears_lock_state(test_store_id, test_admin_id):
 def test_unlock_report_returns_none_when_no_report(test_store_id):
     """No DailyReport row at all → returns None (no-op). Doesn't
     create an empty report (only locking does)."""
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import unlock_report
     today = date.today()
     with flask_app.app_context():
@@ -132,7 +136,8 @@ def test_unlock_report_returns_none_when_no_report(test_store_id):
 
 def test_unlock_report_noop_when_not_locked(test_store_id):
     """Unlocking an unlocked report just returns the row unchanged."""
-    from app import app as flask_app, db, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import unlock_report
     today = date.today()
     with flask_app.app_context():

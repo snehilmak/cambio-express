@@ -16,7 +16,7 @@ from sqlalchemy import inspect
 
 
 def test_user_username_index_declared(client):
-    from app import User
+    from api.Modules.Tenancy.Models import User
     declared = {
         ix.name: tuple(c.name for c in ix.columns)
         for ix in User.__table__.indexes
@@ -59,7 +59,8 @@ def test_user_unique_constraint_still_present(client):
 
 
 def test_added_indexes_registry_lists_user(client):
-    from app import _ADDED_INDEXES, User
+    from api.Modules.Tenancy.Models import User
+    from app import _ADDED_INDEXES
     declared = {ix.name for ix in User.__table__.indexes}
     user_entries = [
         name for name, table, _ in _ADDED_INDEXES if table == "user"

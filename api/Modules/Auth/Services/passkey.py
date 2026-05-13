@@ -77,7 +77,7 @@ def exclude_credentials(
     browser's `excludeCredentials` parameter so the same physical
     authenticator can't enroll twice on one account.
     """
-    from app import Passkey
+    from api.Modules.Auth.Models import Passkey
     rows = (
         db.query(Passkey)
           .filter_by(user_id=user.id)

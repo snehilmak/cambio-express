@@ -26,7 +26,8 @@ _SA_BATCH = [
 
 
 def _admin_session_login(client, store_id):
-    from app import User, Store, db
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -40,7 +41,7 @@ def _admin_session_login(client, store_id):
 
 
 def _superadmin_session(client):
-    from app import User
+    from api.Modules.Tenancy.Models import User
     with client.application.app_context():
         sa = User.query.filter_by(role="superadmin").first()
         sa_id = sa.id

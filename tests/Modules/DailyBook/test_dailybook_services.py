@@ -3,7 +3,8 @@ from datetime import date, datetime, timedelta
 
 
 def _seed_report(store_id, report_date, **kwargs):
-    from app import DailyReport, db
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import db
     r = DailyReport(
         store_id=store_id, report_date=report_date, **kwargs,
     )
@@ -106,7 +107,8 @@ def test_summarize_period_aggregates(test_store_id):
 
 
 def test_summarize_period_isolates_other_stores(test_store_id):
-    from app import app as flask_app, db, Store
+    from api.Modules.Tenancy.Models import Store
+    from app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
     with flask_app.app_context():

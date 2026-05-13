@@ -1,11 +1,9 @@
 """Unit tests for Superadmin.Services.dashboard (PR 75)."""
 from datetime import datetime, timedelta
 
-from app import (
-    ReferralCode,
-    Store,
-    Transfer,
-)
+from api.Modules.Billing.Models import ReferralCode
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 # ── compute_mrr ───────────────────────────────────────────

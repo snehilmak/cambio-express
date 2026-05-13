@@ -28,7 +28,7 @@ def ach_volume(
         as `"(no company)"` for display.
       - totals: `count` (total batches), `amount` (total ACH).
     """
-    from app import ACHBatch
+    from api.Modules.Batches.Models import ACHBatch
 
     rows_q = (
         db.query(

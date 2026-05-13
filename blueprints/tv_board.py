@@ -27,7 +27,9 @@ bp = Blueprint("tv_board", __name__)
 @bp.route("/tv/<token>")
 def tv_public_display(token: str):
     """Fullscreen rate board, no auth. Anyone with the URL sees it."""
-    from app import Store, TVDisplay, _render_tv_board, store_has_addon
+    from api.Modules.TVDisplay.Models import TVDisplay
+    from api.Modules.Tenancy.Models import Store
+    from app import _render_tv_board, store_has_addon
     with SessionLocal() as s:
         display = (
             s.query(TVDisplay).filter_by(public_token=token).first()
@@ -45,9 +47,9 @@ def tv_device_display(device_token: str):
     """Per-device rate-board URL handed to a Fire TV companion app
     after a successful pair-code redeem. Bumps
     ``TVPairing.last_seen_at`` on render."""
-    from app import (
-        Store, TVDisplay, TVPairing, _render_tv_board, store_has_addon,
-    )
+    from api.Modules.TVDisplay.Models import TVDisplay, TVPairing
+    from api.Modules.Tenancy.Models import Store
+    from app import _render_tv_board, store_has_addon
     with SessionLocal() as s:
         pairing = (
             s.query(TVPairing).filter_by(device_token=device_token).first()

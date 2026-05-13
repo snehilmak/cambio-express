@@ -1,7 +1,7 @@
 """Unit tests for SA conversion / trial-timing services (PR 99)."""
 from datetime import date, datetime, timedelta
 
-from app import Store
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug, plan="trial",

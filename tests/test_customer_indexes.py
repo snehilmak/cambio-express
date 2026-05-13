@@ -15,7 +15,7 @@ from sqlalchemy import inspect
 
 
 def test_customer_phone_index_declared(client):
-    from app import Customer
+    from api.Modules.Customers.Models import Customer
     declared = {
         ix.name: tuple(c.name for c in ix.columns)
         for ix in Customer.__table__.indexes
@@ -56,7 +56,8 @@ def test_unique_constraint_still_present(client):
 
 def test_added_indexes_registry_lists_customer_phone(client):
     """Cross-check: registry entry must match a model-level Index()."""
-    from app import _ADDED_INDEXES, Customer
+    from api.Modules.Customers.Models import Customer
+    from app import _ADDED_INDEXES
     declared = {ix.name for ix in Customer.__table__.indexes}
     customer_entries = [
         name for name, table, _ in _ADDED_INDEXES if table == "customer"

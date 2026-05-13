@@ -1,7 +1,9 @@
 """Unit tests for Reports.Services.new_vs_returning (PR 89)."""
 from datetime import date
 
-from app import Customer, Store, Transfer
+from api.Modules.Customers.Models import Customer
+from api.Modules.Tenancy.Models import Store
+from api.Modules.Transfers.Models import Transfer
 
 
 def _add_store(db, *, slug="cs-store"):

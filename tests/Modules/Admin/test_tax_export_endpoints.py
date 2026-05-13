@@ -72,7 +72,8 @@ def test_years_includes_year_from_existing_transfer(
 ):
     """A store with a transfer dated 2022-03-01 must see 2022 in
     the picker even though it's older than this/last year."""
-    from app import Transfer, app as flask_app, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import app as flask_app, db
     with flask_app.app_context():
         # `total_collected` is a derived property (send + fee +
         # federal_tax — see CLAUDE.md invariant #9), not a column,
@@ -101,7 +102,8 @@ def test_years_includes_year_from_existing_daily_report(
 ):
     """A store with a closed daily report dated 2021-11-15 must
     see 2021 in the picker."""
-    from app import DailyReport, app as flask_app, db
+    from api.Modules.DailyBook.Models import DailyReport
+    from app import app as flask_app, db
     with flask_app.app_context():
         dr = DailyReport(
             store_id=test_store_id,

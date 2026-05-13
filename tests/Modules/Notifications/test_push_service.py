@@ -68,7 +68,8 @@ def test_send_push_zero_when_no_subscriptions(monkeypatch):
     import api.Modules.Notifications.Services.push as push_svc
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import app as flask_app, db, PushSubscription
+    from api.Modules.Announcements.Models import PushSubscription
+    from app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()
@@ -83,10 +84,9 @@ def test_send_push_delivers_to_each_subscription(monkeypatch):
     import api.Modules.Notifications.Services.push as push_svc
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import (
-        app as flask_app, db,
-        PushSubscription, User,
-    )
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()
@@ -115,10 +115,9 @@ def test_send_push_drops_dead_subscriptions(monkeypatch):
     import api.Modules.Notifications.Services.push as push_svc
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import (
-        app as flask_app, db,
-        PushSubscription, User,
-    )
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
         PushSubscription.query.delete()
@@ -157,10 +156,9 @@ def test_send_push_keeps_subscriptions_on_other_errors(monkeypatch):
     import api.Modules.Notifications.Services.push as push_svc
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import (
-        app as flask_app, db,
-        PushSubscription, User,
-    )
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
         PushSubscription.query.delete()
@@ -200,10 +198,9 @@ def test_send_push_payload_drops_none_values(monkeypatch):
     import json as _json
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
-    from app import (
-        app as flask_app, db,
-        PushSubscription, User,
-    )
+    from api.Modules.Announcements.Models import PushSubscription
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()

@@ -125,7 +125,7 @@ def create_transfer(
     so the row is visible to subsequent reads.
     """
     # Lazy import — these helpers live across modules + app.py.
-    from app import User, Store
+    from api.Modules.Tenancy.Models import Store, User
     from api.Modules.Customers.Services import upsert as upsert_customer
     from api.Modules.Transfers.Services import (
         federal_tax_for,
@@ -211,7 +211,7 @@ def update_transfer(
     `transfer_snapshot` + `summarize_changes` so the audit log
     only mentions the fields that actually changed.
     """
-    from app import User, Store
+    from api.Modules.Tenancy.Models import Store, User
     from api.Modules.Customers.Services import upsert as upsert_customer
     from api.Modules.Transfers.Services import (
         TRANSFER_AUDIT_FIELDS,
@@ -322,7 +322,7 @@ def delete_transfer(
     # Lazy import — TransferAudit lives in app.py and isn't part of
     # the Transfers Models re-export today (audit migration is its
     # own PR).
-    from app import TransferAudit
+    from api.Modules.Audit.Models import TransferAudit
     transfer = get_by_id_in_stores(db, transfer_id, [store_id])
     if transfer is None:
         raise TransferNotFoundError(f"Transfer id={transfer_id}")

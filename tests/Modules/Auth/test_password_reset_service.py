@@ -5,7 +5,8 @@ import pytest
 
 
 def _seed_user(store_id, *, username, role="admin", is_active=True):
-    from app import User, db
+    from api.Modules.Tenancy.Models import User
+    from app import db
     u = User(
         store_id=store_id, username=username, role=role,
         is_active=is_active,
@@ -36,7 +37,8 @@ def test_hash_token_different_inputs_diverge():
 
 
 def test_issue_token_returns_payload_for_admin(test_store_id):
-    from app import app as flask_app, db, PasswordResetToken
+    from api.Modules.Auth.Models import PasswordResetToken
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         hash_token, issue_password_reset_token,
     )
@@ -114,7 +116,8 @@ def test_issue_token_returns_none_for_empty_username():
 def test_issue_token_invalidates_prior_active_tokens(test_store_id):
     """Issuing a new token marks any still-valid existing tokens for
     the user as used so their prior reset link stops working."""
-    from app import app as flask_app, db, PasswordResetToken
+    from api.Modules.Auth.Models import PasswordResetToken
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         hash_token, issue_password_reset_token,
     )
@@ -183,7 +186,8 @@ def test_verify_rejects_used_token(test_store_id):
 
 
 def test_verify_rejects_expired_token(test_store_id):
-    from app import app as flask_app, db, PasswordResetToken
+    from api.Modules.Auth.Models import PasswordResetToken
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         issue_password_reset_token, verify_password_reset_token,
     )
@@ -214,7 +218,8 @@ def test_verify_rejects_empty_token():
 
 
 def test_consume_updates_password_and_marks_token_used(test_store_id):
-    from app import app as flask_app, db, User
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_password_reset_token, issue_password_reset_token,
         verify_password_reset_token,
@@ -236,7 +241,9 @@ def test_consume_updates_password_and_marks_token_used(test_store_id):
 
 def test_consume_raises_if_user_gone(test_store_id):
     """Race: user deleted between verify and consume → LookupError."""
-    from app import app as flask_app, db, User, PasswordResetToken
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_password_reset_token, issue_password_reset_token,
     )

@@ -5,7 +5,8 @@ from datetime import date
 
 
 def _add_transfer(store_id, **kwargs):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     defaults = {
         "company": "Intermex",
         "service_type": "Money Transfer",

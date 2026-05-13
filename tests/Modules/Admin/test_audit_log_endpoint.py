@@ -23,7 +23,8 @@ def _login(client_, store_id):
 def _seed_op_row(store_id, *, action="lock", target_type="daily_report",
                  user_id=None, ts=None):
     """Insert an OperatorAuditLog row directly."""
-    from app import OperatorAuditLog, db
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from app import db
     row = OperatorAuditLog(
         store_id=store_id, action=action,
         target_type=target_type, target_id="1",
@@ -39,7 +40,8 @@ def _seed_op_row(store_id, *, action="lock", target_type="daily_report",
 def _seed_tx_row(store_id, *, action="create", user_id=None,
                  transfer_id=1, ts=None):
     """Insert a TransferAudit row directly."""
-    from app import TransferAudit, db
+    from api.Modules.Audit.Models import TransferAudit
+    from app import db
     row = TransferAudit(
         store_id=store_id, transfer_id=transfer_id,
         action=action, user_id=user_id,
@@ -190,7 +192,8 @@ def test_audit_log_action_filter(client, test_store_id):
 
 def test_audit_log_user_filter(client, test_store_id):
     """A `?user=` value targets a specific User.id."""
-    from app import User, app as flask_app, db
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="extra@test.com",

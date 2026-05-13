@@ -65,7 +65,7 @@ def owner_period_window(
 
 def owner_store_ids(db: Session, user) -> list[int]:
     """Store IDs the given owner is linked to. Empty if none."""
-    from app import StoreOwnerLink
+    from api.Modules.Tenancy.Models import StoreOwnerLink
     links = (
         db.query(StoreOwnerLink)
           .filter_by(owner_id=user.id)
@@ -88,7 +88,8 @@ def owner_kpis(
     """
     if not store_ids:
         return 0, 0.0, 0.0
-    from app import Transfer, DailyReport
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Transfers.Models import Transfer
     tx_count = (
         db.query(Transfer)
           .filter(

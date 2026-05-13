@@ -1,7 +1,7 @@
 """Unit tests for SA MRR/ARR + churn-cohort services (PR 98)."""
 from datetime import date, datetime
 
-from app import Store
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug, plan="basic", billing_cycle="monthly",

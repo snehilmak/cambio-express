@@ -21,7 +21,8 @@ def list_year_choices(db: Session, store_id: int) -> list[int]:
     Pure SQL — no commit. Mirrors the legacy app._tax_pack_year_choices
     so a Flask reader and a SPA reader see the same options.
     """
-    from app import DailyReport, Transfer
+    from api.Modules.DailyBook.Models import DailyReport
+    from api.Modules.Transfers.Models import Transfer
 
     today = date.today()
     years: set[int] = {today.year, today.year - 1}

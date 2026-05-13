@@ -137,7 +137,8 @@ def test_put_store_info_requires_jwt(client):
 def test_put_store_info_rejects_employee_role(client):
     """Cashier role can't update store info — only admin /
     owner / superadmin."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="employee_test_admin", role="employee",
@@ -277,7 +278,8 @@ def test_team_update_404_for_cross_tenant(client, test_store_id):
 
 def test_team_endpoints_require_admin_role(client):
     """Cashier role can't manage roster."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="employee_team_admin",

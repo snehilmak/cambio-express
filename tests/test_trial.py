@@ -73,7 +73,8 @@ def test_trial_set_but_no_grace_date():
 
 
 def test_expired_store_redirected_to_subscribe(client):
-    from app import db, Store, User
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         s = Store(name="Expired Co", slug="expired-co",
                   email="expired@test.com", plan="trial",
@@ -115,7 +116,8 @@ def test_active_trial_reaches_dashboard(logged_in_client):
 
 def test_subscribe_is_accessible_when_expired(client):
     """Expired stores must be able to reach /subscribe (not infinite redirect)."""
-    from app import db, Store, User
+    from api.Modules.Tenancy.Models import Store, User
+    from app import db
     with client.application.app_context():
         s = Store(name="Exp2 Co", slug="exp2-co",
                   email="exp2@test.com", plan="trial",

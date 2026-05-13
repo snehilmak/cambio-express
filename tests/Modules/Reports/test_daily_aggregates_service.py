@@ -1,11 +1,8 @@
 """Unit tests for Reports.Services daily_drops + check_deposits (PR 92)."""
 from datetime import date, time
 
-from app import (
-    CheckDeposit,
-    DailyDrop,
-    Store,
-)
+from api.Modules.DailyBook.Models import CheckDeposit, DailyDrop
+from api.Modules.Tenancy.Models import Store
 
 
 def _add_store(db, *, slug="da-store"):

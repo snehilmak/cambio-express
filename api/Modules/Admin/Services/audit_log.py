@@ -27,7 +27,8 @@ def list_audit_rows(
         3) merge + sort by timestamp desc
         4) paginate
     """
-    from app import OperatorAuditLog, TransferAudit, User
+    from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
+    from api.Modules.Tenancy.Models import User
 
     op_q = db.query(OperatorAuditLog).filter_by(store_id=store_id)
     tx_q = db.query(TransferAudit).filter_by(store_id=store_id)

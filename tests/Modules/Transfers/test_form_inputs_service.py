@@ -1,10 +1,7 @@
 """Unit tests for Transfers.Services.form_inputs (PR 78)."""
 from datetime import date
 
-from app import (
-    Store,
-    StoreEmployee,
-)
+from api.Modules.Tenancy.Models import Store, StoreEmployee
 
 
 def _add_store(db, *, slug="form-store"):

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 def _add_announcement(db_session, **kwargs):
     """Build + add an Announcement row using the legacy ORM."""
-    from app import Announcement
+    from api.Modules.Announcements.Models import Announcement
     a = Announcement(
         message=kwargs.pop("message", "hello"),
         level=kwargs.pop("level", "info"),

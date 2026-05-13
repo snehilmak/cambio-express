@@ -65,7 +65,7 @@ def _sum_daily(
     *, daily_field: str,
 ) -> float:
     """Σ a column on DailyReport across one (store, year, month)."""
-    from app import DailyReport  # lazy — Models module
+    from api.Modules.DailyBook.Models import DailyReport
     month_end = date(year, month, monthrange(year, month)[1])
     rows = (
         db.query(DailyReport)

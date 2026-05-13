@@ -7,7 +7,7 @@ Covers the first three platform-health aggregators:
 """
 from datetime import date, datetime, timedelta
 
-from app import Store, User
+from api.Modules.Tenancy.Models import Store, User
 
 
 _USER_COUNTER = 0

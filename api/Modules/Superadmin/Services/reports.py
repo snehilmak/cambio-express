@@ -37,7 +37,7 @@ def active_stores_by_plan(
     stores at end of period, not just newcomers). `d_from` is
     intentionally unused — this is a point-in-time view.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     q = (
@@ -67,7 +67,7 @@ def signup_funnel(
 
     Useful for measuring signup → activation success.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -101,7 +101,7 @@ def login_activity(
     have a per-day login log; for now it surfaces the per-role
     split using `User.last_login_at`.
     """
-    from app import User
+    from api.Modules.Tenancy.Models import User
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -133,7 +133,7 @@ def mrr_arr(
     at end of period (created_at <= d_to). `d_from` is unused —
     this is a point-in-time snapshot.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     q = (
@@ -174,7 +174,7 @@ def conversion_rate(
     """For stores that signed up in the period: how many graduated
     from trial to paid by today? Single summary row.
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -211,7 +211,7 @@ def time_to_convert(
     delay" — we don't yet log the exact trial→paid timestamp.
     """
     from datetime import datetime
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -254,7 +254,7 @@ def trial_expiry_timing(
     in-time at end-of-period.
     """
     from datetime import datetime
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     trials = (
@@ -308,7 +308,8 @@ def bank_sync_adoption(
     point-in-time at end of period (we don't have a per-day
     history of when each account connected).
     """
-    from app import Store, StripeBankAccount
+    from api.Modules.BankSync.Models import StripeBankAccount
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     connected_ids = {
@@ -359,7 +360,7 @@ def tv_display_adoption(
     """Stores with the TV-display add-on enabled
     (`Store.addons` contains 'tv_display').
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     stores = (
@@ -392,7 +393,7 @@ def owner_adoption(
     Each row: owner display label + email + linked-store count.
     Single-store owners are excluded.
     """
-    from app import StoreOwnerLink, User
+    from api.Modules.Tenancy.Models import StoreOwnerLink, User
 
     rows_q = (
         db.query(
@@ -436,7 +437,8 @@ def passkey_adoption(
     """Users with at least one passkey, grouped by role.
     Helps gauge rollout of passwordless auth.
     """
-    from app import Passkey, User
+    from api.Modules.Auth.Models import Passkey
+    from api.Modules.Tenancy.Models import User
 
     user_ids = {
         uid for (uid,) in db.query(Passkey.user_id).distinct().all()
@@ -483,7 +485,8 @@ def password_resets(
     a single IN-query (avoiding N+1).
     """
     from datetime import datetime
-    from app import PasswordResetToken, User
+    from api.Modules.Auth.Models import PasswordResetToken
+    from api.Modules.Tenancy.Models import User
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -537,7 +540,7 @@ def suspended_stores(
     inactive (`plan='inactive'`). Point-in-time at end of period.
     """
     from sqlalchemy import or_
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import day_end
 
     suspended = (
@@ -577,7 +580,7 @@ def retention_queue(
     `purge_expired_stores` wipes them. Point-in-time.
     """
     from datetime import date as _date
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
 
     stores = (
         db.query(Store)
@@ -778,7 +781,7 @@ def dau_mau(
     model ships, so periods before that show zeroes.
     """
     from datetime import date as _date, datetime
-    from app import LoginEvent
+    from api.Modules.Auth.Models import LoginEvent
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -838,7 +841,7 @@ def webhook_health(
     every delivery (including signature failures). Totals carry
     `ok`, `errors`, `failure_pct`.
     """
-    from app import WebhookEvent
+    from api.Modules.Webhooks.Models import WebhookEvent
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )
@@ -886,7 +889,7 @@ def churn_cohort(
     Active counts are pulled in a single GROUP BY query (single
     round-trip per call regardless of cohort count).
     """
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,
     )

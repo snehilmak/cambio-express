@@ -24,7 +24,8 @@ def _login(client_, store_id):
 
 def _seed_batch(store_id, *, ach_amount=1000.0, batch_ref="B-001",
                  company="Intermex", ach_date_=None, status="Pending"):
-    from app import ACHBatch, db
+    from api.Modules.Batches.Models import ACHBatch
+    from app import db
     b = ACHBatch(
         store_id=store_id,
         ach_date=ach_date_ or date.today(),
@@ -39,7 +40,8 @@ def _seed_batch(store_id, *, ach_amount=1000.0, batch_ref="B-001",
 
 def _seed_transfer(store_id, *, batch_ref, send_amount=500.0,
                     federal_tax=5.0, send_date_=None):
-    from app import Transfer, db
+    from api.Modules.Transfers.Models import Transfer
+    from app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date_ or date.today(),
@@ -243,7 +245,8 @@ def test_create_batch_rejects_bad_date(client, test_store_id):
 
 def test_create_batch_requires_admin_role(client):
     """Cashier role can't create batches."""
-    from app import User, db, app as flask_app
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="emp_batch_test",

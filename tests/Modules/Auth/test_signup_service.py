@@ -8,7 +8,8 @@ import pytest
 
 
 def test_signup_creates_store_and_admin():
-    from app import app as flask_app, db, Store, User
+    from api.Modules.Tenancy.Models import Store, User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import create_store_and_admin
     with flask_app.app_context():
         result = create_store_and_admin(
@@ -131,7 +132,8 @@ def test_signup_does_not_collide_with_superadmin_username():
     """The legacy existence check filtered `User.store_id.isnot(None)`
     so the superadmin (`store_id IS NULL`) doesn't block per-store
     signups."""
-    from app import app as flask_app, db, User
+    from api.Modules.Tenancy.Models import User
+    from app import app as flask_app, db
     from api.Modules.Auth.Services import create_store_and_admin
     with flask_app.app_context():
         # Per the conftest seed, "superadmin" exists with store_id=None.

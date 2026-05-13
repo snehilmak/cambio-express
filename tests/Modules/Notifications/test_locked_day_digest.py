@@ -1,7 +1,7 @@
 """Unit tests for Notifications.Services.locked_day_digest —
 recipient resolution for the daily-book lock fan-out."""
 
-from app import Store, StoreOwnerLink, User
+from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 
 
 def _add_store(db, *, slug):

@@ -30,7 +30,7 @@ def bank_txn_breakdown(
       - totals: `count`, `amount` (gross |amount|), `inflow`
         (positive dollars), `outflow` (negative dollars).
     """
-    from app import BankTransaction
+    from api.Modules.BankSync.Models import BankTransaction
     from api.Modules.BankSync.Services import bank_category_label
     from api.Modules.Reports.Services.date_helpers import (
         day_end, day_start,

@@ -7,12 +7,9 @@ checks that prove the registry hasn't drifted.
 """
 from datetime import datetime, timedelta
 
-from app import (
-    Customer,
-    Store,
-    Transfer,
-    User,
-)
+from api.Modules.Customers.Models import Customer
+from api.Modules.Tenancy.Models import Store, User
+from api.Modules.Transfers.Models import Transfer
 
 
 # ── registry shape ─────────────────────────────────────────

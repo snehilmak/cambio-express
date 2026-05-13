@@ -62,7 +62,7 @@ def _resolve_store_companies(db: Session, store_id: int) -> list[str]:
     default when the row is missing or the CSV is empty."""
     # Defer import — keeps this module out of the Flask app circular
     # graph during the FastAPI mount step at boot.
-    from app import Store
+    from api.Modules.Tenancy.Models import Store
 
     store = db.get(Store, int(store_id))
     return store_mt_companies(store) if store else list(DEFAULT_MT_COMPANIES)
