@@ -1,23 +1,26 @@
-"""Announcement broadcast Service: who opts in + the subject /
-plain-body template.
+"""Announcement broadcast Service: eligibility + fanout
+orchestrator.
 
-Like the trial-reminder Service, the actual mail delivery +
-template rendering stay in app.py (Flask's `render_template` +
-the Resend SDK wrapper). What this module owns:
+Two halves:
 
-  - `BROADCAST_PLAIN_BODY` — copy template for the text-part of
-    the email.
-  - `derive_broadcast_subject(message)` — first non-empty line
-    of the announcement, capped at 100 chars; generic fallback
-    when the message is empty.
-  - `eligible_recipients(db)` — every active user with email +
-    `notify_announcement_email=True` + no recorded bounce.
+  - **Pure queries**: ``derive_broadcast_subject`` and
+    ``eligible_recipients`` — easy to unit-test, no side effects.
+  - **Side-effect orchestrator**: ``run(session, announcement_id,
+    base_url=None)`` is the CLI entry point — renders the email
+    + delivers via SMTP + stamps ``Announcement.broadcast_sent_at``.
 
 Per CLAUDE.md the broadcast is idempotent on
-`Announcement.broadcast_sent_at`. The first successful run
-stamps it; subsequent calls (re-run, manual replay, etc.) no-op.
+``Announcement.broadcast_sent_at``. ``run()`` checks the flag and
+no-ops on second call; subsequent calls (re-run, manual replay,
+etc.) return 0.
 """
+import os
+from datetime import datetime
+
 from sqlalchemy.orm import Session
+
+from api.Modules.Notifications.Services.smtp import send_email
+from api.Modules.Notifications.Services.templates import render_email_template
 
 
 # Subject fallback when the announcement message is empty / blank.
@@ -75,3 +78,61 @@ def eligible_recipients(db: Session) -> list:
           )
           .all()
     )
+
+
+def run(
+    session: Session,
+    announcement_id: int,
+    *,
+    base_url: str | None = None,
+) -> int:
+    """Fan out an announcement email to every opted-in user.
+
+    Returns the count of emails actually attempted (not counting
+    users filtered out). Idempotent: the first successful run
+    stamps ``Announcement.broadcast_sent_at`` and subsequent
+    calls no-op.
+
+    The caller owns the session lifecycle — this function commits
+    inside the session on a successful broadcast (so the dedup
+    stamp lands), but never closes the session.
+    """
+    from api.Modules.Announcements.Models import Announcement
+    base_url = base_url or os.environ.get(
+        "APP_BASE_URL", "https://dinerobook.com",
+    )
+
+    ann = session.get(Announcement, announcement_id)
+    if ann is None:
+        return 0
+    if ann.broadcast_sent_at is not None:
+        return 0  # already sent — idempotent
+
+    subject = derive_broadcast_subject(ann.message)
+    recipients = eligible_recipients(session)
+    now = datetime.utcnow()
+    notifications_url = f"{base_url}/account/notifications"
+    plain_body = BROADCAST_PLAIN_BODY.format(
+        message=ann.message,
+        base_url=base_url,
+        notifications_url=notifications_url,
+    )
+
+    sent = 0
+    for u in recipients:
+        html = render_email_template(
+            "emails/announcement.html",
+            preheader=ann.message[:120],
+            subject=subject,
+            message=ann.message,
+            level=ann.level or "info",
+            app_url=base_url,
+            notifications_url=notifications_url,
+            year=now.year,
+            base_url=base_url,
+        )
+        send_email(session, u.email, subject, plain_body, html)
+        sent += 1
+    ann.broadcast_sent_at = now
+    session.commit()
+    return sent
