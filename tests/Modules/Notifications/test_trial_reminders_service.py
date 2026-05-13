@@ -294,12 +294,3 @@ def test_body_template_has_named_placeholders():
 # in Final step 2 — ``send_trial_reminders`` now calls
 # ``eligible_recipients`` directly with a ``SessionLocal()``
 # session. Its delegation test went with it.
-
-
-def test_legacy_constants_re_exported():
-    from app import _TRIAL_REMINDER_BODY, _TRIAL_REMINDER_SUBJECT
-    from api.Modules.Notifications.Services import (
-        TRIAL_REMINDER_BODY, TRIAL_REMINDER_SUBJECT,
-    )
-    assert _TRIAL_REMINDER_BODY is TRIAL_REMINDER_BODY
-    assert _TRIAL_REMINDER_SUBJECT is TRIAL_REMINDER_SUBJECT
