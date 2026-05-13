@@ -95,9 +95,13 @@ def test_every_report_has_url_and_status_ready(client):
                 f"{cat['key']}/{r['key']} unexpectedly coming_soon"
             assert r["url"] is not None, \
                 f"{cat['key']}/{r['key']} has no drilldown URL"
-            # All drilldowns live under the legacy /superadmin/...
-            # prefix until each report individually migrates.
-            assert r["url"].startswith("/superadmin/")
+            # Drilldowns live under either the legacy /superadmin/
+            # Jinja routes or the SPA's /app/superadmin/ — both are
+            # valid destinations for a report card.
+            assert (
+                r["url"].startswith("/superadmin/")
+                or r["url"].startswith("/app/superadmin/")
+            ), f"{cat['key']}/{r['key']} url={r['url']!r}"
 
 
 def test_reports_includes_audit_log_card(client):

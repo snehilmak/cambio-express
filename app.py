@@ -117,77 +117,48 @@ if (
 # identically to the original @app.route decorator.
 from blueprints import account as _bp_account  # noqa: E402
 from blueprints import admin_extras as _bp_admin_extras  # noqa: E402
-from blueprints import admin_redirects as _bp_admin_redirects  # noqa: E402
-from blueprints import (  # noqa: E402
-    admin_settings_form as _bp_admin_settings_form,
-)
-from blueprints import (  # noqa: E402
-    admin_settings_mutations as _bp_admin_settings_mutations,
-)
 from blueprints import auth as _bp_auth  # noqa: E402
-from blueprints import auth_redirects as _bp_auth_redirects  # noqa: E402
-from blueprints import bank_mutations as _bp_bank_mutations  # noqa: E402
-from blueprints import bank_redirects as _bp_bank_redirects  # noqa: E402
 from blueprints import billing as _bp_billing  # noqa: E402
-from blueprints import (  # noqa: E402
-    bookkeeping_mutations as _bp_bookkeeping_mutations,
-)
-from blueprints import (  # noqa: E402
-    bookkeeping_redirects as _bp_bookkeeping_redirects,
-)
 from blueprints import customers_api as _bp_customers_api  # noqa: E402
 from blueprints import landing as _bp_landing  # noqa: E402
 from blueprints import owner as _bp_owner  # noqa: E402
 from blueprints import push as _bp_push  # noqa: E402
 from blueprints import pwa as _bp_pwa  # noqa: E402
 from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
-from blueprints import spa_redirects as _bp_spa_redirects  # noqa: E402
 from blueprints import subscription as _bp_subscription  # noqa: E402
 from blueprints import (  # noqa: E402
     superadmin_extras as _bp_superadmin_extras,
 )
-from blueprints import (  # noqa: E402
-    superadmin_misc_mutations as _bp_superadmin_misc_mutations,
-)
-from blueprints import (  # noqa: E402
-    superadmin_redirects as _bp_superadmin_redirects,
-)
-from blueprints import (  # noqa: E402
-    superadmin_store_mutations as _bp_superadmin_store_mutations,
-)
-from blueprints import (  # noqa: E402
-    transfers_redirects as _bp_transfers_redirects,
-)
 from blueprints import tv as _bp_tv  # noqa: E402
 from blueprints import tv_board as _bp_tv_board  # noqa: E402
 from blueprints import tv_pair as _bp_tv_pair  # noqa: E402
+
+# Public + PWA + kiosk surfaces — Flask still owns these.
 app.register_blueprint(_bp_pwa.bp)
-app.register_blueprint(_bp_push.bp)
-app.register_blueprint(_bp_owner.bp)
-app.register_blueprint(_bp_tv.bp)
-app.register_blueprint(_bp_subscription.bp)
-app.register_blueprint(_bp_auth_redirects.bp)
 app.register_blueprint(_bp_landing.bp)
-app.register_blueprint(_bp_billing.bp)
-app.register_blueprint(_bp_account.bp)
-app.register_blueprint(_bp_spa_redirects.bp)
-app.register_blueprint(_bp_superadmin_redirects.bp)
-app.register_blueprint(_bp_customers_api.bp)
-app.register_blueprint(_bp_transfers_redirects.bp)
-app.register_blueprint(_bp_bookkeeping_redirects.bp)
-app.register_blueprint(_bp_bank_redirects.bp)
-app.register_blueprint(_bp_admin_redirects.bp)
+app.register_blueprint(_bp_push.bp)
+app.register_blueprint(_bp_tv.bp)
 app.register_blueprint(_bp_tv_pair.bp)
 app.register_blueprint(_bp_tv_board.bp)
-app.register_blueprint(_bp_superadmin_store_mutations.bp)
-app.register_blueprint(_bp_superadmin_misc_mutations.bp)
+
+# Auth + billing + Stripe webhooks (chunk 3 retires auth's cookie
+# session path; for now Flask still owns /login + /logout + the
+# webhook receivers).
 app.register_blueprint(_bp_auth.bp)
-app.register_blueprint(_bp_bookkeeping_mutations.bp)
-app.register_blueprint(_bp_bank_mutations.bp)
-app.register_blueprint(_bp_superadmin_extras.bp)
+app.register_blueprint(_bp_billing.bp)
+app.register_blueprint(_bp_subscription.bp)
+app.register_blueprint(_bp_customers_api.bp)
+
+# Legacy authed UI surfaces — chunk 3 retires the Jinja views
+# inside these. For now their POST handlers + tax-export downloads
+# are still alive.
+app.register_blueprint(_bp_account.bp)
 app.register_blueprint(_bp_admin_extras.bp)
-app.register_blueprint(_bp_admin_settings_form.bp)
-app.register_blueprint(_bp_admin_settings_mutations.bp)
+app.register_blueprint(_bp_owner.bp)
+app.register_blueprint(_bp_superadmin_extras.bp)
+
+# spa_cutover.register() installs the always-on before_request hook
+# that 301s legacy GET URLs (/dashboard, /transfers, …) to /app/*.
 _bp_spa_cutover.register(app)
 
 
@@ -2154,7 +2125,7 @@ def admin_required(f):
         if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role not in ("admin","superadmin"):
-            flash("Admin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
+            flash("Admin access required.","error"); return redirect("/app/dashboard")
         return f(*a,**k)
     return d
 
@@ -2177,13 +2148,13 @@ def pro_required(f):
         u = current_user()
         if not u or u.role not in ("admin", "superadmin"):
             flash("Admin access required.", "error")
-            return redirect(url_for("spa_redirects.dashboard"))
+            return redirect("/app/dashboard")
         if u.role == "superadmin":
             return f(*a, **k)
         store = current_store()
         if not store:
             flash("Bank sync requires a store context.", "error")
-            return redirect(url_for("spa_redirects.dashboard"))
+            return redirect("/app/dashboard")
         if store.plan == "pro":
             return f(*a, **k)
         if store.plan == "trial" and get_trial_status(store) != "expired":
@@ -2198,7 +2169,7 @@ def superadmin_required(f):
         if "user_id" not in session: return redirect(url_for("auth.login"))
         u=current_user()
         if not u or u.role!="superadmin":
-            flash("Superadmin access required.","error"); return redirect(url_for("spa_redirects.dashboard"))
+            flash("Superadmin access required.","error"); return redirect("/app/dashboard")
         return f(*a,**k)
     return d
 
@@ -3543,8 +3514,8 @@ def _resolved_report_categories(registry, endpoint_prefix=""):
         reports = []
         for r in cat["reports"]:
             ep = r.get("endpoint")
-            url = None
-            if ep:
+            url = r.get("url")  # literal URL takes precedence
+            if not url and ep:
                 # Owner Report Center reuses the admin registry but
                 # routes go to the owner-prefixed mirrors registered
                 # by _register_owner_report_mirrors. Endpoint names
@@ -4744,7 +4715,7 @@ _SUPERADMIN_REPORT_CATEGORIES = [
             {"key": "audit_log",
              "label": "Superadmin Audit Log",
              "description": "Every superadmin mutation, with target and actor.",
-             "endpoint": "superadmin_redirects.superadmin_audit_log"},
+             "url": "/app/superadmin/audit-log"},
             {"key": "password_resets",
              "label": "Password Resets",
              "description": "Reset-token activity in the period (used / expired / open).",
@@ -6110,7 +6081,7 @@ def _get_owned_return_check(rc_id):
     rc = db.session.get(ReturnCheck, rc_id)
     if rc is None or rc.store_id != sid:
         flash("Return check not found.", "error")
-        return None, redirect(url_for("bookkeeping_redirects.return_checks"))
+        return None, redirect("/app/return-checks")
     return rc, None
 
 
@@ -6196,7 +6167,7 @@ def _close_as_writeoff(rc_id, status):
                 if on_s else date.today())
     except ValueError:
         flash("Invalid date.", "error")
-        return redirect(url_for("bookkeeping_redirects.return_checks"))
+        return redirect("/app/return-checks")
     rc.status = status
     rc.status_changed_on = when
     record_op_audit(
@@ -6212,7 +6183,7 @@ def _close_as_writeoff(rc_id, status):
     flash(
         f"Marked {label}: {rc.customer_name} "
         f"(remaining balance ${rc.remaining:,.2f}).", "success")
-    return redirect(url_for("bookkeeping_redirects.return_checks"))
+    return redirect("/app/return-checks")
 
 
 # /return-checks/<rc_id>/{loss,fraud,reopen,edit,delete} moved to
