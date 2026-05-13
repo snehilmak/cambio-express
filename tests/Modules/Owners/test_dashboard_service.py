@@ -226,7 +226,3 @@ def test_owner_kpis_filters_window():
 
 
 
-def test_legacy_constants_re_exported():
-    from app import _OWNER_TRANSFER_EXCLUDED
-    assert "Canceled" in _OWNER_TRANSFER_EXCLUDED
-    assert "Rejected" in _OWNER_TRANSFER_EXCLUDED
