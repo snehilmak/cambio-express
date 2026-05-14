@@ -261,8 +261,7 @@ def test_login_with_store_id_sets_last_store_cookie(client, test_store_id):
         "store_id": test_store_id,
     })
     assert resp.status_code == 200
-    # Flask test client surfaces Set-Cookie via headers + cookies dict.
-    cookies = resp.headers.getlist("Set-Cookie")
+    cookies = resp.headers.get_list("Set-Cookie")
     assert any("ds_last_store=test-store" in c for c in cookies), \
         f"expected ds_last_store cookie, got {cookies!r}"
 

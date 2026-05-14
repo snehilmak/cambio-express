@@ -31,8 +31,6 @@ _wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=
 
 from tests._app import app as flask_app, db
 
-flask_app.config["TESTING"] = True
-
 
 # ─────────────────────────────────────────────────────────────
 # FastAPI TestClient leak plug
@@ -114,48 +112,6 @@ from tests._app import app as _flask_app_for_client  # noqa: E402
 from starlette.testclient import TestClient as _StarletteTestClient  # noqa: E402
 
 
-class _HeadersAdapter:
-    """Wrap httpx's Headers so it answers werkzeug-style ``getlist``
-    in addition to httpx's ``get_list``. The Flask test client
-    returns headers that respond to ``getlist`` (single-l); tests
-    written against that API expect it."""
-
-    __slots__ = ("_h",)
-
-    def __init__(self, h):
-        self._h = h
-
-    def __getitem__(self, key):
-        return self._h[key]
-
-    def __contains__(self, key):
-        return key in self._h
-
-    def __iter__(self):
-        return iter(self._h)
-
-    def __len__(self):
-        return len(self._h)
-
-    def get(self, key, default=None):
-        return self._h.get(key, default)
-
-    def getlist(self, key):
-        return self._h.get_list(key)
-
-    def get_list(self, key):
-        return self._h.get_list(key)
-
-    def items(self):
-        return self._h.items()
-
-    def keys(self):
-        return self._h.keys()
-
-    def values(self):
-        return self._h.values()
-
-
 class AsgiTestResponse:
     """Flask-test-client-compatible response wrapping httpx's response.
 
@@ -176,7 +132,7 @@ class AsgiTestResponse:
 
     @property
     def headers(self):
-        return _HeadersAdapter(self._resp.headers)
+        return self._resp.headers
 
     @property
     def text(self) -> str:
@@ -196,16 +152,8 @@ class AsgiTestResponse:
         return ct.split(";", 1)[0].strip()
 
     @property
-    def content_type(self) -> str:
-        return self._resp.headers.get("content-type", "")
-
-    @property
     def is_json(self) -> bool:
         return self.mimetype == "application/json"
-
-    @property
-    def location(self):
-        return self._resp.headers.get("location")
 
     def get_data(self, as_text: bool = False):
         return self._resp.text if as_text else self._resp.content

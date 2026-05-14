@@ -2,18 +2,17 @@
 
 PR #550 (Flask-removal-5) deleted ``app.py``. Production no longer
 needs the Flask app object — ``asgi.py`` owns the entrypoint and
-runs FastAPI directly. But ~130 test files import ``db``,
+runs FastAPI directly. ~130 test files still import ``db``,
 ``flask_app``, ``find_or_upsert_customer``, and
-``purge_expired_stores`` from ``app``. Rather than mechanically
-rewrite every site, this module re-exports those names from their
-new homes.
+``purge_expired_stores`` from ``app``; this module re-exports them
+so a sed rewrite kept those imports working.
 
-The ``flask_app`` here is a tiny stub: it answers ``.app_context()``
-as a no-op context manager and exposes a writable ``.config`` dict
-for the half-dozen tests that flip ``TESTING`` or read keys back.
-The ``db`` shim is the existing framework-agnostic scoped-session
-binding from ``api.Flask.Database`` — it never required Flask, just
-historical convention.
+The ``flask_app`` here is a near-empty stub: it answers
+``app_context()`` as a context manager that resets the scoped
+session on exit. That mirrors what Flask-SQLAlchemy's
+``teardown_appcontext`` hook used to do — without it, a test that
+PATCHes a row through the SPA + re-reads it through ``db.session``
+gets the stale cached object.
 
 Nothing here belongs in production. Future work: rewrite the test
 suite to call ``SessionLocal()`` directly and delete this module.
@@ -21,27 +20,20 @@ suite to call ``SessionLocal()`` directly and delete this module.
 from __future__ import annotations
 
 import contextlib
-import logging
 
 from tests._db_shim import db
-from tests._app import db
 
 
 class _FlaskAppStub:
     """Drop-in stand-in for ``flask_app`` used by ~130 tests.
 
-    The only things tests historically did with this object are
-    ``flask_app.app_context()`` (to scope ``db.session`` access)
-    and ``flask_app.config[...]`` (boring config flags). The new
-    ``app_context()`` removes the scoped session on exit so the
-    next read inside a fresh ``with`` block doesn't return a
-    stale, cached row — mirroring the ``teardown_appcontext`` hook
-    Flask-SQLAlchemy used to register on the real app.
+    Only ``app_context()`` is left — every other historical
+    surface (``.config``, ``.logger``, ``.root_path``, ``.cli``,
+    ``.test_client``, ``.test_request_context``) was migrated off
+    in PR #552. ``app_context()`` itself stays because 891 sites
+    still wrap their ORM reads in it; eliminating those is its
+    own follow-up.
     """
-
-    config: dict = {}
-    root_path: str = ""
-    logger: logging.Logger = logging.getLogger("dinerobook")
 
     @contextlib.contextmanager
     def app_context(self):
@@ -55,7 +47,6 @@ class _FlaskAppStub:
 
 
 flask_app = _FlaskAppStub()
-flask_app.config["TESTING"] = True
 
 # Alias for the historical ``from app import app as flask_app``
 # pattern. The sed in PR #550 rewrote ``from app import`` → ``from

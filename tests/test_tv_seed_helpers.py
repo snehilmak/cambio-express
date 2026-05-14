@@ -12,12 +12,20 @@ from api.Modules.Tenancy.Models import Store, User
 from tests._app import app as flask_app, db
 
 
+# Repo root — tests live in ``<repo>/tests/``, so two levels up
+# from this file is the directory the seed helpers expect when
+# they look for ``static/seed-logos/``.
+_REPO_ROOT = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), ".."),
+)
+
+
 def _backfill_tv_country_codes():
     return backfill_country_codes(db.session)
 
 
 def _seed_tv_logos_from_disk():
-    return seed_logos_from_disk(db.session, flask_app.root_path)
+    return seed_logos_from_disk(db.session, _REPO_ROOT)
 
 
 # ── Country-code backfill ──────────────────────────────────────
@@ -96,7 +104,7 @@ def test_backfill_is_idempotent(client):
 # ── Seed-logos disk loader ─────────────────────────────────────
 
 def _seed_dir():
-    return os.path.join(flask_app.root_path, "static", "seed-logos")
+    return os.path.join(_REPO_ROOT, "static", "seed-logos")
 
 
 def _drop_logo(catalog_type, slug, ext, body):

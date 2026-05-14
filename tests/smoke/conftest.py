@@ -66,16 +66,11 @@ def smoke_server(tmp_path_factory):
     db_path = tmp_path_factory.mktemp("smoke") / "smoke.db"
     # Force the app's DATABASE_URL to our smoke DB. The `app` module
     # is already imported by the parent conftest at this point, so we
-    # have to re-bind SQLAlchemy's engine instead of relying on the
-    # env var alone. Two-step: set env (so anything that reads it
-    # later sees the right value) AND patch app.config + db.engine.
+    # have to re-bind SQLAlchemy's engine. Set the env var so anything
+    # that reads it later sees the right value, then dispose the
+    # cached engine so the next bind uses the new URI.
     os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
     from tests._app import app as flask_app, db
-    flask_app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    flask_app.config["TESTING"] = False  # Real server, not test_client.
-
-    # Re-bind SQLAlchemy to the new URI. The default engine cached
-    # the in-memory URI from the parent conftest's import-time set.
     with flask_app.app_context():
         db.engine.dispose()
         db.create_all()
