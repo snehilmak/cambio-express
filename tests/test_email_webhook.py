@@ -22,8 +22,15 @@ from datetime import datetime, timedelta
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Webhooks.Models import EmailEvent
 from api.Modules.Webhooks.Services import verify_resend_signature as _verify_resend_signature
-from api.Modules.Notifications.Services.smtp import health_check as smtp_health_check
-from app import _send_email, db, purge_expired_stores
+from api.Modules.Notifications.Services.smtp import (
+    health_check as smtp_health_check,
+    send_email as _smtp_send_email,
+)
+from app import db, purge_expired_stores
+
+
+def _send_email(to_addr, subject, body, html=None):
+    return _smtp_send_email(db.session, to_addr, subject, body, html)
 
 
 # ── Signature helpers ──────────────────────────────────────────
@@ -276,7 +283,7 @@ def test_send_email_does_not_suppress_unmatched_address(client):
     os.environ["SMTP_USER"] = "u"
     os.environ["SMTP_PASS"] = "p"
     from unittest.mock import patch
-    with patch("app.smtplib.SMTP") as smtp:
+    with patch("api.Modules.Notifications.Services.smtp.smtplib.SMTP") as smtp:
         smtp.return_value.__enter__.return_value.send_message.return_value = {}
         with client.application.app_context():
             ok = _send_email("personal@gmail.com", "hi", "body")

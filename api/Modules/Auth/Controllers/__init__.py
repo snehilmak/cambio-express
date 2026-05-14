@@ -706,7 +706,8 @@ def _deliver_password_reset_email(issued) -> None:
     import os
     from datetime import datetime
     from flask import render_template, url_for
-    from app import _send_email, app as flask_app
+    from app import app as flask_app, db as flask_db
+    from api.Modules.Notifications.Services.smtp import send_email
     u = issued.user
     with flask_app.test_request_context():
         # url_for(_external=True) needs a request context; in
@@ -738,8 +739,8 @@ def _deliver_password_reset_email(issued) -> None:
         except Exception:
             html = None
     to_addr = (u.email or u.username).strip()
-    delivered = _send_email(
-        to_addr, "Reset your DineroBook password", body, html=html,
+    delivered = send_email(
+        flask_db.session, to_addr, "Reset your DineroBook password", body, html=html,
     )
     if not delivered:
         flask_app.logger.warning(
