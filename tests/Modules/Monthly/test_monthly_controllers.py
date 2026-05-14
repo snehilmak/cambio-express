@@ -21,7 +21,7 @@ def _login(client_, store_id):
 
 def _seed_monthly(store_id, *, year=2026, month=1, **fields):
     from api.Modules.Monthly.Models import MonthlyFinancial
-    from app import db
+    from tests._app import db
     row = MonthlyFinancial(
         store_id=store_id, year=year, month=month, **fields,
     )
@@ -42,7 +42,7 @@ def test_monthly_returns_row_with_totals(client, test_store_id):
     """taxable_sales=100 + non_taxable=50 = 150 income;
     cash_expenses=20 + cash_payroll=30 = 50 expenses;
     net = 100."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_monthly(
             test_store_id, year=2026, month=2,
@@ -63,7 +63,7 @@ def test_monthly_returns_row_with_totals(client, test_store_id):
 
 
 def test_months_lists_logged(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_monthly(test_store_id, year=2026, month=1, taxable_sales=10)
         _seed_monthly(test_store_id, year=2026, month=3, taxable_sales=20)
@@ -127,7 +127,7 @@ def test_put_creates_when_missing(client, test_store_id):
 
 
 def test_put_updates_existing(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_monthly(test_store_id, year=2026, month=5, taxable_sales=100)
     token = _login(client, test_store_id)
@@ -158,7 +158,7 @@ def test_put_rejects_extra_fields(client, test_store_id):
 def test_put_rejects_employee_role(client):
     """Cashier role cannot save monthly P&L."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="emp_monthly_test",

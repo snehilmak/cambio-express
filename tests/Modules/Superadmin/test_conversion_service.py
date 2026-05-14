@@ -20,7 +20,7 @@ def _add_store(db, *, slug, plan="trial",
 def test_conversion_rate_returns_three_buckets():
     """Always returns Paid / Trial / Inactive rows in fixed order
     so the template can render the same 3 cards."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
         Store.query.delete()
@@ -32,7 +32,7 @@ def test_conversion_rate_returns_three_buckets():
 
 
 def test_conversion_rate_counts_per_plan():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
         Store.query.delete()
@@ -57,7 +57,7 @@ def test_conversion_rate_counts_per_plan():
 
 def test_conversion_rate_zero_total_returns_zero_rate():
     """No signups → rate = 0 (no divide-by-zero)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
         Store.query.delete()
@@ -75,7 +75,7 @@ def test_conversion_rate_zero_total_returns_zero_rate():
 def test_time_to_convert_lists_paid_with_days():
     """Paid stores from the period each get a row with their
     `days` since signup."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
         Store.query.delete()
@@ -93,7 +93,7 @@ def test_time_to_convert_lists_paid_with_days():
 
 def test_time_to_convert_excludes_trial_and_inactive():
     """Only basic/pro stores; trial / inactive don't count."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
         Store.query.delete()
@@ -113,7 +113,7 @@ def test_time_to_convert_excludes_trial_and_inactive():
 
 
 def test_time_to_convert_avg_days_zero_when_empty():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
         Store.query.delete()
@@ -130,7 +130,7 @@ def test_time_to_convert_avg_days_zero_when_empty():
 
 def test_trial_expiry_timing_buckets_by_age():
     """Trial stores bucketed by days since `created_at`."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
         Store.query.delete()
@@ -155,7 +155,7 @@ def test_trial_expiry_timing_buckets_by_age():
 def test_trial_expiry_timing_expired_bucket():
     """Trial whose `trial_ends_at` is in the past lands in the
     expired bucket regardless of age."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
         Store.query.delete()
@@ -172,7 +172,7 @@ def test_trial_expiry_timing_expired_bucket():
 
 def test_trial_expiry_timing_skips_empty_buckets():
     """Buckets with 0 count are not emitted as rows."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
         Store.query.delete()

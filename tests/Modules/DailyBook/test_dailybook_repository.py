@@ -4,7 +4,7 @@ from datetime import date, time, timedelta
 
 def _seed_report(store_id, report_date, *, taxable_sales=0.0, **kwargs):
     from api.Modules.DailyBook.Models import DailyReport
-    from app import db
+    from tests._app import db
     r = DailyReport(
         store_id=store_id, report_date=report_date,
         taxable_sales=taxable_sales, **kwargs,
@@ -16,7 +16,7 @@ def _seed_report(store_id, report_date, *, taxable_sales=0.0, **kwargs):
 def _seed_line_item(store_id, report_date, *, kind="cash_expense",
                      amount=10.0, at_time=None, note=""):
     from api.Modules.DailyBook.Models import DailyLineItem
-    from app import db
+    from tests._app import db
     li = DailyLineItem(
         store_id=store_id, report_date=report_date, kind=kind,
         at_time=at_time or time(9, 0), amount=amount, note=note,
@@ -29,7 +29,7 @@ def _seed_line_item(store_id, report_date, *, kind="cash_expense",
 
 
 def test_find_report_by_date_returns_match(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import find_report_by_date
     today = date.today()
     with flask_app.app_context():
@@ -41,7 +41,7 @@ def test_find_report_by_date_returns_match(test_store_id):
 
 
 def test_find_report_by_date_returns_none_when_missing(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import find_report_by_date
     with flask_app.app_context():
         r = find_report_by_date(
@@ -52,7 +52,7 @@ def test_find_report_by_date_returns_none_when_missing(test_store_id):
 
 def test_find_report_by_date_isolates_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import find_report_by_date
     today = date.today()
     with flask_app.app_context():
@@ -69,7 +69,7 @@ def test_find_report_by_date_isolates_other_stores(test_store_id):
 
 
 def test_get_report_by_id_returns_in_scope(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import get_report_by_id
     with flask_app.app_context():
         rid = _seed_report(test_store_id, date.today())
@@ -80,7 +80,7 @@ def test_get_report_by_id_returns_in_scope(test_store_id):
 
 def test_get_report_by_id_none_outside_scope(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import get_report_by_id
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-db-2",
@@ -95,7 +95,7 @@ def test_get_report_by_id_none_outside_scope(test_store_id):
 
 
 def test_list_reports_in_period_orders_by_date(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_reports_in_period
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -111,7 +111,7 @@ def test_list_reports_in_period_orders_by_date(test_store_id):
 
 
 def test_list_reports_in_period_excludes_out_of_range(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_reports_in_period
     today = date.today()
     last_year = today - timedelta(days=365)
@@ -127,7 +127,7 @@ def test_list_reports_in_period_excludes_out_of_range(test_store_id):
 
 def test_list_reports_in_period_isolates_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_reports_in_period
     today = date.today()
     with flask_app.app_context():
@@ -146,7 +146,7 @@ def test_list_reports_in_period_isolates_other_stores(test_store_id):
 
 
 def test_list_line_items_orders_by_time(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_line_items
     today = date.today()
     with flask_app.app_context():
@@ -163,7 +163,7 @@ def test_list_line_items_orders_by_time(test_store_id):
 
 
 def test_list_line_items_kinds_filter(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_line_items
     today = date.today()
     with flask_app.app_context():
@@ -177,7 +177,7 @@ def test_list_line_items_kinds_filter(test_store_id):
 
 def test_list_line_items_empty_kinds_returns_empty(test_store_id):
     """Passing `kinds=[]` short-circuits before the DB query."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_line_items
     today = date.today()
     with flask_app.app_context():
@@ -191,7 +191,7 @@ def test_list_line_items_empty_kinds_returns_empty(test_store_id):
 def test_list_line_items_scoped_to_date_and_store(test_store_id):
     """Items from other dates or stores must NOT appear."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import list_line_items
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -207,7 +207,7 @@ def test_list_line_items_scoped_to_date_and_store(test_store_id):
 
 
 def test_sum_line_items_by_kind(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import sum_line_items_by_kind
     today = date.today()
     with flask_app.app_context():
@@ -225,7 +225,7 @@ def test_sum_line_items_by_kind(test_store_id):
 
 
 def test_sum_line_items_by_kind_zero_when_empty(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Repositories import sum_line_items_by_kind
     with flask_app.app_context():
         total = sum_line_items_by_kind(

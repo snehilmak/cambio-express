@@ -31,7 +31,7 @@ def test_customer_phone_index_declared(client):
 
 
 def test_customer_phone_index_present_in_db(client):
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("customer")}
@@ -44,7 +44,7 @@ def test_customer_phone_index_present_in_db(client):
 def test_unique_constraint_still_present(client):
     """Sanity check: adding the secondary index didn't drop the
     unique constraint that prevents duplicate (store_id, phone) rows."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         uniques = insp.get_unique_constraints("customer")

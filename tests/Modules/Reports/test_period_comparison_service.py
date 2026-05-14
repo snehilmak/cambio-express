@@ -45,7 +45,7 @@ def _add_daily_report(db, store_id, *, report_date, **kwargs):
 def test_default_prior_is_immediately_preceding_window():
     """Without compare_from/to, the prior window is the same
     length immediately before d_from."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-default")
@@ -64,7 +64,7 @@ def test_default_prior_is_immediately_preceding_window():
 
 
 def test_custom_compare_window_used_when_both_set():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-custom")
@@ -82,7 +82,7 @@ def test_custom_compare_window_used_when_both_set():
 
 def test_custom_compare_normalises_backwards_dates():
     """If user picked compare_from > compare_to, swap them."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-backward")
@@ -100,7 +100,7 @@ def test_custom_compare_normalises_backwards_dates():
 def test_only_one_compare_arg_falls_back_to_auto_prior():
     """Both compare_from AND compare_to must be set — passing
     just one falls back to auto-prior."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-onearg")
@@ -120,7 +120,7 @@ def test_only_one_compare_arg_falls_back_to_auto_prior():
 def test_returns_seven_metric_rows_in_fixed_order():
     """Always returns exactly 7 rows in this order — the template
     relies on it."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-7rows")
@@ -140,7 +140,7 @@ def test_returns_seven_metric_rows_in_fixed_order():
 def test_money_flag_set_correctly_per_row():
     """`is_money` is True for currency metrics, False for
     transfer counts (so the template formats correctly)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         s = _add_store(db.session, slug="pc-money")
@@ -158,7 +158,7 @@ def test_money_flag_set_correctly_per_row():
 
 
 def test_aggregates_transfer_metrics_in_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         Transfer.query.delete()
@@ -187,7 +187,7 @@ def test_aggregates_transfer_metrics_in_window():
 def test_pct_change_computation():
     """delta = current - prior; pct = (delta / prior * 100) when
     prior != 0, else 100 if current else 0."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         Transfer.query.delete()
@@ -221,7 +221,7 @@ def test_pct_change_computation():
 
 def test_pct_handles_zero_prior_with_current():
     """When prior=0 and current>0, pct should be 100 (not crash)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         Transfer.query.delete()
@@ -244,7 +244,7 @@ def test_pct_handles_zero_prior_with_current():
 
 
 def test_pct_zero_when_both_zero():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         Transfer.query.delete()
@@ -263,7 +263,7 @@ def test_pct_zero_when_both_zero():
 def test_includes_daily_report_pl_lines():
     """Income lines pull from DailyReport columns AND transfer
     fees. Expenses from DailyReport only."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
         Transfer.query.delete()

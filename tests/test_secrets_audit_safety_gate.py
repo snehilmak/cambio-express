@@ -1,13 +1,13 @@
-"""Prod-secret safety gate regression tests.
+"""Seed-password safety warning regression tests.
 
-`app.py` refuses to boot if `APP_BASE_URL=https://...` AND
-`SECRET_KEY` is unset (signals a prod deploy still running the
-dev-fallback signing key). Also emits a CRITICAL warning for
-missing `SUPERADMIN_PASSWORD` / `ADMIN_PASSWORD` in prod.
+Production boots are expected to set ``SUPERADMIN_PASSWORD`` and
+``ADMIN_PASSWORD`` so the public defaults in the repo aren't the
+real credentials. ``api.Core.Boot.warn_default_seed_passwords``
+fires a CRITICAL log line when either is missing while
+``APP_BASE_URL`` points at HTTPS — operators see it via Sentry /
+Render logs and can rotate.
 
-These tests run in subprocesses so each one gets a fresh env
-without polluting the test session's already-loaded `app`
-module. See `tests/test_rate_limiting.py` for the same pattern.
+Each test runs in a subprocess so we get a clean env per case.
 """
 from __future__ import annotations
 
@@ -24,12 +24,12 @@ def _run(script: str, *, env_overrides: dict) -> tuple[int, str, str]:
         "STRIPE_BASIC_PRICE_ID": "price_basic_test",
         "STRIPE_PRO_PRICE_ID": "price_pro_test",
         "STRIPE_WEBHOOK_SECRET": "whsec_test_secret",
-        "SPA_CUTOVER_ENABLED": "0",
         "RATELIMIT_ENABLED": "0",
+        "DINEROBOOK_SKIP_INIT_DB": "1",
         **env_overrides,
     }
     # Wipe inherited values that would mask the test's env_overrides.
-    for k in ("SECRET_KEY", "SUPERADMIN_PASSWORD", "ADMIN_PASSWORD"):
+    for k in ("SUPERADMIN_PASSWORD", "ADMIN_PASSWORD"):
         if k not in env_overrides:
             env.pop(k, None)
     res = subprocess.run(
@@ -39,60 +39,29 @@ def _run(script: str, *, env_overrides: dict) -> tuple[int, str, str]:
     return res.returncode, res.stdout, res.stderr
 
 
-def test_dev_boot_still_works_without_secret_key():
-    """A normal dev/CI run (no APP_BASE_URL) must boot with the
-    dev-fallback SECRET_KEY — every other test in the suite
-    implicitly depends on this."""
-    rc, out, err = _run("import app; print('OK')", env_overrides={})
+def test_dev_boot_does_not_warn_about_seed_passwords():
+    """No APP_BASE_URL = not prod — the warning is silent."""
+    rc, out, err = _run(
+        "from api.Core.Boot import warn_default_seed_passwords;"
+        " warn_default_seed_passwords(); print('OK')",
+        env_overrides={},
+    )
     assert rc == 0, f"stderr:\n{err}\nstdout:\n{out}"
     assert "OK" in out
+    combined = (out + err).lower()
+    assert "seed password fallback" not in combined
 
 
-def test_prod_boot_refuses_with_missing_secret_key():
-    """APP_BASE_URL=https://... with no SECRET_KEY set must raise
-    RuntimeError at import time. Catches the catastrophic
-    deploy-with-default-secret state where session cookies are
-    forgeable from public Git history."""
+def test_prod_boot_warns_for_missing_admin_password():
+    """Missing SUPERADMIN_PASSWORD / ADMIN_PASSWORD with
+    APP_BASE_URL=https://... must log a CRITICAL warning."""
     rc, out, err = _run(
-        "import app; print('SHOULD-NOT-REACH')",
+        "from api.Core.Boot import warn_default_seed_passwords;"
+        " warn_default_seed_passwords(); print('OK')",
         env_overrides={"APP_BASE_URL": "https://dinerobook.com"},
     )
-    assert rc != 0, "prod-boot must fail without SECRET_KEY"
-    assert "SECRET_KEY" in err, err[:500]
-    assert "Refusing to boot" in err, err[:500]
-    assert "SHOULD-NOT-REACH" not in out
-
-
-def test_prod_boot_succeeds_with_real_secret_key():
-    """APP_BASE_URL=https://... WITH a real SECRET_KEY env var
-    must boot successfully — the safety gate must not over-fire
-    on the happy path."""
-    rc, out, err = _run(
-        "import app; print('OK', app.app.secret_key != 'dinerobook-dev-secret-change-in-prod')",
-        env_overrides={
-            "APP_BASE_URL": "https://dinerobook.com",
-            "SECRET_KEY": "abc123-real-random-prod-value-do-not-use",
-        },
-    )
     assert rc == 0, f"stderr:\n{err}\nstdout:\n{out}"
-    assert "OK True" in out
-
-
-def test_prod_boot_logs_critical_for_missing_admin_password():
-    """Missing SUPERADMIN_PASSWORD / ADMIN_PASSWORD in prod
-    should NOT fail boot — but it must log a CRITICAL warning so
-    Sentry / Render → Logs surface it."""
-    rc, out, err = _run(
-        "import app; print('OK')",
-        env_overrides={
-            "APP_BASE_URL": "https://dinerobook.com",
-            "SECRET_KEY": "abc123-real-random-prod-value-do-not-use",
-        },
-    )
-    assert rc == 0, f"stderr:\n{err}\nstdout:\n{out}"
-    # Boot succeeded
     assert "OK" in out
-    # CRITICAL warning landed (structlog emits to stderr by default).
     combined = (out + err).lower()
     assert "seed password fallback" in combined, (
         f"expected seed-password warning; out:\n{out}\nerr:\n{err}"
@@ -103,10 +72,10 @@ def test_prod_boot_no_warning_with_admin_passwords_set():
     """When the seed-password env vars ARE set, the CRITICAL
     warning must NOT fire."""
     rc, out, err = _run(
-        "import app; print('OK')",
+        "from api.Core.Boot import warn_default_seed_passwords;"
+        " warn_default_seed_passwords(); print('OK')",
         env_overrides={
             "APP_BASE_URL": "https://dinerobook.com",
-            "SECRET_KEY": "abc123-real-random-prod-value-do-not-use",
             "SUPERADMIN_PASSWORD": "real-superadmin-password",
             "ADMIN_PASSWORD": "real-admin-password",
         },

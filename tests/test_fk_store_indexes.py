@@ -34,7 +34,7 @@ def test_all_store_id_indexes_declared_on_models(client):
     `store_id`. We don't pin the auto-generated name — just that
     *some* index covers the column with store_id first — because
     SQLAlchemy's auto-naming is what produces the registry name."""
-    import app as appmod
+    from tests import _app as appmod
     for model_attr, table_name, _expected in EXPECTED_FK_INDEXES:
         model = getattr(appmod, model_attr)
         leads = {
@@ -50,7 +50,7 @@ def test_all_store_id_indexes_declared_on_models(client):
 def test_all_store_id_indexes_present_in_db(client):
     """End-to-end: every expected index actually exists in the
     live DB after `_ensure_added_indexes()` runs at boot."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         for _model_attr, table_name, expected in EXPECTED_FK_INDEXES:

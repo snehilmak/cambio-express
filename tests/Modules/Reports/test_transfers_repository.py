@@ -20,7 +20,7 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     fee=2.0, federal_tax=1.0, company="Intermex",
                     status="Sent", sender_name="S"):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -56,7 +56,7 @@ def test_aggregate_returns_rows_and_totals(test_store_id):
     Canceled (must be excluded). Repository should return two rows
     (Intermex + Maxi) and totals that sum just the active ones."""
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0,
@@ -95,7 +95,7 @@ def test_aggregate_excludes_out_of_period(test_store_id):
     """Date filter contract — transfers outside [d_from, d_to] don't
     appear in the result."""
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_date=today,
@@ -116,7 +116,7 @@ def test_aggregate_returns_empty_for_no_data(test_store_id):
     tax:0, count:0})`. Caller code shouldn't have to special-case
     the empty path."""
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         from api.Modules.Reports.Repositories.transfers import aggregate

@@ -63,8 +63,8 @@ def _add_report(db, store_id, *, report_date, over_short=0.0):
 
 def test_empty_db_returns_empty():
     """Fresh DB with no transfers / reports → empty list."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import compute_platform_anomalies
     with flask_app.app_context():
         # Wipe any seeded transfers/reports so this test is hermetic.
@@ -80,8 +80,8 @@ def test_empty_db_returns_empty():
 def test_quiet_store_flagged_when_active_then_silent():
     """Store had ≥5 transfers in the last 30 days but none in the
     last 3 days → flagged 'quiet_store' / medium."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
         Transfer.query.delete()
@@ -106,8 +106,8 @@ def test_quiet_store_flagged_when_active_then_silent():
 def test_quiet_store_not_flagged_below_threshold():
     """Store with < 5 transfers in the last 30 days → not flagged
     (we don't yell about idle trials)."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
         Transfer.query.delete()
@@ -127,8 +127,8 @@ def test_quiet_store_not_flagged_below_threshold():
 
 def test_quiet_store_not_flagged_when_recent_activity():
     """Recent transfer (within 3 days) → not flagged."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
         Transfer.query.delete()
@@ -148,8 +148,8 @@ def test_quiet_store_not_flagged_when_recent_activity():
 def test_quiet_store_skips_inactive_plan():
     """plan='inactive' (cancelled) → not flagged. Cancelled stores
     aren't anomalies."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
         Transfer.query.delete()
@@ -168,8 +168,8 @@ def test_quiet_store_skips_inactive_plan():
 
 def test_quiet_store_skips_inactive_store_flag():
     """is_active=False → not flagged."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
         Transfer.query.delete()
@@ -191,8 +191,8 @@ def test_quiet_store_skips_inactive_store_flag():
 
 def test_big_over_short_high_severity_at_or_above_high_threshold():
     """|over_short| ≥ $200 → severity 'high'."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -213,8 +213,8 @@ def test_big_over_short_high_severity_at_or_above_high_threshold():
 
 def test_big_over_short_medium_severity_in_band():
     """$100 ≤ |over_short| < $200 → severity 'medium'."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -235,8 +235,8 @@ def test_big_over_short_medium_severity_in_band():
 
 def test_big_over_short_below_threshold_excluded():
     """|over_short| < $100 → not flagged."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -255,8 +255,8 @@ def test_big_over_short_below_threshold_excluded():
 
 def test_big_over_short_outside_lookback_window_excluded():
     """Reports older than 7 days are excluded."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -278,8 +278,8 @@ def test_big_over_short_outside_lookback_window_excluded():
 
 def test_compute_ranks_high_before_medium():
     """High-severity items float to the top of the merged list."""
-    from app import app as flask_app
-    from app import db
+    from tests._app import app as flask_app
+    from tests._app import db
     from api.Modules.Superadmin.Services import compute_platform_anomalies
     with flask_app.app_context():
         Transfer.query.delete()

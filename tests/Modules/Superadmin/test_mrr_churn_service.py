@@ -32,7 +32,7 @@ def test_plan_mrr_table_has_expected_keys():
 
 
 def test_mrr_arr_groups_by_plan_and_cycle():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
         Store.query.delete()
@@ -62,7 +62,7 @@ def test_mrr_arr_groups_by_plan_and_cycle():
 
 def test_mrr_arr_excludes_trial_and_inactive():
     """Only basic/pro stores count — trial and inactive are ignored."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
         Store.query.delete()
@@ -82,7 +82,7 @@ def test_mrr_arr_excludes_trial_and_inactive():
 
 
 def test_mrr_arr_excludes_stores_created_after_d_to():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
         Store.query.delete()
@@ -104,7 +104,7 @@ def test_mrr_arr_excludes_stores_created_after_d_to():
 
 def test_churn_cohort_buckets_by_signup_month():
     """Cancelled stores group by their `created_at` YYYY-MM."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
         Store.query.delete()
@@ -130,7 +130,7 @@ def test_churn_cohort_buckets_by_signup_month():
 def test_churn_cohort_includes_active_survivors():
     """Stores from the same signup month that are STILL active
     (basic/pro, no canceled_at) feed the `active` count."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
         Store.query.delete()
@@ -153,7 +153,7 @@ def test_churn_cohort_includes_active_survivors():
 
 def test_churn_cohort_pct_calculation():
     """churn_pct = cancelled / (cancelled + active) * 100."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
         Store.query.delete()
@@ -173,7 +173,7 @@ def test_churn_cohort_pct_calculation():
 
 
 def test_churn_cohort_empty_when_no_cancellations():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
         Store.query.delete()

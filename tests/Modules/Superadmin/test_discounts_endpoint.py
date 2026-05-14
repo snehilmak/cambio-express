@@ -31,7 +31,7 @@ def _seed_code(**overrides):
     """Insert a DiscountCode row. Defaults give a 20% off forever code
     that's active and uncapped."""
     from api.Modules.Billing.Models import DiscountCode
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         d = DiscountCode(
             code=overrides.pop("code", f"TEST{datetime.utcnow().timestamp()}"),
@@ -85,7 +85,7 @@ def test_list_discounts_empty_envelope(client):
 def test_list_discounts_returns_newest_first(client):
     """Two codes with different created_at — newer one should come first."""
     from api.Modules.Billing.Models import DiscountCode
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         old = DiscountCode(
             code="OLDONE", percent_off=10, duration="once",
@@ -209,7 +209,7 @@ def test_toggle_rejects_admin_role(client, test_store_id):
 
 def test_toggle_flips_is_active_off(client):
     from api.Modules.Billing.Models import DiscountCode
-    from app import app as flask_app
+    from tests._app import app as flask_app
     discount_id = _seed_code(code="TOG3", is_active=True)
     token = _login_superadmin(client)
     resp = client.post(
@@ -222,14 +222,14 @@ def test_toggle_flips_is_active_off(client):
     assert body["discount"]["is_active"] is False
     assert body["discount"]["is_redeemable"] is False
     with flask_app.app_context():
-        from app import db as _db
+        from tests._app import db as _db
         d = _db.session.get(DiscountCode, discount_id)
         assert d.is_active is False
 
 
 def test_toggle_flips_is_active_on(client):
     from api.Modules.Billing.Models import DiscountCode
-    from app import app as flask_app
+    from tests._app import app as flask_app
     discount_id = _seed_code(code="TOG4", is_active=False)
     token = _login_superadmin(client)
     resp = client.post(
@@ -240,7 +240,7 @@ def test_toggle_flips_is_active_on(client):
     assert resp.status_code == 200
     assert resp.get_json()["discount"]["is_active"] is True
     with flask_app.app_context():
-        from app import db as _db
+        from tests._app import db as _db
         d = _db.session.get(DiscountCode, discount_id)
         assert d.is_active is True
 

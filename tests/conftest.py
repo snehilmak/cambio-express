@@ -21,7 +21,7 @@ from datetime import date, datetime, timedelta
 # 1 PBKDF2 iteration. Production uses the default 600,000 — deliberately
 # slow to defeat brute force — but tests don't need that, and before this
 # the suite spent roughly 12s inside set_password calls alone. MUST run
-# before `from app import ...` because app binds `generate_password_hash`
+# before `from tests._app import ...` because app binds `generate_password_hash`
 # at import time via `from werkzeug.security import generate_password_hash`.
 import werkzeug.security as _wsec
 _ORIG_HASH = _wsec.generate_password_hash
@@ -29,7 +29,7 @@ _wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=
     _ORIG_HASH(pw, method=method, salt_length=salt_length)
 )
 
-from app import app as flask_app, db
+from tests._app import app as flask_app, db
 
 flask_app.config["TESTING"] = True
 
@@ -109,7 +109,7 @@ def _close_fastapi_clients():
 # What's gone: the WSGI bridges that used to translate ``/api/v2``,
 # ``/app``, PublicRoutes, and cutover into Flask test_client. The
 # new client speaks ASGI natively; no a2wsgi in the request path.
-from app import app as _flask_app_for_client  # noqa: E402
+from tests._app import app as _flask_app_for_client  # noqa: E402
 
 from starlette.testclient import TestClient as _StarletteTestClient  # noqa: E402
 
@@ -373,7 +373,7 @@ def login_owner(client, username: str,
 def seed_test_data():
     from api.Modules.Tenancy.Models import Store, User
     from api.Modules.TVDisplay.Services.seed import seed_catalogs
-    from app import db
+    from tests._app import db
     # TV-display catalogs (companies + banks) are seeded by init_db
     # in production but the test fixture drop_all/create_all cycle
     # resets every table — we rebuild them here so picker UI tests

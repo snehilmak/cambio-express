@@ -49,7 +49,7 @@ def _add_txn(db, store_id, account_id, *, posted_at,
 
 
 def test_returns_rows_and_totals_tuple():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -65,7 +65,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -90,7 +90,7 @@ def test_row_shape():
 
 
 def test_groups_by_category_slug():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -123,7 +123,7 @@ def test_groups_by_category_slug():
 
 def test_uncategorised_bucketed_under_empty_slug():
     """Rows with NULL/empty category_slug bucket together."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -148,7 +148,7 @@ def test_uncategorised_bucketed_under_empty_slug():
 
 def test_inflow_for_positive_signed_amount():
     """Credit (positive amount_cents) lands in `totals.inflow`."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -171,7 +171,7 @@ def test_inflow_for_positive_signed_amount():
 def test_outflow_for_negative_signed_amount():
     """Debit (negative amount_cents) lands in `totals.outflow`
     as a negative number; absolute lands in `totals.amount`."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -195,7 +195,7 @@ def test_outflow_for_negative_signed_amount():
 def test_zero_counted_as_inflow():
     """A 0-cent row (rare but possible — pending hold reversal)
     has signed=0 → falls into inflow side per `signed >= 0`."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -219,7 +219,7 @@ def test_zero_counted_as_inflow():
 
 def test_rows_sorted_by_absolute_amount_descending():
     """Biggest |amount| lands first regardless of sign."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -248,7 +248,7 @@ def test_rows_sorted_by_absolute_amount_descending():
 
 
 def test_filters_by_store_list():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -273,7 +273,7 @@ def test_filters_by_store_list():
 def test_filters_by_window_uses_day_boundaries():
     """The window includes posted_at at end-of-day on d_to (so a
     transaction posted at 23:59 on the last day still counts)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
         BankTransaction.query.delete()

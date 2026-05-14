@@ -19,7 +19,7 @@ Two contracts pinned here:
 """
 from datetime import date
 
-from app import app as flask_app, db
+from tests._app import app as flask_app, db
 
 
 def _seed_daily_report(store_id, report_date, **fields):

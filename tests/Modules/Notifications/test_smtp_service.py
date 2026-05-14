@@ -53,7 +53,7 @@ def _reset_attempt():
 
 def test_send_returns_false_when_unconfigured(monkeypatch):
     """Missing env vars → no send + status 'unconfigured'."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         send_email, smtp as smtp_svc,
     )
@@ -68,7 +68,7 @@ def test_send_returns_false_when_unconfigured(monkeypatch):
 
 def test_send_returns_false_when_only_host_set(monkeypatch):
     """Partial config (no user/pw) → unconfigured, not crash."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -83,7 +83,7 @@ def test_send_returns_false_when_only_host_set(monkeypatch):
 
 def test_send_suppressed_for_bounced_user(monkeypatch):
     """User with email_bounced_at set → skip the send entirely."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -106,7 +106,7 @@ def test_send_suppressed_for_bounced_user(monkeypatch):
 
 
 def test_send_suppression_lookup_is_case_insensitive(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -134,7 +134,7 @@ def test_send_attempts_when_no_user_match(monkeypatch):
     """Address with no matching User row → no suppression check
     blocks; the send proceeds (and may succeed or fail on its
     own merits)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -160,7 +160,7 @@ def test_send_attempts_when_no_user_match(monkeypatch):
 
 
 def test_send_calls_smtp_with_starttls_and_login(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -183,7 +183,7 @@ def test_send_calls_smtp_with_starttls_and_login(monkeypatch):
 
 
 def test_send_uses_smtp_from_env_when_set(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     _reset_attempt()
     _set_smtp_env(monkeypatch, sender="alerts@dinerobook.com")
@@ -202,7 +202,7 @@ def test_send_uses_smtp_from_env_when_set(monkeypatch):
 
 def test_send_records_failure_status_on_smtp_error(monkeypatch):
     """SMTP exception → status 'failed' + error string captured."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     from api.Modules.Notifications.Services import smtp as smtp_svc
     _reset_attempt()
@@ -222,7 +222,7 @@ def test_send_records_failure_status_on_smtp_error(monkeypatch):
 
 
 def test_send_html_alternative_attached_when_provided(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import send_email
     _reset_attempt()
     _set_smtp_env(monkeypatch)
@@ -266,7 +266,7 @@ def test_reset_last_attempt_clears_state():
 
 
 def test_health_returns_required_keys():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     with flask_app.app_context():
         result = smtp_health_check(db.session)
@@ -279,7 +279,7 @@ def test_health_returns_required_keys():
 
 
 def test_health_configured_true_when_required_env_set(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
@@ -291,7 +291,7 @@ def test_health_configured_true_when_required_env_set(monkeypatch):
 
 
 def test_health_configured_false_when_partial(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("SMTP_USER", raising=False)
@@ -302,7 +302,7 @@ def test_health_configured_false_when_partial(monkeypatch):
 
 
 def test_health_aggregates_recent_events():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     with flask_app.app_context():
         EmailEvent.query.delete()
@@ -331,7 +331,7 @@ def test_health_aggregates_recent_events():
 
 
 def test_health_suppressed_count_includes_bounced_users():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     with flask_app.app_context():
         User.query.filter(

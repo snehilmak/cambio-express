@@ -22,6 +22,8 @@ Two ways this app gets exercised:
 Mixed routing rule: never put `/api/v2` in a FastAPI route
 declaration. The mount or the OpenAPI `root_path` carry it.
 """
+import os
+
 from fastapi import FastAPI
 
 from api.Core.Config import settings
@@ -191,14 +193,28 @@ def create_app() -> FastAPI:
     tests can build fresh apps with overridden dependencies (e.g. an
     in-memory DB session) without polluting the production instance.
     """
-    # Idempotent — if app.py already booted observability, these are
-    # no-ops. If FastAPI is run standalone (`uvicorn api.main:api_app`)
-    # they run for real.
     init_logging()
     init_sentry()
 
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _lifespan(_app: FastAPI):
+        """Boot-time DB init runs once at uvicorn startup.
+
+        ``api.Core.Boot.init_db`` is idempotent — Alembic upgrade +
+        index safety-net + legacy backfills + seed data. PR #550
+        moved this off the legacy ``app.init_db()`` orchestrator
+        when Flask was retired.
+        """
+        if not os.environ.get("DINEROBOOK_SKIP_INIT_DB"):
+            from api.Core.Boot import init_db
+            init_db()
+        yield
+
     app = FastAPI(
         title="DineroBook API",
+        lifespan=_lifespan,
         version="2.0.0-alpha",  # alpha until cleanup PR removes Flask
         description=(
             "Customer-deployable FastAPI backend, currently being "

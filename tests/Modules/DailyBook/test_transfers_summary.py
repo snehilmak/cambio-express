@@ -6,7 +6,7 @@ from datetime import date
 
 def _add_transfer(store_id, **kwargs):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     defaults = {
         "company": "Intermex",
         "service_type": "Money Transfer",
@@ -26,7 +26,7 @@ def _add_transfer(store_id, **kwargs):
 def test_summary_default_companies_when_no_transfers(test_store_id):
     """Empty day still returns one row per configured company so
     the React editor can render the auto-fill table consistently."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     with flask_app.app_context():
         summary = summarize_transfers_for_day(
@@ -45,7 +45,7 @@ def test_summary_default_companies_when_no_transfers(test_store_id):
 def test_summary_aggregates_by_company(test_store_id):
     """One transfer per company → each bucket carries its row's
     amount + fees + federal_tax + commission."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
     with flask_app.app_context():
@@ -68,7 +68,7 @@ def test_summary_aggregates_by_company(test_store_id):
 
 def test_summary_excludes_cancelled(test_store_id):
     """Cancelled transfers shouldn't poison the day's roll-up."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
     with flask_app.app_context():
@@ -88,7 +88,7 @@ def test_summary_carries_unknown_companies_alphabetically(test_store_id):
     """Historical Transfer rows with a company not in the current
     store config still surface — but after the configured list, in
     alphabetical order. Keeps the grand total honest."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
     with flask_app.app_context():

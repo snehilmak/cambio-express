@@ -67,7 +67,7 @@ def _add_txn(db, store_id, account_id, *, posted_at,
 
 
 def test_returns_rows_and_totals_tuple():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -82,7 +82,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -111,7 +111,7 @@ def test_row_shape():
 def test_only_counts_matched_rule_id_not_null():
     """Manual categorisations (matched_rule_id IS NULL) are not
     counted — those weren't a rule firing."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -144,7 +144,7 @@ def test_only_counts_matched_rule_id_not_null():
 
 
 def test_groups_by_matched_rule_id():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -183,7 +183,7 @@ def test_groups_by_matched_rule_id():
 
 
 def test_label_uses_rule_id_when_rule_exists():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -206,7 +206,7 @@ def test_deleted_rule_renders_with_deleted_marker():
     """If the BankRule was deleted after the sync, the row still
     surfaces with `Rule #<id> (deleted)` so the audit is honest
     about what was applied even if the rule is gone."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -228,7 +228,7 @@ def test_deleted_rule_renders_with_deleted_marker():
 
 
 def test_match_summary_combines_type_and_value():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -253,7 +253,7 @@ def test_match_summary_combines_type_and_value():
 
 
 def test_rows_sorted_by_count_descending():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
         BankTransaction.query.delete()

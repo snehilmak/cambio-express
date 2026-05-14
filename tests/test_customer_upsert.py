@@ -13,7 +13,7 @@ from datetime import date
 
 def _make_store(name, slug, plan="basic"):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=name, slug=slug, email=f"{slug}@test.com", plan=plan)
     db.session.add(s); db.session.flush()
     return s
@@ -21,7 +21,7 @@ def _make_store(name, slug, plan="basic"):
 
 def _make_owner(username="owner1@example.com"):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(username=username, full_name="Owner One", role="owner",
              store_id=None)
     u.set_password("ownerpass!")
@@ -31,7 +31,7 @@ def _make_owner(username="owner1@example.com"):
 
 def _link(owner, store):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import db
+    from tests._app import db
     db.session.add(StoreOwnerLink(owner_id=owner.id, store_id=store.id))
     db.session.flush()
 
@@ -42,7 +42,7 @@ def test_sibling_ids_solo_store_returns_itself(client):
     """Store with no owner links is its own sole sibling — not an empty list."""
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Customers.Repositories import sibling_store_ids
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
         assert sibling_store_ids(db.session, sid) == [sid]
@@ -50,7 +50,7 @@ def test_sibling_ids_solo_store_returns_itself(client):
 
 def test_sibling_ids_spans_all_stores_with_shared_owner(client):
     from api.Modules.Customers.Repositories import sibling_store_ids
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         a = _make_store("A", "store-a")
         b = _make_store("B", "store-b")
@@ -65,7 +65,7 @@ def test_sibling_ids_spans_all_stores_with_shared_owner(client):
 def test_sibling_ids_isolates_unrelated_stores(client):
     """Two owners with disjoint portfolios must never see each other's stores."""
     from api.Modules.Customers.Repositories import sibling_store_ids
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         x = _make_store("X", "store-x"); y = _make_store("Y", "store-y")
@@ -81,7 +81,7 @@ def test_sibling_ids_isolates_unrelated_stores(client):
 def test_sibling_ids_merges_across_shared_owner(client):
     """If one owner sits in both A and B, A sees B — even if only owner2 is in X."""
     from api.Modules.Customers.Repositories import sibling_store_ids
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         x = _make_store("X", "store-x")
@@ -102,7 +102,7 @@ def test_sibling_ids_merges_across_shared_owner(client):
 def test_upsert_creates_new_customer_when_no_match(client):
     from api.Modules.Customers.Models import Customer
     from api.Modules.Tenancy.Models import Store
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
         cust = find_or_upsert_customer(
@@ -123,7 +123,7 @@ def test_upsert_dedup_by_phone_within_same_store(client):
     """Same phone in same store => single Customer row, latest data wins."""
     from api.Modules.Customers.Models import Customer
     from api.Modules.Tenancy.Models import Store
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
         c1 = find_or_upsert_customer(
@@ -148,7 +148,7 @@ def test_upsert_dedup_by_phone_within_same_store(client):
 def test_upsert_dedup_across_sibling_stores(client):
     """A cashier at store B finds the customer logged at store A (same owner)."""
     from api.Modules.Customers.Models import Customer
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         owner = _make_owner()
@@ -175,7 +175,7 @@ def test_upsert_dedup_across_sibling_stores(client):
 def test_upsert_isolation_between_unrelated_stores(client):
     """No shared owner => two separate Customer rows even with same phone."""
     from api.Modules.Customers.Models import Customer
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         a = _make_store("A", "store-a"); x = _make_store("X", "store-x")
         o1 = _make_owner("owner1@test.com")
@@ -198,7 +198,7 @@ def test_upsert_isolation_between_unrelated_stores(client):
 
 
 def test_upsert_explicit_customer_id_from_sibling_accepted(client):
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         a = _make_store("A", "store-a"); b = _make_store("B", "store-b")
         owner = _make_owner()
@@ -227,7 +227,7 @@ def test_upsert_explicit_customer_id_from_unrelated_store_ignored(client):
     other's customers through a guessed id.
     """
     from api.Modules.Customers.Models import Customer
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         a = _make_store("A", "store-a"); x = _make_store("X", "store-x")
         o1 = _make_owner("owner1@test.com")
@@ -259,7 +259,7 @@ def test_upsert_explicit_customer_id_from_unrelated_store_ignored(client):
 def test_upsert_empty_fields_do_not_overwrite_stored_values(client):
     """Blank address/dob on a new visit must not wipe existing data."""
     from api.Modules.Tenancy.Models import Store
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
         find_or_upsert_customer(
@@ -283,7 +283,7 @@ def test_upsert_default_phone_country_is_plus_one(client):
     """Missing phone_country falls back to +1 for both the filter and the row."""
     from api.Modules.Customers.Models import Customer
     from api.Modules.Tenancy.Models import Store
-    from app import db, find_or_upsert_customer
+    from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
         sid = Store.query.filter_by(slug="test-store").one().id
         c = find_or_upsert_customer(

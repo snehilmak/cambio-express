@@ -45,7 +45,7 @@ def _add_daily_report(db, store_id, *, report_date, **kwargs):
 def test_returns_rows_and_totals_tuple():
     """Service returns (rows, totals); rows is a list of dicts;
     totals is a dict with income / expenses / net / days."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         s = _add_store(db.session, slug="ppl-shape")
@@ -60,7 +60,7 @@ def test_returns_rows_and_totals_tuple():
 
 def test_rows_carry_label_section_amount():
     """Each row has label / section / amount keys."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         s = _add_store(db.session, slug="ppl-keys")
@@ -76,7 +76,7 @@ def test_rows_carry_label_section_amount():
 def test_includes_money_transfer_fees_income_row():
     """Every result includes a "Money Transfer Fees" income row,
     even when the period has zero fees."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -101,7 +101,7 @@ def test_includes_money_transfer_fees_income_row():
 def test_section_order_income_then_expenses():
     """Rows are ordered: all income rows, then all expense rows.
     The template depends on this contiguous grouping for headings."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         s = _add_store(db.session, slug="ppl-order")
@@ -122,7 +122,7 @@ def test_section_order_income_then_expenses():
 def test_aggregates_daily_report_income_columns():
     """Income lines sum the matching DailyReport column across the
     period."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -151,7 +151,7 @@ def test_aggregates_daily_report_income_columns():
 
 
 def test_aggregates_daily_report_expense_columns():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -175,7 +175,7 @@ def test_aggregates_daily_report_expense_columns():
 def test_money_transfer_fees_pulled_from_transfer_table():
     """MTF income row sums Transfer.fee for active transfers in the
     period — it does NOT live on DailyReport."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -201,7 +201,7 @@ def test_money_transfer_fees_pulled_from_transfer_table():
 
 
 def test_net_is_income_minus_expenses():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -230,7 +230,7 @@ def test_days_counts_daily_report_rows_in_window():
     """`totals["days"]` is the number of DailyReport rows in the
     window — NOT the date span (so a missing day doesn't inflate
     the denominator if the template ever divides by it)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -253,7 +253,7 @@ def test_days_counts_daily_report_rows_in_window():
 def test_only_includes_stores_in_list():
     """Daily reports + transfers from a sibling store NOT in
     `store_ids` are excluded."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()
@@ -278,7 +278,7 @@ def test_only_includes_stores_in_list():
 
 def test_only_includes_rows_in_window():
     """Rows outside [d_from, d_to] are excluded."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
         Transfer.query.delete()

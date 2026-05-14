@@ -5,12 +5,15 @@ Three independent surfaces under test:
   - Sentry init is a no-op when SENTRY_DSN is empty, and activates
     when it isn't (without actually phoning home — we just assert
     the SDK's hub state).
-  - structlog emits real structured records in both `json` and
-    `console` modes, and contextvars bound by the request-ID
-    middleware show up on the rendered event.
-  - The Flask + FastAPI request-ID middlewares: (a) generate a
-    UUID when no header is present, (b) echo an inbound header back
-    on the response, (c) cap absurdly long inbound IDs.
+  - structlog emits real structured records, and contextvars bound by
+    the request-ID middleware show up on the rendered event.
+  - The FastAPI request-ID middleware: (a) generates a UUID when no
+    header is present, (b) echoes an inbound header back on the
+    response, (c) caps absurdly long inbound IDs.
+
+The Flask-side request-ID hook was retired in PR #550 alongside
+the Flask app itself; production now runs through asgi.py with the
+FastAPI middleware doing the work for every request.
 """
 from __future__ import annotations
 
@@ -23,8 +26,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.Core.Observability import (
-    REQUEST_ID_HEADER, RequestIDMiddleware, init_logging,
-    init_sentry, install_request_id,
+    REQUEST_ID_HEADER, RequestIDMiddleware, init_logging, init_sentry,
 )
 from api.Core.Observability import (
     request_id as request_id_module,
@@ -78,13 +80,10 @@ def test_init_sentry_activates_when_dsn_set(monkeypatch):
     assert init_sentry() is True
     assert init_called["environment"] == "ci-test"
     assert init_called["dsn"] == "https://abc@example.invalid/1"
-    # All four integrations are present + sample rate is what we
-    # configured. Sanity-check the wiring without doing a real SDK
-    # init that would spawn a background transport thread.
     integration_names = {
         type(i).__name__ for i in init_called["integrations"]
     }
-    assert {"FlaskIntegration", "FastApiIntegration",
+    assert {"FastApiIntegration", "StarletteIntegration",
             "SqlalchemyIntegration"} <= integration_names
     assert init_called["traces_sample_rate"] == 0.0
     assert init_called["send_default_pii"] is False
@@ -107,7 +106,7 @@ def test_init_logging_routes_stdlib_through_structlog(monkeypatch):
 
 
 def test_request_id_contextvars_bind_to_log_records():
-    """The Flask + FastAPI middleware bind request-scoped fields via
+    """The FastAPI middleware binds request-scoped fields via
     structlog.contextvars.bind_contextvars; they should show up on
     every log line emitted through the real processor chain.
 
@@ -129,79 +128,16 @@ def test_request_id_contextvars_bind_to_log_records():
 
 
 def test_clear_contextvars_after_request():
-    """After clear_contextvars (called by the request-teardown hook
-    + the FastAPI middleware finally-block), the bound field is gone.
-    Critical — without this, the next request would inherit stale
-    `request_id=...` from whatever ran last on the same worker
-    thread."""
+    """After clear_contextvars (called by the FastAPI middleware
+    finally-block), the bound field is gone. Critical — without
+    this, the next request would inherit stale `request_id=...`
+    from whatever ran last on the same worker thread."""
     structlog.contextvars.bind_contextvars(request_id="leaked")
     structlog.contextvars.clear_contextvars()
     event_dict = structlog.contextvars.merge_contextvars(
         None, "info", {"event": "later"},
     )
     assert "request_id" not in event_dict
-
-
-# ─── Request-ID middleware: Flask ────────────────────────────────
-
-
-def test_flask_generates_request_id_when_header_absent():
-    """Inbound request with no X-Request-ID gets a fresh UUID4 on
-    the response. Validates the value looks like a UUID."""
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    install_request_id(app)
-
-    @app.get("/ping")
-    def _ping():
-        return jsonify(ok=True)
-
-    client = app.test_client()
-    resp = client.get("/ping")
-    assert resp.status_code == 200
-    rid = resp.headers.get(REQUEST_ID_HEADER)
-    assert rid is not None
-    assert re.fullmatch(
-        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-        rid,
-    )
-
-
-def test_flask_echoes_inbound_request_id():
-    """A client-supplied X-Request-ID round-trips on the response so
-    cross-system traces can be stitched together."""
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    install_request_id(app)
-
-    @app.get("/ping")
-    def _ping():
-        return jsonify(ok=True)
-
-    client = app.test_client()
-    resp = client.get("/ping", headers={REQUEST_ID_HEADER: "trace-xyz-789"})
-    assert resp.headers.get(REQUEST_ID_HEADER) == "trace-xyz-789"
-
-
-def test_flask_caps_oversize_inbound_id():
-    """A malicious client can't push a 2 MB 'id' into our log
-    records — the middleware ignores anything over 200 chars and
-    mints a fresh UUID instead."""
-    from flask import Flask, jsonify
-    app = Flask(__name__)
-    install_request_id(app)
-
-    @app.get("/ping")
-    def _ping():
-        return jsonify(ok=True)
-
-    client = app.test_client()
-    huge = "x" * 5_000
-    resp = client.get("/ping", headers={REQUEST_ID_HEADER: huge})
-    echoed = resp.headers.get(REQUEST_ID_HEADER)
-    assert echoed is not None
-    assert echoed != huge
-    assert len(echoed) <= 200
 
 
 # ─── Request-ID middleware: FastAPI ──────────────────────────────

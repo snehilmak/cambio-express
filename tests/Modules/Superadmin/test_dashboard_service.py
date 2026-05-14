@@ -36,7 +36,7 @@ def test_compute_mrr_zero_subscribers_returns_zero():
 def test_dashboard_context_returns_required_keys():
     """The template expects a known set of keys; missing one
     breaks the dashboard. Snapshot the public contract."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -62,7 +62,7 @@ def test_dashboard_context_returns_required_keys():
 
 
 def test_dashboard_context_signup_series_always_90_entries():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -75,7 +75,7 @@ def test_dashboard_context_signup_series_always_90_entries():
 
 def test_dashboard_context_plan_distribution_has_four_buckets():
     """Trial / Basic / Pro / Inactive — fixed shape."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -87,7 +87,7 @@ def test_dashboard_context_plan_distribution_has_four_buckets():
 
 def test_dashboard_context_counts_paid_correctly():
     """paid_count = basic_count + pro_count."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -115,7 +115,7 @@ def test_dashboard_context_counts_paid_correctly():
 
 
 def test_dashboard_context_excludes_canceled_transfers_from_volume():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -152,7 +152,7 @@ def test_dashboard_context_excludes_canceled_transfers_from_volume():
 
 def test_dashboard_context_top_referrers_only_includes_redeemed():
     """Referral codes with redeemed_count=0 are excluded."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
@@ -190,7 +190,7 @@ def test_dashboard_context_top_referrers_only_includes_redeemed():
 
 
 def test_dashboard_context_activity_capped_at_12():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )

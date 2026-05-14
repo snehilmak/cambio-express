@@ -17,7 +17,7 @@ def _login(client, store_id):
 def _seed_rc(store_id, *, customer_name="Bouncer Co",
               amount=500.0, bounced_on_=None, status="pending"):
     from api.Modules.ReturnChecks.Models import ReturnCheck
-    from app import db
+    from tests._app import db
     r = ReturnCheck(
         store_id=store_id,
         bounced_on=bounced_on_ or date.today(),
@@ -45,7 +45,7 @@ def test_list_returns_envelope(client, test_store_id):
 
 
 def test_list_filters_by_status(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_rc(test_store_id, customer_name="Pending Co", status="pending")
         rc_loss = _seed_rc(test_store_id, customer_name="Loss Co", status="loss")
@@ -101,7 +101,7 @@ def test_create_rejects_zero_amount(client, test_store_id):
 def test_create_requires_admin_role(client):
     """Cashier role can't create return checks."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="emp_rc_test",
@@ -142,7 +142,7 @@ def test_create_requires_admin_role(client):
 
 
 def test_update_round_trip(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         rid = _seed_rc(test_store_id, customer_name="Old Name")
     token = _login(client, test_store_id)
@@ -168,7 +168,7 @@ def test_update_round_trip(client, test_store_id):
 
 
 def test_mark_loss_round_trip(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         rid = _seed_rc(test_store_id, status="pending")
     token = _login(client, test_store_id)
@@ -183,7 +183,7 @@ def test_mark_loss_round_trip(client, test_store_id):
 
 
 def test_mark_fraud_rejects_non_pending(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         rid = _seed_rc(test_store_id, status="loss")
     token = _login(client, test_store_id)
@@ -196,7 +196,7 @@ def test_mark_fraud_rejects_non_pending(client, test_store_id):
 
 def test_reopen_round_trip(client, test_store_id):
     from api.Modules.ReturnChecks.Models import ReturnCheck
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         rid = _seed_rc(test_store_id, status="loss")
         rc = db.session.get(ReturnCheck, rid)
@@ -214,7 +214,7 @@ def test_reopen_round_trip(client, test_store_id):
 
 
 def test_reopen_rejects_pending(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         rid = _seed_rc(test_store_id, status="pending")
     token = _login(client, test_store_id)
@@ -229,7 +229,7 @@ def test_reopen_rejects_pending(client, test_store_id):
 
 
 def test_payments_returns_envelope(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         rid = _seed_rc(test_store_id)
     token = _login(client, test_store_id)

@@ -3,14 +3,13 @@
 The SDK is imported but never activated unless ``SENTRY_DSN`` is set
 in the environment, so CI, local dev, and tests pay zero cost. In
 production, set ``SENTRY_DSN`` and Sentry captures every unhandled
-exception across Flask, FastAPI, SQLAlchemy, and the stdlib logger.
+exception across FastAPI, SQLAlchemy, and the stdlib logger.
 
 Integrations enabled:
 
-  - **FlaskIntegration** — every Flask request is a Sentry
-    transaction; unhandled exceptions get the request context.
-  - **FastApiIntegration / StarletteIntegration** — same for the
-    FastAPI half.
+  - **FastApiIntegration / StarletteIntegration** — every request is
+    a Sentry transaction; unhandled exceptions get the request
+    context.
   - **SqlalchemyIntegration** — every query becomes a Sentry span
     so we see DB-bound performance in traces.
   - **LoggingIntegration** — stdlib ``logger.error`` and
@@ -21,7 +20,6 @@ from __future__ import annotations
 
 import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from sentry_sdk.integrations.flask import FlaskIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
@@ -52,9 +50,9 @@ def init_sentry() -> bool:
     sentry_sdk.init(
         dsn=settings.sentry_dsn,
         environment=settings.environment,
-        # Capture errors from both halves of the app + stdlib loggers.
+        # Capture errors from FastAPI / Starlette / SQLAlchemy /
+        # stdlib loggers.
         integrations=[
-            FlaskIntegration(),
             FastApiIntegration(),
             StarletteIntegration(),
             SqlalchemyIntegration(),

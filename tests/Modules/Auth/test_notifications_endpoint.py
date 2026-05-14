@@ -53,7 +53,7 @@ def test_notifications_trial_toggle_off_for_paid_store(
     """Admin on a paid plan: trial reminder is informational
     (toggle is shown disabled in the SPA)."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         s = db.session.get(Store, test_store_id)
         s.plan = "basic"
@@ -71,7 +71,7 @@ def test_notifications_trial_toggle_off_for_employee(
 ):
     """Employees don't own a trial — toggle never applies."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="cashier-pref@x.com",
@@ -82,7 +82,7 @@ def test_notifications_trial_toggle_off_for_employee(
         uid = u.id
     # Issue a JWT directly — the API login path rejects employees
     # via cross-store, so we mint the token from the issuer.
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         from api.Modules.Auth.Services.jwt_issuer import (
             JWTIssuer, issue_access_token,
@@ -110,7 +110,7 @@ def test_notifications_update_persists_trial_pref(
     """Trial pref defaults True; flip it off via PUT and confirm
     persistence."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -129,7 +129,7 @@ def test_notifications_update_persists_announcement_pref(
     client, test_store_id,
 ):
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -164,7 +164,7 @@ def test_notifications_update_partial_leaves_others_alone(
 ):
     """Updating one pref doesn't reset the other."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     # Set both first.
     client.put(

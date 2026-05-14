@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 def _seed_customer(store_id, *, full_name="C", phone_number=""):
     from api.Modules.Customers.Models import Customer
-    from app import db
+    from tests._app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country="+1", phone_number=phone_number,
@@ -17,7 +17,7 @@ def _seed_transfer(store_id, customer_id, *, recipient_name="R",
                     country="MX", phone="", send_date=None,
                     status="Sent", confirm_number=None):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id, customer_id=customer_id,
         send_date=send_date or date.today(),
@@ -34,7 +34,7 @@ def _seed_transfer(store_id, customer_id, *, recipient_name="R",
 
 def _seed_owner(username="owner-rr@x.com"):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -43,7 +43,7 @@ def _seed_owner(username="owner-rr@x.com"):
 
 def _seed_store(slug):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name="X", slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
@@ -51,7 +51,7 @@ def _seed_store(slug):
 
 def _link(owner_id, store_id):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import db
+    from tests._app import db
     db.session.add(StoreOwnerLink(owner_id=owner_id, store_id=store_id))
     db.session.commit()
 
@@ -60,7 +60,7 @@ def _link(owner_id, store_id):
 
 
 def test_returns_distinct_recipients_in_recency_order(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -90,7 +90,7 @@ def test_returns_distinct_recipients_in_recency_order(test_store_id):
 def test_excludes_canceled_and_rejected_status(test_store_id):
     """Canceled/Rejected transfers' recipients aren't ones the sender
     will reuse."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():
@@ -112,7 +112,7 @@ def test_excludes_canceled_and_rejected_status(test_store_id):
 
 
 def test_excludes_empty_recipient_name(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():
@@ -131,7 +131,7 @@ def test_returns_empty_when_customer_outside_umbrella(test_store_id):
     """Cross-umbrella customer lookup returns empty (matches the
     legacy "404 → empty list" UX) — no leakage to a stranger
     store's chip data."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():
@@ -148,7 +148,7 @@ def test_returns_empty_when_customer_outside_umbrella(test_store_id):
 def test_finds_in_owner_umbrella(test_store_id):
     """Customer + their transfers at sibling store are reachable
     when the viewer is at the original store."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():
@@ -166,7 +166,7 @@ def test_finds_in_owner_umbrella(test_store_id):
 
 
 def test_returns_empty_for_unknown_customer(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     with flask_app.app_context():
         rows = list_recent_recipients(
@@ -176,7 +176,7 @@ def test_returns_empty_for_unknown_customer(test_store_id):
 
 
 def test_respects_limit(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():
@@ -196,7 +196,7 @@ def test_respects_limit(test_store_id):
 def test_recent_recipient_to_dict_shape(test_store_id):
     """Wire shape matches the legacy JSON the frontend already
     consumes: keys = name / country / phone, all strings."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     with flask_app.app_context():

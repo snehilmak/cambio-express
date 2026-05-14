@@ -10,17 +10,45 @@ import re
 from api.Modules.Billing.Services import store_has_addon
 from api.Modules.TVDisplay.Models import TVDisplay, TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
 from api.Modules.Tenancy.Models import Store, User
-from app import db
+from tests._app import db
 
 
 REVIEWER_SLUG = "amazon-reviewer"
 REVIEWER_USERNAME = "amazon-review@dinerobook.com"
 
 
+class _ScriptResult:
+    """Minimal stand-in for click's Result. Mirrors the surface
+    this file already uses: ``.exit_code`` + ``.output``."""
+
+    __slots__ = ("exit_code", "output")
+
+    def __init__(self, exit_code: int, output: str):
+        self.exit_code = exit_code
+        self.output = output
+
+
 def _run(client, *args):
-    """Tiny helper — invoke the CLI and return the click Result."""
-    runner = client.application.test_cli_runner()
-    return runner.invoke(args=["seed-amazon-reviewer", *args])
+    """Invoke the standalone reviewer-seed script's ``main()`` and
+    return a click-compatible ``Result``. The Flask ``flask
+    seed-amazon-reviewer`` CLI wrapper was retired in PR #550 along
+    with the rest of the Flask app; the standalone script is the
+    operator-facing entrypoint going forward."""
+    import io
+    import contextlib
+
+    from scripts.seed_amazon_reviewer import main as _main
+
+    out_buf, err_buf = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out_buf), \
+            contextlib.redirect_stderr(err_buf):
+        try:
+            rc = _main(list(args))
+        except SystemExit as e:
+            rc = e.code or 0
+    # argparse-style scripts print error messages to stderr; merge
+    # the two streams so the test assertions can match either.
+    return _ScriptResult(rc, out_buf.getvalue() + err_buf.getvalue())
 
 
 # ── Provisioning ───────────────────────────────────────────────

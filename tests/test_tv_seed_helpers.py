@@ -9,7 +9,7 @@ from api.Modules.TVDisplay.Services.seed import (
     seed_logos_from_disk,
 )
 from api.Modules.Tenancy.Models import Store, User
-from app import app as flask_app, db
+from tests._app import app as flask_app, db
 
 
 def _backfill_tv_country_codes():

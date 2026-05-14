@@ -32,7 +32,7 @@ def _add_user(db, *, store_id, role="admin", username, email,
 
 def test_due_excludes_paid_plans():
     """Only trial-plan stores qualify."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         stores_due_for_reminder,
     )
@@ -49,7 +49,7 @@ def test_due_excludes_paid_plans():
 
 def test_due_excludes_already_reminded_stores():
     """trial_reminder_sent_at set → idempotent skip."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         stores_due_for_reminder,
     )
@@ -67,7 +67,7 @@ def test_due_excludes_already_reminded_stores():
 
 def test_due_excludes_stores_outside_threshold():
     """Trial > 3 days away → not yet expiring_soon."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         stores_due_for_reminder,
     )
@@ -84,7 +84,7 @@ def test_due_excludes_stores_outside_threshold():
 
 def test_due_includes_stores_in_threshold():
     """Trial ≤ 3 days away + not reminded → returned."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         stores_due_for_reminder,
     )
@@ -103,7 +103,7 @@ def test_due_includes_stores_in_threshold():
 def test_due_excludes_no_trial_end_set():
     """A trial row without trial_ends_at can't be classified —
     skip rather than guess."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         stores_due_for_reminder,
     )
@@ -120,7 +120,7 @@ def test_due_excludes_no_trial_end_set():
 
 
 def test_recipients_includes_admin_with_email_and_opt_in():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -137,7 +137,7 @@ def test_recipients_includes_admin_with_email_and_opt_in():
 
 
 def test_recipients_excludes_inactive_users():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -154,7 +154,7 @@ def test_recipients_excludes_inactive_users():
 
 
 def test_recipients_excludes_users_without_email():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -171,7 +171,7 @@ def test_recipients_excludes_users_without_email():
 
 def test_recipients_excludes_opted_out_users():
     """notify_trial_reminders=False → skip."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -189,7 +189,7 @@ def test_recipients_excludes_opted_out_users():
 
 def test_recipients_excludes_employees():
     """Only admin + owner roles get the reminder; cashiers don't."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -207,7 +207,7 @@ def test_recipients_excludes_employees():
 def test_recipients_includes_linked_owner_from_other_store():
     """Owner's User row sits in another store; the StoreOwnerLink
     pulls them into this store's reminder list."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()
@@ -236,7 +236,7 @@ def test_recipients_includes_linked_owner_from_other_store():
 def test_recipients_dedupes_admin_who_is_also_linked_owner():
     """Same User row reachable via store_id AND owner-link →
     appears once in the list."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
         Store.query.delete()

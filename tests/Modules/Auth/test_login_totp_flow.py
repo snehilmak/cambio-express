@@ -27,7 +27,7 @@ def _make_enrolled_superadmin(*, slug="ts2fa"):
     Returns (username, password, totp_secret). Each test gets its
     own row so we don't mutate the shared seeded `superadmin`."""
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     secret = pyotp.random_base32()
     username = f"{slug}@superadmin"
     user = User(
@@ -45,7 +45,7 @@ def _add_recovery_code(username, raw_code="ABCD1234"):
     superadmin (created by `_make_enrolled_superadmin`)."""
     from api.Modules.Auth.Models import RecoveryCode
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     from api.Modules.Auth.Services.totp import hash_recovery_code
     sa = User.query.filter_by(username=username).first()
     db.session.add(RecoveryCode(
@@ -58,7 +58,7 @@ def _add_recovery_code(username, raw_code="ABCD1234"):
 
 
 def test_login_returns_pending_when_superadmin_enrolled(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t1")
     resp = client.post(
@@ -74,7 +74,7 @@ def test_login_returns_pending_when_superadmin_enrolled(client):
 
 
 def test_login_with_recovery_code_flag(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t2")
         _add_recovery_code(username)
@@ -95,7 +95,7 @@ def test_login_unenrolled_superadmin_returns_enroll_required(client):
     rather than mutate the seeded `superadmin` (which is pre-
     enrolled in conftest)."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="ne@super",
@@ -139,7 +139,7 @@ def test_admin_login_unaffected_by_2fa_flow(client, test_store_id):
 
 
 def test_login_totp_exchanges_pending_for_access_token(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, secret = _make_enrolled_superadmin(slug="t3")
     pending = client.post(
@@ -159,7 +159,7 @@ def test_login_totp_exchanges_pending_for_access_token(client):
 
 
 def test_login_totp_rejects_bad_code(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t4")
     pending = client.post(
@@ -206,7 +206,7 @@ def test_login_totp_rejects_access_token_used_as_pending(client, test_store_id):
 
 def test_login_recovery_consumes_code_and_issues_token(client):
     from api.Modules.Auth.Models import RecoveryCode
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t5")
         _add_recovery_code(username, "WXYZ7890")
@@ -229,7 +229,7 @@ def test_login_recovery_consumes_code_and_issues_token(client):
 
 
 def test_login_recovery_rejects_unknown_code(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t6")
     pending = client.post(
@@ -245,7 +245,7 @@ def test_login_recovery_rejects_unknown_code(client):
 
 def test_login_recovery_code_is_single_use(client):
     """Reusing the same recovery code on a second exchange fails."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t7")
         _add_recovery_code(username, "ONEUSE12")
@@ -274,7 +274,7 @@ def test_login_recovery_code_is_single_use(client):
 
 
 def test_login_cross_store_gates_2fa(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t8")
     resp = client.post(
@@ -293,7 +293,7 @@ def test_pending_token_rejected_by_authed_endpoint(client):
     """A pending token has `purpose=totp-pending`, which
     decode_access_token rejects. So even if a client tries to use
     it as a Bearer token, /auth/me returns 401."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t9")
     pending = client.post(
@@ -315,7 +315,7 @@ def _make_unenrolled_superadmin(*, slug="tsne"):
     (username, password). The /login response will carry
     `requires_totp=True, enroll_required=True`."""
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     username = f"{slug}@superadmin"
     user = User(
         store_id=None, username=username,
@@ -329,7 +329,7 @@ def _make_unenrolled_superadmin(*, slug="tsne"):
 def _start_enroll_for(client, slug):
     """Helper: log in, get pending token, call enroll/start.
     Returns (pending_token, start_response_dict)."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         username, password = _make_unenrolled_superadmin(slug=slug)
     pending = client.post(
@@ -401,7 +401,7 @@ def test_enroll_finish_rejects_bad_code(client):
 
 def test_enroll_finish_marks_user_enrolled(client):
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     pending, start = _start_enroll_for(client, "te5")
     code = pyotp.TOTP(start["secret"]).now()
     client.post(

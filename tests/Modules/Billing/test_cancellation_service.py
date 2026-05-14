@@ -21,7 +21,7 @@ def _store(*, sub_id="sub_xyz", plan="basic", billing_cycle="monthly"):
 
 def test_find_store_returns_match(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import find_store_by_subscription_id
     with flask_app.app_context():
         s = Store.query.get(test_store_id)
@@ -33,7 +33,7 @@ def test_find_store_returns_match(test_store_id):
 
 
 def test_find_store_returns_none_for_unknown():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import find_store_by_subscription_id
     with flask_app.app_context():
         assert find_store_by_subscription_id(
@@ -43,7 +43,7 @@ def test_find_store_returns_none_for_unknown():
 
 def test_find_store_returns_none_for_empty():
     """Empty subscription_id short-circuits before the DB hit."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import find_store_by_subscription_id
     with flask_app.app_context():
         assert find_store_by_subscription_id(db.session, "") is None

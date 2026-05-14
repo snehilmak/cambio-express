@@ -12,7 +12,7 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     recipient_name="R", confirm_number=None,
                     status="Sent"):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -35,7 +35,7 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
 
 
 def test_list_transfers_returns_page_object_with_meta(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -54,7 +54,7 @@ def test_list_transfers_returns_page_object_with_meta(test_store_id):
 def test_list_transfers_page_amount_sums_send_fee_tax(test_store_id):
     """`page_amount` = Σ (send_amount + fee + federal_tax) for visible
     rows. Mirrors the legacy `/transfers` route's header total."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -72,7 +72,7 @@ def test_list_transfers_page_amount_sums_send_fee_tax(test_store_id):
 def test_list_transfers_page_amount_only_counts_visible_rows(test_store_id):
     """When pagination splits the result, page_amount reflects only
     the rows on this page — that's the header the user sees."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -101,7 +101,7 @@ def test_list_transfers_page_amount_only_counts_visible_rows(test_store_id):
 
 def test_list_transfers_filters_passthrough(test_store_id):
     """Service must pass the filters dataclass to the repository."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -117,7 +117,7 @@ def test_list_transfers_filters_passthrough(test_store_id):
 
 def test_list_transfers_empty_set_safe(test_store_id):
     """Empty-store case: no rows, total 0, total_pages 1, page_amount 0."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -134,7 +134,7 @@ def test_list_transfers_handles_null_fee_and_tax(test_store_id):
     """Legacy rows can have NULL fee/federal_tax — page_amount must
     treat them as zero, not crash on the addition."""
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     with flask_app.app_context():
@@ -159,7 +159,7 @@ def test_list_transfers_handles_null_fee_and_tax(test_store_id):
 
 def test_delete_transfer_removes_row(test_store_id):
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import delete_transfer
     with flask_app.app_context():
         tid = _seed_transfer(test_store_id, send_amount=100.0)
@@ -173,7 +173,7 @@ def test_delete_transfer_cascades_audit_rows(test_store_id):
     """TransferAudit rows referencing the transfer must be removed
     before the transfer itself (the FK doesn't ON DELETE CASCADE)."""
     from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import delete_transfer
     with flask_app.app_context():
         tid = _seed_transfer(test_store_id, send_amount=100.0)
@@ -196,7 +196,7 @@ def test_delete_transfer_cascades_audit_rows(test_store_id):
 
 def test_delete_transfer_raises_when_cross_store(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import (
         TransferNotFoundError, delete_transfer,
     )
@@ -211,7 +211,7 @@ def test_delete_transfer_raises_when_cross_store(test_store_id):
 
 
 def test_delete_transfer_raises_for_unknown_id(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import (
         TransferNotFoundError, delete_transfer,
     )
@@ -228,7 +228,7 @@ def test_transfer_row_validates_service_output(test_store_id):
     """A row produced via the service should be paintable into the
     TransferRow Pydantic model. If the wire shape ever drifts from
     the model, this test fails before the controller does."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import TransferFilters
     from api.Modules.Transfers.Services import list_transfers
     from api.Modules.Transfers.Requests import (

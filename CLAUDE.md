@@ -12,7 +12,11 @@ multi-store **Owners** connect via invite codes; the platform runs under
 one **Superadmin**.
 
 ## Stack
-- Flask 3.0 (intentionally monolithic; all routes in `app.py`).
+- FastAPI / Starlette on ASGI (uvicorn). Flask was removed in
+  PR #550 — `app.py`, `blueprints/`, and `api/Flask/` no longer
+  exist; `asgi.py` is the single entry point. Every route lives
+  under `api/Modules/<domain>/Controllers/` and the SPA shell
+  serves from `api/spa.py`.
 - SQLAlchemy 3.1, SQLite in dev, Postgres in prod.
 - Alembic is the sole source of schema truth (see "Migrations").
 - Jinja2 templates + a 3-layer stylesheet split:
@@ -107,9 +111,11 @@ Non-negotiables:
 ## Running locally
 ```bash
 pip install -r requirements.txt
-python app.py             # dev server on :5000 (uvicorn → asgi:asgi_app, prod-parity)
-pytest tests/             # full suite
-flask purge-expired-stores  # deletes inactive stores past retention
+uvicorn asgi:asgi_app --reload --port 5000   # dev server on :5000
+pytest tests/                                # full suite
+python -m scripts.purge_expired_stores       # deletes inactive stores past retention
+python -m scripts.send_trial_reminders       # daily cron — trial-ending emails
+python -m scripts.broadcast_announcement N   # resend announcement #N
 ```
 Set `DEV_RELOAD=1` for hot-reload on Python edits. The Vite dev
 server (port 5173) handles SPA reload on its own.
@@ -350,8 +356,9 @@ silently misroutes money on a live P&L.
 
 ### How to add a new built-in rule
 
-1. **Edit `_BUILTIN_BANK_RULES`** in `app.py` (search for the constant).
-   Each entry is a 3-tuple:
+1. **Edit `BUILTIN_BANK_RULES`** in
+   `api/Modules/BankSync/Services/builtin_rules.py`. Each entry is
+   a 3-tuple:
    ```python
    ("DESCRIPTION SUBSTRING", "ACCOUNT_LAST4_OR_BLANK", "TARGET_KIND"),
    ```
@@ -450,30 +457,56 @@ Every new rule needs at minimum:
    filter is set and the wrong account is used.
 See `tests/test_bank_charges_pl.py` for the canonical pattern.
 
-## Section map (app.py)
-Search for the `# ── HEADER ──` block comments. Rough order:
+## Module map (api/Modules)
+Every domain owns four layers: `Models`, `Repositories`,
+`Services`, `Controllers`. Controllers register on the FastAPI
+router in `api/main.py`.
 
-| Section | What it owns |
+| Module | Owns |
 |---|---|
-| Models | All `db.Model` classes + `_ADDED_COLUMNS` |
-| Auth decorators | `login_required`, `admin_required`, `owner_required`, `superadmin_required`, `_TRIAL_EXEMPT` |
-| Trial status | `get_trial_status`, `inject_trial_context` |
-| Superadmin helpers | `record_audit`, `store_feature_enabled`, `stripe_health_check`, `active_announcements` |
-| Stripe Financial Connections | Bank sync: `/bank/stripe/connect`, `/return`, `/refresh`, `/disconnect/<id>` + `ensure_stripe_customer`, `refresh_bank_balances`, `_upsert_fc_account`. The legacy SimpleFIN integration was removed in 2026, including the `simplefin_config` table — see `_drop_legacy_tables()`. |
-| Bank reconcile + rules | `BankTransaction`, `BankRule`, `_BUILTIN_BANK_RULES`, `_match_builtin_bank_rule`, `_categorize_bank_transaction`, `_bank_charges_for_month`. Rules fire in this order on sync: operator-defined (`BankRule`) → platform-managed (`_BUILTIN_BANK_RULES`). Bank charges feed the monthly P&L; see "Bank-charge automation" above. |
-| Login / signup / forgot-password | all auth routes |
-| Subscribe / billing portal / cancel | `/subscribe`, checkout, cancel, billing portal |
-| Dashboard | admin / employee / superadmin |
-| Customers + autocomplete API | `find_or_upsert_customer`, `/api/customers/search`, `PHONE_COUNTRY_CODES` |
-| Transfers | new, edit |
-| Daily / Monthly reports | |
-| ACH batches | |
-| Admin settings / users | Store info, password, team, owner invites |
-| Superadmin controls | `/superadmin/controls` tabs + all mutate endpoints + CSV export |
-| Announcements | Global banner system |
-| Stripe webhook | `checkout.session.completed`, `customer.subscription.deleted` |
-| Data retention purge | `flask purge-expired-stores` CLI |
-| Init / seed | Feature flags, superadmin + demo store |
+| `Admin` | Store settings, team, owner invites, tax export |
+| `Announcements` | Global banner system + email broadcast |
+| `Audit` | Operator + superadmin audit logs, transfer audit |
+| `Auth` | Login (password + TOTP + passkey), JWT issuance, password reset, notifications prefs |
+| `BankSync` | Stripe Financial Connections, `BankTransaction`, `BankRule`, `BUILTIN_BANK_RULES` |
+| `Batches` | ACH batch CRUD + linked transfers |
+| `Billing` | Stripe checkout, subscriptions, addons, referrals, data retention |
+| `Customers` | `find_or_upsert_customer`, autocomplete search, `PHONE_COUNTRY_CODES` |
+| `DailyBook` | Daily report, line items, drops, deposits |
+| `Dashboard` | Per-role landing data |
+| `FeatureFlags` | Per-store overrides + global defaults |
+| `Monthly` | P&L with auto bank-charge feed (see Bank-charge automation) |
+| `Notifications` | SMTP send, email templates, trial reminders, locked-day digest |
+| `Owners` | Multi-store owner umbrella + dashboard rollup |
+| `Reports` | Per-store + platform reports, CSV exports (registry-driven) |
+| `ReturnChecks` | Returned-check tracking + payments |
+| `Superadmin` | `/superadmin/*` controls, anomalies, BI reports |
+| `Tenancy` | `Store`, `User`, `StoreEmployee`, `StoreOwnerLink`, `OwnerConnectCode` |
+| `Transfers` | Transfer CRUD + cancellation flow |
+| `TVDisplay` | Rate-board addon, public display, Fire TV pairing |
+| `Webhooks` | Stripe + Resend ingest |
+
+Cross-cutting (under `api/Core/`):
+
+| Module | Owns |
+|---|---|
+| `Boot` | `init_db()`, `warn_default_seed_passwords()` — called from `api/main.py` lifespan |
+| `Bootstrap` | Alembic upgrade, index safety-net, legacy backfills |
+| `Database` | SQLAlchemy engine + `SessionLocal` + `get_db` FastAPI dep |
+| `Observability` | structlog config, Sentry init, `RequestIDMiddleware` |
+| `RateLimit` | slowapi singleton + decorator |
+| `Config` | Pydantic-settings env loader |
+
+Top-level files:
+
+| File | Owns |
+|---|---|
+| `asgi.py` | Production ASGI router — FastAPI mount, SPA shell, `/static/`, PublicRoutes, cutover redirects |
+| `api/main.py` | `create_app()` factory + lifespan + router registration |
+| `api/spa.py` | Vite build serve (`/app/*`) |
+| `api/PublicRoutes.py` | Landing, PWA, TV display, pair-code API |
+| `api/SpaCutover.py` | Pure `redirect_target(path, qs)` for legacy URLs |
+| `tests/_app.py` | Test-only re-export shim (`db`, `flask_app` stub, helpers) |
 
 ## Templates
 - `base.html` — admin/employee chrome (sidebar + topbar + banner zone).

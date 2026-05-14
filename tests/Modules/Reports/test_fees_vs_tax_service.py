@@ -37,7 +37,7 @@ def _add_transfer(db, store_id, *, send_date, fee=2.0,
 
 
 def test_empty_store_ids_returns_zero_totals():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         rows, totals = fees_vs_tax(
@@ -53,7 +53,7 @@ def test_empty_store_ids_returns_zero_totals():
 def test_no_transfers_returns_zero_totals_with_two_rows():
     """Empty result has 0 totals but the side-by-side rows
     structure is preserved so the template still renders."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -76,7 +76,7 @@ def test_no_transfers_returns_zero_totals_with_two_rows():
 
 
 def test_aggregates_fees_and_tax_in_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -102,7 +102,7 @@ def test_aggregates_fees_and_tax_in_window():
 
 def test_rows_order_fees_then_tax():
     """Side-by-side display: fees row first, tax row second."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -124,7 +124,7 @@ def test_rows_order_fees_then_tax():
 
 def test_excludes_canceled_and_rejected_transfers():
     """Active-period filter excludes Canceled / Rejected."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -155,7 +155,7 @@ def test_excludes_canceled_and_rejected_transfers():
 
 def test_ratio_zero_when_no_fees():
     """ratio = 0.0 (not ZeroDivisionError) when fees total is 0."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -176,7 +176,7 @@ def test_ratio_zero_when_no_fees():
 
 
 def test_filters_by_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()
@@ -202,7 +202,7 @@ def test_filters_by_window():
 
 
 def test_filters_by_store_ids():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
         Transfer.query.delete()

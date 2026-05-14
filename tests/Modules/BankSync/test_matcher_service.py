@@ -173,7 +173,7 @@ def test_account_filter_unset_matches_any_account():
 
 def test_find_matching_rule_returns_none_when_no_rules():
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
         BankRule.query.delete()
@@ -184,7 +184,7 @@ def test_find_matching_rule_returns_none_when_no_rules():
 def test_find_matching_rule_picks_lowest_priority_first():
     """priority=0 wins over priority=1 — even when both match."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
         BankRule.query.delete()
@@ -212,7 +212,7 @@ def test_find_matching_rule_picks_lowest_priority_first():
 def test_find_matching_rule_skips_disabled_rules():
     """Disabled rules never match, regardless of priority."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
         BankRule.query.delete()
@@ -239,7 +239,7 @@ def test_find_matching_rule_skips_disabled_rules():
 def test_find_matching_rule_filters_by_store():
     """Rules in a different store don't apply."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
         BankRule.query.delete()

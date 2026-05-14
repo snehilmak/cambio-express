@@ -38,7 +38,7 @@ def _add_transfer(db, store_id, *, send_date, send_amount=100.0,
 
 
 def test_returns_rows_and_totals_tuple():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -55,7 +55,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -82,7 +82,7 @@ def test_row_shape():
 
 def test_below_threshold_excluded():
     """Transfer below threshold is not in rows."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -106,7 +106,7 @@ def test_below_threshold_excluded():
 
 def test_threshold_inclusive_at_exact_value():
     """`send_amount == threshold` is included (it's `>=`)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -127,7 +127,7 @@ def test_threshold_inclusive_at_exact_value():
 
 
 def test_rows_sorted_by_amount_descending_then_date():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -158,7 +158,7 @@ def test_rows_sorted_by_amount_descending_then_date():
 
 
 def test_totals_sum_amount_fee_tax():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -189,7 +189,7 @@ def test_totals_sum_amount_fee_tax():
 def test_excluded_status_transfers_not_listed():
     """Cancelled / refunded transfers don't appear in HV — they're
     not active-period transfers."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -208,7 +208,7 @@ def test_excluded_status_transfers_not_listed():
 
 
 def test_filters_by_store_list():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -233,7 +233,7 @@ def test_filters_by_store_list():
 
 
 def test_empty_window_returns_empty_rows_and_zero_totals():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
         Transfer.query.delete()

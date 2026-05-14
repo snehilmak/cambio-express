@@ -25,7 +25,7 @@ def _login(client_, store_id):
 def _seed_batch(store_id, *, ach_amount=1000.0, batch_ref="B-001",
                  company="Intermex", ach_date_=None, status="Pending"):
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     b = ACHBatch(
         store_id=store_id,
         ach_date=ach_date_ or date.today(),
@@ -41,7 +41,7 @@ def _seed_batch(store_id, *, ach_amount=1000.0, batch_ref="B-001",
 def _seed_transfer(store_id, *, batch_ref, send_amount=500.0,
                     federal_tax=5.0, send_date_=None):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date_ or date.today(),
@@ -70,7 +70,7 @@ def test_list_returns_envelope(client, test_store_id):
 
 
 def test_list_returns_seeded_batches(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_batch(test_store_id, ach_amount=2000.0, batch_ref="B-A1",
                     ach_date_=date(2026, 1, 5))
@@ -92,7 +92,7 @@ def test_list_computes_variance_from_transfers(client, test_store_id):
     """Variance = ach_amount - Σ(send_amount + federal_tax)
     across linked transfers. Service should bulk-compute, not
     N+1."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_batch(
             test_store_id, ach_amount=1000.0, batch_ref="B-V",
@@ -117,7 +117,7 @@ def test_list_computes_variance_from_transfers(client, test_store_id):
 
 
 def test_list_supports_sort_by_ach_amount(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_batch(test_store_id, ach_amount=100.0,
                     batch_ref="B-S1", ach_date_=date(2026, 2, 1))
@@ -163,7 +163,7 @@ def test_list_rejects_superadmin(client):
 
 
 def test_get_batch_returns_envelope(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         bid = _seed_batch(test_store_id, batch_ref="B-G1", ach_amount=500)
     token = _login(client, test_store_id)
@@ -210,7 +210,7 @@ def test_create_batch_round_trip(client, test_store_id):
 
 
 def test_create_batch_rejects_duplicate_ref(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_batch(test_store_id, batch_ref="B-DUP")
     token = _login(client, test_store_id)
@@ -246,7 +246,7 @@ def test_create_batch_rejects_bad_date(client, test_store_id):
 def test_create_batch_requires_admin_role(client):
     """Cashier role can't create batches."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=None, username="emp_batch_test",
@@ -288,7 +288,7 @@ def test_create_batch_requires_admin_role(client):
 
 
 def test_update_batch_round_trip(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         bid = _seed_batch(test_store_id, batch_ref="B-UPD", ach_amount=200)
     token = _login(client, test_store_id)
@@ -329,7 +329,7 @@ def test_update_batch_404_for_cross_tenant(client, test_store_id):  # noqa: ARG0
 
 def test_update_batch_rejects_collision_with_other_ref(client, test_store_id):
     """Renaming batch B to share C's ref → 422."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         b1 = _seed_batch(test_store_id, batch_ref="B-1", ach_amount=10)
         _seed_batch(test_store_id, batch_ref="B-2", ach_amount=20)
@@ -351,15 +351,16 @@ def test_update_batch_rejects_collision_with_other_ref(client, test_store_id):
 
 
 def test_batch_transfers_round_trip(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_batch(test_store_id, batch_ref="B-TXNS", ach_amount=600)
         _seed_transfer(test_store_id, batch_ref="B-TXNS",
                        send_amount=400.0, federal_tax=4.0)
         _seed_transfer(test_store_id, batch_ref="B-TXNS",
                        send_amount=200.0, federal_tax=2.0)
+        from api.Modules.Batches.Models import ACHBatch
         bid = (
-            __import__("app").ACHBatch.query
+            ACHBatch.query
               .filter_by(store_id=test_store_id, batch_ref="B-TXNS")
               .first().id
         )

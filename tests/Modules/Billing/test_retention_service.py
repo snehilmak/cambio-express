@@ -44,7 +44,7 @@ def test_fk_overrides_match_referral_models():
 
 def test_purge_returns_zero_when_no_expired_stores():
     """Empty/no-expired DB: nothing to do, return 0."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import purge_expired_stores
     with flask_app.app_context():
         # Make sure no inactive-with-elapsed-retention stores exist.
@@ -59,7 +59,7 @@ def test_purge_returns_zero_when_no_expired_stores():
 def test_purge_skips_inactive_store_with_future_retention():
     """A canceled store still inside its retention window must
     NOT be purged — the operator still has time to come back."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import purge_expired_stores
     with flask_app.app_context():
         s = Store(
@@ -80,7 +80,7 @@ def test_purge_skips_inactive_store_with_future_retention():
 def test_purge_deletes_expired_store_and_cascades_owned_rows():
     """Inactive store past its retention window → store row gone,
     every per-store row gone too."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import purge_expired_stores
     with flask_app.app_context():
         s = Store(
@@ -128,7 +128,7 @@ def test_purge_skips_active_paid_stores():
     """Even past `data_retention_until` (which shouldn't be set
     on a paid plan), an active paid store is never purged. The
     plan filter is `inactive`."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import purge_expired_stores
     with flask_app.app_context():
         s = Store(
@@ -152,8 +152,8 @@ def test_purge_skips_active_paid_stores():
 
 def test_legacy_purge_expired_stores_delegates():
     """app.purge_expired_stores hands db.session to the Service."""
-    from app import app as flask_app
-    from app import purge_expired_stores as legacy
+    from tests._app import app as flask_app
+    from tests._app import purge_expired_stores as legacy
     with flask_app.app_context():
         # No expired stores → 0.
         assert legacy() == 0

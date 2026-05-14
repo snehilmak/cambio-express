@@ -4,7 +4,7 @@
 def _seed_user(store_id, *, username, role="employee", full_name="",
                 is_active=True):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(
         store_id=store_id, username=username, role=role,
         full_name=full_name, is_active=is_active,
@@ -18,7 +18,7 @@ def _seed_user(store_id, *, username, role="employee", full_name="",
 
 
 def test_find_user_by_id_returns_user(test_admin_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_id
     with flask_app.app_context():
         u = find_user_by_id(db.session, test_admin_id)
@@ -27,7 +27,7 @@ def test_find_user_by_id_returns_user(test_admin_id):
 
 
 def test_find_user_by_id_returns_none_when_missing():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_id
     with flask_app.app_context():
         u = find_user_by_id(db.session, 999_999)
@@ -38,7 +38,7 @@ def test_find_user_by_id_returns_none_when_missing():
 
 
 def test_find_user_by_username_in_store_returns_match(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username_in_store
     with flask_app.app_context():
         u = find_user_by_username_in_store(
@@ -53,7 +53,7 @@ def test_find_user_by_username_in_store_returns_none_for_other_store(test_store_
     same username at different stores, but each request scope is one
     store."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username_in_store
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-auth",
@@ -70,7 +70,7 @@ def test_find_user_by_username_in_store_returns_none_for_other_store(test_store_
 def test_find_user_by_username_in_store_finds_superadmin():
     """`store_id=None` is the superadmin scope. The seeded fixture
     creates `superadmin / super2025!` at store_id=None."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username_in_store
     with flask_app.app_context():
         u = find_user_by_username_in_store(
@@ -83,7 +83,7 @@ def test_find_user_by_username_in_store_finds_superadmin():
 def test_find_user_by_username_in_store_returns_none_for_empty_username(test_store_id):
     """Empty/whitespace username never matches — defensive against
     callers that don't strip the form input."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username_in_store
     with flask_app.app_context():
         assert find_user_by_username_in_store(
@@ -98,7 +98,7 @@ def test_find_user_by_username_finds_match():
     """Cross-store username lookup. Used by the password-reset path
     where the caller types just the email and we figure out which
     store to mail."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username
     with flask_app.app_context():
         u = find_user_by_username(db.session, "admin@test.com")
@@ -108,7 +108,7 @@ def test_find_user_by_username_finds_match():
 def test_find_user_by_username_role_filter_excludes_normal_users():
     """`role="superadmin"` filter must reject regular users — the
     legacy reset-superadmin CLI relies on this to refuse promotion."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username
     with flask_app.app_context():
         u = find_user_by_username(
@@ -118,7 +118,7 @@ def test_find_user_by_username_role_filter_excludes_normal_users():
 
 
 def test_find_user_by_username_role_filter_finds_superadmin():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import find_user_by_username
     with flask_app.app_context():
         u = find_user_by_username(
@@ -131,7 +131,7 @@ def test_find_user_by_username_role_filter_finds_superadmin():
 
 
 def test_list_users_in_store_orders_by_id(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import list_users_in_store
     with flask_app.app_context():
         _seed_user(test_store_id, username="emp1@x.com")
@@ -143,7 +143,7 @@ def test_list_users_in_store_orders_by_id(test_store_id):
 
 
 def test_list_users_in_store_role_filter(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import list_users_in_store
     with flask_app.app_context():
         _seed_user(test_store_id, username="emp@x.com", role="employee")
@@ -154,7 +154,7 @@ def test_list_users_in_store_role_filter(test_store_id):
 
 
 def test_list_users_in_store_active_only(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import list_users_in_store
     with flask_app.app_context():
         _seed_user(test_store_id, username="quit@x.com", is_active=False)
@@ -166,7 +166,7 @@ def test_list_users_in_store_active_only(test_store_id):
 
 def test_list_users_in_store_isolates_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Repositories import list_users_in_store
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-auth-list",

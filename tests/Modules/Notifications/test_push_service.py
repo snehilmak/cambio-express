@@ -69,7 +69,7 @@ def test_send_push_zero_when_no_subscriptions(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()
@@ -86,7 +86,7 @@ def test_send_push_delivers_to_each_subscription(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()
@@ -117,7 +117,7 @@ def test_send_push_drops_dead_subscriptions(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
         PushSubscription.query.delete()
@@ -158,7 +158,7 @@ def test_send_push_keeps_subscriptions_on_other_errors(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
         PushSubscription.query.delete()
@@ -200,7 +200,7 @@ def test_send_push_payload_drops_none_values(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         PushSubscription.query.delete()
         db.session.commit()

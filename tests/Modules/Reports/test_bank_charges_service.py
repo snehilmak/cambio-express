@@ -47,7 +47,7 @@ def _add_charge(db, store_id, account_id, *, amount_cents,
 
 
 def test_returns_empty_for_no_store_ids():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         rows, totals = bank_charges_by_account(
@@ -59,7 +59,7 @@ def test_returns_empty_for_no_store_ids():
 
 
 def test_returns_empty_when_no_matching_charges():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -78,7 +78,7 @@ def test_returns_empty_when_no_matching_charges():
 
 def test_includes_legacy_bank_charge_slug():
     """Plain `bank_charge` slug rolls up too (legacy rows)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -102,7 +102,7 @@ def test_includes_legacy_bank_charge_slug():
 
 def test_includes_per_account_bank_charge_slugs():
     """`bank_charge_<last4>` slugs match the prefix."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -125,7 +125,7 @@ def test_includes_per_account_bank_charge_slugs():
 
 def test_excludes_non_bank_charge_slugs():
     """`cash_expense`, `internal_transfer`, etc. don't roll up."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -157,7 +157,7 @@ def test_excludes_non_bank_charge_slugs():
 
 def test_filters_by_date_window():
     """Charges outside the window are excluded."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -190,7 +190,7 @@ def test_filters_by_date_window():
 def test_groups_by_account_and_aggregates():
     """Multiple charges on the same account → one row with
     summed amount, count, and computed average."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -218,7 +218,7 @@ def test_groups_by_account_and_aggregates():
 
 def test_separates_rows_by_account():
     """Charges on different accounts produce separate rows."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -246,7 +246,7 @@ def test_separates_rows_by_account():
 
 def test_sorts_rows_by_amount_descending():
     """Biggest contributor first."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -271,7 +271,7 @@ def test_sorts_rows_by_amount_descending():
 
 
 def test_includes_totals_count_and_amount():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -299,7 +299,7 @@ def test_includes_totals_count_and_amount():
 
 def test_filters_by_store_ids():
     """Charges in stores not in the filter don't show up."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()
@@ -329,7 +329,7 @@ def test_filters_by_store_ids():
 
 
 def test_uses_account_label_for_display():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
         BankTransaction.query.delete()

@@ -18,7 +18,7 @@ _MIGRATED_BATCH = [
 
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -60,7 +60,7 @@ def test_admin_drilldown_csv_routes_on_fastapi(client, test_store_id):
 def test_owner_drilldown_routes_redirect_to_spa(client):
     """Owner-side mirror routes 301 the GET to /app/owner/reports/<slug>."""
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         s = Store(name="Drilldown Owner Store",
                   slug="drilldown-owner-store", plan="pro",

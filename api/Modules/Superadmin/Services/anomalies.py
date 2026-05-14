@@ -41,19 +41,13 @@ _MAX_ANOMALIES_RETURNED = 25
 
 
 def _store_href(store) -> str:
-    """Build the impersonation URL for a store. Falls back to ""
-    when called outside a Flask request context (CLI / tests)."""
+    """Build the SPA store-detail URL for a store. Empty string
+    when called with no store. The SPA's `/app/superadmin/stores/
+    <slug>` route renders the same detail page the legacy Flask
+    impersonation handler used to host."""
     if store is None:
         return ""
-    try:
-        from flask import url_for
-        return url_for(
-            "superadmin_extras.superadmin_impersonate",
-            store_id=store.id,
-        )
-    except RuntimeError:
-        # No active request context. Caller can post-process.
-        return ""
+    return f"/app/superadmin/stores/{store.slug}"
 
 
 def quiet_store_anomalies(db: Session, today: date) -> list[dict]:

@@ -35,7 +35,7 @@ def ensure_display(client, store_id: int, jwt: str | None = None) -> int:
         headers={"Authorization": f"Bearer {jwt}"},
     )
     from api.Modules.TVDisplay.Models import TVDisplay
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         return db.session.query(TVDisplay).filter_by(
             store_id=store_id).one().id

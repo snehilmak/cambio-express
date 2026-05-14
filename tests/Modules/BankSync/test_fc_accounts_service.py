@@ -35,7 +35,7 @@ def _stripe_account_dict(*, account_id=None, institution_name="Chase",
 
 
 def test_upsert_inserts_new_account():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -56,7 +56,7 @@ def test_upsert_inserts_new_account():
 
 
 def test_upsert_idempotent_on_existing_account():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -75,7 +75,7 @@ def test_upsert_idempotent_on_existing_account():
 def test_upsert_preserves_existing_fields_when_api_drops_them():
     """Field-merge contract: if Stripe drops a field on a
     subsequent fetch, keep the prior cached value."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -104,7 +104,7 @@ def test_upsert_preserves_existing_fields_when_api_drops_them():
 def test_upsert_extracts_balance_with_currency_match():
     """`current` is a {"usd": <cents>} dict; pick the matching
     currency for this account."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -125,7 +125,7 @@ def test_upsert_extracts_balance_with_currency_match():
 def test_upsert_extracts_first_balance_when_currency_missing():
     """When `current` doesn't have the account's currency, fall
     back to the first value."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -141,7 +141,7 @@ def test_upsert_extracts_first_balance_when_currency_missing():
 
 def test_upsert_handles_missing_balance_gracefully():
     """No `balance` key (permission not granted) — don't crash."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -158,7 +158,7 @@ def test_upsert_handles_missing_balance_gracefully():
 def test_upsert_clears_disconnected_at_on_re_enable():
     """Re-upserting an account that was previously marked
     disconnected re-enables it."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -181,7 +181,7 @@ def test_upsert_clears_disconnected_at_on_re_enable():
 
 
 def test_refresh_returns_zero_when_unconfigured(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
     with flask_app.app_context():
@@ -192,7 +192,7 @@ def test_refresh_returns_zero_when_unconfigured(monkeypatch):
 
 
 def test_refresh_returns_zero_when_no_enabled_accounts(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
@@ -205,7 +205,7 @@ def test_refresh_returns_zero_when_no_enabled_accounts(monkeypatch):
 
 
 def test_refresh_pulls_balance_for_each_account(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
@@ -238,7 +238,7 @@ def test_refresh_pulls_balance_for_each_account(monkeypatch):
 
 
 def test_refresh_records_stripe_error_in_last_error(monkeypatch):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     import stripe

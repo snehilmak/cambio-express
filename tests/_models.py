@@ -1,9 +1,7 @@
-"""Aggregate model re-exports.
-
-Legacy callers ``from app import Store, User, …`` keep working
-through app.py's ``from api.Flask.Models import *``. New code
-imports from the per-domain Models package directly.
-"""
+"""Aggregate model re-exports for test-only ``from tests._app
+import Store, User, …`` callers. New code imports from the
+per-domain Models package directly. Moved out of ``api/Flask/`` in
+PR #550 when the rest of the Flask shim was retired."""
 from api.Modules.Announcements.Models import (
     Announcement, PushSubscription,
 )

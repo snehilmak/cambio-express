@@ -65,7 +65,7 @@ def test_period_window_year_starts_jan_first():
 
 
 def test_owner_store_ids_empty_for_user_with_no_links():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_store_ids
     with flask_app.app_context():
         u = User(
@@ -79,7 +79,7 @@ def test_owner_store_ids_empty_for_user_with_no_links():
 
 
 def test_owner_store_ids_returns_linked_stores():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_store_ids
     with flask_app.app_context():
         StoreOwnerLink.query.delete()
@@ -107,7 +107,7 @@ def test_owner_store_ids_returns_linked_stores():
 
 
 def test_owner_kpis_empty_store_ids_returns_zeros():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
         result = owner_kpis(db.session, [], date.today(), date.today())
@@ -115,7 +115,7 @@ def test_owner_kpis_empty_store_ids_returns_zeros():
 
 
 def test_owner_kpis_aggregates_transfers_and_overshort():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
         Transfer.query.delete()
@@ -149,7 +149,7 @@ def test_owner_kpis_aggregates_transfers_and_overshort():
 
 def test_owner_kpis_excludes_canceled_and_rejected():
     """Canceled/Rejected transfers must not inflate volume."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
         Transfer.query.delete()
@@ -188,7 +188,7 @@ def test_owner_kpis_excludes_canceled_and_rejected():
 
 def test_owner_kpis_filters_window():
     """Transfers outside the window don't count."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
         Transfer.query.delete()

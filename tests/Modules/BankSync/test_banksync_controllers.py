@@ -22,7 +22,7 @@ def _login(client, store_id):
 
 def _seed_account(store_id, *, last4="0000", nickname=""):
     from api.Modules.BankSync.Models import StripeBankAccount
-    from app import db
+    from tests._app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -38,7 +38,7 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
               description="X", category_slug="",
               posted_at=None, stripe_transaction_id=None):
     from api.Modules.BankSync.Models import BankTransaction
-    from app import db
+    from tests._app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -85,7 +85,7 @@ def test_list_rejects_out_of_range_per_page(client, test_store_id):
 
 
 def test_list_response_envelope(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id, nickname="Operating")
         _seed_txn(test_store_id, a, amount_cents=-100,
@@ -109,7 +109,7 @@ def test_list_response_envelope(client, test_store_id):
 
 
 def test_list_filters_by_account(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a1 = _seed_account(test_store_id, last4="1111")
         a2 = _seed_account(test_store_id, last4="2222")
@@ -126,7 +126,7 @@ def test_list_filters_by_account(client, test_store_id):
 
 
 def test_list_filters_by_sign(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, amount_cents=-100, description="DEBIT")
@@ -142,7 +142,7 @@ def test_list_filters_by_sign(client, test_store_id):
 
 
 def test_list_uncategorized_only_filter(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="UNTAGGED",
@@ -166,7 +166,7 @@ def test_list_uncategorized_only_filter(client, test_store_id):
 def test_list_uncategorized_count_independent_of_filter(client, test_store_id):
     """`uncategorized_count` reflects every uncategorized row across
     the filter window, not just the rows matching `uncategorized_only`."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="U1",
@@ -190,7 +190,7 @@ def test_list_uncategorized_count_independent_of_filter(client, test_store_id):
 
 
 def test_list_pagination(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         for i in range(5):
@@ -215,7 +215,7 @@ def test_list_scoped_to_principal_store(client, test_store_id):
     only sees the principal's store. Confirms that the dropped
     `store_ids` query param can't be smuggled back in via the URL."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="MINE",

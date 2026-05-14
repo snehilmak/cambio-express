@@ -88,20 +88,17 @@ def test_all_kinds_iterable_includes_every_key():
 
 def test_kind_or_404_returns_tuple_for_known():
     from api.Modules.DailyBook.Services import kind_or_404
-    from app import app as flask_app
-    with flask_app.test_request_context("/"):
-        result = kind_or_404("cash_expense")
-        assert result == ("cash_expense", "cash expense", "entries")
+    result = kind_or_404("cash_expense")
+    assert result == ("cash_expense", "cash expense", "entries")
 
 
-def test_kind_or_404_aborts_for_unknown():
-    """Unknown kind → flask.abort(404). Tested by catching the
-    HTTPException."""
-    from werkzeug.exceptions import NotFound
+def test_kind_or_404_raises_for_unknown():
+    """Unknown kind → HTTPException(404). Used by FastAPI routes
+    that guard ``<kind>`` path segments."""
+    from fastapi import HTTPException
     from api.Modules.DailyBook.Services import kind_or_404
-    from app import app as flask_app
-    with flask_app.test_request_context("/"):
-        with pytest.raises(NotFound):
-            kind_or_404("not_a_kind")
+    with pytest.raises(HTTPException) as exc:
+        kind_or_404("not_a_kind")
+    assert exc.value.status_code == 404
 
 

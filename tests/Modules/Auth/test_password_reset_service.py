@@ -6,7 +6,7 @@ import pytest
 
 def _seed_user(store_id, *, username, role="admin", is_active=True):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(
         store_id=store_id, username=username, role=role,
         is_active=is_active,
@@ -38,7 +38,7 @@ def test_hash_token_different_inputs_diverge():
 
 def test_issue_token_returns_payload_for_admin(test_store_id):
     from api.Modules.Auth.Models import PasswordResetToken
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         hash_token, issue_password_reset_token,
     )
@@ -63,7 +63,7 @@ def test_issue_token_returns_payload_for_admin(test_store_id):
 def test_issue_token_rejects_employee(test_store_id):
     """Employees use admin_reset_employee_password, not the email
     flow. Service must return None for non-admin/owner roles."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import issue_password_reset_token
     with flask_app.app_context():
         _seed_user(
@@ -76,7 +76,7 @@ def test_issue_token_rejects_employee(test_store_id):
 def test_issue_token_rejects_superadmin(test_store_id):
     """Superadmin reset goes through `flask reset-superadmin`. Email
     flow MUST refuse to issue tokens for that role (2FA bypass risk)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import issue_password_reset_token
     with flask_app.app_context():
         result = issue_password_reset_token(db.session, "superadmin")
@@ -84,7 +84,7 @@ def test_issue_token_rejects_superadmin(test_store_id):
 
 
 def test_issue_token_rejects_inactive_user(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import issue_password_reset_token
     with flask_app.app_context():
         _seed_user(
@@ -96,7 +96,7 @@ def test_issue_token_rejects_inactive_user(test_store_id):
 
 
 def test_issue_token_returns_none_for_unknown_user():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import issue_password_reset_token
     with flask_app.app_context():
         assert issue_password_reset_token(
@@ -106,7 +106,7 @@ def test_issue_token_returns_none_for_unknown_user():
 
 def test_issue_token_returns_none_for_empty_username():
     """Defensive — empty input shouldn't fish the DB."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import issue_password_reset_token
     with flask_app.app_context():
         assert issue_password_reset_token(db.session, "") is None
@@ -117,7 +117,7 @@ def test_issue_token_invalidates_prior_active_tokens(test_store_id):
     """Issuing a new token marks any still-valid existing tokens for
     the user as used so their prior reset link stops working."""
     from api.Modules.Auth.Models import PasswordResetToken
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         hash_token, issue_password_reset_token,
     )
@@ -146,7 +146,7 @@ def test_issue_token_invalidates_prior_active_tokens(test_store_id):
 
 
 def test_verify_returns_row_for_valid_token(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         issue_password_reset_token, verify_password_reset_token,
     )
@@ -158,7 +158,7 @@ def test_verify_returns_row_for_valid_token(test_store_id):
 
 
 def test_verify_rejects_unknown_token():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import verify_password_reset_token
     with flask_app.app_context():
         assert verify_password_reset_token(
@@ -167,7 +167,7 @@ def test_verify_rejects_unknown_token():
 
 
 def test_verify_rejects_used_token(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_password_reset_token, issue_password_reset_token,
         verify_password_reset_token,
@@ -187,7 +187,7 @@ def test_verify_rejects_used_token(test_store_id):
 
 def test_verify_rejects_expired_token(test_store_id):
     from api.Modules.Auth.Models import PasswordResetToken
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         issue_password_reset_token, verify_password_reset_token,
     )
@@ -207,7 +207,7 @@ def test_verify_rejects_expired_token(test_store_id):
 
 
 def test_verify_rejects_empty_token():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import verify_password_reset_token
     with flask_app.app_context():
         assert verify_password_reset_token(db.session, "") is None
@@ -219,7 +219,7 @@ def test_verify_rejects_empty_token():
 
 def test_consume_updates_password_and_marks_token_used(test_store_id):
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_password_reset_token, issue_password_reset_token,
         verify_password_reset_token,
@@ -243,7 +243,7 @@ def test_consume_raises_if_user_gone(test_store_id):
     """Race: user deleted between verify and consume → LookupError."""
     from api.Modules.Auth.Models import PasswordResetToken
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import (
         consume_password_reset_token, issue_password_reset_token,
     )

@@ -6,7 +6,7 @@ from datetime import date
 
 def _seed_user(store_id, *, username, full_name=""):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(
         store_id=store_id, username=username,
         full_name=full_name, role="employee",
@@ -18,7 +18,7 @@ def _seed_user(store_id, *, username, full_name=""):
 
 def _seed_storeemployee(store_id, *, name, is_active=True):
     from api.Modules.Tenancy.Models import StoreEmployee
-    from app import db
+    from tests._app import db
     e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
     db.session.add(e); db.session.commit()
     return e.id
@@ -27,7 +27,7 @@ def _seed_storeemployee(store_id, *, name, is_active=True):
 def _seed_transfer(store_id, *, created_by=None, employee_id=None,
                     send_amount=100.0, status="Sent"):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id, send_date=date.today(),
         company="Intermex", sender_name="S", recipient_name="R",
@@ -40,7 +40,7 @@ def _seed_transfer(store_id, *, created_by=None, employee_id=None,
 
 
 def test_sales_by_employee_resolves_user_names(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         uid = _seed_user(test_store_id, username="cash@x.com",
@@ -62,7 +62,7 @@ def test_sales_by_employee_resolves_user_names(test_store_id):
 def test_sales_by_employee_buckets_unattributed(test_store_id):
     """`Transfer.created_by IS NULL` → `(unattributed)` so legacy
     rows don't disappear from totals."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, created_by=None, send_amount=100.0)
@@ -75,7 +75,7 @@ def test_sales_by_employee_buckets_unattributed(test_store_id):
 
 def test_cashier_productivity_sorts_by_count_desc(test_store_id):
     """Busiest cashier first — matches the operator's mental model."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         big = _seed_storeemployee(test_store_id, name="Maria")
@@ -95,7 +95,7 @@ def test_cashier_productivity_sorts_by_count_desc(test_store_id):
 
 
 def test_cashier_productivity_marks_inactive(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         eid = _seed_storeemployee(
@@ -116,7 +116,7 @@ def test_cashier_productivity_marks_inactive(test_store_id):
 def test_top_customers_resolves_phones_and_walkins(test_store_id):
     from api.Modules.Customers.Models import Customer
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         c = Customer(

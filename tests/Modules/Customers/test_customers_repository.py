@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 def _seed_customer(store_id, *, full_name, phone_country="+1",
                     phone_number="", address=""):
     from api.Modules.Customers.Models import Customer
-    from app import db
+    from tests._app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country=phone_country, phone_number=phone_number,
@@ -27,7 +27,7 @@ def _seed_owner(username="owner@x.com"):
     """`StoreOwnerLink.owner_id` is a FK to `User.id` — owners are just
     Users with `role="owner"`. No separate Owner table."""
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -36,7 +36,7 @@ def _seed_owner(username="owner@x.com"):
 
 def _seed_store(slug, name="X"):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=name, slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
@@ -44,7 +44,7 @@ def _seed_store(slug, name="X"):
 
 def _link(owner_id, store_id):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import db
+    from tests._app import db
     l = StoreOwnerLink(owner_id=owner_id, store_id=store_id)
     db.session.add(l); db.session.commit()
 
@@ -54,7 +54,7 @@ def _link(owner_id, store_id):
 
 def test_sibling_store_ids_solo_shop_returns_self_only(test_store_id):
     """A store with no Owner links is "solo" — returns [self]."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import sibling_store_ids
     with flask_app.app_context():
         ids = sibling_store_ids(db.session, test_store_id)
@@ -63,7 +63,7 @@ def test_sibling_store_ids_solo_shop_returns_self_only(test_store_id):
 
 def test_sibling_store_ids_unifies_owner_umbrella(test_store_id):
     """Two stores under one owner are siblings — both IDs returned."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import sibling_store_ids
     with flask_app.app_context():
         oid = _seed_owner()
@@ -77,7 +77,7 @@ def test_sibling_store_ids_unifies_owner_umbrella(test_store_id):
 def test_sibling_store_ids_excludes_unrelated_stores(test_store_id):
     """A store under a DIFFERENT owner is NOT a sibling. Owner-umbrella
     isolation is the security property the customer search depends on."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import sibling_store_ids
     with flask_app.app_context():
         o1, o2 = _seed_owner("o1@x.com"), _seed_owner("o2@x.com")
@@ -95,7 +95,7 @@ def test_sibling_store_ids_excludes_unrelated_stores(test_store_id):
 
 
 def test_find_by_id_in_stores_returns_customer(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import find_by_id_in_stores
     with flask_app.app_context():
         cid = _seed_customer(test_store_id, full_name="Alice",
@@ -108,7 +108,7 @@ def test_find_by_id_in_stores_returns_customer(test_store_id):
 def test_find_by_id_in_stores_returns_none_when_outside_scope(test_store_id):
     """An explicit customer_id from outside the owner umbrella must NOT
     resolve — the upsert relies on this to enforce isolation."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import find_by_id_in_stores
     with flask_app.app_context():
         s2 = _seed_store("isolated")
@@ -122,7 +122,7 @@ def test_find_by_id_in_stores_returns_none_when_outside_scope(test_store_id):
 
 
 def test_find_by_phone_in_stores_matches(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice",
@@ -138,7 +138,7 @@ def test_find_by_phone_in_stores_empty_phone_returns_none(test_store_id):
     """Empty phone is not a valid lookup key — repository must
     short-circuit before hitting the DB so it can't accidentally
     match a "no phone on file" placeholder row."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="A", phone_number="")
@@ -151,7 +151,7 @@ def test_find_by_phone_in_stores_empty_phone_returns_none(test_store_id):
 def test_find_by_phone_in_stores_defaults_country_to_plus_one(test_store_id):
     """Mirrors `find_or_upsert_customer` — empty country falls back to
     "+1" so older rows seeded without an explicit country still match."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice",
@@ -167,7 +167,7 @@ def test_find_by_phone_in_stores_defaults_country_to_plus_one(test_store_id):
 
 
 def test_search_by_substring_matches_name_or_phone(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import search_by_substring
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice Smith",
@@ -186,7 +186,7 @@ def test_search_by_substring_matches_name_or_phone(test_store_id):
 
 def test_search_by_substring_short_query_returns_empty(test_store_id):
     """Less than 2 chars → no DB hit. Keeps autocomplete fast."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import search_by_substring
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice", phone_number="x")
@@ -199,7 +199,7 @@ def test_search_by_substring_orders_by_updated_at_desc(test_store_id):
     cashier's mental model (the sender they served last is the most
     likely repeat)."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import search_by_substring
     with flask_app.app_context():
         cid_old = _seed_customer(test_store_id, full_name="Match Old",
@@ -219,7 +219,7 @@ def test_search_by_substring_orders_by_updated_at_desc(test_store_id):
 
 def test_search_by_substring_respects_store_scope(test_store_id):
     """Customers in stores outside the passed scope must not appear."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import search_by_substring
     with flask_app.app_context():
         s2 = _seed_store("isolated")
@@ -237,7 +237,7 @@ def test_search_by_substring_respects_store_scope(test_store_id):
 
 
 def test_recent_customers_respects_limit(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import recent_customers
     with flask_app.app_context():
         for i in range(5):
@@ -254,7 +254,7 @@ def test_search_unifies_across_owner_umbrella(test_store_id):
     """Cashier at Store A finds the sender Store B logged — the call
     site for `/api/customers/search` always passes `sibling_store_ids`
     as the scope. This is the integration test of that pairing."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Repositories import (
         search_by_substring, sibling_store_ids,
     )

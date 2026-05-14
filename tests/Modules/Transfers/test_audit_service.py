@@ -182,7 +182,7 @@ def test_record_audit_adds_row_with_expected_fields():
     """The audit row carries store_id + transfer_id + user_id +
     employee snapshot + action + summary."""
     from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
         TransferAudit.query.delete()
@@ -215,7 +215,7 @@ def test_record_audit_handles_none_user():
     """System / cron-triggered audits may have no user — user_id
     falls through as None."""
     from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
         TransferAudit.query.delete()
@@ -236,7 +236,7 @@ def test_record_audit_handles_none_user():
 def test_record_audit_does_not_commit():
     """Caller commits — record_audit just adds the row."""
     from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
         TransferAudit.query.delete()

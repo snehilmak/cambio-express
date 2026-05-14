@@ -64,7 +64,7 @@ def test_stores_returns_seeded_test_store(client, test_store_id):
 def test_stores_lists_multiple_in_created_desc(client, test_store_id):
     """Creation order — newest first."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         db.session.add(Store(name="Alpha", slug="alpha", plan="basic"))
         db.session.add(Store(name="Beta",  slug="beta",  plan="pro"))
@@ -108,7 +108,7 @@ def test_stores_includes_billing_and_retention_fields(client, test_store_id):
 def _seed_audit(action="extend_trial", target_type="store", target_id="42",
                 details="", admin_name="Super Admin"):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from app import db
+    from tests._app import db
     row = SuperadminAuditLog(
         admin_id=None, admin_name=admin_name,
         action=action, target_type=target_type, target_id=target_id,
@@ -133,7 +133,7 @@ def test_audit_log_rejects_admin_role(client, test_store_id):
 
 
 def test_audit_log_returns_paginated_envelope(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         for i in range(3):
             _seed_audit(action=f"act_{i}")
@@ -154,7 +154,7 @@ def test_audit_log_returns_paginated_envelope(client):
 
 
 def test_audit_log_orders_newest_first(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         oldest = _seed_audit(action="oldest")
         newest = _seed_audit(action="newest")
@@ -169,7 +169,7 @@ def test_audit_log_orders_newest_first(client):
 
 
 def test_audit_log_filters_by_action(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_audit(action="extend_trial")
         _seed_audit(action="comp_plan")
@@ -184,7 +184,7 @@ def test_audit_log_filters_by_action(client):
 
 
 def test_audit_log_pagination(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         for i in range(5):
             _seed_audit(action=f"act_{i}")

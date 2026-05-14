@@ -5,7 +5,7 @@ from datetime import date
 def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",
                 home_store_slug="boss-pl-home"):
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     s = Store(name="Boss PL Home", slug=home_store_slug,
               email=username, plan="basic")
     db.session.add(s); db.session.commit()
@@ -20,7 +20,7 @@ def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",
 
 def _link(owner_id, *, store_name, store_slug, plan="basic"):
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink
-    from app import db
+    from tests._app import db
     s = Store(name=store_name, slug=store_slug,
               email=f"{store_slug}@x.com", plan=plan)
     db.session.add(s); db.session.commit()
@@ -37,7 +37,7 @@ def _seed_pl(store_id, year, month, *, revenue=0.0, purchases=0.0,
     `cash_expenses`) so the response carries the expected totals.
     `net_income` is derived: rev - pur - exp + over_short."""
     from api.Modules.Monthly.Models import MonthlyFinancial
-    from app import db
+    from tests._app import db
     mf = MonthlyFinancial(
         store_id=store_id, year=year, month=month,
         taxable_sales=revenue,
@@ -83,7 +83,7 @@ def test_pl_rollup_rejects_admin_role(client, test_store_id):
 
 
 def test_pl_rollup_rejects_invalid_month(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-pl@example.com", pw)
@@ -96,7 +96,7 @@ def test_pl_rollup_rejects_invalid_month(client):
 
 def test_pl_rollup_returns_envelope_for_unlinked_owner(client):
     """An owner with no linked stores still gets a valid envelope."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-pl@example.com", pw)
@@ -114,7 +114,7 @@ def test_pl_rollup_returns_envelope_for_unlinked_owner(client):
 
 
 def test_pl_rollup_lists_per_store_with_totals(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Alpha", store_slug="alpha-pl")
@@ -144,7 +144,7 @@ def test_pl_rollup_lists_per_store_with_totals(client):
 def test_pl_rollup_marks_missing_pl_rows_with_has_pl_false(client):
     """A store without a MonthlyFinancial row for the requested
     period gets has_pl=False + zero values."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         _link(owner_id, store_name="Empty", store_slug="empty-pl")
@@ -159,7 +159,7 @@ def test_pl_rollup_marks_missing_pl_rows_with_has_pl_false(client):
 
 
 def test_pl_rollup_year_choices_includes_distinct_years(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="A", store_slug="a-pl")
@@ -181,7 +181,7 @@ def test_pl_rollup_year_choices_includes_distinct_years(client):
 
 def test_pl_rollup_excludes_unrelated_stores(client):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Mine", store_slug="mine-pl")

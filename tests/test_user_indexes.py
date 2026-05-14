@@ -34,7 +34,7 @@ def test_user_username_index_present_in_db(client):
     or `user` (unquoted), this would fail on Postgres at boot —
     on sqlite it would silently work, masking the bug. We assert
     inspector visibility either way."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("user")}
@@ -47,7 +47,7 @@ def test_user_username_index_present_in_db(client):
 def test_user_unique_constraint_still_present(client):
     """Sanity: the (store_id, username) unique constraint that
     prevents per-store username collisions must survive."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         uniques = insp.get_unique_constraints("user")

@@ -22,7 +22,7 @@ def _add_announcement(db_session, **kwargs):
 
 def test_returns_active_with_no_window():
     """Active row with no starts_at/expires_at is always visible."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         a = _add_announcement(db.session, message="always-on")
@@ -32,7 +32,7 @@ def test_returns_active_with_no_window():
 
 def test_filters_inactive_rows():
     """is_active=False is hidden even when in window."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         a = _add_announcement(
@@ -44,7 +44,7 @@ def test_filters_inactive_rows():
 
 def test_filters_future_starts_at():
     """starts_at in the future → hidden."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         future = datetime.utcnow() + timedelta(days=1)
@@ -56,7 +56,7 @@ def test_filters_future_starts_at():
 
 def test_includes_past_starts_at():
     """starts_at already past → visible."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         past = datetime.utcnow() - timedelta(hours=1)
@@ -68,7 +68,7 @@ def test_includes_past_starts_at():
 
 def test_filters_expired_rows():
     """expires_at in the past → hidden."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         past = datetime.utcnow() - timedelta(hours=1)
@@ -80,7 +80,7 @@ def test_filters_expired_rows():
 
 def test_includes_future_expires_at():
     """expires_at still in the future → visible."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         future = datetime.utcnow() + timedelta(days=1)
@@ -92,7 +92,7 @@ def test_includes_future_expires_at():
 
 def test_includes_full_window_open():
     """Both starts_at past + expires_at future + active → visible."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         a = _add_announcement(
@@ -106,7 +106,7 @@ def test_includes_full_window_open():
 
 def test_orders_newest_first():
     """Most recent created_at lands at the top of the banner stack."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Announcements.Services import active_announcements
     with flask_app.app_context():
         # Emulate ordering by inserting two rows; created_at defaults

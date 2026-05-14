@@ -22,7 +22,7 @@ def _seed_account(store_id, *, last4="0000", nickname="",
                   display_name="", institution_name="Bank",
                   enabled=True):
     from api.Modules.BankSync.Models import StripeBankAccount
-    from app import db
+    from tests._app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}_{nickname or display_name or institution_name}",
@@ -54,7 +54,7 @@ def test_accounts_endpoint_returns_empty_envelope(client, test_store_id):
 
 
 def test_accounts_endpoint_returns_label_and_balance(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_account(test_store_id, last4="9999", nickname="Operating")
     token = _login(client, test_store_id)
@@ -75,7 +75,7 @@ def test_accounts_endpoint_returns_label_and_balance(client, test_store_id):
 
 def test_accounts_endpoint_label_falls_back_to_last4(client, test_store_id):
     """No nickname → label = ••last4."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_account(test_store_id, last4="1234")
     token = _login(client, test_store_id)
@@ -90,7 +90,7 @@ def test_accounts_endpoint_label_falls_back_to_last4(client, test_store_id):
 def test_accounts_endpoint_orders_by_label(client, test_store_id):
     """Repository orders by nickname → display_name → institution_name
     (case-insensitive). Z before a should sort a first."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_account(test_store_id, last4="2", nickname="Zebra")
         _seed_account(test_store_id, last4="1", nickname="alpha")
@@ -106,7 +106,7 @@ def test_accounts_endpoint_orders_by_label(client, test_store_id):
 def test_accounts_endpoint_includes_disconnected(client, test_store_id):
     """Both enabled and disconnected accounts return — clients filter
     via the `enabled` field if they want only active ones."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_account(test_store_id, last4="ON", enabled=True)
         _seed_account(test_store_id, last4="OFF", enabled=False)
@@ -124,7 +124,7 @@ def test_accounts_endpoint_includes_disconnected(client, test_store_id):
 
 def test_accounts_endpoint_excludes_other_stores(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-bank-acc",
                    email="o@x.com", plan="trial")

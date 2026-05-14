@@ -57,7 +57,7 @@ def _add_store(db, *, slug, plan="basic", is_active=True,
 
 def test_password_resets_classifies_used_expired_open():
     """Each token classified as Used / Expired / Open."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import password_resets
     with flask_app.app_context():
         PasswordResetToken.query.delete()
@@ -90,7 +90,7 @@ def test_password_resets_classifies_used_expired_open():
 
 def test_password_resets_handles_deleted_user():
     """Token whose user was deleted shows '(deleted)' username."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import password_resets
     with flask_app.app_context():
         PasswordResetToken.query.delete()
@@ -111,7 +111,7 @@ def test_password_resets_handles_deleted_user():
 
 
 def test_password_resets_window_filter():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import password_resets
     with flask_app.app_context():
         PasswordResetToken.query.delete()
@@ -134,7 +134,7 @@ def test_password_resets_window_filter():
 
 
 def test_suspended_stores_includes_inactive_flag():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import suspended_stores
     with flask_app.app_context():
         Store.query.delete()
@@ -157,7 +157,7 @@ def test_suspended_stores_includes_inactive_flag():
 def test_suspended_stores_reason_combines_flags():
     """A store with BOTH is_active=False AND plan=inactive should
     have both reasons in the row."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import suspended_stores
     with flask_app.app_context():
         Store.query.delete()
@@ -176,7 +176,7 @@ def test_suspended_stores_reason_combines_flags():
 
 
 def test_retention_queue_only_includes_stores_with_until_set():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import retention_queue
     with flask_app.app_context():
         Store.query.delete()
@@ -196,7 +196,7 @@ def test_retention_queue_only_includes_stores_with_until_set():
 
 def test_retention_queue_ready_to_purge_when_days_negative():
     """When `until` is in the past, `ready_to_purge` is True."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import retention_queue
     with flask_app.app_context():
         Store.query.delete()

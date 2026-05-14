@@ -52,7 +52,7 @@ def _add_transfer(db, store_id, *, send_date, send_amount=100.0,
 
 
 def test_returns_rows_and_totals_tuple():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -67,7 +67,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -92,7 +92,7 @@ def test_row_shape():
 
 
 def test_unattributed_transfers_bucket_to_unattributed_label():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -111,7 +111,7 @@ def test_unattributed_transfers_bucket_to_unattributed_label():
 
 
 def test_employee_label_prefers_full_name_over_username():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -132,7 +132,7 @@ def test_employee_label_prefers_full_name_over_username():
 
 
 def test_employee_label_falls_back_to_username_when_no_full_name():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -156,7 +156,7 @@ def test_employee_label_falls_back_to_username_when_no_full_name():
 
 def test_active_count_excludes_canceled_status():
     """Active count + sent only counts non-excluded statuses."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -185,7 +185,7 @@ def test_active_count_excludes_canceled_status():
 def test_cancel_only_employees_appear_with_zero_active():
     """An employee who ONLY had cancelled transfers still surfaces
     as a row (cancels > 0, count = 0, last_activity = None)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -214,7 +214,7 @@ def test_cancel_only_employees_appear_with_zero_active():
 def test_rows_sorted_by_total_activity_descending():
     """Rows sort by (count + cancels) desc — busiest employees
     surface first, regardless of revenue."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()
@@ -243,7 +243,7 @@ def test_rows_sorted_by_total_activity_descending():
 
 
 def test_totals_sum_count_sent_cancels():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import employee_activity
     with flask_app.app_context():
         Transfer.query.delete()

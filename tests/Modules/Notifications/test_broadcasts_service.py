@@ -90,7 +90,7 @@ def test_plain_body_has_required_placeholders():
 
 
 def test_recipients_includes_active_opted_in_user():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
@@ -107,7 +107,7 @@ def test_recipients_includes_active_opted_in_user():
 
 
 def test_recipients_excludes_inactive():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
@@ -124,7 +124,7 @@ def test_recipients_excludes_inactive():
 
 
 def test_recipients_excludes_no_email():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
@@ -141,7 +141,7 @@ def test_recipients_excludes_no_email():
 
 def test_recipients_excludes_opted_out():
     """notify_announcement_email=False → skip."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
@@ -160,7 +160,7 @@ def test_recipients_excludes_opted_out():
 def test_recipients_excludes_bounced_addresses():
     """email_bounced_at set → drop. Resend's reputation depends on
     not retrying hard-bounced addresses."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
@@ -180,7 +180,7 @@ def test_recipients_includes_all_roles():
     """admins, owners, employees — all get announcements (the
     eligibility filter doesn't role-gate the way trial reminders
     do)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )

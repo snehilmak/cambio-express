@@ -7,7 +7,7 @@ from datetime import date
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"
@@ -18,7 +18,7 @@ def _make_transfer(client, store_id, *, send_date, amount, fee=0.0,
                    federal_tax=0.0, company="Intermex",
                    confirm="X", status="Sent"):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         t = Transfer(
             store_id=store_id, send_date=send_date,
