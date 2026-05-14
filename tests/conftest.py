@@ -227,6 +227,37 @@ def _install_public_routes_bridge() -> None:
 _install_public_routes_bridge()
 
 
+# SPA-cutover bridge: production runs the cutover at the ASGI
+# layer in asgi.py, but Flask ``test_client`` doesn't see asgi.py
+# at all. Wrap ``flask_app.wsgi_app`` with a pre-router that
+# applies the same ``api.SpaCutover.redirect_target`` decision so
+# the (still-many) tests that use Flask's ``client.get(...)`` see
+# the same 301s production emits. Goes away in PR 4 when those
+# tests migrate to ``httpx + ASGITransport``.
+from api.SpaCutover import redirect_target as _cutover_redirect
+
+
+def _install_cutover_bridge() -> None:
+    inner = flask_app.wsgi_app
+
+    def _wsgi_router(environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        qs = environ.get("QUERY_STRING", "")
+        target = _cutover_redirect(path=path, query_string=qs)
+        if target is not None:
+            start_response("301 Moved Permanently",
+                           [("Location", target),
+                            ("Content-Type", "text/html; charset=utf-8"),
+                            ("Content-Length", "0")])
+            return [b""]
+        return inner(environ, start_response)
+
+    flask_app.wsgi_app = _wsgi_router
+
+
+_install_cutover_bridge()
+
+
 # Stable TOTP secret for the seeded superadmin so test helpers can
 # compute current codes deterministically via `pyotp.TOTP().now()`.
 # Picked once at module import; never rotated within a session.
