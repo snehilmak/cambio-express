@@ -4,6 +4,7 @@ from datetime import date
 from api.Modules.Customers.Models import Customer
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, *, slug="cs-store"):
@@ -55,7 +56,7 @@ def test_returns_rows_and_totals_tuple():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-shape")
         rows, totals = new_vs_returning(
@@ -79,7 +80,7 @@ def test_walkin_row_only_present_when_walkins_exist():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-walkin-omit")
         # No transfers at all → only 2 rows.
@@ -113,7 +114,7 @@ def test_new_sender_no_prior_transfers():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-new")
         c = _add_customer(db.session, s.id, name="alice")
@@ -144,7 +145,7 @@ def test_returning_sender_has_prior_transfer():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-returning")
         c = _add_customer(db.session, s.id, name="bob")
@@ -176,7 +177,7 @@ def test_walkin_classified_separately_each_visit_unique():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-walkin-count")
         for d in (5, 10, 20):
@@ -207,7 +208,7 @@ def test_prior_check_respects_store_list():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="cs-store-a")
         s2 = _add_store(db.session, slug="cs-store-b")
@@ -238,7 +239,7 @@ def test_excluded_status_transfers_not_counted_in_period():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-excluded")
         c = _add_customer(db.session, s.id, name="cancel-me")
@@ -261,7 +262,7 @@ def test_totals_sum_across_all_buckets():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import new_vs_returning
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-totals")
         c1 = _add_customer(db.session, s.id, name="new-1")

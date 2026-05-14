@@ -24,6 +24,7 @@ import contextlib
 import logging
 
 from tests._db_shim import db
+from tests._app import db
 
 
 class _FlaskAppStub:

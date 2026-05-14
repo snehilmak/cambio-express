@@ -1,6 +1,7 @@
 """Unit tests for Transfers.Services.audit (PR 77)."""
 from datetime import date
 from unittest.mock import MagicMock
+from tests._app import db
 
 
 def _stub_transfer(*, store_id=1, transfer_id=42, send_amount=100.0,
@@ -185,7 +186,7 @@ def test_record_audit_adds_row_with_expected_fields():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
-        TransferAudit.query.delete()
+        db.session.query(TransferAudit).delete()
         db.session.commit()
         # Stub transfer + user.
         t = MagicMock()
@@ -199,7 +200,7 @@ def test_record_audit_adds_row_with_expected_fields():
             summary="Sender: Alice → Bob",
         )
         db.session.flush()
-        rows = TransferAudit.query.all()
+        rows = db.session.query(TransferAudit).all()
         assert len(rows) == 1
         row = rows[0]
         assert row.store_id == 5
@@ -218,7 +219,7 @@ def test_record_audit_handles_none_user():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
-        TransferAudit.query.delete()
+        db.session.query(TransferAudit).delete()
         db.session.commit()
         t = MagicMock()
         t.store_id = 1; t.id = 2
@@ -228,7 +229,7 @@ def test_record_audit_handles_none_user():
             summary="status: Pending → Closed",
         )
         db.session.flush()
-        row = TransferAudit.query.first()
+        row = db.session.query(TransferAudit).first()
         assert row.user_id is None
         assert row.action == "auto_close"
 
@@ -239,7 +240,7 @@ def test_record_audit_does_not_commit():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import record_transfer_audit
     with flask_app.app_context():
-        TransferAudit.query.delete()
+        db.session.query(TransferAudit).delete()
         db.session.commit()
         t = MagicMock()
         t.store_id = 1; t.id = 2

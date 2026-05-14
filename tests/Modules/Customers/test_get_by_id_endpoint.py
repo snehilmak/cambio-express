@@ -1,5 +1,6 @@
 """HTTP integration tests for GET /customers/{customer_id}."""
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _seed_customer(store_id, *, full_name, phone_number=""):

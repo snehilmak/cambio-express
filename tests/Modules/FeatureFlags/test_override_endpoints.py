@@ -8,6 +8,7 @@ endpoints.
 Mirrors the legacy /superadmin/features/{key}/stores/{store_id}
 form handler. Superadmin-scoped.
 """
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -178,7 +179,7 @@ def test_clear_removes_override(client, test_store_id):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert StoreFeatureOverride.query.filter_by(
+        assert db.session.query(StoreFeatureOverride).filter_by(
             store_id=test_store_id, flag_key="bank_sync",
         ).first() is None
 
@@ -207,7 +208,7 @@ def test_upsert_records_audit_entry(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     with flask_app.app_context():
-        rows = SuperadminAuditLog.query.filter_by(
+        rows = db.session.query(SuperadminAuditLog).filter_by(
             action="set_feature_override",
         ).all()
         assert len(rows) >= 1

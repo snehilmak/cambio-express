@@ -1,5 +1,6 @@
 """Unit tests for Customers.Services.list_recent_recipients (PR 38)."""
 from datetime import date, timedelta
+from tests._app import db
 
 
 def _seed_customer(store_id, *, full_name="C", phone_number=""):

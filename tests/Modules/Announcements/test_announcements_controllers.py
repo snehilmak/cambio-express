@@ -4,6 +4,7 @@ Mounts at /api/v2/announcements/*. Superadmin-scoped CRUD over the
 global banner the legacy /superadmin/controls page already manages.
 """
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -185,7 +186,7 @@ def test_delete_removes_row(client):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert Announcement.query.filter_by(id=ann_id).first() is None
+        assert db.session.query(Announcement).filter_by(id=ann_id).first() is None
 
 
 def test_delete_404_when_missing(client):
@@ -213,7 +214,7 @@ def test_create_records_audit_entry(client):
     )
     assert resp.status_code == 201
     with flask_app.app_context():
-        rows = SuperadminAuditLog.query.filter_by(
+        rows = db.session.query(SuperadminAuditLog).filter_by(
             action="create_announcement",
         ).all()
         assert len(rows) >= 1

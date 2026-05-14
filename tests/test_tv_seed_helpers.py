@@ -27,11 +27,11 @@ def _make_legacy_country(name, code=None):
     so the backfill has something to fix. Returns the row's id."""
     with flask_app.app_context():
         # Need a store + display to attach the country to.
-        store = Store.query.filter_by(slug="test-store").first()
-        if not TVDisplay.query.filter_by(store_id=store.id).first():
+        store = db.session.query(Store).filter_by(slug="test-store").first()
+        if not db.session.query(TVDisplay).filter_by(store_id=store.id).first():
             d = TVDisplay(store_id=store.id, public_token="seed-token-xx")
             db.session.add(d); db.session.commit()
-        display = TVDisplay.query.filter_by(store_id=store.id).first()
+        display = db.session.query(TVDisplay).filter_by(store_id=store.id).first()
         c = TVDisplayCountry(
             display_id=display.id,
             country_name=name,
@@ -127,13 +127,13 @@ def test_seed_disk_imports_known_slug_with_blob(client):
             n = _seed_tv_logos_from_disk()
         assert n >= 1
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(
+            row = db.session.query(TVCatalogLogo).filter_by(
                 catalog_type="company", slug="intermex").first()
             assert row is not None
             assert row.mime_type == "image/png"
             assert row.file_size > 0
             # Parent row's logo_url mirrors the public URL.
-            cat = TVCompanyCatalog.query.filter_by(slug="intermex").first()
+            cat = db.session.query(TVCompanyCatalog).filter_by(slug="intermex").first()
             assert "/tv/logo/company/intermex" in cat.logo_url
     finally:
         _cleanup(path)
@@ -148,7 +148,7 @@ def test_seed_disk_handles_svg(client):
         with flask_app.app_context():
             _seed_tv_logos_from_disk()
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(
+            row = db.session.query(TVCatalogLogo).filter_by(
                 catalog_type="company", slug="maxi").first()
             assert row is not None
             assert row.mime_type == "image/svg+xml"
@@ -166,7 +166,7 @@ def test_seed_disk_skips_unknown_slug(client):
         with flask_app.app_context():
             _seed_tv_logos_from_disk()
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(
+            row = db.session.query(TVCatalogLogo).filter_by(
                 slug="totally-fake-brand-9999").first()
             assert row is None
     finally:
@@ -191,7 +191,7 @@ def test_seed_disk_does_not_override_existing_logo(client):
         with flask_app.app_context():
             _seed_tv_logos_from_disk()
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(slug="vigo").first()
+            row = db.session.query(TVCatalogLogo).filter_by(slug="vigo").first()
             # Old blob preserved — disk file ignored.
             assert row.blob == b"old-blob-bytes"
     finally:
@@ -207,7 +207,7 @@ def test_seed_disk_skips_oversized_file(client):
         with flask_app.app_context():
             _seed_tv_logos_from_disk()
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(slug="ria").first()
+            row = db.session.query(TVCatalogLogo).filter_by(slug="ria").first()
             assert row is None
     finally:
         _cleanup(path)
@@ -220,7 +220,7 @@ def test_seed_disk_skips_unknown_extension(client):
         with flask_app.app_context():
             _seed_tv_logos_from_disk()
         with client.application.app_context():
-            row = TVCatalogLogo.query.filter_by(slug="ria").first()
+            row = db.session.query(TVCatalogLogo).filter_by(slug="ria").first()
             assert row is None
     finally:
         _cleanup(path)

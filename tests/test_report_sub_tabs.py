@@ -10,6 +10,7 @@ renders generic Graph + Detail bodies driven by `graph_label_field`
 / `graph_value_field` / `detail_columns` route config.
 """
 from datetime import date
+from tests._app import db
 
 
 def _admin_login(client, store_id):

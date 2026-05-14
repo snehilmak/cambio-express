@@ -62,7 +62,7 @@ def test_first_run_creates_store_user_and_sample_data(client):
     assert "Amazon Reviewer account ready" in result.output
 
     with client.application.app_context():
-        store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+        store = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
         assert store is not None
         # Plan + addon + active flag must all be set; the reviewer
         # would otherwise hit either the trial gate or the addon gate.
@@ -70,7 +70,7 @@ def test_first_run_creates_store_user_and_sample_data(client):
         assert store_has_addon(store, "tv_display")
         assert store.is_active is True
 
-        user = User.query.filter_by(
+        user = db.session.query(User).filter_by(
             store_id=store.id, username=REVIEWER_USERNAME).first()
         assert user is not None
         # *** Reviewer is an EMPLOYEE, not an admin. *** Less surface
@@ -80,9 +80,9 @@ def test_first_run_creates_store_user_and_sample_data(client):
         assert user.is_active is True
 
         # Display + the canonical 2-country sample matrix.
-        display = TVDisplay.query.filter_by(store_id=store.id).first()
+        display = db.session.query(TVDisplay).filter_by(store_id=store.id).first()
         assert display is not None
-        countries = TVDisplayCountry.query.filter_by(
+        countries = db.session.query(TVDisplayCountry).filter_by(
             display_id=display.id).all()
         assert {c.country_code for c in countries} == {"MX", "GT"}
 
@@ -93,13 +93,13 @@ def test_first_run_seeds_realistic_rate_grid(client):
     board, not an empty matrix."""
     _run(client)
     with client.application.app_context():
-        rate_count = TVDisplayRate.query.count()
+        rate_count = db.session.query(TVDisplayRate).count()
         assert rate_count == 13
 
         # Spot-check one number to guard against accidental zeroing.
-        bancomer = TVDisplayPayoutBank.query.filter_by(
+        bancomer = db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Bancomer").first()
-        rate = TVDisplayRate.query.filter_by(
+        rate = db.session.query(TVDisplayRate).filter_by(
             bank_id=bancomer.id, mt_company="Maxi").first()
         assert rate.rate > 18.0
 
@@ -116,7 +116,7 @@ def test_password_is_printed_once_and_works(client):
     assert len(pw) >= 12  # generated default is 16+ from token_urlsafe(12)
 
     with client.application.app_context():
-        user = User.query.filter_by(username=REVIEWER_USERNAME).first()
+        user = db.session.query(User).filter_by(username=REVIEWER_USERNAME).first()
         assert user.check_password(pw)
         assert not user.check_password(pw + "x"), \
             "wrong password must not authenticate (sanity)"
@@ -135,7 +135,7 @@ def test_explicit_password_is_accepted(client):
     assert result.exit_code == 0
     assert custom in result.output  # printed back so the operator can copy it
     with client.application.app_context():
-        user = User.query.filter_by(username=REVIEWER_USERNAME).first()
+        user = db.session.query(User).filter_by(username=REVIEWER_USERNAME).first()
         assert user.check_password(custom)
 
 
@@ -152,17 +152,17 @@ def test_re_run_rotates_password_and_keeps_state(client):
     submission. Same store, same user id, fresh password."""
     _run(client)
     with client.application.app_context():
-        user_id_before = User.query.filter_by(
+        user_id_before = db.session.query(User).filter_by(
             username=REVIEWER_USERNAME).first().id
-        store_id_before = Store.query.filter_by(slug=REVIEWER_SLUG).first().id
+        store_id_before = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first().id
 
     result = _run(client)
     assert result.exit_code == 0
     new_pw = re.search(r"Password:\s+(\S+)", result.output).group(1)
 
     with client.application.app_context():
-        user = User.query.filter_by(username=REVIEWER_USERNAME).first()
-        store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+        user = db.session.query(User).filter_by(username=REVIEWER_USERNAME).first()
+        store = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
         # Same row, not a duplicate.
         assert user.id == user_id_before
         assert store.id == store_id_before
@@ -176,13 +176,13 @@ def test_re_run_re_comps_addon_if_yanked(client):
     re-running the CLI restores everything."""
     _run(client)
     with client.application.app_context():
-        s = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+        s = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
         s.plan = "trial"; s.addons = ""; db.session.commit()
         assert not store_has_addon(s, "tv_display")
 
     _run(client)
     with client.application.app_context():
-        s = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+        s = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
         assert s.plan == "basic"
         assert store_has_addon(s, "tv_display")
 
@@ -195,12 +195,12 @@ def test_re_run_resets_employee_role_if_promoted(client):
     poking at billing."""
     _run(client)
     with client.application.app_context():
-        u = User.query.filter_by(username=REVIEWER_USERNAME).first()
+        u = db.session.query(User).filter_by(username=REVIEWER_USERNAME).first()
         u.role = "admin"; db.session.commit()
 
     _run(client)
     with client.application.app_context():
-        u = User.query.filter_by(username=REVIEWER_USERNAME).first()
+        u = db.session.query(User).filter_by(username=REVIEWER_USERNAME).first()
         assert u.role == "employee"
 
 
@@ -211,7 +211,7 @@ def test_re_run_default_reseeds_sample_data(client):
     _run(client)
     with client.application.app_context():
         # Mutate the data: rename a bank.
-        bank = TVDisplayPayoutBank.query.filter_by(
+        bank = db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Bancomer").first()
         bank.bank_name = "Reviewer Test Edit"
         db.session.commit()
@@ -219,9 +219,9 @@ def test_re_run_default_reseeds_sample_data(client):
     _run(client)
     with client.application.app_context():
         # Bancomer is back; the edit was wiped.
-        assert TVDisplayPayoutBank.query.filter_by(
+        assert db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Bancomer").first() is not None
-        assert TVDisplayPayoutBank.query.filter_by(
+        assert db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Reviewer Test Edit").first() is None
 
 
@@ -231,7 +231,7 @@ def test_keep_data_flag_preserves_existing_grid(client):
     reviewer is mid-test on a specific rate set)."""
     _run(client)
     with client.application.app_context():
-        bank = TVDisplayPayoutBank.query.filter_by(
+        bank = db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Bancomer").first()
         bank.bank_name = "Operator Live Edit"
         db.session.commit()
@@ -242,7 +242,7 @@ def test_keep_data_flag_preserves_existing_grid(client):
 
     with client.application.app_context():
         # Edit survived.
-        assert TVDisplayPayoutBank.query.filter_by(
+        assert db.session.query(TVDisplayPayoutBank).filter_by(
             bank_name="Operator Live Edit").first() is not None
 
 
@@ -261,7 +261,7 @@ def test_seeded_account_can_actually_claim_a_pair_code(client):
     KNOWN_PW = "amazon-reviewer-test-pw-12chars"
     _run(client, "--password", KNOWN_PW)
     with client.application.app_context():
-        store = Store.query.filter_by(slug=REVIEWER_SLUG).first()
+        store = db.session.query(Store).filter_by(slug=REVIEWER_SLUG).first()
         sid = store.id
 
     # 1. Simulate the Fire TV opening the app — public, no auth.

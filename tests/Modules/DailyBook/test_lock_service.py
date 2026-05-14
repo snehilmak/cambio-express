@@ -1,5 +1,6 @@
 """Unit tests for the daily-report write-side lifecycle Service (PR 34)."""
 from datetime import date, datetime
+from tests._app import db
 
 
 # ── ensure_daily_report ─────────────────────────────────────
@@ -12,7 +13,7 @@ def test_ensure_creates_when_missing(test_store_id):
     today = date.today()
     with flask_app.app_context():
         # Sanity: nothing seeded yet
-        assert DailyReport.query.filter_by(
+        assert db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
         ).first() is None
         rpt = ensure_daily_report(db.session, test_store_id, today)
@@ -62,7 +63,7 @@ def test_lock_report_creates_empty_when_missing(test_store_id, test_admin_id):
     from api.Modules.DailyBook.Services import lock_report
     today = date.today()
     with flask_app.app_context():
-        assert DailyReport.query.filter_by(
+        assert db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
         ).first() is None
         lock_report(
@@ -70,7 +71,7 @@ def test_lock_report_creates_empty_when_missing(test_store_id, test_admin_id):
             locked_by_user_id=test_admin_id,
         )
         db.session.commit()
-        rpt = DailyReport.query.filter_by(
+        rpt = db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
         ).first()
         assert rpt is not None
@@ -129,7 +130,7 @@ def test_unlock_report_returns_none_when_no_report(test_store_id):
     with flask_app.app_context():
         assert unlock_report(db.session, test_store_id, today) is None
         # Still no row created
-        assert DailyReport.query.filter_by(
+        assert db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
         ).first() is None
 

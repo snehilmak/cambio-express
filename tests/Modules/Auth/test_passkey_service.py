@@ -1,5 +1,6 @@
 """Unit tests for Auth.Services.passkey (PR 63)."""
 from unittest.mock import MagicMock
+from tests._app import db
 
 
 # ── rp_id ──────────────────────────────────────────────────

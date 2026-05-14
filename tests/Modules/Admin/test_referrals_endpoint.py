@@ -4,6 +4,7 @@ Powers /app/account/referrals. Lazily mints a ReferralCode on a
 paid admin's first visit; trial admins get a 409 the SPA renders
 as an upsell card. Mirrors the legacy admin_referrals route.
 """
+from tests._app import db
 
 
 def _login(client_, store_id):

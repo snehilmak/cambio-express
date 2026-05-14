@@ -5,6 +5,7 @@ legacy `_tv_required()` guard — JWT must carry a store scope, the
 role must be admin or employee, and the store must have the
 `tv_display` add-on active.
 """
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -322,7 +323,7 @@ def test_settings_persists_full_payload(client, test_store_id):
     from api.Modules.TVDisplay.Models import TVDisplay
     from tests._app import app as flask_app
     with flask_app.app_context():
-        d = TVDisplay.query.first()
+        d = db.session.query(TVDisplay).first()
         assert d.title == "Hello"
         assert d.subtitle == "World"
         assert d.orientation == "portrait"
@@ -344,7 +345,7 @@ def test_settings_invalid_orientation_falls_back(client, test_store_id):
     from api.Modules.TVDisplay.Models import TVDisplay
     from tests._app import app as flask_app
     with flask_app.app_context():
-        d = TVDisplay.query.first()
+        d = db.session.query(TVDisplay).first()
         assert d.orientation == "auto"
         assert d.theme == "light"
 
@@ -502,7 +503,7 @@ def test_create_country_uppercases_code_and_returns_201(client, test_store_id):
     from api.Modules.TVDisplay.Models import TVDisplayCountry
     from tests._app import app as flask_app
     with flask_app.app_context():
-        c = TVDisplayCountry.query.filter_by(country_name="Guatemala").one()
+        c = db.session.query(TVDisplayCountry).filter_by(country_name="Guatemala").one()
         assert c.country_code == "GT"
 
 
@@ -534,9 +535,9 @@ def test_delete_country_cascades_banks_and_rates(client, test_store_id):
     from api.Modules.TVDisplay.Models import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
     from tests._app import app as flask_app
     with flask_app.app_context():
-        assert TVDisplayCountry.query.filter_by(id=country_id).first() is None
-        assert TVDisplayPayoutBank.query.filter_by(country_id=country_id).count() == 0
-        assert TVDisplayRate.query.count() == 0
+        assert db.session.query(TVDisplayCountry).filter_by(id=country_id).first() is None
+        assert db.session.query(TVDisplayPayoutBank).filter_by(country_id=country_id).count() == 0
+        assert db.session.query(TVDisplayRate).count() == 0
 
 
 def test_delete_country_404_for_other_store(client, test_store_id):

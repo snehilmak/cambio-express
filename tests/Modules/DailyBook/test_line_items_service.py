@@ -2,6 +2,7 @@
 from datetime import date, time, timedelta
 
 import pytest
+from tests._app import db
 
 
 def _seed_return_check_linked_item(store_id):

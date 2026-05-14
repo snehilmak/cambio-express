@@ -8,6 +8,7 @@ Both go through the existing `categorize_transaction` /
 behavior is shared with the legacy Flask handlers.
 """
 from datetime import datetime
+from tests._app import db
 
 
 def _login(client, store_id):

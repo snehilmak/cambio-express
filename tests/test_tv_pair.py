@@ -56,7 +56,7 @@ def _ensure_display(client, store_id, jwt):
         headers={"Authorization": f"Bearer {jwt}"},
     )
     with client.application.app_context():
-        return TVDisplay.query.filter_by(store_id=store_id).first()
+        return db.session.query(TVDisplay).filter_by(store_id=store_id).first()
 
 
 def _init(client, **payload):
@@ -96,7 +96,7 @@ def test_init_returns_code_and_device_token(client):
 def test_init_persists_pending_pair_row(client):
     body = _init(client)
     with client.application.app_context():
-        pending = TVPendingPair.query.filter_by(code=body["code"]).first()
+        pending = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert pending is not None
         assert pending.device_token == body["device_token"]
         assert pending.claimed_at is None
@@ -106,7 +106,7 @@ def test_init_persists_pending_pair_row(client):
 def test_init_accepts_optional_device_label(client):
     body = _init(client, device_label="Fire TV — Stick 4K Max")
     with client.application.app_context():
-        pending = TVPendingPair.query.filter_by(code=body["code"]).first()
+        pending = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert pending.device_label == "Fire TV — Stick 4K Max"
 
 
@@ -143,7 +143,7 @@ def test_status_expired_for_unknown_token(client):
 def test_status_expired_when_pending_row_aged_out(client):
     body = _init(client)
     with client.application.app_context():
-        p = TVPendingPair.query.filter_by(code=body["code"]).first()
+        p = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         p.expires_at = datetime.utcnow() - timedelta(seconds=1)
         db.session.commit()
     resp = client.get("/api/tv-pair/status",
@@ -182,7 +182,7 @@ def test_claim_blocked_when_addon_off(client, test_store_id):
     )
     assert resp.status_code == 409
     with client.application.app_context():
-        p = TVPendingPair.query.filter_by(code=body["code"]).first()
+        p = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert p.claimed_at is None
 
 
@@ -196,11 +196,11 @@ def test_claim_creates_tvpairing_reusing_device_token(client, test_store_id):
     body = _init(client)
     _claim(client, body["code"], jwt)
     with client.application.app_context():
-        pairing = TVPairing.query.filter_by(
+        pairing = db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first()
         assert pairing is not None
         assert pairing.revoked_at is None
-        pending = TVPendingPair.query.filter_by(code=body["code"]).first()
+        pending = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert pending.claimed_at is not None
         assert pending.claimed_pairing_id == pairing.id
 
@@ -217,7 +217,7 @@ def test_claim_strips_whitespace_and_lowercase(client, test_store_id):
     resp = _claim(client, munged, jwt)
     assert resp.status_code == 204
     with client.application.app_context():
-        assert TVPairing.query.filter_by(
+        assert db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first() is not None
 
 
@@ -278,8 +278,8 @@ def test_claim_revokes_prior_pairing(client, test_store_id):
     b = _init(client)
     _claim(client, b["code"], jwt)
     with client.application.app_context():
-        old = TVPairing.query.filter_by(device_token=a["device_token"]).first()
-        new = TVPairing.query.filter_by(device_token=b["device_token"]).first()
+        old = db.session.query(TVPairing).filter_by(device_token=a["device_token"]).first()
+        new = db.session.query(TVPairing).filter_by(device_token=b["device_token"]).first()
         assert old.revoked_at is not None
         assert new.revoked_at is None
     assert client.get("/tv/device/" + a["device_token"]).status_code == 404
@@ -372,13 +372,13 @@ def test_device_url_bumps_last_seen_at(client, test_store_id):
     body = _init(client)
     _claim(client, body["code"], jwt)
     with client.application.app_context():
-        TVPairing.query.filter_by(
+        db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]
         ).update({"last_seen_at": datetime.utcnow() - timedelta(minutes=5)})
         db.session.commit()
     client.get("/tv/device/" + body["device_token"])
     with client.application.app_context():
-        after = TVPairing.query.filter_by(
+        after = db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first().last_seen_at
         assert after > (datetime.utcnow() - timedelta(minutes=1))
 
@@ -390,7 +390,7 @@ def test_legacy_public_url_still_works_for_tablets(client, test_store_id):
     jwt = _admin_jwt(client, test_store_id)
     _populate_one_country(client, test_store_id, jwt)
     with client.application.app_context():
-        token = TVDisplay.query.first().public_token
+        token = db.session.query(TVDisplay).first().public_token
     assert client.get("/tv/" + token).status_code == 200
     a = _init(client)
     _claim(client, a["code"], jwt)
@@ -413,7 +413,7 @@ def test_employee_can_claim_a_code(client, test_store_id):
     resp = _claim(client, body["code"], emp_jwt)
     assert resp.status_code == 204
     with client.application.app_context():
-        assert TVPairing.query.filter_by(
+        assert db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first() is not None
 
 

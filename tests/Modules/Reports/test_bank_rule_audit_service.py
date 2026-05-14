@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankRule, BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 _TXN_COUNTER = 0
@@ -70,7 +71,7 @@ def test_returns_rows_and_totals_tuple():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-shape")
         rows, totals = bank_rule_audit(
@@ -85,8 +86,8 @@ def test_row_shape():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-row")
         a = _add_account(db.session, s.id)
@@ -114,8 +115,8 @@ def test_only_counts_matched_rule_id_not_null():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-manual")
         a = _add_account(db.session, s.id)
@@ -147,8 +148,8 @@ def test_groups_by_matched_rule_id():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-group")
         a = _add_account(db.session, s.id)
@@ -186,8 +187,8 @@ def test_label_uses_rule_id_when_rule_exists():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-label")
         a = _add_account(db.session, s.id)
@@ -209,8 +210,8 @@ def test_deleted_rule_renders_with_deleted_marker():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-deleted")
         a = _add_account(db.session, s.id)
@@ -231,8 +232,8 @@ def test_match_summary_combines_type_and_value():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-match")
         a = _add_account(db.session, s.id)
@@ -256,8 +257,8 @@ def test_rows_sorted_by_count_descending():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_rule_audit
     with flask_app.app_context():
-        BankTransaction.query.delete()
-        BankRule.query.delete()
+        db.session.query(BankTransaction).delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-sort")
         a = _add_account(db.session, s.id)

@@ -7,6 +7,7 @@ account`) are testable directly against the real ORM.
 """
 from datetime import datetime
 from unittest.mock import MagicMock, patch
+from tests._app import db
 
 
 _TXN_COUNTER = [0]
@@ -52,7 +53,7 @@ def test_upsert_inserts_new_row():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-store")
         api = _stripe_txn_dict(amount=-1500,
@@ -73,7 +74,7 @@ def test_upsert_idempotent_on_existing_id():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-idem")
         api = _stripe_txn_dict()
@@ -96,7 +97,7 @@ def test_upsert_truncates_long_description():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-trunc")
         api = _stripe_txn_dict(description="x" * 1000)
@@ -110,7 +111,7 @@ def test_upsert_handles_none_amount():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_bank_transaction
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-none-amt")
         api = _stripe_txn_dict(amount=None)
@@ -128,7 +129,7 @@ def test_backfill_zero_when_no_uncategorized():
         backfill_uncategorized_rows,
     )
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="backfill-empty")
         # All rows already categorized.
@@ -152,7 +153,7 @@ def test_backfill_tags_uncategorized_via_builtin():
         backfill_uncategorized_rows,
     )
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
         db.session.add(BankTransaction(
@@ -165,7 +166,7 @@ def test_backfill_tags_uncategorized_via_builtin():
         db.session.commit()
         tagged = backfill_uncategorized_rows(db.session, s.id)
         assert tagged == 1
-        row = BankTransaction.query.filter_by(
+        row = db.session.query(BankTransaction).filter_by(
             stripe_transaction_id="bf_rdc_1",
         ).first()
         assert row.category_slug == "bank_charge_230"
@@ -184,7 +185,7 @@ def test_migrate_relabels_generic_bank_charge():
         migrate_generic_bank_charge_per_account,
     )
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
         db.session.add(BankTransaction(
@@ -199,7 +200,7 @@ def test_migrate_relabels_generic_bank_charge():
             db.session, s.id,
         )
         assert migrated == 1
-        row = BankTransaction.query.filter_by(
+        row = db.session.query(BankTransaction).filter_by(
             stripe_transaction_id="legacy_charge_1",
         ).first()
         assert row.category_slug == "bank_charge_230"
@@ -215,7 +216,7 @@ def test_migrate_skips_rows_without_matching_builtin_substring():
         migrate_generic_bank_charge_per_account,
     )
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
         db.session.add(BankTransaction(
@@ -230,7 +231,7 @@ def test_migrate_skips_rows_without_matching_builtin_substring():
             db.session, s.id,
         )
         assert migrated == 0
-        row = BankTransaction.query.filter_by(
+        row = db.session.query(BankTransaction).filter_by(
             stripe_transaction_id="manual_override_1",
         ).first()
         assert row.category_slug == "bank_charge"
@@ -245,7 +246,7 @@ def test_migrate_skips_rows_without_account_last4():
         migrate_generic_bank_charge_per_account,
     )
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = Store(name="no-last4", slug="no-last4",
                   plan="basic", email="no-last4@test.com")
@@ -296,7 +297,7 @@ def test_sync_iterates_accounts_and_tags_transactions(monkeypatch):
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
 
@@ -329,12 +330,12 @@ def test_sync_iterates_accounts_and_tags_transactions(monkeypatch):
         assert new_rows == 2
         assert total == 2
         # Matching txn got tagged.
-        rdc = BankTransaction.query.filter(
+        rdc = db.session.query(BankTransaction).filter(
             BankTransaction.description.like("REMOTE DEPOSIT FEE%"),
         ).first()
         assert rdc.category_slug == "bank_charge_230"
         # Non-matching txn left uncategorised.
-        misc = BankTransaction.query.filter_by(
+        misc = db.session.query(BankTransaction).filter_by(
             description="MISC TRANSACTION",
         ).first()
         assert (misc.category_slug or "") == ""
@@ -349,7 +350,7 @@ def test_sync_records_account_error_in_last_error(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     import stripe
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="err-store")
         # `user_message` is a property without a setter, so we

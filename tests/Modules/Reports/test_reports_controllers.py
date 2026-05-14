@@ -17,6 +17,7 @@ status codes.
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,

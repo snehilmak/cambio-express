@@ -145,7 +145,7 @@ def test_webhook_persists_event_on_valid_request(client):
                         headers=_sign(body))
     assert resp.status_code == 200
     with client.application.app_context():
-        evs = EmailEvent.query.all()
+        evs = db.session.query(EmailEvent).all()
         assert len(evs) == 1
         assert evs[0].event_type == "email.delivered"
         assert evs[0].to_addr == "ok@example.com"
@@ -212,7 +212,7 @@ def test_webhook_handles_unmatched_email(client):
                         content_type="application/json", headers=_sign(body))
     assert resp.status_code == 200
     with client.application.app_context():
-        ev = EmailEvent.query.first()
+        ev = db.session.query(EmailEvent).first()
         assert ev.user_id is None
         assert ev.to_addr == "stranger@gmail.com"
 
@@ -313,7 +313,7 @@ def test_purge_nulls_out_email_event_user_id(client):
             user_id=u.id, event_type="email.delivered",
             bounce_type="", payload=""))
         db.session.commit()
-        ev_id = EmailEvent.query.first().id
+        ev_id = db.session.query(EmailEvent).first().id
 
         n = purge_expired_stores()
         assert n == 1

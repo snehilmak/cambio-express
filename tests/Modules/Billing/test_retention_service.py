@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from api.Modules.Customers.Models import Customer
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 # ── registry shape ─────────────────────────────────────────
@@ -48,7 +49,7 @@ def test_purge_returns_zero_when_no_expired_stores():
     from api.Modules.Billing.Services import purge_expired_stores
     with flask_app.app_context():
         # Make sure no inactive-with-elapsed-retention stores exist.
-        Store.query.filter_by(plan="inactive").update(
+        db.session.query(Store).filter_by(plan="inactive").update(
             {"data_retention_until": None},
             synchronize_session=False,
         )
@@ -74,7 +75,7 @@ def test_purge_skips_inactive_store_with_future_retention():
         result = purge_expired_stores(db.session)
         assert result == 0
         # Store row still there.
-        assert Store.query.filter_by(id=sid).first() is not None
+        assert db.session.query(Store).filter_by(id=sid).first() is not None
 
 
 def test_purge_deletes_expired_store_and_cascades_owned_rows():
@@ -117,11 +118,11 @@ def test_purge_deletes_expired_store_and_cascades_owned_rows():
         result = purge_expired_stores(db.session)
         assert result == 1
         # Store row gone.
-        assert Store.query.filter_by(id=sid).first() is None
+        assert db.session.query(Store).filter_by(id=sid).first() is None
         # Owned rows gone.
-        assert User.query.filter_by(store_id=sid).count() == 0
-        assert Customer.query.filter_by(store_id=sid).count() == 0
-        assert Transfer.query.filter_by(store_id=sid).count() == 0
+        assert db.session.query(User).filter_by(store_id=sid).count() == 0
+        assert db.session.query(Customer).filter_by(store_id=sid).count() == 0
+        assert db.session.query(Transfer).filter_by(store_id=sid).count() == 0
 
 
 def test_purge_skips_active_paid_stores():
@@ -144,7 +145,7 @@ def test_purge_skips_active_paid_stores():
         result = purge_expired_stores(db.session)
         # Doesn't count this store — plan is "basic" not "inactive".
         assert result == 0
-        assert Store.query.filter_by(id=sid).first() is not None
+        assert db.session.query(Store).filter_by(id=sid).first() is not None
 
 
 # ── legacy Flask wrapper + CLI ─────────────────────────────

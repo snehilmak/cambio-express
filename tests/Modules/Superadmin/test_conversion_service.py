@@ -2,6 +2,7 @@
 from datetime import date, datetime, timedelta
 
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug, plan="trial",
@@ -23,7 +24,7 @@ def test_conversion_rate_returns_three_buckets():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         rows, _ = conversion_rate(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -35,7 +36,7 @@ def test_conversion_rate_counts_per_plan():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="cr-paid",   plan="basic",
                    created_at=datetime(2026, 5, 5))
@@ -60,7 +61,7 @@ def test_conversion_rate_zero_total_returns_zero_rate():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import conversion_rate
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _, totals = conversion_rate(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -78,7 +79,7 @@ def test_time_to_convert_lists_paid_with_days():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ttc-1", plan="basic",
                    created_at=datetime(2026, 5, 5))
@@ -96,7 +97,7 @@ def test_time_to_convert_excludes_trial_and_inactive():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ttc-trial", plan="trial",
                    created_at=datetime(2026, 5, 5))
@@ -116,7 +117,7 @@ def test_time_to_convert_avg_days_zero_when_empty():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import time_to_convert
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _, totals = time_to_convert(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -133,7 +134,7 @@ def test_trial_expiry_timing_buckets_by_age():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         today = datetime.utcnow()
         _add_store(db.session, slug="tet-3day", plan="trial",
@@ -158,7 +159,7 @@ def test_trial_expiry_timing_expired_bucket():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         today = datetime.utcnow()
         _add_store(db.session, slug="tet-expired", plan="trial",
@@ -175,7 +176,7 @@ def test_trial_expiry_timing_skips_empty_buckets():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import trial_expiry_timing
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="tet-only-1", plan="trial",
                    created_at=datetime.utcnow() - timedelta(days=3))

@@ -7,6 +7,7 @@ fields. Auth gating, audit-log emission, slug normalization, and
 duplicate-slug 409s are all covered here.
 """
 import pytest
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -138,7 +139,7 @@ def test_create_happy_path(client):
     assert body["store"]["slug"] == "new-branch"
     assert body["store"]["name"] == "New Branch"
     with flask_app.app_context():
-        s = Store.query.filter_by(slug="new-branch").first()
+        s = db.session.query(Store).filter_by(slug="new-branch").first()
         assert s is not None
         assert s.plan == "trial"
         assert s.email == "branch@example.com"
@@ -155,7 +156,7 @@ def test_create_records_audit(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     with flask_app.app_context():
-        s = Store.query.filter_by(slug="new-branch").first()
+        s = db.session.query(Store).filter_by(slug="new-branch").first()
         row = (
             SuperadminAuditLog.query
             .filter_by(action="create_store", target_id=str(s.id))
@@ -176,8 +177,8 @@ def test_create_seeds_admin_user(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     with flask_app.app_context():
-        s = Store.query.filter_by(slug="new-branch").first()
-        admin = User.query.filter_by(store_id=s.id, role="admin").first()
+        s = db.session.query(Store).filter_by(slug="new-branch").first()
+        admin = db.session.query(User).filter_by(store_id=s.id, role="admin").first()
         assert admin is not None
         assert admin.username == "branchadmin"
         assert admin.full_name == "Branch Admin"
@@ -201,7 +202,7 @@ def test_create_normalizes_slug(client):
     assert resp.status_code == 201
     assert resp.get_json()["store"]["slug"] == "my-new-branch"
     with flask_app.app_context():
-        assert Store.query.filter_by(slug="my-new-branch").first() is not None
+        assert db.session.query(Store).filter_by(slug="my-new-branch").first() is not None
 
 
 def test_create_rejects_duplicate_slug(client):
@@ -296,8 +297,8 @@ def test_create_admin_user_defaults_when_omitted(client):
     )
     assert resp.status_code == 201
     with flask_app.app_context():
-        s = Store.query.filter_by(slug="defaulted").first()
-        admin = User.query.filter_by(store_id=s.id, role="admin").first()
+        s = db.session.query(Store).filter_by(slug="defaulted").first()
+        admin = db.session.query(User).filter_by(store_id=s.id, role="admin").first()
         assert admin.username == "admin"
         assert admin.full_name == "Store Admin"
 
@@ -319,7 +320,7 @@ def test_patch_updates_identity_fields(client, test_store_id):
     assert body["store"]["name"] == "Renamed Store"
     assert body["store"]["phone"] == "+1 555 999 8888"
     with flask_app.app_context():
-        s = Store.query.filter_by(id=test_store_id).first()
+        s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert s.name == "Renamed Store"
         assert s.phone == "+1 555 999 8888"
 
@@ -354,7 +355,7 @@ def test_patch_no_op_skips_audit(client, test_store_id):
     from tests._app import app as flask_app
     token = _login_superadmin(client)
     with flask_app.app_context():
-        s = Store.query.filter_by(id=test_store_id).first()
+        s = db.session.query(Store).filter_by(id=test_store_id).first()
         same_payload = {"name": s.name, "slug": s.slug, "email": s.email or ""}
     client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -410,7 +411,7 @@ def test_patch_normalizes_slug(client, test_store_id):
     )
     assert resp.status_code == 200
     with flask_app.app_context():
-        s = Store.query.filter_by(id=test_store_id).first()
+        s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert s.slug == "my-renamed-store"
 
 
@@ -435,7 +436,7 @@ def test_patch_updates_federal_tax_rate(client, test_store_id):
     )
     assert resp.status_code == 200
     with flask_app.app_context():
-        s = Store.query.filter_by(id=test_store_id).first()
+        s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert abs(s.federal_tax_rate - 0.0825) < 1e-6
 
 

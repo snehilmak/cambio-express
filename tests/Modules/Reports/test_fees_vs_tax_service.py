@@ -3,6 +3,7 @@ from datetime import date
 
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 _TXN_COUNTER = [0]
@@ -56,7 +57,7 @@ def test_no_transfers_returns_zero_totals_with_two_rows():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="empty-ft")
         rows, totals = fees_vs_tax(
@@ -79,7 +80,7 @@ def test_aggregates_fees_and_tax_in_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="agg-ft")
         # Three transfers in May, total fee=$15, tax=$6.
@@ -105,7 +106,7 @@ def test_rows_order_fees_then_tax():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rows-ft")
         _add_transfer(
@@ -127,7 +128,7 @@ def test_excludes_canceled_and_rejected_transfers():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="excl-ft")
         d = date(2026, 5, 15)
@@ -158,7 +159,7 @@ def test_ratio_zero_when_no_fees():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ratio-zero")
         # Tax with no fee — unusual but defensive.
@@ -179,7 +180,7 @@ def test_filters_by_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="window-ft")
         # In window
@@ -205,7 +206,7 @@ def test_filters_by_store_ids():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import fees_vs_tax
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="store-a-ft")
         s2 = _add_store(db.session, slug="store-b-ft")

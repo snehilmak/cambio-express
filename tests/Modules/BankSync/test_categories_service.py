@@ -1,5 +1,6 @@
 """Unit tests for BankSync.Services.categories (PR 69)."""
 from api.Modules.BankSync.Models import StripeBankAccount
+from tests._app import db
 
 
 # ── bank_category_label ────────────────────────────────────
@@ -118,7 +119,7 @@ def test_is_valid_accepts_dynamic_bank_charge_for_connected_account():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = Store(name="bc-store", slug="bc-store",
                   plan="basic", email="bc@example.com")
@@ -186,7 +187,7 @@ def test_groups_augments_other_with_per_account_bank_charges():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = Store(name="grp-store", slug="grp-store",
                   plan="basic", email="grp@example.com")
@@ -210,7 +211,7 @@ def test_groups_does_not_duplicate_static_slugs():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = Store(name="dup-store", slug="dup-store",
                   plan="basic", email="dup@example.com")

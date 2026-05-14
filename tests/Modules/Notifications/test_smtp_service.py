@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from api.Modules.Tenancy.Models import User
 from api.Modules.Webhooks.Models import EmailEvent
+from tests._app import db
 
 
 def _add_user(db, *, email, store_id=1, bounced=False):
@@ -89,7 +90,7 @@ def test_send_suppressed_for_bounced_user(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
-        User.query.filter_by(email="bounced@example.com").delete()
+        db.session.query(User).filter_by(email="bounced@example.com").delete()
         db.session.commit()
         _add_user(db.session, email="bounced@example.com",
                    bounced=True)
@@ -112,7 +113,7 @@ def test_send_suppression_lookup_is_case_insensitive(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
-        User.query.filter_by(
+        db.session.query(User).filter_by(
             email="Bounced.Mixed@Example.com",
         ).delete()
         db.session.commit()
@@ -140,7 +141,7 @@ def test_send_attempts_when_no_user_match(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
-        User.query.filter_by(
+        db.session.query(User).filter_by(
             email="superadmin-test@example.com",
         ).delete()
         db.session.commit()
@@ -167,7 +168,7 @@ def test_send_calls_smtp_with_starttls_and_login(monkeypatch):
     _set_smtp_env(monkeypatch, host="smtp.example.com",
                    user="apikey", pw="secret", port="587")
     with flask_app.app_context():
-        User.query.filter_by(email="t@example.com").delete()
+        db.session.query(User).filter_by(email="t@example.com").delete()
         db.session.commit()
         with patch("smtplib.SMTP") as smtp_mock:
             inst = MagicMock()
@@ -188,7 +189,7 @@ def test_send_uses_smtp_from_env_when_set(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch, sender="alerts@dinerobook.com")
     with flask_app.app_context():
-        User.query.filter_by(email="t2@example.com").delete()
+        db.session.query(User).filter_by(email="t2@example.com").delete()
         db.session.commit()
         with patch("smtplib.SMTP") as smtp_mock:
             inst = MagicMock()
@@ -208,7 +209,7 @@ def test_send_records_failure_status_on_smtp_error(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
-        User.query.filter_by(email="t3@example.com").delete()
+        db.session.query(User).filter_by(email="t3@example.com").delete()
         db.session.commit()
         with patch("smtplib.SMTP") as smtp_mock:
             smtp_mock.side_effect = OSError("connection refused")
@@ -227,7 +228,7 @@ def test_send_html_alternative_attached_when_provided(monkeypatch):
     _reset_attempt()
     _set_smtp_env(monkeypatch)
     with flask_app.app_context():
-        User.query.filter_by(email="alt@example.com").delete()
+        db.session.query(User).filter_by(email="alt@example.com").delete()
         db.session.commit()
         with patch("smtplib.SMTP") as smtp_mock:
             inst = MagicMock()
@@ -305,7 +306,7 @@ def test_health_aggregates_recent_events():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     with flask_app.app_context():
-        EmailEvent.query.delete()
+        db.session.query(EmailEvent).delete()
         db.session.commit()
         # Within the 7-day window
         recent = datetime.utcnow() - timedelta(days=2)
@@ -334,7 +335,7 @@ def test_health_suppressed_count_includes_bounced_users():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import smtp_health_check
     with flask_app.app_context():
-        User.query.filter(
+        db.session.query(User).filter(
             User.email.in_([
                 "supp1@example.com", "supp2@example.com",
                 "active@example.com",
@@ -342,7 +343,7 @@ def test_health_suppressed_count_includes_bounced_users():
         ).delete()
         db.session.commit()
         before = (
-            User.query.filter(User.email_bounced_at.isnot(None))
+            db.session.query(User).filter(User.email_bounced_at.isnot(None))
                 .count()
         )
         _add_user(db.session, email="supp1@example.com",

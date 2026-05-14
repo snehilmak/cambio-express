@@ -1,5 +1,6 @@
 """HTTP integration tests for the Monthly Controllers."""
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _client():

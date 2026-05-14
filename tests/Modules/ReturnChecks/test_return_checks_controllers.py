@@ -1,5 +1,6 @@
 """HTTP integration tests for the ReturnChecks Controllers."""
 from datetime import date
+from tests._app import db
 
 
 def _login(client, store_id):

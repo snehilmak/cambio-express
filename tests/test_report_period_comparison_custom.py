@@ -3,6 +3,7 @@ period via `?compare_from=YYYY-MM-DD&compare_to=YYYY-MM-DD`. Both
 must be set; if either is missing or invalid the report falls back
 to the auto-prior same-length window."""
 from datetime import date
+from tests._app import db
 
 
 def _admin_login(client, store_id):

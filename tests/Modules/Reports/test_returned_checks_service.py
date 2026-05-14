@@ -3,6 +3,7 @@ from datetime import date
 
 from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug="rc-store"):
@@ -43,7 +44,7 @@ def test_returns_rows_and_totals_tuple():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-shape")
         rows, totals = returned_check_status(
@@ -63,7 +64,7 @@ def test_empty_buckets_skipped_in_rows():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-empty")
         # Only pending checks — no loss / recovered / fraud.
@@ -87,7 +88,7 @@ def test_rows_sorted_in_fixed_display_order():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-order")
         # Insert in scrambled order.
@@ -116,7 +117,7 @@ def test_recovered_only_set_for_recovered_status():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-rec-non")
         rc = _add_rc(db.session, s.id,
@@ -137,7 +138,7 @@ def test_recovered_sums_payment_rows_for_recovered_status():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-rec-sum")
         rc = _add_rc(db.session, s.id,
@@ -166,7 +167,7 @@ def test_loss_fraud_combined_in_totals():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-loss-fraud")
         _add_rc(db.session, s.id,
@@ -187,7 +188,7 @@ def test_net_gl_is_recovered_minus_loss_fraud():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-netgl")
         rc = _add_rc(db.session, s.id,
@@ -211,7 +212,7 @@ def test_count_amount_totals_sum_all_buckets():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-counts")
         _add_rc(db.session, s.id,
@@ -235,7 +236,7 @@ def test_filters_by_store_list():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="rc-store-1")
         s2 = _add_store(db.session, slug="rc-store-2")
@@ -257,7 +258,7 @@ def test_filters_by_bounced_on_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="rc-window")
         _add_rc(db.session, s.id,

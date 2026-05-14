@@ -1,6 +1,7 @@
 """Unit tests for Billing.Services.cancellation (PR 46)."""
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock
+from tests._app import db
 
 
 def _store(*, sub_id="sub_xyz", plan="basic", billing_cycle="monthly"):
@@ -24,7 +25,7 @@ def test_find_store_returns_match(test_store_id):
     from tests._app import app as flask_app, db
     from api.Modules.Billing.Services import find_store_by_subscription_id
     with flask_app.app_context():
-        s = Store.query.get(test_store_id)
+        s = db.session.get(Store,test_store_id)
         s.stripe_subscription_id = "sub_test123"
         db.session.commit()
         out = find_store_by_subscription_id(db.session, "sub_test123")

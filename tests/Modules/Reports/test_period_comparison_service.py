@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, *, slug="pc-store"):
@@ -161,7 +162,7 @@ def test_aggregates_transfer_metrics_in_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pc-agg-tx")
         # Current period: 3 transfers totaling $300, $6 fee, $3 tax
@@ -190,7 +191,7 @@ def test_pct_change_computation():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pc-pct")
         # Current: 2 transfers; prior: 1 transfer → +100% delta.
@@ -224,7 +225,7 @@ def test_pct_handles_zero_prior_with_current():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pc-zero-prior")
         _add_transfer(
@@ -247,7 +248,7 @@ def test_pct_zero_when_both_zero():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pc-zero-both")
         rows, _ = period_comparison(
@@ -266,8 +267,8 @@ def test_includes_daily_report_pl_lines():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_comparison
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pc-pl")
         _add_daily_report(

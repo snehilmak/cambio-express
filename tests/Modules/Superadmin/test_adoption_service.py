@@ -7,6 +7,7 @@ from datetime import date, datetime
 from api.Modules.Auth.Models import Passkey
 from api.Modules.BankSync.Models import StripeBankAccount
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from tests._app import db
 
 
 _USER_COUNTER = 0
@@ -67,8 +68,8 @@ def test_bank_sync_adoption_groups_by_plan():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import bank_sync_adoption
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
-        Store.query.delete()
+        db.session.query(StripeBankAccount).delete()
+        db.session.query(Store).delete()
         db.session.commit()
         s_basic_conn = _add_store(db.session, slug="bsa-basic-c",
                                    plan="basic")
@@ -94,8 +95,8 @@ def test_bank_sync_adoption_zero_total_no_divzero():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import bank_sync_adoption
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
-        Store.query.delete()
+        db.session.query(StripeBankAccount).delete()
+        db.session.query(Store).delete()
         db.session.commit()
         rows, totals = bank_sync_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -112,7 +113,7 @@ def test_tv_display_adoption_filters_by_addons():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import tv_display_adoption
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="tvda-on", plan="basic",
                    addons="tv_display,referrals")
@@ -133,7 +134,7 @@ def test_tv_display_adoption_sorted_by_name():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import tv_display_adoption
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="tvda-z", plan="basic",
                    addons="tv_display")
@@ -154,8 +155,8 @@ def test_owner_adoption_includes_only_multi_store_owners():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import owner_adoption
     with flask_app.app_context():
-        StoreOwnerLink.query.delete()
-        Store.query.delete()
+        db.session.query(StoreOwnerLink).delete()
+        db.session.query(Store).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="oa-1", plan="basic")
         s2 = _add_store(db.session, slug="oa-2", plan="basic")
@@ -183,7 +184,7 @@ def test_owner_adoption_empty_when_no_multi_store_owners():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import owner_adoption
     with flask_app.app_context():
-        StoreOwnerLink.query.delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         rows, totals = owner_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -199,7 +200,7 @@ def test_passkey_adoption_returns_role_breakdown_and_rate():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import passkey_adoption
     with flask_app.app_context():
-        Passkey.query.delete()
+        db.session.query(Passkey).delete()
         db.session.commit()
         u_admin = _add_user(db.session, role="admin")
         u_emp   = _add_user(db.session, role="employee")
@@ -222,7 +223,7 @@ def test_passkey_adoption_zero_users_returns_empty_rows():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import passkey_adoption
     with flask_app.app_context():
-        Passkey.query.delete()
+        db.session.query(Passkey).delete()
         db.session.commit()
         rows, totals = passkey_adoption(
             db.session, date(2026, 5, 1), date(2026, 5, 31),

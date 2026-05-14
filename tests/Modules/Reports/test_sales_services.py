@@ -7,6 +7,7 @@ they replace; this gives us the equivalence guarantee the
 strangler fig depends on.
 """
 from datetime import date
+from tests._app import db
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,

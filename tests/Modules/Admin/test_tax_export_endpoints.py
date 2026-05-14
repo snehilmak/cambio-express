@@ -7,6 +7,7 @@ route /admin/tax-export.zip — we don't test that here (it streams
 multi-MB files and would dominate the suite runtime).
 """
 from datetime import date
+from tests._app import db
 
 
 def _login(client_, store_id):

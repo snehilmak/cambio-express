@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _seed_report(store_id, report_date, **kwargs):

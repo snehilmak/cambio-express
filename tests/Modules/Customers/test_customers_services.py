@@ -7,6 +7,7 @@ legacy `find_or_upsert_customer` and the body of `/api/customers/search`
 in `app.py`.
 """
 from datetime import date, datetime, timedelta
+from tests._app import db
 
 
 def _seed_customer(store_id, *, full_name, phone_country="+1",

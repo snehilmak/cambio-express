@@ -2,6 +2,7 @@
 from datetime import datetime
 
 from api.Modules.Tenancy.Models import User
+from tests._app import db
 
 
 def _add_user(db, *, store_id=1, role="admin",
@@ -95,7 +96,7 @@ def test_recipients_includes_active_opted_in_user():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         u = _add_user(
             db.session,
@@ -112,7 +113,7 @@ def test_recipients_excludes_inactive():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         _add_user(
             db.session,
@@ -129,7 +130,7 @@ def test_recipients_excludes_no_email():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         _add_user(
             db.session,
@@ -146,7 +147,7 @@ def test_recipients_excludes_opted_out():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         _add_user(
             db.session,
@@ -165,7 +166,7 @@ def test_recipients_excludes_bounced_addresses():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         _add_user(
             db.session,
@@ -185,7 +186,7 @@ def test_recipients_includes_all_roles():
         broadcast_eligible_recipients,
     )
     with flask_app.app_context():
-        User.query.delete()
+        db.session.query(User).delete()
         db.session.commit()
         admin = _add_user(
             db.session, role="admin",

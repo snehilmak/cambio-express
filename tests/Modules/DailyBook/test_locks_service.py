@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug="locks-store"):
@@ -32,7 +33,7 @@ def test_is_locked_returns_false_when_no_report():
     from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-empty")
         assert is_daily_report_locked(
@@ -45,7 +46,7 @@ def test_is_locked_returns_false_when_report_unlocked():
     from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-unlocked")
         d = date(2026, 5, 1)
@@ -57,7 +58,7 @@ def test_is_locked_returns_true_when_report_locked():
     from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-locked")
         d = date(2026, 5, 1)
@@ -73,7 +74,7 @@ def test_is_locked_filters_by_store_and_date():
     from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="locks-isolation-1")
         s2 = _add_store(db.session, slug="locks-isolation-2")

@@ -20,6 +20,7 @@ unrelated `test_line_items_delete_round_trip` setup.
 from datetime import datetime
 
 import pyotp
+from tests._app import db
 
 
 def _make_enrolled_superadmin(*, slug="ts2fa"):
@@ -47,7 +48,7 @@ def _add_recovery_code(username, raw_code="ABCD1234"):
     from api.Modules.Tenancy.Models import User
     from tests._app import db
     from api.Modules.Auth.Services.totp import hash_recovery_code
-    sa = User.query.filter_by(username=username).first()
+    sa = db.session.query(User).filter_by(username=username).first()
     db.session.add(RecoveryCode(
         user_id=sa.id, code_hash=hash_recovery_code(raw_code),
     ))
@@ -210,7 +211,7 @@ def test_login_recovery_consumes_code_and_issues_token(client):
     with flask_app.app_context():
         username, password, _ = _make_enrolled_superadmin(slug="t5")
         _add_recovery_code(username, "WXYZ7890")
-        before = RecoveryCode.query.filter_by(used_at=None).count()
+        before = db.session.query(RecoveryCode).filter_by(used_at=None).count()
     pending = client.post(
         "/api/v2/auth/login",
         json={"username": username, "password": password, "store_id": None},
@@ -224,7 +225,7 @@ def test_login_recovery_consumes_code_and_issues_token(client):
     assert body["access_token"]
     assert body["role"] == "superadmin"
     with flask_app.app_context():
-        after = RecoveryCode.query.filter_by(used_at=None).count()
+        after = db.session.query(RecoveryCode).filter_by(used_at=None).count()
     assert after == before - 1
 
 
@@ -409,7 +410,7 @@ def test_enroll_finish_marks_user_enrolled(client):
         json={"pending_token": pending, "code": code},
     )
     with flask_app.app_context():
-        u = User.query.filter_by(username="te5@superadmin").first()
+        u = db.session.query(User).filter_by(username="te5@superadmin").first()
         assert u.totp_secret == start["secret"]
         assert u.totp_enrolled_at is not None
 

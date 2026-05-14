@@ -1,5 +1,6 @@
 """Unit tests for BankSync.Services.charges (PR 57)."""
 from datetime import datetime
+from tests._app import db
 
 
 _TXN_COUNTER = [0]
@@ -10,7 +11,7 @@ def _ensure_account(db, store_id):
     return it. BankTransaction.stripe_bank_account_id is NOT NULL,
     so every test row needs a parent account row."""
     from api.Modules.BankSync.Models import StripeBankAccount
-    existing = StripeBankAccount.query.filter_by(store_id=store_id).first()
+    existing = db.query(StripeBankAccount).filter_by(store_id=store_id).first()
     if existing is not None:
         return existing
     a = StripeBankAccount(

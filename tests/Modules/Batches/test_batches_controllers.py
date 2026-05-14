@@ -2,6 +2,7 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _client():

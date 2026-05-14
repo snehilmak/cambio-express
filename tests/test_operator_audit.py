@@ -7,13 +7,14 @@ Covers:
   - Employee role can't view the log (admin-only by decorator)
 """
 from datetime import date
+from tests._app import db
 
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
     with client.application.app_context():
-        u = User.query.filter_by(store_id=store_id, role="admin").first()
+        u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
         s.plan = "pro"
@@ -52,7 +53,7 @@ def test_daily_report_lock_writes_audit(client, test_store_id):
     from api.Modules.Audit.Models import OperatorAuditLog
     from tests._app import app as flask_app
     with flask_app.app_context():
-        rows = OperatorAuditLog.query.filter_by(
+        rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, action="lock").all()
         assert len(rows) == 1
         assert rows[0].target_type == "daily_report"
@@ -71,7 +72,7 @@ def test_daily_report_unlock_writes_audit(client, test_store_id):
     from api.Modules.Audit.Models import OperatorAuditLog
     from tests._app import app as flask_app
     with flask_app.app_context():
-        actions = [r.action for r in OperatorAuditLog.query.filter_by(
+        actions = [r.action for r in db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="daily_report").all()]
         assert "lock"   in actions
         assert "unlock" in actions
@@ -115,7 +116,7 @@ def test_new_batch_writes_create_audit(client, test_store_id):
     from api.Modules.Audit.Models import OperatorAuditLog
     from tests._app import app as flask_app
     with flask_app.app_context():
-        rows = OperatorAuditLog.query.filter_by(
+        rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="batch", action="create").all()
         assert len(rows) == 1
         assert "Intermex" in rows[0].target_label
@@ -153,7 +154,7 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
     assert resp.status_code == 200, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
     with flask_app.app_context():
-        rows = OperatorAuditLog.query.filter_by(
+        rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="batch", action="update").all()
         assert len(rows) == 1
         assert "amount" in rows[0].summary
@@ -186,7 +187,7 @@ def test_delete_transfer_writes_audit(client, test_store_id):
     assert resp.status_code == 204, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
     with flask_app.app_context():
-        rows = OperatorAuditLog.query.filter_by(
+        rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="transfer", action="delete").all()
         assert len(rows) == 1
         assert "DeleteMe Sender" in rows[0].target_label

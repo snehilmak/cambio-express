@@ -1,4 +1,5 @@
 """HTTP integration tests for the FeatureFlags Controllers."""
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -166,7 +167,7 @@ def test_delete_removes_row(client):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert FeatureFlag.query.filter_by(key="zap_me").first() is None
+        assert db.session.query(FeatureFlag).filter_by(key="zap_me").first() is None
 
 
 def test_delete_cascades_per_store_overrides(client, test_store_id):
@@ -187,7 +188,7 @@ def test_delete_cascades_per_store_overrides(client, test_store_id):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert StoreFeatureOverride.query.filter_by(
+        assert db.session.query(StoreFeatureOverride).filter_by(
             flag_key="targeted",
         ).first() is None
 
@@ -215,7 +216,7 @@ def test_create_records_audit_entry(client):
     )
     assert resp.status_code == 201
     with flask_app.app_context():
-        rows = SuperadminAuditLog.query.filter_by(
+        rows = db.session.query(SuperadminAuditLog).filter_by(
             action="create_feature_flag",
             target_id="audited_flag",
         ).all()

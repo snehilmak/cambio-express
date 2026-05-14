@@ -13,6 +13,7 @@ Purge rules:
   announcements) is not scoped to a store and must never be purged here.
 """
 from datetime import datetime, timedelta, date
+from tests._app import db
 
 
 def _make_inactive_store_due(slug="expiring-store", days_past=1):
@@ -147,27 +148,27 @@ def test_purge_cascades_all_store_owned_tables(client):
         db.session.commit()
 
         # Sanity: rows exist before purge.
-        assert User.query.filter_by(store_id=sid).count() == 1
-        assert Transfer.query.filter_by(store_id=sid).count() == 1
-        assert TransferAudit.query.filter_by(store_id=sid).count() == 1
-        assert ACHBatch.query.filter_by(store_id=sid).count() == 1
-        assert DailyReport.query.filter_by(store_id=sid).count() == 1
-        assert DailyDrop.query.filter_by(store_id=sid).count() == 1
-        assert Customer.query.filter_by(store_id=sid).count() == 1
-        assert StoreEmployee.query.filter_by(store_id=sid).count() == 1
+        assert db.session.query(User).filter_by(store_id=sid).count() == 1
+        assert db.session.query(Transfer).filter_by(store_id=sid).count() == 1
+        assert db.session.query(TransferAudit).filter_by(store_id=sid).count() == 1
+        assert db.session.query(ACHBatch).filter_by(store_id=sid).count() == 1
+        assert db.session.query(DailyReport).filter_by(store_id=sid).count() == 1
+        assert db.session.query(DailyDrop).filter_by(store_id=sid).count() == 1
+        assert db.session.query(Customer).filter_by(store_id=sid).count() == 1
+        assert db.session.query(StoreEmployee).filter_by(store_id=sid).count() == 1
 
         assert purge_expired_stores() == 1
 
         # And they're all gone afterwards.
         assert db.session.get(Store, sid) is None
-        assert User.query.filter_by(store_id=sid).count() == 0
-        assert Transfer.query.filter_by(store_id=sid).count() == 0
-        assert TransferAudit.query.filter_by(store_id=sid).count() == 0
-        assert ACHBatch.query.filter_by(store_id=sid).count() == 0
-        assert DailyReport.query.filter_by(store_id=sid).count() == 0
-        assert DailyDrop.query.filter_by(store_id=sid).count() == 0
-        assert Customer.query.filter_by(store_id=sid).count() == 0
-        assert StoreEmployee.query.filter_by(store_id=sid).count() == 0
+        assert db.session.query(User).filter_by(store_id=sid).count() == 0
+        assert db.session.query(Transfer).filter_by(store_id=sid).count() == 0
+        assert db.session.query(TransferAudit).filter_by(store_id=sid).count() == 0
+        assert db.session.query(ACHBatch).filter_by(store_id=sid).count() == 0
+        assert db.session.query(DailyReport).filter_by(store_id=sid).count() == 0
+        assert db.session.query(DailyDrop).filter_by(store_id=sid).count() == 0
+        assert db.session.query(Customer).filter_by(store_id=sid).count() == 0
+        assert db.session.query(StoreEmployee).filter_by(store_id=sid).count() == 0
 
 
 def test_purge_transfer_audit_before_transfer_order(client):
@@ -212,7 +213,7 @@ def test_purge_cascades_referral_models_with_custom_fk(client):
         sid = doomed.id
         db.session.add(ReferralCode(code="DOOMED1", owner_store_id=sid))
         db.session.flush()
-        rc_id = ReferralCode.query.filter_by(owner_store_id=sid).one().id
+        rc_id = db.session.query(ReferralCode).filter_by(owner_store_id=sid).one().id
         # Redemption needs a referee store too.
         referee = _make_inactive_store_due(slug="referral-referee", days_past=2)
         db.session.flush()
@@ -221,14 +222,14 @@ def test_purge_cascades_referral_models_with_custom_fk(client):
         ))
         db.session.commit()
 
-        assert ReferralCode.query.filter_by(owner_store_id=sid).count() == 1
-        assert ReferralRedemption.query.filter_by(
+        assert db.session.query(ReferralCode).filter_by(owner_store_id=sid).count() == 1
+        assert db.session.query(ReferralRedemption).filter_by(
             referee_store_id=referee.id).count() == 1
 
         assert purge_expired_stores() == 2
 
-        assert ReferralCode.query.filter_by(owner_store_id=sid).count() == 0
-        assert ReferralRedemption.query.filter_by(
+        assert db.session.query(ReferralCode).filter_by(owner_store_id=sid).count() == 0
+        assert db.session.query(ReferralRedemption).filter_by(
             referee_store_id=referee.id).count() == 0
 
 
@@ -261,8 +262,8 @@ def test_purge_does_not_touch_unrelated_stores(client):
 
         # Survivor intact.
         assert db.session.get(Store, sid_survivor) is not None
-        assert User.query.filter_by(store_id=sid_survivor).count() == 1
-        assert Transfer.query.filter_by(store_id=sid_survivor).count() == 1
+        assert db.session.query(User).filter_by(store_id=sid_survivor).count() == 1
+        assert db.session.query(Transfer).filter_by(store_id=sid_survivor).count() == 1
 
 
 def test_purge_preserves_superadmin_and_other_platform_data(client):
@@ -290,12 +291,12 @@ def test_purge_preserves_superadmin_and_other_platform_data(client):
         purge_expired_stores()
 
         # Superadmin is a store-less user; must survive.
-        assert User.query.filter_by(username="superadmin",
+        assert db.session.query(User).filter_by(username="superadmin",
                                     store_id=None).count() == 1
-        assert FeatureFlag.query.filter_by(key="bank_sync").count() == 1
-        assert SuperadminAuditLog.query.count() >= 1
-        assert Announcement.query.count() == 1
-        assert DiscountCode.query.filter_by(code="TEST10").count() == 1
+        assert db.session.query(FeatureFlag).filter_by(key="bank_sync").count() == 1
+        assert db.session.query(SuperadminAuditLog).count() >= 1
+        assert db.session.query(Announcement).count() == 1
+        assert db.session.query(DiscountCode).filter_by(code="TEST10").count() == 1
 
 
 def test_purge_handles_multiple_expired_stores_in_one_run(client):
@@ -308,7 +309,7 @@ def test_purge_handles_multiple_expired_stores_in_one_run(client):
         db.session.commit()
         purged = purge_expired_stores()
         assert purged == 2
-        remaining = {s.slug for s in Store.query.all()}
+        remaining = {s.slug for s in db.session.query(Store).all()}
         assert "doomed-1" not in remaining
         assert "doomed-2" not in remaining
         assert "safe-1" in remaining

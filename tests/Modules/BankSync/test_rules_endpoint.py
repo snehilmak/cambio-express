@@ -3,6 +3,7 @@
 After SPA-29 the endpoint derives `store_id` from the JWT
 principal — explicit `store_ids` query params are gone.
 """
+from tests._app import db
 
 
 def _login(client, store_id):

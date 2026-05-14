@@ -6,6 +6,7 @@ behavior. No HTTP, no Flask request context — just the repository
 helpers against a live SQLAlchemy session.
 """
 from datetime import date, timedelta
+from tests._app import db
 
 
 def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,

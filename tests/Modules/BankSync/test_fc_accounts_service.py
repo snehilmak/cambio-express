@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from api.Modules.BankSync.Models import StripeBankAccount
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug="fc-acct-store"):
@@ -38,7 +39,7 @@ def test_upsert_inserts_new_account():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-new")
         api = _stripe_account_dict(
@@ -59,7 +60,7 @@ def test_upsert_idempotent_on_existing_account():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-idem")
         api = _stripe_account_dict(account_id="fcacct_idem")
@@ -67,7 +68,7 @@ def test_upsert_idempotent_on_existing_account():
         row2 = upsert_fc_account(db.session, s.id, api)
         # Same row, no duplicates.
         assert row1.id == row2.id
-        assert StripeBankAccount.query.filter_by(
+        assert db.session.query(StripeBankAccount).filter_by(
             stripe_account_id="fcacct_idem",
         ).count() == 1
 
@@ -78,7 +79,7 @@ def test_upsert_preserves_existing_fields_when_api_drops_them():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-merge")
         first = _stripe_account_dict(
@@ -107,7 +108,7 @@ def test_upsert_extracts_balance_with_currency_match():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-bal")
         api = _stripe_account_dict(
@@ -128,7 +129,7 @@ def test_upsert_extracts_first_balance_when_currency_missing():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-fallback")
         api = _stripe_account_dict(
@@ -144,7 +145,7 @@ def test_upsert_handles_missing_balance_gracefully():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-no-bal")
         api = _stripe_account_dict(account_id="fcacct_no_bal")
@@ -161,7 +162,7 @@ def test_upsert_clears_disconnected_at_on_re_enable():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import upsert_fc_account
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="upsert-fc-reconn")
         api = _stripe_account_dict(account_id="fcacct_reconn")
@@ -196,7 +197,7 @@ def test_refresh_returns_zero_when_no_enabled_accounts(monkeypatch):
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="refresh-no-accts")
         updated, err = refresh_bank_balances(db.session, s)
@@ -209,7 +210,7 @@ def test_refresh_pulls_balance_for_each_account(monkeypatch):
     from api.Modules.BankSync.Services import refresh_bank_balances
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="refresh-happy")
         # Pre-existing connected account.
@@ -243,7 +244,7 @@ def test_refresh_records_stripe_error_in_last_error(monkeypatch):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     import stripe
     with flask_app.app_context():
-        StripeBankAccount.query.delete()
+        db.session.query(StripeBankAccount).delete()
         db.session.commit()
         s = _add_store(db.session, slug="refresh-err")
         db.session.add(StripeBankAccount(

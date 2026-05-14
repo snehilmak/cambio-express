@@ -9,6 +9,7 @@ portfolio (owner umbrella). Lookup priority:
 Unrelated stores (no shared owner) must remain fully isolated.
 """
 from datetime import date
+from tests._app import db
 
 
 def _make_store(name, slug, plan="basic"):
@@ -44,7 +45,7 @@ def test_sibling_ids_solo_store_returns_itself(client):
     from api.Modules.Customers.Repositories import sibling_store_ids
     from tests._app import db
     with client.application.app_context():
-        sid = Store.query.filter_by(slug="test-store").one().id
+        sid = db.session.query(Store).filter_by(slug="test-store").one().id
         assert sibling_store_ids(db.session, sid) == [sid]
 
 
@@ -104,7 +105,7 @@ def test_upsert_creates_new_customer_when_no_match(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
-        sid = Store.query.filter_by(slug="test-store").one().id
+        sid = db.session.query(Store).filter_by(slug="test-store").one().id
         cust = find_or_upsert_customer(
             store_id=sid, full_name="Alice Alpha",
             phone_country="+1", phone_number="5550100",
@@ -125,7 +126,7 @@ def test_upsert_dedup_by_phone_within_same_store(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
-        sid = Store.query.filter_by(slug="test-store").one().id
+        sid = db.session.query(Store).filter_by(slug="test-store").one().id
         c1 = find_or_upsert_customer(
             store_id=sid, full_name="Alice Old",
             phone_country="+1", phone_number="5550100",
@@ -139,7 +140,7 @@ def test_upsert_dedup_by_phone_within_same_store(client):
         )
         db.session.commit()
         assert c1.id == c2.id
-        assert Customer.query.count() == 1
+        assert db.session.query(Customer).count() == 1
         # Newest values overwrite.
         assert c2.full_name == "Alice New"
         assert c2.address == "New Address"
@@ -169,7 +170,7 @@ def test_upsert_dedup_across_sibling_stores(client):
         assert c_at_a.id == c_at_b.id
         # Customer stays pinned to its home store (A), not reassigned to B.
         assert c_at_b.store_id == a.id
-        assert Customer.query.count() == 1
+        assert db.session.query(Customer).count() == 1
 
 
 def test_upsert_isolation_between_unrelated_stores(client):
@@ -192,8 +193,8 @@ def test_upsert_isolation_between_unrelated_stores(client):
         )
         db.session.commit()
         # Two rows — unrelated stores must not share customers.
-        assert Customer.query.count() == 2
-        store_ids = {c.store_id for c in Customer.query.all()}
+        assert db.session.query(Customer).count() == 2
+        store_ids = {c.store_id for c in db.session.query(Customer).all()}
         assert store_ids == {a.id, x.id}
 
 
@@ -261,7 +262,7 @@ def test_upsert_empty_fields_do_not_overwrite_stored_values(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
-        sid = Store.query.filter_by(slug="test-store").one().id
+        sid = db.session.query(Store).filter_by(slug="test-store").one().id
         find_or_upsert_customer(
             store_id=sid, full_name="Dana Delta",
             phone_country="+1", phone_number="5550600",
@@ -285,7 +286,7 @@ def test_upsert_default_phone_country_is_plus_one(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db, find_or_upsert_customer
     with client.application.app_context():
-        sid = Store.query.filter_by(slug="test-store").one().id
+        sid = db.session.query(Store).filter_by(slug="test-store").one().id
         c = find_or_upsert_customer(
             store_id=sid, full_name="Eli Echo",
             phone_country="", phone_number="5550700",
@@ -299,4 +300,4 @@ def test_upsert_default_phone_country_is_plus_one(client):
         )
         db.session.commit()
         assert c.id == c2.id
-        assert Customer.query.count() == 1
+        assert db.session.query(Customer).count() == 1

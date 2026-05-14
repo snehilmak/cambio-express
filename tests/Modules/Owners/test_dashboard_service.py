@@ -4,6 +4,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 # ── owner_period_window (pure date math) ───────────────────
@@ -82,7 +83,7 @@ def test_owner_store_ids_returns_linked_stores():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_store_ids
     with flask_app.app_context():
-        StoreOwnerLink.query.delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         u = User(
             username="multi-owner@test.com",
@@ -118,8 +119,8 @@ def test_owner_kpis_aggregates_transfers_and_overshort():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = Store(name="K", slug="store-k", plan="basic",
                   email="k@example.com")
@@ -152,8 +153,8 @@ def test_owner_kpis_excludes_canceled_and_rejected():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = Store(name="X", slug="store-x", plan="basic",
                   email="x@example.com")
@@ -191,7 +192,7 @@ def test_owner_kpis_filters_window():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_kpis
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = Store(name="W", slug="store-w", plan="basic",
                   email="w@example.com")
