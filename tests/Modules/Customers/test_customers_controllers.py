@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 def _seed_customer(store_id, *, full_name, phone_country="+1",
                     phone_number="", address=""):
     from api.Modules.Customers.Models import Customer
-    from app import db
+    from tests._app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country=phone_country, phone_number=phone_number,
@@ -29,7 +29,7 @@ def _seed_customer(store_id, *, full_name, phone_country="+1",
 
 def _seed_owner(username="owner@x.com"):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -38,7 +38,7 @@ def _seed_owner(username="owner@x.com"):
 
 def _seed_store(slug, name="X"):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=name, slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
@@ -46,7 +46,7 @@ def _seed_store(slug, name="X"):
 
 def _link(owner_id, store_id):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import db
+    from tests._app import db
     l = StoreOwnerLink(owner_id=owner_id, store_id=store_id)
     db.session.add(l); db.session.commit()
 
@@ -66,7 +66,7 @@ def test_search_requires_store_id():
 
 
 def test_search_short_query_returns_empty_envelope(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice", phone_number="5550000")
     resp = _client().get(
@@ -79,7 +79,7 @@ def test_search_short_query_returns_empty_envelope(test_store_id):
 
 
 def test_search_returns_envelope_with_matches(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice Smith",
                         phone_country="+1", phone_number="5551234")
@@ -103,7 +103,7 @@ def test_search_returns_envelope_with_matches(test_store_id):
 def test_search_decorates_cross_store_rows_with_home_name(test_store_id):
     """Customer logged at sibling store → row carries `home_store_name`
     so the UI can label it "from Store B"."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         oid = _seed_owner()
         s2_id = _seed_store("loc-2", name="Location 2")
@@ -126,7 +126,7 @@ def test_search_decorates_cross_store_rows_with_home_name(test_store_id):
 def test_search_excludes_stores_outside_umbrella(test_store_id):
     """Security property: a stranger store's customer must not leak
     through the autocomplete."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         s2_id = _seed_store("stranger")
         _seed_customer(s2_id, full_name="Hidden", phone_number="5550000")
@@ -140,7 +140,7 @@ def test_search_excludes_stores_outside_umbrella(test_store_id):
 
 def test_search_fuzzy_suggestions_in_response(test_store_id):
     """A typo of an existing customer surfaces them under `suggestions`."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Maria Gonzalez",
                         phone_number="5551234")
@@ -179,7 +179,7 @@ def test_upsert_creates_customer(test_store_id):
 
 def test_upsert_reuses_existing_phone(test_store_id):
     """Second upsert with same phone returns the same id."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         cid = _seed_customer(test_store_id, full_name="Alice Old",
                               phone_number="5551234")
@@ -255,7 +255,7 @@ def test_upsert_requires_full_name(test_store_id):
 
 
 def test_flask_dispatcher_routes_customers_to_fastapi(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice",
                         phone_number="5551234")

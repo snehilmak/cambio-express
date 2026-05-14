@@ -14,7 +14,7 @@ Two Jinja templates retired (admin_subscription.html, subscribe.html).
 
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -75,7 +75,7 @@ def test_subscription_summary_trial_store_shows_trial_state(
     """Default test store is on a trial. Expose trial_status +
     trial_days_left for the SPA's plan-hero meta line."""
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         s = db.session.get(Store, test_store_id)
         s.plan = "trial"

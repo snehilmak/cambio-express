@@ -41,7 +41,7 @@ def test_login_event_composite_declared(client):
 
 
 def test_login_event_composite_present_in_db(client):
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("login_event")}
@@ -56,7 +56,7 @@ def test_existing_single_column_indexes_survive(client):
     `index=True` on the columns) cover other paths — FK joins on
     user_id, "logins for user X" lookups, simple range scans on
     `at`. Don't drop them."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         idxs = insp.get_indexes("login_event")

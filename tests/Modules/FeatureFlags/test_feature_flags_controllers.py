@@ -24,7 +24,7 @@ def _login_superadmin(client):
 def _seed_flag(key="bank_sync", label="Bank sync",
                enabled_by_default=True):
     from api.Modules.Billing.Models import FeatureFlag
-    from app import db
+    from tests._app import db
     f = FeatureFlag(
         key=key, label=label,
         enabled_by_default=enabled_by_default,
@@ -85,7 +85,7 @@ def test_create_rejects_extra_fields(client):
 
 
 def test_create_rejects_duplicate_key(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_flag(key="bank_sync")
     token = _login_superadmin(client)
@@ -116,7 +116,7 @@ def test_create_persists_and_returns_row(client):
 
 
 def test_list_returns_alphabetic_by_key(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_flag(key="zeta")
         _seed_flag(key="alpha")
@@ -131,7 +131,7 @@ def test_list_returns_alphabetic_by_key(client):
 
 
 def test_toggle_flips_default(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_flag(key="bank_sync", enabled_by_default=True)
     token = _login_superadmin(client)
@@ -156,7 +156,7 @@ def test_toggle_404_when_missing(client):
 
 def test_delete_removes_row(client):
     from api.Modules.Billing.Models import FeatureFlag
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_flag(key="zap_me")
     token = _login_superadmin(client)
@@ -173,7 +173,7 @@ def test_delete_cascades_per_store_overrides(client, test_store_id):
     """Deleting a flag cascades the per-store overrides — they
     reference the key string directly and would orphan otherwise."""
     from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         _seed_flag(key="targeted")
         db.session.add(StoreFeatureOverride(
@@ -206,7 +206,7 @@ def test_delete_404_when_missing(client):
 
 def test_create_records_audit_entry(client):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/feature-flags",

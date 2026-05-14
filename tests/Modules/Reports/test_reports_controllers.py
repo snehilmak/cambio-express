@@ -26,7 +26,7 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
                     created_by=None, employee_id=None,
                     customer_id=None, send_date=None):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -79,7 +79,7 @@ def test_store_ids_empty_string_returns_422(test_store_id):
 def test_period_swaps_when_from_after_to(test_store_id):
     """Mirrors `_report_period`: if the caller passes `from > to`,
     the dependency swaps them so the SQL window is non-empty."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
     with flask_app.app_context():
@@ -101,7 +101,7 @@ def test_period_swaps_when_from_after_to(test_store_id):
 def test_period_falls_back_to_defaults_on_garbage_input(test_store_id):
     """`_report_period` swallows ValueError and falls back to today /
     first-of-month. The dependency mirrors that."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=42.0)
@@ -122,7 +122,7 @@ def test_period_falls_back_to_defaults_on_garbage_input(test_store_id):
 
 
 def test_sales_by_company_envelope(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0, company="Intermex")
         _seed_transfer(test_store_id, send_amount=300.0, company="Maxi")
@@ -139,7 +139,7 @@ def test_sales_by_company_envelope(test_store_id):
 
 
 def test_sales_by_service_envelope(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0,
                         service_type="Money Transfer")
@@ -156,7 +156,7 @@ def test_sales_by_service_envelope(test_store_id):
 
 
 def test_by_destination_country_envelope(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0, country="MX")
         _seed_transfer(test_store_id, send_amount=200.0, country="GT")
@@ -171,7 +171,7 @@ def test_by_destination_country_envelope(test_store_id):
 
 
 def test_top_recipients_respects_limit_query_param(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1),
@@ -203,7 +203,7 @@ def test_top_recipients_rejects_out_of_range_limit(test_store_id):
 
 def test_top_customers_respects_sort_by(test_store_id):
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     with flask_app.app_context():
         c = Customer(
@@ -237,7 +237,7 @@ def test_top_customers_rejects_invalid_sort_by(test_store_id):
 
 def test_sales_by_employee_resolves_user(test_store_id):
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         u = User(
             store_id=test_store_id, username="cash@x.com",
@@ -259,7 +259,7 @@ def test_sales_by_employee_resolves_user(test_store_id):
 
 def test_cashier_productivity_resolves_storeemployee(test_store_id):
     from api.Modules.Tenancy.Models import StoreEmployee
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         e = StoreEmployee(
             store_id=test_store_id, name="Maria", is_active=True,
@@ -283,7 +283,7 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id):
 def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
     """Comma-separated `store_ids=1,2` must aggregate across both."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-store",
                     email="o@test.com", plan="trial")
@@ -300,7 +300,7 @@ def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
 
 
 def test_period_filter_excludes_out_of_range_rows(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     last_year = today - timedelta(days=365)
     with flask_app.app_context():
@@ -326,7 +326,7 @@ def test_flask_dispatcher_routes_reports_to_fastapi(client, test_store_id):
     """The DispatcherMiddleware must forward `/api/v2/reports/*` into
     FastAPI. Hitting one route is enough to pin the wiring; the
     standalone TestClient cases above cover route logic."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=99.0, company="Intermex")
     resp = client.get(

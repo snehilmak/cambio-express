@@ -32,7 +32,7 @@ def _enable_tv_addon(store_id):
     Mirrors what the legacy /admin/subscription/addons toggle does
     — comma-separated list on Store.addons."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         s = db.session.get(Store, store_id)
         s.plan = "basic"
@@ -44,7 +44,7 @@ def _seed_country(store_id, **overrides):
     """Insert a TVDisplayCountry row for the given store. Returns
     (display_id, country_id)."""
     from api.Modules.TVDisplay.Models import TVDisplay, TVDisplayCountry
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     import secrets
     with flask_app.app_context():
         d = db.session.query(TVDisplay).filter_by(store_id=store_id).one_or_none()
@@ -71,7 +71,7 @@ def _seed_bank_with_rates(country_id, bank_name, rates):
     """Insert one TVDisplayPayoutBank + a TVDisplayRate per entry in
     `rates` (dict mt_company -> rate)."""
     from api.Modules.TVDisplay.Models import TVDisplayPayoutBank, TVDisplayRate
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         b = TVDisplayPayoutBank(
             country_id=country_id, bank_name=bank_name, sort_order=0,
@@ -174,7 +174,7 @@ def test_overview_country_stats_counts_banks_and_rates(client, test_store_id):
 def test_overview_active_pairing_surfaces_newest_unrevoked(client, test_store_id):
     """Most-recent unrevoked TVPairing should populate active_pairing."""
     from api.Modules.TVDisplay.Models import TVPairing
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from datetime import datetime, timedelta
     _enable_tv_addon(test_store_id)
     display_id, _ = _seed_country(test_store_id)
@@ -214,7 +214,7 @@ def test_country_detail_404_when_country_belongs_elsewhere(client, test_store_id
     """Cross-store ID → 404 (opaque tenancy)."""
     from api.Modules.TVDisplay.Models import TVDisplay, TVDisplayCountry
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     import secrets
     _enable_tv_addon(test_store_id)
     # Seed a SECOND store + country, so we have a country_id that
@@ -320,7 +320,7 @@ def test_settings_persists_full_payload(client, test_store_id):
     )
     assert resp.status_code == 204
     from api.Modules.TVDisplay.Models import TVDisplay
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         d = TVDisplay.query.first()
         assert d.title == "Hello"
@@ -342,7 +342,7 @@ def test_settings_invalid_orientation_falls_back(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     from api.Modules.TVDisplay.Models import TVDisplay
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         d = TVDisplay.query.first()
         assert d.orientation == "auto"
@@ -397,7 +397,7 @@ def test_claim_pairs_fire_tv_with_valid_code(client, test_store_id):
     Result: a TVPairing row whose device_token equals the pending row's,
     and the pending row is marked claimed."""
     from api.Modules.TVDisplay.Models import TVPairing, TVPendingPair
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     _enable_tv_addon(test_store_id)
     init = client.post("/api/tv-pair/init", json={"device_label": "Counter"})
     assert init.status_code == 200
@@ -430,7 +430,7 @@ def test_revoke_pairing_404_for_other_store(client, test_store_id):
     tenancy. Mirrors the overview's 404-everything posture."""
     from api.Modules.TVDisplay.Models import TVDisplay, TVPairing
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from datetime import datetime
     import secrets
     _enable_tv_addon(test_store_id)
@@ -457,7 +457,7 @@ def test_revoke_pairing_404_for_other_store(client, test_store_id):
 
 def test_revoke_pairing_marks_revoked_at(client, test_store_id):
     from api.Modules.TVDisplay.Models import TVDisplay, TVPairing
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from datetime import datetime
     import secrets
     _enable_tv_addon(test_store_id)
@@ -500,7 +500,7 @@ def test_create_country_uppercases_code_and_returns_201(client, test_store_id):
     assert body["country_code"] == "GT"
     assert body["country_name"] == "Guatemala"
     from api.Modules.TVDisplay.Models import TVDisplayCountry
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         c = TVDisplayCountry.query.filter_by(country_name="Guatemala").one()
         assert c.country_code == "GT"
@@ -532,7 +532,7 @@ def test_delete_country_cascades_banks_and_rates(client, test_store_id):
     )
     assert resp.status_code == 204
     from api.Modules.TVDisplay.Models import TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         assert TVDisplayCountry.query.filter_by(id=country_id).first() is None
         assert TVDisplayPayoutBank.query.filter_by(country_id=country_id).count() == 0
@@ -543,7 +543,7 @@ def test_delete_country_404_for_other_store(client, test_store_id):
     _enable_tv_addon(test_store_id)
     from api.Modules.TVDisplay.Models import TVDisplay, TVDisplayCountry
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     import secrets
     with flask_app.app_context():
         sibling = Store(name="Sibling", slug="sib", email="s@e.com",

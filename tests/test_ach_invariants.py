@@ -17,7 +17,7 @@ def _seed_store_and_transfers(transfers):
     """
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     store = Store.query.filter_by(slug="test-store").one()
     for t in transfers:
         db.session.add(Transfer(
@@ -39,7 +39,7 @@ def _seed_store_and_transfers(transfers):
 def test_transfer_total_collected_sums_all_three(client):
     """Customer hands over: send + fee + federal_tax."""
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
@@ -51,7 +51,7 @@ def test_transfer_total_collected_sums_all_three(client):
 def test_transfer_total_collected_handles_none_fields(client):
     """Legacy rows may have null fee / federal_tax — must not explode."""
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         _seed_store_and_transfers([
             {"send_amount": 100.0, "fee": None, "federal_tax": None},
@@ -76,7 +76,7 @@ def test_ach_transfers_total_excludes_fee(client):
     """The store keeps the fee — ACH debit is send_amount + federal_tax only."""
     from api.Modules.Batches.Models import ACHBatch
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
@@ -95,7 +95,7 @@ def test_ach_transfers_total_excludes_fee(client):
 def test_ach_transfers_total_scoped_to_batch_ref(client):
     """Transfers in a different batch_ref must not leak into this total."""
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0,
@@ -116,7 +116,7 @@ def test_ach_transfers_total_scoped_to_store(client):
     from api.Modules.Batches.Models import ACHBatch
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 200.0, "fee": 4.0, "federal_tax": 2.0},
@@ -143,7 +143,7 @@ def test_ach_transfers_total_empty_batch_is_zero(client):
     """Batch with no matching transfers returns 0.0, not None."""
     from api.Modules.Batches.Models import ACHBatch
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         store = Store.query.filter_by(slug="test-store").one()
         batch = ACHBatch(
@@ -158,7 +158,7 @@ def test_ach_transfers_total_empty_batch_is_zero(client):
 
 def test_ach_variance_zero_when_batch_balances(client):
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
@@ -174,7 +174,7 @@ def test_ach_variance_zero_when_batch_balances(client):
 def test_ach_variance_positive_when_bank_overpaid(client):
     """ach_amount > transfers_total => positive variance (bank moved too much)."""
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
@@ -189,7 +189,7 @@ def test_ach_variance_positive_when_bank_overpaid(client):
 
 def test_ach_variance_negative_when_bank_underpaid(client):
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
@@ -205,7 +205,7 @@ def test_ach_variance_negative_when_bank_underpaid(client):
 def test_ach_variance_rounded_to_cents(client):
     """Variance rounds to 2 decimals — no float jitter in the UI."""
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 100.10, "fee": 0.0, "federal_tax": 0.05},
@@ -223,7 +223,7 @@ def test_ach_variance_rounded_to_cents(client):
 
 def test_ach_transfer_count_matches_batch_ref(client):
     from api.Modules.Batches.Models import ACHBatch
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed_store_and_transfers([
             {"send_amount": 100.0}, {"send_amount": 200.0},

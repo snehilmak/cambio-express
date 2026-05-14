@@ -40,7 +40,7 @@ def _add_check(db, store_id, *, report_date, amount=100.0,
 
 
 def test_daily_drops_returns_rows_and_totals():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -57,7 +57,7 @@ def test_daily_drops_returns_rows_and_totals():
 def test_daily_drops_groups_by_report_date():
     """Multiple drops on same date → one bucket; multiple dates →
     multiple buckets."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -86,7 +86,7 @@ def test_daily_drops_groups_by_report_date():
 def test_daily_drops_sorted_newest_first():
     """Newest date first — the daily-drops table is most recent
     on top."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -107,7 +107,7 @@ def test_daily_drops_sorted_newest_first():
 def test_daily_drops_avg_per_day_uses_distinct_date_count():
     """avg_per_day divides by distinct date count, not row count.
     Two drops on the same date → still 1 day in the divisor."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -127,7 +127,7 @@ def test_daily_drops_avg_per_day_uses_distinct_date_count():
 
 def test_daily_drops_avg_per_day_zero_when_no_rows():
     """No drops → avg_per_day = 0 (no divide-by-zero)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -142,7 +142,7 @@ def test_daily_drops_avg_per_day_zero_when_no_rows():
 
 
 def test_daily_drops_filters_by_store_and_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
         DailyDrop.query.delete()
@@ -169,7 +169,7 @@ def test_daily_drops_filters_by_store_and_window():
 
 
 def test_check_deposits_returns_rows_and_totals():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import check_deposits
     with flask_app.app_context():
         CheckDeposit.query.delete()
@@ -184,7 +184,7 @@ def test_check_deposits_returns_rows_and_totals():
 
 
 def test_check_deposits_groups_by_report_date():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import check_deposits
     with flask_app.app_context():
         CheckDeposit.query.delete()

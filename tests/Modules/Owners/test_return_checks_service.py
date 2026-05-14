@@ -43,7 +43,7 @@ def _add_payment(db, return_check_id, *, paid_on, amount=100.0):
 
 
 def test_writeoff_empty_store_ids_returns_zero():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
         result = return_check_writeoff_total(
@@ -54,7 +54,7 @@ def test_writeoff_empty_store_ids_returns_zero():
 
 def test_writeoff_nets_payments_against_remaining_balance():
     """A $500 check with $100 paid before loss → $400 writeoff."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -81,7 +81,7 @@ def test_writeoff_nets_payments_against_remaining_balance():
 
 def test_writeoff_filters_by_status_value():
     """A check marked 'fraud' isn't included when status_value='loss'."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -103,7 +103,7 @@ def test_writeoff_filters_by_status_value():
 
 def test_writeoff_filters_by_status_changed_window():
     """Loss outside window → excluded."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -128,7 +128,7 @@ def test_writeoff_filters_by_status_changed_window():
 
 
 def test_period_aggregates_empty_store_ids_returns_zeros():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import (
         return_check_period_aggregates,
     )
@@ -145,7 +145,7 @@ def test_period_aggregates_empty_store_ids_returns_zeros():
 def test_period_aggregates_recoveries_by_payment_date():
     """Recoveries are measured at the PAYMENT level — installments
     in different months go to different months."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import (
         return_check_period_aggregates,
     )
@@ -178,7 +178,7 @@ def test_period_aggregates_recoveries_by_payment_date():
 
 def test_period_aggregates_pending_balance_subtracts_installments():
     """Pending = parent.amount − payments already received."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import (
         return_check_period_aggregates,
     )
@@ -203,7 +203,7 @@ def test_period_aggregates_pending_balance_subtracts_installments():
 
 def test_period_aggregates_net_gl_uses_gain_positive():
     """net_gl = recoveries - (losses + fraud)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import (
         return_check_period_aggregates,
     )
@@ -238,7 +238,7 @@ def test_period_aggregates_net_gl_uses_gain_positive():
 
 
 def test_aging_buckets_empty_store_ids_returns_zero_buckets():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_aging_buckets
     with flask_app.app_context():
         result = return_check_aging_buckets(
@@ -250,7 +250,7 @@ def test_aging_buckets_empty_store_ids_returns_zero_buckets():
 
 
 def test_aging_buckets_classifies_by_age():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_aging_buckets
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -284,7 +284,7 @@ def test_aging_buckets_classifies_by_age():
 
 
 def test_monthly_series_returns_12_months():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_monthly_series
     with flask_app.app_context():
         labels, rec, loss = return_check_monthly_series(
@@ -299,7 +299,7 @@ def test_monthly_series_returns_12_months():
 
 
 def test_monthly_series_handles_year_rollover():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_monthly_series
     with flask_app.app_context():
         labels, _, _ = return_check_monthly_series(
@@ -316,7 +316,7 @@ def test_monthly_series_handles_year_rollover():
 def test_monthly_pl_uses_loss_positive_convention():
     """net_gl is gain-positive; monthly_pl is loss-positive (expense
     convention). The two should be exact negatives."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import (
         return_check_monthly_pl,
         return_check_period_aggregates,

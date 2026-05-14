@@ -26,7 +26,7 @@ def _add_user(db, *, store_id, role, username, email,
 
 
 def test_recipients_include_store_admin():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -41,7 +41,7 @@ def test_recipients_include_store_admin():
 
 
 def test_recipients_skip_employees():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -56,7 +56,7 @@ def test_recipients_skip_employees():
 
 def test_recipients_skip_users_with_toggle_off():
     """The opt-out toggle silences the digest for that user."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -74,7 +74,7 @@ def test_recipients_skip_users_with_toggle_off():
 
 
 def test_recipients_skip_users_without_email():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -88,7 +88,7 @@ def test_recipients_skip_users_without_email():
 
 
 def test_recipients_skip_inactive_users():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -105,7 +105,7 @@ def test_recipients_skip_inactive_users():
 def test_recipients_pick_up_linked_owners():
     """Multi-store owner pattern — owner's User row lives in another
     store but StoreOwnerLink connects them in."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
@@ -127,7 +127,7 @@ def test_recipients_pick_up_linked_owners():
 def test_recipients_dedup_owner_admin_overlap():
     """Same user could be both admin of this store AND linked owner —
     they should only get one email."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )

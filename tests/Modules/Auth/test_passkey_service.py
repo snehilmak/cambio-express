@@ -69,7 +69,7 @@ def test_origin_preserves_port():
 def test_exclude_credentials_returns_descriptors_for_user():
     from api.Modules.Auth.Models import Passkey
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import passkey_exclude_credentials
     with flask_app.app_context():
         # Create a user + 2 passkeys
@@ -100,7 +100,7 @@ def test_exclude_credentials_returns_descriptors_for_user():
 
 def test_exclude_credentials_empty_for_user_without_passkeys():
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Auth.Services import passkey_exclude_credentials
     with flask_app.app_context():
         u = User(

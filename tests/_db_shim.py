@@ -1,12 +1,23 @@
-"""Flask-SQLAlchemy `db` shim. CLAUDE.md invariant #11.
+"""Test-only ``db`` shim — a Flask-SQLAlchemy-shaped facade over
+the production SQLAlchemy engine.
 
-Drop-in replacement for the slice of Flask-SQLAlchemy the legacy
-Flask code relies on (``db.Model``, ``db.session``, ``db.engine``,
-``db.create_all`` / ``drop_all``, ``db.relationship``, transparent
-re-exports of ``Column``, ``Integer``, ``func`` etc).
+Never required Flask despite its historical name; the original
+``api/Flask/Database.py`` was framework-free except for a
+``teardown_appcontext`` hook that tests/_app.py now replicates in
+its ``app_context()`` stub. Moved to ``tests/`` in PR #550 so the
+``api/`` tree contains zero Flask-flavoured code.
 
-Legacy ``Model.query`` keeps working via the scoped-session query
-property — CLAUDE.md invariant #11 says new code uses
+Public surface (matches what ~130 tests already use):
+  - ``db.Model`` — SQLAlchemy declarative ``Base``.
+  - ``db.session`` — thread-local scoped session.
+  - ``db.engine`` — the same engine FastAPI uses.
+  - ``db.create_all`` / ``db.drop_all`` — schema reset between tests.
+  - ``db.relationship`` — re-export for legacy model files.
+  - ``db.<sqlalchemy-name>`` — transparent ``Column``, ``Integer``,
+    ``func``, etc.
+
+``Model.query.filter_by(...)`` keeps working via the scoped-session
+``query_property``. CLAUDE.md invariant #11 says new code uses
 ``db.session.query(Model)``.
 """
 from __future__ import annotations
@@ -52,11 +63,3 @@ class _DB:
 
 
 db = _DB()
-
-
-def install(app) -> _DB:
-    """Wire the teardown hook + return the ``db`` shim."""
-    @app.teardown_appcontext
-    def _remove_db_session(exc):  # noqa: ARG001
-        _scoped_session.remove()
-    return db

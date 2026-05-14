@@ -1,5 +1,5 @@
-flask==3.0.3
-werkzeug==3.0.3
+werkzeug==3.0.3  # still used for password hashing helpers
+jinja2==3.1.4    # email templates + Starlette Jinja2Templates (was a flask transitive)
 requests==2.32.3
 gunicorn==22.0.0
 psycopg2-binary==2.9.9
@@ -11,21 +11,17 @@ qrcode==7.4.2
 webauthn==2.7.1
 Pillow==10.4.0
 pytest==8.2.0
-pytest-flask==1.3.0
-# ── FastAPI migration (per docs/architecture/MIGRATION_ADR.md) ────
-# FastAPI runs alongside Flask in the same repo during the strangler-
-# fig migration. Mounted at /api/v2/ — Flask continues to serve /
-# everywhere else until module migration is complete.
+# ── FastAPI ─────────────────────────────────────────────────────
+# Flask is gone as of PR #550 — asgi.py is the production entry
+# point and FastAPI handles every route. /api/v2/* / /webhooks/*
+# go to FastAPI directly; /app/* to the SPA shell; /static/* to a
+# Starlette mount; everything else 301s to /app/<path>.
 fastapi==0.136.1
 uvicorn[standard]==0.46.0
 pydantic==2.13.3
 pydantic-settings==2.13.0
-httpx==0.28.1  # FastAPI TestClient dependency
-# a2wsgi bridges Flask (WSGI) to FastAPI (ASGI) so /api/v2/* requests
-# get routed into the FastAPI app while Flask owns / and everything
-# else during the strangler-fig migration. Removed at cleanup.
-a2wsgi==1.10.10
-# JWT issuance for the FastAPI auth surface (PR 19+). Per ADR:
+httpx==0.28.1  # FastAPI TestClient + httpx-backed AsgiTestClient
+# JWT issuance for the FastAPI auth surface.
 # JWT-claims auth model — full permission set as claims, 30-min
 # access token TTL, refresh token + jti blacklist.
 PyJWT==2.7.0
@@ -33,11 +29,9 @@ PyJWT==2.7.0
 # Sentry is opt-in via SENTRY_DSN; structlog is the always-on
 # structured-logging foundation. Both libraries are lightweight,
 # import-only when not configured.
-sentry-sdk[flask,fastapi,sqlalchemy]==2.21.0
+sentry-sdk[fastapi,sqlalchemy]==2.21.0
 structlog==24.4.0
-# Alembic for schema migrations (see docs/architecture/
-# ADR-004-alembic-adoption.md). Coexists with the legacy
-# `_ADDED_COLUMNS` boot mechanism until the cutover PR.
+# Alembic for schema migrations. Sole source of schema truth.
 alembic==1.13.3
 # Rate limiting (see BACKLOG D6 + "Before going live"). slowapi
 # guards the FastAPI auth surface; defaults to in-memory storage

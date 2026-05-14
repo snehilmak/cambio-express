@@ -15,7 +15,7 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     confirm_number=None, status="Sent",
                     batch_id=""):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -80,7 +80,7 @@ def test_filters_normalizes_sort_dir():
 
 
 def test_list_returns_rows_and_total(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -95,7 +95,7 @@ def test_list_returns_rows_and_total(test_store_id):
 
 
 def test_list_filters_by_company(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -111,7 +111,7 @@ def test_list_filters_by_company(test_store_id):
 
 
 def test_list_filters_by_status(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -128,7 +128,7 @@ def test_list_filters_by_status(test_store_id):
 
 
 def test_list_filters_by_date_range(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -154,7 +154,7 @@ def test_list_filters_by_date_range(test_store_id):
 def test_list_global_search_q_matches_multiple_columns(test_store_id):
     """The `q=` global search hits sender, recipient, confirm,
     country, batch — anything string-y."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -177,7 +177,7 @@ def test_list_global_search_q_matches_multiple_columns(test_store_id):
 
 
 def test_list_orders_by_send_date_desc_by_default(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -196,7 +196,7 @@ def test_list_orders_by_send_date_desc_by_default(test_store_id):
 
 
 def test_list_respects_explicit_sort(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -215,7 +215,7 @@ def test_list_respects_explicit_sort(test_store_id):
 
 def test_list_falls_back_when_sort_slug_invalid(test_store_id):
     """Bad slug → default ordering (send_date desc), not a random column."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -235,7 +235,7 @@ def test_list_falls_back_when_sort_slug_invalid(test_store_id):
 
 
 def test_list_paginates(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -253,7 +253,7 @@ def test_list_paginates(test_store_id):
 def test_list_clamps_out_of_range_page(test_store_id):
     """Asking for page 99 of a 5-row list returns the last page,
     not an empty list — matches the legacy route's behavior."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -269,7 +269,7 @@ def test_list_clamps_out_of_range_page(test_store_id):
 
 
 def test_list_isolates_other_stores(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -289,7 +289,7 @@ def test_list_isolates_other_stores(test_store_id):
 
 
 def test_list_returns_empty_for_empty_store(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import (
         TransferFilters, list_with_filters,
     )
@@ -305,7 +305,7 @@ def test_list_returns_empty_for_empty_store(test_store_id):
 
 
 def test_get_by_id_returns_row_in_scope(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import get_by_id_in_stores
     with flask_app.app_context():
         tid = _seed_transfer(test_store_id, send_amount=100.0)
@@ -317,7 +317,7 @@ def test_get_by_id_returns_row_in_scope(test_store_id):
 def test_get_by_id_returns_none_outside_scope(test_store_id):
     """Cross-tenant lookup must return None (callers translate to 404)."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Repositories import get_by_id_in_stores
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-scope",

@@ -56,12 +56,12 @@ def is_known_kind(kind: str) -> bool:
 
 
 def kind_or_404(kind: str) -> tuple[str, str, str]:
-    """Return the registry tuple for `kind`, or `flask.abort(404)`
-    when unknown. Used by the daily-report URL family to guard
-    `<kind>` path segments."""
+    """Return the registry tuple for ``kind``, or raise an
+    ``HTTPException(404)`` when unknown. Used by the daily-report
+    URL family to guard ``<kind>`` path segments."""
     if kind not in LINE_ITEM_KINDS:
-        from flask import abort
-        abort(404)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Unknown kind '{kind}'.")
     return LINE_ITEM_KINDS[kind]
 
 

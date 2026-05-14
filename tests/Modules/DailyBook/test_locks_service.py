@@ -29,7 +29,7 @@ def _add_report(db, store_id, *, report_date,
 def test_is_locked_returns_false_when_no_report():
     """Nothing to lock yet — returns False so write routes can
     proceed."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -42,7 +42,7 @@ def test_is_locked_returns_false_when_no_report():
 
 def test_is_locked_returns_false_when_report_unlocked():
     """Row exists but locked_at is None → not locked."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -54,7 +54,7 @@ def test_is_locked_returns_false_when_report_unlocked():
 
 
 def test_is_locked_returns_true_when_report_locked():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
         DailyReport.query.delete()
@@ -70,7 +70,7 @@ def test_is_locked_returns_true_when_report_locked():
 
 def test_is_locked_filters_by_store_and_date():
     """Locks on other stores or other dates don't leak."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import is_daily_report_locked
     with flask_app.app_context():
         DailyReport.query.delete()

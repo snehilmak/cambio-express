@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, date
 
 def _make_inactive_store_due(slug="expiring-store", days_past=1):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=slug, slug=slug, email=f"{slug}@test.com",
               plan="inactive",
               canceled_at=datetime.utcnow() - timedelta(days=181),
@@ -28,7 +28,7 @@ def _make_inactive_store_due(slug="expiring-store", days_past=1):
 
 def _make_inactive_store_future(slug="still-within-window", days_future=90):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=slug, slug=slug, email=f"{slug}@test.com",
               plan="inactive",
               canceled_at=datetime.utcnow(),
@@ -41,7 +41,7 @@ def _make_inactive_store_future(slug="still-within-window", days_future=90):
 
 def test_purge_deletes_inactive_store_past_retention(client):
     from api.Modules.Tenancy.Models import Store
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         s = _make_inactive_store_due()
         db.session.commit()
@@ -58,7 +58,7 @@ def test_purge_deletes_inactive_store_past_retention(client):
 
 def test_purge_skips_inactive_store_within_retention_window(client):
     from api.Modules.Tenancy.Models import Store
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         s = _make_inactive_store_future(days_future=60)
         db.session.commit()
@@ -71,7 +71,7 @@ def test_purge_skips_inactive_store_within_retention_window(client):
 def test_purge_skips_active_store_even_with_past_retention(client):
     """plan != 'inactive' => never purge, even if data_retention_until is set."""
     from api.Modules.Tenancy.Models import Store
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         s = Store(name="Paying Store", slug="paying-store",
                   email="p@test.com", plan="pro",
@@ -86,7 +86,7 @@ def test_purge_skips_active_store_even_with_past_retention(client):
 def test_purge_skips_inactive_store_with_null_retention(client):
     """No retention timer => cancellation never committed; don't delete."""
     from api.Modules.Tenancy.Models import Store
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         s = Store(name="No Timer", slug="no-timer", email="n@test.com",
                   plan="inactive", data_retention_until=None)
@@ -97,7 +97,7 @@ def test_purge_skips_inactive_store_with_null_retention(client):
 
 
 def test_purge_returns_zero_when_nothing_to_purge(client):
-    from app import purge_expired_stores
+    from tests._app import purge_expired_stores
     with client.application.app_context():
         assert purge_expired_stores() == 0
 
@@ -112,7 +112,7 @@ def test_purge_cascades_all_store_owned_tables(client):
     from api.Modules.DailyBook.Models import DailyDrop, DailyReport
     from api.Modules.Tenancy.Models import Store, StoreEmployee, User
     from api.Modules.Transfers.Models import Transfer
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         s = _make_inactive_store_due(slug="cascade-store")
         db.session.flush()
@@ -201,7 +201,7 @@ def test_purge_cascades_referral_models_with_custom_fk(client):
     column or the whole purge aborts with an InvalidRequestError."""
     from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
     from api.Modules.Billing.Services import STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     # Override map must not lie.
     assert _STORE_FK_OVERRIDES.get("ReferralCode") == "owner_store_id"
     assert _STORE_FK_OVERRIDES.get("ReferralRedemption") == "referee_store_id"
@@ -238,7 +238,7 @@ def test_purge_does_not_touch_unrelated_stores(client):
     """Active stores + their data must survive a purge of a different store."""
     from api.Modules.Tenancy.Models import Store, User
     from api.Modules.Transfers.Models import Transfer
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         doomed = _make_inactive_store_due(slug="doomed")
         survivor = Store(name="Survivor", slug="survivor-store",
@@ -272,7 +272,7 @@ def test_purge_preserves_superadmin_and_other_platform_data(client):
     from api.Modules.Audit.Models import SuperadminAuditLog
     from api.Modules.Billing.Models import DiscountCode, FeatureFlag
     from api.Modules.Tenancy.Models import Store, User
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         _make_inactive_store_due(slug="doomed-platform-test")
         db.session.add(FeatureFlag(key="bank_sync", label="Bank sync",
@@ -300,7 +300,7 @@ def test_purge_preserves_superadmin_and_other_platform_data(client):
 
 def test_purge_handles_multiple_expired_stores_in_one_run(client):
     from api.Modules.Tenancy.Models import Store
-    from app import db, purge_expired_stores
+    from tests._app import db, purge_expired_stores
     with client.application.app_context():
         _make_inactive_store_due(slug="doomed-1")
         _make_inactive_store_due(slug="doomed-2", days_past=30)

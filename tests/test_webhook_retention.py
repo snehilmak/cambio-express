@@ -20,7 +20,7 @@ def _basic_price_id():
 
 def _seed(plan="pro", **kwargs):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name="Retention Store", slug="retention-store",
               email="r@test.com", plan=plan, **kwargs)
     db.session.add(s); db.session.commit()
@@ -43,7 +43,7 @@ def _post(client, event):
 def test_deleted_starts_180_day_retention(client):
     from api.Modules.Billing.Services import DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="pro", stripe_subscription_id="sub_xyz")
     before = datetime.utcnow()
@@ -69,7 +69,7 @@ def test_deleted_starts_180_day_retention(client):
 def test_deleted_event_for_unknown_subscription_is_noop(client):
     """Stripe can send us deletions for subs we never tracked — must not 500."""
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="pro", stripe_subscription_id="sub_ours")
     resp = _post(client, {
@@ -88,7 +88,7 @@ def test_deleted_event_for_unknown_subscription_is_noop(client):
 def test_checkout_completed_clears_retention_timer(client):
     """Returning customer: clear canceled_at + data_retention_until."""
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     past_cancel = datetime.utcnow() - timedelta(days=30)
     retain_until = datetime.utcnow() + timedelta(days=150)
     with client.application.app_context():
@@ -118,7 +118,7 @@ def test_checkout_completed_clears_retention_timer(client):
 
 def test_checkout_completed_maps_basic_price_to_basic_plan(client):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="trial")
     event = {
@@ -139,7 +139,7 @@ def test_checkout_completed_maps_basic_price_to_basic_plan(client):
 def test_checkout_completed_non_basic_price_maps_to_pro(client):
     """Any non-basic price id routes to 'pro' (covers monthly + yearly pro)."""
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="trial")
     event = {
@@ -163,7 +163,7 @@ def test_checkout_completed_falls_back_to_pro_on_retrieve_failure(client):
     Better to give them too much than to lock a paying customer out.
     """
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="trial")
     event = {
@@ -187,7 +187,7 @@ def test_checkout_completed_falls_back_to_pro_on_retrieve_failure(client):
 def test_checkout_completed_ignored_without_store_id_metadata(client):
     """No metadata.store_id => must not mutate anything (or 500)."""
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="trial")
     event = {
@@ -226,7 +226,7 @@ def test_checkout_completed_ignored_for_unknown_store_id(client):
 
 def test_unhandled_event_type_returns_200_without_mutation(client):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         sid = _seed(plan="pro")
     resp = _post(client, {

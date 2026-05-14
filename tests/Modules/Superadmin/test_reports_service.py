@@ -43,7 +43,7 @@ def _add_user(db, store_id=None, *, role="admin",
 
 def test_active_stores_by_plan_groups_by_plan():
     """Counts existing stores by current plan at end-of-period."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
         Store.query.delete()
@@ -67,7 +67,7 @@ def test_active_stores_by_plan_groups_by_plan():
 def test_active_stores_by_plan_excludes_stores_created_after_d_to():
     """Stores created AFTER d_to don't count — point-in-time at
     end-of-period."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
         Store.query.delete()
@@ -84,7 +84,7 @@ def test_active_stores_by_plan_excludes_stores_created_after_d_to():
 
 def test_active_stores_by_plan_unknown_plan_label():
     """Stores with NULL plan render as '(unknown)'."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
         Store.query.delete()
@@ -103,7 +103,7 @@ def test_active_stores_by_plan_unknown_plan_label():
 
 
 def test_signup_funnel_only_counts_stores_created_in_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import signup_funnel
     with flask_app.app_context():
         Store.query.delete()
@@ -126,7 +126,7 @@ def test_signup_funnel_only_counts_stores_created_in_window():
 
 
 def test_signup_funnel_groups_by_plan():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import signup_funnel
     with flask_app.app_context():
         Store.query.delete()
@@ -149,7 +149,7 @@ def test_signup_funnel_groups_by_plan():
 
 
 def test_login_activity_groups_by_role():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import login_activity
     with flask_app.app_context():
         # Snapshot existing logins so seed users don't pollute.
@@ -180,7 +180,7 @@ def test_login_activity_groups_by_role():
 def test_login_activity_filters_by_window():
     """Users whose `last_login_at` is outside [d_from, d_to] don't
     surface even if they have a recent login."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import login_activity
     with flask_app.app_context():
         # Reset baseline.

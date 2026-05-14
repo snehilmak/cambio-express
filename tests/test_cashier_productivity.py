@@ -11,7 +11,7 @@ from datetime import date
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         u = User.query.filter_by(store_id=store_id, role="admin").first()
         uid = u.id
@@ -23,7 +23,7 @@ def _admin_login(client, store_id):
 
 def _make_employee(client, store_id, *, name, is_active=True):
     from api.Modules.Tenancy.Models import StoreEmployee
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
         db.session.add(e); db.session.commit()
@@ -33,7 +33,7 @@ def _make_employee(client, store_id, *, name, is_active=True):
 def _make_transfer(client, store_id, *, send_date, amount, fee=2.0,
                    employee_id=None, employee_name=""):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         t = Transfer(
             store_id=store_id, send_date=send_date,
@@ -62,7 +62,7 @@ def test_cashier_productivity_groups_by_employee_id(client, test_store_id):
 
     # Direct data-fn unit test — the registry-driven route adds CSRF
     # state, period chip, etc. that the data fn doesn't care about.
-    from app import db
+    from tests._app import db
     from api.Modules.Reports.Services import cashier_productivity
     rows, totals = cashier_productivity(
         db.session, [test_store_id], today, today,
@@ -89,7 +89,7 @@ def test_cashier_productivity_marks_inactive(client, test_store_id):
     _make_transfer(client, test_store_id, send_date=today,
                    amount=100, employee_id=quit_emp, employee_name="Quit")
 
-    from app import db
+    from tests._app import db
     from api.Modules.Reports.Services import cashier_productivity
     rows, totals = cashier_productivity(
         db.session, [test_store_id], today, today,

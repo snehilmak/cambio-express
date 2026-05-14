@@ -29,7 +29,7 @@ def _login_superadmin(client):
 def _seed(message="Heads up", level="info", is_active=True,
           starts_at=None, expires_at=None):
     from api.Modules.Announcements.Models import Announcement
-    from app import db
+    from tests._app import db
     a = Announcement(
         message=message, level=level, is_active=is_active,
         starts_at=starts_at, expires_at=expires_at,
@@ -121,7 +121,7 @@ def test_create_returns_row_and_persists(client):
 
 
 def test_list_returns_newest_first(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         old_id = _seed(message="oldest")
         new_id = _seed(message="newest")
@@ -136,7 +136,7 @@ def test_list_returns_newest_first(client):
 
 
 def test_list_marks_expired_as_not_visible(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         past = datetime.utcnow() - timedelta(days=1)
         _seed(message="dead", expires_at=past)
@@ -150,7 +150,7 @@ def test_list_marks_expired_as_not_visible(client):
 
 
 def test_toggle_flips_is_active(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         ann_id = _seed(message="x", is_active=True)
     token = _login_superadmin(client)
@@ -175,7 +175,7 @@ def test_toggle_404_when_missing(client):
 
 def test_delete_removes_row(client):
     from api.Modules.Announcements.Models import Announcement
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         ann_id = _seed(message="zap")
     token = _login_superadmin(client)
@@ -204,7 +204,7 @@ def test_create_records_audit_entry(client):
     """Every superadmin mutation must record_audit (CLAUDE.md
     invariant #7). Confirms the Controller calls it."""
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/announcements",

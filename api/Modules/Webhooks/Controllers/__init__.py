@@ -109,8 +109,8 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     Stripe doesn't retry-storm a buggy handler — operator sees the
     failure rate via the Webhook Health page.
     """
+    from api.Core.Database import SessionLocal
     from api.Modules.Webhooks.Models import WebhookEvent
-    from app import app as flask_app, db as flask_db
     from api.Modules.Billing.Services import (
         DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS,
         InvalidWebhookSignatureError,
@@ -124,17 +124,17 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         event = verify_webhook_signature(payload, sig_header, webhook_secret)
     except InvalidWebhookSignatureError as e:
-        with flask_app.app_context():
+        with SessionLocal() as session:
             try:
-                flask_db.session.add(WebhookEvent(
+                session.add(WebhookEvent(
                     source="stripe", status="signature_err",
                     error=str(e)[:500]))
-                flask_db.session.commit()
+                session.commit()
             except Exception:
-                flask_db.session.rollback()
+                session.rollback()
         return JSONResponse({"error": "Invalid signature"}, status_code=400)
 
-    with flask_app.app_context():
+    with SessionLocal() as session:
         log_row = WebhookEvent(
             source="stripe",
             event_id=event.get("id", "") or "",
@@ -142,15 +142,15 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
             status="ok",
         )
         try:
-            flask_db.session.add(log_row)
-            flask_db.session.commit()
+            session.add(log_row)
+            session.commit()
         except Exception:
-            flask_db.session.rollback()
+            session.rollback()
             log_row = None
 
         try:
             handle_stripe_event(
-                flask_db.session, event,
+                session, event,
                 retention_days=DATA_RETENTION_DAYS,
             )
         except Exception as e:
@@ -158,9 +158,9 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
                 try:
                     log_row.status = "processing_err"
                     log_row.error = (str(e) or type(e).__name__)[:500]
-                    flask_db.session.commit()
+                    session.commit()
                 except Exception:
-                    flask_db.session.rollback()
+                    session.rollback()
             # Still return 200 — Stripe shouldn't retry handler bugs.
             return {"ok": True, "warning": "handler error logged"}
 

@@ -51,7 +51,7 @@ def test_transfer_indexes_present_in_db(client):
     """After boot, every expected index actually exists in the
     running database. Catches a bug where the model declares an
     index but `_ensure_added_indexes()` failed silently on prod."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("transfer")}
@@ -86,7 +86,7 @@ def test_ensure_added_indexes_is_idempotent(client):
     catches a regression where someone forgets the IF NOT EXISTS
     and prod boots start failing with `relation already exists`."""
     from api.Core.Bootstrap import ensure_added_indexes
-    from app import db, app as flask_app
+    from tests._app import db, app as flask_app
     with flask_app.app_context():
         ensure_added_indexes(db.engine, flask_app.logger)  # first call already happened on boot
         ensure_added_indexes(db.engine, flask_app.logger)  # second call must not raise
@@ -99,7 +99,7 @@ def test_period_filter_uses_index_on_postgres(client):
     so we just assert the index exists with the right column order
     — that's the prerequisite. Real EXPLAIN diffing happens in the
     PR description before/after."""
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         insp = inspect(db.engine)
         idxs = {ix["name"]: ix for ix in insp.get_indexes("transfer")}

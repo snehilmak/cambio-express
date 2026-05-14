@@ -70,7 +70,7 @@ def test_is_daily_book_kind_false_for_blank_or_none():
 
 
 def test_is_valid_accepts_daily_book_kind():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         assert is_valid_bank_category(
@@ -79,7 +79,7 @@ def test_is_valid_accepts_daily_book_kind():
 
 
 def test_is_valid_accepts_static_non_posting():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         assert is_valid_bank_category(
@@ -91,7 +91,7 @@ def test_is_valid_accepts_static_non_posting():
 
 
 def test_is_valid_rejects_blank():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         assert is_valid_bank_category(
@@ -103,7 +103,7 @@ def test_is_valid_rejects_blank():
 
 
 def test_is_valid_rejects_unknown_slug():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         assert is_valid_bank_category(
@@ -115,7 +115,7 @@ def test_is_valid_accepts_dynamic_bank_charge_for_connected_account():
     """bank_charge_<last4> validates against the store's
     connected `StripeBankAccount` rows."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -145,7 +145,7 @@ def test_is_valid_accepts_dynamic_bank_charge_for_connected_account():
 
 def test_is_valid_rejects_bank_charge_with_empty_suffix():
     """`bank_charge_` with no suffix is junk."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import is_valid_bank_category
     with flask_app.app_context():
         assert is_valid_bank_category(
@@ -157,7 +157,7 @@ def test_is_valid_rejects_bank_charge_with_empty_suffix():
 
 
 def test_groups_returns_two_top_level_groups():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         result = bank_category_groups(db.session)
@@ -170,7 +170,7 @@ def test_groups_returns_two_top_level_groups():
 
 
 def test_groups_includes_static_non_posting_tags():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         result = bank_category_groups(db.session)
@@ -183,7 +183,7 @@ def test_groups_augments_other_with_per_account_bank_charges():
     """Connected accounts get dynamic bank_charge_<last4> entries
     in the Other group."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         StripeBankAccount.query.delete()
@@ -207,7 +207,7 @@ def test_groups_does_not_duplicate_static_slugs():
     """If an account's last4 maps to a slug already in the static
     dict (210/230), don't double-add it."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import bank_category_groups
     with flask_app.app_context():
         StripeBankAccount.query.delete()

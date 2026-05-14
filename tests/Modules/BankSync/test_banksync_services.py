@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 def _seed_account(store_id, *, last4="0000"):
     from api.Modules.BankSync.Models import StripeBankAccount
-    from app import db
+    from tests._app import db
     a = StripeBankAccount(
         store_id=store_id,
         stripe_account_id=f"fcacc_{last4}",
@@ -19,7 +19,7 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
                 description="X", category_slug="",
                 posted_at=None, stripe_transaction_id=None):
     from api.Modules.BankSync.Models import BankTransaction
-    from app import db
+    from tests._app import db
     t = BankTransaction(
         store_id=store_id,
         stripe_bank_account_id=account_id,
@@ -40,7 +40,7 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
 
 
 def test_page_meta_and_totals(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     with flask_app.app_context():
@@ -61,7 +61,7 @@ def test_page_meta_and_totals(test_store_id):
 def test_page_uncategorized_count_independent_of_pagination(test_store_id):
     """Pill shows the count across the entire filtered window, not
     just the current page."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     with flask_app.app_context():
@@ -90,7 +90,7 @@ def test_page_uncategorized_count_independent_of_pagination(test_store_id):
 
 def test_page_total_cents_only_visible_rows(test_store_id):
     """Footer total reflects ONLY rows on the visible page."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     with flask_app.app_context():
@@ -115,7 +115,7 @@ def test_page_total_cents_only_visible_rows(test_store_id):
 def test_page_filter_passthrough_uncategorized(test_store_id):
     """When the caller filters by uncategorized_only, the
     uncategorized_count equals total — we don't re-filter on top."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     with flask_app.app_context():
@@ -136,7 +136,7 @@ def test_page_filter_passthrough_uncategorized(test_store_id):
 
 
 def test_page_empty_safe(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     with flask_app.app_context():
@@ -153,7 +153,7 @@ def test_page_empty_safe(test_store_id):
 
 
 def test_response_schema_validates_service_output(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Repositories import BankTransactionFilters
     from api.Modules.BankSync.Services import list_transactions_page
     from api.Modules.BankSync.Requests import (

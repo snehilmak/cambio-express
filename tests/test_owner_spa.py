@@ -15,7 +15,7 @@ def _seed_owner_with_store(client):
     """Mint an owner user with one linked store + a JWT for it."""
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         s = Store(name="OS Store", slug="os-store-spa", plan="pro",
                   billing_cycle="monthly")
@@ -58,7 +58,7 @@ def test_owner_dashboard_redirects_to_spa(client):
     """Unauthed: bounces to login. We test the contract through an
     authed owner session so the redirect-to-login path doesn't fire."""
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         o = User(username="dash-spa@x.com", full_name="Dash",
                  role="owner", store_id=None)
@@ -72,7 +72,7 @@ def test_owner_dashboard_redirects_to_spa(client):
 
 def test_owner_dashboard_preserves_period_query_string(client):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     with client.application.app_context():
         o = User(username="dash-spa-q@x.com", full_name="Dash",
                  role="owner", store_id=None)
@@ -161,7 +161,7 @@ def test_store_detail_blocks_unrelated_store(client):
     the API returns 404 (parity with the legacy 302-bounce, just
     a more API-shaped status)."""
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     jwt, _, _ = _seed_owner_with_store(client)
     with client.application.app_context():
         other = Store(name="Other", slug="other-spa", plan="pro")

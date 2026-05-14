@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 def _seed_report(store_id, report_date, **kwargs):
     from api.Modules.DailyBook.Models import DailyReport
-    from app import db
+    from tests._app import db
     r = DailyReport(
         store_id=store_id, report_date=report_date, **kwargs,
     )
@@ -29,7 +29,7 @@ def test_get_report_returns_404_when_missing(test_store_id):
 
 
 def test_get_report_returns_summary(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     with flask_app.app_context():
         _seed_report(
@@ -60,7 +60,7 @@ def test_get_report_rejects_zero_store_id():
 
 
 def test_period_returns_summary(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
     with flask_app.app_context():
@@ -79,7 +79,7 @@ def test_period_returns_summary(test_store_id):
 def test_period_swaps_when_from_after_to(test_store_id):
     """Mirror the Reports period dependency: if from > to, swap so the
     SQL window stays non-empty."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
     with flask_app.app_context():
@@ -121,7 +121,7 @@ def test_period_empty_range_returns_zeros(test_store_id):
 
 
 def test_flask_dispatcher_routes_daily_to_fastapi(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     with flask_app.app_context():
         _seed_report(test_store_id, today, taxable_sales=99.0)
@@ -181,7 +181,7 @@ def test_put_creates_report_when_missing(client, test_store_id):
 
 
 def test_put_updates_existing_report(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     with flask_app.app_context():
         _seed_report(test_store_id, today, taxable_sales=10.0)
@@ -197,7 +197,7 @@ def test_put_updates_existing_report(client, test_store_id):
 
 def test_put_rejects_locked_report(client, test_store_id):
     from api.Modules.DailyBook.Models import DailyReport
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = date.today()
     from datetime import datetime as _dt
     with flask_app.app_context():

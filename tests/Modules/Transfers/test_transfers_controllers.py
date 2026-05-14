@@ -15,7 +15,7 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
                     confirm_number=None, status="Sent",
                     batch_id=""):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date or date.today(),
@@ -80,7 +80,7 @@ def test_list_rejects_out_of_range_per_page():
 
 
 def test_list_response_envelope(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         for i in range(3):
             _seed_transfer(test_store_id, send_amount=100.0)
@@ -97,7 +97,7 @@ def test_list_response_envelope(test_store_id):
 
 
 def test_list_filters_company(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, company="Intermex",
                         confirm_number="X-Intermex")
@@ -114,7 +114,7 @@ def test_list_filters_company(test_store_id):
 
 
 def test_list_global_search_q(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, sender_name="Alice",
                         confirm_number="X-A")
@@ -129,7 +129,7 @@ def test_list_global_search_q(test_store_id):
 
 
 def test_list_pagination(test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1))
@@ -149,7 +149,7 @@ def test_list_filters_date_range_string_input(test_store_id):
     """Controller takes `date_from`/`date_to` as YYYY-MM-DD strings;
     the underlying TransferFilters parses them. Malformed strings drop
     the filter (legacy behavior)."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
     last_week = today - timedelta(days=7)
@@ -173,7 +173,7 @@ def test_list_filters_date_range_string_input(test_store_id):
 
 def test_list_multi_store_aggregation(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         s2 = Store(name="Other", slug="other-tx-cc",
                     email="o@x.com", plan="trial")
@@ -193,7 +193,7 @@ def test_list_rows_have_total_collected(test_store_id):
     """Wire test: the row payload must include `total_collected`
     (send + fee + tax) so the React table can render the column
     without recomputing client-side."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0,
                         fee=2.0, federal_tax=1.0)
@@ -208,7 +208,7 @@ def test_list_rows_have_total_collected(test_store_id):
 
 
 def test_flask_dispatcher_routes_transfers_to_fastapi(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=99.0)
     resp = client.get(
@@ -249,7 +249,7 @@ def _seed_employee(store_id, *, name="Cashier 1", is_active=True):
     """Add a roster row so the create endpoint's pick_employee
     has something to resolve to."""
     from api.Modules.Tenancy.Models import StoreEmployee
-    from app import db
+    from tests._app import db
     e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
     db.session.add(e); db.session.commit()
     return e.id
@@ -276,7 +276,7 @@ def test_create_returns_201_and_persists(client, test_store_id):
 
     Uses the Flask dispatcher path (mirrors how the SPA calls in
     production through DispatcherMiddleware)."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id)
 
@@ -321,7 +321,7 @@ def test_create_returns_201_and_persists(client, test_store_id):
 
     # Verify it persisted.
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     with flask_app.app_context():
         t = db.session.get(Transfer, row["id"])
         assert t is not None
@@ -334,7 +334,7 @@ def test_create_recomputes_tax_ignoring_client_value(client, test_store_id):
     """Tax invariant — client can't override the server-computed
     federal_tax. We don't expose it as a request field at all
     (extra=forbid), and the response shows the recomputed value."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="C2")
 
@@ -395,7 +395,7 @@ def test_create_rejects_missing_employee(client, test_store_id):
 
 
 def test_create_rejects_bad_send_date(client, test_store_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="C3")
     login = client.post(
@@ -450,7 +450,7 @@ def test_update_returns_200_and_persists(client, test_store_id):
     verify the row + the audit log."""
     from api.Modules.Audit.Models import TransferAudit
     from api.Modules.Transfers.Models import Transfer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="EE-edit")
         tid = _seed_transfer(
@@ -515,7 +515,7 @@ def test_update_returns_404_for_cross_tenant(client, test_store_id):
     to update a transfer ID that doesn't exist (or belongs to
     another store). Both must 404 — never 403, so a probe can't
     enumerate other tenants' transfer IDs."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="EE-404")
 
@@ -568,7 +568,7 @@ def test_employees_returns_active_roster(client, test_store_id):
     filtered to active employees only — feeds the SPA's
     'Processed by' dropdown."""
     from api.Modules.Tenancy.Models import StoreEmployee
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         e1 = StoreEmployee(store_id=test_store_id, name="Alice", is_active=True)
         e2 = StoreEmployee(store_id=test_store_id, name="Bob", is_active=True)
@@ -630,7 +630,7 @@ def test_update_status_only_records_status_changed_audit(
     audit (correctly) sees those as changes too.
     """
     from api.Modules.Audit.Models import TransferAudit
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         emp_id = _seed_employee(test_store_id, name="EE-status")
         tid = _seed_transfer(

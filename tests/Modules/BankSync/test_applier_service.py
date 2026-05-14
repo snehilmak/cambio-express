@@ -46,7 +46,7 @@ def _add_uncategorized_txn(db, store_id, account_id,
 def test_already_categorized_row_is_skipped():
     """Rows with a non-empty category_slug must NOT be retagged
     — operator overrides survive."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -69,7 +69,7 @@ def test_matches_builtin_when_no_operator_rule():
     """REMOTE DEPOSIT FEE on the 0230 MSB account fires the
     Nizari built-in. Built-ins never post to the daily book."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -93,7 +93,7 @@ def test_matches_builtin_when_no_operator_rule():
 
 def test_no_match_leaves_row_uncategorised():
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -122,7 +122,7 @@ def test_operator_rule_wins_over_builtin():
     """Operator rules fire before built-ins. Rule chain order
     matters."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -158,7 +158,7 @@ def test_operator_rule_increments_match_count():
     """When an operator rule fires, its match_count goes up +
     last_matched_at gets stamped."""
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -194,7 +194,7 @@ def test_allow_auto_post_false_skips_daily_line_item():
     DailyLineItem even when rule.auto_post=True."""
     from api.Modules.BankSync.Models import BankRule
     from api.Modules.DailyBook.Models import DailyLineItem
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
@@ -231,7 +231,7 @@ def test_allow_auto_post_true_creates_daily_line_item():
     target → DailyLineItem created."""
     from api.Modules.BankSync.Models import BankRule
     from api.Modules.DailyBook.Models import DailyLineItem
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )

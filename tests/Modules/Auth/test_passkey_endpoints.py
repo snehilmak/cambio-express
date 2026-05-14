@@ -26,7 +26,7 @@ def _login_admin(client, store_id):
 
 def _seed_passkey(user_id, *, name="Test Passkey", credential_id=None):
     from api.Modules.Auth.Models import Passkey
-    from app import db
+    from tests._app import db
     p = Passkey(
         user_id=user_id,
         credential_id=credential_id or f"cred_{user_id}_{name}".encode(),
@@ -67,7 +67,7 @@ def test_list_empty_returns_zero(client, test_store_id):
 
 
 def test_list_returns_users_passkeys(client, test_store_id, test_admin_id):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_passkey(test_admin_id, name="MacBook")
         _seed_passkey(test_admin_id, name="iPhone",
@@ -85,7 +85,7 @@ def test_list_returns_users_passkeys(client, test_store_id, test_admin_id):
 def test_list_does_not_leak_credential_id_or_public_key(client, test_store_id, test_admin_id):
     """The raw credential bytes never leave the server — the SPA
     only needs the metadata to render the device list."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _seed_passkey(test_admin_id, name="Sensitive")
     token = _login_admin(client, test_store_id)
@@ -102,7 +102,7 @@ def test_list_does_not_leak_credential_id_or_public_key(client, test_store_id, t
 def test_list_excludes_other_users_passkeys(client, test_store_id, test_admin_id):
     """Cross-user isolation: another user's passkey must not surface."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         # Seed another user with a passkey
         other = User(
@@ -129,7 +129,7 @@ def test_list_excludes_other_users_passkeys(client, test_store_id, test_admin_id
 
 def test_delete_removes_passkey(client, test_store_id, test_admin_id):
     from api.Modules.Auth.Models import Passkey
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         pid = _seed_passkey(test_admin_id, name="ToDelete")
     token = _login_admin(client, test_store_id)
@@ -155,7 +155,7 @@ def test_delete_404_for_another_users_passkey(client, test_store_id, test_admin_
     """Deleting someone else's passkey returns 404, never 200 or
     403 — that would leak the existence of the row."""
     from api.Modules.Tenancy.Models import User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         other = User(
             store_id=test_store_id, username="alien@test.com",

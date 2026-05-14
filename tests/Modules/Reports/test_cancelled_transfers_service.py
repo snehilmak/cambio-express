@@ -39,7 +39,7 @@ def _add_transfer(db, store_id, *, send_date, status="Canceled",
 
 
 def test_returns_rows_and_totals_tuple():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -54,7 +54,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -79,7 +79,7 @@ def test_row_shape():
 
 def test_active_transfers_excluded():
     """Sent / Pending transfers are NOT in the cancelled list."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -103,7 +103,7 @@ def test_active_transfers_excluded():
 
 def test_includes_both_canceled_and_rejected():
     """Both Canceled and Rejected statuses surface."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -134,7 +134,7 @@ def test_includes_both_canceled_and_rejected():
 def test_rows_sorted_send_date_descending():
     """Newest send_date first — operator wants the most recent
     cancellations on top."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -164,7 +164,7 @@ def test_rows_sorted_send_date_descending():
 
 
 def test_totals_count_amount_canceled_rejected():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -198,7 +198,7 @@ def test_totals_count_amount_canceled_rejected():
 def test_status_notes_passed_through():
     """The free-form notes field is exposed verbatim so the
     template can show why a transfer was cancelled."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -219,7 +219,7 @@ def test_status_notes_passed_through():
 
 
 def test_filters_by_store_list():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()
@@ -242,7 +242,7 @@ def test_filters_by_store_list():
 
 
 def test_filters_by_send_date_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import cancelled_transfers
     with flask_app.app_context():
         Transfer.query.delete()

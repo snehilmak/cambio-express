@@ -23,7 +23,7 @@ from api.Modules.TVDisplay.Services.pair_code import (
     PAIR_CODE_LIFETIME as _PAIR_CODE_LIFETIME,
 )
 from api.Modules.Tenancy.Models import Store, User
-from app import db
+from tests._app import db
 
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -321,7 +321,7 @@ def _populate_one_country(client, store_id, jwt):
     )
     country_id = create.get_json()["id"]
     from api.Modules.TVDisplay.Models import TVDisplayPayoutBank
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         db.session.add(TVDisplayPayoutBank(
             country_id=country_id, bank_name="Bancomer", sort_order=0,

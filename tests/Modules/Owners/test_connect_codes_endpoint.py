@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 def _make_owner(*, username="boss-cc@x.com", password="ownerpass1!"):
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     s = Store(name="Boss CC Home", slug="boss-cc",
               email=username, plan="basic")
     db.session.add(s); db.session.commit()
@@ -48,7 +48,7 @@ def _login_admin(client, store_id):
 
 def _link_store(owner_id, store_name="Sibling", store_slug="sibling-cc"):
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink
-    from app import db
+    from tests._app import db
     s = Store(name=store_name, slug=store_slug,
               email=f"{store_slug}@x.com", plan="basic")
     db.session.add(s); db.session.commit()
@@ -97,7 +97,7 @@ def test_unlink_rejects_admin_role(client, test_store_id):
 
 
 def test_generate_returns_8_char_code(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-cc@x.com", pw)
@@ -117,7 +117,7 @@ def test_generate_returns_8_char_code(client):
 
 
 def test_list_returns_owners_codes(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-cc@x.com", pw)
@@ -140,7 +140,7 @@ def test_list_returns_owners_codes(client):
 def test_list_excludes_other_owners_codes(client):
     """Cross-owner isolation: another owner's code mustn't surface."""
     from api.Modules.Tenancy.Models import OwnerConnectCode, User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         _, _, pw = _make_owner()
         # Seed a different owner with a code
@@ -166,7 +166,7 @@ def test_list_excludes_other_owners_codes(client):
 
 def test_list_marks_expired(client):
     from api.Modules.Tenancy.Models import OwnerConnectCode
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         db.session.add(OwnerConnectCode(
@@ -188,7 +188,7 @@ def test_list_marks_expired(client):
 
 def test_revoke_marks_code_revoked(client):
     from api.Modules.Tenancy.Models import OwnerConnectCode
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         c = OwnerConnectCode(
@@ -208,7 +208,7 @@ def test_revoke_marks_code_revoked(client):
 
 def test_revoke_404_for_other_owners_code(client):
     from api.Modules.Tenancy.Models import OwnerConnectCode, User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         _, _, pw = _make_owner()
         other = User(
@@ -233,7 +233,7 @@ def test_revoke_404_for_other_owners_code(client):
 
 def test_revoke_409_when_already_redeemed(client):
     from api.Modules.Tenancy.Models import OwnerConnectCode
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         c = OwnerConnectCode(
@@ -256,7 +256,7 @@ def test_revoke_409_when_already_redeemed(client):
 
 def test_unlink_removes_link(client):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         sid = _link_store(owner_id, store_name="Linked",
@@ -268,7 +268,7 @@ def test_unlink_removes_link(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    from app import db as _db
+    from tests._app import db as _db
     with flask_app.app_context():
         assert StoreOwnerLink.query.filter_by(
             owner_id=owner_id, store_id=sid,
@@ -276,7 +276,7 @@ def test_unlink_removes_link(client):
 
 
 def test_unlink_404_when_not_linked(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-cc@x.com", pw)
@@ -292,7 +292,7 @@ def test_unlink_404_for_other_owners_link(client):
     """Trying to unlink a store that's in another owner's umbrella
     returns 404 — the relationship doesn't exist for THIS owner."""
     from api.Modules.Tenancy.Models import StoreOwnerLink, User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         owner1_id, _, pw = _make_owner()
         # Create a separate owner + their store link
@@ -316,7 +316,7 @@ def test_unlink_404_for_other_owners_link(client):
 
 def test_unlink_rejects_extra_fields(client):
     """Body schema is extra="forbid" — typos must 422."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         sid = _link_store(owner_id, store_name="Linked",

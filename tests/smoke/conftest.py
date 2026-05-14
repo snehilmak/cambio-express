@@ -69,7 +69,7 @@ def smoke_server(tmp_path_factory):
     # env var alone. Two-step: set env (so anything that reads it
     # later sees the right value) AND patch app.config + db.engine.
     os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     flask_app.config["TESTING"] = False  # Real server, not test_client.
 
@@ -174,7 +174,7 @@ def owner_page(page, smoke_server):
     """A `page` signed in as a freshly-created owner with one linked
     store. Created on demand inside the smoke DB."""
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     with flask_app.app_context():
         # Idempotent: reuse if a previous test already created this owner.
         existing = User.query.filter_by(username="owner-smoke@x.com").first()

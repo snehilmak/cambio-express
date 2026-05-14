@@ -56,10 +56,13 @@ def _run_in_subprocess(script: str) -> tuple[int, str, str]:
 
 def test_fastapi_login_429_with_limiter_enabled_at_boot():
     """slowapi: 429 within a small burst when the limiter is
-    enabled at boot."""
+    enabled at boot. The subprocess hits the production
+    ``asgi_app`` directly via Starlette's ``TestClient`` — same
+    transport tests use everywhere else."""
     script = (
-        "import app\n"
-        "with app.app.test_client() as c:\n"
+        "from starlette.testclient import TestClient\n"
+        "from asgi import asgi_app\n"
+        "with TestClient(asgi_app) as c:\n"
         "    statuses = []\n"
         "    for _ in range(15):\n"
         "        r = c.post('/api/v2/auth/login',\n"

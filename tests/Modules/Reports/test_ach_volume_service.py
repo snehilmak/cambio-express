@@ -36,7 +36,7 @@ def _add_batch(db, store_id, *, ach_date, company="Intermex",
 def test_returns_rows_and_totals_tuple():
     """Service returns (rows, totals); rows is a list of dicts;
     totals dict has count + amount keys."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         s = _add_store(db.session, slug="ach-shape")
@@ -50,7 +50,7 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape_has_company_count_amount_avg():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -70,7 +70,7 @@ def test_row_shape_has_company_count_amount_avg():
 
 
 def test_groups_by_company():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -95,7 +95,7 @@ def test_groups_by_company():
 
 
 def test_avg_is_amount_over_count():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -115,7 +115,7 @@ def test_avg_is_amount_over_count():
 def test_blank_company_displayed_as_no_company_label():
     """ACHBatch with blank company is rendered as '(no company)'
     so the template can still show a row instead of a blank cell."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -136,7 +136,7 @@ def test_blank_company_displayed_as_no_company_label():
 
 def test_rows_sorted_by_amount_descending():
     """Biggest mover lands first — the report's headline view."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -159,7 +159,7 @@ def test_rows_sorted_by_amount_descending():
 
 
 def test_filters_by_store_list():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -178,7 +178,7 @@ def test_filters_by_store_list():
 
 
 def test_filters_by_date_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()
@@ -198,7 +198,7 @@ def test_filters_by_date_window():
 
 
 def test_empty_window_returns_empty_rows_and_zero_totals():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import ach_volume
     with flask_app.app_context():
         ACHBatch.query.delete()

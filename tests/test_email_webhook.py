@@ -26,7 +26,7 @@ from api.Modules.Notifications.Services.smtp import (
     health_check as smtp_health_check,
     send_email as _smtp_send_email,
 )
-from app import db, purge_expired_stores
+from tests._app import db, purge_expired_stores
 
 
 def _send_email(to_addr, subject, body, html=None):

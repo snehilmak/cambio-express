@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 
 def _seed_report(store_id, report_date, **kwargs):
     from api.Modules.DailyBook.Models import DailyReport
-    from app import db
+    from tests._app import db
     r = DailyReport(
         store_id=store_id, report_date=report_date, **kwargs,
     )
@@ -16,7 +16,7 @@ def _seed_report(store_id, report_date, **kwargs):
 
 
 def test_summarize_report_returns_none_when_missing(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_report
     with flask_app.app_context():
         s = summarize_report(db.session, test_store_id, date.today())
@@ -24,7 +24,7 @@ def test_summarize_report_returns_none_when_missing(test_store_id):
 
 
 def test_summarize_report_computes_totals(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
     with flask_app.app_context():
@@ -44,7 +44,7 @@ def test_summarize_report_computes_totals(test_store_id):
 
 
 def test_summarize_report_locked_state(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
     with flask_app.app_context():
@@ -57,7 +57,7 @@ def test_summarize_report_locked_state(test_store_id):
 
 
 def test_summarize_report_unlocked_default(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
     with flask_app.app_context():
@@ -70,7 +70,7 @@ def test_summarize_report_unlocked_default(test_store_id):
 
 
 def test_summarize_period_empty_safe(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
     with flask_app.app_context():
@@ -85,7 +85,7 @@ def test_summarize_period_empty_safe(test_store_id):
 
 
 def test_summarize_period_aggregates(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
     yesterday = today - timedelta(days=1)
@@ -108,7 +108,7 @@ def test_summarize_period_aggregates(test_store_id):
 
 def test_summarize_period_isolates_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
     with flask_app.app_context():
@@ -127,7 +127,7 @@ def test_summarize_period_isolates_other_stores(test_store_id):
 
 
 def test_period_summary_response_validates(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.DailyBook.Services import summarize_period
     from api.Modules.DailyBook.Requests import (
         DailyReportRow, PeriodSummaryResponse,

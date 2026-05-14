@@ -40,7 +40,7 @@ def _add_payment(db, rc_id, *, amount, paid_on):
 
 def test_returns_rows_and_totals_tuple():
     """Service returns (rows, totals) with consistent shapes."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -60,7 +60,7 @@ def test_returns_rows_and_totals_tuple():
 def test_empty_buckets_skipped_in_rows():
     """Statuses with 0 count are NOT emitted as a row — keeps the
     template from rendering zero-value cards."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -84,7 +84,7 @@ def test_empty_buckets_skipped_in_rows():
 def test_rows_sorted_in_fixed_display_order():
     """Display order is pending → recovered → loss → fraud,
     even when DB returns them differently."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -113,7 +113,7 @@ def test_rows_sorted_in_fixed_display_order():
 def test_recovered_only_set_for_recovered_status():
     """`recovered` field on a non-recovered bucket stays 0 even
     if the row has payment rows attached (those don't apply)."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -134,7 +134,7 @@ def test_recovered_only_set_for_recovered_status():
 
 def test_recovered_sums_payment_rows_for_recovered_status():
     """For a recovered check, `recovered` = Σ payment amounts."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -163,7 +163,7 @@ def test_recovered_sums_payment_rows_for_recovered_status():
 
 def test_loss_fraud_combined_in_totals():
     """`loss_fraud` total combines the amounts of loss + fraud."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -184,7 +184,7 @@ def test_loss_fraud_combined_in_totals():
 
 def test_net_gl_is_recovered_minus_loss_fraud():
     """net_gl is the headline P&L line: recoveries beat write-offs."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -208,7 +208,7 @@ def test_net_gl_is_recovered_minus_loss_fraud():
 
 
 def test_count_amount_totals_sum_all_buckets():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -232,7 +232,7 @@ def test_count_amount_totals_sum_all_buckets():
 
 
 def test_filters_by_store_list():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()
@@ -254,7 +254,7 @@ def test_filters_by_store_list():
 
 def test_filters_by_bounced_on_window():
     """bounced_on filter respects [d_from, d_to]."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import returned_check_status
     with flask_app.app_context():
         ReturnCheck.query.delete()

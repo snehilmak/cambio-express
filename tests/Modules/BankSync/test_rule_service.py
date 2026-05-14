@@ -4,7 +4,7 @@ import pytest
 
 def _seed_account(store_id, *, last4="0000"):
     from api.Modules.BankSync.Models import StripeBankAccount
-    from app import db
+    from tests._app import db
     a = StripeBankAccount(
         store_id=store_id, stripe_account_id=f"fcacc_{last4}",
         institution_name="Bank", last4=last4, enabled=True,
@@ -28,7 +28,7 @@ def _form(**kwargs):
 
 
 def test_parse_rule_form_minimal_valid_input(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import parse_rule_form
     with flask_app.app_context():
         fields = parse_rule_form(
@@ -46,7 +46,7 @@ def test_parse_rule_form_minimal_valid_input(test_store_id):
 
 
 def test_parse_rule_form_rejects_missing_target_kind(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -60,7 +60,7 @@ def test_parse_rule_form_rejects_missing_target_kind(test_store_id):
 
 
 def test_parse_rule_form_rejects_unknown_category(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -76,7 +76,7 @@ def test_parse_rule_form_rejects_unknown_category(test_store_id):
 def test_parse_rule_form_requires_at_least_one_condition(test_store_id):
     """An empty rule (no conditions) matches everything — almost
     always a misconfiguration."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -90,7 +90,7 @@ def test_parse_rule_form_requires_at_least_one_condition(test_store_id):
 
 
 def test_parse_rule_form_desc_value_without_type_defaults_to_contains(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import parse_rule_form
     with flask_app.app_context():
         fields = parse_rule_form(
@@ -103,7 +103,7 @@ def test_parse_rule_form_desc_value_without_type_defaults_to_contains(test_store
 
 
 def test_parse_rule_form_rejects_desc_type_without_value(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -120,7 +120,7 @@ def test_parse_rule_form_rejects_desc_type_without_value(test_store_id):
 
 
 def test_parse_rule_form_rejects_invalid_desc_type(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -138,7 +138,7 @@ def test_parse_rule_form_rejects_invalid_desc_type(test_store_id):
 
 
 def test_parse_rule_form_rejects_invalid_sign_filter(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -155,7 +155,7 @@ def test_parse_rule_form_rejects_invalid_sign_filter(test_store_id):
 
 def test_parse_rule_form_amounts_dollars_to_cents(test_store_id):
     """Form posts dollar strings; Service stores absolute cents."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import parse_rule_form
     with flask_app.app_context():
         fields = parse_rule_form(
@@ -171,7 +171,7 @@ def test_parse_rule_form_amounts_dollars_to_cents(test_store_id):
 
 
 def test_parse_rule_form_rejects_negative_amount(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -185,7 +185,7 @@ def test_parse_rule_form_rejects_negative_amount(test_store_id):
 
 
 def test_parse_rule_form_rejects_min_greater_than_max(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -204,7 +204,7 @@ def test_parse_rule_form_rejects_min_greater_than_max(test_store_id):
 def test_parse_rule_form_account_filter_must_belong_to_store(test_store_id):
     """Cross-store account_filter_id references must be rejected."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleValidationError, parse_rule_form,
     )
@@ -226,7 +226,7 @@ def test_parse_rule_form_account_filter_must_belong_to_store(test_store_id):
 
 
 def test_parse_rule_form_account_filter_succeeds_in_scope(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import parse_rule_form
     with flask_app.app_context():
         a = _seed_account(test_store_id, last4="OURS")
@@ -242,7 +242,7 @@ def test_parse_rule_form_account_filter_succeeds_in_scope(test_store_id):
 
 
 def test_parse_rule_form_truncates_long_description(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import parse_rule_form
     with flask_app.app_context():
         fields = parse_rule_form(
@@ -261,7 +261,7 @@ def test_parse_rule_form_truncates_long_description(test_store_id):
 
 def test_create_rule_inserts_row(test_store_id):
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule,
     )
@@ -286,7 +286,7 @@ def test_create_rule_inserts_row(test_store_id):
 
 
 def test_update_rule_updates_in_place(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule, update_rule,
     )
@@ -323,7 +323,7 @@ def test_update_rule_updates_in_place(test_store_id):
 
 def test_update_rule_raises_when_cross_store(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, RuleNotFoundError, create_rule, update_rule,
     )
@@ -347,7 +347,7 @@ def test_update_rule_raises_when_cross_store(test_store_id):
 
 
 def test_toggle_rule_flips_enabled(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule, toggle_rule,
     )
@@ -373,7 +373,7 @@ def test_toggle_rule_flips_enabled(test_store_id):
 
 def test_delete_rule_removes_row(test_store_id):
     from api.Modules.BankSync.Models import BankRule
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, create_rule, delete_rule,
     )
@@ -397,7 +397,7 @@ def test_delete_rule_removes_row(test_store_id):
 
 def test_delete_rule_raises_when_cross_store(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import (
         RuleFields, RuleNotFoundError, create_rule, delete_rule,
     )

@@ -126,7 +126,7 @@ def test_get_404_for_unknown_store(client):
 
 def test_create_happy_path(client):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/superadmin/stores",
@@ -147,7 +147,7 @@ def test_create_happy_path(client):
 def test_create_records_audit(client):
     from api.Modules.Audit.Models import SuperadminAuditLog
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
@@ -168,7 +168,7 @@ def test_create_records_audit(client):
 
 def test_create_seeds_admin_user(client):
     from api.Modules.Tenancy.Models import Store, User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
@@ -190,7 +190,7 @@ def test_create_normalizes_slug(client):
     """Slug should be lowercased + spaces-to-dashes, mirroring the
     legacy Flask handler's `slug.strip().lower().replace(" ","-")`."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     payload = dict(_VALID_CREATE, slug="My New BRANCH")
     resp = client.post(
@@ -208,7 +208,7 @@ def test_create_rejects_duplicate_slug(client):
     """Existing slug returns 409 with a field-level error envelope
     so the SPA can render `Slug 'X' is already taken` inline."""
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
@@ -283,7 +283,7 @@ def test_create_admin_user_defaults_when_omitted(client):
     """If admin_username + admin_name are omitted, the endpoint
     falls back to the legacy defaults ("admin" / "Store Admin")."""
     from api.Modules.Tenancy.Models import Store, User
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     payload = {
         "name": "Defaulted Branch", "slug": "defaulted",
@@ -307,7 +307,7 @@ def test_create_admin_user_defaults_when_omitted(client):
 
 def test_patch_updates_identity_fields(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -326,7 +326,7 @@ def test_patch_updates_identity_fields(client, test_store_id):
 
 def test_patch_records_audit_with_changed_keys(client, test_store_id):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -351,7 +351,7 @@ def test_patch_no_op_skips_audit(client, test_store_id):
     a no-op shouldn't pollute the audit log."""
     from api.Modules.Audit.Models import SuperadminAuditLog
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     with flask_app.app_context():
         s = Store.query.filter_by(id=test_store_id).first()
@@ -383,7 +383,7 @@ def test_patch_404_for_unknown_store(client):
 def test_patch_rejects_duplicate_slug(client, test_store_id):
     """Renaming to a slug another store already owns returns 409."""
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     token = _login_superadmin(client)
     with flask_app.app_context():
         other = Store(name="Other", slug="other-store", plan="trial")
@@ -401,7 +401,7 @@ def test_patch_rejects_duplicate_slug(client, test_store_id):
 
 def test_patch_normalizes_slug(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -426,7 +426,7 @@ def test_patch_rejects_invalid_plan(client, test_store_id):
 
 def test_patch_updates_federal_tax_rate(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from app import app as flask_app
+    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",

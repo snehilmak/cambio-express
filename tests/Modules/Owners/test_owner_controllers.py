@@ -12,7 +12,7 @@ def _make_owner(*, username="boss@example.com", password="ownerpass1!",
     home_store_id, raw_password). The owner can then be linked to
     additional stores via _link()."""
     from api.Modules.Tenancy.Models import Store, User
-    from app import db
+    from tests._app import db
     s = Store(name="Boss Home", slug=home_store_slug,
               email=username, plan="basic")
     db.session.add(s); db.session.commit()
@@ -27,7 +27,7 @@ def _make_owner(*, username="boss@example.com", password="ownerpass1!",
 
 def _link(owner_id, *, store_name="Sibling", store_slug="sibling"):
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink
-    from app import db
+    from tests._app import db
     s = Store(name=store_name, slug=store_slug,
               email=f"{store_slug}@x.com", plan="basic")
     db.session.add(s); db.session.commit()
@@ -39,7 +39,7 @@ def _link(owner_id, *, store_name="Sibling", store_slug="sibling"):
 def _seed_transfer(store_id, *, send_amount=500.0, company="Intermex",
                    send_date_=None):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=send_date_ or date.today(),
@@ -95,7 +95,7 @@ def test_locations_rejects_admin_role(client, test_store_id):
 
 def test_locations_returns_empty_envelope_for_unlinked_owner(client):
     """An owner with no StoreOwnerLink rows sees `total=0`."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss@example.com", pw)
@@ -109,7 +109,7 @@ def test_locations_returns_empty_envelope_for_unlinked_owner(client):
 
 
 def test_locations_lists_linked_stores_with_period_stats(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Alpha", store_slug="alpha")
@@ -137,7 +137,7 @@ def test_locations_lists_linked_stores_with_period_stats(client):
 
 
 def test_locations_filters_by_query(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         _link(owner_id, store_name="Alpha", store_slug="alpha")
@@ -154,7 +154,7 @@ def test_locations_filters_by_query(client):
 
 
 def test_locations_rejects_invalid_period(client):
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss@example.com", pw)
@@ -168,14 +168,14 @@ def test_locations_rejects_invalid_period(client):
 def test_locations_excludes_unrelated_stores(client):
     """Stores that aren't in the owner's umbrella don't appear, even
     if they have transfers."""
-    from app import app as flask_app
+    from tests._app import app as flask_app
     with flask_app.app_context():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Mine", store_slug="mine")
         _seed_transfer(s1, send_amount=50.0)
         # Unlinked store — should NOT appear
         from api.Modules.Tenancy.Models import Store
-        from app import db
+        from tests._app import db
         other = Store(name="Theirs", slug="theirs",
                       email="t@x.com", plan="basic")
         db.session.add(other); db.session.commit()

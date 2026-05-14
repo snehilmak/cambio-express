@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 def _seed_customer(store_id, *, full_name, phone_country="+1",
                     phone_number="", address=""):
     from api.Modules.Customers.Models import Customer
-    from app import db
+    from tests._app import db
     c = Customer(
         store_id=store_id, full_name=full_name,
         phone_country=phone_country, phone_number=phone_number,
@@ -24,7 +24,7 @@ def _seed_customer(store_id, *, full_name, phone_country="+1",
 
 def _seed_owner(username="owner@x.com"):
     from api.Modules.Tenancy.Models import User
-    from app import db
+    from tests._app import db
     u = User(username=username, full_name="Owner", role="owner")
     u.set_password("p")
     db.session.add(u); db.session.commit()
@@ -33,7 +33,7 @@ def _seed_owner(username="owner@x.com"):
 
 def _seed_store(slug, name="X"):
     from api.Modules.Tenancy.Models import Store
-    from app import db
+    from tests._app import db
     s = Store(name=name, slug=slug, email=f"{slug}@x.com", plan="trial")
     db.session.add(s); db.session.commit()
     return s.id
@@ -41,7 +41,7 @@ def _seed_store(slug, name="X"):
 
 def _link(owner_id, store_id):
     from api.Modules.Tenancy.Models import StoreOwnerLink
-    from app import db
+    from tests._app import db
     l = StoreOwnerLink(owner_id=owner_id, store_id=store_id)
     db.session.add(l); db.session.commit()
 
@@ -50,7 +50,7 @@ def _link(owner_id, store_id):
 
 
 def test_upsert_creates_new_customer(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         c = upsert(
@@ -68,7 +68,7 @@ def test_upsert_creates_new_customer(test_store_id):
 def test_upsert_reuses_existing_phone_match(test_store_id):
     """Repeat phone_number → no new row, just update last-write-wins fields."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         cid = _seed_customer(test_store_id, full_name="Alice Old",
@@ -92,7 +92,7 @@ def test_upsert_unifies_across_owner_umbrella(test_store_id):
     """Cashier at Store A logs a sender; cashier at Store B (same owner)
     finds the same row via phone match — no duplicate created."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         oid = _seed_owner()
@@ -122,7 +122,7 @@ def test_upsert_isolates_unrelated_stores(test_store_id):
     """Same phone in two unrelated stores → two separate rows.
     Owner-umbrella isolation is the security property."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         s2 = _seed_store("isolated")
@@ -139,7 +139,7 @@ def test_upsert_isolates_unrelated_stores(test_store_id):
 def test_upsert_explicit_customer_id_only_within_umbrella(test_store_id):
     """Caller passes `customer_id` from a sibling store → reuse.
     Caller passes `customer_id` from outside umbrella → create new."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         # Sibling case: same owner.
@@ -176,7 +176,7 @@ def test_upsert_empty_phone_creates_one_row(test_store_id):
     on (store_id, phone_country, phone_number) prevents a second
     empty-phone row in the same store. Mirrors `find_or_upsert_customer`:
     no dedup-by-name shortcut, but the constraint backstops dups."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         c = upsert(db.session, test_store_id, "Walk-in", "+1", "")
@@ -189,7 +189,7 @@ def test_upsert_does_not_overwrite_with_empty_values(test_store_id):
     """Last-write-wins is conditional on truthiness — passing an empty
     address doesn't wipe an existing one. This matches the legacy
     `if address: cust.address = address` guard."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         upsert(
@@ -209,7 +209,7 @@ def test_upsert_does_not_overwrite_with_empty_values(test_store_id):
 
 
 def test_search_short_query_returns_empty_envelope(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice",
@@ -219,7 +219,7 @@ def test_search_short_query_returns_empty_envelope(test_store_id):
 
 
 def test_search_returns_matches_by_name(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Alice Smith",
@@ -236,7 +236,7 @@ def test_search_fuzzy_suggestions_catch_spelling_drift(test_store_id):
     """The whole point of the suggestion path: a typo of an existing
     customer surfaces the canonical record so the cashier doesn't
     create a duplicate."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Maria Gonzalez",
@@ -253,7 +253,7 @@ def test_search_skips_fuzzy_when_matches_full(test_store_id):
     """5+ exact matches → no fuzzy pass; the cashier already has
     plenty to pick from."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         # 6 exact matches on substring "Test"
@@ -275,7 +275,7 @@ def test_search_short_query_skips_fuzzy(test_store_id):
     """Queries shorter than 4 chars → no fuzzy pass even if the
     exact-match list is empty. Avoids flooding the cashier with
     SequenceMatcher false positives."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         _seed_customer(test_store_id, full_name="Maria Gonzalez",
@@ -288,7 +288,7 @@ def test_search_short_query_skips_fuzzy(test_store_id):
 
 def test_search_unifies_across_owner_umbrella(test_store_id):
     """Cashier at Store A finds the customer Store B logged."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         oid = _seed_owner()
@@ -304,7 +304,7 @@ def test_search_unifies_across_owner_umbrella(test_store_id):
 def test_search_excludes_unrelated_stores(test_store_id):
     """Customers in stores outside the umbrella must NOT appear.
     This is the security property the autocomplete depends on."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     with flask_app.app_context():
         s2 = _seed_store("stranger")  # no owner overlap
@@ -322,7 +322,7 @@ def test_search_excludes_unrelated_stores(test_store_id):
 def test_customer_search_response_validates(test_store_id):
     """Wire test: service rows must validate against the Pydantic schema.
     `to_dict` shape and the schema must stay in sync."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Customers.Services import search
     from api.Modules.Customers.Requests import (
         CustomerRow, CustomerSearchResponse,
@@ -355,8 +355,8 @@ def test_legacy_upsert_matches_service(test_store_id):
     must produce identical results from identical input. This test
     runs each independently and compares row counts + content."""
     from api.Modules.Customers.Models import Customer
-    from app import app as flask_app, db
-    from app import find_or_upsert_customer
+    from tests._app import app as flask_app, db
+    from tests._app import find_or_upsert_customer
     from api.Modules.Customers.Services import upsert
     with flask_app.app_context():
         c_legacy = find_or_upsert_customer(

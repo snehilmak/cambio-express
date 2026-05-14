@@ -14,7 +14,7 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
                     service_type="Money Transfer", country="MX",
                     recipient_name="R", status="Sent"):
     from api.Modules.Transfers.Models import Transfer
-    from app import db
+    from tests._app import db
     t = Transfer(
         store_id=store_id,
         send_date=date.today(),
@@ -38,7 +38,7 @@ def _today():
 
 
 def test_sales_by_company_renames_key_and_sorts_by_sent_desc(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0, company="Intermex")
@@ -58,7 +58,7 @@ def test_sales_by_company_renames_key_and_sorts_by_sent_desc(test_store_id):
 def test_sales_by_company_handles_empty_company(test_store_id):
     """Legacy rows with no company tag get the `"(no company)"`
     bucket instead of disappearing — the totals must match."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0, company="")
@@ -69,7 +69,7 @@ def test_sales_by_company_handles_empty_company(test_store_id):
 
 
 def test_sales_by_service_groups_by_service_type(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=300.0,
@@ -84,7 +84,7 @@ def test_sales_by_service_groups_by_service_type(test_store_id):
 
 
 def test_by_destination_country_renames_key(test_store_id):
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0, country="MX")
@@ -99,7 +99,7 @@ def test_by_destination_country_renames_key(test_store_id):
 def test_top_recipients_respects_limit(test_store_id):
     """Service returns only `limit` rows by sent desc; totals reflect
     EVERY group so percentages stay accurate."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         for i in range(5):
@@ -126,7 +126,7 @@ def test_pydantic_response_schemas_validate_service_output(test_store_id):
     the matching Pydantic model. If the service shape ever drifts
     from the schema, this test fails before we hit the controller
     in PR 4."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     today = _today()
     with flask_app.app_context():
         _seed_transfer(test_store_id, send_amount=100.0)

@@ -522,7 +522,8 @@ def signup_route(
     request before touching the DB, so an attacker hitting the
     API directly can't bypass the legacy /signup HTML guard.
     """
-    from app import SIGNUP_CLOSED
+    import os
+    SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
     if SIGNUP_CLOSED:
         raise HTTPException(
             status_code=503,
@@ -604,7 +605,8 @@ def signup_owner_route(
     request so an attacker hitting the API directly can't bypass
     the legacy /signup/owner HTML guard.
     """
-    from app import SIGNUP_CLOSED
+    import os
+    SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
     if SIGNUP_CLOSED:
         raise HTTPException(
             status_code=503,
@@ -699,51 +701,51 @@ def forgot_password_route(
 
 
 def _deliver_password_reset_email(issued) -> None:
-    """Send the password-reset email. Lifted verbatim from the
-    legacy /forgot-password Flask handler — same body copy, same
-    HTML template, same SMTP-fallback log line — so the SPA's
-    /app/forgot-password gives users an identical email."""
+    """Send the password-reset email.
+
+    Body copy + HTML template + SMTP-fallback log line match what
+    the legacy Flask handler used to send so the migration is
+    transparent to recipients. Renders via the Flask-free
+    ``render_email_template`` from the Notifications service."""
+    import logging
     import os
     from datetime import datetime
-    from flask import render_template, url_for
-    from app import app as flask_app, db as flask_db
+    from api.Core.Database import SessionLocal
     from api.Modules.Notifications.Services.smtp import send_email
-    u = issued.user
-    with flask_app.test_request_context():
-        # url_for(_external=True) needs a request context; in
-        # production the dispatcher already sets one, but for a
-        # FastAPI-only call (no Flask request frame) we synthesise
-        # one. Routes resolved here are still the canonical Flask
-        # ones; the SPA equivalent path /app/reset-password?token=
-        # is what the email actually sends — see below.
-        base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
-        reset_url = f"{base_url}/app/reset-password?token={issued.raw_token}"
-        body = (
-            "Hi,\n\n"
-            "Someone (hopefully you) requested a password reset for your "
-            "DineroBook account. Follow this link within the next hour to "
-            "set a new password:\n\n"
-            f"  {reset_url}\n\n"
-            "If you didn't request this you can safely ignore this email "
-            "— your current password will keep working.\n"
-        )
-        try:
-            html = render_template(
-                "emails/password_reset.html",
-                preheader="Reset your DineroBook password — link expires in 1 hour.",
-                name=u.full_name or "",
-                reset_url=reset_url,
-                year=datetime.utcnow().year,
-                base_url=base_url,
-            )
-        except Exception:
-            html = None
-    to_addr = (u.email or u.username).strip()
-    delivered = send_email(
-        flask_db.session, to_addr, "Reset your DineroBook password", body, html=html,
+    from api.Modules.Notifications.Services.templates import (
+        render_email_template,
     )
+    u = issued.user
+    base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+    reset_url = f"{base_url}/app/reset-password?token={issued.raw_token}"
+    body = (
+        "Hi,\n\n"
+        "Someone (hopefully you) requested a password reset for your "
+        "DineroBook account. Follow this link within the next hour to "
+        "set a new password:\n\n"
+        f"  {reset_url}\n\n"
+        "If you didn't request this you can safely ignore this email "
+        "— your current password will keep working.\n"
+    )
+    try:
+        html = render_email_template(
+            "emails/password_reset.html",
+            preheader="Reset your DineroBook password — link expires in 1 hour.",
+            name=u.full_name or "",
+            reset_url=reset_url,
+            year=datetime.utcnow().year,
+            base_url=base_url,
+        )
+    except Exception:
+        html = None
+    to_addr = (u.email or u.username).strip()
+    with SessionLocal() as session:
+        delivered = send_email(
+            session, to_addr, "Reset your DineroBook password",
+            body, html=html,
+        )
     if not delivered:
-        flask_app.logger.warning(
+        logging.getLogger("dinerobook").warning(
             f"[password-reset] email send skipped for {u.username}; "
             f"reset URL: {reset_url}"
         )

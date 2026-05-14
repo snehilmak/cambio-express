@@ -60,7 +60,7 @@ def test_parse_dob_handles_extra_whitespace():
 def test_active_roster_returns_only_active_employees():
     """Inactive cashiers are hidden from the dropdown so new
     transfers can't be credited to former employees."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -78,7 +78,7 @@ def test_active_roster_returns_only_active_employees():
 
 
 def test_active_roster_sorted_alphabetically():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -93,7 +93,7 @@ def test_active_roster_sorted_alphabetically():
 
 def test_active_roster_filters_by_store():
     """Cross-store cashiers don't appear."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -111,7 +111,7 @@ def test_active_roster_filters_by_store():
 
 
 def test_active_roster_empty_when_no_active():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -127,7 +127,7 @@ def test_active_roster_empty_when_no_active():
 
 
 def test_pick_employee_returns_employee_and_name():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -142,7 +142,7 @@ def test_pick_employee_returns_employee_and_name():
 
 def test_pick_employee_int_id_works():
     """Form posts strings, but defensive: int input also works."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -155,7 +155,7 @@ def test_pick_employee_int_id_works():
 
 
 def test_pick_employee_blank_returns_none():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         s = _add_store(db.session, slug="pick-blank")
@@ -169,7 +169,7 @@ def test_pick_employee_blank_returns_none():
 
 def test_pick_employee_bad_int_returns_none():
     """Non-numeric input shouldn't crash."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         s = _add_store(db.session, slug="pick-bad")
@@ -181,7 +181,7 @@ def test_pick_employee_bad_int_returns_none():
 def test_pick_employee_rejects_cross_store():
     """An attacker submitting another store's employee_id gets
     None back — the SQL filter on store_id is the gate."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         StoreEmployee.query.delete()
@@ -199,7 +199,7 @@ def test_pick_employee_rejects_cross_store():
 
 
 def test_pick_employee_unknown_id_returns_none():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
         s = _add_store(db.session, slug="pick-unknown")

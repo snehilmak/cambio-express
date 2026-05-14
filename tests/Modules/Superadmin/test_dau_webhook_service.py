@@ -41,7 +41,7 @@ def _add_webhook(db, *, status="ok",
 def test_dau_mau_distinct_users_per_day():
     """Same user logging twice in a day still counts as 1 in
     that day's bucket."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
         LoginEvent.query.delete()
@@ -70,7 +70,7 @@ def test_dau_mau_distinct_users_per_day():
 def test_dau_mau_handles_zero_activity():
     """Empty window → zero rows, zero MAU/DAU, no divide-by-zero
     on stickiness."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
         LoginEvent.query.delete()
@@ -88,7 +88,7 @@ def test_dau_mau_handles_zero_activity():
 def test_dau_mau_avg_per_day_uses_active_day_count():
     """avg_per_day = total user-day count / number of active days,
     not / number of calendar days in the window."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
         LoginEvent.query.delete()
@@ -115,7 +115,7 @@ def test_webhook_health_groups_by_status_with_failure_pct():
     """ok counts toward `ok`; everything else (signature_err,
     processing_err, etc.) counts toward `errors`. failure_pct
     = errors / count * 100."""
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
         WebhookEvent.query.delete()
@@ -145,7 +145,7 @@ def test_webhook_health_groups_by_status_with_failure_pct():
 
 
 def test_webhook_health_zero_count_no_div_by_zero():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
         WebhookEvent.query.delete()
@@ -159,7 +159,7 @@ def test_webhook_health_zero_count_no_div_by_zero():
 
 
 def test_webhook_health_filters_by_received_at_window():
-    from app import app as flask_app, db
+    from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
         WebhookEvent.query.delete()
