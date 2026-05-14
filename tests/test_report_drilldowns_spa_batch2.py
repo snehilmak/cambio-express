@@ -24,10 +24,6 @@ def _admin_session_login(client, store_id):
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"
         db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = store_id
 
 
 def test_admin_drilldown_routes_redirect_to_spa(client, test_store_id):

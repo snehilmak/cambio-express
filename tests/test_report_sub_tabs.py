@@ -13,17 +13,12 @@ from datetime import date
 
 
 def _admin_login(client, store_id):
-    from api.Modules.Tenancy.Models import Store, User
+    from api.Modules.Tenancy.Models import Store
     from app import db
     with client.application.app_context():
-        u = User.query.filter_by(store_id=store_id, role="admin").first()
-        uid = u.id
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"
         db.session.commit()
-    with client.session_transaction() as s:
-        s["user_id"] = uid; s["role"] = "admin"
-        s["store_id"] = store_id
 
 
 def _make_transfer(client, store_id, *, send_date, amount, fee=2.0,

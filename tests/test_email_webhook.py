@@ -290,19 +290,6 @@ def test_send_email_does_not_suppress_unmatched_address(client):
     assert ok is True
 
 
-# ── Overview health card ───────────────────────────────────────
-
-def _superadmin_client(app):
-    c = app.test_client()
-    with app.app_context():
-        sa_id = User.query.filter_by(username="superadmin").first().id
-    with c.session_transaction() as s:
-        s["user_id"] = sa_id; s["role"] = "superadmin"; s["store_id"] = None
-    return c
-
-
-
-
 
 
 # ── Purge FK safety ────────────────────────────────────────────

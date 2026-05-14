@@ -18,10 +18,6 @@ def _admin_login(client, store_id):
         s = db.session.get(Store, store_id)
         s.plan = "pro"
         db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = store_id
 
 
 # ── Audit hooks fire ─────────────────────────────────────────
@@ -234,9 +230,5 @@ def test_audit_log_employee_role_blocked(client, test_store_id):
                  role="employee", full_name="Cashier")
         u.set_password("p"); db.session.add(u); db.session.commit()
         uid = u.id
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = test_store_id
     resp = client.get("/admin/audit-log", follow_redirects=False)
     assert resp.status_code != 200

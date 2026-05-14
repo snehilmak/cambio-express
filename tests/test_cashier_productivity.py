@@ -19,10 +19,6 @@ def _admin_login(client, store_id):
         s.plan = "pro"
         s.billing_cycle = "monthly"
         db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = store_id
 
 
 def _make_employee(client, store_id, *, name, is_active=True):

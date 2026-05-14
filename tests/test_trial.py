@@ -89,10 +89,6 @@ def test_expired_store_redirected_to_subscribe(client):
         db.session.commit()
         uid, sid = u.id, s.id
 
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = sid
 
     # /dashboard is now redirected to /app/dashboard by the
     # spa_cutover hook (the legacy trial gate was retired with the
@@ -132,10 +128,6 @@ def test_subscribe_is_accessible_when_expired(client):
         db.session.commit()
         uid, sid = u.id, s.id
 
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = sid
 
     # /subscribe 301s to /app/subscribe; the no-redirect-loop
     # invariant for expired stores is what matters here.

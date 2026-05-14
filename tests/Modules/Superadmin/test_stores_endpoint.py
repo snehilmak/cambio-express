@@ -444,19 +444,12 @@ def test_patch_updates_federal_tax_rate(client, test_store_id):
 
 @pytest.fixture
 def _superadmin_flask_client():
-    """Flask test client authed as the seeded superadmin (via the
-    Flask session — the SPA redirect happens inside Flask, not
-    FastAPI, so we don't need a JWT here)."""
-    from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
-    c = flask_app.test_client()
-    with flask_app.app_context():
-        sa = User.query.filter_by(username="superadmin", store_id=None).first()
-        uid = sa.id
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "superadmin"
-    return c
+    """Test client for the legacy ``/superadmin/stores/new`` URLs.
+    These are SPA-cutover redirects (301 → ``/app/...``) — they
+    don't depend on session/JWT auth, so we use the standard
+    ``AsgiTestClient`` for transport parity with production."""
+    from tests.conftest import AsgiTestClient
+    return AsgiTestClient()
 
 
 def test_legacy_new_get_redirects_301(_superadmin_flask_client):
