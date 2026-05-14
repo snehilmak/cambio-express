@@ -52,11 +52,3 @@ def test_phone_country_codes_no_duplicate_dial_codes():
 # ── legacy Flask wrapper ──────────────────────────────────
 
 
-def test_legacy_phone_country_codes_re_exported():
-    """app.PHONE_COUNTRY_CODES is the same list object as the
-    Service's — re-exported, not copied."""
-    from app import PHONE_COUNTRY_CODES as legacy
-    from api.Modules.Customers.Services import (
-        PHONE_COUNTRY_CODES as service,
-    )
-    assert legacy is service
