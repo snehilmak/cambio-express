@@ -6,7 +6,7 @@ log in as the seeded admin and pass the resulting bearer token,
 mirroring the ReturnChecks / Batches / Monthly test pattern.
 """
 from datetime import datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client, store_id):
@@ -86,8 +86,7 @@ def test_list_rejects_out_of_range_per_page(client, test_store_id):
 
 
 def test_list_response_envelope(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id, nickname="Operating")
         _seed_txn(test_store_id, a, amount_cents=-100,
                   description="REMOTE DEPOSIT FEE")
@@ -110,8 +109,7 @@ def test_list_response_envelope(client, test_store_id):
 
 
 def test_list_filters_by_account(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a1 = _seed_account(test_store_id, last4="1111")
         a2 = _seed_account(test_store_id, last4="2222")
         _seed_txn(test_store_id, a1, description="A1")
@@ -127,8 +125,7 @@ def test_list_filters_by_account(client, test_store_id):
 
 
 def test_list_filters_by_sign(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, amount_cents=-100, description="DEBIT")
         _seed_txn(test_store_id, a, amount_cents=200, description="CREDIT")
@@ -143,8 +140,7 @@ def test_list_filters_by_sign(client, test_store_id):
 
 
 def test_list_uncategorized_only_filter(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="UNTAGGED",
                   stripe_transaction_id="u")
@@ -167,8 +163,7 @@ def test_list_uncategorized_only_filter(client, test_store_id):
 def test_list_uncategorized_count_independent_of_filter(client, test_store_id):
     """`uncategorized_count` reflects every uncategorized row across
     the filter window, not just the rows matching `uncategorized_only`."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="U1",
                   stripe_transaction_id="u1")
@@ -191,8 +186,7 @@ def test_list_uncategorized_count_independent_of_filter(client, test_store_id):
 
 
 def test_list_pagination(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         for i in range(5):
             _seed_txn(test_store_id, a, description=f"T{i}",
@@ -216,8 +210,8 @@ def test_list_scoped_to_principal_store(client, test_store_id):
     only sees the principal's store. Confirms that the dropped
     `store_ids` query param can't be smuggled back in via the URL."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="MINE",
                   stripe_transaction_id="mine")

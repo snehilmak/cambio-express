@@ -1,7 +1,7 @@
 """Unit tests for BankSync.Services.applier (PR 71)."""
 from datetime import datetime
 from unittest.mock import MagicMock
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _store_with_account(db, *, slug="applier-store", last4="0210"):
@@ -47,11 +47,11 @@ def _add_uncategorized_txn(db, store_id, account_id,
 def test_already_categorized_row_is_skipped():
     """Rows with a non-empty category_slug must NOT be retagged
     — operator overrides survive."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         s, a = _store_with_account(db.session, slug="idem-store")
         t = _add_uncategorized_txn(db.session, s.id, a.id)
         t.category_slug = "manual_override"
@@ -70,11 +70,11 @@ def test_matches_builtin_when_no_operator_rule():
     """REMOTE DEPOSIT FEE on the 0230 MSB account fires the
     Nizari built-in. Built-ins never post to the daily book."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
@@ -94,11 +94,11 @@ def test_matches_builtin_when_no_operator_rule():
 
 def test_no_match_leaves_row_uncategorised():
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
@@ -123,11 +123,11 @@ def test_operator_rule_wins_over_builtin():
     """Operator rules fire before built-ins. Rule chain order
     matters."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
@@ -159,11 +159,11 @@ def test_operator_rule_increments_match_count():
     """When an operator rule fires, its match_count goes up +
     last_matched_at gets stamped."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="counter-store")
@@ -195,11 +195,11 @@ def test_allow_auto_post_false_skips_daily_line_item():
     DailyLineItem even when rule.auto_post=True."""
     from api.Modules.BankSync.Models import BankRule
     from api.Modules.DailyBook.Models import DailyLineItem
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.query(DailyLineItem).delete()
         db.session.commit()
@@ -232,11 +232,11 @@ def test_allow_auto_post_true_creates_daily_line_item():
     target → DailyLineItem created."""
     from api.Modules.BankSync.Models import BankRule
     from api.Modules.DailyBook.Models import DailyLineItem
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         apply_rules_to_uncategorized_row,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.query(DailyLineItem).delete()
         db.session.commit()

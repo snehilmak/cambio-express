@@ -7,7 +7,7 @@ from datetime import date, datetime
 from api.Modules.Auth.Models import Passkey
 from api.Modules.BankSync.Models import StripeBankAccount
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
-from tests._app import db
+from tests._app import db, db_session
 
 
 _USER_COUNTER = 0
@@ -65,9 +65,9 @@ def _add_passkey(db, user_id, *, credential_id_bytes):
 
 
 def test_bank_sync_adoption_groups_by_plan():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import bank_sync_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StripeBankAccount).delete()
         db.session.query(Store).delete()
         db.session.commit()
@@ -92,9 +92,9 @@ def test_bank_sync_adoption_groups_by_plan():
 
 
 def test_bank_sync_adoption_zero_total_no_divzero():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import bank_sync_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StripeBankAccount).delete()
         db.session.query(Store).delete()
         db.session.commit()
@@ -110,9 +110,9 @@ def test_bank_sync_adoption_zero_total_no_divzero():
 
 def test_tv_display_adoption_filters_by_addons():
     """Only stores whose `addons` contains 'tv_display' surface."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import tv_display_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="tvda-on", plan="basic",
@@ -131,9 +131,9 @@ def test_tv_display_adoption_filters_by_addons():
 
 
 def test_tv_display_adoption_sorted_by_name():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import tv_display_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="tvda-z", plan="basic",
@@ -152,9 +152,9 @@ def test_tv_display_adoption_sorted_by_name():
 def test_owner_adoption_includes_only_multi_store_owners():
     """Owners with exactly 1 linked store are excluded — the
     report's purpose is to surface umbrella owners."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import owner_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreOwnerLink).delete()
         db.session.query(Store).delete()
         db.session.commit()
@@ -181,9 +181,9 @@ def test_owner_adoption_includes_only_multi_store_owners():
 
 
 def test_owner_adoption_empty_when_no_multi_store_owners():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import owner_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         rows, totals = owner_adoption(
@@ -197,9 +197,9 @@ def test_owner_adoption_empty_when_no_multi_store_owners():
 
 
 def test_passkey_adoption_returns_role_breakdown_and_rate():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import passkey_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Passkey).delete()
         db.session.commit()
         u_admin = _add_user(db.session, role="admin")
@@ -220,9 +220,9 @@ def test_passkey_adoption_returns_role_breakdown_and_rate():
 
 
 def test_passkey_adoption_zero_users_returns_empty_rows():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import passkey_adoption
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Passkey).delete()
         db.session.commit()
         rows, totals = passkey_adoption(

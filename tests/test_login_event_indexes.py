@@ -22,6 +22,7 @@ This test pins the composite without removing the standalone
 `at` / `user_id` indexes that already exist on the model.
 """
 from sqlalchemy import inspect
+from tests._app import db_session
 
 
 def test_login_event_composite_declared(client):
@@ -42,7 +43,7 @@ def test_login_event_composite_declared(client):
 
 def test_login_event_composite_present_in_db(client):
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("login_event")}
     assert "ix_login_event_at_user" in present, (
@@ -57,7 +58,7 @@ def test_existing_single_column_indexes_survive(client):
     user_id, "logins for user X" lookups, simple range scans on
     `at`. Don't drop them."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         idxs = insp.get_indexes("login_event")
     by_cols = {tuple(ix["column_names"]) for ix in idxs}

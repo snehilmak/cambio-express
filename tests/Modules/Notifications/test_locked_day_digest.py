@@ -2,7 +2,7 @@
 recipient resolution for the daily-book lock fan-out."""
 
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug):
@@ -27,11 +27,11 @@ def _add_user(db, *, store_id, role, username, email,
 
 
 def test_recipients_include_store_admin():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         # Isolate to a fresh store so seed data doesn't pollute counts.
         s = _add_store(db.session, slug="locked-test-admin")
         _add_user(db.session, store_id=s.id, role="admin",
@@ -42,11 +42,11 @@ def test_recipients_include_store_admin():
 
 
 def test_recipients_skip_employees():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="locked-test-emp")
         _add_user(db.session, store_id=s.id, role="employee",
                   username="cashier", email="cashier@x.com")
@@ -57,11 +57,11 @@ def test_recipients_skip_employees():
 
 def test_recipients_skip_users_with_toggle_off():
     """The opt-out toggle silences the digest for that user."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="locked-test-off")
         _add_user(db.session, store_id=s.id, role="admin",
                   username="silenced", email="silenced@x.com",
@@ -75,11 +75,11 @@ def test_recipients_skip_users_with_toggle_off():
 
 
 def test_recipients_skip_users_without_email():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="locked-test-noemail")
         _add_user(db.session, store_id=s.id, role="admin",
                   username="noemail", email="")
@@ -89,11 +89,11 @@ def test_recipients_skip_users_without_email():
 
 
 def test_recipients_skip_inactive_users():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="locked-test-inactive")
         _add_user(db.session, store_id=s.id, role="admin",
                   username="exadmin", email="ex@x.com",
@@ -106,11 +106,11 @@ def test_recipients_skip_inactive_users():
 def test_recipients_pick_up_linked_owners():
     """Multi-store owner pattern — owner's User row lives in another
     store but StoreOwnerLink connects them in."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         # Store A — has the daily book being locked.
         store_a = _add_store(db.session, slug="locked-store-a")
         # Store B — where the owner's user row actually lives.
@@ -128,11 +128,11 @@ def test_recipients_pick_up_linked_owners():
 def test_recipients_dedup_owner_admin_overlap():
     """Same user could be both admin of this store AND linked owner —
     they should only get one email."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         locked_day_digest_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="locked-test-dup")
         u = _add_user(db.session, store_id=s.id, role="admin",
                       username="boss", email="boss@x.com")

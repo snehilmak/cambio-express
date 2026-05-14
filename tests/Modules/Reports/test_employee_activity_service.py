@@ -3,7 +3,7 @@ from datetime import date
 
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 _USER_COUNTER = 0
@@ -53,9 +53,9 @@ def _add_transfer(db, store_id, *, send_date, send_amount=100.0,
 
 
 def test_returns_rows_and_totals_tuple():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-shape")
@@ -68,9 +68,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-row")
@@ -93,9 +93,9 @@ def test_row_shape():
 
 
 def test_unattributed_transfers_bucket_to_unattributed_label():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-unattr")
@@ -112,9 +112,9 @@ def test_unattributed_transfers_bucket_to_unattributed_label():
 
 
 def test_employee_label_prefers_full_name_over_username():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-label")
@@ -133,9 +133,9 @@ def test_employee_label_prefers_full_name_over_username():
 
 
 def test_employee_label_falls_back_to_username_when_no_full_name():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-uname")
@@ -157,9 +157,9 @@ def test_employee_label_falls_back_to_username_when_no_full_name():
 
 def test_active_count_excludes_canceled_status():
     """Active count + sent only counts non-excluded statuses."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-active")
@@ -186,9 +186,9 @@ def test_active_count_excludes_canceled_status():
 def test_cancel_only_employees_appear_with_zero_active():
     """An employee who ONLY had cancelled transfers still surfaces
     as a row (cancels > 0, count = 0, last_activity = None)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-cancel-only")
@@ -215,9 +215,9 @@ def test_cancel_only_employees_appear_with_zero_active():
 def test_rows_sorted_by_total_activity_descending():
     """Rows sort by (count + cancels) desc — busiest employees
     surface first, regardless of revenue."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-sort")
@@ -244,9 +244,9 @@ def test_rows_sorted_by_total_activity_descending():
 
 
 def test_totals_sum_count_sent_cancels():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import employee_activity
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ea-totals")

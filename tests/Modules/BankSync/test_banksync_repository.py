@@ -4,7 +4,7 @@ The Service + Controller layers (PRs 15-16) compose these into the
 /bank/transactions and /bank/rules endpoints.
 """
 from datetime import date, datetime, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_account(store_id, *, nickname="", display_name="",
@@ -65,9 +65,9 @@ def _seed_rule(store_id, *, target_kind="bank_charge_210",
 
 
 def test_list_accounts_returns_store_scoped(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import list_accounts
-    with flask_app.app_context():
+    with db_session():
         a1 = _seed_account(test_store_id, last4="1111")
         rows = list_accounts(db.session, [test_store_id])
     assert len(rows) == 1
@@ -77,9 +77,9 @@ def test_list_accounts_returns_store_scoped(test_store_id):
 def test_list_accounts_orders_by_label(test_store_id):
     """Accounts ordered by nickname ?? display_name ?? institution
     (case-insensitive). Stable id tie-break for tests."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import list_accounts
-    with flask_app.app_context():
+    with db_session():
         _seed_account(test_store_id, nickname="Zebra", last4="9")
         _seed_account(test_store_id, nickname="alpha", last4="1")
         rows = list_accounts(db.session, [test_store_id])
@@ -88,9 +88,9 @@ def test_list_accounts_orders_by_label(test_store_id):
 
 def test_list_accounts_excludes_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import list_accounts
-    with flask_app.app_context():
+    with db_session():
         s2 = Store(name="Other", slug="other-bank",
                     email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()
@@ -138,11 +138,11 @@ def test_txn_filters_normalizes_sign_and_uncategorized_only():
 
 
 def test_list_transactions_orders_by_posted_at_desc(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         old = datetime.utcnow() - timedelta(days=2)
         new = datetime.utcnow()
@@ -156,11 +156,11 @@ def test_list_transactions_orders_by_posted_at_desc(test_store_id):
 
 
 def test_list_transactions_filters_by_sign(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, amount_cents=-100, description="DEBIT")
         _seed_txn(test_store_id, a, amount_cents=200, description="CREDIT")
@@ -172,11 +172,11 @@ def test_list_transactions_filters_by_sign(test_store_id):
 
 
 def test_list_transactions_filters_by_account_id(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a1 = _seed_account(test_store_id, last4="1111")
         a2 = _seed_account(test_store_id, last4="2222")
         _seed_txn(test_store_id, a1, description="A1")
@@ -189,11 +189,11 @@ def test_list_transactions_filters_by_account_id(test_store_id):
 
 
 def test_list_transactions_filters_by_category_and_uncategorized(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, category_slug="bank_charge_210",
                     description="TAGGED")
@@ -214,11 +214,11 @@ def test_list_transactions_filters_by_category_and_uncategorized(test_store_id):
 
 
 def test_list_transactions_filters_by_q_description(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, description="REMOTE DEPOSIT FEE")
         _seed_txn(test_store_id, a, description="ACH DEPOSIT")
@@ -230,11 +230,11 @@ def test_list_transactions_filters_by_q_description(test_store_id):
 
 
 def test_list_transactions_paginates(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import (
         BankTransactionFilters, list_transactions,
     )
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         for i in range(5):
             _seed_txn(test_store_id, a,
@@ -254,9 +254,9 @@ def test_list_transactions_paginates(test_store_id):
 def test_sum_amount_returns_absolute_value(test_store_id):
     """The Σ uses ABS(amount_cents) so the P&L card displays the
     positive "we paid this much in fees" number."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import sum_amount_cents_by_category
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         _seed_txn(test_store_id, a, amount_cents=-210,
                     category_slug="bank_charge_210",
@@ -275,9 +275,9 @@ def test_sum_amount_returns_absolute_value(test_store_id):
 
 
 def test_sum_amount_zero_for_empty(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import sum_amount_cents_by_category
-    with flask_app.app_context():
+    with db_session():
         result = sum_amount_cents_by_category(
             db.session, [test_store_id], "bank_charge_210",
         )
@@ -288,9 +288,9 @@ def test_sum_amount_zero_for_empty(test_store_id):
 
 
 def test_list_rules_orders_by_priority_then_id(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import list_rules
-    with flask_app.app_context():
+    with db_session():
         r_high = _seed_rule(test_store_id, priority=10,
                               desc_match_value="HIGH")
         r_low = _seed_rule(test_store_id, priority=100,
@@ -303,9 +303,9 @@ def test_list_rules_orders_by_priority_then_id(test_store_id):
 
 
 def test_list_rules_enabled_only_filter(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Repositories import list_rules
-    with flask_app.app_context():
+    with db_session():
         r_on = _seed_rule(test_store_id, desc_match_value="ON",
                             enabled=True)
         _seed_rule(test_store_id, desc_match_value="OFF",

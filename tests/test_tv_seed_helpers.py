@@ -9,7 +9,7 @@ from api.Modules.TVDisplay.Services.seed import (
     seed_logos_from_disk,
 )
 from api.Modules.Tenancy.Models import Store, User
-from tests._app import app as flask_app, db
+from tests._app import db, db_session
 
 
 # Repo root — tests live in ``<repo>/tests/``, so two levels up
@@ -33,7 +33,7 @@ def _seed_tv_logos_from_disk():
 def _make_legacy_country(name, code=None):
     """Create a TVDisplayCountry with no country_code (legacy data)
     so the backfill has something to fix. Returns the row's id."""
-    with flask_app.app_context():
+    with db_session():
         # Need a store + display to attach the country to.
         store = db.session.query(Store).filter_by(slug="test-store").first()
         if not db.session.query(TVDisplay).filter_by(store_id=store.id).first():
@@ -55,7 +55,7 @@ def test_backfill_fills_missing_iso_for_known_country(client):
     cid = _make_legacy_country("Mexico")
     fixed = _backfill_tv_country_codes()
     assert fixed >= 1
-    with client.application.app_context():
+    with db_session():
         c = db.session.get(TVDisplayCountry, cid)
         assert c.country_code == "MX"
 
@@ -63,7 +63,7 @@ def test_backfill_fills_missing_iso_for_known_country(client):
 def test_backfill_handles_synonyms(client):
     cid = _make_legacy_country("Republica Dominicana")
     _backfill_tv_country_codes()
-    with client.application.app_context():
+    with db_session():
         c = db.session.get(TVDisplayCountry, cid)
         assert c.country_code == "DO"
 
@@ -74,7 +74,7 @@ def test_backfill_skips_already_coded_rows(client):
     wins over heuristic matching."""
     cid = _make_legacy_country("Sealand", code="ZZ")
     _backfill_tv_country_codes()
-    with client.application.app_context():
+    with db_session():
         c = db.session.get(TVDisplayCountry, cid)
         # Code unchanged.
         assert c.country_code == "ZZ"
@@ -86,7 +86,7 @@ def test_backfill_skips_unknown_country_names(client):
     than guess wrong."""
     cid = _make_legacy_country("Atlantis")  # not in picker
     _backfill_tv_country_codes()
-    with client.application.app_context():
+    with db_session():
         c = db.session.get(TVDisplayCountry, cid)
         assert c.country_code == ""
 
@@ -131,10 +131,10 @@ def test_seed_disk_imports_known_slug_with_blob(client):
     path = _drop_logo("company", "intermex", "png",
                       b"\x89PNG\r\n\x1a\n" + b"x" * 200)
     try:
-        with flask_app.app_context():
+        with db_session():
             n = _seed_tv_logos_from_disk()
         assert n >= 1
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(
                 catalog_type="company", slug="intermex").first()
             assert row is not None
@@ -153,9 +153,9 @@ def test_seed_disk_handles_svg(client):
     path = _drop_logo("company", "maxi", "svg",
                       b'<svg xmlns="http://www.w3.org/2000/svg"></svg>')
     try:
-        with flask_app.app_context():
+        with db_session():
             _seed_tv_logos_from_disk()
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(
                 catalog_type="company", slug="maxi").first()
             assert row is not None
@@ -171,9 +171,9 @@ def test_seed_disk_skips_unknown_slug(client):
     path = _drop_logo("company", "totally-fake-brand-9999", "png",
                       b"\x89PNG\r\n\x1a\n")
     try:
-        with flask_app.app_context():
+        with db_session():
             _seed_tv_logos_from_disk()
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(
                 slug="totally-fake-brand-9999").first()
             assert row is None
@@ -185,7 +185,7 @@ def test_seed_disk_does_not_override_existing_logo(client):
     """A previously-uploaded UI logo wins — the disk seed never
     overrides operator-managed state."""
     # Pre-existing logo in the table.
-    with client.application.app_context():
+    with db_session():
         db.session.add(TVCatalogLogo(
             catalog_type="company", slug="vigo",
             mime_type="image/png",
@@ -196,9 +196,9 @@ def test_seed_disk_does_not_override_existing_logo(client):
     path = _drop_logo("company", "vigo", "png",
                       b"new-blob-from-disk")
     try:
-        with flask_app.app_context():
+        with db_session():
             _seed_tv_logos_from_disk()
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(slug="vigo").first()
             # Old blob preserved — disk file ignored.
             assert row.blob == b"old-blob-bytes"
@@ -212,9 +212,9 @@ def test_seed_disk_skips_oversized_file(client):
     path = _drop_logo("company", "ria", "png",
                       b"x" * (250 * 1024))  # 250 KiB
     try:
-        with flask_app.app_context():
+        with db_session():
             _seed_tv_logos_from_disk()
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(slug="ria").first()
             assert row is None
     finally:
@@ -225,9 +225,9 @@ def test_seed_disk_skips_unknown_extension(client):
     """File with an extension not in the whitelist is skipped."""
     path = _drop_logo("company", "ria", "bin", b"random-bytes")
     try:
-        with flask_app.app_context():
+        with db_session():
             _seed_tv_logos_from_disk()
-        with client.application.app_context():
+        with db_session():
             row = db.session.query(TVCatalogLogo).filter_by(slug="ria").first()
             assert row is None
     finally:
@@ -240,7 +240,7 @@ def test_seed_disk_is_idempotent(client):
     path = _drop_logo("company", "moneygram", "png",
                       b"\x89PNG\r\n\x1a\nbody")
     try:
-        with flask_app.app_context():
+        with db_session():
             first = _seed_tv_logos_from_disk()
             second = _seed_tv_logos_from_disk()
         assert first == 1

@@ -4,7 +4,7 @@ After SPA-29 the endpoint derives `store_id` from the JWT
 principal — explicit `store_ids` query params are gone.
 """
 from datetime import datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client, store_id):
@@ -55,8 +55,7 @@ def test_accounts_endpoint_returns_empty_envelope(client, test_store_id):
 
 
 def test_accounts_endpoint_returns_label_and_balance(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_account(test_store_id, last4="9999", nickname="Operating")
     token = _login(client, test_store_id)
     resp = client.get(
@@ -76,8 +75,7 @@ def test_accounts_endpoint_returns_label_and_balance(client, test_store_id):
 
 def test_accounts_endpoint_label_falls_back_to_last4(client, test_store_id):
     """No nickname → label = ••last4."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_account(test_store_id, last4="1234")
     token = _login(client, test_store_id)
     resp = client.get(
@@ -91,8 +89,7 @@ def test_accounts_endpoint_label_falls_back_to_last4(client, test_store_id):
 def test_accounts_endpoint_orders_by_label(client, test_store_id):
     """Repository orders by nickname → display_name → institution_name
     (case-insensitive). Z before a should sort a first."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_account(test_store_id, last4="2", nickname="Zebra")
         _seed_account(test_store_id, last4="1", nickname="alpha")
     token = _login(client, test_store_id)
@@ -107,8 +104,7 @@ def test_accounts_endpoint_orders_by_label(client, test_store_id):
 def test_accounts_endpoint_includes_disconnected(client, test_store_id):
     """Both enabled and disconnected accounts return — clients filter
     via the `enabled` field if they want only active ones."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_account(test_store_id, last4="ON", enabled=True)
         _seed_account(test_store_id, last4="OFF", enabled=False)
     token = _login(client, test_store_id)
@@ -125,8 +121,8 @@ def test_accounts_endpoint_includes_disconnected(client, test_store_id):
 
 def test_accounts_endpoint_excludes_other_stores(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s2 = Store(name="Other", slug="other-bank-acc",
                    email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()

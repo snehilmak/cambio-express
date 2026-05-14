@@ -1,7 +1,7 @@
 """Unit tests for DailyBook.Services.mt_breakdown — per-company
 Money Transfer breakdown read + bulk-replace flows."""
 from datetime import date, datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_summary(db, *, store_id, report_date, company, amount=0.0,
@@ -36,9 +36,9 @@ def _add_transfer(db, *, store_id, send_date, company="Intermex",
 def test_read_empty_day_returns_default_companies(test_store_id):
     """No saved rows, no transfers → one row per configured company
     with both saved + auto = 0."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import read_mt_breakdown
-    with flask_app.app_context():
+    with db_session():
         breakdown = read_mt_breakdown(
             db.session, test_store_id, date.today(),
         )
@@ -55,10 +55,10 @@ def test_read_empty_day_returns_default_companies(test_store_id):
 
 def test_read_pulls_auto_from_transfers(test_store_id):
     """A logged transfer surfaces in the row's auto_* fields."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import read_mt_breakdown
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_transfer(db.session, store_id=test_store_id,
                       send_date=today, company="Intermex",
                       send_amount=200, fee=10, federal_tax=2,
@@ -76,10 +76,10 @@ def test_read_pulls_auto_from_transfers(test_store_id):
 
 def test_read_pulls_saved_from_mt_summary(test_store_id):
     """A persisted MoneyTransferSummary row surfaces in saved_*."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import read_mt_breakdown
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_summary(db.session, store_id=test_store_id,
                      report_date=today, company="Maxi",
                      amount=500, fees=20, federal_tax=5,
@@ -95,10 +95,10 @@ def test_read_pulls_saved_from_mt_summary(test_store_id):
 def test_read_unknown_companies_sort_after_configured(test_store_id):
     """Carry-over companies (saved or logged transfer w/ company
     not in current config) appear after configured, alphabetical."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import read_mt_breakdown
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_summary(db.session, store_id=test_store_id,
                      report_date=today, company="Zoom",
                      amount=100)
@@ -120,14 +120,14 @@ def test_replace_inserts_rows_and_updates_money_transfer(test_store_id):
     """Bulk-replace inserts MT rows + writes the grand total into
     DailyReport.money_transfer."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         read_mt_breakdown,
         replace_mt_breakdown,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         total = replace_mt_breakdown(
             db.session,
             store_id=test_store_id,
@@ -161,13 +161,13 @@ def test_replace_is_bulk_idempotent(test_store_id):
     """Re-calling replace with different rows fully clears the old
     set (no orphaned rows from the previous save)."""
     from api.Modules.DailyBook.Models import MoneyTransferSummary
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         replace_mt_breakdown(
             db.session, store_id=test_store_id, report_date=today,
             rows=[
@@ -202,13 +202,13 @@ def test_replace_skips_zero_rows(test_store_id):
     """Companies with every-field-zero are not persisted — the
     read-side falls back to auto values for those."""
     from api.Modules.DailyBook.Models import MoneyTransferSummary
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         replace_mt_breakdown(
             db.session, store_id=test_store_id, report_date=today,
             rows=[
@@ -233,14 +233,14 @@ def test_replace_refuses_locked_day(test_store_id):
     as HTTP 403)."""
     import pytest
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         DailyReportLockedError,
         MTWriteRow,
         replace_mt_breakdown,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Pre-lock the day
         r = DailyReport(
             store_id=test_store_id, report_date=today,
@@ -264,13 +264,13 @@ def test_replace_empty_rows_preserves_money_transfer(test_store_id):
     Use the standard PUT /daily/{store}/{date} endpoint to zero
     that field if the operator really wants to clear it."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         MTWriteRow,
         replace_mt_breakdown,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Seed an existing daily-report with a manual money_transfer
         r = DailyReport(
             store_id=test_store_id, report_date=today,

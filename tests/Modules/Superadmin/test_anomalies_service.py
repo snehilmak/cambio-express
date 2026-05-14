@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, name="Test Co", slug=None,
@@ -64,10 +64,9 @@ def _add_report(db, store_id, *, report_date, over_short=0.0):
 
 def test_empty_db_returns_empty():
     """Fresh DB with no transfers / reports → empty list."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import compute_platform_anomalies
-    with flask_app.app_context():
+    with db_session():
         # Wipe any seeded transfers/reports so this test is hermetic.
         db.session.query(Transfer).delete()
         db.session.query(DailyReport).delete()
@@ -81,10 +80,9 @@ def test_empty_db_returns_empty():
 def test_quiet_store_flagged_when_active_then_silent():
     """Store had ≥5 transfers in the last 30 days but none in the
     last 3 days → flagged 'quiet_store' / medium."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="quiet-co")
@@ -107,10 +105,9 @@ def test_quiet_store_flagged_when_active_then_silent():
 def test_quiet_store_not_flagged_below_threshold():
     """Store with < 5 transfers in the last 30 days → not flagged
     (we don't yell about idle trials)."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="tiny-co")
@@ -128,10 +125,9 @@ def test_quiet_store_not_flagged_below_threshold():
 
 def test_quiet_store_not_flagged_when_recent_activity():
     """Recent transfer (within 3 days) → not flagged."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="active-co")
@@ -149,10 +145,9 @@ def test_quiet_store_not_flagged_when_recent_activity():
 def test_quiet_store_skips_inactive_plan():
     """plan='inactive' (cancelled) → not flagged. Cancelled stores
     aren't anomalies."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cancelled-co", plan="inactive")
@@ -169,10 +164,9 @@ def test_quiet_store_skips_inactive_plan():
 
 def test_quiet_store_skips_inactive_store_flag():
     """is_active=False → not flagged."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="disabled-co", is_active=False)
@@ -192,10 +186,9 @@ def test_quiet_store_skips_inactive_store_flag():
 
 def test_big_over_short_high_severity_at_or_above_high_threshold():
     """|over_short| ≥ $200 → severity 'high'."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="varianty-co")
@@ -214,10 +207,9 @@ def test_big_over_short_high_severity_at_or_above_high_threshold():
 
 def test_big_over_short_medium_severity_in_band():
     """$100 ≤ |over_short| < $200 → severity 'medium'."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="medium-co")
@@ -236,10 +228,9 @@ def test_big_over_short_medium_severity_in_band():
 
 def test_big_over_short_below_threshold_excluded():
     """|over_short| < $100 → not flagged."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="small-variance-co")
@@ -256,10 +247,9 @@ def test_big_over_short_below_threshold_excluded():
 
 def test_big_over_short_outside_lookback_window_excluded():
     """Reports older than 7 days are excluded."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ancient-co")
@@ -279,10 +269,9 @@ def test_big_over_short_outside_lookback_window_excluded():
 
 def test_compute_ranks_high_before_medium():
     """High-severity items float to the top of the merged list."""
-    from tests._app import app as flask_app
     from tests._app import db
     from api.Modules.Superadmin.Services import compute_platform_anomalies
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.query(DailyReport).delete()
         db.session.commit()

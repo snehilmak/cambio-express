@@ -1,6 +1,6 @@
 """Unit tests for Customers.Services.list_recent_recipients (PR 38)."""
 from datetime import date, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_customer(store_id, *, full_name="C", phone_number=""):
@@ -61,12 +61,12 @@ def _link(owner_id, store_id):
 
 
 def test_returns_distinct_recipients_in_recency_order(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
     yesterday = today - timedelta(days=1)
     last_week = today - timedelta(days=7)
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id, full_name="Sender")
         # Three distinct recipients on three distinct dates; one
         # duplicate to test "distinct".
@@ -91,10 +91,10 @@ def test_returns_distinct_recipients_in_recency_order(test_store_id):
 def test_excludes_canceled_and_rejected_status(test_store_id):
     """Canceled/Rejected transfers' recipients aren't ones the sender
     will reuse."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id)
         _seed_transfer(test_store_id, cid, recipient_name="Sent",
                         send_date=today, status="Sent",
@@ -113,10 +113,10 @@ def test_excludes_canceled_and_rejected_status(test_store_id):
 
 
 def test_excludes_empty_recipient_name(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id)
         _seed_transfer(test_store_id, cid, recipient_name="Real",
                         send_date=today, confirm_number="X-R")
@@ -132,10 +132,10 @@ def test_returns_empty_when_customer_outside_umbrella(test_store_id):
     """Cross-umbrella customer lookup returns empty (matches the
     legacy "404 → empty list" UX) — no leakage to a stranger
     store's chip data."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         s2 = _seed_store("stranger-rr")
         cid = _seed_customer(s2)
         _seed_transfer(s2, cid, recipient_name="Hidden",
@@ -149,10 +149,10 @@ def test_returns_empty_when_customer_outside_umbrella(test_store_id):
 def test_finds_in_owner_umbrella(test_store_id):
     """Customer + their transfers at sibling store are reachable
     when the viewer is at the original store."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         oid = _seed_owner()
         s2 = _seed_store("loc-rr")
         _link(oid, test_store_id)
@@ -167,9 +167,9 @@ def test_finds_in_owner_umbrella(test_store_id):
 
 
 def test_returns_empty_for_unknown_customer(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
-    with flask_app.app_context():
+    with db_session():
         rows = list_recent_recipients(
             db.session, 99999, viewer_store_id=test_store_id,
         )
@@ -177,10 +177,10 @@ def test_returns_empty_for_unknown_customer(test_store_id):
 
 
 def test_respects_limit(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id)
         for i in range(8):
             _seed_transfer(
@@ -197,10 +197,10 @@ def test_respects_limit(test_store_id):
 def test_recent_recipient_to_dict_shape(test_store_id):
     """Wire shape matches the legacy JSON the frontend already
     consumes: keys = name / country / phone, all strings."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Services import list_recent_recipients
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id)
         _seed_transfer(
             test_store_id, cid, recipient_name="Maria",

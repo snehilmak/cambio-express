@@ -7,7 +7,7 @@ account`) are testable directly against the real ORM.
 """
 from datetime import datetime
 from unittest.mock import MagicMock, patch
-from tests._app import db
+from tests._app import db, db_session
 
 
 _TXN_COUNTER = [0]
@@ -50,9 +50,9 @@ def _store_with_account(db, *, slug="sync-store", last4="0230"):
 
 def test_upsert_inserts_new_row():
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import upsert_bank_transaction
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-store")
@@ -71,9 +71,9 @@ def test_upsert_idempotent_on_existing_id():
     """Same stripe_transaction_id → update existing row, return
     inserted=False."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import upsert_bank_transaction
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-idem")
@@ -94,9 +94,9 @@ def test_upsert_idempotent_on_existing_id():
 def test_upsert_truncates_long_description():
     """description column caps at 500 — defensive truncation."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import upsert_bank_transaction
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-trunc")
@@ -108,9 +108,9 @@ def test_upsert_truncates_long_description():
 def test_upsert_handles_none_amount():
     """Defensive: None amount → 0 cents, doesn't crash."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import upsert_bank_transaction
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="upsert-none-amt")
@@ -124,11 +124,11 @@ def test_upsert_handles_none_amount():
 
 def test_backfill_zero_when_no_uncategorized():
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         backfill_uncategorized_rows,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="backfill-empty")
@@ -148,11 +148,11 @@ def test_backfill_tags_uncategorized_via_builtin():
     """An uncategorised REMOTE DEPOSIT FEE on 0230 gets tagged
     by the built-in rule chain on backfill."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         backfill_uncategorized_rows,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
@@ -180,11 +180,11 @@ def test_migrate_relabels_generic_bank_charge():
     that matches a current built-in gets retagged to
     `bank_charge_<last4>`."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
@@ -211,11 +211,11 @@ def test_migrate_skips_rows_without_matching_builtin_substring():
     any current built-in is treated as an operator override and
     left alone."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
@@ -241,11 +241,11 @@ def test_migrate_skips_rows_without_account_last4():
     """No last4 → can't build the per-account slug → skip."""
     from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         migrate_generic_bank_charge_per_account,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = Store(name="no-last4", slug="no-last4",
@@ -277,10 +277,10 @@ def test_migrate_skips_rows_without_account_last4():
 
 def test_sync_returns_zero_when_stripe_unconfigured(monkeypatch):
     """Stripe disabled → sync no-ops."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.delenv("STRIPE_SECRET_KEY", raising=False)
-    with flask_app.app_context():
+    with db_session():
         s, _ = _store_with_account(db.session, slug="no-stripe")
         new_rows, total, err = sync_bank_transactions(db.session, s)
         assert new_rows == 0
@@ -293,10 +293,10 @@ def test_sync_iterates_accounts_and_tags_transactions(monkeypatch):
     transactions (one matching the Nizari built-in, one not).
     Both get inserted; the matching one gets tagged."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, last4="0230")
@@ -345,11 +345,11 @@ def test_sync_records_account_error_in_last_error(monkeypatch):
     """Stripe API failure on Transaction.list → captured into
     last_error, sync still returns (doesn't crash)."""
     from api.Modules.BankSync.Models import BankTransaction
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import sync_bank_transactions
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     import stripe
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="err-store")

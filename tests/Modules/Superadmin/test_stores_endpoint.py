@@ -7,7 +7,7 @@ fields. Auth gating, audit-log emission, slug normalization, and
 duplicate-slug 409s are all covered here.
 """
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -127,7 +127,6 @@ def test_get_404_for_unknown_store(client):
 
 def test_create_happy_path(client):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/superadmin/stores",
@@ -138,7 +137,7 @@ def test_create_happy_path(client):
     body = resp.get_json()
     assert body["store"]["slug"] == "new-branch"
     assert body["store"]["name"] == "New Branch"
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(slug="new-branch").first()
         assert s is not None
         assert s.plan == "trial"
@@ -148,14 +147,13 @@ def test_create_happy_path(client):
 def test_create_records_audit(client):
     from api.Modules.Audit.Models import SuperadminAuditLog
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
         json=_VALID_CREATE,
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(slug="new-branch").first()
         row = (
             SuperadminAuditLog.query
@@ -169,14 +167,13 @@ def test_create_records_audit(client):
 
 def test_create_seeds_admin_user(client):
     from api.Modules.Tenancy.Models import Store, User
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
         json=_VALID_CREATE,
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(slug="new-branch").first()
         admin = db.session.query(User).filter_by(store_id=s.id, role="admin").first()
         assert admin is not None
@@ -191,7 +188,6 @@ def test_create_normalizes_slug(client):
     """Slug should be lowercased + spaces-to-dashes, mirroring the
     legacy Flask handler's `slug.strip().lower().replace(" ","-")`."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     payload = dict(_VALID_CREATE, slug="My New BRANCH")
     resp = client.post(
@@ -201,7 +197,7 @@ def test_create_normalizes_slug(client):
     )
     assert resp.status_code == 201
     assert resp.get_json()["store"]["slug"] == "my-new-branch"
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(Store).filter_by(slug="my-new-branch").first() is not None
 
 
@@ -209,7 +205,6 @@ def test_create_rejects_duplicate_slug(client):
     """Existing slug returns 409 with a field-level error envelope
     so the SPA can render `Slug 'X' is already taken` inline."""
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.post(
         "/api/v2/superadmin/stores",
@@ -227,7 +222,7 @@ def test_create_rejects_duplicate_slug(client):
     assert detail["field"] == "slug"
     assert "already taken" in detail["message"]
     # The duplicate POST must NOT have produced a second audit row.
-    with flask_app.app_context():
+    with db_session():
         rows = (
             SuperadminAuditLog.query
             .filter_by(action="create_store")
@@ -284,7 +279,6 @@ def test_create_admin_user_defaults_when_omitted(client):
     """If admin_username + admin_name are omitted, the endpoint
     falls back to the legacy defaults ("admin" / "Store Admin")."""
     from api.Modules.Tenancy.Models import Store, User
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     payload = {
         "name": "Defaulted Branch", "slug": "defaulted",
@@ -296,7 +290,7 @@ def test_create_admin_user_defaults_when_omitted(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(slug="defaulted").first()
         admin = db.session.query(User).filter_by(store_id=s.id, role="admin").first()
         assert admin.username == "admin"
@@ -308,7 +302,6 @@ def test_create_admin_user_defaults_when_omitted(client):
 
 def test_patch_updates_identity_fields(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -319,7 +312,7 @@ def test_patch_updates_identity_fields(client, test_store_id):
     body = resp.get_json()
     assert body["store"]["name"] == "Renamed Store"
     assert body["store"]["phone"] == "+1 555 999 8888"
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert s.name == "Renamed Store"
         assert s.phone == "+1 555 999 8888"
@@ -327,14 +320,13 @@ def test_patch_updates_identity_fields(client, test_store_id):
 
 def test_patch_records_audit_with_changed_keys(client, test_store_id):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
         json={"name": "Renamed Store", "email": "new@example.com"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         row = (
             SuperadminAuditLog.query
             .filter_by(action="update_store", target_id=str(test_store_id))
@@ -352,9 +344,8 @@ def test_patch_no_op_skips_audit(client, test_store_id):
     a no-op shouldn't pollute the audit log."""
     from api.Modules.Audit.Models import SuperadminAuditLog
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(id=test_store_id).first()
         same_payload = {"name": s.name, "slug": s.slug, "email": s.email or ""}
     client.patch(
@@ -362,7 +353,7 @@ def test_patch_no_op_skips_audit(client, test_store_id):
         json=same_payload,
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         rows = (
             SuperadminAuditLog.query
             .filter_by(action="update_store")
@@ -384,9 +375,9 @@ def test_patch_404_for_unknown_store(client):
 def test_patch_rejects_duplicate_slug(client, test_store_id):
     """Renaming to a slug another store already owns returns 409."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     token = _login_superadmin(client)
-    with flask_app.app_context():
+    with db_session():
         other = Store(name="Other", slug="other-store", plan="trial")
         db.session.add(other); db.session.commit()
     resp = client.patch(
@@ -402,7 +393,6 @@ def test_patch_rejects_duplicate_slug(client, test_store_id):
 
 def test_patch_normalizes_slug(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -410,7 +400,7 @@ def test_patch_normalizes_slug(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert s.slug == "my-renamed-store"
 
@@ -427,7 +417,6 @@ def test_patch_rejects_invalid_plan(client, test_store_id):
 
 def test_patch_updates_federal_tax_rate(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.patch(
         f"/api/v2/superadmin/stores/{test_store_id}",
@@ -435,7 +424,7 @@ def test_patch_updates_federal_tax_rate(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 200
-    with flask_app.app_context():
+    with db_session():
         s = db.session.query(Store).filter_by(id=test_store_id).first()
         assert abs(s.federal_tax_rate - 0.0825) < 1e-6
 

@@ -10,7 +10,7 @@ server-side and ship here so /app/settings can show the user's
 registered devices without bouncing.
 """
 from datetime import datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -68,8 +68,7 @@ def test_list_empty_returns_zero(client, test_store_id):
 
 
 def test_list_returns_users_passkeys(client, test_store_id, test_admin_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_passkey(test_admin_id, name="MacBook")
         _seed_passkey(test_admin_id, name="iPhone",
                       credential_id=b"cred_phone")
@@ -86,8 +85,7 @@ def test_list_returns_users_passkeys(client, test_store_id, test_admin_id):
 def test_list_does_not_leak_credential_id_or_public_key(client, test_store_id, test_admin_id):
     """The raw credential bytes never leave the server — the SPA
     only needs the metadata to render the device list."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_passkey(test_admin_id, name="Sensitive")
     token = _login_admin(client, test_store_id)
     body = client.get(
@@ -103,8 +101,8 @@ def test_list_does_not_leak_credential_id_or_public_key(client, test_store_id, t
 def test_list_excludes_other_users_passkeys(client, test_store_id, test_admin_id):
     """Cross-user isolation: another user's passkey must not surface."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         # Seed another user with a passkey
         other = User(
             store_id=test_store_id, username="other@test.com",
@@ -130,8 +128,7 @@ def test_list_excludes_other_users_passkeys(client, test_store_id, test_admin_id
 
 def test_delete_removes_passkey(client, test_store_id, test_admin_id):
     from api.Modules.Auth.Models import Passkey
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         pid = _seed_passkey(test_admin_id, name="ToDelete")
     token = _login_admin(client, test_store_id)
     resp = client.delete(
@@ -139,7 +136,7 @@ def test_delete_removes_passkey(client, test_store_id, test_admin_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(Passkey).filter_by(id=pid).first() is None
 
 
@@ -156,8 +153,8 @@ def test_delete_404_for_another_users_passkey(client, test_store_id, test_admin_
     """Deleting someone else's passkey returns 404, never 200 or
     403 — that would leak the existence of the row."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = User(
             store_id=test_store_id, username="alien@test.com",
             full_name="Alien", role="employee",

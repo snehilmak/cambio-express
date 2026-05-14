@@ -8,7 +8,7 @@ endpoints.
 Mirrors the legacy /superadmin/features/{key}/stores/{store_id}
 form handler. Superadmin-scoped.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -80,8 +80,7 @@ def test_clear_rejects_admin_role(client, test_store_id):
 
 
 def test_upsert_creates_override(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync")
     token = _login_superadmin(client)
     resp = client.put(
@@ -96,8 +95,7 @@ def test_upsert_creates_override(client, test_store_id):
 
 
 def test_upsert_updates_existing_override(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync")
         _seed_override(test_store_id, "bank_sync", enabled=False)
     token = _login_superadmin(client)
@@ -121,8 +119,7 @@ def test_upsert_404_when_flag_missing(client, test_store_id):
 
 
 def test_upsert_404_when_store_missing(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync")
     token = _login_superadmin(client)
     resp = client.put(
@@ -138,8 +135,8 @@ def test_upsert_404_when_store_missing(client):
 
 def test_list_returns_per_store_rows(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         _seed_flag(key="bank_sync")
         s2 = Store(name="Beta", slug="beta-flag",
                    email="b@x.com", plan="basic")
@@ -168,8 +165,7 @@ def test_list_empty_for_unknown_flag(client):
 
 def test_clear_removes_override(client, test_store_id):
     from api.Modules.Billing.Models import StoreFeatureOverride
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync")
         _seed_override(test_store_id, "bank_sync", enabled=False)
     token = _login_superadmin(client)
@@ -178,7 +174,7 @@ def test_clear_removes_override(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(StoreFeatureOverride).filter_by(
             store_id=test_store_id, flag_key="bank_sync",
         ).first() is None
@@ -198,8 +194,7 @@ def test_clear_404_when_no_override(client, test_store_id):
 
 def test_upsert_records_audit_entry(client, test_store_id):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="audit_target")
     token = _login_superadmin(client)
     client.put(
@@ -207,7 +202,7 @@ def test_upsert_records_audit_entry(client, test_store_id):
         json={"enabled": True},
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(SuperadminAuditLog).filter_by(
             action="set_feature_override",
         ).all()

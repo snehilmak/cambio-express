@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankRule, BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 _TXN_COUNTER = 0
@@ -68,9 +68,9 @@ def _add_txn(db, store_id, account_id, *, posted_at,
 
 
 def test_returns_rows_and_totals_tuple():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bra-shape")
@@ -83,9 +83,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -112,9 +112,9 @@ def test_row_shape():
 def test_only_counts_matched_rule_id_not_null():
     """Manual categorisations (matched_rule_id IS NULL) are not
     counted — those weren't a rule firing."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -145,9 +145,9 @@ def test_only_counts_matched_rule_id_not_null():
 
 
 def test_groups_by_matched_rule_id():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -184,9 +184,9 @@ def test_groups_by_matched_rule_id():
 
 
 def test_label_uses_rule_id_when_rule_exists():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -207,9 +207,9 @@ def test_deleted_rule_renders_with_deleted_marker():
     """If the BankRule was deleted after the sync, the row still
     surfaces with `Rule #<id> (deleted)` so the audit is honest
     about what was applied even if the rule is gone."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -229,9 +229,9 @@ def test_deleted_rule_renders_with_deleted_marker():
 
 
 def test_match_summary_combines_type_and_value():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()
@@ -254,9 +254,9 @@ def test_match_summary_combines_type_and_value():
 
 
 def test_rows_sorted_by_count_descending():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_rule_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.query(BankRule).delete()
         db.session.commit()

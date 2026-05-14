@@ -26,7 +26,7 @@ from api.Modules.Notifications.Services.smtp import (
     health_check as smtp_health_check,
     send_email as _smtp_send_email,
 )
-from tests._app import db, purge_expired_stores
+from tests._app import db, purge_expired_stores, db_session
 
 
 def _send_email(to_addr, subject, body, html=None):
@@ -144,7 +144,7 @@ def test_webhook_persists_event_on_valid_request(client):
                         content_type="application/json",
                         headers=_sign(body))
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         evs = db.session.query(EmailEvent).all()
         assert len(evs) == 1
         assert evs[0].event_type == "email.delivered"
@@ -155,7 +155,7 @@ def test_webhook_hard_bounce_stamps_user(client, test_admin_id):
     """Hard bounce → User.email_bounced_at gets stamped. Matched via
     case-insensitive equality on User.email."""
     _set_webhook_secret()
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "Admin@Test.com"  # uppercase variation
         db.session.commit()
@@ -163,7 +163,7 @@ def test_webhook_hard_bounce_stamps_user(client, test_admin_id):
                           bounce_type="hard")
     client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         assert u.email_bounced_at is not None
 
@@ -172,7 +172,7 @@ def test_webhook_soft_bounce_does_not_stamp(client, test_admin_id):
     """Soft bounce (mailbox full, greylisting) is a retry situation —
     we record the event but don't suppress the address."""
     _set_webhook_secret()
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "admin@test.com"
         db.session.commit()
@@ -180,7 +180,7 @@ def test_webhook_soft_bounce_does_not_stamp(client, test_admin_id):
                           bounce_type="soft")
     client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         assert u.email_bounced_at is None, "soft bounce must not suppress"
 
@@ -189,7 +189,7 @@ def test_webhook_complaint_stamps_and_flips_toggles(client, test_admin_id):
     """Spam-report: stamp the suppression column AND flip every
     notify_* preference to False. Strongest-possible user signal."""
     _set_webhook_secret()
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "admin@test.com"
         u.notify_trial_reminders = True
@@ -197,7 +197,7 @@ def test_webhook_complaint_stamps_and_flips_toggles(client, test_admin_id):
     body = _webhook_body("email.complained", to="admin@test.com")
     client.post("/api/v2/webhooks/resend", data=body,
                 content_type="application/json", headers=_sign(body))
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         assert u.email_bounced_at is not None
         assert u.notify_trial_reminders is False
@@ -211,7 +211,7 @@ def test_webhook_handles_unmatched_email(client):
     resp = client.post("/api/v2/webhooks/resend", data=body,
                         content_type="application/json", headers=_sign(body))
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         ev = db.session.query(EmailEvent).first()
         assert ev.user_id is None
         assert ev.to_addr == "stranger@gmail.com"
@@ -221,7 +221,7 @@ def test_webhook_handles_non_bounce_events_without_side_effects(client, test_adm
     """email.sent, .delivered, .opened, .clicked, .delivery_delayed
     all persist but must not stamp suppression."""
     _set_webhook_secret()
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "admin@test.com"; u.notify_trial_reminders = True
         db.session.commit()
@@ -232,7 +232,7 @@ def test_webhook_handles_non_bounce_events_without_side_effects(client, test_adm
                             content_type="application/json",
                             headers=_sign(body, svix_id=kind))
         assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         assert u.email_bounced_at is None
         assert u.notify_trial_reminders is True
@@ -246,12 +246,12 @@ def test_send_email_skips_suppressed_user(client, test_admin_id):
     os.environ["SMTP_HOST"] = "smtp.test"
     os.environ["SMTP_USER"] = "u"
     os.environ["SMTP_PASS"] = "p"
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "bounced@test.com"
         u.email_bounced_at = datetime.utcnow()
         db.session.commit()
-    with client.application.app_context():
+    with db_session():
         ok = _send_email("bounced@test.com", "hi", "body")
     assert ok is False
     h = smtp_health_check(db.session)
@@ -265,12 +265,12 @@ def test_send_email_skips_suppressed_case_insensitive(client, test_admin_id):
     os.environ["SMTP_HOST"] = "smtp.test"
     os.environ["SMTP_USER"] = "u"
     os.environ["SMTP_PASS"] = "p"
-    with client.application.app_context():
+    with db_session():
         u = db.session.get(User, test_admin_id)
         u.email = "bounced@test.com"
         u.email_bounced_at = datetime.utcnow()
         db.session.commit()
-    with client.application.app_context():
+    with db_session():
         ok = _send_email("BOUNCED@Test.COM", "hi", "body")
     assert ok is False
 
@@ -285,7 +285,7 @@ def test_send_email_does_not_suppress_unmatched_address(client):
     from unittest.mock import patch
     with patch("api.Modules.Notifications.Services.smtp.smtplib.SMTP") as smtp:
         smtp.return_value.__enter__.return_value.send_message.return_value = {}
-        with client.application.app_context():
+        with db_session():
             ok = _send_email("personal@gmail.com", "hi", "body")
     assert ok is True
 
@@ -300,7 +300,7 @@ def test_purge_nulls_out_email_event_user_id(client):
     delete. We null and keep the event rows so post-purge forensics
     still work (useful when auditing "did we ever email this address"
     months later)."""
-    with client.application.app_context():
+    with db_session():
         s = Store(name="Doomed", slug="doomed-ee", plan="inactive",
                   is_active=False,
                   data_retention_until=datetime.utcnow() - timedelta(days=1))

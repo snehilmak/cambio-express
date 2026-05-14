@@ -14,6 +14,7 @@ The two checks are intentionally separate:
      on Postgres) so the test works in both environments.
 """
 from sqlalchemy import inspect
+from tests._app import db_session
 
 
 # Single source of truth for what the test enforces. Keep this in
@@ -52,7 +53,7 @@ def test_transfer_indexes_present_in_db(client):
     running database. Catches a bug where the model declares an
     index but `_ensure_added_indexes()` failed silently on prod."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("transfer")}
     for name in EXPECTED_TRANSFER_INDEXES:
@@ -87,9 +88,9 @@ def test_ensure_added_indexes_is_idempotent(client):
     and prod boots start failing with `relation already exists`."""
     import logging
     from api.Core.Bootstrap import ensure_added_indexes
-    from tests._app import db, app as flask_app
+    from tests._app import db
     log = logging.getLogger("dinerobook")
-    with flask_app.app_context():
+    with db_session():
         ensure_added_indexes(db.engine, log)  # first call already happened on boot
         ensure_added_indexes(db.engine, log)  # second call must not raise
 
@@ -102,7 +103,7 @@ def test_period_filter_uses_index_on_postgres(client):
     — that's the prerequisite. Real EXPLAIN diffing happens in the
     PR description before/after."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         idxs = {ix["name"]: ix for ix in insp.get_indexes("transfer")}
     composite = idxs.get("ix_transfer_store_send_date")

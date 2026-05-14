@@ -5,7 +5,7 @@
 
 Mirrors the legacy /admin/subscription/addons/<key> form handler.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -25,8 +25,8 @@ def _set_paid_plan(store_id, plan="basic"):
     endpoint accepts the request (legacy contract: add-ons need
     Basic or Pro)."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.query(Store).filter_by(id=store_id).first()
         s.plan = plan
         db.session.commit()
@@ -66,8 +66,8 @@ def test_list_marks_active_addon(client, test_store_id):
     """A store with `addons="tv_display"` should surface
     is_active=true on that row."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.query(Store).filter_by(id=test_store_id).first()
         s.addons = "tv_display"
         db.session.commit()

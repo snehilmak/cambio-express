@@ -4,7 +4,7 @@ Powers /app/admin/users (roster + create + edit). Mirrors the
 legacy admin_users / admin_new_user / admin_edit_user Flask
 routes, plus the new self-edit guard.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -48,8 +48,8 @@ def test_users_patch_requires_jwt(client):
 def test_users_endpoints_reject_employee_role(client, test_store_id):
     """Cashier role can't manage the user roster."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=test_store_id, username="cashier_users_admin",
             role="employee", is_active=True,
@@ -84,7 +84,7 @@ def test_users_endpoints_reject_employee_role(client, test_store_id):
         assert creating.status_code == 403
         assert patching.status_code == 403
     finally:
-        with flask_app.app_context():
+        with db_session():
             u2 = db.session.query(User).filter_by(
                 username="cashier_users_admin",
             ).first()
@@ -128,8 +128,8 @@ def test_users_list_does_not_leak_cross_store(client, test_store_id):
     """Users from a different store must not appear in this store's
     roster."""
     from api.Modules.Tenancy.Models import Store, User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Other Store", slug="other-store",
                       email="ops@other.com", plan="trial")
         db.session.add(other); db.session.flush()
@@ -195,8 +195,8 @@ def test_users_create_hashes_password(client, test_store_id):
     new_id = create.get_json()["id"]
 
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         row = db.session.get(User, new_id)
         assert row is not None
         # Stored hash must not equal the raw password and must
@@ -273,8 +273,8 @@ def test_users_get_returns_detail(client, test_store_id, test_admin_id):
 def test_users_get_404_for_cross_store(client, test_store_id):
     """Cross-store user IDs surface as 404 — opaque tenancy."""
     from api.Modules.Tenancy.Models import Store, User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Other 2", slug="other-2",
                       email="o2@x.com", plan="trial")
         db.session.add(other); db.session.flush()
@@ -344,7 +344,7 @@ def test_users_patch_password_only_when_provided(
     """Empty / missing password leaves the existing hash alone;
     a non-blank password value reseats it."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
@@ -359,7 +359,7 @@ def test_users_patch_password_only_when_provided(
         json={"full_name": "Pw User", "password": ""},
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         row = db.session.get(User, new_id)
         assert row.check_password("first123") is True
 
@@ -369,7 +369,7 @@ def test_users_patch_password_only_when_provided(
         json={"password": "second456"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         row = db.session.get(User, new_id)
         assert row.check_password("second456") is True
         assert row.check_password("first123")  is False
@@ -432,7 +432,7 @@ def test_users_patch_records_audit_row(client, test_store_id):
     """Mutating endpoints append to OperatorAuditLog so the audit
     log surfaces who changed what."""
     from api.Modules.Audit.Models import OperatorAuditLog
-    from tests._app import app as flask_app, db
+    from tests._app import db
     token = _login(client, test_store_id)
     create = client.post(
         "/api/v2/admin/users",
@@ -446,7 +446,7 @@ def test_users_patch_records_audit_row(client, test_store_id):
         json={"full_name": "Audited Person"},
         headers={"Authorization": f"Bearer {token}"},
     )
-    with flask_app.app_context():
+    with db_session():
         rows = (
             db.session.query(OperatorAuditLog)
               .filter_by(store_id=test_store_id, target_type="user")

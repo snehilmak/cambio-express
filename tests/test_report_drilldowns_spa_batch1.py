@@ -6,7 +6,7 @@ CSV exports (/reports/<slug>.csv) stay on Flask as direct
 downloads. The data envelope is fetched by the SPA from
 /api/v2/reports/<api-slug>.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 _MIGRATED_BATCH = [
@@ -20,7 +20,7 @@ _MIGRATED_BATCH = [
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
@@ -62,7 +62,7 @@ def test_owner_drilldown_routes_redirect_to_spa(client):
     """Owner-side mirror routes 301 the GET to /app/owner/reports/<slug>."""
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         s = Store(name="Drilldown Owner Store",
                   slug="drilldown-owner-store", plan="pro",
                   billing_cycle="monthly")

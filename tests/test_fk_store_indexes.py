@@ -13,6 +13,7 @@ constraint or composite index are skipped (transfer, customer,
 etc.).
 """
 from sqlalchemy import inspect
+from tests._app import db_session
 
 
 # (model attr, table_name, expected_index_name)
@@ -51,7 +52,7 @@ def test_all_store_id_indexes_present_in_db(client):
     """End-to-end: every expected index actually exists in the
     live DB after `_ensure_added_indexes()` runs at boot."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         for _model_attr, table_name, expected in EXPECTED_FK_INDEXES:
             present = {ix["name"] for ix in insp.get_indexes(table_name)}

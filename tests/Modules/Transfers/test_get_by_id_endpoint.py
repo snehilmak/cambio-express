@@ -2,7 +2,7 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
@@ -28,8 +28,7 @@ def _client():
 
 
 def test_get_transfer_returns_envelope(test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         tid = _seed_transfer(
             test_store_id, send_amount=500.0,
             fee=5.0, federal_tax=2.0, company="Maxi",
@@ -57,8 +56,8 @@ def test_get_transfer_404_for_other_store(test_store_id):
     """Cross-tenant lookup returns 404 (never 403) so tenancy
     boundaries stay opaque."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s2 = Store(name="Other", slug="other-tx-get",
                     email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()
@@ -71,8 +70,7 @@ def test_get_transfer_404_for_other_store(test_store_id):
 
 
 def test_get_transfer_requires_store_ids(test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         tid = _seed_transfer(test_store_id)
     resp = _client().get(f"/transfers/{tid}")
     assert resp.status_code == 422
@@ -90,8 +88,8 @@ def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id):
     """`store_ids=1,2` finds a transfer in either store — same shape
     as the list endpoint."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s2 = Store(name="Other", slug="other-tx-umbrella",
                     email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()

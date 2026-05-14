@@ -8,7 +8,7 @@ Both go through the existing `categorize_transaction` /
 behavior is shared with the legacy Flask handlers.
 """
 from datetime import datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client, store_id):
@@ -61,8 +61,7 @@ def _seed_txn(store_id, account_id, *, amount_cents=-100,
 
 
 def test_categorize_requires_jwt(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(test_store_id, a)
     resp = client.post(
@@ -73,8 +72,7 @@ def test_categorize_requires_jwt(client, test_store_id):
 
 
 def test_uncategorize_requires_jwt(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(test_store_id, a)
     resp = client.post(
@@ -87,8 +85,7 @@ def test_uncategorize_requires_jwt(client, test_store_id):
 
 
 def test_categorize_rejects_missing_target_kind(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(test_store_id, a)
     token = _login(client, test_store_id)
@@ -101,8 +98,7 @@ def test_categorize_rejects_missing_target_kind(client, test_store_id):
 
 
 def test_categorize_rejects_extra_fields(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(test_store_id, a)
     token = _login(client, test_store_id)
@@ -118,8 +114,7 @@ def test_categorize_rejects_extra_fields(client, test_store_id):
 
 
 def test_categorize_assigns_kind_and_returns_row(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(test_store_id, a, description="REMOTE DEPOSIT FEE")
     token = _login(client, test_store_id)
@@ -135,8 +130,7 @@ def test_categorize_assigns_kind_and_returns_row(client, test_store_id):
 
 
 def test_uncategorize_clears_kind(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(
             test_store_id, a,
@@ -154,8 +148,7 @@ def test_uncategorize_clears_kind(client, test_store_id):
 
 def test_categorize_idempotent_replaces_prior_kind(client, test_store_id):
     """Re-categorizing should overwrite the prior slug, not stack it."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id)
         tid = _seed_txn(
             test_store_id, a,
@@ -177,8 +170,8 @@ def test_categorize_idempotent_replaces_prior_kind(client, test_store_id):
 def test_categorize_rejects_other_stores_txn(client, test_store_id):
     """A txn that belongs to a different store must 404, not 200."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Other", slug="other-bs", plan="trial")
         db.session.add(other); db.session.commit()
         oid = other.id

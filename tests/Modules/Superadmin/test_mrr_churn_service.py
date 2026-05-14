@@ -2,7 +2,7 @@
 from datetime import date, datetime
 
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug, plan="basic", billing_cycle="monthly",
@@ -33,9 +33,9 @@ def test_plan_mrr_table_has_expected_keys():
 
 
 def test_mrr_arr_groups_by_plan_and_cycle():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import mrr_arr
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-b1", plan="basic",
@@ -63,9 +63,9 @@ def test_mrr_arr_groups_by_plan_and_cycle():
 
 def test_mrr_arr_excludes_trial_and_inactive():
     """Only basic/pro stores count — trial and inactive are ignored."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import mrr_arr
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-trial", plan="trial",
@@ -83,9 +83,9 @@ def test_mrr_arr_excludes_trial_and_inactive():
 
 
 def test_mrr_arr_excludes_stores_created_after_d_to():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import mrr_arr
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-future", plan="basic",
@@ -105,9 +105,9 @@ def test_mrr_arr_excludes_stores_created_after_d_to():
 
 def test_churn_cohort_buckets_by_signup_month():
     """Cancelled stores group by their `created_at` YYYY-MM."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import churn_cohort
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="cc-a-1", plan="inactive",
@@ -131,9 +131,9 @@ def test_churn_cohort_buckets_by_signup_month():
 def test_churn_cohort_includes_active_survivors():
     """Stores from the same signup month that are STILL active
     (basic/pro, no canceled_at) feed the `active` count."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import churn_cohort
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         # Cancelled in May, signed up in Jan.
@@ -154,9 +154,9 @@ def test_churn_cohort_includes_active_survivors():
 
 def test_churn_cohort_pct_calculation():
     """churn_pct = cancelled / (cancelled + active) * 100."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import churn_cohort
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         # 1 cancelled + 3 active in same Jan cohort → 25% churn.
@@ -174,9 +174,9 @@ def test_churn_cohort_pct_calculation():
 
 
 def test_churn_cohort_empty_when_no_cancellations():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import churn_cohort
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="cc-active-only", plan="basic",

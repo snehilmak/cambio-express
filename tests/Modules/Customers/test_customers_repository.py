@@ -8,7 +8,7 @@ then a couple of cross-helper scenarios that mirror the real
 `/api/customers/search` and upsert call sites.
 """
 from datetime import datetime, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_customer(store_id, *, full_name, phone_country="+1",
@@ -55,18 +55,18 @@ def _link(owner_id, store_id):
 
 def test_sibling_store_ids_solo_shop_returns_self_only(test_store_id):
     """A store with no Owner links is "solo" — returns [self]."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import sibling_store_ids
-    with flask_app.app_context():
+    with db_session():
         ids = sibling_store_ids(db.session, test_store_id)
     assert ids == [test_store_id]
 
 
 def test_sibling_store_ids_unifies_owner_umbrella(test_store_id):
     """Two stores under one owner are siblings — both IDs returned."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import sibling_store_ids
-    with flask_app.app_context():
+    with db_session():
         oid = _seed_owner()
         s2 = _seed_store("sibling")
         _link(oid, test_store_id)
@@ -78,9 +78,9 @@ def test_sibling_store_ids_unifies_owner_umbrella(test_store_id):
 def test_sibling_store_ids_excludes_unrelated_stores(test_store_id):
     """A store under a DIFFERENT owner is NOT a sibling. Owner-umbrella
     isolation is the security property the customer search depends on."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import sibling_store_ids
-    with flask_app.app_context():
+    with db_session():
         o1, o2 = _seed_owner("o1@x.com"), _seed_owner("o2@x.com")
         s2 = _seed_store("under-o1")
         s3 = _seed_store("under-o2")
@@ -96,9 +96,9 @@ def test_sibling_store_ids_excludes_unrelated_stores(test_store_id):
 
 
 def test_find_by_id_in_stores_returns_customer(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import find_by_id_in_stores
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id, full_name="Alice",
                               phone_number="5551234")
         c = find_by_id_in_stores(db.session, cid, [test_store_id])
@@ -109,9 +109,9 @@ def test_find_by_id_in_stores_returns_customer(test_store_id):
 def test_find_by_id_in_stores_returns_none_when_outside_scope(test_store_id):
     """An explicit customer_id from outside the owner umbrella must NOT
     resolve — the upsert relies on this to enforce isolation."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import find_by_id_in_stores
-    with flask_app.app_context():
+    with db_session():
         s2 = _seed_store("isolated")
         cid = _seed_customer(s2, full_name="Stranger",
                               phone_number="5559999")
@@ -123,9 +123,9 @@ def test_find_by_id_in_stores_returns_none_when_outside_scope(test_store_id):
 
 
 def test_find_by_phone_in_stores_matches(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
-    with flask_app.app_context():
+    with db_session():
         _seed_customer(test_store_id, full_name="Alice",
                         phone_country="+1", phone_number="5551234")
         c = find_by_phone_in_stores(
@@ -139,9 +139,9 @@ def test_find_by_phone_in_stores_empty_phone_returns_none(test_store_id):
     """Empty phone is not a valid lookup key — repository must
     short-circuit before hitting the DB so it can't accidentally
     match a "no phone on file" placeholder row."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
-    with flask_app.app_context():
+    with db_session():
         _seed_customer(test_store_id, full_name="A", phone_number="")
         c = find_by_phone_in_stores(
             db.session, [test_store_id], "+1", "",
@@ -152,9 +152,9 @@ def test_find_by_phone_in_stores_empty_phone_returns_none(test_store_id):
 def test_find_by_phone_in_stores_defaults_country_to_plus_one(test_store_id):
     """Mirrors `find_or_upsert_customer` — empty country falls back to
     "+1" so older rows seeded without an explicit country still match."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import find_by_phone_in_stores
-    with flask_app.app_context():
+    with db_session():
         _seed_customer(test_store_id, full_name="Alice",
                         phone_country="+1", phone_number="5551234")
         # Caller passes empty country — should still find the row.
@@ -168,9 +168,9 @@ def test_find_by_phone_in_stores_defaults_country_to_plus_one(test_store_id):
 
 
 def test_search_by_substring_matches_name_or_phone(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import search_by_substring
-    with flask_app.app_context():
+    with db_session():
         _seed_customer(test_store_id, full_name="Alice Smith",
                         phone_number="5551234")
         _seed_customer(test_store_id, full_name="Bob Jones",
@@ -179,7 +179,7 @@ def test_search_by_substring_matches_name_or_phone(test_store_id):
         rows = search_by_substring(db.session, [test_store_id], "alice")
     assert {c.full_name for c in rows} == {"Alice Smith"}
 
-    with flask_app.app_context():
+    with db_session():
         # Phone match
         rows = search_by_substring(db.session, [test_store_id], "9999")
     assert {c.full_name for c in rows} == {"Bob Jones"}
@@ -187,9 +187,9 @@ def test_search_by_substring_matches_name_or_phone(test_store_id):
 
 def test_search_by_substring_short_query_returns_empty(test_store_id):
     """Less than 2 chars → no DB hit. Keeps autocomplete fast."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import search_by_substring
-    with flask_app.app_context():
+    with db_session():
         _seed_customer(test_store_id, full_name="Alice", phone_number="x")
         rows = search_by_substring(db.session, [test_store_id], "a")
     assert rows == []
@@ -200,9 +200,9 @@ def test_search_by_substring_orders_by_updated_at_desc(test_store_id):
     cashier's mental model (the sender they served last is the most
     likely repeat)."""
     from api.Modules.Customers.Models import Customer
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import search_by_substring
-    with flask_app.app_context():
+    with db_session():
         cid_old = _seed_customer(test_store_id, full_name="Match Old",
                                   phone_number="5550001")
         cid_new = _seed_customer(test_store_id, full_name="Match New",
@@ -220,9 +220,9 @@ def test_search_by_substring_orders_by_updated_at_desc(test_store_id):
 
 def test_search_by_substring_respects_store_scope(test_store_id):
     """Customers in stores outside the passed scope must not appear."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import search_by_substring
-    with flask_app.app_context():
+    with db_session():
         s2 = _seed_store("isolated")
         _seed_customer(s2, full_name="Hidden", phone_number="5550000")
         _seed_customer(test_store_id, full_name="Visible",
@@ -238,9 +238,9 @@ def test_search_by_substring_respects_store_scope(test_store_id):
 
 
 def test_recent_customers_respects_limit(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import recent_customers
-    with flask_app.app_context():
+    with db_session():
         for i in range(5):
             _seed_customer(test_store_id, full_name=f"C{i}",
                             phone_number=f"555000{i}")
@@ -255,11 +255,11 @@ def test_search_unifies_across_owner_umbrella(test_store_id):
     """Cashier at Store A finds the sender Store B logged — the call
     site for `/api/customers/search` always passes `sibling_store_ids`
     as the scope. This is the integration test of that pairing."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Customers.Repositories import (
         search_by_substring, sibling_store_ids,
     )
-    with flask_app.app_context():
+    with db_session():
         oid = _seed_owner()
         s2 = _seed_store("location-2")
         _link(oid, test_store_id)

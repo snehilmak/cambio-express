@@ -3,16 +3,15 @@
 PR #550 (Flask-removal-5) deleted ``app.py``. Production no longer
 needs the Flask app object — ``asgi.py`` owns the entrypoint and
 runs FastAPI directly. ~130 test files still import ``db``,
-``flask_app``, ``find_or_upsert_customer``, and
-``purge_expired_stores`` from ``app``; this module re-exports them
-so a sed rewrite kept those imports working.
+``find_or_upsert_customer``, ``purge_expired_stores``, and the
+model classes from ``app``; this module re-exports them so a sed
+rewrite kept those imports working.
 
-The ``flask_app`` here is a near-empty stub: it answers
-``app_context()`` as a context manager that resets the scoped
-session on exit. That mirrors what Flask-SQLAlchemy's
-``teardown_appcontext`` hook used to do — without it, a test that
-PATCHes a row through the SPA + re-reads it through ``db.session``
-gets the stale cached object.
+The historical ``flask_app`` / ``app_context()`` pattern was
+swept in PR #553. Tests now use ``db_session()`` — a clearly-named
+context manager that does the same thing the stub's
+``app_context()`` did (yield, then drop the scoped session on
+exit).
 
 Nothing here belongs in production. Future work: rewrite the test
 suite to call ``SessionLocal()`` directly and delete this module.
@@ -24,35 +23,19 @@ import contextlib
 from tests._db_shim import db
 
 
-class _FlaskAppStub:
-    """Drop-in stand-in for ``flask_app`` used by ~130 tests.
+@contextlib.contextmanager
+def db_session():
+    """Scope a block of ORM work and drop the scoped session on
+    exit so a subsequent read sees fresh DB state.
 
-    Only ``app_context()`` is left — every other historical
-    surface (``.config``, ``.logger``, ``.root_path``, ``.cli``,
-    ``.test_client``, ``.test_request_context``) was migrated off
-    in PR #552. ``app_context()`` itself stays because 891 sites
-    still wrap their ORM reads in it; eliminating those is its
-    own follow-up.
+    Replaces the historical ``with flask_app.app_context():``
+    idiom — same semantics, name that doesn't lie about Flask's
+    involvement (which is none).
     """
-
-    @contextlib.contextmanager
-    def app_context(self):
-        try:
-            yield
-        finally:
-            # Drop the thread-local scoped session so the next
-            # ``with`` block re-reads from the DB. Without this,
-            # tests that PATCH then re-read get the cached row.
-            db.session.remove()
-
-
-flask_app = _FlaskAppStub()
-
-# Alias for the historical ``from app import app as flask_app``
-# pattern. The sed in PR #550 rewrote ``from app import`` → ``from
-# tests._app import`` but kept the trailing ``as flask_app``
-# rename, so the symbol the import wants is ``app``.
-app = flask_app
+    try:
+        yield
+    finally:
+        db.session.remove()
 
 
 def find_or_upsert_customer(

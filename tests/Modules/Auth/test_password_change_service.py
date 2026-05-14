@@ -1,5 +1,5 @@
 """Unit tests for Auth.Services.password_change (PR 40)."""
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_user(store_id, *, username, password="oldpassword"):
@@ -17,9 +17,9 @@ def _seed_user(store_id, *, username, password="oldpassword"):
 
 
 def test_change_password_success(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import change_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="user@x.com")
         errors = change_password(
             db.session, u,
@@ -34,9 +34,9 @@ def test_change_password_success(test_store_id):
 
 
 def test_change_password_rejects_wrong_current(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import change_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="user@x.com")
         errors = change_password(
             db.session, u,
@@ -49,9 +49,9 @@ def test_change_password_rejects_wrong_current(test_store_id):
 
 
 def test_change_password_rejects_too_short(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import change_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="user@x.com")
         errors = change_password(
             db.session, u,
@@ -64,9 +64,9 @@ def test_change_password_rejects_too_short(test_store_id):
 
 
 def test_change_password_rejects_mismatch(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import change_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="user@x.com")
         errors = change_password(
             db.session, u,
@@ -79,9 +79,9 @@ def test_change_password_rejects_mismatch(test_store_id):
 
 def test_change_password_does_not_apply_when_invalid(test_store_id):
     """Validation failures must NOT mutate the user row."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import change_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="user@x.com")
         change_password(
             db.session, u,
@@ -99,9 +99,9 @@ def test_change_password_does_not_apply_when_invalid(test_store_id):
 def test_admin_set_password_success(test_store_id):
     """Admin path doesn't require a current password — different
     surface."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import admin_set_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="emp@x.com")
         errors = admin_set_password(
             db.session, u,
@@ -114,9 +114,9 @@ def test_admin_set_password_success(test_store_id):
 
 
 def test_admin_set_password_rejects_too_short(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import admin_set_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="emp@x.com")
         errors = admin_set_password(
             db.session, u,
@@ -127,9 +127,9 @@ def test_admin_set_password_rejects_too_short(test_store_id):
 
 
 def test_admin_set_password_rejects_mismatch(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import admin_set_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="emp@x.com")
         errors = admin_set_password(
             db.session, u,
@@ -140,9 +140,9 @@ def test_admin_set_password_rejects_mismatch(test_store_id):
 
 
 def test_admin_set_password_does_not_apply_when_invalid(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import admin_set_password
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(test_store_id, username="emp@x.com")
         admin_set_password(
             db.session, u, new_pw="x", confirm_pw="x",

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from api.Modules.Billing.Models import ReferralCode
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── compute_mrr ───────────────────────────────────────────
@@ -37,11 +37,11 @@ def test_compute_mrr_zero_subscribers_returns_zero():
 def test_dashboard_context_returns_required_keys():
     """The template expects a known set of keys; missing one
     breaks the dashboard. Snapshot the public contract."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         ctx = superadmin_dashboard_context(db.session)
         required = {
             "total_stores", "active_count", "trial_count",
@@ -63,11 +63,11 @@ def test_dashboard_context_returns_required_keys():
 
 
 def test_dashboard_context_signup_series_always_90_entries():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         ctx = superadmin_dashboard_context(db.session)
         assert len(ctx["signup_labels"]) == 90
         assert len(ctx["signup_direct"]) == 90
@@ -76,11 +76,11 @@ def test_dashboard_context_signup_series_always_90_entries():
 
 def test_dashboard_context_plan_distribution_has_four_buckets():
     """Trial / Basic / Pro / Inactive — fixed shape."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         ctx = superadmin_dashboard_context(db.session)
         labels = [bucket["label"] for bucket in ctx["plan_dist"]]
         assert labels == ["Trial", "Basic", "Pro", "Inactive"]
@@ -88,11 +88,11 @@ def test_dashboard_context_plan_distribution_has_four_buckets():
 
 def test_dashboard_context_counts_paid_correctly():
     """paid_count = basic_count + pro_count."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         # 2 basic, 1 pro, 1 trial.
@@ -116,11 +116,11 @@ def test_dashboard_context_counts_paid_correctly():
 
 
 def test_dashboard_context_excludes_canceled_transfers_from_volume():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.query(Store).delete()
         db.session.commit()
@@ -153,11 +153,11 @@ def test_dashboard_context_excludes_canceled_transfers_from_volume():
 
 def test_dashboard_context_top_referrers_only_includes_redeemed():
     """Referral codes with redeemed_count=0 are excluded."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ReferralCode).delete()
         db.session.query(Store).delete()
         db.session.commit()
@@ -191,11 +191,11 @@ def test_dashboard_context_top_referrers_only_includes_redeemed():
 
 
 def test_dashboard_context_activity_capped_at_12():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import (
         superadmin_dashboard_context,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         # 15 stores, all recent → activity feed should still cap.

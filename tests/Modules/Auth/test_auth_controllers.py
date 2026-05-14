@@ -1,6 +1,6 @@
 """HTTP integration tests for the Auth Controllers (PR 20)."""
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _client():
@@ -231,8 +231,8 @@ def test_store_by_slug_404_unknown(client):
 def test_store_by_slug_404_inactive(client, test_store_id):
     """Inactive stores return 404 — no leak that the slug exists."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.is_active = False
         db.session.commit()
@@ -271,15 +271,14 @@ def test_login_records_login_event(client, test_store_id, test_admin_id):
     after the migration (legacy /login Flask route did this via
     `_record_login`; the FastAPI port mirrors it)."""
     from api.Modules.Auth.Models import LoginEvent
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         before = db.session.query(LoginEvent).filter_by(user_id=test_admin_id).count()
     client.post("/api/v2/auth/login", json={
         "username": "admin@test.com",
         "password": "testpass123!",
         "store_id": test_store_id,
     })
-    with flask_app.app_context():
+    with db_session():
         after = db.session.query(LoginEvent).filter_by(user_id=test_admin_id).count()
     assert after == before + 1
 
@@ -749,13 +748,13 @@ def test_forgot_password_issues_token_for_known_user(client, test_store_id):  # 
     """Known-good email mints a PasswordResetToken row that the
     legacy SMTP delivery path can pick up."""
     from api.Modules.Auth.Models import PasswordResetToken
-    from tests._app import app as flask_app, db
+    from tests._app import db
     resp = client.post(
         "/api/v2/auth/forgot-password",
         json={"email": "admin@test.com"},
     )
     assert resp.status_code == 200
-    with flask_app.app_context():
+    with db_session():
         tokens = (
             db.session.query(PasswordResetToken)
               .filter_by(used_at=None)
@@ -779,9 +778,9 @@ def test_forgot_password_response_does_not_leak_token(client, test_store_id):  #
 def test_reset_password_round_trip(client, test_store_id):
     """Issue a token via the Service helper, then consume it via
     the endpoint, then log in with the new password."""
-    from tests._app import db, app as flask_app
+    from tests._app import db
     from api.Modules.Auth.Services import issue_password_reset_token
-    with flask_app.app_context():
+    with db_session():
         issued = issue_password_reset_token(db.session, "admin@test.com")
         db.session.commit()
         raw = issued.raw_token
@@ -835,10 +834,10 @@ def test_reset_password_rejects_invalid_token(client):
 def test_reset_password_rejects_expired_token(client, test_store_id):  # noqa: ARG001
     """Tokens past expires_at should 400 even if otherwise valid."""
     from api.Modules.Auth.Models import PasswordResetToken
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import issue_password_reset_token
     from datetime import datetime, timedelta
-    with flask_app.app_context():
+    with db_session():
         issued = issue_password_reset_token(db.session, "admin@test.com")
         db.session.commit()
         raw = issued.raw_token
@@ -893,9 +892,9 @@ def test_reset_password_rejects_short_new_password(client):
 def test_reset_password_consumed_token_cannot_be_reused(client, test_store_id):  # noqa: ARG001
     """One-time use enforced — second consume of the same token
     returns 400."""
-    from tests._app import db, app as flask_app
+    from tests._app import db
     from api.Modules.Auth.Services import issue_password_reset_token
-    with flask_app.app_context():
+    with db_session():
         issued = issue_password_reset_token(db.session, "admin@test.com")
         db.session.commit()
         raw = issued.raw_token
@@ -951,8 +950,7 @@ def _seed_referral_code(*, owner_store_id, code="ABCD1234",
 def test_referral_preview_returns_code_and_reward(
     client, test_store_id,
 ):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_referral_code(
             owner_store_id=test_store_id, code="GOOD1234",
             reward_referee_cents=7500,
@@ -974,8 +972,7 @@ def test_referral_preview_normalizes_lowercase(
 ):
     """Codes are stored uppercase; the SPA shouldn't have to
     pre-normalize. Lowercase lookup must still resolve."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_referral_code(
             owner_store_id=test_store_id, code="MIXED999",
         )
@@ -987,8 +984,7 @@ def test_referral_preview_normalizes_lowercase(
 def test_referral_preview_strips_whitespace(client, test_store_id):
     """Pasted codes often pick up trailing whitespace; the
     endpoint must tolerate it."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_referral_code(
             owner_store_id=test_store_id, code="WHITES12",
         )
@@ -1011,8 +1007,8 @@ def test_signup_with_valid_ref_code_records_referrer(
     referred_by_code_id must point at the referrer's
     ReferralCode.id."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         rc = _seed_referral_code(
             owner_store_id=test_store_id, code="REFER123",
         )
@@ -1028,7 +1024,7 @@ def test_signup_with_valid_ref_code_records_referrer(
     )
     assert resp.status_code == 201
     new_store_id = resp.get_json()["store_id"]
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id == rc_id
 
@@ -1037,7 +1033,7 @@ def test_signup_with_unknown_ref_code_silently_drops(client):
     """Unknown ref_codes don't fail the signup — they just don't
     record referred_by_code_id. Mirrors legacy Jinja behavior."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     resp = client.post(
         "/api/v2/auth/signup",
         json={
@@ -1049,7 +1045,7 @@ def test_signup_with_unknown_ref_code_silently_drops(client):
     )
     assert resp.status_code == 201
     new_store_id = resp.get_json()["store_id"]
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id is None
 
@@ -1060,8 +1056,8 @@ def test_signup_normalizes_ref_code_case_and_whitespace(
     """Ref codes get .strip().upper() before lookup — pasted
     'refer123 ' or 'Refer123' both resolve."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         rc = _seed_referral_code(
             owner_store_id=test_store_id, code="NORMRF99",
         )
@@ -1077,7 +1073,7 @@ def test_signup_normalizes_ref_code_case_and_whitespace(
     )
     assert resp.status_code == 201
     new_store_id = resp.get_json()["store_id"]
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id == rc_id
 
@@ -1085,7 +1081,7 @@ def test_signup_normalizes_ref_code_case_and_whitespace(
 def test_signup_with_no_ref_code_omits_referrer(client):
     """Absence of ref_code means referred_by_code_id stays null."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     resp = client.post(
         "/api/v2/auth/signup",
         json={
@@ -1096,7 +1092,7 @@ def test_signup_with_no_ref_code_omits_referrer(client):
     )
     assert resp.status_code == 201
     new_store_id = resp.get_json()["store_id"]
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id is None
 
@@ -1109,8 +1105,8 @@ def test_signup_with_inactive_ref_code_silently_drops(
     signup falls through to the no-referrer branch."""
     from api.Modules.Billing.Models import ReferralCode
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         rc = _seed_referral_code(
             owner_store_id=test_store_id, code="INACT123",
         )
@@ -1127,7 +1123,7 @@ def test_signup_with_inactive_ref_code_silently_drops(
     )
     assert resp.status_code == 201
     new_store_id = resp.get_json()["store_id"]
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store, new_store_id)
         assert s.referred_by_code_id is None
 

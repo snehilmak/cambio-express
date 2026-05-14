@@ -13,6 +13,7 @@ boot helper actually creates the index on the live DB so we
 catch any regression in the quoting path.
 """
 from sqlalchemy import inspect
+from tests._app import db_session
 
 
 def test_user_username_index_declared(client):
@@ -35,7 +36,7 @@ def test_user_username_index_present_in_db(client):
     on sqlite it would silently work, masking the bug. We assert
     inspector visibility either way."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("user")}
     assert "ix_user_username" in present, (
@@ -48,7 +49,7 @@ def test_user_unique_constraint_still_present(client):
     """Sanity: the (store_id, username) unique constraint that
     prevents per-store username collisions must survive."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         uniques = insp.get_unique_constraints("user")
     cols = [tuple(u["column_names"]) for u in uniques]

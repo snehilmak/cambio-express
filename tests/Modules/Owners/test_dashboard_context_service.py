@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _make_owner_with_stores(db, *, slug="ctx-owner",
@@ -58,9 +58,9 @@ def _add_transfer(db, store_id, *, send_date, send_amount=100.0,
 
 def test_dashboard_context_empty_umbrella_returns_zeros():
     """Owner with no linked stores → KPIs zero, empty lists."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         owner, _ = _make_owner_with_stores(
             db.session, slug="empty-umbrella", num_stores=0,
         )
@@ -78,9 +78,9 @@ def test_dashboard_context_empty_umbrella_returns_zeros():
 
 
 def test_dashboard_context_aggregates_transfers_across_umbrella():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -101,9 +101,9 @@ def test_dashboard_context_aggregates_transfers_across_umbrella():
 
 
 def test_dashboard_context_period_today_returns_today_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         owner, _ = _make_owner_with_stores(
             db.session, slug="period-today", num_stores=1,
         )
@@ -113,9 +113,9 @@ def test_dashboard_context_period_today_returns_today_window():
 
 
 def test_dashboard_context_company_breakdown_sorted_by_volume():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -137,9 +137,9 @@ def test_dashboard_context_company_breakdown_sorted_by_volume():
 
 def test_dashboard_context_excludes_canceled_and_rejected():
     """Canceled / Rejected transfers must not pollute the volume."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -162,9 +162,9 @@ def test_dashboard_context_excludes_canceled_and_rejected():
 
 
 def test_dashboard_context_30day_series_always_30_entries():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_dashboard_context
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -187,9 +187,9 @@ def test_dashboard_context_30day_series_always_30_entries():
 
 
 def test_locations_payload_empty_umbrella_returns_zero_total():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_locations_payload
-    with flask_app.app_context():
+    with db_session():
         owner, _ = _make_owner_with_stores(
             db.session, slug="loc-empty", num_stores=0,
         )
@@ -201,9 +201,9 @@ def test_locations_payload_empty_umbrella_returns_zero_total():
 
 
 def test_locations_payload_returns_one_row_per_store():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_locations_payload
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -221,9 +221,9 @@ def test_locations_payload_returns_one_row_per_store():
 
 def test_locations_payload_filters_by_query():
     """Substring match on store name, case-insensitive."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_locations_payload
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -242,9 +242,9 @@ def test_locations_payload_filters_by_query():
 
 
 def test_locations_payload_includes_transfer_stats():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_locations_payload
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
@@ -267,9 +267,9 @@ def test_locations_payload_includes_transfer_stats():
 
 def test_locations_payload_companies_sorted_by_volume():
     """Per-store companies chips sorted by volume desc."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_locations_payload
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(

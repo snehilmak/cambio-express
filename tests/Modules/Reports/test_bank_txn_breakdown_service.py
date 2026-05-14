@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 _TXN_COUNTER = 0
@@ -50,9 +50,9 @@ def _add_txn(db, store_id, account_id, *, posted_at,
 
 
 def test_returns_rows_and_totals_tuple():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-shape")
@@ -66,9 +66,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-row")
@@ -91,9 +91,9 @@ def test_row_shape():
 
 
 def test_groups_by_category_slug():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-group")
@@ -124,9 +124,9 @@ def test_groups_by_category_slug():
 
 def test_uncategorised_bucketed_under_empty_slug():
     """Rows with NULL/empty category_slug bucket together."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-uncat")
@@ -149,9 +149,9 @@ def test_uncategorised_bucketed_under_empty_slug():
 
 def test_inflow_for_positive_signed_amount():
     """Credit (positive amount_cents) lands in `totals.inflow`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-inflow")
@@ -172,9 +172,9 @@ def test_inflow_for_positive_signed_amount():
 def test_outflow_for_negative_signed_amount():
     """Debit (negative amount_cents) lands in `totals.outflow`
     as a negative number; absolute lands in `totals.amount`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-outflow")
@@ -196,9 +196,9 @@ def test_outflow_for_negative_signed_amount():
 def test_zero_counted_as_inflow():
     """A 0-cent row (rare but possible — pending hold reversal)
     has signed=0 → falls into inflow side per `signed >= 0`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-zero")
@@ -220,9 +220,9 @@ def test_zero_counted_as_inflow():
 
 def test_rows_sorted_by_absolute_amount_descending():
     """Biggest |amount| lands first regardless of sign."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-sort")
@@ -249,9 +249,9 @@ def test_rows_sorted_by_absolute_amount_descending():
 
 
 def test_filters_by_store_list():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="bt-store-1")
@@ -274,9 +274,9 @@ def test_filters_by_store_list():
 def test_filters_by_window_uses_day_boundaries():
     """The window includes posted_at at end-of-day on d_to (so a
     transaction posted at 23:59 on the last day still counts)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_txn_breakdown
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-window")

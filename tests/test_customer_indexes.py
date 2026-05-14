@@ -12,6 +12,7 @@ Mirrors `tests/test_transfer_indexes.py`: model declaration,
 DB-level presence, registry parity.
 """
 from sqlalchemy import inspect
+from tests._app import db_session
 
 
 def test_customer_phone_index_declared(client):
@@ -32,7 +33,7 @@ def test_customer_phone_index_declared(client):
 
 def test_customer_phone_index_present_in_db(client):
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         present = {ix["name"] for ix in insp.get_indexes("customer")}
     assert "ix_customer_phone" in present, (
@@ -45,7 +46,7 @@ def test_unique_constraint_still_present(client):
     """Sanity check: adding the secondary index didn't drop the
     unique constraint that prevents duplicate (store_id, phone) rows."""
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         insp = inspect(db.engine)
         uniques = insp.get_unique_constraints("customer")
     names = {u["name"] for u in uniques}

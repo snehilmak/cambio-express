@@ -2,7 +2,7 @@
 from datetime import datetime
 
 from api.Modules.Tenancy.Models import User
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_user(db, *, store_id=1, role="admin",
@@ -91,11 +91,11 @@ def test_plain_body_has_required_placeholders():
 
 
 def test_recipients_includes_active_opted_in_user():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         u = _add_user(
@@ -108,11 +108,11 @@ def test_recipients_includes_active_opted_in_user():
 
 
 def test_recipients_excludes_inactive():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         _add_user(
@@ -125,11 +125,11 @@ def test_recipients_excludes_inactive():
 
 
 def test_recipients_excludes_no_email():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         _add_user(
@@ -142,11 +142,11 @@ def test_recipients_excludes_no_email():
 
 def test_recipients_excludes_opted_out():
     """notify_announcement_email=False → skip."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         _add_user(
@@ -161,11 +161,11 @@ def test_recipients_excludes_opted_out():
 def test_recipients_excludes_bounced_addresses():
     """email_bounced_at set → drop. Resend's reputation depends on
     not retrying hard-bounced addresses."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         _add_user(
@@ -181,11 +181,11 @@ def test_recipients_includes_all_roles():
     """admins, owners, employees — all get announcements (the
     eligibility filter doesn't role-gate the way trial reminders
     do)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Notifications.Services import (
         broadcast_eligible_recipients,
     )
-    with flask_app.app_context():
+    with db_session():
         db.session.query(User).delete()
         db.session.commit()
         admin = _add_user(

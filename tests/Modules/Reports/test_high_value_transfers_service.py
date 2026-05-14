@@ -3,7 +3,7 @@ from datetime import date
 
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="hv-store"):
@@ -39,9 +39,9 @@ def _add_transfer(db, store_id, *, send_date, send_amount=100.0,
 
 
 def test_returns_rows_and_totals_tuple():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-shape")
@@ -56,9 +56,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-row")
@@ -83,9 +83,9 @@ def test_row_shape():
 
 def test_below_threshold_excluded():
     """Transfer below threshold is not in rows."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-below")
@@ -107,9 +107,9 @@ def test_below_threshold_excluded():
 
 def test_threshold_inclusive_at_exact_value():
     """`send_amount == threshold` is included (it's `>=`)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-equal")
@@ -128,9 +128,9 @@ def test_threshold_inclusive_at_exact_value():
 
 
 def test_rows_sorted_by_amount_descending_then_date():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-sort")
@@ -159,9 +159,9 @@ def test_rows_sorted_by_amount_descending_then_date():
 
 
 def test_totals_sum_amount_fee_tax():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-totals")
@@ -190,9 +190,9 @@ def test_totals_sum_amount_fee_tax():
 def test_excluded_status_transfers_not_listed():
     """Cancelled / refunded transfers don't appear in HV — they're
     not active-period transfers."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-canceled")
@@ -209,9 +209,9 @@ def test_excluded_status_transfers_not_listed():
 
 
 def test_filters_by_store_list():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="hv-store-1")
@@ -234,9 +234,9 @@ def test_filters_by_store_list():
 
 
 def test_empty_window_returns_empty_rows_and_zero_totals():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import high_value_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-empty")

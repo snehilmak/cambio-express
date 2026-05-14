@@ -6,7 +6,7 @@ validated changes; field-level errors come back as 422 with
 `field_errors` keyed by field name (matches the legacy Jinja
 form's inline-error shape so the SPA renders identically).
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -66,7 +66,7 @@ def test_profile_includes_metadata_fields(client, test_store_id):
 
 def test_profile_update_persists_full_name(client, test_store_id):
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     token = _login(client, test_store_id)
     resp = client.put(
         "/api/v2/auth/profile",
@@ -75,7 +75,7 @@ def test_profile_update_persists_full_name(client, test_store_id):
     )
     assert resp.status_code == 200
     assert resp.get_json()["full_name"] == "Updated Admin Name"
-    with flask_app.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.full_name == "Updated Admin Name"
 
@@ -120,7 +120,7 @@ def test_profile_update_accepts_valid_timezone(
 def test_profile_update_clears_blanked_fields(client, test_store_id):
     """Empty string explicitly clears email / phone / timezone."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     token = _login(client, test_store_id)
     # Set first.
     client.put(

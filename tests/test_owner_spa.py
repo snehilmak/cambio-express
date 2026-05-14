@@ -9,7 +9,7 @@ The /owner/dashboard and /owner/store/<id> Flask landings 301 to
 Two Jinja templates retired (owner_dashboard.html, owner_store_detail.html).
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_owner_with_store(client):
@@ -17,7 +17,7 @@ def _seed_owner_with_store(client):
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
     from api.Modules.Transfers.Models import Transfer
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         s = Store(name="OS Store", slug="os-store-spa", plan="pro",
                   billing_cycle="monthly")
         db.session.add(s); db.session.commit()
@@ -60,7 +60,7 @@ def test_owner_dashboard_redirects_to_spa(client):
     authed owner session so the redirect-to-login path doesn't fire."""
     from api.Modules.Tenancy.Models import User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         o = User(username="dash-spa@x.com", full_name="Dash",
                  role="owner", store_id=None)
         o.set_password("ownerpass123")
@@ -74,7 +74,7 @@ def test_owner_dashboard_redirects_to_spa(client):
 def test_owner_dashboard_preserves_period_query_string(client):
     from api.Modules.Tenancy.Models import User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         o = User(username="dash-spa-q@x.com", full_name="Dash",
                  role="owner", store_id=None)
         o.set_password("ownerpass123")
@@ -164,7 +164,7 @@ def test_store_detail_blocks_unrelated_store(client):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
     jwt, _, _ = _seed_owner_with_store(client)
-    with client.application.app_context():
+    with db_session():
         other = Store(name="Other", slug="other-spa", plan="pro")
         db.session.add(other); db.session.commit()
         other_id = other.id

@@ -1,7 +1,7 @@
 """Unit tests for Transfers.Services.audit (PR 77)."""
 from datetime import date
 from unittest.mock import MagicMock
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _stub_transfer(*, store_id=1, transfer_id=42, send_amount=100.0,
@@ -183,9 +183,9 @@ def test_record_audit_adds_row_with_expected_fields():
     """The audit row carries store_id + transfer_id + user_id +
     employee snapshot + action + summary."""
     from api.Modules.Audit.Models import TransferAudit
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import record_transfer_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(TransferAudit).delete()
         db.session.commit()
         # Stub transfer + user.
@@ -216,9 +216,9 @@ def test_record_audit_handles_none_user():
     """System / cron-triggered audits may have no user — user_id
     falls through as None."""
     from api.Modules.Audit.Models import TransferAudit
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import record_transfer_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(TransferAudit).delete()
         db.session.commit()
         t = MagicMock()
@@ -237,9 +237,9 @@ def test_record_audit_handles_none_user():
 def test_record_audit_does_not_commit():
     """Caller commits — record_audit just adds the row."""
     from api.Modules.Audit.Models import TransferAudit
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import record_transfer_audit
-    with flask_app.app_context():
+    with db_session():
         db.session.query(TransferAudit).delete()
         db.session.commit()
         t = MagicMock()

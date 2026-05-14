@@ -11,7 +11,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from unittest.mock import patch
-from tests._app import db
+from tests._app import db, db_session
 
 # Resolved at call time (not import time) — CI passes different price IDs
 # than conftest, and the webhook reads the env var live.
@@ -45,7 +45,7 @@ def test_deleted_starts_180_day_retention(client):
     from api.Modules.Billing.Services import DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="pro", stripe_subscription_id="sub_xyz")
     before = datetime.utcnow()
     resp = _post(client, {
@@ -54,7 +54,7 @@ def test_deleted_starts_180_day_retention(client):
     })
     after = datetime.utcnow()
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, sid)
         assert s.plan == "inactive"
         assert s.stripe_subscription_id == ""
@@ -71,14 +71,14 @@ def test_deleted_event_for_unknown_subscription_is_noop(client):
     """Stripe can send us deletions for subs we never tracked — must not 500."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="pro", stripe_subscription_id="sub_ours")
     resp = _post(client, {
         "type": "customer.subscription.deleted",
         "data": {"object": {"id": "sub_not_ours"}},
     })
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, sid)
         assert s.plan == "pro"  # unchanged
         assert s.data_retention_until is None
@@ -92,7 +92,7 @@ def test_checkout_completed_clears_retention_timer(client):
     from tests._app import db
     past_cancel = datetime.utcnow() - timedelta(days=30)
     retain_until = datetime.utcnow() + timedelta(days=150)
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="inactive",
                     canceled_at=past_cancel,
                     data_retention_until=retain_until,
@@ -109,7 +109,7 @@ def test_checkout_completed_clears_retention_timer(client):
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         resp = _post(client, event)
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, sid)
         assert s.plan == "basic"
         assert s.canceled_at is None
@@ -120,7 +120,7 @@ def test_checkout_completed_clears_retention_timer(client):
 def test_checkout_completed_maps_basic_price_to_basic_plan(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="trial")
     event = {
         "type": "checkout.session.completed",
@@ -133,7 +133,7 @@ def test_checkout_completed_maps_basic_price_to_basic_plan(client):
     mock_sub = {"items": {"data": [{"price": {"id": _basic_price_id()}}]}}
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         _post(client, event)
-    with client.application.app_context():
+    with db_session():
         assert db.session.get(Store, sid).plan == "basic"
 
 
@@ -141,7 +141,7 @@ def test_checkout_completed_non_basic_price_maps_to_pro(client):
     """Any non-basic price id routes to 'pro' (covers monthly + yearly pro)."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="trial")
     event = {
         "type": "checkout.session.completed",
@@ -154,7 +154,7 @@ def test_checkout_completed_non_basic_price_maps_to_pro(client):
     mock_sub = {"items": {"data": [{"price": {"id": "price_pro_yearly_test"}}]}}
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         _post(client, event)
-    with client.application.app_context():
+    with db_session():
         assert db.session.get(Store, sid).plan == "pro"
 
 
@@ -165,7 +165,7 @@ def test_checkout_completed_falls_back_to_pro_on_retrieve_failure(client):
     """
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="trial")
     event = {
         "type": "checkout.session.completed",
@@ -179,7 +179,7 @@ def test_checkout_completed_falls_back_to_pro_on_retrieve_failure(client):
                side_effect=Exception("stripe boom")):
         resp = _post(client, event)
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, sid)
         assert s.plan == "pro"
         assert s.stripe_subscription_id == "sub_1"
@@ -189,7 +189,7 @@ def test_checkout_completed_ignored_without_store_id_metadata(client):
     """No metadata.store_id => must not mutate anything (or 500)."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="trial")
     event = {
         "type": "checkout.session.completed",
@@ -203,7 +203,7 @@ def test_checkout_completed_ignored_without_store_id_metadata(client):
     with patch("stripe.Subscription.retrieve", return_value=mock_sub):
         resp = _post(client, event)
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         assert db.session.get(Store, sid).plan == "trial"
 
 
@@ -228,14 +228,14 @@ def test_checkout_completed_ignored_for_unknown_store_id(client):
 def test_unhandled_event_type_returns_200_without_mutation(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         sid = _seed(plan="pro")
     resp = _post(client, {
         "type": "invoice.payment_succeeded",  # not handled by our webhook
         "data": {"object": {}},
     })
     assert resp.status_code == 200
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, sid)
         assert s.plan == "pro"
         assert s.data_retention_until is None

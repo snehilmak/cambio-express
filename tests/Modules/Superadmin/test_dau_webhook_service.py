@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from api.Modules.Auth.Models import LoginEvent
 from api.Modules.Tenancy.Models import User
 from api.Modules.Webhooks.Models import WebhookEvent
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_user(db, *, role="admin", username):
@@ -42,9 +42,9 @@ def _add_webhook(db, *, status="ok",
 def test_dau_mau_distinct_users_per_day():
     """Same user logging twice in a day still counts as 1 in
     that day's bucket."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import dau_mau
-    with flask_app.app_context():
+    with db_session():
         db.session.query(LoginEvent).delete()
         db.session.commit()
         u1 = _add_user(db.session, username="dm-u1")
@@ -71,9 +71,9 @@ def test_dau_mau_distinct_users_per_day():
 def test_dau_mau_handles_zero_activity():
     """Empty window → zero rows, zero MAU/DAU, no divide-by-zero
     on stickiness."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import dau_mau
-    with flask_app.app_context():
+    with db_session():
         db.session.query(LoginEvent).delete()
         db.session.commit()
         rows, totals = dau_mau(
@@ -89,9 +89,9 @@ def test_dau_mau_handles_zero_activity():
 def test_dau_mau_avg_per_day_uses_active_day_count():
     """avg_per_day = total user-day count / number of active days,
     not / number of calendar days in the window."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import dau_mau
-    with flask_app.app_context():
+    with db_session():
         db.session.query(LoginEvent).delete()
         db.session.commit()
         u1 = _add_user(db.session, username="dm-avg-1")
@@ -116,9 +116,9 @@ def test_webhook_health_groups_by_status_with_failure_pct():
     """ok counts toward `ok`; everything else (signature_err,
     processing_err, etc.) counts toward `errors`. failure_pct
     = errors / count * 100."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import webhook_health
-    with flask_app.app_context():
+    with db_session():
         db.session.query(WebhookEvent).delete()
         db.session.commit()
         for _ in range(8):
@@ -146,9 +146,9 @@ def test_webhook_health_groups_by_status_with_failure_pct():
 
 
 def test_webhook_health_zero_count_no_div_by_zero():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import webhook_health
-    with flask_app.app_context():
+    with db_session():
         db.session.query(WebhookEvent).delete()
         db.session.commit()
         rows, totals = webhook_health(
@@ -160,9 +160,9 @@ def test_webhook_health_zero_count_no_div_by_zero():
 
 
 def test_webhook_health_filters_by_received_at_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import webhook_health
-    with flask_app.app_context():
+    with db_session():
         db.session.query(WebhookEvent).delete()
         db.session.commit()
         _add_webhook(

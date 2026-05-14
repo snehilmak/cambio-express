@@ -6,7 +6,7 @@ target / action / user query params, page is 1-based, per_page
 is 50.
 """
 from datetime import datetime, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -106,8 +106,7 @@ def test_audit_log_empty_store_returns_zero_rows(
 def test_audit_log_merges_op_and_tx_feeds(
     client, test_store_id,
 ):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id, action="lock")
         _seed_tx_row(test_store_id, action="create")
     token = _login(client, test_store_id)
@@ -123,9 +122,8 @@ def test_audit_log_merges_op_and_tx_feeds(
 def test_audit_log_orders_newest_first(
     client, test_store_id,
 ):
-    from tests._app import app as flask_app
     base = datetime.utcnow()
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id, action="lock", ts=base - timedelta(days=2))
         _seed_op_row(test_store_id, action="unlock", ts=base)
     token = _login(client, test_store_id)
@@ -145,8 +143,7 @@ def test_audit_log_target_filter_drops_non_matching(
 ):
     """`?target=batch` should drop daily_report rows AND suppress
     the entire transfer feed (TransferAudit is transfer-only)."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id, target_type="daily_report")
         _seed_op_row(test_store_id, target_type="batch")
         _seed_tx_row(test_store_id)
@@ -164,8 +161,7 @@ def test_audit_log_target_transfer_keeps_transfer_feed(
 ):
     """`?target=transfer` keeps only transfer-flavored rows
     (TransferAudit + OperatorAuditLog with target_type=transfer)."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id, target_type="batch")
         _seed_op_row(test_store_id, target_type="transfer")
         _seed_tx_row(test_store_id)
@@ -178,8 +174,7 @@ def test_audit_log_target_transfer_keeps_transfer_feed(
 
 
 def test_audit_log_action_filter(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id, action="lock")
         _seed_op_row(test_store_id, action="unlock")
     token = _login(client, test_store_id)
@@ -194,8 +189,8 @@ def test_audit_log_action_filter(client, test_store_id):
 def test_audit_log_user_filter(client, test_store_id):
     """A `?user=` value targets a specific User.id."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=test_store_id, username="extra@test.com",
             full_name="Extra User", role="admin",
@@ -218,8 +213,7 @@ def test_audit_log_garbage_user_filter_silently_ignored(
 ):
     """A non-numeric user filter is treated as no filter — matches
     legacy behavior (don't 422 on operator typos)."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_op_row(test_store_id)
     token = _login(client, test_store_id)
     body = client.get(
@@ -235,8 +229,7 @@ def test_audit_log_garbage_user_filter_silently_ignored(
 def test_audit_log_paginates_at_50_per_page(
     client, test_store_id,
 ):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         # 51 rows: 50 fit on page 1, 1 spills to page 2.
         for i in range(51):
             _seed_op_row(

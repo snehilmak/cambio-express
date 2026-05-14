@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="locks-store"):
@@ -30,9 +30,9 @@ def _add_report(db, store_id, *, report_date,
 def test_is_locked_returns_false_when_no_report():
     """Nothing to lock yet — returns False so write routes can
     proceed."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import is_daily_report_locked
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-empty")
@@ -43,9 +43,9 @@ def test_is_locked_returns_false_when_no_report():
 
 def test_is_locked_returns_false_when_report_unlocked():
     """Row exists but locked_at is None → not locked."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import is_daily_report_locked
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-unlocked")
@@ -55,9 +55,9 @@ def test_is_locked_returns_false_when_report_unlocked():
 
 
 def test_is_locked_returns_true_when_report_locked():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import is_daily_report_locked
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="locks-locked")
@@ -71,9 +71,9 @@ def test_is_locked_returns_true_when_report_locked():
 
 def test_is_locked_filters_by_store_and_date():
     """Locks on other stores or other dates don't leak."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import is_daily_report_locked
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyReport).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="locks-isolation-1")

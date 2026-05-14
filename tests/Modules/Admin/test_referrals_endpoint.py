@@ -4,7 +4,7 @@ Powers /app/account/referrals. Lazily mints a ReferralCode on a
 paid admin's first visit; trial admins get a 409 the SPA renders
 as an upsell card. Mirrors the legacy admin_referrals route.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -23,8 +23,8 @@ def _put_on_paid_plan(store_id, plan="basic"):
     """Most tests need an active paid plan because the referrals
     feature gates on store_has_paid_plan."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.get(Store, store_id)
         s.plan = plan
         db.session.commit()
@@ -61,8 +61,8 @@ def test_referrals_409_for_trial_store(client, test_store_id):
     # explicit so a future fixture change doesn't silently flip
     # this expectation.
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.plan = "trial"
         db.session.commit()
@@ -140,9 +140,9 @@ def test_referrals_includes_redemption_history(
     from datetime import datetime
     from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     _put_on_paid_plan(test_store_id)
-    with flask_app.app_context():
+    with db_session():
         # Mint a referral code directly so we can attach a
         # redemption row to it.
         rc = ReferralCode(

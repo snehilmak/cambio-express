@@ -1,6 +1,6 @@
 """Unit tests for DailyBook.Services (read-side)."""
 from datetime import date, datetime, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_report(store_id, report_date, **kwargs):
@@ -17,18 +17,18 @@ def _seed_report(store_id, report_date, **kwargs):
 
 
 def test_summarize_report_returns_none_when_missing(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_report
-    with flask_app.app_context():
+    with db_session():
         s = summarize_report(db.session, test_store_id, date.today())
     assert s is None
 
 
 def test_summarize_report_computes_totals(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(
             test_store_id, today,
             taxable_sales=100.0, non_taxable=50.0, sales_tax=10.0,
@@ -45,10 +45,10 @@ def test_summarize_report_computes_totals(test_store_id):
 
 
 def test_summarize_report_locked_state(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(
             test_store_id, today, taxable_sales=10.0,
             locked_at=datetime.utcnow(),
@@ -58,10 +58,10 @@ def test_summarize_report_locked_state(test_store_id):
 
 
 def test_summarize_report_unlocked_default(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=10.0)
         s = summarize_report(db.session, test_store_id, today)
     assert s.locked is False
@@ -71,10 +71,10 @@ def test_summarize_report_unlocked_default(test_store_id):
 
 
 def test_summarize_period_empty_safe(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         s = summarize_period(
             db.session, [test_store_id], today, today,
         )
@@ -86,11 +86,11 @@ def test_summarize_period_empty_safe(test_store_id):
 
 
 def test_summarize_period_aggregates(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
     yesterday = today - timedelta(days=1)
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, yesterday, taxable_sales=100.0)
         _seed_report(test_store_id, today, taxable_sales=200.0,
                      cash_expense=50.0)
@@ -109,10 +109,10 @@ def test_summarize_period_aggregates(test_store_id):
 
 def test_summarize_period_isolates_other_stores(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_period
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         s2 = Store(name="Other", slug="other-db-svc",
                     email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()
@@ -128,13 +128,13 @@ def test_summarize_period_isolates_other_stores(test_store_id):
 
 
 def test_period_summary_response_validates(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_period
     from api.Modules.DailyBook.Requests import (
         DailyReportRow, PeriodSummaryResponse,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=100.0)
         s = summarize_period(
             db.session, [test_store_id], today, today,

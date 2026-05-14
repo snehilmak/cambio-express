@@ -3,7 +3,7 @@ from datetime import date
 
 from api.Modules.Batches.Models import ACHBatch
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="ach-store"):
@@ -37,9 +37,9 @@ def _add_batch(db, store_id, *, ach_date, company="Intermex",
 def test_returns_rows_and_totals_tuple():
     """Service returns (rows, totals); rows is a list of dicts;
     totals dict has count + amount keys."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="ach-shape")
         rows, totals = ach_volume(
             db.session, [s.id],
@@ -51,9 +51,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape_has_company_count_amount_avg():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-shape2")
@@ -71,9 +71,9 @@ def test_row_shape_has_company_count_amount_avg():
 
 
 def test_groups_by_company():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-group")
@@ -96,9 +96,9 @@ def test_groups_by_company():
 
 
 def test_avg_is_amount_over_count():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-avg")
@@ -116,9 +116,9 @@ def test_avg_is_amount_over_count():
 def test_blank_company_displayed_as_no_company_label():
     """ACHBatch with blank company is rendered as '(no company)'
     so the template can still show a row instead of a blank cell."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-null")
@@ -137,9 +137,9 @@ def test_blank_company_displayed_as_no_company_label():
 
 def test_rows_sorted_by_amount_descending():
     """Biggest mover lands first — the report's headline view."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-sort")
@@ -160,9 +160,9 @@ def test_rows_sorted_by_amount_descending():
 
 
 def test_filters_by_store_list():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="ach-store-1")
@@ -179,9 +179,9 @@ def test_filters_by_store_list():
 
 
 def test_filters_by_date_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-window")
@@ -199,9 +199,9 @@ def test_filters_by_date_window():
 
 
 def test_empty_window_returns_empty_rows_and_zero_totals():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import ach_volume
-    with flask_app.app_context():
+    with db_session():
         db.session.query(ACHBatch).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ach-empty")

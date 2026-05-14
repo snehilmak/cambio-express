@@ -1,5 +1,6 @@
 """Unit tests for Announcements.Services.visibility (PR 55)."""
 from datetime import datetime, timedelta
+from tests._app import db_session
 
 
 def _add_announcement(db_session, **kwargs):
@@ -22,9 +23,9 @@ def _add_announcement(db_session, **kwargs):
 
 def test_returns_active_with_no_window():
     """Active row with no starts_at/expires_at is always visible."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         a = _add_announcement(db.session, message="always-on")
         rows = active_announcements(db.session)
         assert a in rows
@@ -32,9 +33,9 @@ def test_returns_active_with_no_window():
 
 def test_filters_inactive_rows():
     """is_active=False is hidden even when in window."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         a = _add_announcement(
             db.session, message="hidden", is_active=False,
         )
@@ -44,9 +45,9 @@ def test_filters_inactive_rows():
 
 def test_filters_future_starts_at():
     """starts_at in the future → hidden."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         future = datetime.utcnow() + timedelta(days=1)
         a = _add_announcement(
             db.session, message="not yet", starts_at=future,
@@ -56,9 +57,9 @@ def test_filters_future_starts_at():
 
 def test_includes_past_starts_at():
     """starts_at already past → visible."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         past = datetime.utcnow() - timedelta(hours=1)
         a = _add_announcement(
             db.session, message="started", starts_at=past,
@@ -68,9 +69,9 @@ def test_includes_past_starts_at():
 
 def test_filters_expired_rows():
     """expires_at in the past → hidden."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         past = datetime.utcnow() - timedelta(hours=1)
         a = _add_announcement(
             db.session, message="expired", expires_at=past,
@@ -80,9 +81,9 @@ def test_filters_expired_rows():
 
 def test_includes_future_expires_at():
     """expires_at still in the future → visible."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         future = datetime.utcnow() + timedelta(days=1)
         a = _add_announcement(
             db.session, message="not yet expired", expires_at=future,
@@ -92,9 +93,9 @@ def test_includes_future_expires_at():
 
 def test_includes_full_window_open():
     """Both starts_at past + expires_at future + active → visible."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         a = _add_announcement(
             db.session,
             message="in window",
@@ -106,9 +107,9 @@ def test_includes_full_window_open():
 
 def test_orders_newest_first():
     """Most recent created_at lands at the top of the banner stack."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Announcements.Services import active_announcements
-    with flask_app.app_context():
+    with db_session():
         # Emulate ordering by inserting two rows; created_at defaults
         # to utcnow() which is monotonically increasing within the
         # test (microsecond resolution is enough).

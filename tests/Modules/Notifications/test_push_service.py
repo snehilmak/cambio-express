@@ -8,7 +8,7 @@ effect — the read already happened).
 from unittest.mock import MagicMock, patch
 
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── is_enabled ─────────────────────────────────────────────
@@ -70,8 +70,8 @@ def test_send_push_zero_when_no_subscriptions(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PUBLIC_KEY", "BHj")
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         db.session.query(PushSubscription).delete()
         db.session.commit()
         # Stub pywebpush so the test doesn't need it installed.
@@ -87,8 +87,8 @@ def test_send_push_delivers_to_each_subscription(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
@@ -118,9 +118,9 @@ def test_send_push_drops_dead_subscriptions(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from pywebpush import WebPushException
-    with flask_app.app_context():
+    with db_session():
         db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
@@ -159,9 +159,9 @@ def test_send_push_keeps_subscriptions_on_other_errors(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from pywebpush import WebPushException
-    with flask_app.app_context():
+    with db_session():
         db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
@@ -201,8 +201,8 @@ def test_send_push_payload_drops_none_values(monkeypatch):
     monkeypatch.setattr(push_svc, "VAPID_PRIVATE_KEY", "wHd")
     from api.Modules.Announcements.Models import PushSubscription
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(

@@ -3,7 +3,7 @@ from datetime import date, time
 
 from api.Modules.DailyBook.Models import CheckDeposit, DailyDrop
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="da-store"):
@@ -41,9 +41,9 @@ def _add_check(db, store_id, *, report_date, amount=100.0,
 
 
 def test_daily_drops_returns_rows_and_totals():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-shape")
@@ -58,9 +58,9 @@ def test_daily_drops_returns_rows_and_totals():
 def test_daily_drops_groups_by_report_date():
     """Multiple drops on same date → one bucket; multiple dates →
     multiple buckets."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-group")
@@ -87,9 +87,9 @@ def test_daily_drops_groups_by_report_date():
 def test_daily_drops_sorted_newest_first():
     """Newest date first — the daily-drops table is most recent
     on top."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-sort")
@@ -108,9 +108,9 @@ def test_daily_drops_sorted_newest_first():
 def test_daily_drops_avg_per_day_uses_distinct_date_count():
     """avg_per_day divides by distinct date count, not row count.
     Two drops on the same date → still 1 day in the divisor."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-avg")
@@ -128,9 +128,9 @@ def test_daily_drops_avg_per_day_uses_distinct_date_count():
 
 def test_daily_drops_avg_per_day_zero_when_no_rows():
     """No drops → avg_per_day = 0 (no divide-by-zero)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-empty")
@@ -143,9 +143,9 @@ def test_daily_drops_avg_per_day_zero_when_no_rows():
 
 
 def test_daily_drops_filters_by_store_and_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import daily_drops
-    with flask_app.app_context():
+    with db_session():
         db.session.query(DailyDrop).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="da-drops-store-1")
@@ -170,9 +170,9 @@ def test_daily_drops_filters_by_store_and_window():
 
 
 def test_check_deposits_returns_rows_and_totals():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import check_deposits
-    with flask_app.app_context():
+    with db_session():
         db.session.query(CheckDeposit).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-checks-shape")
@@ -185,9 +185,9 @@ def test_check_deposits_returns_rows_and_totals():
 
 
 def test_check_deposits_groups_by_report_date():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import check_deposits
-    with flask_app.app_context():
+    with db_session():
         db.session.query(CheckDeposit).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-checks-group")

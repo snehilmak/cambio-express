@@ -1,6 +1,6 @@
 """Unit tests for the daily-report write-side lifecycle Service (PR 34)."""
 from datetime import date, datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── ensure_daily_report ─────────────────────────────────────
@@ -8,10 +8,10 @@ from tests._app import db
 
 def test_ensure_creates_when_missing(test_store_id):
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import ensure_daily_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Sanity: nothing seeded yet
         assert db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
@@ -25,10 +25,10 @@ def test_ensure_creates_when_missing(test_store_id):
 
 def test_ensure_returns_existing(test_store_id):
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import ensure_daily_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         seeded = DailyReport(
             store_id=test_store_id, report_date=today,
             taxable_sales=42.0,
@@ -43,10 +43,10 @@ def test_ensure_returns_existing(test_store_id):
 
 
 def test_lock_report_sets_locked_at_and_locked_by(test_store_id, test_admin_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import lock_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         rpt = lock_report(
             db.session, test_store_id, today,
             locked_by_user_id=test_admin_id,
@@ -59,10 +59,10 @@ def test_lock_report_sets_locked_at_and_locked_by(test_store_id, test_admin_id):
 def test_lock_report_creates_empty_when_missing(test_store_id, test_admin_id):
     """Locking an empty day creates the DailyReport row first."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import lock_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=today,
         ).first() is None
@@ -81,10 +81,10 @@ def test_lock_report_creates_empty_when_missing(test_store_id, test_admin_id):
 def test_lock_report_idempotent_when_already_locked(test_store_id, test_admin_id):
     """Re-locking shouldn't bump locked_at — that would look like a
     fresh action in the audit trail."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import lock_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         first = lock_report(
             db.session, test_store_id, today,
             locked_by_user_id=test_admin_id,
@@ -103,12 +103,12 @@ def test_lock_report_idempotent_when_already_locked(test_store_id, test_admin_id
 
 
 def test_unlock_report_clears_lock_state(test_store_id, test_admin_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         lock_report, unlock_report,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         lock_report(
             db.session, test_store_id, today,
             locked_by_user_id=test_admin_id,
@@ -124,10 +124,10 @@ def test_unlock_report_returns_none_when_no_report(test_store_id):
     """No DailyReport row at all → returns None (no-op). Doesn't
     create an empty report (only locking does)."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import unlock_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         assert unlock_report(db.session, test_store_id, today) is None
         # Still no row created
         assert db.session.query(DailyReport).filter_by(
@@ -138,10 +138,10 @@ def test_unlock_report_returns_none_when_no_report(test_store_id):
 def test_unlock_report_noop_when_not_locked(test_store_id):
     """Unlocking an unlocked report just returns the row unchanged."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import unlock_report
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         seeded = DailyReport(
             store_id=test_store_id, report_date=today,
             taxable_sales=50.0,
