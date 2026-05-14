@@ -11,7 +11,7 @@ export default function ReturnedCheckStatus() {
       title="Returned Check Status"
       resultUnit={["status", "statuses"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/returned-check-status.csv`}
+      csvUrl={`/api/v2/reports/returned-check-status.csv`}
       kpis={[
         { label: "Total Bounces", tone: "primary",
           value: t => Number(t.count ?? 0).toLocaleString() },

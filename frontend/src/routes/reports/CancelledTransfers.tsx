@@ -11,7 +11,7 @@ export default function CancelledTransfers() {
       title="Cancelled & Rejected Transfers"
       resultUnit={["transfer", "transfers"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/cancelled-transfers.csv`}
+      csvUrl={`/api/v2/reports/cancelled-transfers.csv`}
       kpis={[
         { label: "Total",        tone: "primary",
           value: t => Number(t.count ?? 0).toLocaleString() },

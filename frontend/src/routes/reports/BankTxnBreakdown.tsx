@@ -11,7 +11,7 @@ export default function BankTxnBreakdown() {
       title="Bank Transactions Breakdown"
       resultUnit={["category", "categories"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/bank-transactions-breakdown.csv`}
+      csvUrl={`/api/v2/reports/bank-transactions-breakdown.csv`}
       kpis={[
         { label: "Inflows",          tone: "primary",
           value: t => fmtMoney(Number(t.inflow ?? 0)) },

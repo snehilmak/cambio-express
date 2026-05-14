@@ -53,10 +53,15 @@ def test_admin_drilldown_routes_redirect_to_spa(client, test_store_id):
         assert resp.headers["Location"] == f"/app/reports/{slug}", slug
 
 
-def test_admin_drilldown_csv_routes_stay_on_flask(client, test_store_id):
-    _admin_session_login(client, test_store_id)
+def test_admin_drilldown_csv_routes_on_fastapi(client, test_store_id):
+    from tests.conftest import login_admin
+    jwt = login_admin(client, test_store_id)
+    headers = {"Authorization": f"Bearer {jwt}"}
     for slug in _MIGRATED_BATCH:
-        resp = client.get(f"/reports/{slug}.csv")
+        resp = client.get(
+            f"/api/v2/reports/{slug}.csv?store_ids={test_store_id}",
+            headers=headers,
+        )
         assert resp.status_code == 200, slug
         assert resp.mimetype == "text/csv", slug
 

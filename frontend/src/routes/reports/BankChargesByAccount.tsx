@@ -11,7 +11,7 @@ export default function BankChargesByAccount() {
       title="Bank Charges by Account"
       resultUnit={["account", "accounts"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/bank-charges-by-account.csv`}
+      csvUrl={`/api/v2/reports/bank-charges-by-account.csv`}
       kpis={[
         { label: "Total Charges", tone: "primary",
           value: t => fmtMoney(Number(t.amount ?? 0)) },

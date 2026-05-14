@@ -12,7 +12,7 @@ export default function SalesByService() {
       title="Sales by Service Type"
       resultUnit={["service type", "service types"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/sales-by-service-type.csv`}
+      csvUrl={`/api/v2/reports/sales-by-service-type.csv`}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },

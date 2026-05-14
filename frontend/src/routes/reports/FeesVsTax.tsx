@@ -11,7 +11,7 @@ export default function FeesVsTax() {
       title="Fees vs Tax"
       resultUnit={["line", "lines"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/fees-vs-tax.csv`}
+      csvUrl={`/api/v2/reports/fees-vs-tax.csv`}
       kpis={[
         { label: "Total Fees",     tone: "neon",
           value: t => fmtMoney(Number(t.fees ?? 0)) },

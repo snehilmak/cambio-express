@@ -52,13 +52,18 @@ def test_custom_compare_csv_export_includes_period_columns(client,
                                                             test_store_id):
     """The CSV column headers use the dynamic period labels — verify
     the custom compare window shows up as a column header."""
-    _admin_login(client, test_store_id)
+    from tests.conftest import login_admin
     _make_transfer(client, test_store_id, send_date=date(2026, 5, 5),
                    amount=100, confirm="X1")
+    jwt = login_admin(client, test_store_id)
     resp = client.get(
-        "/reports/period-comparison.csv?from=2026-05-01&to=2026-05-31"
-        "&compare_from=2025-05-01&compare_to=2025-05-31"
+        f"/api/v2/reports/period-comparison.csv"
+        f"?store_ids={test_store_id}"
+        f"&from=2026-05-01&to=2026-05-31"
+        f"&compare_from=2025-05-01&compare_to=2025-05-31",
+        headers={"Authorization": f"Bearer {jwt}"},
     )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
     body = resp.get_data(as_text=True)
     # Custom compare window appears as a CSV column header.
     assert "May 01" in body and "May 31, 2025" in body

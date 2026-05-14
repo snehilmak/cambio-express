@@ -11,7 +11,7 @@ export default function CashierProductivity() {
       title="Cashier Productivity"
       resultUnit={["cashier", "cashiers"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/cashier-productivity.csv`}
+      csvUrl={`/api/v2/reports/cashier-productivity.csv`}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },

@@ -11,7 +11,7 @@ export default function PeriodPL() {
       title="Period P&L"
       resultUnit={["line", "lines"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/period-pl.csv`}
+      csvUrl={`/api/v2/reports/period-pl.csv`}
       kpis={[
         { label: "Revenue",   tone: "primary",
           value: t => fmtMoney(Number(t.revenue ?? 0)) },

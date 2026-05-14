@@ -504,3 +504,10 @@ def list_reports_route(
             detail="Sign in as a store user to view reports.",
         )
     return _build_report_list(prefix="")
+
+
+# CSV downloads — registered last so `/{slug}.csv` doesn't shadow
+# the named JSON routes above (FastAPI matches in declaration order).
+from api.Modules.Reports.Controllers.csv_export import register as _register_csv  # noqa: E402
+
+_register_csv(router)

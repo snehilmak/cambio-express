@@ -5,8 +5,9 @@ import {
   defaultStoreIds, useReportDrilldown,
   type AggregatedRow, type AggregatedTotals,
 } from "../api/reportDrilldown";
+import { downloadCsv } from "../lib/api";
 import {
-  ButtonLink, EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
+  EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
   PageShell, TableSkeleton, tdStyle, thStyle, tokens,
 } from "./ui";
 
@@ -78,10 +79,13 @@ export function ReportDrilldown({
   const rowCount = data?.rows.length ?? 0;
   const unit = rowCount === 1 ? resultUnit[0] : resultUnit[1];
 
-  // Append the period (and any extraParams) to the CSV URL so the
-  // download matches the visible filter. The Flask endpoint reads
-  // the same query params.
+  // Append the period (+ store_ids + any extraParams) to the CSV
+  // URL so the download matches the visible filter. The FastAPI
+  // endpoint reads the same query params as the JSON drilldown.
   const csvParams = new URLSearchParams({ from, to, ...(extraParams ?? {}) });
+  if (storeIds.length > 0) {
+    csvParams.set("store_ids", storeIds.join(","));
+  }
   const csvHref = `${csvUrl}?${csvParams.toString()}`;
 
   return (
@@ -118,9 +122,15 @@ export function ReportDrilldown({
                   />
                 </label>
               </form>
-              <ButtonLink tone="secondary" size="sm" href={csvHref} download>
+              <button
+                type="button"
+                style={btnOutline}
+                onClick={() => {
+                  void downloadCsv(csvHref, csvFilename(csvUrl, from, to));
+                }}
+              >
                 Export CSV
-              </ButtonLink>
+              </button>
               <button
                 type="button"
                 style={btnOutline}
@@ -221,6 +231,16 @@ export function ReportDrilldown({
       )}
     </PageShell>
   );
+}
+
+// Derive a filename from the CSV URL slug + period. Mirrors the
+// `fname_prefix_<from>_<to>.csv` shape the backend's
+// `Content-Disposition` header produces, but we generate it on
+// the client so a slow network doesn't block the download UX.
+function csvFilename(url: string, from: string, to: string): string {
+  const path = url.split("?")[0];
+  const slug = path.split("/").pop()?.replace(/\.csv$/, "") || "report";
+  return `${slug}_${from}_${to}.csv`;
 }
 
 function fmtDate(iso: string): string {

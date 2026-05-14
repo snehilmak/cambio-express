@@ -11,7 +11,7 @@ export default function AchVolume() {
       title="ACH Volume by Company"
       resultUnit={["company", "companies"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/ach-volume.csv`}
+      csvUrl={`/api/v2/reports/ach-volume.csv`}
       kpis={[
         { label: "Total ACH",   tone: "primary",
           value: t => fmtMoney(Number(t.amount ?? 0)) },

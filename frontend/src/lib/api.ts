@@ -79,3 +79,41 @@ export async function api<T = unknown>(
   }
   return parsed as T;
 }
+
+
+// CSV downloads can't ride a plain <a href download> because the
+// browser won't attach our Authorization header on a top-level
+// navigation. Instead, fetch the bytes with the bearer token,
+// turn the response into a Blob, and trigger a download with a
+// synthetic anchor click. Memory-bound, but report CSVs are tiny.
+export async function downloadCsv(
+  path: string,
+  filename: string,
+): Promise<void> {
+  const headers = new Headers();
+  const token = getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const resp = await fetch(path, { headers });
+  if (!resp.ok) {
+    if (resp.status === 401) {
+      clearAccessToken();
+      const onLogin = window.location.pathname === "/app/login";
+      if (!onLogin) window.location.assign("/app/login");
+    }
+    let body: unknown;
+    try { body = await resp.json(); } catch { body = null; }
+    throw new ApiError(
+      resp.status, `CSV download failed (${resp.status})`, body,
+    );
+  }
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Defer revoke so the browser has time to start the download.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

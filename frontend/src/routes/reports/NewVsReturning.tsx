@@ -11,7 +11,7 @@ export default function NewVsReturning() {
       title="New vs Returning Senders"
       resultUnit={["bucket", "buckets"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/new-vs-returning.csv`}
+      csvUrl={`/api/v2/reports/new-vs-returning.csv`}
       kpis={[
         { label: "Total Senders", tone: "primary",
           value: t => (Number(t.customers ?? 0)).toLocaleString() },

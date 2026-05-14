@@ -59,10 +59,15 @@ def test_admin_stragglers_redirect_to_spa(client, test_store_id):
         assert resp.headers["Location"] == f"/app/reports/{slug}", slug
 
 
-def test_admin_stragglers_csv_stays_on_flask(client, test_store_id):
-    _admin_session_login(client, test_store_id)
+def test_admin_stragglers_csv_on_fastapi(client, test_store_id):
+    from tests.conftest import login_admin
+    jwt = login_admin(client, test_store_id)
+    headers = {"Authorization": f"Bearer {jwt}"}
     for slug in _ADMIN_BATCH:
-        resp = client.get(f"/reports/{slug}.csv")
+        resp = client.get(
+            f"/api/v2/reports/{slug}.csv?store_ids={test_store_id}",
+            headers=headers,
+        )
         assert resp.status_code == 200, slug
         assert resp.mimetype == "text/csv", slug
 
@@ -79,11 +84,17 @@ def test_every_superadmin_report_redirects_to_spa(client):
         ), slug
 
 
-def test_superadmin_csv_stays_on_flask(client):
-    _superadmin_session(client)
+def test_superadmin_csv_on_fastapi(client):
+    from tests.conftest import login_superadmin
+    jwt = login_superadmin(client)
+    headers = {"Authorization": f"Bearer {jwt}"}
     for slug in _SA_BATCH:
-        resp = client.get(f"/superadmin/reports/{slug}.csv")
-        assert resp.status_code == 200, slug
+        resp = client.get(
+            f"/api/v2/superadmin/reports/{slug}.csv", headers=headers,
+        )
+        assert resp.status_code == 200, (
+            slug, resp.get_data(as_text=True)[:200],
+        )
         assert resp.mimetype == "text/csv", slug
 
 

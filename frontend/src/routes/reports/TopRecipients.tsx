@@ -11,7 +11,7 @@ export default function TopRecipients() {
       title="Top Recipients"
       resultUnit={["recipient", "recipients"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/top-recipients.csv`}
+      csvUrl={`/api/v2/reports/top-recipients.csv`}
       kpis={[
         { label: "Total Sent",      tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Transfer Count",  tone: "neon",    value: t => Number(t.count ?? 0).toLocaleString() },

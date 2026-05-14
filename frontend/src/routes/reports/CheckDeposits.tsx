@@ -11,7 +11,7 @@ export default function CheckDeposits() {
       title="Check Deposits"
       resultUnit={["day", "days"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/check-deposits.csv`}
+      csvUrl={`/api/v2/reports/check-deposits.csv`}
       kpis={[
         { label: "Total Amount", tone: "primary",
           value: t => fmtMoney(Number(t.amount ?? 0)) },

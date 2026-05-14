@@ -12,10 +12,10 @@ import {
 } from "chart.js";
 import { Bar, Line } from "react-chartjs-2";
 
-import { api } from "../../lib/api";
+import { api, downloadCsv } from "../../lib/api";
 import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
 import {
-  ButtonLink, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
+  Card, EmptyState, ErrorState, KpiCard, KpiGrid,
   PageHeader, PageShell, TableSkeleton, tdStyle, thStyle, tokens,
 } from "../../components/ui";
 
@@ -157,7 +157,8 @@ export default function SuperadminBIDrilldown() {
   );
   const rowKeys = rows.length > 0 ? Object.keys(rows[0]) : [];
 
-  const csvHref = `/superadmin/reports/${slug}.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const csvHref = `/api/v2/superadmin/reports/${slug}.csv?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+  const csvFilename = `${slug}_${from}_${to}.csv`;
 
   return (
     <PageShell gap="1.25rem">
@@ -185,9 +186,13 @@ export default function SuperadminBIDrilldown() {
                   style={dateInput}
                 />
               </label>
-              <ButtonLink tone="secondary" size="sm" href={csvHref} download>
+              <button
+                type="button"
+                style={btnOutline}
+                onClick={() => { void downloadCsv(csvHref, csvFilename); }}
+              >
                 Export CSV
-              </ButtonLink>
+              </button>
               <button type="button" style={btnOutline} onClick={() => window.print()}>
                 Print / PDF
               </button>

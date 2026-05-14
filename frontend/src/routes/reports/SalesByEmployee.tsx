@@ -11,7 +11,7 @@ export default function SalesByEmployee() {
       title="Sales by Employee"
       resultUnit={["employee", "employees"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/sales-by-employee.csv`}
+      csvUrl={`/api/v2/reports/sales-by-employee.csv`}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },

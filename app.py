@@ -88,11 +88,10 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
     )
 
 
-# Wire the rest of the app: CLI commands, report routes, error
-# handlers, schema init, FastAPI mount.
-from api.Modules.Reports.Routes import register as _register_report_routes  # noqa: E402
-_register_report_routes(app, db, current_user)
-
+# Wire the rest of the app: CLI commands, error handlers, schema
+# init, FastAPI mount. CSV report routes moved to FastAPI in
+# PR #547 (Flask-removal-2) — the SPA now fetches them with the
+# Bearer JWT and turns the response into a blob download.
 from api.Flask.Cli import register as _register_cli_commands  # noqa: E402
 _register_cli_commands(app, db)
 

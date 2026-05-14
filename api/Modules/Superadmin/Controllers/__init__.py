@@ -44,6 +44,16 @@ from api.Modules.Superadmin.Requests import (
 router = APIRouter()
 
 
+# CSV exports register first so `/reports/{slug}.csv` matches before
+# the JSON drilldown's open-ended `/reports/{slug}` catch-all
+# (Starlette picks the first declared route that matches).
+from api.Modules.Reports.Controllers.csv_export import (  # noqa: E402
+    register_superadmin as _register_superadmin_csv,
+)
+
+_register_superadmin_csv(router)
+
+
 def _require_superadmin(claims: dict) -> None:
     if claims.get("role") != "superadmin":
         raise HTTPException(
@@ -621,3 +631,4 @@ def superadmin_report_drilldown_route(
     if isinstance(extras, dict):
         payload.update(extras)
     return payload
+
