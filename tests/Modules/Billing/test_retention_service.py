@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from api.Modules.Customers.Models import Customer
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── registry shape ─────────────────────────────────────────
@@ -45,9 +45,9 @@ def test_fk_overrides_match_referral_models():
 
 def test_purge_returns_zero_when_no_expired_stores():
     """Empty/no-expired DB: nothing to do, return 0."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import purge_expired_stores
-    with flask_app.app_context():
+    with db_session():
         # Make sure no inactive-with-elapsed-retention stores exist.
         db.session.query(Store).filter_by(plan="inactive").update(
             {"data_retention_until": None},
@@ -60,9 +60,9 @@ def test_purge_returns_zero_when_no_expired_stores():
 def test_purge_skips_inactive_store_with_future_retention():
     """A canceled store still inside its retention window must
     NOT be purged — the operator still has time to come back."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import purge_expired_stores
-    with flask_app.app_context():
+    with db_session():
         s = Store(
             name="Future-Retention", slug="future-retention",
             plan="inactive",
@@ -81,9 +81,9 @@ def test_purge_skips_inactive_store_with_future_retention():
 def test_purge_deletes_expired_store_and_cascades_owned_rows():
     """Inactive store past its retention window → store row gone,
     every per-store row gone too."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import purge_expired_stores
-    with flask_app.app_context():
+    with db_session():
         s = Store(
             name="Expired-Co", slug="expired-co",
             plan="inactive",
@@ -129,9 +129,9 @@ def test_purge_skips_active_paid_stores():
     """Even past `data_retention_until` (which shouldn't be set
     on a paid plan), an active paid store is never purged. The
     plan filter is `inactive`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import purge_expired_stores
-    with flask_app.app_context():
+    with db_session():
         s = Store(
             name="Active-Paid", slug="active-paid",
             plan="basic",  # paid, not inactive
@@ -153,9 +153,8 @@ def test_purge_skips_active_paid_stores():
 
 def test_legacy_purge_expired_stores_delegates():
     """app.purge_expired_stores hands db.session to the Service."""
-    from tests._app import app as flask_app
     from tests._app import purge_expired_stores as legacy
-    with flask_app.app_context():
+    with db_session():
         # No expired stores → 0.
         assert legacy() == 0
 

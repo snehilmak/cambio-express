@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 
 from api.Modules.Auth.Models import PasswordResetToken
 from api.Modules.Tenancy.Models import Store, User
-from tests._app import db
+from tests._app import db, db_session
 
 
 _USER_COUNTER = 0
@@ -58,9 +58,9 @@ def _add_store(db, *, slug, plan="basic", is_active=True,
 
 def test_password_resets_classifies_used_expired_open():
     """Each token classified as Used / Expired / Open."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import password_resets
-    with flask_app.app_context():
+    with db_session():
         db.session.query(PasswordResetToken).delete()
         db.session.commit()
         u = _add_user(db.session, role="admin")
@@ -91,9 +91,9 @@ def test_password_resets_classifies_used_expired_open():
 
 def test_password_resets_handles_deleted_user():
     """Token whose user was deleted shows '(deleted)' username."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import password_resets
-    with flask_app.app_context():
+    with db_session():
         db.session.query(PasswordResetToken).delete()
         db.session.commit()
         # Insert a token referencing a user_id that doesn't exist.
@@ -112,9 +112,9 @@ def test_password_resets_handles_deleted_user():
 
 
 def test_password_resets_window_filter():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import password_resets
-    with flask_app.app_context():
+    with db_session():
         db.session.query(PasswordResetToken).delete()
         db.session.commit()
         u = _add_user(db.session, role="admin")
@@ -135,9 +135,9 @@ def test_password_resets_window_filter():
 
 
 def test_suspended_stores_includes_inactive_flag():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import suspended_stores
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ss-active", plan="basic",
@@ -158,9 +158,9 @@ def test_suspended_stores_includes_inactive_flag():
 def test_suspended_stores_reason_combines_flags():
     """A store with BOTH is_active=False AND plan=inactive should
     have both reasons in the row."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import suspended_stores
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ss-both",
@@ -177,9 +177,9 @@ def test_suspended_stores_reason_combines_flags():
 
 
 def test_retention_queue_only_includes_stores_with_until_set():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import retention_queue
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="rq-no-until", plan="basic",
@@ -197,9 +197,9 @@ def test_retention_queue_only_includes_stores_with_until_set():
 
 def test_retention_queue_ready_to_purge_when_days_negative():
     """When `until` is in the past, `ready_to_purge` is True."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services import retention_queue
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="rq-ready", plan="inactive",

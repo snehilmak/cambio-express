@@ -1,5 +1,5 @@
 """HTTP integration tests for the FeatureFlags Controllers."""
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -86,8 +86,7 @@ def test_create_rejects_extra_fields(client):
 
 
 def test_create_rejects_duplicate_key(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync")
     token = _login_superadmin(client)
     resp = client.post(
@@ -117,8 +116,7 @@ def test_create_persists_and_returns_row(client):
 
 
 def test_list_returns_alphabetic_by_key(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="zeta")
         _seed_flag(key="alpha")
         _seed_flag(key="mu")
@@ -132,8 +130,7 @@ def test_list_returns_alphabetic_by_key(client):
 
 
 def test_toggle_flips_default(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="bank_sync", enabled_by_default=True)
     token = _login_superadmin(client)
     resp = client.post(
@@ -157,8 +154,7 @@ def test_toggle_404_when_missing(client):
 
 def test_delete_removes_row(client):
     from api.Modules.Billing.Models import FeatureFlag
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_flag(key="zap_me")
     token = _login_superadmin(client)
     resp = client.delete(
@@ -166,7 +162,7 @@ def test_delete_removes_row(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(FeatureFlag).filter_by(key="zap_me").first() is None
 
 
@@ -174,8 +170,8 @@ def test_delete_cascades_per_store_overrides(client, test_store_id):
     """Deleting a flag cascades the per-store overrides — they
     reference the key string directly and would orphan otherwise."""
     from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         _seed_flag(key="targeted")
         db.session.add(StoreFeatureOverride(
             store_id=test_store_id, flag_key="targeted", enabled=True,
@@ -187,7 +183,7 @@ def test_delete_cascades_per_store_overrides(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(StoreFeatureOverride).filter_by(
             flag_key="targeted",
         ).first() is None
@@ -207,7 +203,6 @@ def test_delete_404_when_missing(client):
 
 def test_create_records_audit_entry(client):
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/feature-flags",
@@ -215,7 +210,7 @@ def test_create_records_audit_entry(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(SuperadminAuditLog).filter_by(
             action="create_feature_flag",
             target_id="audited_flag",

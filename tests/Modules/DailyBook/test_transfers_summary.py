@@ -2,7 +2,7 @@
 aggregates Transfer rows by company for the daily book's
 Money Transfers auto-fill view."""
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_transfer(store_id, **kwargs):
@@ -27,9 +27,9 @@ def _add_transfer(store_id, **kwargs):
 def test_summary_default_companies_when_no_transfers(test_store_id):
     """Empty day still returns one row per configured company so
     the React editor can render the auto-fill table consistently."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
-    with flask_app.app_context():
+    with db_session():
         summary = summarize_transfers_for_day(
             db.session, test_store_id, date.today(),
         )
@@ -46,10 +46,10 @@ def test_summary_default_companies_when_no_transfers(test_store_id):
 def test_summary_aggregates_by_company(test_store_id):
     """One transfer per company → each bucket carries its row's
     amount + fees + federal_tax + commission."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_transfer(test_store_id, company="Intermex", send_date=today,
                       send_amount=100, fee=5, federal_tax=1, commission=2)
         _add_transfer(test_store_id, company="Maxi", send_date=today,
@@ -69,10 +69,10 @@ def test_summary_aggregates_by_company(test_store_id):
 
 def test_summary_excludes_cancelled(test_store_id):
     """Cancelled transfers shouldn't poison the day's roll-up."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_transfer(test_store_id, company="Intermex", send_date=today,
                       send_amount=100, status="Sent")
         _add_transfer(test_store_id, company="Intermex", send_date=today,
@@ -89,10 +89,10 @@ def test_summary_carries_unknown_companies_alphabetically(test_store_id):
     """Historical Transfer rows with a company not in the current
     store config still surface — but after the configured list, in
     alphabetical order. Keeps the grand total honest."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import summarize_transfers_for_day
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _add_transfer(test_store_id, company="Zoom", send_date=today,
                       send_amount=50)
         _add_transfer(test_store_id, company="Ria", send_date=today,

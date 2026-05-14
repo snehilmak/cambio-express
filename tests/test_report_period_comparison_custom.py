@@ -3,13 +3,13 @@ period via `?compare_from=YYYY-MM-DD&compare_to=YYYY-MM-DD`. Both
 must be set; if either is missing or invalid the report falls back
 to the auto-prior same-length window."""
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"
         db.session.commit()
@@ -20,7 +20,7 @@ def _make_transfer(client, store_id, *, send_date, amount, fee=0.0,
                    confirm="X", status="Sent"):
     from api.Modules.Transfers.Models import Transfer
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         t = Transfer(
             store_id=store_id, send_date=send_date,
             sender_name="S", recipient_name="R",

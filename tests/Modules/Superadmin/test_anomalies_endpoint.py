@@ -4,7 +4,7 @@ Backed by `compute_platform_anomalies()` (existing Service). The
 endpoint is read-only and superadmin-scoped.
 """
 from datetime import date, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -59,12 +59,12 @@ def test_anomalies_surfaces_big_over_short(client, test_store_id):
     """A daily report with absolute over/short above the medium
     threshold should appear in the anomalies feed."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Superadmin.Services.anomalies import (
         ANOMALY_OVERSHORT_MEDIUM_THRESHOLD,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Seed a daily report with a big over/short variance
         r = DailyReport(
             store_id=test_store_id,

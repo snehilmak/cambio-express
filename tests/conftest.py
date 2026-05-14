@@ -29,7 +29,7 @@ _wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=
     _ORIG_HASH(pw, method=method, salt_length=salt_length)
 )
 
-from tests._app import app as flask_app, db
+from tests._app import db, db_session
 
 
 # ─────────────────────────────────────────────────────────────
@@ -107,8 +107,6 @@ def _close_fastapi_clients():
 # What's gone: the WSGI bridges that used to translate ``/api/v2``,
 # ``/app``, PublicRoutes, and cutover into Flask test_client. The
 # new client speaks ASGI natively; no a2wsgi in the request path.
-from tests._app import app as _flask_app_for_client  # noqa: E402
-
 from starlette.testclient import TestClient as _StarletteTestClient  # noqa: E402
 
 
@@ -193,14 +191,10 @@ class AsgiTestClient:
         ``follow_redirects``)
       * ``query_string`` (Flask flag; appended to the path)
 
-    ``application`` returns the live Flask app for the (now
-    shrinking) tests that need ``app_context()`` for direct DB
-    work. ``session_transaction()`` is removed — the SPA-cutover
-    redirects don't depend on the Flask session, and tests that
-    need auth use the JWT login helpers further down.
+    Tests that need a JWT use the ``login_*`` helpers further down.
+    Tests that need to scope ORM access import ``db_session`` from
+    ``tests._app``.
     """
-
-    application = _flask_app_for_client
 
     def _request(self, method: str, path: str, *,
                  headers=None, json=None, data=None, content=None,
@@ -278,7 +272,7 @@ def login_admin(client, store_id: int) -> str:
     """Log in as the seeded admin@test.com user (or whatever admin
     exists on `store_id`) and return the JWT."""
     from api.Modules.Tenancy.Models import User
-    with flask_app.app_context():
+    with db_session():
         u = (
             User.query
             .filter_by(store_id=store_id, role="admin")
@@ -360,7 +354,7 @@ def seed_test_data():
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    with flask_app.app_context():
+    with db_session():
         # Defensive cleanup: bare FastAPI TestClient instances in many
         # tests leak pending asyncio tasks ("Task was destroyed but it
         # is pending!") that hold references to SQLAlchemy sessions
@@ -413,7 +407,7 @@ def logged_in_client():
 def test_store_id():
     """The Store.id of the seeded test-store fixture row."""
     from api.Modules.Tenancy.Models import Store
-    with flask_app.app_context():
+    with db_session():
         return db.session.query(Store).filter_by(slug="test-store").first().id
 
 
@@ -421,7 +415,7 @@ def test_store_id():
 def test_admin_id():
     """The User.id of the seeded admin@test.com user."""
     from api.Modules.Tenancy.Models import User
-    with flask_app.app_context():
+    with db_session():
         return db.session.query(User).filter_by(username="admin@test.com").first().id
 
 
@@ -431,7 +425,7 @@ def make_employee_client(store_id, *, username_suffix="emp"):
     real JWT — tests using this pair the client with bearer-auth
     headers when hitting /api/v2/*."""
     from api.Modules.Tenancy.Models import User
-    with flask_app.app_context():
+    with db_session():
         username = f"{username_suffix}_{store_id}_{os.urandom(2).hex()}@test.com"
         emp = User(
             store_id=store_id, username=username,
@@ -454,7 +448,7 @@ def seed_transfer(store_id, creator_id, *, send_date=None,
     callers that need a specific tax value can .query the row and
     override after."""
     from api.Modules.Transfers.Models import Transfer
-    with flask_app.app_context():
+    with db_session():
         t = Transfer(
             store_id=store_id,
             created_by=creator_id,

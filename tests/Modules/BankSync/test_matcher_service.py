@@ -1,6 +1,6 @@
 """Unit tests for BankSync.Services.matcher (PR 70)."""
 from unittest.mock import MagicMock
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _rule(*, enabled=True, desc_match_type=None, desc_match_value=None,
@@ -174,9 +174,9 @@ def test_account_filter_unset_matches_any_account():
 
 def test_find_matching_rule_returns_none_when_no_rules():
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import find_matching_rule
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         assert find_matching_rule(db.session, 1, _txn()) is None
@@ -185,9 +185,9 @@ def test_find_matching_rule_returns_none_when_no_rules():
 def test_find_matching_rule_picks_lowest_priority_first():
     """priority=0 wins over priority=1 — even when both match."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import find_matching_rule
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         store_id = 99
@@ -213,9 +213,9 @@ def test_find_matching_rule_picks_lowest_priority_first():
 def test_find_matching_rule_skips_disabled_rules():
     """Disabled rules never match, regardless of priority."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import find_matching_rule
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         store_id = 100
@@ -240,9 +240,9 @@ def test_find_matching_rule_skips_disabled_rules():
 def test_find_matching_rule_filters_by_store():
     """Rules in a different store don't apply."""
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import find_matching_rule
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankRule).delete()
         db.session.commit()
         # Rule belongs to store 1; we query store 2.

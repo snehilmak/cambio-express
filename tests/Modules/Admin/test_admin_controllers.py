@@ -1,6 +1,6 @@
 """HTTP integration tests for the Admin Controllers."""
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _client():
@@ -139,8 +139,8 @@ def test_put_store_info_rejects_employee_role(client):
     """Cashier role can't update store info — only admin /
     owner / superadmin."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=None, username="employee_test_admin", role="employee",
             is_active=True,
@@ -164,7 +164,7 @@ def test_put_store_info_rejects_employee_role(client):
         )
         assert resp.status_code == 403
     finally:
-        with flask_app.app_context():
+        with db_session():
             u2 = db.session.query(User).filter_by(
                 username="employee_test_admin",
             ).first()
@@ -280,8 +280,8 @@ def test_team_update_404_for_cross_tenant(client, test_store_id):
 def test_team_endpoints_require_admin_role(client):
     """Cashier role can't manage roster."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=None, username="employee_team_admin",
             role="employee", is_active=True,
@@ -305,7 +305,7 @@ def test_team_endpoints_require_admin_role(client):
         )
         assert c.status_code == 403
     finally:
-        with flask_app.app_context():
+        with db_session():
             u2 = db.session.query(User).filter_by(
                 username="employee_team_admin",
             ).first()

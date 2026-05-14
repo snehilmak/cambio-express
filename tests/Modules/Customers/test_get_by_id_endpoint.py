@@ -1,6 +1,6 @@
 """HTTP integration tests for GET /customers/{customer_id}."""
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_customer(store_id, *, full_name, phone_number=""):
@@ -44,8 +44,7 @@ def _client():
 
 
 def test_get_customer_returns_envelope(test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(
             test_store_id, full_name="Alice", phone_number="5551234",
         )
@@ -70,8 +69,7 @@ def test_get_customer_404_for_missing(test_store_id):
 def test_get_customer_404_for_unrelated_store(test_store_id):
     """Stranger-store lookup returns 404 (the owner-umbrella security
     property — same as the search endpoint)."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         s2 = _seed_store("stranger-cgbi")
         cid = _seed_customer(s2, full_name="Hidden")
     resp = _client().get(
@@ -83,8 +81,7 @@ def test_get_customer_404_for_unrelated_store(test_store_id):
 def test_get_customer_finds_in_owner_umbrella(test_store_id):
     """Customer at sibling store under same owner is reachable, with
     `home_store_name` decoration so the UI can label "from Store X"."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         oid = _seed_owner()
         s2 = _seed_store("loc-cgbi", name="Sibling Loc")
         _link(oid, test_store_id)
@@ -101,8 +98,7 @@ def test_get_customer_finds_in_owner_umbrella(test_store_id):
 
 
 def test_get_customer_requires_store_id(test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         cid = _seed_customer(test_store_id, full_name="Alice")
     resp = _client().get(f"/customers/{cid}")
     assert resp.status_code == 422

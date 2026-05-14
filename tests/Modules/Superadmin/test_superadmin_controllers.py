@@ -2,7 +2,7 @@
 
 Mounts at /api/v2/superadmin/*. First slice ships the stores list.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -65,8 +65,8 @@ def test_stores_returns_seeded_test_store(client, test_store_id):
 def test_stores_lists_multiple_in_created_desc(client, test_store_id):
     """Creation order — newest first."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         db.session.add(Store(name="Alpha", slug="alpha", plan="basic"))
         db.session.add(Store(name="Beta",  slug="beta",  plan="pro"))
         db.session.commit()
@@ -134,8 +134,7 @@ def test_audit_log_rejects_admin_role(client, test_store_id):
 
 
 def test_audit_log_returns_paginated_envelope(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         for i in range(3):
             _seed_audit(action=f"act_{i}")
     token = _login_superadmin(client)
@@ -155,8 +154,7 @@ def test_audit_log_returns_paginated_envelope(client):
 
 
 def test_audit_log_orders_newest_first(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         oldest = _seed_audit(action="oldest")
         newest = _seed_audit(action="newest")
     token = _login_superadmin(client)
@@ -170,8 +168,7 @@ def test_audit_log_orders_newest_first(client):
 
 
 def test_audit_log_filters_by_action(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_audit(action="extend_trial")
         _seed_audit(action="comp_plan")
         _seed_audit(action="extend_trial")
@@ -185,8 +182,7 @@ def test_audit_log_filters_by_action(client):
 
 
 def test_audit_log_pagination(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         for i in range(5):
             _seed_audit(action=f"act_{i}")
     token = _login_superadmin(client)

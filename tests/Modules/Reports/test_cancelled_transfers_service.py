@@ -3,7 +3,7 @@ from datetime import date
 
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="ct-store"):
@@ -40,9 +40,9 @@ def _add_transfer(db, store_id, *, send_date, status="Canceled",
 
 
 def test_returns_rows_and_totals_tuple():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-shape")
@@ -55,9 +55,9 @@ def test_returns_rows_and_totals_tuple():
 
 
 def test_row_shape():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-row")
@@ -80,9 +80,9 @@ def test_row_shape():
 
 def test_active_transfers_excluded():
     """Sent / Pending transfers are NOT in the cancelled list."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-active")
@@ -104,9 +104,9 @@ def test_active_transfers_excluded():
 
 def test_includes_both_canceled_and_rejected():
     """Both Canceled and Rejected statuses surface."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-both")
@@ -135,9 +135,9 @@ def test_includes_both_canceled_and_rejected():
 def test_rows_sorted_send_date_descending():
     """Newest send_date first — operator wants the most recent
     cancellations on top."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-sort")
@@ -165,9 +165,9 @@ def test_rows_sorted_send_date_descending():
 
 
 def test_totals_count_amount_canceled_rejected():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-totals")
@@ -199,9 +199,9 @@ def test_totals_count_amount_canceled_rejected():
 def test_status_notes_passed_through():
     """The free-form notes field is exposed verbatim so the
     template can show why a transfer was cancelled."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-notes")
@@ -220,9 +220,9 @@ def test_status_notes_passed_through():
 
 
 def test_filters_by_store_list():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="ct-store-1")
@@ -243,9 +243,9 @@ def test_filters_by_store_list():
 
 
 def test_filters_by_send_date_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import cancelled_transfers
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ct-window")

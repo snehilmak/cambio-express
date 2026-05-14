@@ -8,7 +8,7 @@
 Mirrors the legacy /bank/rules/* form handlers but returns JSON
 envelopes the SPA renders directly.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client, store_id):
@@ -139,8 +139,8 @@ def test_create_rejects_account_from_other_store(client, test_store_id):
     """Cross-tenant safety: can't attach a rule to an account in
     another store."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Other", slug="other-rule",
                       email="o@x.com", plan="trial")
         db.session.add(other); db.session.commit()
@@ -182,8 +182,7 @@ def test_create_persists_and_returns_row(client, test_store_id):
 
 
 def test_update_changes_fields(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         rid = _seed_rule(test_store_id, target_kind="bank_charge_210")
     token = _login(client, test_store_id)
     resp = client.put(
@@ -203,8 +202,7 @@ def test_update_changes_fields(client, test_store_id):
 
 
 def test_toggle_flips_enabled(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         rid = _seed_rule(test_store_id, enabled=True)
     token = _login(client, test_store_id)
     resp = client.post(
@@ -218,8 +216,7 @@ def test_toggle_flips_enabled(client, test_store_id):
 
 def test_delete_removes_row(client, test_store_id):
     from api.Modules.BankSync.Models import BankRule
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         rid = _seed_rule(test_store_id)
     token = _login(client, test_store_id)
     resp = client.delete(
@@ -227,7 +224,7 @@ def test_delete_removes_row(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(BankRule).filter_by(id=rid).first() is None
 
 
@@ -236,8 +233,8 @@ def test_delete_removes_row(client, test_store_id):
 
 def test_update_404_for_other_stores_rule(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="X", slug="x-rule", plan="trial")
         db.session.add(other); db.session.commit()
         rid = _seed_rule(other.id)
@@ -252,8 +249,8 @@ def test_update_404_for_other_stores_rule(client, test_store_id):
 
 def test_toggle_404_for_other_stores_rule(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Y", slug="y-rule", plan="trial")
         db.session.add(other); db.session.commit()
         rid = _seed_rule(other.id)
@@ -268,8 +265,8 @@ def test_toggle_404_for_other_stores_rule(client, test_store_id):
 
 def test_delete_404_for_other_stores_rule(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         other = Store(name="Z", slug="z-rule", plan="trial")
         db.session.add(other); db.session.commit()
         rid = _seed_rule(other.id)

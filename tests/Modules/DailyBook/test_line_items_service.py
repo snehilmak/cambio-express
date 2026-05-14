@@ -2,7 +2,7 @@
 from datetime import date, time, timedelta
 
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_return_check_linked_item(store_id):
@@ -70,10 +70,10 @@ def test_parse_amount_rejects_zero_negative_garbage():
 
 def test_add_line_item_inserts_row(test_store_id):
     from api.Modules.DailyBook.Models import DailyLineItem
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import add_line_item
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         row = add_line_item(
             db.session,
             store_id=test_store_id, report_date=today,
@@ -89,10 +89,10 @@ def test_add_line_item_inserts_row(test_store_id):
 
 
 def test_add_line_item_truncates_long_note(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import add_line_item
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         row = add_line_item(
             db.session,
             store_id=test_store_id, report_date=today,
@@ -104,11 +104,11 @@ def test_add_line_item_truncates_long_note(test_store_id):
 
 
 def test_add_line_item_with_allowed_kinds_filter_rejects_unknown(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         LineItemValidationError, add_line_item,
     )
-    with flask_app.app_context():
+    with db_session():
         with pytest.raises(LineItemValidationError):
             add_line_item(
                 db.session,
@@ -123,12 +123,12 @@ def test_add_line_item_with_allowed_kinds_filter_rejects_unknown(test_store_id):
 
 def test_delete_line_item_removes_row(test_store_id):
     from api.Modules.DailyBook.Models import DailyLineItem
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         add_line_item, delete_line_item,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         row = add_line_item(
             db.session,
             store_id=test_store_id, report_date=today,
@@ -145,11 +145,11 @@ def test_delete_line_item_blocks_return_check_linked(test_store_id):
     """A line item created from a Return-Check payment can't be
     deleted via the daily-book delete path — the daily book stays in
     sync with the Return Checks page."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         LineItemValidationError, delete_line_item,
     )
-    with flask_app.app_context():
+    with db_session():
         li = _seed_return_check_linked_item(test_store_id)
         with pytest.raises(LineItemValidationError) as exc:
             delete_line_item(db.session, li)
@@ -160,9 +160,9 @@ def test_delete_line_item_allows_return_check_when_flag_set(test_store_id):
     """The Return-Checks-side delete path passes
     `allow_return_check_linked=True` to bypass the gate."""
     from api.Modules.DailyBook.Models import DailyLineItem
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import delete_line_item
-    with flask_app.app_context():
+    with db_session():
         li = _seed_return_check_linked_item(test_store_id)
         rid = li.id
         delete_line_item(
@@ -179,12 +179,12 @@ def test_recompute_sums_kind_and_writes_back(test_store_id):
     """Σ DailyLineItem.amount where kind matches → DailyReport
     field. Other kinds + other dates ignored."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import (
         add_line_item, recompute_line_items_total,
     )
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Three cash_expense lines today (10 + 20 + 5 = 35.0)
         for amt in (10.0, 20.0, 5.0):
             add_line_item(
@@ -227,10 +227,10 @@ def test_recompute_zeroes_field_when_no_line_items(test_store_id):
     """If all line items of a kind are deleted, the recompute pushes
     0.0 onto the field — clearing stale totals."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import recompute_line_items_total
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         # Seed a DailyReport with a non-zero cash_expense (simulating
         # an old recompute) but no line items
         rpt = DailyReport(
@@ -252,10 +252,10 @@ def test_recompute_zeroes_field_when_no_line_items(test_store_id):
 def test_recompute_creates_report_if_missing(test_store_id):
     """Recompute calls ensure_daily_report — empty days get a row."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.DailyBook.Services import recompute_line_items_total
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         recompute_line_items_total(
             db.session, test_store_id, today,
             kind="cash_expense", daily_report_field="cash_expense",

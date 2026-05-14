@@ -7,13 +7,13 @@ distinction matters for stores where one admin logs transfers on
 behalf of multiple cashiers.
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
@@ -25,7 +25,7 @@ def _admin_login(client, store_id):
 def _make_employee(client, store_id, *, name, is_active=True):
     from api.Modules.Tenancy.Models import StoreEmployee
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         e = StoreEmployee(store_id=store_id, name=name, is_active=is_active)
         db.session.add(e); db.session.commit()
         return e.id
@@ -35,7 +35,7 @@ def _make_transfer(client, store_id, *, send_date, amount, fee=2.0,
                    employee_id=None, employee_name=""):
     from api.Modules.Transfers.Models import Transfer
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         t = Transfer(
             store_id=store_id, send_date=send_date,
             sender_name="S", recipient_name="R",

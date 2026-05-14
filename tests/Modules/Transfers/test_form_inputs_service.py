@@ -2,7 +2,7 @@
 from datetime import date
 
 from api.Modules.Tenancy.Models import Store, StoreEmployee
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="form-store"):
@@ -61,9 +61,9 @@ def test_parse_dob_handles_extra_whitespace():
 def test_active_roster_returns_only_active_employees():
     """Inactive cashiers are hidden from the dropdown so new
     transfers can't be credited to former employees."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import active_roster
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-active")
@@ -79,9 +79,9 @@ def test_active_roster_returns_only_active_employees():
 
 
 def test_active_roster_sorted_alphabetically():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import active_roster
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-sort")
@@ -94,9 +94,9 @@ def test_active_roster_sorted_alphabetically():
 
 def test_active_roster_filters_by_store():
     """Cross-store cashiers don't appear."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import active_roster
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.query(Store).filter(Store.slug.like("roster-x-%")).delete()
         db.session.commit()
@@ -112,9 +112,9 @@ def test_active_roster_filters_by_store():
 
 
 def test_active_roster_empty_when_no_active():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import active_roster
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-empty")
@@ -128,9 +128,9 @@ def test_active_roster_empty_when_no_active():
 
 
 def test_pick_employee_returns_employee_and_name():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pick-1")
@@ -143,9 +143,9 @@ def test_pick_employee_returns_employee_and_name():
 
 def test_pick_employee_int_id_works():
     """Form posts strings, but defensive: int input also works."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pick-int")
@@ -156,9 +156,9 @@ def test_pick_employee_int_id_works():
 
 
 def test_pick_employee_blank_returns_none():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="pick-blank")
         emp, name = pick_employee(db.session, s.id, "")
         assert emp is None
@@ -170,9 +170,9 @@ def test_pick_employee_blank_returns_none():
 
 def test_pick_employee_bad_int_returns_none():
     """Non-numeric input shouldn't crash."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="pick-bad")
         emp, name = pick_employee(db.session, s.id, "not-a-number")
         assert emp is None
@@ -182,9 +182,9 @@ def test_pick_employee_bad_int_returns_none():
 def test_pick_employee_rejects_cross_store():
     """An attacker submitting another store's employee_id gets
     None back — the SQL filter on store_id is the gate."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreEmployee).delete()
         db.session.query(Store).filter(Store.slug.like("pick-cross-%")).delete()
         db.session.commit()
@@ -200,9 +200,9 @@ def test_pick_employee_rejects_cross_store():
 
 
 def test_pick_employee_unknown_id_returns_none():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Transfers.Services import pick_employee
-    with flask_app.app_context():
+    with db_session():
         s = _add_store(db.session, slug="pick-unknown")
         emp, name = pick_employee(db.session, s.id, "999999")
         assert emp is None

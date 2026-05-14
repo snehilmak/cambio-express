@@ -1,6 +1,6 @@
 """HTTP integration tests for /api/v2/owner/pl-rollup."""
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",
@@ -84,8 +84,7 @@ def test_pl_rollup_rejects_admin_role(client, test_store_id):
 
 
 def test_pl_rollup_rejects_invalid_month(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-pl@example.com", pw)
     resp = client.get(
@@ -97,8 +96,7 @@ def test_pl_rollup_rejects_invalid_month(client):
 
 def test_pl_rollup_returns_envelope_for_unlinked_owner(client):
     """An owner with no linked stores still gets a valid envelope."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss-pl@example.com", pw)
     resp = client.get(
@@ -115,8 +113,7 @@ def test_pl_rollup_returns_envelope_for_unlinked_owner(client):
 
 
 def test_pl_rollup_lists_per_store_with_totals(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Alpha", store_slug="alpha-pl")
         s2 = _link(owner_id, store_name="Beta",  store_slug="beta-pl")
@@ -145,8 +142,7 @@ def test_pl_rollup_lists_per_store_with_totals(client):
 def test_pl_rollup_marks_missing_pl_rows_with_has_pl_false(client):
     """A store without a MonthlyFinancial row for the requested
     period gets has_pl=False + zero values."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         _link(owner_id, store_name="Empty", store_slug="empty-pl")
     token = _login_owner(client, "boss-pl@example.com", pw)
@@ -160,8 +156,7 @@ def test_pl_rollup_marks_missing_pl_rows_with_has_pl_false(client):
 
 
 def test_pl_rollup_year_choices_includes_distinct_years(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="A", store_slug="a-pl")
         _seed_pl(s1, 2024, 6, revenue=10.0)
@@ -182,8 +177,8 @@ def test_pl_rollup_year_choices_includes_distinct_years(client):
 
 def test_pl_rollup_excludes_unrelated_stores(client):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Mine", store_slug="mine-pl")
         _seed_pl(s1, 2026, 3, revenue=100.0)

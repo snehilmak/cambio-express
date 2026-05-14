@@ -5,7 +5,7 @@ boolean prefs + a `trial_toggle_applies` flag the SPA uses to
 render the trial-reminder toggle as interactive vs informational.
 PUT applies changes; both fields are optional.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -54,8 +54,8 @@ def test_notifications_trial_toggle_off_for_paid_store(
     """Admin on a paid plan: trial reminder is informational
     (toggle is shown disabled in the SPA)."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.plan = "basic"
         db.session.commit()
@@ -72,8 +72,8 @@ def test_notifications_trial_toggle_off_for_employee(
 ):
     """Employees don't own a trial — toggle never applies."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=test_store_id, username="cashier-pref@x.com",
             full_name="Cashier", role="employee",
@@ -83,8 +83,7 @@ def test_notifications_trial_toggle_off_for_employee(
         uid = u.id
     # Issue a JWT directly — the API login path rejects employees
     # via cross-store, so we mint the token from the issuer.
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         from api.Modules.Auth.Services.jwt_issuer import (
             JWTIssuer, issue_access_token,
         )
@@ -111,7 +110,6 @@ def test_notifications_update_persists_trial_pref(
     """Trial pref defaults True; flip it off via PUT and confirm
     persistence."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -119,7 +117,7 @@ def test_notifications_update_persists_trial_pref(
         headers={"Authorization": f"Bearer {token}"},
     ).get_json()
     assert body["notify_trial_reminders"] is False
-    with flask_app.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_trial_reminders is False
         # Untouched field stays at its prior value.
@@ -130,7 +128,6 @@ def test_notifications_update_persists_announcement_pref(
     client, test_store_id,
 ):
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     body = client.put(
         "/api/v2/auth/notifications",
@@ -138,7 +135,7 @@ def test_notifications_update_persists_announcement_pref(
         headers={"Authorization": f"Bearer {token}"},
     ).get_json()
     assert body["notify_announcement_email"] is True
-    with flask_app.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_announcement_email is True
 
@@ -165,7 +162,6 @@ def test_notifications_update_partial_leaves_others_alone(
 ):
     """Updating one pref doesn't reset the other."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app
     token = _login(client, test_store_id)
     # Set both first.
     client.put(
@@ -185,7 +181,7 @@ def test_notifications_update_partial_leaves_others_alone(
     # Trial pref is untouched.
     assert body["notify_trial_reminders"] is True
     assert body["notify_announcement_email"] is False
-    with flask_app.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_trial_reminders is True
         assert u.notify_announcement_email is False

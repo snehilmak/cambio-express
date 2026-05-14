@@ -4,7 +4,7 @@ Mounts at /api/v2/announcements/*. Superadmin-scoped CRUD over the
 global banner the legacy /superadmin/controls page already manages.
 """
 from datetime import datetime, timedelta
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login_admin(client, store_id):
@@ -122,8 +122,7 @@ def test_create_returns_row_and_persists(client):
 
 
 def test_list_returns_newest_first(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         old_id = _seed(message="oldest")
         new_id = _seed(message="newest")
     token = _login_superadmin(client)
@@ -137,8 +136,7 @@ def test_list_returns_newest_first(client):
 
 
 def test_list_marks_expired_as_not_visible(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         past = datetime.utcnow() - timedelta(days=1)
         _seed(message="dead", expires_at=past)
     token = _login_superadmin(client)
@@ -151,8 +149,7 @@ def test_list_marks_expired_as_not_visible(client):
 
 
 def test_toggle_flips_is_active(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         ann_id = _seed(message="x", is_active=True)
     token = _login_superadmin(client)
     resp = client.post(
@@ -176,8 +173,7 @@ def test_toggle_404_when_missing(client):
 
 def test_delete_removes_row(client):
     from api.Modules.Announcements.Models import Announcement
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         ann_id = _seed(message="zap")
     token = _login_superadmin(client)
     resp = client.delete(
@@ -185,7 +181,7 @@ def test_delete_removes_row(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 204
-    with flask_app.app_context():
+    with db_session():
         assert db.session.query(Announcement).filter_by(id=ann_id).first() is None
 
 
@@ -205,7 +201,6 @@ def test_create_records_audit_entry(client):
     """Every superadmin mutation must record_audit (CLAUDE.md
     invariant #7). Confirms the Controller calls it."""
     from api.Modules.Audit.Models import SuperadminAuditLog
-    from tests._app import app as flask_app
     token = _login_superadmin(client)
     resp = client.post(
         "/api/v2/announcements",
@@ -213,7 +208,7 @@ def test_create_records_audit_entry(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 201
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(SuperadminAuditLog).filter_by(
             action="create_announcement",
         ).all()

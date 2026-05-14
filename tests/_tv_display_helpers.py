@@ -11,7 +11,7 @@ seed a country (or a country + bank + rates) don't have to re-litigate
 the form-vs-JSON contract themselves.
 """
 from __future__ import annotations
-from tests._app import db
+from tests._app import db, db_session
 
 
 def admin_jwt(client, store_id: int, *, username: str = "admin@test.com",
@@ -36,8 +36,8 @@ def ensure_display(client, store_id: int, jwt: str | None = None) -> int:
         headers={"Authorization": f"Bearer {jwt}"},
     )
     from api.Modules.TVDisplay.Models import TVDisplay
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         return db.session.query(TVDisplay).filter_by(
             store_id=store_id).one().id
 

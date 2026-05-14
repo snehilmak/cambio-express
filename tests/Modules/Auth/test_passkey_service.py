@@ -1,6 +1,6 @@
 """Unit tests for Auth.Services.passkey (PR 63)."""
 from unittest.mock import MagicMock
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── rp_id ──────────────────────────────────────────────────
@@ -70,9 +70,9 @@ def test_origin_preserves_port():
 def test_exclude_credentials_returns_descriptors_for_user():
     from api.Modules.Auth.Models import Passkey
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import passkey_exclude_credentials
-    with flask_app.app_context():
+    with db_session():
         # Create a user + 2 passkeys
         u = User(
             username="passkey-user@test.com",
@@ -101,9 +101,9 @@ def test_exclude_credentials_returns_descriptors_for_user():
 
 def test_exclude_credentials_empty_for_user_without_passkeys():
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import passkey_exclude_credentials
-    with flask_app.app_context():
+    with db_session():
         u = User(
             username="no-passkey@test.com",
             password_hash="x", role="admin",

@@ -1,12 +1,13 @@
-"""Smoke-test infrastructure: a real Flask HTTP server + Playwright.
+"""Smoke-test infrastructure: a real HTTP server + Playwright.
 
-The unit/integration suite uses Flask's test_client which never executes
-JavaScript — that's how silent JS errors in chrome (e.g. owner avatar
-dropdown wiring missing the `.is-open` class toggle, search.js loading
-deferred while inline scripts depended on it synchronously) shipped to
-production. This layer fills the gap by spinning up a real
-Werkzeug HTTP server and driving it through a headless Chromium so any
-uncaught JS error fails a test.
+The unit/integration suite uses ``starlette.testclient.TestClient``
+sitting on the ASGI app, which never executes JavaScript — that's
+how silent JS errors in chrome (e.g. owner avatar dropdown wiring
+missing the `.is-open` class toggle, search.js loading deferred
+while inline scripts depended on it synchronously) shipped to
+production. This layer fills the gap by spinning up a real uvicorn
+server on top of ``asgi.asgi_app`` and driving it through a
+headless Chromium so any uncaught JS error fails a test.
 
 Design choices:
 - Session-scoped server. Cheap to start once, expensive to start per
@@ -29,7 +30,7 @@ import threading
 import time
 
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── Skip the whole module if Playwright/Chromium aren't installed ──
@@ -60,18 +61,19 @@ def _free_port():
 
 @pytest.fixture(scope="session")
 def smoke_server(tmp_path_factory):
-    """Boot Flask in a daemon thread bound to a tempfile SQLite.
+    """Boot uvicorn in a daemon thread bound to a tempfile SQLite.
     Yields a base URL for Playwright to point at; shuts the server
     down when the session ends."""
+    import uvicorn
+
     db_path = tmp_path_factory.mktemp("smoke") / "smoke.db"
-    # Force the app's DATABASE_URL to our smoke DB. The `app` module
-    # is already imported by the parent conftest at this point, so we
-    # have to re-bind SQLAlchemy's engine. Set the env var so anything
-    # that reads it later sees the right value, then dispose the
-    # cached engine so the next bind uses the new URI.
+    # Force the app's DATABASE_URL to our smoke DB. The ``asgi``
+    # module is already imported by the parent conftest at this
+    # point, so we have to re-bind SQLAlchemy's engine. Set the env
+    # var so anything that reads it later sees the right value, then
+    # dispose the cached engine so the next bind uses the new URI.
     os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    with db_session():
         db.engine.dispose()
         db.create_all()
         # Seed the same fixture data the unit conftest creates so
@@ -79,12 +81,16 @@ def smoke_server(tmp_path_factory):
         from tests.conftest import seed_test_data
         seed_test_data()
 
+    from asgi import asgi_app
     port = _free_port()
-    from werkzeug.serving import make_server
-    srv = make_server("127.0.0.1", port, flask_app, threaded=True)
-    t = threading.Thread(target=srv.serve_forever, daemon=True)
+    config = uvicorn.Config(
+        asgi_app, host="127.0.0.1", port=port,
+        log_level="warning", lifespan="off",
+    )
+    srv = uvicorn.Server(config)
+    t = threading.Thread(target=srv.run, daemon=True)
     t.start()
-    # Spin until the port responds — make_server returns before the
+    # Spin until the port responds — uvicorn returns before the
     # listener is fully ready, and Playwright fails fast.
     deadline = time.time() + 5
     while time.time() < deadline:
@@ -94,7 +100,8 @@ def smoke_server(tmp_path_factory):
         except OSError:
             time.sleep(0.05)
     yield f"http://127.0.0.1:{port}"
-    srv.shutdown()
+    srv.should_exit = True
+    t.join(timeout=2)
 
 
 @pytest.fixture(scope="session")
@@ -170,8 +177,7 @@ def owner_page(page, smoke_server):
     """A `page` signed in as a freshly-created owner with one linked
     store. Created on demand inside the smoke DB."""
     from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    with db_session():
         # Idempotent: reuse if a previous test already created this owner.
         existing = db.session.query(User).filter_by(username="owner-smoke@x.com").first()
         if existing:

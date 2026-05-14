@@ -3,7 +3,7 @@
 After SPA-29 the endpoint derives `store_id` from the JWT
 principal — explicit `store_ids` query params are gone.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client, store_id):
@@ -67,8 +67,7 @@ def test_rules_endpoint_returns_empty_envelope(client, test_store_id):
 
 
 def test_rules_endpoint_lists_rules_in_priority_order(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         r_low = _seed_rule(test_store_id, priority=100,
                            desc_match_value="LOW")
         r_high = _seed_rule(test_store_id, priority=10,
@@ -85,8 +84,7 @@ def test_rules_endpoint_lists_rules_in_priority_order(client, test_store_id):
 
 
 def test_rules_endpoint_enabled_only_filter(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         r_on = _seed_rule(test_store_id, desc_match_value="ON",
                           enabled=True)
         _seed_rule(test_store_id, desc_match_value="OFF", enabled=False)
@@ -103,8 +101,7 @@ def test_rules_endpoint_enabled_only_filter(client, test_store_id):
 def test_rules_endpoint_decorates_account_filter_label(client, test_store_id):
     """Rules with account_filter_id get the label decorated so the
     UI doesn't follow the FK separately."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         a = _seed_account(test_store_id, last4="9999",
                           nickname="Operating")
         _seed_rule(test_store_id, desc_match_value="X",
@@ -122,8 +119,8 @@ def test_rules_endpoint_decorates_account_filter_label(client, test_store_id):
 
 def test_rules_endpoint_excludes_other_stores(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         s2 = Store(name="Other", slug="other-rules",
                    email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()

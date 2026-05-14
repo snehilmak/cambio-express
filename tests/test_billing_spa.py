@@ -10,13 +10,13 @@ billing page both 301 to React. The SPA fetches:
 
 Two Jinja templates retired (admin_subscription.html, subscribe.html).
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
@@ -77,13 +77,13 @@ def test_subscription_summary_trial_store_shows_trial_state(
     trial_days_left for the SPA's plan-hero meta line."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.plan = "trial"
         db.session.commit()
     _admin_session_login(client, test_store_id)
     # Re-set plan back to trial after admin_session_login flipped it.
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.plan = "trial"
         db.session.commit()

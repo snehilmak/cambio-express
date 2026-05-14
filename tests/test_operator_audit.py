@@ -7,13 +7,13 @@ Covers:
   - Employee role can't view the log (admin-only by decorator)
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _admin_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
@@ -51,8 +51,7 @@ def test_daily_report_lock_writes_audit(client, test_store_id):
     )
     assert resp.status_code == 200, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, action="lock").all()
         assert len(rows) == 1
@@ -70,8 +69,7 @@ def test_daily_report_unlock_writes_audit(client, test_store_id):
     client.post(f"/api/v2/daily/{test_store_id}/{today}/lock", headers=headers)
     client.post(f"/api/v2/daily/{test_store_id}/{today}/unlock", headers=headers)
     from api.Modules.Audit.Models import OperatorAuditLog
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         actions = [r.action for r in db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="daily_report").all()]
         assert "lock"   in actions
@@ -114,8 +112,7 @@ def test_new_batch_writes_create_audit(client, test_store_id):
     )
     assert resp.status_code == 201, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="batch", action="create").all()
         assert len(rows) == 1
@@ -129,8 +126,8 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
     /api/v2/batches/<id>."""
     _admin_login(client, test_store_id)
     from api.Modules.Batches.Models import ACHBatch
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         b = ACHBatch(store_id=test_store_id, ach_date=date.today(),
                      company="Maxi", batch_ref="B-EDIT",
                      ach_amount=500.0, status="Pending")
@@ -153,7 +150,7 @@ def test_edit_batch_writes_update_audit(client, test_store_id):
     )
     assert resp.status_code == 200, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="batch", action="update").all()
         assert len(rows) == 1
@@ -168,8 +165,8 @@ def test_delete_transfer_writes_audit(client, test_store_id):
     with the same label format."""
     _admin_login(client, test_store_id)
     from api.Modules.Transfers.Models import Transfer
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         t = Transfer(
             store_id=test_store_id, send_date=date.today(),
             sender_name="DeleteMe Sender",
@@ -186,7 +183,7 @@ def test_delete_transfer_writes_audit(client, test_store_id):
     )
     assert resp.status_code == 204, resp.get_data(as_text=True)
     from api.Modules.Audit.Models import OperatorAuditLog
-    with flask_app.app_context():
+    with db_session():
         rows = db.session.query(OperatorAuditLog).filter_by(
             store_id=test_store_id, target_type="transfer", action="delete").all()
         assert len(rows) == 1
@@ -226,7 +223,7 @@ def test_audit_log_employee_role_blocked(client, test_store_id):
     """Employees can't see the activity log — admin_required gates."""
     from api.Modules.Tenancy.Models import User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = User(username="cashier@audit.com", store_id=test_store_id,
                  role="employee", full_name="Cashier")
         u.set_password("p"); db.session.add(u); db.session.commit()

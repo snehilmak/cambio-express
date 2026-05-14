@@ -1,6 +1,6 @@
 """Unit tests for `Auth.Services.login.authenticate_password`."""
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_user(store_id, *, username, password, role="employee",
@@ -46,9 +46,9 @@ def test_permissions_for_unknown_role_is_empty():
 
 
 def test_authenticate_password_returns_login_result(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import authenticate_password
-    with flask_app.app_context():
+    with db_session():
         result = authenticate_password(
             db.session, store_id=test_store_id,
             username="admin@test.com", password="testpass123!",
@@ -62,10 +62,10 @@ def test_authenticate_password_returns_login_result(test_store_id):
 
 
 def test_authenticate_password_rejects_bad_password(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import authenticate_password
     from api.Modules.Auth.Services.login import AuthenticationError
-    with flask_app.app_context():
+    with db_session():
         with pytest.raises(AuthenticationError):
             authenticate_password(
                 db.session, store_id=test_store_id,
@@ -74,10 +74,10 @@ def test_authenticate_password_rejects_bad_password(test_store_id):
 
 
 def test_authenticate_password_rejects_unknown_user(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import authenticate_password
     from api.Modules.Auth.Services.login import AuthenticationError
-    with flask_app.app_context():
+    with db_session():
         with pytest.raises(AuthenticationError):
             authenticate_password(
                 db.session, store_id=test_store_id,
@@ -89,10 +89,10 @@ def test_authenticate_password_rejects_disabled_user(test_store_id):
     """Disabled accounts must fail with the same exception as an
     unknown user — never leak "account exists but is disabled" via
     the response shape."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import authenticate_password
     from api.Modules.Auth.Services.login import AuthenticationError
-    with flask_app.app_context():
+    with db_session():
         _seed_user(
             test_store_id, username="quit@x.com", password="p",
             is_active=False,
@@ -111,14 +111,14 @@ def test_authenticate_password_finds_superadmin_with_none_store_id():
     real access token without a manual enrolment hop. The
     authenticate_password call therefore returns a pending result
     with `enroll_required=False`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         LoginPendingResult, authenticate_password,
     )
     from api.Modules.Auth.Services.jwt_issuer import (
         decode_pending_2fa_token,
     )
-    with flask_app.app_context():
+    with db_session():
         result = authenticate_password(
             db.session, store_id=None,
             username="superadmin", password="super2025!",
@@ -132,11 +132,11 @@ def test_authenticate_password_finds_superadmin_with_none_store_id():
 def test_authenticate_password_token_carries_role_and_perms_claims(test_store_id):
     """End-to-end: the JWT we mint round-trips with the same role +
     permissions claims that the LoginResult carries."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         authenticate_password, decode_access_token,
     )
-    with flask_app.app_context():
+    with db_session():
         result = authenticate_password(
             db.session, store_id=test_store_id,
             username="admin@test.com", password="testpass123!",
@@ -151,10 +151,10 @@ def test_authenticate_password_token_carries_role_and_perms_claims(test_store_id
 
 
 def test_login_response_schema_validates(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import authenticate_password
     from api.Modules.Auth.Requests import LoginResponse
-    with flask_app.app_context():
+    with db_session():
         result = authenticate_password(
             db.session, store_id=test_store_id,
             username="admin@test.com", password="testpass123!",
@@ -195,9 +195,9 @@ def test_login_request_schema_rejects_empty_username():
 def test_verify_password_cross_store_returns_user_on_success(test_store_id):
     """Used by the legacy Flask /login page (which doesn't know which
     store the user belongs to before the password check)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         u = verify_password_cross_store(
             db.session, "admin@test.com", "testpass123!",
         )
@@ -207,9 +207,9 @@ def test_verify_password_cross_store_returns_user_on_success(test_store_id):
 
 
 def test_verify_password_cross_store_returns_none_on_bad_password(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         u = verify_password_cross_store(
             db.session, "admin@test.com", "wrong",
         )
@@ -217,9 +217,9 @@ def test_verify_password_cross_store_returns_none_on_bad_password(test_store_id)
 
 
 def test_verify_password_cross_store_returns_none_for_unknown_user():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         u = verify_password_cross_store(
             db.session, "ghost@x.com", "anything",
         )
@@ -230,9 +230,9 @@ def test_verify_password_cross_store_rejects_disabled_user(test_store_id):
     """Disabled accounts must fail the same way as wrong password —
     no enumeration of "exists but disabled" via the response."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         u_obj = User(
             store_id=test_store_id, username="quit-vp@x.com",
             role="employee", is_active=False,
@@ -248,9 +248,9 @@ def test_verify_password_cross_store_rejects_disabled_user(test_store_id):
 def test_verify_password_cross_store_finds_superadmin():
     """Cross-store lookup must include the superadmin (which has
     store_id=None)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         u = verify_password_cross_store(
             db.session, "superadmin", "super2025!",
         )
@@ -261,9 +261,9 @@ def test_verify_password_cross_store_finds_superadmin():
 def test_verify_password_cross_store_handles_empty_inputs():
     """Defensive: empty username or password short-circuits to None
     instead of fishing the DB."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import verify_password_cross_store
-    with flask_app.app_context():
+    with db_session():
         assert verify_password_cross_store(db.session, "", "x") is None
         assert verify_password_cross_store(db.session, "x", "") is None
         assert verify_password_cross_store(db.session, "", "") is None

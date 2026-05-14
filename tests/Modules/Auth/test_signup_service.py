@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 import pytest
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── create_store_and_admin ──────────────────────────────────
@@ -10,9 +10,9 @@ from tests._app import db
 
 def test_signup_creates_store_and_admin():
     from api.Modules.Tenancy.Models import Store, User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         result = create_store_and_admin(
             db.session,
             store_name="Maria Cambio",
@@ -35,9 +35,9 @@ def test_signup_creates_store_and_admin():
 
 def test_signup_unique_slug_collision_appends_counter():
     """Two stores with the same name should get distinct slugs."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         first = create_store_and_admin(
             db.session,
             store_name="Cambio Express",
@@ -57,9 +57,9 @@ def test_signup_unique_slug_collision_appends_counter():
 
 def test_signup_sets_trial_window_defaults():
     """Default trial = 7 days; grace = 4 days after trial."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         result = create_store_and_admin(
             db.session,
             store_name="Trial Test",
@@ -76,9 +76,9 @@ def test_signup_sets_trial_window_defaults():
 
 
 def test_signup_respects_custom_trial_window():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         result = create_store_and_admin(
             db.session,
             store_name="Custom",
@@ -93,9 +93,9 @@ def test_signup_respects_custom_trial_window():
 
 
 def test_signup_records_referral_when_passed():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         result = create_store_and_admin(
             db.session,
             store_name="Referred",
@@ -108,11 +108,11 @@ def test_signup_records_referral_when_passed():
 
 
 def test_signup_rejects_existing_email():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         SignupConflictError, create_store_and_admin,
     )
-    with flask_app.app_context():
+    with db_session():
         create_store_and_admin(
             db.session,
             store_name="First",
@@ -134,9 +134,9 @@ def test_signup_does_not_collide_with_superadmin_username():
     so the superadmin (`store_id IS NULL`) doesn't block per-store
     signups."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         # Per the conftest seed, "superadmin" exists with store_id=None.
         # If a real user wanted username="superadmin", the per-store
         # uniqueness rules don't conflict — but the more realistic case
@@ -161,9 +161,9 @@ def test_signup_does_not_collide_with_superadmin_username():
 
 def test_signup_handles_special_chars_in_store_name():
     """slugify normalises Unicode + punctuation."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import create_store_and_admin
-    with flask_app.app_context():
+    with db_session():
         result = create_store_and_admin(
             db.session,
             store_name="José's Cambio (#1) — Tucson!",

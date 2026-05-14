@@ -4,7 +4,7 @@ from datetime import date
 from api.Modules.Customers.Models import Customer
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _add_store(db, *, slug="cs-store"):
@@ -53,9 +53,9 @@ def _add_transfer(db, store_id, *, send_date, customer_id=None,
 def test_returns_rows_and_totals_tuple():
     """Service returns (rows, totals); rows include New senders +
     Returning senders always, walk-in only when present."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-shape")
@@ -77,9 +77,9 @@ def test_returns_rows_and_totals_tuple():
 
 def test_walkin_row_only_present_when_walkins_exist():
     """No walkins → only 2 rows. Walkins → 3 rows."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-walkin-omit")
@@ -111,9 +111,9 @@ def test_new_sender_no_prior_transfers():
     """A customer with NO transfers before d_from is a 'new sender'
     in the period (regardless of how many transfers they made
     inside the window)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-new")
@@ -142,9 +142,9 @@ def test_new_sender_no_prior_transfers():
 def test_returning_sender_has_prior_transfer():
     """A customer with at least one transfer BEFORE d_from is
     'returning' in the period."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-returning")
@@ -174,9 +174,9 @@ def test_walkin_classified_separately_each_visit_unique():
     """Each walk-in transfer counts as 1 customer (we can't dedupe
     across visits when customer_id is NULL). Two walk-in transfers
     → customers=2."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-walkin-count")
@@ -205,9 +205,9 @@ def test_walkin_classified_separately_each_visit_unique():
 def test_prior_check_respects_store_list():
     """Prior transfers in OTHER stores don't make a sender
     'returning' for the queried store."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="cs-store-a")
@@ -236,9 +236,9 @@ def test_prior_check_respects_store_list():
 def test_excluded_status_transfers_not_counted_in_period():
     """Canceled / Rejected transfers are excluded from the period
     query (they don't count as activity)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-excluded")
@@ -259,9 +259,9 @@ def test_excluded_status_transfers_not_counted_in_period():
 
 
 def test_totals_sum_across_all_buckets():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import new_vs_returning
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cs-totals")

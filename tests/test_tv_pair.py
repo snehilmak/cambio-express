@@ -23,13 +23,13 @@ from api.Modules.TVDisplay.Services.pair_code import (
     PAIR_CODE_LIFETIME as _PAIR_CODE_LIFETIME,
 )
 from api.Modules.Tenancy.Models import Store, User
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── Helpers ────────────────────────────────────────────────────
 
 def _activate_addon(client, store_id):
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, store_id)
         s.plan = "basic"
         s.addons = "tv_display"
@@ -55,7 +55,7 @@ def _ensure_display(client, store_id, jwt):
         "/api/v2/tv-display/overview",
         headers={"Authorization": f"Bearer {jwt}"},
     )
-    with client.application.app_context():
+    with db_session():
         return db.session.query(TVDisplay).filter_by(store_id=store_id).first()
 
 
@@ -95,7 +95,7 @@ def test_init_returns_code_and_device_token(client):
 
 def test_init_persists_pending_pair_row(client):
     body = _init(client)
-    with client.application.app_context():
+    with db_session():
         pending = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert pending is not None
         assert pending.device_token == body["device_token"]
@@ -105,7 +105,7 @@ def test_init_persists_pending_pair_row(client):
 
 def test_init_accepts_optional_device_label(client):
     body = _init(client, device_label="Fire TV — Stick 4K Max")
-    with client.application.app_context():
+    with db_session():
         pending = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert pending.device_label == "Fire TV — Stick 4K Max"
 
@@ -142,7 +142,7 @@ def test_status_expired_for_unknown_token(client):
 
 def test_status_expired_when_pending_row_aged_out(client):
     body = _init(client)
-    with client.application.app_context():
+    with db_session():
         p = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         p.expires_at = datetime.utcnow() - timedelta(seconds=1)
         db.session.commit()
@@ -181,7 +181,7 @@ def test_claim_blocked_when_addon_off(client, test_store_id):
         headers={"Authorization": f"Bearer {jwt}"},
     )
     assert resp.status_code == 409
-    with client.application.app_context():
+    with db_session():
         p = db.session.query(TVPendingPair).filter_by(code=body["code"]).first()
         assert p.claimed_at is None
 
@@ -195,7 +195,7 @@ def test_claim_creates_tvpairing_reusing_device_token(client, test_store_id):
     _ensure_display(client, test_store_id, jwt)
     body = _init(client)
     _claim(client, body["code"], jwt)
-    with client.application.app_context():
+    with db_session():
         pairing = db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first()
         assert pairing is not None
@@ -216,7 +216,7 @@ def test_claim_strips_whitespace_and_lowercase(client, test_store_id):
     munged = body["code"][:3].lower() + " - " + body["code"][3:].lower()
     resp = _claim(client, munged, jwt)
     assert resp.status_code == 204
-    with client.application.app_context():
+    with db_session():
         assert db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first() is not None
 
@@ -277,7 +277,7 @@ def test_claim_revokes_prior_pairing(client, test_store_id):
     assert client.get("/tv/device/" + a["device_token"]).status_code == 200
     b = _init(client)
     _claim(client, b["code"], jwt)
-    with client.application.app_context():
+    with db_session():
         old = db.session.query(TVPairing).filter_by(device_token=a["device_token"]).first()
         new = db.session.query(TVPairing).filter_by(device_token=b["device_token"]).first()
         assert old.revoked_at is not None
@@ -321,8 +321,8 @@ def _populate_one_country(client, store_id, jwt):
     )
     country_id = create.get_json()["id"]
     from api.Modules.TVDisplay.Models import TVDisplayPayoutBank
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         db.session.add(TVDisplayPayoutBank(
             country_id=country_id, bank_name="Bancomer", sort_order=0,
         ))
@@ -359,7 +359,7 @@ def test_device_url_404s_when_addon_revoked(client, test_store_id):
     _ensure_display(client, test_store_id, jwt)
     body = _init(client)
     _claim(client, body["code"], jwt)
-    with client.application.app_context():
+    with db_session():
         s = db.session.get(Store, test_store_id)
         s.addons = ""; db.session.commit()
     assert client.get("/tv/device/" + body["device_token"]).status_code == 404
@@ -371,13 +371,13 @@ def test_device_url_bumps_last_seen_at(client, test_store_id):
     _ensure_display(client, test_store_id, jwt)
     body = _init(client)
     _claim(client, body["code"], jwt)
-    with client.application.app_context():
+    with db_session():
         db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]
         ).update({"last_seen_at": datetime.utcnow() - timedelta(minutes=5)})
         db.session.commit()
     client.get("/tv/device/" + body["device_token"])
-    with client.application.app_context():
+    with db_session():
         after = db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first().last_seen_at
         assert after > (datetime.utcnow() - timedelta(minutes=1))
@@ -389,7 +389,7 @@ def test_legacy_public_url_still_works_for_tablets(client, test_store_id):
     pair flow doesn't break that path."""
     jwt = _admin_jwt(client, test_store_id)
     _populate_one_country(client, test_store_id, jwt)
-    with client.application.app_context():
+    with db_session():
         token = db.session.query(TVDisplay).first().public_token
     assert client.get("/tv/" + token).status_code == 200
     a = _init(client)
@@ -412,7 +412,7 @@ def test_employee_can_claim_a_code(client, test_store_id):
     body = _init(client)
     resp = _claim(client, body["code"], emp_jwt)
     assert resp.status_code == 204
-    with client.application.app_context():
+    with db_session():
         assert db.session.query(TVPairing).filter_by(
             device_token=body["device_token"]).first() is not None
 

@@ -1,6 +1,6 @@
 """Unit tests for BankSync.Services.charges (PR 57)."""
 from datetime import datetime
-from tests._app import db
+from tests._app import db, db_session
 
 
 _TXN_COUNTER = [0]
@@ -61,9 +61,9 @@ def _make_account(db, store_id, *, last4="0230", nickname="MSB ••0230"):
 
 
 def test_for_month_sums_exact_slug_match(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import bank_charges_for_month
-    with flask_app.app_context():
+    with db_session():
         _add_txn(db.session, test_store_id,
                  amount_cents=-210, posted_at=datetime(2026, 5, 15),
                  slug="bank_charge_230")
@@ -76,9 +76,9 @@ def test_for_month_sums_exact_slug_match(test_store_id):
 
 
 def test_for_month_returns_zero_when_no_matches(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import bank_charges_for_month
-    with flask_app.app_context():
+    with db_session():
         result = bank_charges_for_month(
             db.session, test_store_id, 2026, 5,
             category_slug="bank_charge_230",
@@ -88,9 +88,9 @@ def test_for_month_returns_zero_when_no_matches(test_store_id):
 
 def test_for_month_filters_by_window(test_store_id):
     """Transactions outside the month don't count."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import bank_charges_for_month
-    with flask_app.app_context():
+    with db_session():
         # In window
         _add_txn(db.session, test_store_id,
                  amount_cents=-300, posted_at=datetime(2026, 5, 15),
@@ -113,9 +113,9 @@ def test_for_month_filters_by_window(test_store_id):
 def test_for_month_prefix_match_rolls_up(test_store_id):
     """Prefix mode: bank_charge / bank_charge_210 / bank_charge_230
     all roll into bank_charges_total."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import bank_charges_for_month
-    with flask_app.app_context():
+    with db_session():
         _add_txn(db.session, test_store_id,
                  amount_cents=-100, posted_at=datetime(2026, 5, 1),
                  slug="bank_charge")
@@ -135,9 +135,9 @@ def test_for_month_prefix_match_rolls_up(test_store_id):
 def test_for_month_filters_by_store(test_store_id):
     """Transactions in another store don't count."""
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import bank_charges_for_month
-    with flask_app.app_context():
+    with db_session():
         # Create a second store + a charge for it.
         other = Store(name="Other", slug="other-store",
                       plan="basic", email="other@test.com")
@@ -158,11 +158,11 @@ def test_for_month_filters_by_store(test_store_id):
 
 
 def test_breakdown_returns_empty_when_no_rows(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         bank_charges_breakdown_for_month,
     )
-    with flask_app.app_context():
+    with db_session():
         result = bank_charges_breakdown_for_month(
             db.session, test_store_id, 2026, 5,
         )
@@ -170,11 +170,11 @@ def test_breakdown_returns_empty_when_no_rows(test_store_id):
 
 
 def test_breakdown_groups_by_description(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         bank_charges_breakdown_for_month,
     )
-    with flask_app.app_context():
+    with db_session():
         _add_txn(db.session, test_store_id,
                  amount_cents=-100, posted_at=datetime(2026, 5, 1),
                  slug="bank_charge_230",
@@ -202,11 +202,11 @@ def test_breakdown_groups_by_description(test_store_id):
 
 
 def test_breakdown_includes_account_label_via_join(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         bank_charges_breakdown_for_month,
     )
-    with flask_app.app_context():
+    with db_session():
         acct = _make_account(db.session, test_store_id, last4="0230",
                               nickname="MSB ••0230")
         _add_txn(db.session, test_store_id,
@@ -220,11 +220,11 @@ def test_breakdown_includes_account_label_via_join(test_store_id):
 
 
 def test_breakdown_handles_missing_description_with_placeholder(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.BankSync.Services import (
         bank_charges_breakdown_for_month,
     )
-    with flask_app.app_context():
+    with db_session():
         _add_txn(db.session, test_store_id,
                  amount_cents=-100, posted_at=datetime(2026, 5, 1),
                  slug="bank_charge_230",

@@ -4,7 +4,7 @@ Mounts at /api/v2/owner/*. First slice ships the locations
 list — per-store stats for the owner umbrella view.
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _make_owner(*, username="boss@example.com", password="ownerpass1!",
@@ -96,8 +96,7 @@ def test_locations_rejects_admin_role(client, test_store_id):
 
 def test_locations_returns_empty_envelope_for_unlinked_owner(client):
     """An owner with no StoreOwnerLink rows sees `total=0`."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss@example.com", pw)
     resp = client.get(
@@ -110,8 +109,7 @@ def test_locations_returns_empty_envelope_for_unlinked_owner(client):
 
 
 def test_locations_lists_linked_stores_with_period_stats(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Alpha", store_slug="alpha")
         s2 = _link(owner_id, store_name="Beta",  store_slug="beta")
@@ -138,8 +136,7 @@ def test_locations_lists_linked_stores_with_period_stats(client):
 
 
 def test_locations_filters_by_query(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         _link(owner_id, store_name="Alpha", store_slug="alpha")
         _link(owner_id, store_name="Beta",  store_slug="beta")
@@ -155,8 +152,7 @@ def test_locations_filters_by_query(client):
 
 
 def test_locations_rejects_invalid_period(client):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _, _, pw = _make_owner()
     token = _login_owner(client, "boss@example.com", pw)
     resp = client.get(
@@ -169,8 +165,7 @@ def test_locations_rejects_invalid_period(client):
 def test_locations_excludes_unrelated_stores(client):
     """Stores that aren't in the owner's umbrella don't appear, even
     if they have transfers."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         owner_id, _, pw = _make_owner()
         s1 = _link(owner_id, store_name="Mine", store_slug="mine")
         _seed_transfer(s1, send_amount=50.0)

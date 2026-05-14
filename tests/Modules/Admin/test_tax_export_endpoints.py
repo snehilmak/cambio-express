@@ -7,7 +7,7 @@ route /admin/tax-export.zip — we don't test that here (it streams
 multi-MB files and would dominate the suite runtime).
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _login(client_, store_id):
@@ -74,8 +74,8 @@ def test_years_includes_year_from_existing_transfer(
     """A store with a transfer dated 2022-03-01 must see 2022 in
     the picker even though it's older than this/last year."""
     from api.Modules.Transfers.Models import Transfer
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         # `total_collected` is a derived property (send + fee +
         # federal_tax — see CLAUDE.md invariant #9), not a column,
         # so we don't pass it.
@@ -104,8 +104,8 @@ def test_years_includes_year_from_existing_daily_report(
     """A store with a closed daily report dated 2021-11-15 must
     see 2021 in the picker."""
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         dr = DailyReport(
             store_id=test_store_id,
             report_date=date(2021, 11, 15),

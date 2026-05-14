@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_report(store_id, report_date, **kwargs):
@@ -30,9 +30,8 @@ def test_get_report_returns_404_when_missing(test_store_id):
 
 
 def test_get_report_returns_summary(test_store_id):
-    from tests._app import app as flask_app
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(
             test_store_id, today,
             taxable_sales=100.0, sales_tax=10.0,
@@ -61,10 +60,9 @@ def test_get_report_rejects_zero_store_id():
 
 
 def test_period_returns_summary(test_store_id):
-    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, yesterday, taxable_sales=100.0)
         _seed_report(test_store_id, today, taxable_sales=200.0)
     resp = _client().get(
@@ -80,10 +78,9 @@ def test_period_returns_summary(test_store_id):
 def test_period_swaps_when_from_after_to(test_store_id):
     """Mirror the Reports period dependency: if from > to, swap so the
     SQL window stays non-empty."""
-    from tests._app import app as flask_app
     today = date.today()
     yesterday = today - timedelta(days=1)
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=42.0)
     resp = _client().get(
         f"/daily/{test_store_id}/period",
@@ -122,9 +119,8 @@ def test_period_empty_range_returns_zeros(test_store_id):
 
 
 def test_flask_dispatcher_routes_daily_to_fastapi(client, test_store_id):
-    from tests._app import app as flask_app
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=99.0)
     resp = client.get(
         f"/api/v2/daily/{test_store_id}/{today.isoformat()}",
@@ -182,9 +178,8 @@ def test_put_creates_report_when_missing(client, test_store_id):
 
 
 def test_put_updates_existing_report(client, test_store_id):
-    from tests._app import app as flask_app
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=10.0)
     token = _login_admin_token(client, test_store_id)
     resp = client.put(
@@ -198,10 +193,10 @@ def test_put_updates_existing_report(client, test_store_id):
 
 def test_put_rejects_locked_report(client, test_store_id):
     from api.Modules.DailyBook.Models import DailyReport
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
     from datetime import datetime as _dt
-    with flask_app.app_context():
+    with db_session():
         _seed_report(test_store_id, today, taxable_sales=5.0)
         r = (
             db.session.query(DailyReport)

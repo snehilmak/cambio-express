@@ -2,7 +2,7 @@
 cashier_productivity. Mirrors test_sales_services.py — same
 strangler-fig equivalence checks."""
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_user(store_id, *, username, full_name=""):
@@ -41,9 +41,9 @@ def _seed_transfer(store_id, *, created_by=None, employee_id=None,
 
 
 def test_sales_by_employee_resolves_user_names(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         uid = _seed_user(test_store_id, username="cash@x.com",
                           full_name="Cash Cashier")
         _seed_transfer(test_store_id, created_by=uid, send_amount=300.0)
@@ -63,9 +63,9 @@ def test_sales_by_employee_resolves_user_names(test_store_id):
 def test_sales_by_employee_buckets_unattributed(test_store_id):
     """`Transfer.created_by IS NULL` → `(unattributed)` so legacy
     rows don't disappear from totals."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, created_by=None, send_amount=100.0)
 
         from api.Modules.Reports.Services import sales_by_employee
@@ -76,9 +76,9 @@ def test_sales_by_employee_buckets_unattributed(test_store_id):
 
 def test_cashier_productivity_sorts_by_count_desc(test_store_id):
     """Busiest cashier first — matches the operator's mental model."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         big = _seed_storeemployee(test_store_id, name="Maria")
         small = _seed_storeemployee(test_store_id, name="Carlos")
         # Maria handled 3, Carlos 1.
@@ -96,9 +96,9 @@ def test_cashier_productivity_sorts_by_count_desc(test_store_id):
 
 
 def test_cashier_productivity_marks_inactive(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         eid = _seed_storeemployee(
             test_store_id, name="Quit", is_active=False,
         )
@@ -117,9 +117,9 @@ def test_cashier_productivity_marks_inactive(test_store_id):
 def test_top_customers_resolves_phones_and_walkins(test_store_id):
     from api.Modules.Customers.Models import Customer
     from api.Modules.Transfers.Models import Transfer
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = date.today()
-    with flask_app.app_context():
+    with db_session():
         c = Customer(
             store_id=test_store_id, full_name="Alice",
             phone_country="+1", phone_number="5551234",

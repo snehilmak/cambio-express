@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
-from tests._app import db
+from tests._app import db, db_session
 
 
 _TXN_COUNTER = [0]
@@ -48,9 +48,9 @@ def _add_charge(db, store_id, account_id, *, amount_cents,
 
 
 def test_returns_empty_for_no_store_ids():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         rows, totals = bank_charges_by_account(
             db.session, [],
             date(2026, 5, 1), date(2026, 5, 31),
@@ -60,9 +60,9 @@ def test_returns_empty_for_no_store_ids():
 
 
 def test_returns_empty_when_no_matching_charges():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="empty-bc")
@@ -79,9 +79,9 @@ def test_returns_empty_when_no_matching_charges():
 
 def test_includes_legacy_bank_charge_slug():
     """Plain `bank_charge` slug rolls up too (legacy rows)."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="legacy-slug")
@@ -103,9 +103,9 @@ def test_includes_legacy_bank_charge_slug():
 
 def test_includes_per_account_bank_charge_slugs():
     """`bank_charge_<last4>` slugs match the prefix."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="per-acct-slug")
@@ -126,9 +126,9 @@ def test_includes_per_account_bank_charge_slugs():
 
 def test_excludes_non_bank_charge_slugs():
     """`cash_expense`, `internal_transfer`, etc. don't roll up."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="non-bc")
@@ -158,9 +158,9 @@ def test_excludes_non_bank_charge_slugs():
 
 def test_filters_by_date_window():
     """Charges outside the window are excluded."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="window-bc")
@@ -191,9 +191,9 @@ def test_filters_by_date_window():
 def test_groups_by_account_and_aggregates():
     """Multiple charges on the same account → one row with
     summed amount, count, and computed average."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="multi-bc")
@@ -219,9 +219,9 @@ def test_groups_by_account_and_aggregates():
 
 def test_separates_rows_by_account():
     """Charges on different accounts produce separate rows."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="multi-acct-bc")
@@ -247,9 +247,9 @@ def test_separates_rows_by_account():
 
 def test_sorts_rows_by_amount_descending():
     """Biggest contributor first."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="sort-bc")
@@ -272,9 +272,9 @@ def test_sorts_rows_by_amount_descending():
 
 
 def test_includes_totals_count_and_amount():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="totals-bc")
@@ -300,9 +300,9 @@ def test_includes_totals_count_and_amount():
 
 def test_filters_by_store_ids():
     """Charges in stores not in the filter don't show up."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="filter-s1")
@@ -330,9 +330,9 @@ def test_filters_by_store_ids():
 
 
 def test_uses_account_label_for_display():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Reports.Services import bank_charges_by_account
-    with flask_app.app_context():
+    with db_session():
         db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="label-bc")

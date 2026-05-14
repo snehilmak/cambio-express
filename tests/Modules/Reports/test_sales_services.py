@@ -7,7 +7,7 @@ they replace; this gives us the equivalence guarantee the
 strangler fig depends on.
 """
 from datetime import date
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
@@ -39,9 +39,9 @@ def _today():
 
 
 def test_sales_by_company_renames_key_and_sorts_by_sent_desc(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, company="Intermex")
         _seed_transfer(test_store_id, send_amount=500.0, company="Maxi")
         _seed_transfer(test_store_id, send_amount=200.0, company="Maxi")
@@ -59,9 +59,9 @@ def test_sales_by_company_renames_key_and_sorts_by_sent_desc(test_store_id):
 def test_sales_by_company_handles_empty_company(test_store_id):
     """Legacy rows with no company tag get the `"(no company)"`
     bucket instead of disappearing — the totals must match."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, company="")
         from api.Modules.Reports.Services import sales_by_company
         rows, totals = sales_by_company(db.session, [test_store_id], today, today)
@@ -70,9 +70,9 @@ def test_sales_by_company_handles_empty_company(test_store_id):
 
 
 def test_sales_by_service_groups_by_service_type(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, send_amount=300.0,
                         service_type="Money Transfer")
         _seed_transfer(test_store_id, send_amount=50.0,
@@ -85,9 +85,9 @@ def test_sales_by_service_groups_by_service_type(test_store_id):
 
 
 def test_by_destination_country_renames_key(test_store_id):
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, country="MX")
         _seed_transfer(test_store_id, send_amount=200.0, country="GT")
 
@@ -100,9 +100,9 @@ def test_by_destination_country_renames_key(test_store_id):
 def test_top_recipients_respects_limit(test_store_id):
     """Service returns only `limit` rows by sent desc; totals reflect
     EVERY group so percentages stay accurate."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1),
                             recipient_name=f"R{i}")
@@ -127,9 +127,9 @@ def test_pydantic_response_schemas_validate_service_output(test_store_id):
     the matching Pydantic model. If the service shape ever drifts
     from the schema, this test fails before we hit the controller
     in PR 4."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     today = _today()
-    with flask_app.app_context():
+    with db_session():
         _seed_transfer(test_store_id, send_amount=100.0)
         from api.Modules.Reports.Services import sales_by_company
         from api.Modules.Reports.Requests import (

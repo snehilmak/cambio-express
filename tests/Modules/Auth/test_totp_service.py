@@ -2,7 +2,7 @@
 from datetime import datetime
 
 import pyotp
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _seed_user(role="employee", *, totp_secret=None, totp_enrolled_at=None):
@@ -24,17 +24,15 @@ def _seed_user(role="employee", *, totp_secret=None, totp_enrolled_at=None):
 
 
 def test_needs_totp_true_for_superadmin():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import needs_totp
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         assert needs_totp(u) is True
 
 
 def test_needs_totp_false_for_other_roles():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import needs_totp
-    with flask_app.app_context():
+    with db_session():
         for role in ("admin", "owner", "employee"):
             u = _seed_user(role=role)
             assert needs_totp(u) is False, f"{role} should not need TOTP"
@@ -49,9 +47,8 @@ def test_needs_totp_false_for_none():
 
 
 def test_is_enrolled_requires_secret_and_timestamp():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import is_enrolled
-    with flask_app.app_context():
+    with db_session():
         secret = pyotp.random_base32()
         u_done = _seed_user(
             role="superadmin", totp_secret=secret,
@@ -73,9 +70,8 @@ def test_is_enrolled_handles_none():
 
 
 def test_verify_totp_token_accepts_current_code():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import verify_totp_token
-    with flask_app.app_context():
+    with db_session():
         secret = pyotp.random_base32()
         u = _seed_user(role="superadmin", totp_secret=secret)
         current = pyotp.TOTP(secret).now()
@@ -83,17 +79,15 @@ def test_verify_totp_token_accepts_current_code():
 
 
 def test_verify_totp_token_rejects_wrong_code():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import verify_totp_token
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin", totp_secret=pyotp.random_base32())
         assert verify_totp_token(u, "000000") is False
 
 
 def test_verify_totp_token_handles_no_secret():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import verify_totp_token
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         assert verify_totp_token(u, "123456") is False
 
@@ -104,17 +98,15 @@ def test_verify_totp_token_handles_none_user():
 
 
 def test_verify_totp_token_handles_empty_token():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import verify_totp_token
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin", totp_secret=pyotp.random_base32())
         assert verify_totp_token(u, "") is False
 
 
 def test_verify_totp_token_strips_whitespace():
-    from tests._app import app as flask_app
     from api.Modules.Auth.Services import verify_totp_token
-    with flask_app.app_context():
+    with db_session():
         secret = pyotp.random_base32()
         u = _seed_user(role="superadmin", totp_secret=secret)
         current = pyotp.TOTP(secret).now()
@@ -150,9 +142,9 @@ def test_format_recovery_code():
 
 def test_generate_recovery_codes_creates_count_rows():
     from api.Modules.Auth.Models import RecoveryCode
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import generate_recovery_codes
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         codes = generate_recovery_codes(db.session, u)
         db.session.commit()
@@ -163,9 +155,9 @@ def test_generate_recovery_codes_creates_count_rows():
 
 def test_generate_recovery_codes_replaces_existing():
     from api.Modules.Auth.Models import RecoveryCode
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import generate_recovery_codes
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         first = generate_recovery_codes(db.session, u)
         db.session.commit()
@@ -179,9 +171,9 @@ def test_generate_recovery_codes_replaces_existing():
 
 def test_generate_recovery_codes_format():
     """Codes are returned in display format `ABCD-EFGH`."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import generate_recovery_codes
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         codes = generate_recovery_codes(db.session, u)
         db.session.commit()
@@ -196,11 +188,11 @@ def test_generate_recovery_codes_format():
 
 def test_consume_recovery_code_marks_used_and_returns_true():
     from api.Modules.Auth.Models import RecoveryCode
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         consume_recovery_code, generate_recovery_codes,
     )
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         codes = generate_recovery_codes(db.session, u)
         db.session.commit()
@@ -212,11 +204,11 @@ def test_consume_recovery_code_marks_used_and_returns_true():
 
 
 def test_consume_recovery_code_handles_hyphen_and_case():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         consume_recovery_code, generate_recovery_codes,
     )
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         codes = generate_recovery_codes(db.session, u)
         db.session.commit()
@@ -227,17 +219,17 @@ def test_consume_recovery_code_handles_hyphen_and_case():
 
 
 def test_consume_recovery_code_rejects_unknown():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import consume_recovery_code
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         assert consume_recovery_code(db.session, u, "AAAAAAAA") is False
 
 
 def test_consume_recovery_code_handles_empty():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import consume_recovery_code
-    with flask_app.app_context():
+    with db_session():
         u = _seed_user(role="superadmin")
         assert consume_recovery_code(db.session, u, "") is False
         assert consume_recovery_code(db.session, u, None) is False
@@ -245,11 +237,11 @@ def test_consume_recovery_code_handles_empty():
 
 def test_consume_recovery_code_rejects_other_users_code():
     """A code minted for user A must not be consumable by user B."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Auth.Services import (
         consume_recovery_code, generate_recovery_codes,
     )
-    with flask_app.app_context():
+    with db_session():
         u_a = _seed_user(role="superadmin")
         u_b = _seed_user(role="superadmin")
         codes_a = generate_recovery_codes(db.session, u_a)

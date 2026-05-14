@@ -1,7 +1,7 @@
 """Unit tests for Billing.Services.cancellation (PR 46)."""
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _store(*, sub_id="sub_xyz", plan="basic", billing_cycle="monthly"):
@@ -22,9 +22,9 @@ def _store(*, sub_id="sub_xyz", plan="basic", billing_cycle="monthly"):
 
 def test_find_store_returns_match(test_store_id):
     from api.Modules.Tenancy.Models import Store
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import find_store_by_subscription_id
-    with flask_app.app_context():
+    with db_session():
         s = db.session.get(Store,test_store_id)
         s.stripe_subscription_id = "sub_test123"
         db.session.commit()
@@ -34,9 +34,9 @@ def test_find_store_returns_match(test_store_id):
 
 
 def test_find_store_returns_none_for_unknown():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import find_store_by_subscription_id
-    with flask_app.app_context():
+    with db_session():
         assert find_store_by_subscription_id(
             db.session, "sub_nope",
         ) is None
@@ -44,9 +44,9 @@ def test_find_store_returns_none_for_unknown():
 
 def test_find_store_returns_none_for_empty():
     """Empty subscription_id short-circuits before the DB hit."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Billing.Services import find_store_by_subscription_id
-    with flask_app.app_context():
+    with db_session():
         assert find_store_by_subscription_id(db.session, "") is None
         assert find_store_by_subscription_id(db.session, None) is None
 

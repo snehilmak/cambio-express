@@ -12,7 +12,7 @@ Migrates:
 All Jinja report templates retired. The cleanup phase removes
 the generic _report_page.html chrome too.
 """
-from tests._app import db
+from tests._app import db, db_session
 
 
 _ADMIN_BATCH = ["employee-activity", "period-pl"]
@@ -29,7 +29,7 @@ _SA_BATCH = [
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    with client.application.app_context():
+    with db_session():
         u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
@@ -39,7 +39,7 @@ def _admin_session_login(client, store_id):
 
 def _superadmin_session(client):
     from api.Modules.Tenancy.Models import User
-    with client.application.app_context():
+    with db_session():
         sa = db.session.query(User).filter_by(role="superadmin").first()
         sa_id = sa.id
 

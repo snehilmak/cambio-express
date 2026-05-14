@@ -1,6 +1,6 @@
 """HTTP integration tests for the Monthly Controllers."""
 from fastapi.testclient import TestClient
-from tests._app import db
+from tests._app import db, db_session
 
 
 def _client():
@@ -43,8 +43,7 @@ def test_monthly_returns_row_with_totals(client, test_store_id):
     """taxable_sales=100 + non_taxable=50 = 150 income;
     cash_expenses=20 + cash_payroll=30 = 50 expenses;
     net = 100."""
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_monthly(
             test_store_id, year=2026, month=2,
             taxable_sales=100.0, non_taxable=50.0,
@@ -64,8 +63,7 @@ def test_monthly_returns_row_with_totals(client, test_store_id):
 
 
 def test_months_lists_logged(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_monthly(test_store_id, year=2026, month=1, taxable_sales=10)
         _seed_monthly(test_store_id, year=2026, month=3, taxable_sales=20)
     token = _login(client, test_store_id)
@@ -128,8 +126,7 @@ def test_put_creates_when_missing(client, test_store_id):
 
 
 def test_put_updates_existing(client, test_store_id):
-    from tests._app import app as flask_app
-    with flask_app.app_context():
+    with db_session():
         _seed_monthly(test_store_id, year=2026, month=5, taxable_sales=100)
     token = _login(client, test_store_id)
     resp = client.put(
@@ -159,8 +156,8 @@ def test_put_rejects_extra_fields(client, test_store_id):
 def test_put_rejects_employee_role(client):
     """Cashier role cannot save monthly P&L."""
     from api.Modules.Tenancy.Models import User
-    from tests._app import app as flask_app, db
-    with flask_app.app_context():
+    from tests._app import db
+    with db_session():
         u = User(
             store_id=None, username="emp_monthly_test",
             role="employee", is_active=True,
@@ -184,7 +181,7 @@ def test_put_rejects_employee_role(client):
         )
         assert resp.status_code == 403
     finally:
-        with flask_app.app_context():
+        with db_session():
             u2 = db.session.query(User).filter_by(
                 username="emp_monthly_test",
             ).first()

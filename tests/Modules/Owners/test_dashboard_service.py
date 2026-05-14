@@ -4,7 +4,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 from api.Modules.Transfers.Models import Transfer
-from tests._app import db
+from tests._app import db, db_session
 
 
 # ── owner_period_window (pure date math) ───────────────────
@@ -66,9 +66,9 @@ def test_period_window_year_starts_jan_first():
 
 
 def test_owner_store_ids_empty_for_user_with_no_links():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_store_ids
-    with flask_app.app_context():
+    with db_session():
         u = User(
             username="lonely-owner@test.com",
             password_hash="x", role="owner",
@@ -80,9 +80,9 @@ def test_owner_store_ids_empty_for_user_with_no_links():
 
 
 def test_owner_store_ids_returns_linked_stores():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_store_ids
-    with flask_app.app_context():
+    with db_session():
         db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         u = User(
@@ -108,17 +108,17 @@ def test_owner_store_ids_returns_linked_stores():
 
 
 def test_owner_kpis_empty_store_ids_returns_zeros():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_kpis
-    with flask_app.app_context():
+    with db_session():
         result = owner_kpis(db.session, [], date.today(), date.today())
         assert result == (0, 0.0, 0.0)
 
 
 def test_owner_kpis_aggregates_transfers_and_overshort():
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_kpis
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.query(DailyReport).delete()
         db.session.commit()
@@ -150,9 +150,9 @@ def test_owner_kpis_aggregates_transfers_and_overshort():
 
 def test_owner_kpis_excludes_canceled_and_rejected():
     """Canceled/Rejected transfers must not inflate volume."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_kpis
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.query(DailyReport).delete()
         db.session.commit()
@@ -189,9 +189,9 @@ def test_owner_kpis_excludes_canceled_and_rejected():
 
 def test_owner_kpis_filters_window():
     """Transfers outside the window don't count."""
-    from tests._app import app as flask_app, db
+    from tests._app import db
     from api.Modules.Owners.Services import owner_kpis
-    with flask_app.app_context():
+    with db_session():
         db.session.query(Transfer).delete()
         db.session.commit()
         s = Store(name="W", slug="store-w", plan="basic",
