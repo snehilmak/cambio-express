@@ -4,6 +4,7 @@ The Service + Controller layers (PRs 15-16) compose these into the
 /bank/transactions and /bank/rules endpoints.
 """
 from datetime import date, datetime, timedelta
+from tests._app import db
 
 
 def _seed_account(store_id, *, nickname="", display_name="",

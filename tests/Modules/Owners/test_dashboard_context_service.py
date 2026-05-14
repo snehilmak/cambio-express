@@ -4,14 +4,15 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _make_owner_with_stores(db, *, slug="ctx-owner",
                              num_stores=2):
     """Set up an owner User + N linked stores, return them."""
-    User.query.filter_by(role="owner").delete()
-    Store.query.delete()
-    StoreOwnerLink.query.delete()
+    db.query(User).filter_by(role="owner").delete()
+    db.query(Store).delete()
+    db.query(StoreOwnerLink).delete()
     db.commit()
     owner = User(
         username=f"{slug}@test.com",
@@ -80,7 +81,7 @@ def test_dashboard_context_aggregates_transfers_across_umbrella():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_dashboard_context
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="agg-test", num_stores=2,
@@ -115,7 +116,7 @@ def test_dashboard_context_company_breakdown_sorted_by_volume():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_dashboard_context
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="company-sort", num_stores=1,
@@ -139,7 +140,7 @@ def test_dashboard_context_excludes_canceled_and_rejected():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_dashboard_context
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="excl-test", num_stores=1,
@@ -164,7 +165,7 @@ def test_dashboard_context_30day_series_always_30_entries():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_dashboard_context
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="30day", num_stores=1,
@@ -203,7 +204,7 @@ def test_locations_payload_returns_one_row_per_store():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_locations_payload
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="loc-three", num_stores=3,
@@ -223,7 +224,7 @@ def test_locations_payload_filters_by_query():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_locations_payload
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="loc-search", num_stores=3,
@@ -244,7 +245,7 @@ def test_locations_payload_includes_transfer_stats():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_locations_payload
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="loc-stats", num_stores=1,
@@ -269,7 +270,7 @@ def test_locations_payload_companies_sorted_by_volume():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import owner_locations_payload
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         owner, stores = _make_owner_with_stores(
             db.session, slug="loc-co-sort", num_stores=1,

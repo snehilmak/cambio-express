@@ -4,6 +4,7 @@ Powers /app/admin/users (roster + create + edit). Mirrors the
 legacy admin_users / admin_new_user / admin_edit_user Flask
 routes, plus the new self-edit guard.
 """
+from tests._app import db
 
 
 def _login(client_, store_id):

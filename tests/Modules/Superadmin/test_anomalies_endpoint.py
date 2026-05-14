@@ -4,6 +4,7 @@ Backed by `compute_platform_anomalies()` (existing Service). The
 endpoint is read-only and superadmin-scoped.
 """
 from datetime import date, timedelta
+from tests._app import db
 
 
 def _login_admin(client, store_id):

@@ -2,6 +2,7 @@
 
 Mounts at /api/v2/superadmin/*. First slice ships the stores list.
 """
+from tests._app import db
 
 
 def _login_admin(client, store_id):

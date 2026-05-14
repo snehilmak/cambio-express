@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _store(plan="trial", trial_ends_at=None, grace_ends_at=None):

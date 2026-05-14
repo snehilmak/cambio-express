@@ -3,6 +3,7 @@ from datetime import date, time
 
 from api.Modules.DailyBook.Models import CheckDeposit, DailyDrop
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug="da-store"):
@@ -43,7 +44,7 @@ def test_daily_drops_returns_rows_and_totals():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-shape")
         rows, totals = daily_drops(
@@ -60,7 +61,7 @@ def test_daily_drops_groups_by_report_date():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-group")
         _add_drop(db.session, s.id, report_date=date(2026, 5, 5),
@@ -89,7 +90,7 @@ def test_daily_drops_sorted_newest_first():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-sort")
         for d in (5, 20, 10):
@@ -110,7 +111,7 @@ def test_daily_drops_avg_per_day_uses_distinct_date_count():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-avg")
         _add_drop(db.session, s.id, report_date=date(2026, 5, 5),
@@ -130,7 +131,7 @@ def test_daily_drops_avg_per_day_zero_when_no_rows():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-drops-empty")
         _, totals = daily_drops(
@@ -145,7 +146,7 @@ def test_daily_drops_filters_by_store_and_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import daily_drops
     with flask_app.app_context():
-        DailyDrop.query.delete()
+        db.session.query(DailyDrop).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="da-drops-store-1")
         s2 = _add_store(db.session, slug="da-drops-store-2")
@@ -172,7 +173,7 @@ def test_check_deposits_returns_rows_and_totals():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import check_deposits
     with flask_app.app_context():
-        CheckDeposit.query.delete()
+        db.session.query(CheckDeposit).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-checks-shape")
         rows, totals = check_deposits(
@@ -187,7 +188,7 @@ def test_check_deposits_groups_by_report_date():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import check_deposits
     with flask_app.app_context():
-        CheckDeposit.query.delete()
+        db.session.query(CheckDeposit).delete()
         db.session.commit()
         s = _add_store(db.session, slug="da-checks-group")
         _add_check(db.session, s.id, report_date=date(2026, 5, 5),

@@ -9,6 +9,7 @@ Mirrors the legacy /owner/connect/* + /owner/unlink/<id> form
 handlers — JSON envelopes the SPA can render directly.
 """
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _make_owner(*, username="boss-cc@x.com", password="ownerpass1!"):
@@ -270,7 +271,7 @@ def test_unlink_removes_link(client):
     assert resp.status_code == 204
     from tests._app import db as _db
     with flask_app.app_context():
-        assert StoreOwnerLink.query.filter_by(
+        assert db.session.query(StoreOwnerLink).filter_by(
             owner_id=owner_id, store_id=sid,
         ).first() is None
 

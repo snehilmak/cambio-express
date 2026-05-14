@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from tests._app import db
 
 
 def _add_store(db, *, slug, plan="trial", trial_ends_at=None,
@@ -37,7 +38,7 @@ def test_due_excludes_paid_plans():
         stores_due_for_reminder,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         now = datetime.utcnow()
         # Paid plan: never reminded.
@@ -54,7 +55,7 @@ def test_due_excludes_already_reminded_stores():
         stores_due_for_reminder,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         now = datetime.utcnow()
         _add_store(
@@ -72,7 +73,7 @@ def test_due_excludes_stores_outside_threshold():
         stores_due_for_reminder,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         now = datetime.utcnow()
         _add_store(
@@ -89,7 +90,7 @@ def test_due_includes_stores_in_threshold():
         stores_due_for_reminder,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         now = datetime.utcnow()
         s = _add_store(
@@ -108,7 +109,7 @@ def test_due_excludes_no_trial_end_set():
         stores_due_for_reminder,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         now = datetime.utcnow()
         _add_store(db.session, slug="no-end-set",
@@ -123,9 +124,9 @@ def test_recipients_includes_admin_with_email_and_opt_in():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="adm-1")
         u = _add_user(
@@ -140,9 +141,9 @@ def test_recipients_excludes_inactive_users():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="inactive-store")
         _add_user(
@@ -157,9 +158,9 @@ def test_recipients_excludes_users_without_email():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="no-email-co")
         _add_user(
@@ -174,9 +175,9 @@ def test_recipients_excludes_opted_out_users():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="optout-co")
         _add_user(
@@ -192,9 +193,9 @@ def test_recipients_excludes_employees():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="emp-co")
         _add_user(
@@ -210,9 +211,9 @@ def test_recipients_includes_linked_owner_from_other_store():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         # Trial store the owner is linked to.
         target = _add_store(db.session, slug="target-trial-co")
@@ -239,9 +240,9 @@ def test_recipients_dedupes_admin_who_is_also_linked_owner():
     from tests._app import app as flask_app, db
     from api.Modules.Notifications.Services import eligible_recipients
     with flask_app.app_context():
-        Store.query.delete()
-        User.query.delete()
-        StoreOwnerLink.query.delete()
+        db.session.query(Store).delete()
+        db.session.query(User).delete()
+        db.session.query(StoreOwnerLink).delete()
         db.session.commit()
         s = _add_store(db.session, slug="dedup-co")
         u = _add_user(

@@ -7,6 +7,7 @@ withdrawal. So:
   - ACHBatch.variance         = ach_amount - transfers_total
 """
 from datetime import date
+from tests._app import db
 
 
 def _seed_store_and_transfers(transfers):
@@ -18,7 +19,7 @@ def _seed_store_and_transfers(transfers):
     from api.Modules.Tenancy.Models import Store
     from api.Modules.Transfers.Models import Transfer
     from tests._app import db
-    store = Store.query.filter_by(slug="test-store").one()
+    store = db.session.query(Store).filter_by(slug="test-store").one()
     for t in transfers:
         db.session.add(Transfer(
             store_id=store.id,
@@ -44,7 +45,7 @@ def test_transfer_total_collected_sums_all_three(client):
         _seed_store_and_transfers([
             {"send_amount": 500.0, "fee": 8.0, "federal_tax": 5.0},
         ])
-        t = Transfer.query.one()
+        t = db.session.query(Transfer).one()
         assert t.total_collected == 513.0
 
 
@@ -56,7 +57,7 @@ def test_transfer_total_collected_handles_none_fields(client):
         _seed_store_and_transfers([
             {"send_amount": 100.0, "fee": None, "federal_tax": None},
         ])
-        t = Transfer.query.one()
+        t = db.session.query(Transfer).one()
         assert t.total_collected == 100.0
 
 
@@ -66,7 +67,7 @@ def test_transfer_total_collected_with_zero_tax(client):
         _seed_store_and_transfers([
             {"send_amount": 250.0, "fee": 10.0, "federal_tax": 0.0},
         ])
-        t = Transfer.query.one()
+        t = db.session.query(Transfer).one()
         assert t.total_collected == 260.0
 
 
@@ -145,7 +146,7 @@ def test_ach_transfers_total_empty_batch_is_zero(client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
     with client.application.app_context():
-        store = Store.query.filter_by(slug="test-store").one()
+        store = db.session.query(Store).filter_by(slug="test-store").one()
         batch = ACHBatch(
             store_id=store.id, ach_date=date(2026, 4, 2), company="Intermex",
             batch_ref="EMPTY-BATCH", ach_amount=0.0,

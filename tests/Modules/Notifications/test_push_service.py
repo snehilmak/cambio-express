@@ -8,6 +8,7 @@ effect — the read already happened).
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests._app import db
 
 
 # ── is_enabled ─────────────────────────────────────────────
@@ -71,7 +72,7 @@ def test_send_push_zero_when_no_subscriptions(monkeypatch):
     from api.Modules.Announcements.Models import PushSubscription
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        PushSubscription.query.delete()
+        db.session.query(PushSubscription).delete()
         db.session.commit()
         # Stub pywebpush so the test doesn't need it installed.
         with patch("pywebpush.webpush") as wp:
@@ -88,7 +89,7 @@ def test_send_push_delivers_to_each_subscription(monkeypatch):
     from api.Modules.Tenancy.Models import User
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        PushSubscription.query.delete()
+        db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
             username="push-target@test.com", password_hash="x",
@@ -120,7 +121,7 @@ def test_send_push_drops_dead_subscriptions(monkeypatch):
     from tests._app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
-        PushSubscription.query.delete()
+        db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
             username="dead-sub@test.com", password_hash="x",
@@ -145,7 +146,7 @@ def test_send_push_drops_dead_subscriptions(monkeypatch):
             sent = push_svc.send_push(db.session, u.id, "hi")
             assert sent == 0
         # Subscription deleted.
-        remaining = PushSubscription.query.filter_by(
+        remaining = db.session.query(PushSubscription).filter_by(
             user_id=u.id,
         ).count()
         assert remaining == 0
@@ -161,7 +162,7 @@ def test_send_push_keeps_subscriptions_on_other_errors(monkeypatch):
     from tests._app import app as flask_app, db
     from pywebpush import WebPushException
     with flask_app.app_context():
-        PushSubscription.query.delete()
+        db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
             username="alive-sub@test.com", password_hash="x",
@@ -185,7 +186,7 @@ def test_send_push_keeps_subscriptions_on_other_errors(monkeypatch):
             sent = push_svc.send_push(db.session, u.id, "hi")
             assert sent == 0
         # Subscription kept (not deleted).
-        remaining = PushSubscription.query.filter_by(
+        remaining = db.session.query(PushSubscription).filter_by(
             user_id=u.id,
         ).count()
         assert remaining == 1
@@ -202,7 +203,7 @@ def test_send_push_payload_drops_none_values(monkeypatch):
     from api.Modules.Tenancy.Models import User
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        PushSubscription.query.delete()
+        db.session.query(PushSubscription).delete()
         db.session.commit()
         u = User(
             username="payload-test@test.com", password_hash="x",

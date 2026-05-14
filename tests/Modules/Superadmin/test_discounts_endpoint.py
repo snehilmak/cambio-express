@@ -5,6 +5,7 @@ legacy site, so these endpoints never touch Stripe — that's why
 the tests don't need to monkeypatch the SDK.
 """
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _login_admin(client, store_id):

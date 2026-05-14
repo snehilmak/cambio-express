@@ -2,6 +2,7 @@
 cashier_productivity. Mirrors test_sales_services.py — same
 strangler-fig equivalence checks."""
 from datetime import date
+from tests._app import db
 
 
 def _seed_user(store_id, *, username, full_name=""):

@@ -5,6 +5,7 @@ boolean prefs + a `trial_toggle_applies` flag the SPA uses to
 render the trial-reminder toggle as interactive vs informational.
 PUT applies changes; both fields are optional.
 """
+from tests._app import db
 
 
 def _login(client_, store_id):
@@ -119,7 +120,7 @@ def test_notifications_update_persists_trial_pref(
     ).get_json()
     assert body["notify_trial_reminders"] is False
     with flask_app.app_context():
-        u = User.query.filter_by(username="admin@test.com").first()
+        u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_trial_reminders is False
         # Untouched field stays at its prior value.
         assert u.notify_announcement_email is False
@@ -138,7 +139,7 @@ def test_notifications_update_persists_announcement_pref(
     ).get_json()
     assert body["notify_announcement_email"] is True
     with flask_app.app_context():
-        u = User.query.filter_by(username="admin@test.com").first()
+        u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_announcement_email is True
 
 
@@ -185,7 +186,7 @@ def test_notifications_update_partial_leaves_others_alone(
     assert body["notify_trial_reminders"] is True
     assert body["notify_announcement_email"] is False
     with flask_app.app_context():
-        u = User.query.filter_by(username="admin@test.com").first()
+        u = db.session.query(User).filter_by(username="admin@test.com").first()
         assert u.notify_trial_reminders is True
         assert u.notify_announcement_email is False
 

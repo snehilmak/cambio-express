@@ -14,6 +14,7 @@ Two layers of coverage:
      legacy callers are migrated too.
 """
 from datetime import date, timedelta
+from tests._app import db
 
 
 def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,

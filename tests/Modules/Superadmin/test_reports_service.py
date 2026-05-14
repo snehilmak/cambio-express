@@ -8,6 +8,7 @@ Covers the first three platform-health aggregators:
 from datetime import date, datetime, timedelta
 
 from api.Modules.Tenancy.Models import Store, User
+from tests._app import db
 
 
 _USER_COUNTER = 0
@@ -46,7 +47,7 @@ def test_active_stores_by_plan_groups_by_plan():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="sa-pl-trial-1", plan="trial",
                    created_at=datetime(2026, 5, 1))
@@ -70,7 +71,7 @@ def test_active_stores_by_plan_excludes_stores_created_after_d_to():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="sa-pl-future", plan="trial",
                    created_at=datetime(2026, 7, 1))
@@ -87,7 +88,7 @@ def test_active_stores_by_plan_unknown_plan_label():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import active_stores_by_plan
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         s = _add_store(db.session, slug="sa-pl-null", plan="trial",
                        created_at=datetime(2026, 5, 5))
@@ -106,7 +107,7 @@ def test_signup_funnel_only_counts_stores_created_in_window():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import signup_funnel
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         # Outside window (before).
         _add_store(db.session, slug="sa-sf-old", plan="trial",
@@ -129,7 +130,7 @@ def test_signup_funnel_groups_by_plan():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import signup_funnel
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="sa-sf-trial-1", plan="trial",
                    created_at=datetime(2026, 5, 5))
@@ -153,7 +154,7 @@ def test_login_activity_groups_by_role():
     from api.Modules.Superadmin.Services import login_activity
     with flask_app.app_context():
         # Snapshot existing logins so seed users don't pollute.
-        baseline_email = User.query.filter_by(role="superadmin").first()
+        baseline_email = db.session.query(User).filter_by(role="superadmin").first()
         if baseline_email:
             baseline_email.last_login_at = None
         db.session.commit()
@@ -184,7 +185,7 @@ def test_login_activity_filters_by_window():
     from api.Modules.Superadmin.Services import login_activity
     with flask_app.app_context():
         # Reset baseline.
-        for u in User.query.all():
+        for u in db.session.query(User).all():
             u.last_login_at = None
         db.session.commit()
         s = _add_store(db.session, slug="sa-li-window",

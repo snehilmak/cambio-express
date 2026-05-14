@@ -69,7 +69,7 @@ def test_locked_fields_populate_from_daily_sums_on_save(client, test_store_id):
     resp = _put_monthly(client, test_store_id, y, m, {"notes": "first save"})
     assert resp.status_code == 200, resp.get_data(as_text=True)
     with flask_app.app_context():
-        r = MonthlyFinancial.query.filter_by(
+        r = db.session.query(MonthlyFinancial).filter_by(
             store_id=test_store_id, year=y, month=m).first()
         assert r is not None
         assert abs(r.cash_purchases  - 175.0) < 0.01
@@ -88,7 +88,7 @@ def test_check_cashing_fees_auto_populates(client, test_store_id):
     resp = _put_monthly(client, test_store_id, y, m, {"notes": ""})
     assert resp.status_code == 200
     with flask_app.app_context():
-        r = MonthlyFinancial.query.filter_by(
+        r = db.session.query(MonthlyFinancial).filter_by(
             store_id=test_store_id, year=y, month=m).first()
         assert abs(r.check_cashing_fees - 50.25) < 0.01
 
@@ -142,7 +142,7 @@ def test_unlocked_fields_save_submitted_values(client, test_store_id):
     })
     assert resp.status_code == 200
     with flask_app.app_context():
-        r = MonthlyFinancial.query.filter_by(
+        r = db.session.query(MonthlyFinancial).filter_by(
             store_id=test_store_id, year=y, month=m).first()
         assert abs(r.mt_commission_in_bank - 250.0) < 0.01
         assert abs(r.other_income_1 - 33.0) < 0.01
@@ -163,7 +163,7 @@ def test_resaving_picks_up_fresh_daily_sums(client, test_store_id):
     _put_monthly(client, test_store_id, y, m, {"notes": ""})
     # Admin edits the daily book — cash_expense jumps to 250.
     with flask_app.app_context():
-        r = DailyReport.query.filter_by(
+        r = db.session.query(DailyReport).filter_by(
             store_id=test_store_id, report_date=date(y, m, 5)).first()
         r.cash_expense = 250.0
         db.session.commit()
@@ -172,6 +172,6 @@ def test_resaving_picks_up_fresh_daily_sums(client, test_store_id):
     resp = _put_monthly(client, test_store_id, y, m, {"notes": "resaved"})
     assert resp.status_code == 200
     with flask_app.app_context():
-        row = MonthlyFinancial.query.filter_by(
+        row = db.session.query(MonthlyFinancial).filter_by(
             store_id=test_store_id, year=y, month=m).first()
         assert abs(row.cash_expenses - 250.0) < 0.01

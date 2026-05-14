@@ -1,5 +1,6 @@
 """Unit tests for the BankSync rule write-side Service (PR 31)."""
 import pytest
+from tests._app import db
 
 
 def _seed_account(store_id, *, last4="0000"):

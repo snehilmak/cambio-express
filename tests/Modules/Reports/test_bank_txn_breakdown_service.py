@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 _TXN_COUNTER = 0
@@ -52,7 +53,7 @@ def test_returns_rows_and_totals_tuple():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-shape")
         rows, totals = bank_txn_breakdown(
@@ -68,7 +69,7 @@ def test_row_shape():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-row")
         a = _add_account(db.session, s.id)
@@ -93,7 +94,7 @@ def test_groups_by_category_slug():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-group")
         a = _add_account(db.session, s.id)
@@ -126,7 +127,7 @@ def test_uncategorised_bucketed_under_empty_slug():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-uncat")
         a = _add_account(db.session, s.id)
@@ -151,7 +152,7 @@ def test_inflow_for_positive_signed_amount():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-inflow")
         a = _add_account(db.session, s.id)
@@ -174,7 +175,7 @@ def test_outflow_for_negative_signed_amount():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-outflow")
         a = _add_account(db.session, s.id)
@@ -198,7 +199,7 @@ def test_zero_counted_as_inflow():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-zero")
         a = _add_account(db.session, s.id)
@@ -222,7 +223,7 @@ def test_rows_sorted_by_absolute_amount_descending():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-sort")
         a = _add_account(db.session, s.id)
@@ -251,7 +252,7 @@ def test_filters_by_store_list():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="bt-store-1")
         s2 = _add_store(db.session, slug="bt-store-2")
@@ -276,7 +277,7 @@ def test_filters_by_window_uses_day_boundaries():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_txn_breakdown
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="bt-window")
         a = _add_account(db.session, s.id)

@@ -4,6 +4,7 @@ Mounts at /api/v2/owner/*. First slice ships the locations
 list — per-store stats for the owner umbrella view.
 """
 from datetime import date
+from tests._app import db
 
 
 def _make_owner(*, username="boss@example.com", password="ownerpass1!",

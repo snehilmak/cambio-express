@@ -9,6 +9,7 @@ The /owner/dashboard and /owner/store/<id> Flask landings 301 to
 Two Jinja templates retired (owner_dashboard.html, owner_store_detail.html).
 """
 from datetime import date
+from tests._app import db
 
 
 def _seed_owner_with_store(client):
@@ -30,7 +31,7 @@ def _seed_owner_with_store(client):
         # Seed transfers: $300 Intermex Sent today, $9999 Canceled
         # today (must NOT count toward volume), $50 Maxi yesterday.
         from api.Modules.Tenancy.Models import User as U
-        admin = U.query.filter_by(username="admin@test.com").first()
+        admin = db.session.query(U).filter_by(username="admin@test.com").first()
         admin_id = admin.id if admin else oid
         db.session.add(Transfer(
             store_id=sid, created_by=admin_id, send_date=date.today(),

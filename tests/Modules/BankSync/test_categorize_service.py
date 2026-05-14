@@ -1,5 +1,6 @@
 """Unit tests for BankSync.Services.categorize (PR 36)."""
 from datetime import date, datetime, time
+from tests._app import db
 
 
 def _seed_account(store_id, *, last4="0000"):

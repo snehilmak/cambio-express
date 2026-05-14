@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+from tests._app import db
 
 
 # ── create_store_and_admin ──────────────────────────────────

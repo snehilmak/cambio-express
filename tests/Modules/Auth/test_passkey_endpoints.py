@@ -10,6 +10,7 @@ server-side and ship here so /app/settings can show the user's
 registered devices without bouncing.
 """
 from datetime import datetime
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -139,7 +140,7 @@ def test_delete_removes_passkey(client, test_store_id, test_admin_id):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert Passkey.query.filter_by(id=pid).first() is None
+        assert db.session.query(Passkey).filter_by(id=pid).first() is None
 
 
 def test_delete_404_when_missing(client, test_store_id):

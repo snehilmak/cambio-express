@@ -2,6 +2,7 @@
 from datetime import date
 
 from api.Modules.Tenancy.Models import Store, StoreEmployee
+from tests._app import db
 
 
 def _add_store(db, *, slug="form-store"):
@@ -63,7 +64,7 @@ def test_active_roster_returns_only_active_employees():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
-        StoreEmployee.query.delete()
+        db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-active")
         active = _add_employee(db.session, s.id, name="Active",
@@ -81,7 +82,7 @@ def test_active_roster_sorted_alphabetically():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
-        StoreEmployee.query.delete()
+        db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-sort")
         for n in ("Charlie", "Alice", "Bob"):
@@ -96,8 +97,8 @@ def test_active_roster_filters_by_store():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
-        StoreEmployee.query.delete()
-        Store.query.filter(Store.slug.like("roster-x-%")).delete()
+        db.session.query(StoreEmployee).delete()
+        db.session.query(Store).filter(Store.slug.like("roster-x-%")).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="roster-x-1")
         s2 = _add_store(db.session, slug="roster-x-2")
@@ -114,7 +115,7 @@ def test_active_roster_empty_when_no_active():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import active_roster
     with flask_app.app_context():
-        StoreEmployee.query.delete()
+        db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="roster-empty")
         _add_employee(db.session, s.id, name="Former",
@@ -130,7 +131,7 @@ def test_pick_employee_returns_employee_and_name():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
-        StoreEmployee.query.delete()
+        db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pick-1")
         e = _add_employee(db.session, s.id, name="Carla")
@@ -145,7 +146,7 @@ def test_pick_employee_int_id_works():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
-        StoreEmployee.query.delete()
+        db.session.query(StoreEmployee).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pick-int")
         e = _add_employee(db.session, s.id, name="Diana")
@@ -184,8 +185,8 @@ def test_pick_employee_rejects_cross_store():
     from tests._app import app as flask_app, db
     from api.Modules.Transfers.Services import pick_employee
     with flask_app.app_context():
-        StoreEmployee.query.delete()
-        Store.query.filter(Store.slug.like("pick-cross-%")).delete()
+        db.session.query(StoreEmployee).delete()
+        db.session.query(Store).filter(Store.slug.like("pick-cross-%")).delete()
         db.session.commit()
         s_a = _add_store(db.session, slug="pick-cross-a")
         s_b = _add_store(db.session, slug="pick-cross-b")

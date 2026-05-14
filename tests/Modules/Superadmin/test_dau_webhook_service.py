@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from api.Modules.Auth.Models import LoginEvent
 from api.Modules.Tenancy.Models import User
 from api.Modules.Webhooks.Models import WebhookEvent
+from tests._app import db
 
 
 def _add_user(db, *, role="admin", username):
@@ -44,7 +45,7 @@ def test_dau_mau_distinct_users_per_day():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
-        LoginEvent.query.delete()
+        db.session.query(LoginEvent).delete()
         db.session.commit()
         u1 = _add_user(db.session, username="dm-u1")
         u2 = _add_user(db.session, username="dm-u2")
@@ -73,7 +74,7 @@ def test_dau_mau_handles_zero_activity():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
-        LoginEvent.query.delete()
+        db.session.query(LoginEvent).delete()
         db.session.commit()
         rows, totals = dau_mau(
             db.session, date(2020, 1, 1), date(2020, 1, 31),
@@ -91,7 +92,7 @@ def test_dau_mau_avg_per_day_uses_active_day_count():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import dau_mau
     with flask_app.app_context():
-        LoginEvent.query.delete()
+        db.session.query(LoginEvent).delete()
         db.session.commit()
         u1 = _add_user(db.session, username="dm-avg-1")
         u2 = _add_user(db.session, username="dm-avg-2")
@@ -118,7 +119,7 @@ def test_webhook_health_groups_by_status_with_failure_pct():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
-        WebhookEvent.query.delete()
+        db.session.query(WebhookEvent).delete()
         db.session.commit()
         for _ in range(8):
             _add_webhook(
@@ -148,7 +149,7 @@ def test_webhook_health_zero_count_no_div_by_zero():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
-        WebhookEvent.query.delete()
+        db.session.query(WebhookEvent).delete()
         db.session.commit()
         rows, totals = webhook_health(
             db.session, date(2026, 5, 1), date(2026, 5, 31),
@@ -162,7 +163,7 @@ def test_webhook_health_filters_by_received_at_window():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import webhook_health
     with flask_app.app_context():
-        WebhookEvent.query.delete()
+        db.session.query(WebhookEvent).delete()
         db.session.commit()
         _add_webhook(
             db.session, status="ok",

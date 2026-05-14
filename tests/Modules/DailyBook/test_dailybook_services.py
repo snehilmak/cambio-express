@@ -1,5 +1,6 @@
 """Unit tests for DailyBook.Services (read-side)."""
 from datetime import date, datetime, timedelta
+from tests._app import db
 
 
 def _seed_report(store_id, report_date, **kwargs):

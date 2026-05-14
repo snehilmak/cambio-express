@@ -2,6 +2,7 @@
 recipient resolution for the daily-book lock fan-out."""
 
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+from tests._app import db
 
 
 def _add_store(db, *, slug):

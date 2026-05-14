@@ -6,6 +6,7 @@ target / action / user query params, page is 1-based, per_page
 is 50.
 """
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _login(client_, store_id):

@@ -12,6 +12,7 @@ from datetime import date, timedelta
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, *, name="Test Co", slug=None,
@@ -68,8 +69,8 @@ def test_empty_db_returns_empty():
     from api.Modules.Superadmin.Services import compute_platform_anomalies
     with flask_app.app_context():
         # Wipe any seeded transfers/reports so this test is hermetic.
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         assert compute_platform_anomalies(db.session) == []
 
@@ -84,7 +85,7 @@ def test_quiet_store_flagged_when_active_then_silent():
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="quiet-co")
         today = date.today()
@@ -110,7 +111,7 @@ def test_quiet_store_not_flagged_below_threshold():
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="tiny-co")
         today = date.today()
@@ -131,7 +132,7 @@ def test_quiet_store_not_flagged_when_recent_activity():
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="active-co")
         today = date.today()
@@ -152,7 +153,7 @@ def test_quiet_store_skips_inactive_plan():
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="cancelled-co", plan="inactive")
         today = date.today()
@@ -172,7 +173,7 @@ def test_quiet_store_skips_inactive_store_flag():
     from tests._app import db
     from api.Modules.Superadmin.Services import quiet_store_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="disabled-co", is_active=False)
         today = date.today()
@@ -195,7 +196,7 @@ def test_big_over_short_high_severity_at_or_above_high_threshold():
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="varianty-co")
         today = date.today()
@@ -217,7 +218,7 @@ def test_big_over_short_medium_severity_in_band():
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="medium-co")
         today = date.today()
@@ -239,7 +240,7 @@ def test_big_over_short_below_threshold_excluded():
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="small-variance-co")
         today = date.today()
@@ -259,7 +260,7 @@ def test_big_over_short_outside_lookback_window_excluded():
     from tests._app import db
     from api.Modules.Superadmin.Services import big_over_short_anomalies
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ancient-co")
         today = date.today()
@@ -282,8 +283,8 @@ def test_compute_ranks_high_before_medium():
     from tests._app import db
     from api.Modules.Superadmin.Services import compute_platform_anomalies
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         # One quiet-store (medium), one big-over-short high.
         sq = _add_store(db.session, slug="qq")

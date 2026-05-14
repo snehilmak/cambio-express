@@ -1,5 +1,6 @@
 """Unit tests for `Auth.Services.login.authenticate_password`."""
 import pytest
+from tests._app import db
 
 
 def _seed_user(store_id, *, username, password, role="employee",

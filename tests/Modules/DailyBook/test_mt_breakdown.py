@@ -1,6 +1,7 @@
 """Unit tests for DailyBook.Services.mt_breakdown — per-company
 Money Transfer breakdown read + bulk-replace flows."""
 from datetime import date, datetime
+from tests._app import db
 
 
 def _add_summary(db, *, store_id, report_date, company, amount=0.0,

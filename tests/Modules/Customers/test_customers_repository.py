@@ -8,6 +8,7 @@ then a couple of cross-helper scenarios that mirror the real
 `/api/customers/search` and upsert call sites.
 """
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _seed_customer(store_id, *, full_name, phone_country="+1",

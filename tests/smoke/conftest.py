@@ -29,6 +29,7 @@ import threading
 import time
 
 import pytest
+from tests._app import db
 
 
 # ── Skip the whole module if Playwright/Chromium aren't installed ──
@@ -177,7 +178,7 @@ def owner_page(page, smoke_server):
     from tests._app import app as flask_app, db
     with flask_app.app_context():
         # Idempotent: reuse if a previous test already created this owner.
-        existing = User.query.filter_by(username="owner-smoke@x.com").first()
+        existing = db.session.query(User).filter_by(username="owner-smoke@x.com").first()
         if existing:
             oid = existing.id
         else:
@@ -186,7 +187,7 @@ def owner_page(page, smoke_server):
             o.set_password("smokepass123!")
             db.session.add(o); db.session.commit()
             oid = o.id
-            sa_store = Store.query.filter_by(slug="test-store").first()
+            sa_store = db.session.query(Store).filter_by(slug="test-store").first()
             db.session.add(StoreOwnerLink(owner_id=oid, store_id=sa_store.id))
             db.session.commit()
     _login_via_form(page, smoke_server,

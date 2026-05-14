@@ -1,5 +1,6 @@
 """HTTP integration tests for /api/v2/owner/pl-rollup."""
 from datetime import date
+from tests._app import db
 
 
 def _make_owner(*, username="boss-pl@example.com", password="ownerpass1!",

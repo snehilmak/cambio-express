@@ -5,6 +5,7 @@
 
 Mirrors the legacy /admin/subscription/addons/<key> form handler.
 """
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -26,7 +27,7 @@ def _set_paid_plan(store_id, plan="basic"):
     from api.Modules.Tenancy.Models import Store
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        s = Store.query.filter_by(id=store_id).first()
+        s = db.session.query(Store).filter_by(id=store_id).first()
         s.plan = plan
         db.session.commit()
 
@@ -67,7 +68,7 @@ def test_list_marks_active_addon(client, test_store_id):
     from api.Modules.Tenancy.Models import Store
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        s = Store.query.filter_by(id=test_store_id).first()
+        s = db.session.query(Store).filter_by(id=test_store_id).first()
         s.addons = "tv_display"
         db.session.commit()
     token = _login_admin(client, test_store_id)

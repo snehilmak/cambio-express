@@ -2,6 +2,7 @@
 from datetime import date, datetime
 
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 def _add_store(db, *, slug, plan="basic", billing_cycle="monthly",
@@ -35,7 +36,7 @@ def test_mrr_arr_groups_by_plan_and_cycle():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-b1", plan="basic",
                    billing_cycle="monthly",
@@ -65,7 +66,7 @@ def test_mrr_arr_excludes_trial_and_inactive():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-trial", plan="trial",
                    created_at=datetime(2026, 4, 1))
@@ -85,7 +86,7 @@ def test_mrr_arr_excludes_stores_created_after_d_to():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import mrr_arr
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="ma-future", plan="basic",
                    billing_cycle="monthly",
@@ -107,7 +108,7 @@ def test_churn_cohort_buckets_by_signup_month():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="cc-a-1", plan="inactive",
                    created_at=datetime(2026, 1, 5),
@@ -133,7 +134,7 @@ def test_churn_cohort_includes_active_survivors():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         # Cancelled in May, signed up in Jan.
         _add_store(db.session, slug="cc-cancelled", plan="inactive",
@@ -156,7 +157,7 @@ def test_churn_cohort_pct_calculation():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         # 1 cancelled + 3 active in same Jan cohort → 25% churn.
         _add_store(db.session, slug="cc-pct-cancel", plan="inactive",
@@ -176,7 +177,7 @@ def test_churn_cohort_empty_when_no_cancellations():
     from tests._app import app as flask_app, db
     from api.Modules.Superadmin.Services import churn_cohort
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         _add_store(db.session, slug="cc-active-only", plan="basic",
                    created_at=datetime(2026, 1, 5))

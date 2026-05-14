@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 
 import pytest
+from tests._app import db
 
 
 def _seed_user(store_id, *, username, role="admin", is_active=True):

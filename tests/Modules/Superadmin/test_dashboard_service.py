@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from api.Modules.Billing.Models import ReferralCode
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 # ── compute_mrr ───────────────────────────────────────────
@@ -92,7 +93,7 @@ def test_dashboard_context_counts_paid_correctly():
         superadmin_dashboard_context,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         # 2 basic, 1 pro, 1 trial.
         for slug, plan, cycle in [
@@ -120,8 +121,8 @@ def test_dashboard_context_excludes_canceled_transfers_from_volume():
         superadmin_dashboard_context,
     )
     with flask_app.app_context():
-        Transfer.query.delete()
-        Store.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(Store).delete()
         db.session.commit()
         s = Store(name="dash-vol", slug="dash-vol", plan="basic",
                   email="dash-vol@test.com")
@@ -157,8 +158,8 @@ def test_dashboard_context_top_referrers_only_includes_redeemed():
         superadmin_dashboard_context,
     )
     with flask_app.app_context():
-        ReferralCode.query.delete()
-        Store.query.delete()
+        db.session.query(ReferralCode).delete()
+        db.session.query(Store).delete()
         db.session.commit()
         s_redeemed = Store(name="redeemed", slug="redeemed",
                             plan="basic",
@@ -195,7 +196,7 @@ def test_dashboard_context_activity_capped_at_12():
         superadmin_dashboard_context,
     )
     with flask_app.app_context():
-        Store.query.delete()
+        db.session.query(Store).delete()
         db.session.commit()
         # 15 stores, all recent → activity feed should still cap.
         for i in range(15):

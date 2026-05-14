@@ -6,6 +6,7 @@ Tests hit the FastAPI router via TestClient + via the Flask dispatcher
 from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,

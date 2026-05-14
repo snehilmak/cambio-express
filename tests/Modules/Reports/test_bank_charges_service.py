@@ -3,6 +3,7 @@ from datetime import date, datetime
 
 from api.Modules.BankSync.Models import BankTransaction, StripeBankAccount
 from api.Modules.Tenancy.Models import Store
+from tests._app import db
 
 
 _TXN_COUNTER = [0]
@@ -62,7 +63,7 @@ def test_returns_empty_when_no_matching_charges():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="empty-bc")
         rows, totals = bank_charges_by_account(
@@ -81,7 +82,7 @@ def test_includes_legacy_bank_charge_slug():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="legacy-slug")
         a = _add_account(db.session, s.id, last4="0210")
@@ -105,7 +106,7 @@ def test_includes_per_account_bank_charge_slugs():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="per-acct-slug")
         a = _add_account(db.session, s.id, last4="0230")
@@ -128,7 +129,7 @@ def test_excludes_non_bank_charge_slugs():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="non-bc")
         a = _add_account(db.session, s.id)
@@ -160,7 +161,7 @@ def test_filters_by_date_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="window-bc")
         a = _add_account(db.session, s.id)
@@ -193,7 +194,7 @@ def test_groups_by_account_and_aggregates():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="multi-bc")
         a = _add_account(db.session, s.id)
@@ -221,7 +222,7 @@ def test_separates_rows_by_account():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="multi-acct-bc")
         a1 = _add_account(db.session, s.id, last4="0210")
@@ -249,7 +250,7 @@ def test_sorts_rows_by_amount_descending():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="sort-bc")
         a1 = _add_account(db.session, s.id, last4="0210")
@@ -274,7 +275,7 @@ def test_includes_totals_count_and_amount():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="totals-bc")
         a = _add_account(db.session, s.id)
@@ -302,7 +303,7 @@ def test_filters_by_store_ids():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="filter-s1")
         s2 = _add_store(db.session, slug="filter-s2")
@@ -332,7 +333,7 @@ def test_uses_account_label_for_display():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import bank_charges_by_account
     with flask_app.app_context():
-        BankTransaction.query.delete()
+        db.session.query(BankTransaction).delete()
         db.session.commit()
         s = _add_store(db.session, slug="label-bc")
         a = _add_account(

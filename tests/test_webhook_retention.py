@@ -11,6 +11,7 @@ import json
 import os
 from datetime import datetime, timedelta
 from unittest.mock import patch
+from tests._app import db
 
 # Resolved at call time (not import time) — CI passes different price IDs
 # than conftest, and the webhook reads the env var live.

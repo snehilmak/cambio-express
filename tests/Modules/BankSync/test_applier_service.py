@@ -1,6 +1,7 @@
 """Unit tests for BankSync.Services.applier (PR 71)."""
 from datetime import datetime
 from unittest.mock import MagicMock
+from tests._app import db
 
 
 def _store_with_account(db, *, slug="applier-store", last4="0210"):
@@ -74,7 +75,7 @@ def test_matches_builtin_when_no_operator_rule():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
             db.session, slug="rdc-store", last4="0230",
@@ -98,7 +99,7 @@ def test_no_match_leaves_row_uncategorised():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
             db.session, slug="nomatch-store", last4="9999",
@@ -127,7 +128,7 @@ def test_operator_rule_wins_over_builtin():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(
             db.session, slug="opwin-store", last4="0230",
@@ -163,7 +164,7 @@ def test_operator_rule_increments_match_count():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="counter-store")
         rule = BankRule(
@@ -199,8 +200,8 @@ def test_allow_auto_post_false_skips_daily_line_item():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
-        DailyLineItem.query.delete()
+        db.session.query(BankRule).delete()
+        db.session.query(DailyLineItem).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="backfill-store")
         db.session.add(BankRule(
@@ -221,7 +222,7 @@ def test_allow_auto_post_false_skips_daily_line_item():
         # Tagged but no daily-book row created.
         assert t.category_slug == "cash_expense"
         assert t.daily_line_item_id is None
-        assert DailyLineItem.query.filter_by(
+        assert db.session.query(DailyLineItem).filter_by(
             store_id=s.id,
         ).count() == 0
 
@@ -236,8 +237,8 @@ def test_allow_auto_post_true_creates_daily_line_item():
         apply_rules_to_uncategorized_row,
     )
     with flask_app.app_context():
-        BankRule.query.delete()
-        DailyLineItem.query.delete()
+        db.session.query(BankRule).delete()
+        db.session.query(DailyLineItem).delete()
         db.session.commit()
         s, a = _store_with_account(db.session, slug="autopost-store")
         db.session.add(BankRule(

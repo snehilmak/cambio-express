@@ -8,6 +8,7 @@
 Mirrors the legacy /bank/rules/* form handlers but returns JSON
 envelopes the SPA renders directly.
 """
+from tests._app import db
 
 
 def _login(client, store_id):
@@ -227,7 +228,7 @@ def test_delete_removes_row(client, test_store_id):
     )
     assert resp.status_code == 204
     with flask_app.app_context():
-        assert BankRule.query.filter_by(id=rid).first() is None
+        assert db.session.query(BankRule).filter_by(id=rid).first() is None
 
 
 # ── Cross-tenant safety on update / toggle / delete ─────────

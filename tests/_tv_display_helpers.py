@@ -11,6 +11,7 @@ seed a country (or a country + bank + rates) don't have to re-litigate
 the form-vs-JSON contract themselves.
 """
 from __future__ import annotations
+from tests._app import db
 
 
 def admin_jwt(client, store_id: int, *, username: str = "admin@test.com",

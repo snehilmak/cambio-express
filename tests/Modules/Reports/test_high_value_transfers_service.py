@@ -3,6 +3,7 @@ from datetime import date
 
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, *, slug="hv-store"):
@@ -41,7 +42,7 @@ def test_returns_rows_and_totals_tuple():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-shape")
         rows, totals = high_value_transfers(
@@ -58,7 +59,7 @@ def test_row_shape():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-row")
         _add_transfer(db.session, s.id,
@@ -85,7 +86,7 @@ def test_below_threshold_excluded():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-below")
         _add_transfer(db.session, s.id,
@@ -109,7 +110,7 @@ def test_threshold_inclusive_at_exact_value():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-equal")
         _add_transfer(db.session, s.id,
@@ -130,7 +131,7 @@ def test_rows_sorted_by_amount_descending_then_date():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-sort")
         _add_transfer(db.session, s.id,
@@ -161,7 +162,7 @@ def test_totals_sum_amount_fee_tax():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-totals")
         _add_transfer(db.session, s.id,
@@ -192,7 +193,7 @@ def test_excluded_status_transfers_not_listed():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-canceled")
         _add_transfer(db.session, s.id,
@@ -211,7 +212,7 @@ def test_filters_by_store_list():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="hv-store-1")
         s2 = _add_store(db.session, slug="hv-store-2")
@@ -236,7 +237,7 @@ def test_empty_window_returns_empty_rows_and_zero_totals():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import high_value_transfers
     with flask_app.app_context():
-        Transfer.query.delete()
+        db.session.query(Transfer).delete()
         db.session.commit()
         s = _add_store(db.session, slug="hv-empty")
         rows, totals = high_value_transfers(

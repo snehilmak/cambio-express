@@ -1,5 +1,6 @@
 """Unit tests for BankSync.Services.matcher (PR 70)."""
 from unittest.mock import MagicMock
+from tests._app import db
 
 
 def _rule(*, enabled=True, desc_match_type=None, desc_match_value=None,
@@ -176,7 +177,7 @@ def test_find_matching_rule_returns_none_when_no_rules():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         assert find_matching_rule(db.session, 1, _txn()) is None
 
@@ -187,7 +188,7 @@ def test_find_matching_rule_picks_lowest_priority_first():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         store_id = 99
         # Both match every transaction (no conditions set).
@@ -215,7 +216,7 @@ def test_find_matching_rule_skips_disabled_rules():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         store_id = 100
         # The lowest-priority rule is disabled — should be skipped.
@@ -242,7 +243,7 @@ def test_find_matching_rule_filters_by_store():
     from tests._app import app as flask_app, db
     from api.Modules.BankSync.Services import find_matching_rule
     with flask_app.app_context():
-        BankRule.query.delete()
+        db.session.query(BankRule).delete()
         db.session.commit()
         # Rule belongs to store 1; we query store 2.
         db.session.add(BankRule(

@@ -2,6 +2,7 @@
 aggregates Transfer rows by company for the daily book's
 Money Transfers auto-fill view."""
 from datetime import date
+from tests._app import db
 
 
 def _add_transfer(store_id, **kwargs):

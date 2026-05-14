@@ -1,4 +1,5 @@
 """Unit tests for Auth.Services.password_change (PR 40)."""
+from tests._app import db
 
 
 def _seed_user(store_id, *, username, password="oldpassword"):

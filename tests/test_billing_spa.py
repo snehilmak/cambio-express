@@ -10,13 +10,14 @@ billing page both 301 to React. The SPA fetches:
 
 Two Jinja templates retired (admin_subscription.html, subscribe.html).
 """
+from tests._app import db
 
 
 def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
     with client.application.app_context():
-        u = User.query.filter_by(store_id=store_id, role="admin").first()
+        u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
         s.plan = "pro"

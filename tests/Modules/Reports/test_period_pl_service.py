@@ -4,6 +4,7 @@ from datetime import date
 from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, *, slug="ppl-store"):
@@ -79,8 +80,8 @@ def test_includes_money_transfer_fees_income_row():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-mtf")
         rows, _ = period_pl(
@@ -125,8 +126,8 @@ def test_aggregates_daily_report_income_columns():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-income")
         _add_daily_report(
@@ -154,8 +155,8 @@ def test_aggregates_daily_report_expense_columns():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-expense")
         _add_daily_report(
@@ -178,8 +179,8 @@ def test_money_transfer_fees_pulled_from_transfer_table():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-mtf-sum")
         _add_transfer(
@@ -204,8 +205,8 @@ def test_net_is_income_minus_expenses():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-net")
         _add_daily_report(
@@ -233,7 +234,7 @@ def test_days_counts_daily_report_rows_in_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        DailyReport.query.delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-days")
         for d in (5, 6, 10):
@@ -256,8 +257,8 @@ def test_only_includes_stores_in_list():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s1 = _add_store(db.session, slug="ppl-scope-1")
         s2 = _add_store(db.session, slug="ppl-scope-2")
@@ -281,8 +282,8 @@ def test_only_includes_rows_in_window():
     from tests._app import app as flask_app, db
     from api.Modules.Reports.Services import period_pl
     with flask_app.app_context():
-        Transfer.query.delete()
-        DailyReport.query.delete()
+        db.session.query(Transfer).delete()
+        db.session.query(DailyReport).delete()
         db.session.commit()
         s = _add_store(db.session, slug="ppl-window")
         _add_daily_report(

@@ -7,6 +7,7 @@ Mounts at /api/v2/billing/*. Two endpoints:
 Stripe SDK calls are monkeypatched to avoid network egress.
 """
 from unittest.mock import patch
+from tests._app import db
 
 
 def _login_admin(client, store_id):
@@ -36,7 +37,7 @@ def _login_employee(client, store_id):
     from tests._app import app as flask_app
     with flask_app.app_context():
         from api.Modules.Tenancy.Models import User
-        if not User.query.filter_by(username="emp@test.com").first():
+        if not db.session.query(User).filter_by(username="emp@test.com").first():
             _seed_employee(store_id)
     resp = client.post(
         "/api/v2/auth/login",
@@ -56,7 +57,7 @@ def _set_store_customer_id(store_id, customer_id):
     from api.Modules.Tenancy.Models import Store
     from tests._app import app as flask_app, db
     with flask_app.app_context():
-        s = Store.query.filter_by(id=store_id).first()
+        s = db.session.query(Store).filter_by(id=store_id).first()
         s.stripe_customer_id = customer_id
         db.session.commit()
 

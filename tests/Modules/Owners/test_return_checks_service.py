@@ -5,6 +5,7 @@ from api.Modules.DailyBook.Models import DailyReport
 from api.Modules.ReturnChecks.Models import ReturnCheck, ReturnCheckPayment
 from api.Modules.Tenancy.Models import Store
 from api.Modules.Transfers.Models import Transfer
+from tests._app import db
 
 
 def _add_store(db, slug="rc-store"):
@@ -57,8 +58,8 @@ def test_writeoff_nets_payments_against_remaining_balance():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
-        ReturnCheck.query.delete()
-        ReturnCheckPayment.query.delete()
+        db.session.query(ReturnCheck).delete()
+        db.session.query(ReturnCheckPayment).delete()
         db.session.commit()
         s = _add_store(db.session)
         rc = _add_check(
@@ -84,7 +85,7 @@ def test_writeoff_filters_by_status_value():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="fraud-store")
         _add_check(
@@ -106,7 +107,7 @@ def test_writeoff_filters_by_status_changed_window():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_writeoff_total
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="window-store")
         _add_check(
@@ -150,8 +151,8 @@ def test_period_aggregates_recoveries_by_payment_date():
         return_check_period_aggregates,
     )
     with flask_app.app_context():
-        ReturnCheck.query.delete()
-        ReturnCheckPayment.query.delete()
+        db.session.query(ReturnCheck).delete()
+        db.session.query(ReturnCheckPayment).delete()
         db.session.commit()
         s = _add_store(db.session, slug="recovery-store")
         rc = _add_check(
@@ -183,8 +184,8 @@ def test_period_aggregates_pending_balance_subtracts_installments():
         return_check_period_aggregates,
     )
     with flask_app.app_context():
-        ReturnCheck.query.delete()
-        ReturnCheckPayment.query.delete()
+        db.session.query(ReturnCheck).delete()
+        db.session.query(ReturnCheckPayment).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pending-store")
         rc = _add_check(
@@ -208,8 +209,8 @@ def test_period_aggregates_net_gl_uses_gain_positive():
         return_check_period_aggregates,
     )
     with flask_app.app_context():
-        ReturnCheck.query.delete()
-        ReturnCheckPayment.query.delete()
+        db.session.query(ReturnCheck).delete()
+        db.session.query(ReturnCheckPayment).delete()
         db.session.commit()
         s = _add_store(db.session, slug="netgl-store")
         # Recovered $500 in May
@@ -253,7 +254,7 @@ def test_aging_buckets_classifies_by_age():
     from tests._app import app as flask_app, db
     from api.Modules.Owners.Services import return_check_aging_buckets
     with flask_app.app_context():
-        ReturnCheck.query.delete()
+        db.session.query(ReturnCheck).delete()
         db.session.commit()
         s = _add_store(db.session, slug="aging-store")
         today = date(2026, 5, 6)
@@ -322,8 +323,8 @@ def test_monthly_pl_uses_loss_positive_convention():
         return_check_period_aggregates,
     )
     with flask_app.app_context():
-        ReturnCheck.query.delete()
-        ReturnCheckPayment.query.delete()
+        db.session.query(ReturnCheck).delete()
+        db.session.query(ReturnCheckPayment).delete()
         db.session.commit()
         s = _add_store(db.session, slug="pl-store")
         # $300 loss in May

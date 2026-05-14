@@ -1,4 +1,5 @@
 """Unit tests for Auth.Repositories.users."""
+from tests._app import db
 
 
 def _seed_user(store_id, *, username, role="employee", full_name="",

@@ -1,5 +1,6 @@
 """Unit tests for BankSync.Services — list_transactions_page."""
 from datetime import datetime, timedelta
+from tests._app import db
 
 
 def _seed_account(store_id, *, last4="0000"):

@@ -11,6 +11,7 @@ endpoints (none of these had API endpoints yet):
   - bank-charges-by-account
   - period-comparison (takes optional ?compare_from=&compare_to=)
 """
+from tests._app import db
 
 
 _MIGRATED_BATCH = [
@@ -28,7 +29,7 @@ def _admin_session_login(client, store_id):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
     with client.application.app_context():
-        u = User.query.filter_by(store_id=store_id, role="admin").first()
+        u = db.session.query(User).filter_by(store_id=store_id, role="admin").first()
         uid = u.id
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"

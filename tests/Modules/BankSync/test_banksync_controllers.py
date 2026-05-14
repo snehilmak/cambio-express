@@ -6,6 +6,7 @@ log in as the seeded admin and pass the resulting bearer token,
 mirroring the ReturnChecks / Batches / Monthly test pattern.
 """
 from datetime import datetime
+from tests._app import db
 
 
 def _login(client, store_id):

@@ -1,5 +1,6 @@
 """HTTP integration tests for the Auth Controllers (PR 20)."""
 from fastapi.testclient import TestClient
+from tests._app import db
 
 
 def _client():
@@ -273,14 +274,14 @@ def test_login_records_login_event(client, test_store_id, test_admin_id):
     from api.Modules.Auth.Models import LoginEvent
     from tests._app import app as flask_app
     with flask_app.app_context():
-        before = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+        before = db.session.query(LoginEvent).filter_by(user_id=test_admin_id).count()
     client.post("/api/v2/auth/login", json={
         "username": "admin@test.com",
         "password": "testpass123!",
         "store_id": test_store_id,
     })
     with flask_app.app_context():
-        after = LoginEvent.query.filter_by(user_id=test_admin_id).count()
+        after = db.session.query(LoginEvent).filter_by(user_id=test_admin_id).count()
     assert after == before + 1
 
 

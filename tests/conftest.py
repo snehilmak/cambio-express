@@ -379,7 +379,7 @@ def seed_test_data():
     # resets every table — we rebuild them here so picker UI tests
     # see the same canonical 12 + 34 entries production does.
     seed_catalogs(db.session)
-    if not User.query.filter_by(username="superadmin", store_id=None).first():
+    if not db.session.query(User).filter_by(username="superadmin", store_id=None).first():
         # Pre-enrol the seeded superadmin so SPA login returns a real
         # access_token directly via the TOTP exchange step. The flow
         # is: POST /auth/login with creds → pending_token → POST
@@ -393,7 +393,7 @@ def seed_test_data():
                   totp_enrolled_at=datetime.utcnow())
         sa.set_password("super2025!")
         db.session.add(sa)
-    if not Store.query.filter_by(slug="test-store").first():
+    if not db.session.query(Store).filter_by(slug="test-store").first():
         s = Store(name="Test Store", slug="test-store",
                   email="admin@test.com", plan="trial")
         # trial columns added in Task 2 — set them if available
@@ -429,7 +429,7 @@ def clean_db():
         # rolled back the seed transaction, the row is gone before
         # the test even starts. Retry once to make CI deterministic.
         from api.Modules.Tenancy.Models import Store
-        if Store.query.filter_by(slug="test-store").first() is None:
+        if db.session.query(Store).filter_by(slug="test-store").first() is None:
             db.session.remove()
             db.drop_all()
             db.create_all()
@@ -466,7 +466,7 @@ def test_store_id():
     """The Store.id of the seeded test-store fixture row."""
     from api.Modules.Tenancy.Models import Store
     with flask_app.app_context():
-        return Store.query.filter_by(slug="test-store").first().id
+        return db.session.query(Store).filter_by(slug="test-store").first().id
 
 
 @pytest.fixture
@@ -474,7 +474,7 @@ def test_admin_id():
     """The User.id of the seeded admin@test.com user."""
     from api.Modules.Tenancy.Models import User
     with flask_app.app_context():
-        return User.query.filter_by(username="admin@test.com").first().id
+        return db.session.query(User).filter_by(username="admin@test.com").first().id
 
 
 def make_employee_client(store_id, *, username_suffix="emp"):

@@ -2,12 +2,13 @@
 from datetime import datetime
 
 import pyotp
+from tests._app import db
 
 
 def _seed_user(role="employee", *, totp_secret=None, totp_enrolled_at=None):
     from api.Modules.Tenancy.Models import Store, User
     from tests._app import db
-    s = Store.query.filter_by(slug="test-store").first()
+    s = db.session.query(Store).filter_by(slug="test-store").first()
     u = User(
         store_id=s.id, username=f"u-{role}-{datetime.utcnow().timestamp()}@x.com",
         role=role,
