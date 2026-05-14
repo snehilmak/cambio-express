@@ -85,11 +85,13 @@ def test_ensure_added_indexes_is_idempotent(client):
     second time — `CREATE INDEX IF NOT EXISTS` is idempotent. This
     catches a regression where someone forgets the IF NOT EXISTS
     and prod boots start failing with `relation already exists`."""
+    import logging
     from api.Core.Bootstrap import ensure_added_indexes
     from tests._app import db, app as flask_app
+    log = logging.getLogger("dinerobook")
     with flask_app.app_context():
-        ensure_added_indexes(db.engine, flask_app.logger)  # first call already happened on boot
-        ensure_added_indexes(db.engine, flask_app.logger)  # second call must not raise
+        ensure_added_indexes(db.engine, log)  # first call already happened on boot
+        ensure_added_indexes(db.engine, log)  # second call must not raise
 
 
 def test_period_filter_uses_index_on_postgres(client):
