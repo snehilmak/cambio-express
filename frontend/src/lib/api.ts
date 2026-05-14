@@ -100,7 +100,7 @@ export async function downloadCsv(
       const onLogin = window.location.pathname === "/app/login";
       if (!onLogin) window.location.assign("/app/login");
     }
-    let body: unknown = null;
+    let body: unknown;
     try { body = await resp.json(); } catch { body = null; }
     throw new ApiError(
       resp.status, `CSV download failed (${resp.status})`, body,
