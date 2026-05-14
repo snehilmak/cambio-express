@@ -22,7 +22,8 @@ from datetime import datetime, timedelta
 from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Webhooks.Models import EmailEvent
 from api.Modules.Webhooks.Services import verify_resend_signature as _verify_resend_signature
-from app import _send_email, db, purge_expired_stores, smtp_health_check
+from api.Modules.Notifications.Services.smtp import health_check as smtp_health_check
+from app import _send_email, db, purge_expired_stores
 
 
 # ── Signature helpers ──────────────────────────────────────────
@@ -246,7 +247,7 @@ def test_send_email_skips_suppressed_user(client, test_admin_id):
     with client.application.app_context():
         ok = _send_email("bounced@test.com", "hi", "body")
     assert ok is False
-    h = smtp_health_check()
+    h = smtp_health_check(db.session)
     assert h["status"] == "suppressed"
     assert "suppression" in h["error"].lower()
 

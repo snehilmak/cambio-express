@@ -287,7 +287,3 @@ def test_audit_fields_includes_core_columns():
 
 
 
-def test_legacy_audit_fields_re_exported():
-    from app import _TRANSFER_AUDIT_FIELDS
-    from api.Modules.Transfers.Services import TRANSFER_AUDIT_FIELDS
-    assert _TRANSFER_AUDIT_FIELDS is TRANSFER_AUDIT_FIELDS
