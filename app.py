@@ -1,4 +1,4 @@
-import logging, os, smtplib, sys
+import logging, os, sys
 
 import stripe
 from flask import Flask, session
@@ -82,18 +82,6 @@ _register_context_processors(app, db, current_user, current_store)
 
 # Self-service signup gate.
 SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
-
-# Cookie name used by PublicRoutes' /login/<slug> bounce path.
-LAST_STORE_SLUG_COOKIE = "ds_last_store"
-
-# Email sending shim — Auth's password-reset Controller imports it
-# from here; canonical home is api.Modules.Notifications.Services.smtp.
-from api.Modules.Notifications.Services import smtp as _smtp_svc  # noqa: E402
-
-
-def _send_email(to_addr, subject, body, html=None):
-    return _smtp_svc.send_email(db.session, to_addr, subject, body, html)
-
 
 def purge_expired_stores():
     """Daily cron entrypoint (CLAUDE.md invariant #4 = 180 days)."""

@@ -86,6 +86,11 @@ from api.Flask.Templating import country_flag_html as _country_flag_html  # noqa
 _templates.env.globals["country_flag_html"] = _country_flag_html
 
 
+# Long-lived cookie persisting the last store-slug an employee
+# signed in to so the PWA shortcut at "/" knows where to bounce.
+LAST_STORE_SLUG_COOKIE = "ds_last_store"
+
+
 # ── Landing routes ───────────────────────────────────────────────
 
 
@@ -94,7 +99,6 @@ async def landing(request: Request) -> Response:
     employee opens their shortcut (which points at /), we honor
     the ``ds_last_store`` cookie and bounce straight to
     /app/login/<slug>."""
-    from app import LAST_STORE_SLUG_COOKIE
     from api.Modules.Tenancy.Models import Store
 
     slug = request.cookies.get(LAST_STORE_SLUG_COOKIE)
