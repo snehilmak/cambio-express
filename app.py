@@ -69,33 +69,12 @@ from api.Modules.Tenancy.Models import Store, User  # noqa: E402 (named for curr
 def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
 def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
-# ── Add-ons catalog ──────────────────────────────────────────
-ADDONS_CATALOG = {
-    "tv_display": {
-        "name": "TV Display & Live Rates",
-        "price_cents": 500,
-        "price_label": "$5 / month",
-        "tagline": "Show your money transfer rates on the TV behind your counter.",
-        "description": (
-            "A live rate board for your shop — manage country sections, payout "
-            "banks, and the MT companies you offer in one place; the TV refreshes "
-            "automatically when you change a rate. Each store gets a tokenized "
-            "URL you point any TV browser, Chromecast, smart-TV, or our upcoming "
-            "Google TV / Fire TV apps at."
-        ),
-        "status": "active",
-    },
-}
-
-# Add-on / plan / retention helpers re-exported for legacy callers
-# (context processors, tests) that ``from app import …``.
+# Billing helpers re-exported for context processors + tests.
 from api.Modules.Billing.Services import (  # noqa: E402
     data_retention_days_left,
     store_addon_keys,
     store_has_paid_plan,
 )
-
-DATA_RETENTION_DAYS = 180  # 6 months
 
 from api.Flask.ContextProcessors import register as _register_context_processors  # noqa: E402
 _register_context_processors(app, db, current_user, current_store)

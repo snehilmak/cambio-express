@@ -41,8 +41,9 @@ def _post(client, event):
 # ── customer.subscription.deleted ───────────────────────────────────────────
 
 def test_deleted_starts_180_day_retention(client):
+    from api.Modules.Billing.Services import DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS
     from api.Modules.Tenancy.Models import Store
-    from app import DATA_RETENTION_DAYS, db
+    from app import db
     with client.application.app_context():
         sid = _seed(plan="pro", stripe_subscription_id="sub_xyz")
     before = datetime.utcnow()
