@@ -22,9 +22,7 @@ app = Flask(__name__)
 install_request_id(app)
 
 from api.Flask.Config import (  # noqa: E402
-    install_csrf as _install_csrf,
     install_secret_key as _install_secret_key,
-    install_session as _install_session,
     warn_default_seed_passwords as _warn_seed_pw,
 )
 _install_secret_key(app)
@@ -41,20 +39,11 @@ from api.Flask.Templating import (  # noqa: E402
 )
 STATIC_VERSION = _install_templating(app)
 
-_is_https_prod = _install_session(app)
-
 from api.Flask.Database import install as _install_db  # noqa: E402
 db = _install_db(app)
 
 
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
-
-# ── Rate limiting (CLAUDE.md invariant #15) ─────────────────
-from api.Flask.RateLimit import install as _install_rate_limiter
-limiter = _install_rate_limiter(app)
-
-# ── CSRF protection (CLAUDE.md invariant #16) ───────────────
-csrf = _install_csrf(app, is_https_prod=_is_https_prod)
 
 
 # ── Models live in api/Modules/<domain>/Models ──────────────────
@@ -69,15 +58,12 @@ from api.Modules.Tenancy.Models import Store, User  # noqa: E402 (named for curr
 def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
 def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
-# Billing helpers re-exported for context processors + tests.
+# Billing helpers re-exported for tests.
 from api.Modules.Billing.Services import (  # noqa: E402
     data_retention_days_left,
     store_addon_keys,
     store_has_paid_plan,
 )
-
-from api.Flask.ContextProcessors import register as _register_context_processors  # noqa: E402
-_register_context_processors(app, db, current_user, current_store)
 
 
 # Self-service signup gate.
