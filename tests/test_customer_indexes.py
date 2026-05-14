@@ -57,7 +57,7 @@ def test_unique_constraint_still_present(client):
 def test_added_indexes_registry_lists_customer_phone(client):
     """Cross-check: registry entry must match a model-level Index()."""
     from api.Modules.Customers.Models import Customer
-    from app import _ADDED_INDEXES
+    from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared = {ix.name for ix in Customer.__table__.indexes}
     customer_entries = [
         name for name, table, _ in _ADDED_INDEXES if table == "customer"

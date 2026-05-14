@@ -1,6 +1,6 @@
 from flask import Flask, request, session, Response
 from datetime import timedelta
-import logging, os, secrets, smtplib, sys
+import logging, os, smtplib, sys
 
 # When run via `python app.py` the running module is `__main__`, not
 # `app`. Submodules in api/Modules/*/Models/__init__.py do
@@ -265,45 +265,10 @@ csrf = CSRFProtect(app)
 
 # ── Models live in api/Modules/<domain>/Models ──────────────────
 # Re-exported here so legacy ``from app import Store, User, …``
-# call sites keep working. New code imports from the Models
-# package directly.
-from api.Modules.Announcements.Models import (  # noqa: E402
-    Announcement, PushSubscription,
-)
-from api.Modules.Audit.Models import (  # noqa: E402
-    OperatorAuditLog, SuperadminAuditLog, TransferAudit,
-)
-from api.Modules.Auth.Models import (  # noqa: E402
-    LoginEvent, Passkey, PasswordResetToken,
-)
-from api.Modules.BankSync.Models import (  # noqa: E402
-    BankRule, BankTransaction, StripeBankAccount,
-)
-from api.Modules.Batches.Models import ACHBatch  # noqa: E402
-from api.Modules.Billing.Models import (  # noqa: E402
-    DiscountCode, FeatureFlag, ReferralCode, ReferralRedemption,
-    StoreFeatureOverride,
-)
-from api.Modules.Customers.Models import Customer  # noqa: E402
-from api.Modules.DailyBook.Models import (  # noqa: E402
-    CheckDeposit, DailyDrop, DailyLineItem, DailyReport,
-    MoneyTransferSummary,
-)
-from api.Modules.Monthly.Models import MonthlyFinancial  # noqa: E402
-from api.Modules.ReturnChecks.Models import (  # noqa: E402
-    RETURN_CHECK_BOOKED, RETURN_CHECK_STATUSES,
-    ReturnCheck, ReturnCheckPayment,
-)
-from api.Modules.Tenancy.Models import (  # noqa: E402
-    OwnerConnectCode, Store, StoreEmployee, StoreOwnerLink, User,
-)
-from api.Modules.Transfers.Models import Transfer  # noqa: E402
-from api.Modules.TVDisplay.Models import (  # noqa: E402
-    TVBankCatalog, TVCatalogLogo, TVCompanyCatalog, TVDisplay,
-    TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate,
-    TVPairing, TVPendingPair,
-)
-from api.Modules.Webhooks.Models import EmailEvent, WebhookEvent  # noqa: E402
+# call sites keep working. New code imports from the per-domain
+# Models package directly.
+from api.Flask.Models import *  # noqa: E402, F401, F403
+from api.Modules.Tenancy.Models import Store, User  # noqa: E402 (named for current_user/current_store)
 
 
 # ── Auth ─────────────────────────────────────────────────────
@@ -393,35 +358,6 @@ def smtp_health_check():
 from api.Modules.Owners.Services import owner_store_ids as _svc_owner_store_ids
 
 
-# ── Pair-code system for the Fire TV / Google TV companion app ─
-# TV-initiated flow (mirrors Netflix/YouTube/Disney+ on TV):
-# 1) TV POSTs /api/tv-pair/init → server mints code + device_token,
-#    returns both, TV polls /api/tv-pair/status.
-# 2) Operator types code on /tv-display claim panel.
-# 3) Server revokes any prior active TVPairing on the display and
-#    creates a fresh one reusing the pending device_token.
-# 4) TV's next poll returns "claimed" + per-device URL; rate board
-#    loads. addon=tv_display is required to claim.
-#
-# Ambiguous chars excluded from the alphabet: O / 0 / I / 1 / L / B / 8.
-_PAIR_CODE_ALPHABET = "ACDEFGHJKMNPQRTUVWXYZ234579"
-_PAIR_CODE_LIFETIME = timedelta(minutes=10)
-
-def _generate_pair_code():
-    """6-char code from _PAIR_CODE_ALPHABET. Brute-force resistance
-    comes from the 10-min expiry + addon gate, not the code length
-    (27**6 ~ 387M)."""
-    return "".join(secrets.choice(_PAIR_CODE_ALPHABET) for _ in range(6))
-
-def _generate_device_token():
-    """32-byte URL-safe random. Loops 8x on collision against
-    TVPairing or TVPendingPair before raising."""
-    for _ in range(8):
-        t = secrets.token_urlsafe(24)
-        if (not db.session.query(TVPairing).filter_by(device_token=t).first()
-                and not db.session.query(TVPendingPair).filter_by(device_token=t).first()):
-            return t
-    raise RuntimeError("Could not mint a unique device_token")
 
 
 # ── Report Center ────────────────────────────────────────────
@@ -489,78 +425,21 @@ from blueprints import errors as _bp_errors  # noqa: E402
 _bp_errors.register(app, current_user)
 
 
-# Bootstrap shims for legacy ``from app import _X`` test imports;
-# canonical home is api.Core.Bootstrap.
-from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
-
-
-def _ensure_added_indexes():
-    from api.Core.Bootstrap import ensure_added_indexes
-    ensure_added_indexes(db.engine, app.logger)
-
+from api.Flask.Init import init_db as _init_db, mount_fastapi as _mount_fastapi  # noqa: E402
 
 def init_db():
-    """Boot-time DB init: Alembic upgrade + index safety-net + legacy
-    drops + line-item migration + feature-flag seed + TV catalog seed
-    + superadmin seed. Idempotent on every boot."""
-    from api.Core.Bootstrap import (
-        apply_schema as _bs_apply_schema,
-        drop_legacy_tables as _bs_drop_legacy,
-        ensure_added_indexes as _bs_ensure_indexes,
-        migrate_legacy_line_item_tables as _bs_migrate_line_items,
-        rename_maxi_transfer_to_maxi as _bs_rename_maxi,
-        seed_feature_flags as _bs_seed_flags,
-    )
-    with app.app_context():
-        _bs_apply_schema(db.engine, app.logger)
-        _bs_ensure_indexes(db.engine, app.logger)
-        _bs_drop_legacy(db.engine, app.logger)
-        _bs_rename_maxi(db.session, app.logger)
-        try:
-            _bs_migrate_line_items(db.session)
-        except Exception as e:
-            app.logger.warning(f"Legacy line-item migration skipped: {e}")
-        _bs_seed_flags(db.session)
-        try:
-            from api.Modules.TVDisplay.Services.seed import run as _seed_tv
-            n_imported = _seed_tv(db.session, app.root_path)
-            if n_imported:
-                app.logger.info(f"Imported {n_imported} TV logos from static/seed-logos/.")
-        except Exception as e:
-            app.logger.warning(f"TV catalog seed skipped: {e}")
-        if not db.session.query(User).filter_by(username="superadmin",store_id=None).first():
-            sa=User(username="superadmin",full_name="Platform Owner",role="superadmin",store_id=None)
-            sa.set_password(os.environ.get("SUPERADMIN_PASSWORD","super2025!")); db.session.add(sa); db.session.commit()
-            print("✅ Superadmin: superadmin / super2025!")
+    """Boot-time DB init. Idempotent on every boot."""
+    _init_db(app, db)
 
 # DINEROBOOK_SKIP_INIT_DB is set by alembic/env.py (it imports app
 # only to harvest db.metadata).
 if not os.environ.get("DINEROBOOK_SKIP_INIT_DB"):
     init_db()
 
-# ── FastAPI + SPA strangler-fig dispatcher ──────────────────────
-# Mounts /api/v2 and /app onto Flask's wsgi_app so Flask's
-# test_client can reach them. Production routes via asgi.py and
-# bypasses this entirely; conftest.py swaps the ASGIMiddleware
-# wrappers for TestClient-backed bridges to avoid the a2wsgi
-# leaked-task pathology under coverage.
-try:
-    from api.main import api_app as _fastapi_app
-    from api.spa import spa_app as _spa_app
-    from a2wsgi import ASGIMiddleware
-    from werkzeug.middleware.dispatcher import DispatcherMiddleware
-    app.wsgi_app = DispatcherMiddleware(
-        app.wsgi_app,
-        {
-            "/api/v2": ASGIMiddleware(_fastapi_app),
-            "/app":    ASGIMiddleware(_spa_app),
-        },
-    )
-    app.logger.info(
-        "FastAPI mounted at /api/v2 + SPA at /app (strangler-fig)"
-    )
-except Exception as _fastapi_err:
-    app.logger.warning(f"FastAPI mount skipped: {_fastapi_err}")
+# Mount /api/v2 (FastAPI) + /app (Starlette SPA) onto Flask's
+# wsgi_app so the test_client can reach them. Production routes
+# via asgi.py and bypasses this entirely.
+_mount_fastapi(app)
 
 
 if __name__=="__main__":

@@ -326,7 +326,7 @@ def claim_pair_code_route(
     # the Flask /api/tv-pair/init endpoint that mints the pending row,
     # so the validator must agree on what's a valid char.
     from api.Modules.TVDisplay.Models import TVPairing, TVPendingPair
-    from app import _PAIR_CODE_ALPHABET
+    from api.Modules.TVDisplay.Services.pair_code import PAIR_CODE_ALPHABET as _PAIR_CODE_ALPHABET
 
     raw = (payload.code or "").strip().upper()
     code = "".join(c for c in raw if c in _PAIR_CODE_ALPHABET)

@@ -60,7 +60,7 @@ def test_user_unique_constraint_still_present(client):
 
 def test_added_indexes_registry_lists_user(client):
     from api.Modules.Tenancy.Models import User
-    from app import _ADDED_INDEXES
+    from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared = {ix.name for ix in User.__table__.indexes}
     user_entries = [
         name for name, table, _ in _ADDED_INDEXES if table == "user"

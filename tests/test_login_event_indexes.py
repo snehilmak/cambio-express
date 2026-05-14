@@ -67,7 +67,7 @@ def test_existing_single_column_indexes_survive(client):
 
 def test_added_indexes_registry_lists_login_event(client):
     from api.Modules.Auth.Models import LoginEvent
-    from app import _ADDED_INDEXES
+    from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared = {ix.name for ix in LoginEvent.__table__.indexes}
     entries = [
         name for name, table, _ in _ADDED_INDEXES if table == "login_event"

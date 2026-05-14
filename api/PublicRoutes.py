@@ -244,8 +244,10 @@ async def tv_pair_init(request: Request) -> JSONResponse:
     """The Fire TV app calls this on launch. Creates a
     ``TVPendingPair`` with a fresh code + device_token and returns
     both."""
-    from app import _generate_device_token, _generate_pair_code, _PAIR_CODE_LIFETIME
     from api.Modules.TVDisplay.Models import TVPendingPair
+    from api.Modules.TVDisplay.Services.pair_code import (
+        PAIR_CODE_LIFETIME, generate_device_token, generate_pair_code,
+    )
 
     payload: dict = {}
     try:
@@ -261,16 +263,16 @@ async def tv_pair_init(request: Request) -> JSONResponse:
         # Loop on code collision (rare with a 387M space, free to retry).
         code = None
         for _ in range(8):
-            code = _generate_pair_code()
+            code = generate_pair_code()
             if not s.query(TVPendingPair).filter_by(code=code).first():
                 break
 
         pending = TVPendingPair(
             code=code,
-            device_token=_generate_device_token(),
+            device_token=generate_device_token(s),
             device_label=device_label,
             created_at=now,
-            expires_at=now + _PAIR_CODE_LIFETIME,
+            expires_at=now + PAIR_CODE_LIFETIME,
         )
         s.add(pending)
         s.commit()
@@ -278,7 +280,7 @@ async def tv_pair_init(request: Request) -> JSONResponse:
             "code":         pending.code,
             "device_token": pending.device_token,
             "expires_at":   pending.expires_at.isoformat() + "Z",
-            "ttl_seconds":  int(_PAIR_CODE_LIFETIME.total_seconds()),
+            "ttl_seconds":  int(PAIR_CODE_LIFETIME.total_seconds()),
         }
     return JSONResponse(body)
 

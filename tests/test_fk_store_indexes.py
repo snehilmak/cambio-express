@@ -65,7 +65,7 @@ def test_added_indexes_registry_covers_all_targets(client):
     """`_ADDED_INDEXES` must list every (table, store_id) entry —
     otherwise existing prod databases will silently skip the
     index even though fresh installs get it."""
-    from app import _ADDED_INDEXES
+    from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     registry = {(name, table) for name, table, _ in _ADDED_INDEXES}
     for _model_attr, table_name, expected in EXPECTED_FK_INDEXES:
         assert (expected, table_name) in registry, (
