@@ -129,14 +129,18 @@ def test_cashier_productivity_listed_in_report_center(client, test_store_id):
 
 
 def test_cashier_productivity_csv_export(client, test_store_id):
-    _admin_login(client, test_store_id)
+    from tests.conftest import login_admin
     today = date.today()
     maria = _make_employee(client, test_store_id, name="Maria")
     _make_transfer(client, test_store_id, send_date=today, amount=500,
                    employee_id=maria, employee_name="Maria")
-
-    resp = client.get("/reports/cashier-productivity.csv")
-    assert resp.status_code == 200
+    jwt = login_admin(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/reports/cashier-productivity.csv"
+        f"?store_ids={test_store_id}",
+        headers={"Authorization": f"Bearer {jwt}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
     assert resp.headers["Content-Type"].startswith("text/csv")
     body = resp.get_data(as_text=True)
     # Header row + Maria row + TOTAL row.

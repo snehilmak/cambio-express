@@ -11,7 +11,7 @@ export default function EmployeeActivity() {
       title="Employee Activity"
       resultUnit={["employee", "employees"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/employee-activity.csv`}
+      csvUrl={`/api/v2/reports/employee-activity.csv`}
       kpis={[
         { label: "Transfers Logged", tone: "primary",
           value: t => Number(t.count ?? 0).toLocaleString() },

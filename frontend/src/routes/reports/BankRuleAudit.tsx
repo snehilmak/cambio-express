@@ -11,7 +11,7 @@ export default function BankRuleAudit() {
       title="Bank Rule Audit"
       resultUnit={["rule", "rules"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/bank-rule-audit.csv`}
+      csvUrl={`/api/v2/reports/bank-rule-audit.csv`}
       kpis={[
         { label: "Active Rules",  tone: "primary",
           value: t => Number(t.rules ?? 0).toLocaleString() },

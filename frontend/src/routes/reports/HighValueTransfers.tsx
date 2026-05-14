@@ -53,7 +53,7 @@ export default function HighValueTransfers() {
         title="High Value Transfers"
         resultUnit={["transfer", "transfers"]}
         backTo={baseRoute}
-        csvUrl={`${baseRoute}/high-value-transfers.csv`}
+        csvUrl={`/api/v2/reports/high-value-transfers.csv`}
         extraParams={{ threshold: threshold || "1000" }}
         kpis={[
           { label: `Above $${Number(threshold || 1000).toLocaleString()}`, tone: "primary",

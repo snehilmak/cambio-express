@@ -12,7 +12,7 @@ export default function TopCustomers() {
       title="Top Customers by Volume"
       resultUnit={["customer", "customers"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/top-customers.csv`}
+      csvUrl={`/api/v2/reports/top-customers.csv`}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Total Fees",     tone: "neon",    value: t => fmtMoney(Number(t.fees ?? 0)) },

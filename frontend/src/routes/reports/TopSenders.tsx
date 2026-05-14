@@ -14,7 +14,7 @@ export default function TopSenders() {
       title="Top Senders"
       resultUnit={["sender", "senders"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/top-senders.csv`}
+      csvUrl={`/api/v2/reports/top-senders.csv`}
       extraParams={{ sort_by: "count" }}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },

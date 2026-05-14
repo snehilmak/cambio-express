@@ -15,7 +15,7 @@ export default function PeriodComparison() {
       title="Period vs Prior Period"
       resultUnit={["metric", "metrics"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/period-comparison.csv`}
+      csvUrl={`/api/v2/reports/period-comparison.csv`}
       kpis={[
         { label: "Current Period", tone: "primary",
           value: t => (t.current_label as string) || "—" },

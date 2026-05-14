@@ -11,7 +11,7 @@ export default function DailyDrops() {
       title="Daily Cash Drops"
       resultUnit={["day", "days"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/daily-drops.csv`}
+      csvUrl={`/api/v2/reports/daily-drops.csv`}
       kpis={[
         { label: "Total Amount",  tone: "primary",
           value: t => fmtMoney(Number(t.amount ?? 0)) },

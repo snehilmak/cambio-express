@@ -254,6 +254,31 @@ def login_superadmin(client) -> str:
     ).get_json()["access_token"]
 
 
+def login_admin(client, store_id: int) -> str:
+    """Log in as the seeded admin@test.com user (or whatever admin
+    exists on `store_id`) and return the JWT. Used by CSV-export
+    tests that need a real bearer token rather than the legacy
+    Flask cookie session."""
+    from api.Modules.Tenancy.Models import User
+    with flask_app.app_context():
+        u = (
+            User.query
+            .filter_by(store_id=store_id, role="admin")
+            .first()
+        )
+        assert u is not None, (
+            f"No admin user on store_id={store_id} — did seed run?"
+        )
+        username = u.username
+    return client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": username, "password": "testpass123!",
+            "store_id": store_id,
+        },
+    ).get_json()["access_token"]
+
+
 def seed_test_data():
     from api.Modules.Tenancy.Models import Store, User
     from api.Modules.TVDisplay.Services.seed import seed_catalogs

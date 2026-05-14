@@ -43,13 +43,21 @@ def test_admin_drilldown_routes_redirect_to_spa(client, test_store_id):
         )
 
 
-def test_admin_drilldown_csv_routes_stay_on_flask(client, test_store_id):
-    """CSV exports MUST stay on Flask — the SPA links to them as
-    `download` attributes."""
-    _admin_session_login(client, test_store_id)
+def test_admin_drilldown_csv_routes_on_fastapi(client, test_store_id):
+    """CSV exports are JWT-authed FastAPI endpoints. The SPA reads
+    them with the bearer token + turns the response into a blob
+    download client-side (lib/api.ts::downloadCsv)."""
+    from tests.conftest import login_admin
+    jwt = login_admin(client, test_store_id)
+    headers = {"Authorization": f"Bearer {jwt}"}
     for flask_slug, _api_slug in _MIGRATED_BATCH:
-        resp = client.get(f"/reports/{flask_slug}.csv")
-        assert resp.status_code == 200, f"slug={flask_slug}"
+        resp = client.get(
+            f"/api/v2/reports/{flask_slug}.csv?store_ids={test_store_id}",
+            headers=headers,
+        )
+        assert resp.status_code == 200, (
+            f"slug={flask_slug} {resp.get_data(as_text=True)[:200]}"
+        )
         assert resp.mimetype == "text/csv", f"slug={flask_slug}"
 
 

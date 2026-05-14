@@ -11,7 +11,7 @@ export default function ByDestinationCountry() {
       title="By Destination Country"
       resultUnit={["country", "countries"]}
       backTo={baseRoute}
-      csvUrl={`${baseRoute}/by-destination-country.csv`}
+      csvUrl={`/api/v2/reports/by-destination-country.csv`}
       kpis={[
         { label: "Total Sent",     tone: "primary", value: t => fmtMoney(Number(t.sent ?? 0)) },
         { label: "Country Count",  tone: "neon",
