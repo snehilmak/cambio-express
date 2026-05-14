@@ -2,6 +2,7 @@
 subscription-state business logic, lifted out of app.py during the
 Auth/Billing slice of the strangler-fig migration.
 """
+from api.Modules.Billing.Services.addons_catalog import ADDONS_CATALOG
 from api.Modules.Billing.Services.checkout import (
     BillingError,
     InvalidPlanError,
@@ -60,6 +61,7 @@ from api.Modules.Billing.Services.webhook import (
 )
 
 __all__ = [
+    "ADDONS_CATALOG",
     "BillingError",
     "DEFAULT_RETENTION_DAYS",
     "EXPIRING_SOON_THRESHOLD_DAYS",

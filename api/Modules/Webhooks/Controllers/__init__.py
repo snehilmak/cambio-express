@@ -110,8 +110,9 @@ async def stripe_webhook(request: Request, db: Session = Depends(get_db)):
     failure rate via the Webhook Health page.
     """
     from api.Modules.Webhooks.Models import WebhookEvent
-    from app import DATA_RETENTION_DAYS, app as flask_app, db as flask_db
+    from app import app as flask_app, db as flask_db
     from api.Modules.Billing.Services import (
+        DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS,
         InvalidWebhookSignatureError,
         handle_stripe_event,
         verify_webhook_signature,

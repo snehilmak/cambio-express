@@ -262,10 +262,10 @@ def subscription_summary_route(
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
     from api.Modules.Billing.Services import (
+        ADDONS_CATALOG, DEFAULT_RETENTION_DAYS as DATA_RETENTION_DAYS,
         data_retention_days_left, get_trial_status, store_addon_keys,
         store_feature_enabled, store_has_paid_plan,
     )
-    from app import ADDONS_CATALOG, DATA_RETENTION_DAYS
     plan_labels = {
         "trial": "Free Trial", "basic": "Basic", "pro": "Pro",
         "inactive": "Inactive",
@@ -329,9 +329,9 @@ def list_addons_route(
     Basic or Pro subscription per the legacy contract."""
     sid = _require_store(claims)
     from api.Modules.Billing.Services import (
+        ADDONS_CATALOG,
         store_addon_keys, store_feature_enabled, store_has_paid_plan,
     )
-    from app import ADDONS_CATALOG
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -362,9 +362,9 @@ def toggle_addon_route(
     not flipped on."""
     sid = _require_store(claims)
     from api.Modules.Billing.Services import (
+        ADDONS_CATALOG,
         store_addon_keys, store_has_paid_plan,
     )
-    from app import ADDONS_CATALOG
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
