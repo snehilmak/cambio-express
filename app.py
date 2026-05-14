@@ -1,6 +1,6 @@
 from flask import Flask, request, session, Response
-from datetime import datetime, date, timedelta
-import csv, io, logging, os, secrets, smtplib, sys
+from datetime import timedelta
+import logging, os, secrets, smtplib, sys
 
 # When run via `python app.py` the running module is `__main__`, not
 # `app`. Submodules in api/Modules/*/Models/__init__.py do
@@ -12,7 +12,6 @@ import csv, io, logging, os, secrets, smtplib, sys
 if __name__ == "__main__" and "app" not in sys.modules:
     sys.modules["app"] = sys.modules[__name__]
 import stripe
-import click
 # WebAuthn / passkeys. The library ships both verify_* helpers and the
 # structs we need to build registration options. Lazy imports inside
 # helper bodies would work too, but these are cheap and centralizing
@@ -275,7 +274,7 @@ from api.Modules.Audit.Models import (  # noqa: E402
     OperatorAuditLog, SuperadminAuditLog, TransferAudit,
 )
 from api.Modules.Auth.Models import (  # noqa: E402
-    LoginEvent, Passkey, PasswordResetToken, RecoveryCode,
+    LoginEvent, Passkey, PasswordResetToken,
 )
 from api.Modules.BankSync.Models import (  # noqa: E402
     BankRule, BankTransaction, StripeBankAccount,
@@ -350,84 +349,9 @@ from api.Modules.Billing.Services import (
 # ── Cancellation & data retention ────────────────────────────
 DATA_RETENTION_DAYS = 180  # 6 months
 
-# ``active_announcements`` lives in
-# ``api.Modules.Announcements.Services``. Imported at module-load
-# time so the trial-context processor below doesn't re-do the
-# lookup on every request.
-from api.Modules.Announcements.Services import (  # noqa: E402
-    active_announcements,
-)
+from api.Flask.ContextProcessors import register as _register_context_processors  # noqa: E402
+_register_context_processors(app, db, current_user, current_store)
 
-
-@app.context_processor
-def inject_trial_context():
-    """trial_status, trial_days_left, store, announcements, my_referral_code."""
-    try:
-        announcements = active_announcements(db.session)
-    except Exception:
-        announcements = []
-    user = current_user()
-    if not user:
-        return {"trial_status": "exempt", "trial_days_left": 0, "store": None,
-                "announcements": announcements}
-    if user.role in ("superadmin", "owner"):
-        return {"trial_status": "exempt", "trial_days_left": 0, "store": None,
-                "announcements": announcements}
-    from api.Modules.Billing.Services import (
-        ensure_referral_code as _svc_ensure_referral_code,
-        get_trial_status as _svc_get_trial_status,
-    )
-    store = current_store()
-    status = _svc_get_trial_status(store)
-    days_left = 0
-    if store and store.trial_ends_at:
-        delta = store.trial_ends_at - datetime.utcnow()
-        days_left = max(0, delta.days)
-    my_referral_code = ""
-    if (user.role == "admin"
-        and store is not None
-        and store.plan in ("basic", "pro")):
-        try:
-            rc = db.session.query(ReferralCode).filter_by(owner_store_id=store.id).first()
-            if rc is None:
-                rc = _svc_ensure_referral_code(db.session, store)
-                db.session.commit()
-            my_referral_code = rc.code if rc else ""
-        except Exception as e:
-            app.logger.warning(f"referral code lookup failed: {e}")
-    return {"trial_status": status, "trial_days_left": days_left, "store": store,
-            "announcements": announcements, "my_referral_code": my_referral_code}
-
-
-@app.context_processor
-def inject_impersonation_context():
-    """is_impersonating + impersonated_store_name for the banner."""
-    if "impersonator_user_id" not in session:
-        return {"is_impersonating": False, "impersonated_store_name": ""}
-    sid = session.get("store_id")
-    store = db.session.get(Store, sid) if sid else None
-    return {
-        "is_impersonating": True,
-        "impersonated_store_name": store.name if store else "(unknown store)",
-    }
-
-
-@app.context_processor
-def inject_active_addons():
-    """active_addons set for sidebar feature-link gating."""
-    store = current_store()
-    return {"active_addons": store_addon_keys(store)}
-
-@app.context_processor
-def inject_theme():
-    """Active UI theme: user preference or 'dark' default."""
-    user = current_user()
-    if user is None:
-        return {"theme": "dark"}
-    pref = getattr(user, "theme_preference", None)
-    if pref not in ("dark", "light"):
-        return {"theme": "dark"}
-    return {"theme": pref}
 
 # Self-service signup gate. With SIGNUP_CLOSED=1 the /signup
 # pages render a "Signups closed" notice; the FastAPI signup
@@ -556,82 +480,10 @@ def purge_expired_stores():
     with SessionLocal() as s:
         return _svc(s)
 
-@app.cli.command("purge-expired-stores")
-def purge_expired_stores_cmd():
-    """Delete inactive stores past their retention deadline. Run daily."""
-    n = purge_expired_stores()
-    print(f"Purged {n} expired store(s).")
 
+from api.Flask.Cli import register as _register_cli_commands  # noqa: E402
+_register_cli_commands(app, db)
 
-@app.cli.command("send-trial-reminders")
-def send_trial_reminders_cmd():
-    """Email admins/owners of stores in expiring_soon. Run daily."""
-    from api.Core.Database import SessionLocal
-    from api.Modules.Notifications.Services.trial_reminders import run as _run
-    with SessionLocal() as s:
-        n = _run(s)
-    print(f"Sent {n} trial reminder email(s).")
-
-
-@app.cli.command("broadcast-announcement")
-@click.argument("announcement_id", type=int)
-def broadcast_announcement_cmd(announcement_id):
-    """Resend an announcement email (no-op if already broadcast)."""
-    from api.Core.Database import SessionLocal
-    from api.Modules.Notifications.Services.broadcasts import run as _run
-    with SessionLocal() as s:
-        n = _run(s, announcement_id)
-    print(f"Broadcast announcement {announcement_id}: {n} email(s) sent.")
-
-
-@app.cli.command("reset-superadmin")
-@click.argument("username", required=False)
-@click.option("--reset-2fa", is_flag=True,
-              help="Also wipe TOTP secret + recovery codes.")
-def reset_superadmin_cmd(username, reset_2fa):
-    """Recover a locked-out superadmin from the Render shell.
-    /forgot-password intentionally skips this role."""
-    q = db.session.query(User).filter_by(role="superadmin")
-    if username:
-        q = q.filter_by(username=username.strip())
-    sa = q.first()
-    if not sa:
-        click.echo("No superadmin found" +
-                   (f" with username={username!r}." if username else "."))
-        return
-    click.echo(f"Resetting password for superadmin: {sa.username}")
-    pw = click.prompt("New password", hide_input=True, confirmation_prompt=True)
-    if len(pw) < 8:
-        click.echo("Password must be at least 8 characters. Aborting.")
-        return
-    sa.set_password(pw)
-    if reset_2fa:
-        sa.totp_secret = None
-        sa.totp_enrolled_at = None
-        db.session.query(RecoveryCode).filter_by(user_id=sa.id).delete()
-        click.echo("2FA wiped — re-enrollment will be forced on next login.")
-    db.session.commit()
-    click.echo("Done.")
-
-
-@app.cli.command("seed-amazon-reviewer")
-@click.option("--password", default=None,
-              help="Override the auto-generated password (>= 12 chars). "
-                   "Omit to generate a fresh URL-safe random.")
-@click.option("--keep-data", is_flag=True,
-              help="Don't reseed sample countries/banks/rates if any "
-                   "already exist — useful for in-place password rotation.")
-def seed_amazon_reviewer_cmd(password, keep_data):
-    """Delegate to the standalone script's main()."""
-    from scripts.seed_amazon_reviewer import main as _main
-    argv: list[str] = []
-    if password is not None:
-        argv += ["--password", password]
-    if keep_data:
-        argv.append("--keep-data")
-    rc = _main(argv)
-    if rc != 0:
-        raise click.Abort()
 
 from blueprints import errors as _bp_errors  # noqa: E402
 _bp_errors.register(app, current_user)
