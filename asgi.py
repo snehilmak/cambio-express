@@ -38,6 +38,7 @@ tests rewrite it to a plain function, which would break a
 mount-shape assertion.
 """
 from a2wsgi import WSGIMiddleware
+from starlette.responses import RedirectResponse
 
 # Importing `app` runs the full module-level init (model
 # definitions, FastAPI mount onto app.wsgi_app, seed data, …).
@@ -51,6 +52,7 @@ from api.PublicRoutes import (
     PUBLIC_ROUTE_PREFIXES as _PUBLIC_PREFIXES,
     public_app as _public_app,
 )
+from api.SpaCutover import redirect_target as _cutover_redirect
 from api.spa import spa_app as _spa_app
 
 
@@ -124,5 +126,20 @@ async def asgi_app(scope, receive, send):
         ):
             await _public_app(scope, receive, send)
             return
+
+        # SPA-cutover: every legacy GET/POST URL (e.g. /dashboard,
+        # /reports/sales-by-company, /admin/users/new) bounces to
+        # the /app/* SPA equivalent. ``api/SpaCutover.py`` owns the
+        # decision; we only need to translate Some-or-None into a
+        # 301 response here. /static/* and unknown .csv URLs are
+        # passed through to Flask (currently still serving
+        # /static/*; everything else 404s).
+        if scope["type"] == "http":
+            qs = scope.get("query_string", b"").decode("latin-1")
+            target = _cutover_redirect(path=path, query_string=qs)
+            if target is not None:
+                response = RedirectResponse(target, status_code=301)
+                await response(scope, receive, send)
+                return
 
     await _flask_asgi(scope, receive, send)

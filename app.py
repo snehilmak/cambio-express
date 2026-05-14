@@ -1,7 +1,7 @@
 import logging, os, sys
 
 import stripe
-from flask import Flask, session
+from flask import Flask
 
 # When run via `python app.py` the module is __main__; submodules
 # that ``from app import …`` would re-execute it as a fresh `app`
@@ -28,12 +28,6 @@ from api.Flask.Config import (  # noqa: E402
 _install_secret_key(app)
 _warn_seed_pw(app)
 
-# spa_cutover registers the before_request hook that 301s legacy
-# GET URLs (/dashboard, /transfers, …) to /app/*.
-from blueprints import spa_cutover as _bp_spa_cutover  # noqa: E402
-_bp_spa_cutover.register(app)
-
-
 from api.Flask.Templating import (  # noqa: E402
     country_flag_html, install as _install_templating,
 )
@@ -51,12 +45,7 @@ stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "")
 # call sites keep working. New code imports from the per-domain
 # Models package directly.
 from api.Flask.Models import *  # noqa: E402, F401, F403
-from api.Modules.Tenancy.Models import Store, User  # noqa: E402 (named for current_user/current_store)
 
-
-# Cookie-session helpers (None for SPA users; they auth via JWT).
-def current_user():  return db.session.get(User,  session["user_id"])  if "user_id"  in session else None
-def current_store(): return db.session.get(Store, session["store_id"]) if session.get("store_id") else None
 
 # Billing helpers re-exported for tests.
 from api.Modules.Billing.Services import (  # noqa: E402
@@ -88,15 +77,14 @@ def find_or_upsert_customer(store_id, full_name, phone_country, phone_number,
     )
 
 
-# Wire the rest of the app: CLI commands, error handlers, schema
-# init, FastAPI mount. CSV report routes moved to FastAPI in
-# PR #547 (Flask-removal-2) — the SPA now fetches them with the
-# Bearer JWT and turns the response into a blob download.
+# Wire the rest of the app: CLI commands, schema init, FastAPI
+# mount. SPA-cutover redirects + 404/500 error handlers moved to
+# the ASGI layer in PR #548 (Flask-removal-3); they run before the
+# Flask fallback in asgi.py. The conftest mirrors them onto the
+# Flask test_client for the (now-shrinking) tests that still hit
+# Flask directly.
 from api.Flask.Cli import register as _register_cli_commands  # noqa: E402
 _register_cli_commands(app, db)
-
-from blueprints import errors as _bp_errors  # noqa: E402
-_bp_errors.register(app, current_user)
 
 from api.Flask.Init import init_db as _init_db, mount_fastapi as _mount_fastapi  # noqa: E402
 
