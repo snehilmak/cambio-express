@@ -105,23 +105,3 @@ def test_kind_or_404_aborts_for_unknown():
             kind_or_404("not_a_kind")
 
 
-# ── legacy Flask wrappers ──────────────────────────────────
-
-
-def test_legacy_constants_re_exported():
-    from app import _LINE_ITEM_KINDS
-    from api.Modules.DailyBook.Services import LINE_ITEM_KINDS
-    assert _LINE_ITEM_KINDS is LINE_ITEM_KINDS
-
-
-def test_legacy_kind_or_404_re_exported():
-    from app import _line_item_kind_or_404
-    from api.Modules.DailyBook.Services import kind_or_404
-    assert _line_item_kind_or_404 is kind_or_404
-
-
-def test_legacy_kind_or_404_returns_known():
-    from app import app as flask_app, _line_item_kind_or_404
-    with flask_app.test_request_context("/"):
-        result = _line_item_kind_or_404("cash_expense")
-        assert result[0] == "cash_expense"

@@ -173,7 +173,7 @@ def test_purge_cascades_all_store_owned_tables(client):
 def test_purge_transfer_audit_before_transfer_order(client):
     """_STORE_OWNED_MODELS lists TransferAudit BEFORE Transfer — otherwise
     the FK transfer_audit.transfer_id → transfer.id would block deletion."""
-    from app import _STORE_OWNED_MODELS
+    from api.Modules.Billing.Services import STORE_OWNED_MODELS as _STORE_OWNED_MODELS
     assert _STORE_OWNED_MODELS.index("TransferAudit") < \
            _STORE_OWNED_MODELS.index("Transfer")
 
@@ -186,7 +186,7 @@ def test_purge_customer_and_user_listed(client):
     when we inverted the owner-store connect flow. Its replacement
     OwnerConnectCode is owner-keyed (cleaned up via the User cascade,
     not the store-purge loop), so it's intentionally NOT in the list."""
-    from app import _STORE_OWNED_MODELS
+    from api.Modules.Billing.Services import STORE_OWNED_MODELS as _STORE_OWNED_MODELS
     for required in ["User", "Customer", "Transfer", "TransferAudit",
                      "ACHBatch", "DailyReport", "StoreEmployee",
                      "StoreOwnerLink"]:
@@ -200,7 +200,8 @@ def test_purge_cascades_referral_models_with_custom_fk(client):
     not store_id. _STORE_FK_OVERRIDES must route the purge to the right
     column or the whole purge aborts with an InvalidRequestError."""
     from api.Modules.Billing.Models import ReferralCode, ReferralRedemption
-    from app import _STORE_FK_OVERRIDES, db, purge_expired_stores
+    from api.Modules.Billing.Services import STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES
+    from app import db, purge_expired_stores
     # Override map must not lie.
     assert _STORE_FK_OVERRIDES.get("ReferralCode") == "owner_store_id"
     assert _STORE_FK_OVERRIDES.get("ReferralRedemption") == "referee_store_id"

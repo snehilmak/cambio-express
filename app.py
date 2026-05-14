@@ -86,37 +86,13 @@ SIGNUP_CLOSED = os.environ.get("SIGNUP_CLOSED", "0") == "1"
 # Cookie name used by PublicRoutes' /login/<slug> bounce path.
 LAST_STORE_SLUG_COOKIE = "ds_last_store"
 
-# Push notification VAPID config (re-exported for tests).
-from api.Modules.Notifications.Services import push as _push_svc  # noqa: E402
-VAPID_PUBLIC_KEY  = _push_svc.VAPID_PUBLIC_KEY
-VAPID_PRIVATE_KEY = _push_svc.VAPID_PRIVATE_KEY
-VAPID_SUBJECT     = _push_svc.VAPID_SUBJECT
-
-
-# Email sending shim — Auth's password-reset path + tests still import it.
+# Email sending shim — Auth's password-reset Controller imports it
+# from here; canonical home is api.Modules.Notifications.Services.smtp.
 from api.Modules.Notifications.Services import smtp as _smtp_svc  # noqa: E402
 
 
 def _send_email(to_addr, subject, body, html=None):
     return _smtp_svc.send_email(db.session, to_addr, subject, body, html)
-
-
-def smtp_health_check():
-    return _smtp_svc.health_check(db.session)
-
-
-# Legacy re-exports for tests.
-from api.Modules.Transfers.Services import (  # noqa: E402
-    TRANSFER_AUDIT_FIELDS as _TRANSFER_AUDIT_FIELDS,
-)
-from api.Modules.DailyBook.Services import (  # noqa: E402
-    LINE_ITEM_KINDS as _LINE_ITEM_KINDS,
-    kind_or_404 as _line_item_kind_or_404,
-)
-from api.Modules.Billing.Services import (  # noqa: E402
-    STORE_FK_OVERRIDES as _STORE_FK_OVERRIDES,
-    STORE_OWNED_MODELS as _STORE_OWNED_MODELS,
-)
 
 
 def purge_expired_stores():

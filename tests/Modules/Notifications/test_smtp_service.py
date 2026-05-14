@@ -359,22 +359,3 @@ def test_health_suppressed_count_includes_bounced_users():
 # ── legacy Flask wrappers ─────────────────────────────────
 
 
-def test_legacy_send_email_delegates(monkeypatch):
-    from app import app as flask_app
-    from app import _send_email as legacy
-    _reset_attempt()
-    monkeypatch.delenv("SMTP_HOST", raising=False)
-    with flask_app.app_context():
-        # Unconfigured → False (no crash)
-        assert legacy("x@y.com", "S", "B") is False
-
-
-def test_legacy_smtp_health_check_delegates():
-    from app import app as flask_app
-    from app import smtp_health_check as legacy
-    with flask_app.app_context():
-        result = legacy()
-        assert "env" in result
-        assert "configured" in result
-
-

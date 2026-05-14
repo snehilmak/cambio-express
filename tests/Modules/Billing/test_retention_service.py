@@ -159,12 +159,3 @@ def test_legacy_purge_expired_stores_delegates():
         assert legacy() == 0
 
 
-def test_legacy_constants_re_exported():
-    """app._STORE_OWNED_MODELS / _STORE_FK_OVERRIDES re-export
-    the Service registry for any tooling that imported by name."""
-    from app import _STORE_FK_OVERRIDES, _STORE_OWNED_MODELS
-    from api.Modules.Billing.Services import (
-        STORE_FK_OVERRIDES, STORE_OWNED_MODELS,
-    )
-    assert _STORE_OWNED_MODELS is STORE_OWNED_MODELS
-    assert _STORE_FK_OVERRIDES is STORE_FK_OVERRIDES
