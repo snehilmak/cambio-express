@@ -81,7 +81,7 @@ _templates.env.globals["STATIC_VERSION"] = os.environ.get("STATIC_VERSION", "1")
 # ``country_flag_html`` Jinja helper that Flask registers on its
 # global env. Mirror that on the public-routes env so the same
 # template works under both renderers.
-from app import country_flag_html as _country_flag_html  # noqa: E402
+from api.Flask.Templating import country_flag_html as _country_flag_html  # noqa: E402
 
 _templates.env.globals["country_flag_html"] = _country_flag_html
 
