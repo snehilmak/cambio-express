@@ -68,7 +68,7 @@ def test_added_indexes_registry_matches_model(client):
     drift where someone adds an entry to the registry but forgets
     the model decl (fresh installs would silently skip it)."""
     from api.Modules.Transfers.Models import Transfer
-    from app import _ADDED_INDEXES
+    from api.Core.Bootstrap import ADDED_INDEXES as _ADDED_INDEXES
     declared_names = {ix.name for ix in Transfer.__table__.indexes}
     for name, table, _cols in _ADDED_INDEXES:
         if table != "transfer":
@@ -85,10 +85,11 @@ def test_ensure_added_indexes_is_idempotent(client):
     second time — `CREATE INDEX IF NOT EXISTS` is idempotent. This
     catches a regression where someone forgets the IF NOT EXISTS
     and prod boots start failing with `relation already exists`."""
-    from app import _ensure_added_indexes
-    with client.application.app_context():
-        _ensure_added_indexes()  # first call already happened on boot
-        _ensure_added_indexes()  # second call must not raise
+    from api.Core.Bootstrap import ensure_added_indexes
+    from app import db, app as flask_app
+    with flask_app.app_context():
+        ensure_added_indexes(db.engine, flask_app.logger)  # first call already happened on boot
+        ensure_added_indexes(db.engine, flask_app.logger)  # second call must not raise
 
 
 def test_period_filter_uses_index_on_postgres(client):

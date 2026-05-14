@@ -18,8 +18,12 @@ These tests pin the security-relevant invariants:
 from datetime import datetime, timedelta
 
 from api.Modules.TVDisplay.Models import TVDisplay, TVPairing, TVPendingPair
+from api.Modules.TVDisplay.Services.pair_code import (
+    PAIR_CODE_ALPHABET as _PAIR_CODE_ALPHABET,
+    PAIR_CODE_LIFETIME as _PAIR_CODE_LIFETIME,
+)
 from api.Modules.Tenancy.Models import Store, User
-from app import _PAIR_CODE_ALPHABET, _PAIR_CODE_LIFETIME, db
+from app import db
 
 
 # ── Helpers ────────────────────────────────────────────────────
