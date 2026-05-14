@@ -287,51 +287,36 @@ that was active at registration time.
     - Reference: `templates/transfers.html` + `templates/_transfers_table.html`
       + `/transfers` route's `partial=1` branch.
 15. **Rate limiting** — every auth route, password-reset route, and
-    webhook ingest endpoint is bucketed:
-    - Flask side: `Flask-Limiter` instance is created in `app.py`
-      and applied retroactively via `_apply_rate_limits()` after
-      every Blueprint registers. Limits live in that one function;
-      change them there, not on the routes themselves.
-    - FastAPI side: shared singleton `slow_limiter` in
-      `api/Core/RateLimit.py`. Critical endpoints carry
-      `@_rate_limiter.limit(...)` decorators on their controllers
-      (look for `from api.Core.RateLimit import limiter as
-      _rate_limiter` in `api/Modules/Auth/Controllers/__init__.py`).
+    webhook ingest endpoint is bucketed by slowapi on the FastAPI
+    side. The Flask-Limiter twin is gone — Flask has no remaining
+    POST surface to limit.
+    - Shared singleton `slow_limiter` in `api/Core/RateLimit.py`.
+      Critical endpoints carry `@_rate_limiter.limit(...)`
+      decorators on their controllers (look for `from
+      api.Core.RateLimit import limiter as _rate_limiter` in
+      `api/Modules/Auth/Controllers/__init__.py`).
     - Storage backend defaults to in-memory; prod sets
       `RATELIMIT_STORAGE_URI=redis://...` in `render.yaml` so the
       bucket holds across workers. `RATELIMIT_ENABLED=0` disables
-      both limiters (the test conftest sets this — never set it in
+      the limiter (the test conftest sets this — never set it in
       prod).
-    - Flask-Limiter captures `enabled` at decoration time, so
-      toggling the flag at runtime doesn't re-arm a wrapper that
-      was created with `enabled=False`. Tests that exercise the
-      429 path spawn a subprocess (see
-      `tests/test_rate_limiting.py`).
+    - slowapi captures `enabled` at import time, so toggling the
+      flag at runtime doesn't re-arm decorators that were created
+      with `enabled=False`. Tests that exercise the 429 path spawn
+      a subprocess (see `tests/test_rate_limiting.py`).
     - Don't tighten the limits casually — integration tests and
       Stripe webhook retries both burn rate budget. Loosening is
       always safer than the alternative.
-16. **CSRF protection** — Flask-WTF's `CSRFProtect` is installed on
-    every Flask form-POST route. Each `<form method="POST">` in
-    legacy templates MUST render `{{ csrf_token() }}` as a hidden
-    input. Don't add a new form-POST template surface without it.
-    - Webhook endpoints (`/webhooks/{stripe,resend}`) and WebAuthn
-      passkey JSON routes are `csrf.exempt(...)`-listed in
-      `_csrf_exempt_endpoints()` at the bottom of `app.py`. Add
-      new endpoints there if they have an out-of-band auth path
-      (signature header, session-only flows).
-    - FastAPI `/api/v2/*` routes don't go through Flask-WTF; they
-      use Bearer JWT in the Authorization header, which is
-      naturally CSRF-immune (browsers don't attach it to
-      cross-origin requests by default).
-    - Kill-switch: `WTF_CSRF_ENABLED=False`. The test conftest
-      sets this so the existing form-POST tests don't need to
-      mint tokens. Production keeps it on. Tests in
-      `tests/test_csrf_protection.py` re-enable it via fixture.
-    - `_csrf_exempt_endpoints()` must run AFTER every `@app.route`
-      has decorated its view. Called at the very bottom of
-      `app.py` after the FastAPI mount block. Moving it earlier
-      silently breaks webhook exemption — see git history for
-      the trap I fell into.
+16. **CSRF protection** — Flask has no POST surface anymore so
+    Flask-WTF is gone. The SPA talks to FastAPI over Bearer JWT
+    in the Authorization header, which is naturally CSRF-immune
+    (browsers don't attach it to cross-origin requests by
+    default). Webhook endpoints verify provider signatures
+    (Stripe `Stripe-Signature`, Resend HMAC) so they don't rely
+    on session-cookie auth either. If you ever reintroduce a
+    cookie-authenticated form-POST surface, add CSRF protection
+    back at that point — don't bolt cookie auth onto a JSON
+    endpoint without it.
 
 ## Migrations
 **Every schema change is an Alembic revision.** Generate one with:

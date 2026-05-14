@@ -1,11 +1,10 @@
-"""Boot-time Flask configuration: SECRET_KEY gate, session cookie
-hardening, CSRF protection. Called from app.py."""
+"""Boot-time Flask configuration: SECRET_KEY gate + seed-password
+warning. Called from app.py."""
 from __future__ import annotations
 
 import os
 
 from flask import Flask
-from flask_wtf.csrf import CSRFProtect
 
 
 _SECRET_KEY_DEV_FALLBACK = "dinerobook-dev-secret-change-in-prod"
@@ -49,28 +48,3 @@ def warn_default_seed_passwords(app: Flask) -> None:
             "change the password in the UI immediately on first login.",
             ", ".join(missing),
         )
-
-
-def install_session(app: Flask) -> bool:
-    """HTTPOnly + SameSite=Lax + Secure (prod only). Returns whether
-    we're in https-prod mode (used by other config decisions)."""
-    is_https_prod = os.environ.get("APP_BASE_URL", "").startswith("https://")
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = is_https_prod
-    from datetime import timedelta
-    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=7)
-    return is_https_prod
-
-
-def install_csrf(app: Flask, *, is_https_prod: bool) -> CSRFProtect:
-    """CLAUDE.md invariant #16. CSRFProtect rejects POST/PUT/PATCH/DELETE
-    without a valid csrf_token. WTF_CSRF_ENABLED=0 kill-switch is used
-    by the test conftest."""
-    enabled = os.environ.get("WTF_CSRF_ENABLED", "True") not in (
-        "0", "false", "False",
-    )
-    app.config["WTF_CSRF_ENABLED"] = enabled
-    app.config["WTF_CSRF_TIME_LIMIT"] = 60 * 60 * 24 * 7
-    app.config["WTF_CSRF_SSL_STRICT"] = is_https_prod
-    return CSRFProtect(app)

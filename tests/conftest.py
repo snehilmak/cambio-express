@@ -15,16 +15,10 @@ os.environ["SPA_CUTOVER_ENABLED"] = "0"
 # Disable rate limiting in tests — the in-memory bucket persists
 # across tests in a single session, so the second test that calls
 # /login would 429 instantly. Tests that exercise the limiter
-# itself opt back in via the fixture in
-# tests/test_rate_limiting.py. Force-set (not setdefault) so a
+# itself spawn a subprocess with the env var flipped on (see
+# tests/test_rate_limiting.py). Force-set (not setdefault) so a
 # stray RATELIMIT_ENABLED=1 in the shell can't break CI.
 os.environ["RATELIMIT_ENABLED"] = "0"
-# Disable CSRF token enforcement so existing form-POST integration
-# tests don't need to mint tokens. Production keeps
-# WTF_CSRF_ENABLED on; this only flips it for the pytest session.
-# Tests that exercise the CSRF machinery opt back in via the
-# fixture in tests/test_csrf_protection.py.
-os.environ["WTF_CSRF_ENABLED"] = "False"
 
 import pytest
 from datetime import date, datetime, timedelta
