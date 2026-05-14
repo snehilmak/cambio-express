@@ -407,15 +407,7 @@ def test_employee_can_claim_a_code(client, test_store_id):
     via /api/v2/auth/login."""
     _activate_addon(client, test_store_id)
     from tests.conftest import make_employee_client
-    emp = make_employee_client(test_store_id)
-    with emp.session_transaction() as sess:
-        emp_uid = sess["user_id"]
-    with client.application.app_context():
-        emp_username = User.query.filter_by(id=emp_uid).one().username
-    emp_jwt = _admin_jwt(
-        client, test_store_id,
-        username=emp_username, password="x",
-    )
+    _emp_client, emp_jwt = make_employee_client(test_store_id)
     _ensure_display(client, test_store_id, emp_jwt)
     body = _init(client)
     resp = _claim(client, body["code"], emp_jwt)

@@ -280,25 +280,7 @@ def test_country_detail_employee_role_allowed(client, test_store_id):
     from tests.conftest import make_employee_client
     _enable_tv_addon(test_store_id)
     _, country_id = _seed_country(test_store_id)
-    emp_client = make_employee_client(test_store_id)
-    # The employee fixture uses session cookies, but our Auth
-    # /login endpoint requires a username+password. Mint a JWT
-    # directly via the same factory so the endpoint can verify it.
-    from api.Modules.Tenancy.Models import User
-    from app import app as flask_app
-    with flask_app.app_context():
-        emp = User.query.filter_by(role="employee").first()
-        emp_password = "x"  # set by make_employee_client
-        username = emp.username
-    token_resp = client.post(
-        "/api/v2/auth/login",
-        json={
-            "username": username, "password": emp_password,
-            "store_id": test_store_id,
-        },
-    )
-    assert token_resp.status_code == 200
-    token = token_resp.get_json()["access_token"]
+    _emp_client, token = make_employee_client(test_store_id)
     resp = client.get(
         f"/api/v2/tv-display/countries/{country_id}",
         headers={"Authorization": f"Bearer {token}"},

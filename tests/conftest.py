@@ -6,12 +6,6 @@ os.environ.setdefault("STRIPE_SECRET_KEY", "sk_test_fake_key")
 os.environ.setdefault("STRIPE_BASIC_PRICE_ID", "price_basic_test")
 os.environ.setdefault("STRIPE_PRO_PRICE_ID", "price_pro_test")
 os.environ.setdefault("STRIPE_WEBHOOK_SECRET", "whsec_test_secret")
-# Default the SPA cutover redirects OFF in tests so the existing
-# legacy-route assertions keep working unchanged. Tests that want
-# to exercise the cutover layer opt in via the `cutover_on` /
-# `cutover_off` fixtures defined in tests/test_spa_cutover.py.
-# Production / CI deploy honours the real flag (default on).
-os.environ["SPA_CUTOVER_ENABLED"] = "0"
 # Disable rate limiting in tests — the in-memory bucket persists
 # across tests in a single session, so the second test that calls
 # /login would 429 instantly. Tests that exercise the limiter
@@ -102,160 +96,207 @@ def _close_fastapi_clients():
 
 
 # ─────────────────────────────────────────────────────────────
-# /api/v2 dispatch in tests — bypass the leaky a2wsgi bridge.
+# Flask-compatible test client backed by Starlette's TestClient
 #
-# Production routes /api/v2/* through asgi.py's native ASGI
-# dispatcher (see asgi.py + render.yaml). The Flask app's
-# DispatcherMiddleware mount via a2wsgi.ASGIMiddleware is only
-# kept on the Flask side as a strangler-fig fallback that
-# production NEVER hits — but the test suite uses Flask's
-# WSGI test_client, which routes through that legacy mount.
+# Production runs every request through ``asgi.py``'s top-level
+# ASGI router (FastAPI / SPA / PublicRoutes / cutover / Flask
+# fallback). Tests now do too — via Starlette's TestClient sitting
+# on the same ``asgi_app``. The wrapper exposes a Flask-test-client-
+# compatible surface (``.get/post/...``, ``.get_json()``,
+# ``.get_data()``, ``.mimetype``) so test files don't need to
+# change to switch transports.
 #
-# Under coverage's tracer the a2wsgi-spawned asyncio.Task objects
-# get GC'd while still flagged "pending" — Python emits
-# "Task was destroyed but it is pending!" and rolls back the
-# SQLAlchemy session of whatever test happens to be running.
-# Manifestation: random 500 Internal Server Errors on
-# /api/v2/monthly PUT in test_bank_charges_pl.py and similar.
-#
-# Fix: replace the /api/v2 mount with a TestClient-backed WSGI
-# bridge. starlette TestClient uses anyio.from_thread.start_
-# blocking_portal — well-defined task lifecycle, no leaks under
-# coverage. Production behaviour is unaffected; asgi.py already
-# bypasses a2wsgi for /api/v2/* (PR #399).
-from werkzeug.middleware.dispatcher import DispatcherMiddleware as _DM
-from a2wsgi import ASGIMiddleware as _A2W
+# What's gone: the WSGI bridges that used to translate ``/api/v2``,
+# ``/app``, PublicRoutes, and cutover into Flask test_client. The
+# new client speaks ASGI natively; no a2wsgi in the request path.
+from app import app as _flask_app_for_client  # noqa: E402
+
+from starlette.testclient import TestClient as _StarletteTestClient  # noqa: E402
 
 
-def _make_testclient_bridge(asgi_app):
-    """Build a WSGI handler that funnels requests into ``asgi_app``
-    via a starlette ``TestClient``. anyio's blocking-portal gives a
-    well-defined task lifecycle that the leaky ``a2wsgi`` bridge
-    doesn't — see the long comment above the call site. The
-    returned handler conforms to the WSGI app signature so it can
-    replace an ``ASGIMiddleware`` in the dispatcher mounts dict."""
-    # Use _OrigTestClient (unpatched starlette class) so the bridge's
-    # client is NOT registered with the autouse close-between-tests
-    # fixture above. The bridge stays alive for the full session.
-    tc = _OrigTestClient(asgi_app)
-    tc.__enter__()  # spin up the portal + lifespan task
+class _HeadersAdapter:
+    """Wrap httpx's Headers so it answers werkzeug-style ``getlist``
+    in addition to httpx's ``get_list``. The Flask test client
+    returns headers that respond to ``getlist`` (single-l); tests
+    written against that API expect it."""
 
-    def _wsgi_handler(environ, start_response):
-        # Translate WSGI environ → httpx request → response →
-        # WSGI iterable. anyio's portal handles the ASGI roundtrip.
-        method = environ["REQUEST_METHOD"]
-        path = environ.get("PATH_INFO", "/")
-        qs = environ.get("QUERY_STRING", "")
-        url = path + ("?" + qs if qs else "")
-        body = b""
-        cl = environ.get("CONTENT_LENGTH")
-        if cl and int(cl) > 0:
-            body = environ["wsgi.input"].read(int(cl))
-        headers: dict[str, str] = {}
-        for k, v in environ.items():
-            if k.startswith("HTTP_"):
-                hdr = k[5:].replace("_", "-").lower()
-                headers[hdr] = v
-        ct = environ.get("CONTENT_TYPE")
-        if ct:
-            headers["content-type"] = ct
-        if cl:
-            headers["content-length"] = cl
-        # Never follow redirects at this layer — Flask's
-        # ``test_client(follow_redirects=…)`` flag isn't part of the
-        # WSGI environ. If we let httpx auto-follow, the outer
-        # Flask client never sees the 301 and tests asserting on
-        # the redirect status fail (was a real bug — see
-        # ``tests/test_spa_shell.py::test_legacy_root_redirects_to_app``).
-        resp = tc.request(method, url, headers=headers, content=body,
-                          follow_redirects=False)
-        status_line = f"{resp.status_code} {resp.reason_phrase or ''}".strip()
-        out_headers = [(k, v) for k, v in resp.headers.items()
-                       if k.lower() != "transfer-encoding"]
-        start_response(status_line, out_headers)
-        return [resp.content]
+    __slots__ = ("_h",)
 
-    return _wsgi_handler
+    def __init__(self, h):
+        self._h = h
+
+    def __getitem__(self, key):
+        return self._h[key]
+
+    def __contains__(self, key):
+        return key in self._h
+
+    def __iter__(self):
+        return iter(self._h)
+
+    def __len__(self):
+        return len(self._h)
+
+    def get(self, key, default=None):
+        return self._h.get(key, default)
+
+    def getlist(self, key):
+        return self._h.get_list(key)
+
+    def get_list(self, key):
+        return self._h.get_list(key)
+
+    def items(self):
+        return self._h.items()
+
+    def keys(self):
+        return self._h.keys()
+
+    def values(self):
+        return self._h.values()
 
 
-def _swap_in_testclient_bridge() -> None:
-    """Swap both ASGIMiddleware mounts (``/api/v2`` and ``/app``) for
-    TestClient-backed handlers. Idempotent — safe to call once at
-    module import."""
-    bridge = flask_app.wsgi_app
-    if not isinstance(bridge, _DM):
-        return
-    for mount_prefix in ("/api/v2", "/app"):
-        asgi_mw = bridge.mounts.get(mount_prefix)
-        if asgi_mw is None or not isinstance(asgi_mw, _A2W):
-            continue
-        bridge.mounts[mount_prefix] = _make_testclient_bridge(asgi_mw.app)
+class AsgiTestResponse:
+    """Flask-test-client-compatible response wrapping httpx's response.
+
+    Tests authored for Flask's ``test_client()`` use a small but
+    distinctive surface (``.get_json()``, ``.get_data(as_text=...)``,
+    ``.mimetype``, ``.status_code``). Mirror it so the migration to
+    httpx + ASGITransport is invisible at the call sites.
+    """
+
+    __slots__ = ("_resp",)
+
+    def __init__(self, httpx_resp):
+        self._resp = httpx_resp
+
+    @property
+    def status_code(self) -> int:
+        return self._resp.status_code
+
+    @property
+    def headers(self):
+        return _HeadersAdapter(self._resp.headers)
+
+    @property
+    def text(self) -> str:
+        return self._resp.text
+
+    @property
+    def data(self) -> bytes:
+        return self._resp.content
+
+    @property
+    def content(self) -> bytes:
+        return self._resp.content
+
+    @property
+    def mimetype(self) -> str:
+        ct = self._resp.headers.get("content-type", "")
+        return ct.split(";", 1)[0].strip()
+
+    @property
+    def content_type(self) -> str:
+        return self._resp.headers.get("content-type", "")
+
+    @property
+    def is_json(self) -> bool:
+        return self.mimetype == "application/json"
+
+    @property
+    def location(self):
+        return self._resp.headers.get("location")
+
+    def get_data(self, as_text: bool = False):
+        return self._resp.text if as_text else self._resp.content
+
+    def get_json(self):
+        try:
+            return self._resp.json()
+        except Exception:
+            return None
+
+    def json(self):
+        return self._resp.json()
 
 
-_swap_in_testclient_bridge()
+# Single, session-scoped Starlette TestClient that drives the
+# production ASGI app. Spun up at import time so its anyio portal
+# + lifespan setup happen once; tests share it through the
+# ``AsgiTestClient`` wrapper below.
+from asgi import asgi_app as _asgi_app  # noqa: E402
+
+_starlette_client = _StarletteTestClient(_asgi_app)
+_starlette_client.__enter__()  # spin up the portal + lifespan
 
 
-# Public-route bridge: asgi.py dispatches a handful of root-mounted
-# paths (``/``, ``/privacy``, ``/sw.js``, ``/offline``, ``/tv/*``,
-# ``/api/tv-pair/*``) to the Starlette ``api.PublicRoutes.public_app``
-# rather than Flask. The Flask ``test_client`` doesn't know about
-# asgi.py, so those paths would 404 inside the tests. Wrap
-# ``flask_app.wsgi_app`` with a thin pre-router that mirrors asgi.py's
-# decision and forwards matching paths to a TestClient bridge.
-from api.PublicRoutes import (
-    PUBLIC_ROUTE_PATHS as _PUBLIC_PATHS,
-    PUBLIC_ROUTE_PREFIXES as _PUBLIC_PREFIXES,
-    public_app as _public_app,
-)
+class AsgiTestClient:
+    """Flask-test-client-compatible client that runs requests
+    through the production ``asgi:asgi_app``.
 
+    Surface kept intentionally narrow — only the methods + kwargs
+    historical tests use:
 
-def _install_public_routes_bridge() -> None:
-    public_bridge = _make_testclient_bridge(_public_app)
-    inner = flask_app.wsgi_app
+      * ``get`` / ``post`` / ``put`` / ``patch`` / ``delete`` / ``head``
+        / ``options``
+      * ``headers`` dict, ``json`` body, ``data`` form body, raw
+        ``content`` body
+      * ``follow_redirects`` (Flask flag name; mapped to httpx's
+        ``follow_redirects``)
+      * ``query_string`` (Flask flag; appended to the path)
 
-    def _wsgi_router(environ, start_response):
-        path = environ.get("PATH_INFO", "")
-        if path in _PUBLIC_PATHS or any(
-            path.startswith(p) for p in _PUBLIC_PREFIXES
-        ):
-            return public_bridge(environ, start_response)
-        return inner(environ, start_response)
+    ``application`` returns the live Flask app for the (now
+    shrinking) tests that need ``app_context()`` for direct DB
+    work. ``session_transaction()`` is removed — the SPA-cutover
+    redirects don't depend on the Flask session, and tests that
+    need auth use the JWT login helpers further down.
+    """
 
-    flask_app.wsgi_app = _wsgi_router
+    application = _flask_app_for_client
 
+    def _request(self, method: str, path: str, *,
+                 headers=None, json=None, data=None, content=None,
+                 follow_redirects: bool = False,
+                 query_string=None, **_extra):
+        if query_string:
+            if isinstance(query_string, dict):
+                from urllib.parse import urlencode
+                qs = urlencode(query_string, doseq=True)
+            else:
+                qs = str(query_string)
+            sep = "&" if "?" in path else "?"
+            path = f"{path}{sep}{qs}"
+        kwargs = {"headers": headers, "follow_redirects": follow_redirects}
+        if json is not None:
+            kwargs["json"] = json
+        if data is not None:
+            kwargs["data"] = data
+        if content is not None:
+            kwargs["content"] = content
+        return AsgiTestResponse(
+            _starlette_client.request(method, path, **kwargs),
+        )
 
-_install_public_routes_bridge()
+    def get(self, path, **kwargs):
+        return self._request("GET", path, **kwargs)
 
+    def post(self, path, **kwargs):
+        return self._request("POST", path, **kwargs)
 
-# SPA-cutover bridge: production runs the cutover at the ASGI
-# layer in asgi.py, but Flask ``test_client`` doesn't see asgi.py
-# at all. Wrap ``flask_app.wsgi_app`` with a pre-router that
-# applies the same ``api.SpaCutover.redirect_target`` decision so
-# the (still-many) tests that use Flask's ``client.get(...)`` see
-# the same 301s production emits. Goes away in PR 4 when those
-# tests migrate to ``httpx + ASGITransport``.
-from api.SpaCutover import redirect_target as _cutover_redirect
+    def put(self, path, **kwargs):
+        return self._request("PUT", path, **kwargs)
 
+    def patch(self, path, **kwargs):
+        return self._request("PATCH", path, **kwargs)
 
-def _install_cutover_bridge() -> None:
-    inner = flask_app.wsgi_app
+    def delete(self, path, **kwargs):
+        return self._request("DELETE", path, **kwargs)
 
-    def _wsgi_router(environ, start_response):
-        path = environ.get("PATH_INFO", "")
-        qs = environ.get("QUERY_STRING", "")
-        target = _cutover_redirect(path=path, query_string=qs)
-        if target is not None:
-            start_response("301 Moved Permanently",
-                           [("Location", target),
-                            ("Content-Type", "text/html; charset=utf-8"),
-                            ("Content-Length", "0")])
-            return [b""]
-        return inner(environ, start_response)
+    def head(self, path, **kwargs):
+        return self._request("HEAD", path, **kwargs)
 
-    flask_app.wsgi_app = _wsgi_router
-
-
-_install_cutover_bridge()
+    def options(self, path, **kwargs):
+        return self._request("OPTIONS", path, **kwargs)
 
 
 # Stable TOTP secret for the seeded superadmin so test helpers can
@@ -287,9 +328,7 @@ def login_superadmin(client) -> str:
 
 def login_admin(client, store_id: int) -> str:
     """Log in as the seeded admin@test.com user (or whatever admin
-    exists on `store_id`) and return the JWT. Used by CSV-export
-    tests that need a real bearer token rather than the legacy
-    Flask cookie session."""
+    exists on `store_id`) and return the JWT."""
     from api.Modules.Tenancy.Models import User
     with flask_app.app_context():
         u = (
@@ -307,6 +346,27 @@ def login_admin(client, store_id: int) -> str:
             "username": username, "password": "testpass123!",
             "store_id": store_id,
         },
+    ).get_json()["access_token"]
+
+
+def login_employee(client, store_id: int, username: str,
+                   password: str = "x") -> str:
+    """Log in as an employee user already seeded by the caller."""
+    return client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": password,
+              "store_id": store_id},
+    ).get_json()["access_token"]
+
+
+def login_owner(client, username: str,
+                password: str = "ownerpass123") -> str:
+    """Log in as an owner user (store_id=None — owners aren't
+    pinned to a single store) and return the JWT."""
+    return client.post(
+        "/api/v2/auth/login",
+        json={"username": username, "password": password,
+              "store_id": None},
     ).get_json()["access_token"]
 
 
@@ -380,23 +440,17 @@ def clean_db():
 
 @pytest.fixture
 def client():
-    return flask_app.test_client()
+    return AsgiTestClient()
 
 
 @pytest.fixture
 def logged_in_client():
-    """Client pre-authenticated as the test store admin."""
-    c = flask_app.test_client()
-    with flask_app.app_context():
-        from api.Modules.Tenancy.Models import User
-        u = User.query.filter_by(username="admin@test.com").first()
-        assert u is not None, "admin@test.com user not found — did seed_test_data run?"
-        uid, sid = u.id, u.store_id
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = sid
-    return c
+    """Drop-in for the legacy fixture — returns an
+    ``AsgiTestClient``. The SPA-cutover redirects every test
+    using this fixture asserts on are unauthenticated, so no
+    real login is needed. Tests that need a bearer JWT call
+    ``login_admin(client, store_id)`` explicitly."""
+    return AsgiTestClient()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -424,27 +478,23 @@ def test_admin_id():
 
 
 def make_employee_client(store_id, *, username_suffix="emp"):
-    """Return a Flask test client authenticated as a new employee user
-    at the given store. Each call creates a fresh User row so tests
-    that need multiple employees can call this multiple times."""
+    """Return ``(client, jwt)`` for a fresh employee user at
+    ``store_id``. Replaces the legacy Flask-session variant with a
+    real JWT — tests using this pair the client with bearer-auth
+    headers when hitting /api/v2/*."""
     from api.Modules.Tenancy.Models import User
-    c = flask_app.test_client()
     with flask_app.app_context():
+        username = f"{username_suffix}_{store_id}_{os.urandom(2).hex()}@test.com"
         emp = User(
-            store_id=store_id,
-            username=f"{username_suffix}_{store_id}_{os.urandom(2).hex()}@test.com",
-            full_name="Test Employee",
-            role="employee",
+            store_id=store_id, username=username,
+            full_name="Test Employee", role="employee",
         )
         emp.set_password("x")
         db.session.add(emp)
         db.session.commit()
-        uid = emp.id
-    with c.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = store_id
-    return c
+    c = AsgiTestClient()
+    jwt = login_employee(c, store_id, username)
+    return c, jwt
 
 
 def seed_transfer(store_id, creator_id, *, send_date=None,

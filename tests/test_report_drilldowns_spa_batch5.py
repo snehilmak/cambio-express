@@ -34,10 +34,6 @@ def _admin_session_login(client, store_id):
         s = db.session.get(Store, store_id)
         s.plan = "pro"; s.billing_cycle = "monthly"
         db.session.commit()
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "admin"
-        sess["store_id"] = store_id
 
 
 def _superadmin_session(client):
@@ -45,10 +41,6 @@ def _superadmin_session(client):
     with client.application.app_context():
         sa = User.query.filter_by(role="superadmin").first()
         sa_id = sa.id
-    with client.session_transaction() as s:
-        s["user_id"] = sa_id
-        s["role"] = "superadmin"
-        s["store_id"] = None
 
 
 def test_admin_stragglers_redirect_to_spa(client, test_store_id):

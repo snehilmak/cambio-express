@@ -80,14 +80,8 @@ def test_notifications_trial_toggle_off_for_employee(
         u.set_password("p")
         db.session.add(u); db.session.commit()
         uid = u.id
-    # Login as employee via Flask client session (the API login
-    # path rejects employees via cross-store, so we shortcut).
-    with client.session_transaction() as sess:
-        sess["user_id"] = uid
-        sess["role"] = "employee"
-        sess["store_id"] = test_store_id
-    # We need a JWT for the API call — issue one directly through
-    # the per-store endpoint.
+    # Issue a JWT directly — the API login path rejects employees
+    # via cross-store, so we mint the token from the issuer.
     from app import app as flask_app
     with flask_app.app_context():
         from api.Modules.Auth.Services.jwt_issuer import (

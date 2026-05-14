@@ -65,10 +65,6 @@ def test_owner_dashboard_redirects_to_spa(client):
         o.set_password("ownerpass123")
         db.session.add(o); db.session.commit()
         oid = o.id
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-        sess["store_id"] = None
     resp = client.get("/owner/dashboard", follow_redirects=False)
     assert resp.status_code == 301
     assert resp.headers["Location"] == "/app/owner/dashboard"
@@ -83,10 +79,6 @@ def test_owner_dashboard_preserves_period_query_string(client):
         o.set_password("ownerpass123")
         db.session.add(o); db.session.commit()
         oid = o.id
-    with client.session_transaction() as sess:
-        sess["user_id"] = oid
-        sess["role"] = "owner"
-        sess["store_id"] = None
     resp = client.get("/owner/dashboard?period=year", follow_redirects=False)
     assert resp.status_code == 301
     assert resp.headers["Location"] == "/app/owner/dashboard?period=year"
