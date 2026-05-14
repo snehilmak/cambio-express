@@ -49,20 +49,17 @@ jobs:
           STRIPE_BASIC_PRICE_ID: "price_basic_ci"
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
-        run: python -c "import app; print('import OK')"
+          DINEROBOOK_SKIP_INIT_DB: "1"
+        run: python -c "import asgi; print('import OK')"
 
       - name: Run tests with coverage
-        # --source=app,api covers BOTH the legacy Flask monolith and
-        # the FastAPI modules under api/Modules/. Before this change
-        # api/* was invisible to the coverage gate — new modules
-        # could ship at 0% and CI was happy.
+        # --source=api covers the FastAPI tree. PR #550 (kill Flask)
+        # removed the legacy ``app.py`` monolith; ``api/Modules/`` is
+        # the entirety of production code now.
         #
-        # --fail-under=80 reflects the broader scope: app.py sits
-        # around 78% and the api/ tree is in the 95% range, so a
-        # healthy total lands near 90%. 80 gives a ~10pt margin
-        # before alerting; raise this by 5pt each time we clear a
-        # sustained ~5pt buffer so new code is incentivized to
-        # carry its own tests.
+        # --fail-under=80 reflects the broader scope across api/.
+        # Raise this by 5pt each time we clear a sustained ~5pt
+        # buffer so new code is incentivized to carry its own tests.
         #
         # tests/smoke/ excluded here — that layer needs Playwright +
         # a real browser and runs in the dedicated step below.
@@ -77,7 +74,7 @@ jobs:
           STRIPE_PRO_PRICE_ID: "price_pro_ci"
           STRIPE_WEBHOOK_SECRET: "whsec_ci"
         run: |
-          coverage run --source=app,api -m pytest --tb=short -rfE --ignore=tests/smoke
+          coverage run --source=api -m pytest --tb=short -rfE --ignore=tests/smoke
           coverage report --fail-under=80
 
       # ── SPA build + lint gate ─────────────────────────────────
