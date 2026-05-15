@@ -2,9 +2,11 @@
 //   • ``credentials: "include"`` ships the httpOnly access-token
 //     cookie automatically (PR #559 — see ``./auth.ts`` for the
 //     cookie-vs-localStorage rationale).
-//   • a 401 response clears the local identity hint and triggers
-//     a redirect to /app/login (saves callers from threading
-//     auth-state errors through every component).
+//   • a 401 first attempts a silent refresh via ``/auth/refresh``
+//     (PR #560 rotating refresh tokens). If that succeeds, retry
+//     the original request once. If the refresh itself 401s the
+//     session is dead — clear the local identity hint and bounce
+//     to /app/login. Callers don't see the hop.
 //   • non-2xx becomes a thrown ApiError with the parsed body.
 //   • JSON request bodies get the right Content-Type.
 //
@@ -12,7 +14,7 @@
 // browser-native, smaller bundle, and good enough for the SPA's
 // needs. TanStack Query handles caching/retries on top.
 
-import { clearAccessToken } from "./auth";
+import { clearAccessToken, persistLoginResponse } from "./auth";
 
 export class ApiError extends Error {
   status: number;
@@ -29,9 +31,51 @@ interface ApiOptions extends Omit<RequestInit, "body"> {
   json?: unknown;
 }
 
+// Single in-flight refresh promise — concurrent 401s from parallel
+// requests (the SPA's first paint typically fires 3-4) get the
+// same refresh round-trip rather than racing on the token.
+let _inFlightRefresh: Promise<boolean> | null = null;
+
+async function _silentRefresh(): Promise<boolean> {
+  if (_inFlightRefresh) return _inFlightRefresh;
+  _inFlightRefresh = (async () => {
+    try {
+      const resp = await fetch("/api/v2/auth/refresh", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!resp.ok) return false;
+      const body = await resp.json();
+      // The refresh response carries fresh identity claims — keep
+      // the local cache in sync so chrome re-renders correctly.
+      if (
+        typeof body === "object" && body &&
+        typeof body.user_id === "number"
+      ) {
+        persistLoginResponse(body);
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      _inFlightRefresh = null;
+    }
+  })();
+  return _inFlightRefresh;
+}
+
+function _bounceToLogin(): void {
+  clearAccessToken();
+  const onLogin = window.location.pathname === "/app/login";
+  if (!onLogin) window.location.assign("/app/login");
+}
+
 export async function api<T = unknown>(
   path: string,
   options: ApiOptions = {},
+  // Internal: prevents infinite recursion if the refresh itself
+  // 401s. External callers always start with _retryAfterRefresh=true.
+  _retryAfterRefresh = true,
 ): Promise<T> {
   const headers = new Headers(options.headers);
 
@@ -52,15 +96,17 @@ export async function api<T = unknown>(
     : await resp.text();
 
   if (!resp.ok) {
-    if (resp.status === 401) {
-      // Cookie's already expired or never existed. Drop the local
-      // identity hint so the next paint renders unauthed.
-      clearAccessToken();
-      // Hard navigation to avoid a stale React tree referencing
-      // a cleared identity. Skip the redirect when we're already
-      // on /app/login (e.g. a bad-creds POST shouldn't reload).
-      const onLogin = window.location.pathname === "/app/login";
-      if (!onLogin) window.location.assign("/app/login");
+    if (resp.status === 401 && _retryAfterRefresh) {
+      // Try a silent refresh. If it succeeds, retry the original
+      // request exactly once (with retry disabled this time so a
+      // second 401 doesn't loop forever).
+      const refreshed = await _silentRefresh();
+      if (refreshed) {
+        return api<T>(path, options, /* _retryAfterRefresh = */ false);
+      }
+      _bounceToLogin();
+    } else if (resp.status === 401) {
+      _bounceToLogin();
     }
     let message = `Request failed (${resp.status})`;
     if (typeof parsed === "object" && parsed && "detail" in parsed) {
@@ -95,13 +141,18 @@ export async function downloadCsv(
   path: string,
   filename: string,
 ): Promise<void> {
-  const resp = await fetch(path, { credentials: "include" });
-  if (!resp.ok) {
-    if (resp.status === 401) {
-      clearAccessToken();
-      const onLogin = window.location.pathname === "/app/login";
-      if (!onLogin) window.location.assign("/app/login");
+  const tryFetch = () => fetch(path, { credentials: "include" });
+  let resp = await tryFetch();
+  if (resp.status === 401) {
+    // Same silent-refresh dance as `api()`.
+    const refreshed = await _silentRefresh();
+    if (refreshed) {
+      resp = await tryFetch();
+    } else {
+      _bounceToLogin();
     }
+  }
+  if (!resp.ok) {
     let body: unknown;
     try { body = await resp.json(); } catch { body = null; }
     throw new ApiError(

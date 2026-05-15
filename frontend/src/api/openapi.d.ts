@@ -572,14 +572,15 @@ export interface paths {
         put?: never;
         /**
          * Logout Route
-         * @description Clear the httpOnly access-token cookie.
+         * @description Clear both the access-token + refresh-token cookies and
+         *     revoke the refresh row server-side.
          *
-         *     Stateless on the server — JWTs aren't revocable mid-TTL without
-         *     a denylist. Until the refresh-token PR lands, ``/logout`` is
-         *     purely a cookie-clear: the access token is still cryptographically
-         *     valid until it expires, but the browser no longer ships it.
-         *     Callers using ``Authorization: Bearer`` (scripts / tests) can
-         *     discard the token client-side; no server cooperation needed.
+         *     The access JWT is still cryptographically valid until its
+         *     30-minute exp, but the browser no longer ships either cookie
+         *     and the refresh row's ``revoked_at`` is set — so even an
+         *     attacker who captured the access cookie before logout can
+         *     only use it for the remaining minutes of its TTL, and the
+         *     matching refresh chain is already burned.
          */
         post: operations["logout_route_auth_logout_post"];
         delete?: never;
@@ -778,6 +779,38 @@ export interface paths {
         get: operations["referral_preview_route_auth_referral__code__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Route
+         * @description Rotate the refresh token + mint a fresh access JWT.
+         *
+         *     The SPA's ``api()`` helper hits this when a regular API call
+         *     401s — silent recovery from an expired access cookie.
+         *     Successful refresh sets new ``db_access_token`` + new
+         *     ``db_refresh_token`` cookies (rotation: the old refresh row
+         *     is revoked and chained to the new one via ``rotated_to_id``).
+         *
+         *     Failures clear both cookies and return 401:
+         *       * No refresh cookie → not logged in
+         *       * Unknown jti → forged or row-deleted (rare)
+         *       * Already revoked → replay (legitimate user rotated past it)
+         *       * Expired → past the 14-day TTL
+         */
+        post: operations["refresh_route_auth_refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7593,7 +7626,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_refresh_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7603,6 +7638,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };
@@ -7943,6 +7987,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReferralPreviewResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_route_auth_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                db_refresh_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
                 };
             };
             /** @description Validation Error */

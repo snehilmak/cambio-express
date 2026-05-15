@@ -84,6 +84,13 @@ router = APIRouter()
 
 
 _ACCESS_TOKEN_COOKIE = "db_access_token"
+_REFRESH_TOKEN_COOKIE = "db_refresh_token"
+# Refresh cookie is scoped to ``/api/v2/auth/`` (refresh + logout
+# are the only consumers) so it doesn't ride along with every API
+# call. ``Path`` here is the SPA-visible path; the dispatcher in
+# ``asgi.py`` strips ``/api/v2`` before forwarding to FastAPI, but
+# the browser sees the full mount.
+_REFRESH_COOKIE_PATH = "/api/v2/auth"
 
 
 def _is_https_prod() -> bool:
@@ -108,6 +115,32 @@ def _set_access_token_cookie(response: Response, token: str) -> None:
         samesite="lax",
         secure=_is_https_prod(),
         path="/",
+    )
+
+
+def _set_refresh_token_cookie(
+    response: Response, jti: str, max_age_seconds: int,
+) -> None:
+    """Drop the opaque refresh secret into a scoped httpOnly cookie.
+    Scoped to ``/api/v2/auth`` so it's only sent to the refresh +
+    logout endpoints; reduces exposure on every other API call."""
+    response.set_cookie(
+        key=_REFRESH_TOKEN_COOKIE,
+        value=jti,
+        max_age=max_age_seconds,
+        httponly=True,
+        samesite="lax",
+        secure=_is_https_prod(),
+        path=_REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_refresh_token_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=_REFRESH_TOKEN_COOKIE,
+        path=_REFRESH_COOKIE_PATH,
+        samesite="lax",
+        secure=_is_https_prod(),
     )
 
 
@@ -163,6 +196,7 @@ def get_principal(
 def _to_login_response(
     result: LoginResult | LoginPendingResult,
     response: Response | None = None,
+    db: Session | None = None,
 ) -> LoginResponse:
     """Translate a Service result (full or pending) into the
     polymorphic `LoginResponse` shape. Centralised so the four
@@ -171,8 +205,10 @@ def _to_login_response(
 
     When the result is a full ``LoginResult`` and a ``Response``
     is supplied, also drop the JWT into the httpOnly
-    ``db_access_token`` cookie so the SPA can stop reading it
-    from ``localStorage``. Body still carries ``access_token`` for
+    ``db_access_token`` cookie + mint a refresh token (httpOnly
+    ``db_refresh_token``, scoped to ``/api/v2/auth``) so the SPA
+    can silently refresh expired access cookies via
+    ``/auth/refresh``. Body still carries ``access_token`` for
     backward compat with non-SPA callers (curl, scripts, tests).
     """
     if isinstance(result, LoginPendingResult):
@@ -186,6 +222,19 @@ def _to_login_response(
         )
     if response is not None:
         _set_access_token_cookie(response, result.access_token)
+        if db is not None:
+            from api.Modules.Auth.Services.refresh import (
+                DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+            )
+            issued = _issue_refresh(db, user_id=result.user_id)
+            # Commit so the refresh row is visible to the next
+            # ``SessionLocal`` (refresh hits a fresh session via
+            # ``Depends(get_db)``).
+            db.commit()
+            _set_refresh_token_cookie(
+                response, issued.jti,
+                max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+            )
     return LoginResponse(
         access_token=result.access_token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -274,7 +323,7 @@ def login_route(
         if store is not None and store.slug:
             _set_last_store_slug_cookie(response, store.slug)
     db.commit()
-    return _to_login_response(result, response)
+    return _to_login_response(result, response, db)
 
 
 @router.get(
@@ -329,7 +378,7 @@ def login_cross_store_route(
         )
     except TotpEnrollmentRequired as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    return _to_login_response(result, response)
+    return _to_login_response(result, response, db)
 
 
 @router.post("/login/totp", response_model=LoginResponse)
@@ -351,7 +400,7 @@ def login_totp_route(
             status_code=401, detail=str(exc) or "Invalid verification code",
         )
     db.commit()  # no-op for TOTP, but keep call shape symmetric with /recovery
-    return _to_login_response(result, response)
+    return _to_login_response(result, response, db)
 
 
 @router.post("/login/recovery", response_model=LoginResponse)
@@ -371,7 +420,7 @@ def login_recovery_route(
             status_code=401, detail=str(exc) or "Invalid recovery code",
         )
     db.commit()
-    return _to_login_response(result, response)
+    return _to_login_response(result, response, db)
 
 
 @router.post(
@@ -431,23 +480,107 @@ def login_totp_enroll_confirm_route(
     except AuthenticationError as exc:
         raise HTTPException(status_code=401, detail=str(exc) or "Invalid pending token")
     db.commit()
-    return _to_login_response(result, response)
+    return _to_login_response(result, response, db)
 
 
 @router.post("/logout", status_code=204)
-def logout_route(response: Response) -> Response:
-    """Clear the httpOnly access-token cookie.
+def logout_route(
+    response: Response,
+    db_refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Clear both the access-token + refresh-token cookies and
+    revoke the refresh row server-side.
 
-    Stateless on the server — JWTs aren't revocable mid-TTL without
-    a denylist. Until the refresh-token PR lands, ``/logout`` is
-    purely a cookie-clear: the access token is still cryptographically
-    valid until it expires, but the browser no longer ships it.
-    Callers using ``Authorization: Bearer`` (scripts / tests) can
-    discard the token client-side; no server cooperation needed.
+    The access JWT is still cryptographically valid until its
+    30-minute exp, but the browser no longer ships either cookie
+    and the refresh row's ``revoked_at`` is set — so even an
+    attacker who captured the access cookie before logout can
+    only use it for the remaining minutes of its TTL, and the
+    matching refresh chain is already burned.
     """
+    if db_refresh_token:
+        from api.Modules.Auth.Services.refresh import revoke as _revoke
+        _revoke(db, jti=db_refresh_token)
+        db.commit()
     _clear_access_token_cookie(response)
+    _clear_refresh_token_cookie(response)
     response.status_code = 204
     return response
+
+
+@router.post("/refresh", response_model=LoginResponse)
+@_rate_limiter.limit("20/minute;200/hour")
+def refresh_route(
+    request: Request,  # noqa: ARG001 — required by slowapi
+    response: Response,
+    db_refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+) -> LoginResponse:
+    """Rotate the refresh token + mint a fresh access JWT.
+
+    The SPA's ``api()`` helper hits this when a regular API call
+    401s — silent recovery from an expired access cookie.
+    Successful refresh sets new ``db_access_token`` + new
+    ``db_refresh_token`` cookies (rotation: the old refresh row
+    is revoked and chained to the new one via ``rotated_to_id``).
+
+    Failures clear both cookies and return 401:
+      * No refresh cookie → not logged in
+      * Unknown jti → forged or row-deleted (rare)
+      * Already revoked → replay (legitimate user rotated past it)
+      * Expired → past the 14-day TTL
+    """
+    if not db_refresh_token:
+        _clear_access_token_cookie(response)
+        _clear_refresh_token_cookie(response)
+        raise HTTPException(
+            status_code=401, detail="No refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    from api.Modules.Auth.Services.refresh import (
+        DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+        RefreshTokenInvalid, rotate as _rotate,
+    )
+    try:
+        old_row, new = _rotate(db, jti=db_refresh_token)
+    except RefreshTokenInvalid:
+        _clear_access_token_cookie(response)
+        _clear_refresh_token_cookie(response)
+        raise HTTPException(
+            status_code=401, detail="Invalid refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    # Look up the user via the refresh row so we can rebuild the
+    # full JWT claim set (role, store_id, permissions, …).
+    user = db.query(User).filter(User.id == old_row.user_id).first()
+    if user is None or not user.is_active:
+        _clear_access_token_cookie(response)
+        _clear_refresh_token_cookie(response)
+        raise HTTPException(status_code=401, detail="User unavailable")
+    perms = permissions_for(user.role)
+    new_access = issue_access_token(JWTIssuer(
+        sub=user.id, role=user.role or "",
+        store_id=user.store_id, permissions=perms,
+        full_name=user.full_name or "",
+        username=user.username,
+    ))
+    _set_access_token_cookie(response, new_access)
+    _set_refresh_token_cookie(
+        response, new.jti,
+        max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    )
+    db.commit()
+    return LoginResponse(
+        access_token=new_access,
+        expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        user_id=user.id,
+        username=user.username,
+        full_name=user.full_name or "",
+        role=user.role or "",
+        store_id=user.store_id,
+        permissions=perms,
+    )
 
 
 @router.get("/me")
@@ -655,6 +788,16 @@ def signup_route(
     )
     token = issue_access_token(issuer)
     _set_access_token_cookie(response, token)
+    from api.Modules.Auth.Services.refresh import (
+        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+    )
+    # Commit the user/store first so the refresh-token FK can land.
+    issued_rt = _issue_refresh(db, user_id=result.admin.id)
+    db.commit()
+    _set_refresh_token_cookie(
+        response, issued_rt.jti,
+        max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    )
     return SignupResponse(
         access_token=token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -727,6 +870,16 @@ def signup_owner_route(
     )
     token = issue_access_token(issuer)
     _set_access_token_cookie(response, token)
+    from api.Modules.Auth.Services.refresh import (
+        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+    )
+    # Commit the user/store first so the refresh-token FK can land.
+    issued_rt = _issue_refresh(db, user_id=result.owner.id)
+    db.commit()
+    _set_refresh_token_cookie(
+        response, issued_rt.jti,
+        max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    )
     return OwnerSignupResponse(
         access_token=token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,

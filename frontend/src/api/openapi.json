@@ -8719,11 +8719,39 @@
     },
     "/auth/logout": {
       "post": {
-        "description": "Clear the httpOnly access-token cookie.\n\nStateless on the server \u2014 JWTs aren't revocable mid-TTL without\na denylist. Until the refresh-token PR lands, ``/logout`` is\npurely a cookie-clear: the access token is still cryptographically\nvalid until it expires, but the browser no longer ships it.\nCallers using ``Authorization: Bearer`` (scripts / tests) can\ndiscard the token client-side; no server cooperation needed.",
+        "description": "Clear both the access-token + refresh-token cookies and\nrevoke the refresh row server-side.\n\nThe access JWT is still cryptographically valid until its\n30-minute exp, but the browser no longer ships either cookie\nand the refresh row's ``revoked_at`` is set \u2014 so even an\nattacker who captured the access cookie before logout can\nonly use it for the remaining minutes of its TTL, and the\nmatching refresh chain is already burned.",
         "operationId": "logout_route_auth_logout_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "db_refresh_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Refresh Token"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Logout Route",
@@ -9402,6 +9430,56 @@
           }
         },
         "summary": "Referral Preview Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "description": "Rotate the refresh token + mint a fresh access JWT.\n\nThe SPA's ``api()`` helper hits this when a regular API call\n401s \u2014 silent recovery from an expired access cookie.\nSuccessful refresh sets new ``db_access_token`` + new\n``db_refresh_token`` cookies (rotation: the old refresh row\nis revoked and chained to the new one via ``rotated_to_id``).\n\nFailures clear both cookies and return 401:\n  * No refresh cookie \u2192 not logged in\n  * Unknown jti \u2192 forged or row-deleted (rare)\n  * Already revoked \u2192 replay (legitimate user rotated past it)\n  * Expired \u2192 past the 14-day TTL",
+        "operationId": "refresh_route_auth_refresh_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "db_refresh_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Refresh Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Route",
         "tags": [
           "auth"
         ]
