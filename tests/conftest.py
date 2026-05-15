@@ -295,6 +295,13 @@ def seed_test_data():
 
 @pytest.fixture(autouse=True)
 def clean_db():
+    # The session-scoped Starlette TestClient carries cookies across
+    # tests by default. After PR #559 added httpOnly access-token
+    # cookies, a test that logs in leaves a valid auth cookie on the
+    # jar — any subsequent "expects 401" test would then pass with
+    # 200. Clear cookies between tests so the unauthenticated state
+    # is the default.
+    _starlette_client.cookies.clear()
     with db_session():
         # Drop the thread-local scoped session before drop_all so
         # the schema reset doesn't fight a connection still bound
