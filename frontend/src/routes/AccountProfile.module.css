@@ -1,0 +1,20 @@
+/* Page-specific styles for AccountProfile.tsx. */
+
+.lead {
+  margin: 0 0 1.25rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.hr {
+  border: 0;
+  border-top: 1px solid var(--db-border, #262626);
+  margin: 1.5rem 0 1rem;
+}
+
+.readOnlyGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0.6rem 1rem;
+}

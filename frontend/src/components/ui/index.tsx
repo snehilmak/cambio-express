@@ -248,7 +248,7 @@ export function Section({
 // ── Field + Input ─────────────────────────────────────────────────────
 
 export function Field({
-  label, highlight, error, hint, children,
+  label, highlight, error, hint, style, children,
 }: {
   label: ReactNode;
   /** Tints the label red when the server flagged a field-level
@@ -262,11 +262,15 @@ export function Field({
    *  both are present). For the "you can't deactivate yourself"
    *  class of inline guidance. */
   hint?: ReactNode;
+  /** Extra style on the wrapping ``<label>``. Use for ``gridColumn:
+   *  "1 / -1"`` style overrides when a field needs to span the full
+   *  width of a parent grid. */
+  style?: CSSProperties;
   children: ReactNode;
 }) {
   const isErr = Boolean(error) || highlight;
   return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
+    <label style={{ display: "flex", flexDirection: "column", gap: "0.45rem", ...style }}>
       {label !== "" && label != null && (
         <span
           style={{

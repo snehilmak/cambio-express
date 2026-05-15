@@ -1,0 +1,39 @@
+/* Page-specific styles for ReturnCheckForm.tsx.
+ *
+ * Everything that maps to a shared primitive (PageShell, Card,
+ * Field, Input, Textarea, Button, ButtonLink, Alert) goes
+ * through `components/ui` — this file only holds page-specific
+ * layout. See CLAUDE.md → "Inline styles vs CSS Modules".
+ */
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.statusLine {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.9rem;
+}
+
+.statusName {
+  text-transform: capitalize;
+}
+
+.transitionRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}

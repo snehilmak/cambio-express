@@ -7,8 +7,10 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import {
-  Card, ErrorState, Loading, PageHeader, PageShell, Section, tokens,
+  Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
+  Table, tdStyle, thStyle, tokens,
 } from "../components/ui";
+import styles from "./AccountNotifications.module.css";
 
 // /app/account/notifications — per-user boolean toggles.
 //
@@ -91,15 +93,11 @@ export default function AccountNotifications() {
     <PageShell maxWidth="60rem">
       <PageHeader title="Notifications" />
 
-      <div style={gridStyle}>
+      <div className={styles.grid}>
         <Section title="Your preferences">
           <Card>
-            {serverError && <div style={alertErrorStyle}>{serverError}</div>}
-            {saved && (
-              <div style={alertOkStyle} role="status">
-                Notification preferences saved.
-              </div>
-            )}
+            {serverError && <Alert tone="error">{serverError}</Alert>}
+            {saved && <Alert tone="success">Notification preferences saved.</Alert>}
 
             <form onSubmit={onSubmit} autoComplete="off">
               <PrefRow
@@ -115,7 +113,7 @@ export default function AccountNotifications() {
                 {!trialApplies && (
                   <>
                     <br />
-                    <em style={{ fontStyle: "italic", opacity: 0.85 }}>
+                    <em className={styles.notApplicable}>
                       {trialNotApplicableNote}
                     </em>
                   </>
@@ -135,11 +133,9 @@ export default function AccountNotifications() {
               </PrefRow>
 
               <div style={{ marginTop: "1.25rem" }}>
-                <button
-                  type="submit" disabled={busy} style={btnPrimaryStyle}
-                >
+                <Button type="submit" busy={busy} disabled={busy}>
                   {busy ? "Saving…" : "Save preferences"}
-                </button>
+                </Button>
               </div>
             </form>
           </Card>
@@ -147,13 +143,13 @@ export default function AccountNotifications() {
 
         <Section title="What DineroBook sends you">
           <Card>
-            <p style={leadStyle}>
+            <p className={styles.lead}>
               We send as little as possible. Here's the complete list —
               anything user-controllable has a toggle on the left; the
               rest is either essential (password reset) or not yet
               implemented.
             </p>
-            <table style={tableStyle}>
+            <Table>
               <thead>
                 <tr>
                   {["Channel", "What", "Control"].map((h) => (
@@ -189,8 +185,8 @@ export default function AccountNotifications() {
                   muted
                 />
               </tbody>
-            </table>
-            <p style={fineStyle}>
+            </Table>
+            <p className={styles.fine}>
               More channels coming (announcement broadcast emails, daily
               summary emails). Each one will land here as a toggle
               alongside its real sender — we don't ship controls for
@@ -215,17 +211,17 @@ function PrefRow({
   children: React.ReactNode;
 }) {
   return (
-    <div style={prefRowStyle}>
+    <div className={styles.prefRow}>
       <input
         id={id} type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        style={checkboxStyle}
+        className={styles.checkbox}
       />
-      <div style={{ flex: 1 }}>
-        <label htmlFor={id} style={prefTitleStyle}>{title}</label>
-        <div style={prefDescStyle}>{children}</div>
+      <div className={styles.prefBody}>
+        <label htmlFor={id} className={styles.prefTitle}>{title}</label>
+        <div className={styles.prefDesc}>{children}</div>
       </div>
     </div>
   );
@@ -238,109 +234,13 @@ function Row({
   channel: string; what: string; control: string; muted?: boolean;
 }) {
   const ctrlStyle: React.CSSProperties = muted
-    ? { ...cellStyle, color: tokens.textMuted }
-    : cellStyle;
+    ? { ...tdStyle, color: tokens.textMuted }
+    : tdStyle;
   return (
     <tr>
-      <td style={cellStyle}>{channel}</td>
-      <td style={cellStyle}>{what}</td>
+      <td style={tdStyle}>{channel}</td>
+      <td style={tdStyle}>{what}</td>
       <td style={ctrlStyle}>{control}</td>
     </tr>
   );
 }
-
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
-  gap: "1rem",
-};
-
-const leadStyle: React.CSSProperties = {
-  margin: "0 0 1rem", color: tokens.textMuted,
-  fontSize: "0.88rem", lineHeight: 1.55,
-};
-
-const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: tokens.textMuted,
-  fontSize: "0.78rem", lineHeight: 1.55,
-};
-
-const prefRowStyle: React.CSSProperties = {
-  display: "flex",
-  gap: "0.75rem",
-  alignItems: "flex-start",
-  padding: "0.75rem 0",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const checkboxStyle: React.CSSProperties = {
-  width: "1.05rem", height: "1.05rem",
-  marginTop: "0.2rem", flexShrink: 0,
-  accentColor: tokens.accent,
-  cursor: "pointer",
-};
-
-const prefTitleStyle: React.CSSProperties = {
-  fontSize: "0.95rem", fontWeight: 500,
-  color: tokens.text,
-  display: "block",
-  marginBottom: "0.25rem",
-  cursor: "pointer",
-};
-
-const prefDescStyle: React.CSSProperties = {
-  fontSize: "0.85rem", lineHeight: 1.55,
-  color: tokens.textMuted,
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse",
-  fontSize: "0.88rem",
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.55rem 0.7rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: `1px solid ${tokens.border}`,
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.6rem 0.7rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  verticalAlign: "top",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 600, fontSize: "0.92rem",
-  background: tokens.accent,
-  color: tokens.onAccent,
-  border: "none", borderRadius: "0.5rem",
-  cursor: "pointer",
-};
-
-const alertErrorStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "0.75rem",
-  background: "rgba(255,77,109,0.08)",
-  border: "1px solid rgba(255,77,109,0.3)",
-  borderRadius: "0.5rem",
-  color: tokens.negative,
-  fontSize: "0.88rem",
-};
-
-const alertOkStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "0.75rem",
-  background: "rgba(63,255,0,0.08)",
-  border: "1px solid rgba(63,255,0,0.3)",
-  borderRadius: "0.5rem",
-  color: tokens.accent,
-  fontSize: "0.88rem",
-};
