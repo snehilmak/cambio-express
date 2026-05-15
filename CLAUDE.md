@@ -57,7 +57,14 @@ Non-negotiables:
   `docs/design-system/project/ui_kits/{marketing,admin_app,auth}/`
   for the closest existing pattern before hand-rolling. The mapping
   between kit components and live code lives in
-  `docs/design-system/README.md`.
+  `docs/design-system/README.md`. Code-level primitives live in
+  `frontend/src/components/ui/index.tsx` — `PageShell`,
+  `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`,
+  `Button`, `ButtonLink`, `Pill`, `Pager`, `Table`, `EmptyState`,
+  `ErrorState`, `KpiCard`, `KpiGrid`, `FormActions`. Reach for
+  these before writing inline styles. The canonical migration
+  example (showing how a route swaps inline-style constants for
+  kit primitives) is `frontend/src/routes/NewTransfer.tsx`.
 - **Emoji is retired from nav.** Replace any new emoji nav icon with
   an inline stroke SVG matching the existing set
   (`stroke-width:2; stroke-linecap:round; fill:none; currentColor`).

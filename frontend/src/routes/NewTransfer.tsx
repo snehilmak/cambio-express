@@ -3,6 +3,18 @@ import { useNavigate } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import {
+  Button,
+  Card,
+  Field,
+  FormActions,
+  Input,
+  PageHeader,
+  PageShell,
+  Section,
+  Select,
+  tokens,
+} from "../components/ui";
+import {
   createTransfer,
   previewFederalTax,
   useEmployees,
@@ -13,12 +25,15 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 
 // New transfer form at /app/transfers/new.
-// Mirrors the legacy `transfer_form.html` Jinja form's required
-// inputs. Server-side recomputes federal_tax — we don't expose it
-// in the form. On success: redirect to /app/transfers/:new-id.
 //
-// First write-side screen on the SPA. Subsequent PRs add edit,
-// daily book save, and the rest of the form-driven flows.
+// **Canonical example** for the SPA component-library migration
+// (P2 #9). This file demonstrates how a route migrates from inline
+// style constants to the kit primitives in
+// ``frontend/src/components/ui``: ``PageShell``, ``PageHeader``,
+// ``Section``, ``Card``, ``Field``, ``Input``, ``Select``, ``Button``,
+// ``FormActions``. Other heavily-inlined routes (BatchForm,
+// EditTransfer, EditMonthly, Settings, AdminSubscription, …)
+// migrate on-touch following this pattern.
 
 const COMPANIES = [
   "Intermex", "Maxi", "Barri", "Sigue", "Vigo", "Western Union",
@@ -97,332 +112,293 @@ export default function NewTransfer() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>New transfer</h1>
-        <p style={emptyStyle}>
+      <PageShell>
+        <PageHeader title="New transfer" />
+        <p style={{ color: tokens.textMuted, textAlign: "center", padding: "1.5rem 0" }}>
           Sign in as a store admin to create transfers. Owners + the
           store-picker land in a follow-up PR.
         </p>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>New transfer</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}
-        >
-          Federal tax preview updates as you type; the server
-          recomputes the final value on save.
-        </p>
-      </header>
+    <PageShell>
+      <PageHeader
+        title="New transfer"
+        subtitle={
+          "Federal tax preview updates as you type; the server "
+          + "recomputes the final value on save."
+        }
+      />
 
       <form
         onSubmit={onSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>When + how</h2>
-          <Grid>
-            <Field label="Date">
-              <input
-                type="date"
-                value={form.send_date}
-                onChange={(e) => set("send_date", e.target.value)}
-                style={inputStyle}
-                required
-              />
-            </Field>
-            <Field label="Company">
-              <select
-                value={form.company}
-                onChange={(e) => set("company", e.target.value)}
-                style={inputStyle}
-              >
-                {COMPANIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Service">
-              <select
-                value={form.service_type}
-                onChange={(e) => set("service_type", e.target.value)}
-                style={inputStyle}
-              >
-                {SERVICES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Status">
-              <select
-                value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-                style={inputStyle}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-          </Grid>
-        </section>
+        <Card>
+          <Section title="When + how">
+            <Grid>
+              <Field label="Date">
+                <Input
+                  type="date"
+                  value={form.send_date}
+                  onChange={(e) => set("send_date", e.target.value)}
+                  required
+                />
+              </Field>
+              <Field label="Company">
+                <Select
+                  value={form.company}
+                  onChange={(e) => set("company", e.target.value)}
+                >
+                  {COMPANIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Service">
+                <Select
+                  value={form.service_type}
+                  onChange={(e) => set("service_type", e.target.value)}
+                >
+                  {SERVICES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Status">
+                <Select
+                  value={form.status}
+                  onChange={(e) => set("status", e.target.value)}
+                >
+                  {STATUSES.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </Select>
+              </Field>
+            </Grid>
+          </Section>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Sender</h2>
-          <Grid>
-            <Field label="Full name">
-              <SenderAutocomplete
-                value={form.sender_name}
-                onChange={(v) => set("sender_name", v)}
-                onPick={(row) => {
-                  // Autofill the rest of the sender block from the
-                  // picked customer row + remember the customer_id
-                  // so the upsert reuses the same record.
-                  setForm((f) => ({
-                    ...f,
-                    sender_name: row.full_name,
-                    sender_phone_country: row.phone_country || "+1",
-                    sender_phone: row.phone_number,
-                    sender_address: row.address,
-                    sender_dob: row.dob || "",
-                    customer_id: row.id,
-                  }));
-                }}
-                onClearPickedId={() => set("customer_id", null)}
-                required
-              />
-            </Field>
-            <Field label="Phone country">
-              <input
-                type="text"
-                value={form.sender_phone_country}
-                onChange={(e) => set("sender_phone_country", e.target.value)}
-                placeholder="+1"
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Phone">
-              <input
-                type="tel"
-                value={form.sender_phone}
-                onChange={(e) => set("sender_phone", e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Address">
-              <input
-                type="text"
-                value={form.sender_address}
-                onChange={(e) => set("sender_address", e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-          </Grid>
-          {form.customer_id && (
-            <p
-              style={{
-                margin: "0.5rem 0 0",
-                fontSize: "0.85rem",
-                color: "var(--db-text-muted, #a3a3a3)",
-              }}
-            >
-              Linked to customer #{form.customer_id} — edits sync
-              back to the customer directory.
-            </p>
-          )}
-        </section>
-
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Recipient</h2>
-          <Grid>
-            <Field label="Country">
-              <select
-                value={form.country}
-                onChange={(e) => set("country", e.target.value)}
-                style={inputStyle}
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Recipient name">
-              <input
-                type="text"
-                value={form.recipient_name}
-                onChange={(e) => set("recipient_name", e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Recipient phone">
-              <input
-                type="tel"
-                value={form.recipient_phone}
-                onChange={(e) => set("recipient_phone", e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-          </Grid>
-        </section>
-
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Amounts</h2>
-          <Grid>
-            <Field label="Send amount (USD)">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.send_amount}
-                onChange={(e) =>
-                  set("send_amount", Number(e.target.value))
-                }
-                style={inputStyle}
-                required
-              />
-            </Field>
-            <Field label="Fee (USD)">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.fee}
-                onChange={(e) => set("fee", Number(e.target.value))}
-                style={inputStyle}
-              />
-            </Field>
-            <FederalTaxPreview
-              sendAmount={form.send_amount}
-              serviceType={form.service_type}
-              country={form.country ?? ""}
-              rate={storeInfo.data?.store.federal_tax_rate ?? 0}
-            />
-            <Field label="Confirm #">
-              <input
-                type="text"
-                value={form.confirm_number}
-                onChange={(e) => set("confirm_number", e.target.value)}
-                style={inputStyle}
-              />
-            </Field>
-          </Grid>
-        </section>
-
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Processed by</h2>
-          <Grid>
-            <Field label="Employee">
-              <select
-                value={form.employee_id ?? ""}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  set("employee_id", v ? Number(v) : null);
-                }}
-                style={inputStyle}
-                required
-                disabled={roster.isLoading}
-              >
-                <option value="">— Select —</option>
-                {roster.data?.employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          </Grid>
-          {roster.isError && (
-            <p
-              style={{
-                margin: "0.5rem 0 0",
-                fontSize: "0.85rem",
-                color: "var(--db-negative, #ff3b30)",
-              }}
-            >
-              Couldn't load roster. Add cashiers via Settings → Team
-              on the legacy admin page.
-            </p>
-          )}
-          {!roster.isLoading &&
-            !roster.isError &&
-            roster.data &&
-            roster.data.employees.length === 0 && (
+        <Card>
+          <Section title="Sender">
+            <Grid>
+              <Field label="Full name">
+                <SenderAutocomplete
+                  value={form.sender_name}
+                  onChange={(v) => set("sender_name", v)}
+                  onPick={(row) => {
+                    // Autofill the rest of the sender block from the
+                    // picked customer row + remember the customer_id
+                    // so the upsert reuses the same record.
+                    setForm((f) => ({
+                      ...f,
+                      sender_name: row.full_name,
+                      sender_phone_country: row.phone_country || "+1",
+                      sender_phone: row.phone_number,
+                      sender_address: row.address,
+                      sender_dob: row.dob || "",
+                      customer_id: row.id,
+                    }));
+                  }}
+                  onClearPickedId={() => set("customer_id", null)}
+                  required
+                />
+              </Field>
+              <Field label="Phone country">
+                <Input
+                  type="text"
+                  value={form.sender_phone_country}
+                  onChange={(e) => set("sender_phone_country", e.target.value)}
+                  placeholder="+1"
+                />
+              </Field>
+              <Field label="Phone">
+                <Input
+                  type="tel"
+                  value={form.sender_phone}
+                  onChange={(e) => set("sender_phone", e.target.value)}
+                />
+              </Field>
+              <Field label="Address">
+                <Input
+                  type="text"
+                  value={form.sender_address}
+                  onChange={(e) => set("sender_address", e.target.value)}
+                />
+              </Field>
+            </Grid>
+            {form.customer_id && (
               <p
                 style={{
                   margin: "0.5rem 0 0",
                   fontSize: "0.85rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
+                  color: tokens.textMuted,
                 }}
               >
-                No active employees on this store's roster yet. Add
-                them via Settings → Team on the legacy admin page.
+                Linked to customer #{form.customer_id} — edits sync
+                back to the customer directory.
               </p>
             )}
-        </section>
+          </Section>
+        </Card>
+
+        <Card>
+          <Section title="Recipient">
+            <Grid>
+              <Field label="Country">
+                <Select
+                  value={form.country}
+                  onChange={(e) => set("country", e.target.value)}
+                >
+                  {COUNTRIES.map((c) => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Recipient name">
+                <Input
+                  type="text"
+                  value={form.recipient_name}
+                  onChange={(e) => set("recipient_name", e.target.value)}
+                />
+              </Field>
+              <Field label="Recipient phone">
+                <Input
+                  type="tel"
+                  value={form.recipient_phone}
+                  onChange={(e) => set("recipient_phone", e.target.value)}
+                />
+              </Field>
+            </Grid>
+          </Section>
+        </Card>
+
+        <Card>
+          <Section title="Amounts">
+            <Grid>
+              <Field label="Send amount (USD)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.send_amount}
+                  onChange={(e) =>
+                    set("send_amount", Number(e.target.value))
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Fee (USD)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.fee}
+                  onChange={(e) => set("fee", Number(e.target.value))}
+                />
+              </Field>
+              <FederalTaxPreview
+                sendAmount={form.send_amount}
+                serviceType={form.service_type}
+                country={form.country ?? ""}
+                rate={storeInfo.data?.store.federal_tax_rate ?? 0}
+              />
+              <Field label="Confirm #">
+                <Input
+                  type="text"
+                  value={form.confirm_number}
+                  onChange={(e) => set("confirm_number", e.target.value)}
+                />
+              </Field>
+            </Grid>
+          </Section>
+        </Card>
+
+        <Card>
+          <Section title="Processed by">
+            <Grid>
+              <Field label="Employee">
+                <Select
+                  value={form.employee_id ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    set("employee_id", v ? Number(v) : null);
+                  }}
+                  required
+                  disabled={roster.isLoading}
+                >
+                  <option value="">— Select —</option>
+                  {roster.data?.employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            </Grid>
+            {roster.isError && (
+              <p
+                style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.85rem",
+                  color: tokens.negative,
+                }}
+              >
+                Couldn't load roster. Add cashiers via Settings → Team
+                on the legacy admin page.
+              </p>
+            )}
+            {!roster.isLoading &&
+              !roster.isError &&
+              roster.data &&
+              roster.data.employees.length === 0 && (
+                <p
+                  style={{
+                    margin: "0.5rem 0 0",
+                    fontSize: "0.85rem",
+                    color: tokens.textMuted,
+                  }}
+                >
+                  No active employees on this store's roster yet. Add
+                  them via Settings → Team on the legacy admin page.
+                </p>
+              )}
+          </Section>
+        </Card>
 
         {error && (
-          <p
-            role="alert"
-            style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}
-          >
+          <p role="alert" style={{ color: tokens.negative, textAlign: "center", padding: "0.5rem 0" }}>
             {error}
           </p>
         )}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button
-            type="button"
+        <FormActions>
+          <Button
+            tone="secondary"
             onClick={() => navigate("/transfers")}
-            style={cancelBtnStyle}
             disabled={busy}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            busy={busy}
             disabled={busy || !form.sender_name || !form.send_amount}
-            style={{
-              ...saveBtnStyle,
-              opacity:
-                busy || !form.sender_name || !form.send_amount ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}
           >
             {busy ? "Saving…" : "Save transfer"}
-          </button>
-        </div>
+          </Button>
+        </FormActions>
       </form>
-    </main>
+    </PageShell>
   );
 }
 
-function Field({
-  label, children,
-}: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
 
+// Auto-fit grid for the form rows — repeated four times above so it
+// pays its keep as a local helper, not yet generic enough for the
+// kit.
 function Grid({ children }: { children: React.ReactNode }) {
   return (
     <div
@@ -463,17 +439,16 @@ function FederalTaxPreview({
           : "Federal tax preview"
       }
     >
-      <input
+      <Input
         type="text"
         readOnly
         tabIndex={-1}
         value={`$${tax.toFixed(2)}`}
         style={{
-          ...inputStyle,
-          background: "var(--db-surface-2, #141414)",
-          color: "var(--db-text-muted, #a3a3a3)",
+          background: tokens.surface2,
+          color: tokens.textMuted,
           cursor: "default",
-          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
+          fontFamily: tokens.fontMono,
         }}
       />
       {exempt && (
@@ -482,7 +457,7 @@ function FederalTaxPreview({
             display: "block",
             marginTop: "0.25rem",
             fontSize: "0.75rem",
-            color: "var(--db-text-muted, #a3a3a3)",
+            color: tokens.textMuted,
           }}
         >
           Exempt — {country === "United States"
@@ -493,79 +468,3 @@ function FederalTaxPreview({
     </Field>
   );
 }
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "62rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
-  margin: "0 0 1rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  cursor: "pointer",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "1.5rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
