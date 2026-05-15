@@ -1,0 +1,33 @@
+/* Page-specific styles for AdminUserForm.tsx.
+ *
+ * Everything that maps to a shared primitive (page shell, card,
+ * field, input, button, alert) goes through `components/ui`
+ * instead — this file only holds what's truly specific to this
+ * page's layout. See CLAUDE.md → "Forms" / "Inline styles".
+ */
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.25rem;
+  gap: 0.5rem;
+}
+
+.cardHeaderText {
+  font-weight: 600;
+  font-size: 0.98rem;
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkboxLabel {
+  font-size: 0.92rem;
+  color: var(--db-text, #e5e5e5);
+}

@@ -8,7 +8,11 @@ import {
 } from "../api/admin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
+  PageHeader, PageShell, Select,
+} from "../components/ui";
+import styles from "./AdminUserForm.module.css";
 
 // /app/admin/users/new and /app/admin/users/:uid/edit — combined
 // create + edit form. Mirrors the legacy admin_user_form.html
@@ -81,33 +85,31 @@ export default function AdminUserForm() {
     || (identity.role !== "admin" && identity.role !== "owner")
   ) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>User Management</h1>
-        <p style={emptyStyle}>
-          You need a store-admin sign-in to manage users.
-        </p>
-      </main>
+      <PageShell maxWidth="36rem">
+        <PageHeader title="User Management" />
+        <p>You need a store-admin sign-in to manage users.</p>
+      </PageShell>
     );
   }
 
   if (isEdit && detail.isLoading) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit User</h1>
+      <PageShell maxWidth="36rem">
+        <PageHeader title="Edit User" />
         <Loading />
-      </main>
+      </PageShell>
     );
   }
   if (isEdit && (detail.isError || !detail.data)) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit User</h1>
+      <PageShell maxWidth="36rem">
+        <PageHeader title="Edit User" />
         <ErrorState
           message={`Couldn't load this user.${detail.error instanceof Error ? ` ${detail.error.message}` : ""}`}
           onRetry={() => { void detail.refetch(); }}
         />
-        <Link to="/admin/users" style={btnOutlineStyle}>← Back</Link>
-      </main>
+        <ButtonLink href="/admin/users" tone="secondary">← Back</ButtonLink>
+      </PageShell>
     );
   }
 
@@ -159,68 +161,69 @@ export default function AdminUserForm() {
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1rem" }}>
-        <h1 style={titleStyle}>{isEdit ? "Edit User" : "Add User"}</h1>
-      </header>
+    <PageShell maxWidth="36rem">
+      <PageHeader title={isEdit ? "Edit User" : "Add User"} />
 
-      <section style={cardStyle}>
-        <div style={cardHeaderStyle}>
-          <span style={cardHeaderTextStyle}>
+      <Card>
+        <div className={styles.cardHeader}>
+          <span className={styles.cardHeaderText}>
             {isEdit ? "Update user account" : "Create a new user account"}
           </span>
-          <Link to="/admin/users" style={btnOutlineSmStyle}>← Back</Link>
+          <Link to="/admin/users" style={{ textDecoration: "none" }}>
+            <Button tone="secondary" size="sm">← Back</Button>
+          </Link>
         </div>
 
-        {serverError && <div style={alertErrorStyle}>{serverError}</div>}
+        {serverError && <Alert tone="error">{serverError}</Alert>}
 
-        <form onSubmit={onSubmit} autoComplete="off">
+        <form
+          onSubmit={onSubmit}
+          autoComplete="off"
+          style={{ display: "flex", flexDirection: "column", gap: "1rem", marginTop: "1rem" }}
+        >
           {!isEdit ? (
             <Field label="Username *" error={fieldErrors.username}>
-              <input
+              <Input
                 type="text" maxLength={80} required
                 placeholder="e.g. maria.lopez"
                 value={draft.username}
                 onChange={(e) => set("username", e.target.value)}
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
           ) : (
             <Field label="Username">
-              <input
+              <Input
                 type="text" disabled
                 value={draft.username}
-                style={{ ...inputStyle, opacity: 0.7, cursor: "not-allowed" }}
+                style={{ opacity: 0.7, cursor: "not-allowed" }}
               />
             </Field>
           )}
 
           <Field label="Full Name" error={fieldErrors.full_name}>
-            <input
+            <Input
               type="text" maxLength={120}
               placeholder="Employee's full name"
               value={draft.full_name}
               onChange={(e) => set("full_name", e.target.value)}
-              disabled={busy} style={inputStyle}
+              disabled={busy}
             />
           </Field>
 
-          <Field label="Role *" error={fieldErrors.role}>
-            <select
+          <Field
+            label="Role *"
+            error={fieldErrors.role}
+            hint={isSelf ? "You can't change your own role. Ask another admin to do it." : undefined}
+          >
+            <Select
               value={draft.role}
               onChange={(e) => set("role", e.target.value)}
               disabled={busy || isSelf}
-              style={inputStyle}
             >
               <option value="employee">Employee (Transfer only)</option>
               <option value="admin">Super Admin (Full access)</option>
-            </select>
-            {isSelf && (
-              <span style={hintStyle}>
-                You can't change your own role. Ask another admin
-                to do it.
-              </span>
-            )}
+            </Select>
           </Field>
 
           <Field
@@ -231,179 +234,44 @@ export default function AdminUserForm() {
             }
             error={fieldErrors.password}
           >
-            <input
+            <Input
               type="password" maxLength={200}
               placeholder="Set password"
               required={!isEdit}
               value={draft.password}
               onChange={(e) => set("password", e.target.value)}
-              disabled={busy} style={inputStyle}
+              disabled={busy}
             />
           </Field>
 
           {isEdit && (
-            <Field label="" error={fieldErrors.is_active}>
-              <label style={checkboxRowStyle}>
+            <Field
+              label=""
+              error={fieldErrors.is_active}
+              hint={isSelf ? "You can't deactivate your own account. Ask another admin to do it." : undefined}
+            >
+              <label className={styles.checkboxRow}>
                 <input
                   type="checkbox"
                   checked={draft.is_active}
                   onChange={(e) => set("is_active", e.target.checked)}
                   disabled={busy || isSelf}
                 />
-                <span style={checkboxLabelStyle}>
+                <span className={styles.checkboxLabel}>
                   Account is active
                 </span>
               </label>
-              {isSelf && (
-                <span style={hintStyle}>
-                  You can't deactivate your own account. Ask another
-                  admin to do it.
-                </span>
-              )}
             </Field>
           )}
 
-          <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.6rem" }}>
-            <button
-              type="submit" disabled={busy} style={btnPrimaryStyle}
-            >
+          <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.6rem" }}>
+            <Button type="submit" busy={busy} disabled={busy}>
               {busy ? "Saving…" : (isEdit ? "Save Changes" : "Create User")}
-            </button>
-            <Link to="/admin/users" style={btnOutlineStyle}>Cancel</Link>
+            </Button>
+            <ButtonLink href="/admin/users" tone="secondary">Cancel</ButtonLink>
           </div>
         </form>
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
-
-
-function Field({
-  label, error, children,
-}: {
-  label:    string;
-  error?:   string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={fieldStyle}>
-      {label && <span style={labelStyle}>{label}</span>}
-      {children}
-      {error && <span style={fieldErrorStyle}>{error}</span>}
-    </label>
-  );
-}
-
-
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "36rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.5rem",
-};
-
-const cardHeaderStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center",
-  justifyContent: "space-between",
-  marginBottom: "1.25rem",
-  gap: "0.5rem",
-};
-
-const cardHeaderTextStyle: React.CSSProperties = {
-  fontWeight: 600, fontSize: "0.98rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-};
-
-const fieldStyle: React.CSSProperties = {
-  display: "flex", flexDirection: "column",
-  gap: "0.35rem", marginBottom: "1rem",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "0.7rem", letterSpacing: "0.06em",
-  textTransform: "uppercase", fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.6rem 0.75rem",
-  background: "var(--db-bg-input, #0d0d0d)",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem", fontSize: "0.95rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-};
-
-const hintStyle: React.CSSProperties = {
-  fontSize: "0.78rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const fieldErrorStyle: React.CSSProperties = {
-  fontSize: "0.8rem", color: "var(--db-negative, #ff4d6d)",
-};
-
-const checkboxRowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: "0.5rem",
-  cursor: "pointer",
-};
-
-const checkboxLabelStyle: React.CSSProperties = {
-  fontSize: "0.92rem",
-  color: "var(--db-text, #e5e5e5)",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 600, fontSize: "0.92rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
-  border: "none", borderRadius: "0.5rem",
-  cursor: "pointer",
-};
-
-const btnOutlineStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 500, fontSize: "0.92rem",
-  background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  textDecoration: "none",
-  display: "inline-block",
-};
-
-const btnOutlineSmStyle: React.CSSProperties = {
-  padding: "0.35rem 0.75rem",
-  fontWeight: 500, fontSize: "0.82rem",
-  background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.4rem",
-  textDecoration: "none",
-  display: "inline-block",
-};
-
-const alertErrorStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "1rem",
-  background: "rgba(255,77,109,0.08)",
-  border: "1px solid rgba(255,77,109,0.3)",
-  borderRadius: "0.5rem",
-  color: "var(--db-negative, #ff4d6d)",
-  fontSize: "0.88rem",
-};
-
-const emptyStyle: React.CSSProperties = {
-  marginTop: "1rem", color: "var(--db-text-muted, #a3a3a3)",
-};
