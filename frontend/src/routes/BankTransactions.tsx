@@ -12,11 +12,12 @@ import {
   type BankTransactionRow,
 } from "../api/bankSync";
 import {
-  Card, Empty, EmptyState, ErrorState, Field, inputStyle, monoStyle,
-  PageHeader, PageShell, Pager, TableSkeleton, tokens,
+  Card, Empty, EmptyState, ErrorState, Field, Input, monoStyle, PageHeader,
+  PageShell, Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import styles from "./BankTransactions.module.css";
 
 // Bank transactions at /app/bank-transactions. Filters: account,
 // sign, uncategorized-only, free-text search. Each row's category
@@ -87,30 +88,16 @@ export default function BankTransactions() {
             : "—"
         }
         actions={
-          <a
-            href="/bank"
-            style={{
-              color: tokens.textMuted,
-              fontSize: "0.85rem",
-              textDecoration: "underline",
-            }}
-          >
+          <a href="/bank" className={styles.legacyLink}>
             Connect / sync (legacy) →
           </a>
         }
       />
 
       <Card>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-            gap: "0.75rem",
-            marginBottom: "1rem",
-          }}
-        >
+        <div className={styles.filtersGrid}>
           <Field label="Search">
-            <input
+            <Input
               type="search"
               value={qDraft}
               placeholder="Description…"
@@ -122,60 +109,45 @@ export default function BankTransactions() {
                   setParam("q", qDraft.trim());
                 }
               }}
-              style={inputStyle}
             />
           </Field>
           <Field label="Account">
-            <select
+            <Select
               value={filters.account_id ?? ""}
               onChange={(e) => setParam("account_id", e.target.value)}
-              style={inputStyle}
             >
               <option value="">All accounts</option>
               {accounts.data?.rows.map((a) => (
                 <option key={a.id} value={a.id}>{a.label}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Sign">
-            <select
+            <Select
               value={filters.sign ?? ""}
-              onChange={(e) =>
-                setParam("sign", e.target.value as "credit" | "debit" | "")
-              }
-              style={inputStyle}
+              onChange={(e) => setParam("sign", e.target.value as "credit" | "debit" | "")}
             >
               <option value="">Any</option>
               <option value="credit">Credit</option>
               <option value="debit">Debit</option>
-            </select>
+            </Select>
           </Field>
           <Field label="From">
-            <input
+            <Input
               type="date"
               value={filters.posted_from ?? ""}
               onChange={(e) => setParam("posted_from", e.target.value)}
-              style={inputStyle}
             />
           </Field>
           <Field label="To">
-            <input
+            <Input
               type="date"
               value={filters.posted_to ?? ""}
               onChange={(e) => setParam("posted_to", e.target.value)}
-              style={inputStyle}
             />
           </Field>
           <Field label="Filter">
-            <label
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.55rem 0",
-                fontSize: "0.95rem",
-              }}
-            >
+            <label className={styles.checkboxRow}>
               <input
                 type="checkbox"
                 checked={filters.uncategorized_only}
@@ -200,13 +172,13 @@ export default function BankTransactions() {
         )}
         {txns.data && txns.data.rows.length > 0 && (
           <>
-            <Table rows={txns.data.rows} />
+            <TxnTable rows={txns.data.rows} />
             <Pager
               page={page}
               totalPages={totalPages}
               onPage={setPage}
               leading={
-                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
+                <span className={styles.pagerLead}>
                   Page total:{" "}
                   <span style={monoStyle}>
                     ${(txns.data.page_total_cents / 100).toFixed(2)}
@@ -221,7 +193,7 @@ export default function BankTransactions() {
   );
 }
 
-function Table({ rows }: { rows: BankTransactionRow[] }) {
+function TxnTable({ rows }: { rows: BankTransactionRow[] }) {
   const qc = useQueryClient();
   const identity = getCurrentIdentity();
   function refresh() {
@@ -230,57 +202,48 @@ function Table({ rows }: { rows: BankTransactionRow[] }) {
     });
   }
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}
-      >
-        <thead>
-          <tr>
-            {[
-              ["Posted",      "left"],
-              ["Description", "left"],
-              ["Account",     "left"],
-              ["Category",    "left"],
-              ["Amount",      "right"],
-            ].map(([label, align], i) => (
-              <th key={i} style={{ ...thStyle, textAlign: align as "left" | "right" }}>
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id}>
-              <td style={cellStyle}>
-                <span style={{ ...monoStyle, fontSize: "0.85rem", color: tokens.textMuted }}>
-                  {r.posted_at.slice(0, 10)}
-                </span>
-              </td>
-              <td style={cellStyle}>{r.description || "—"}</td>
-              <td style={cellStyle}>
-                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
-                  {r.account_label || `acct ${r.account_id}`}
-                </span>
-              </td>
-              <td style={cellStyle}>
-                <CategoryCell row={r} onChanged={refresh} />
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span
-                  style={{
-                    ...monoStyle,
-                    color: r.amount_cents > 0 ? tokens.accent : tokens.text,
-                  }}
-                >
-                  {r.amount_cents > 0 ? "+" : ""}${r.amount.toFixed(2)}
-                </span>
-              </td>
-            </tr>
+    <Table>
+      <thead>
+        <tr>
+          {[
+            ["Posted",      "left"],
+            ["Description", "left"],
+            ["Account",     "left"],
+            ["Category",    "left"],
+            ["Amount",      "right"],
+          ].map(([label, align], i) => (
+            <th key={i} style={{ ...thStyle, textAlign: align as "left" | "right" }}>
+              {label}
+            </th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id}>
+            <td style={tdStyle}>
+              <span className={styles.dateCell}>
+                {r.posted_at.slice(0, 10)}
+              </span>
+            </td>
+            <td style={tdStyle}>{r.description || "—"}</td>
+            <td style={tdStyle}>
+              <span className={styles.accountCell}>
+                {r.account_label || `acct ${r.account_id}`}
+              </span>
+            </td>
+            <td style={tdStyle}>
+              <CategoryCell row={r} onChanged={refresh} />
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={r.amount_cents > 0 ? styles.amountPos : styles.amountNeutral}>
+                {r.amount_cents > 0 ? "+" : ""}${r.amount.toFixed(2)}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
@@ -316,47 +279,27 @@ function CategoryCell({
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-      <select
+    <div className={styles.categoryCell}>
+      <Select
         value={row.category_slug}
         onChange={(e) => pick(e.target.value)}
         disabled={busy}
-        style={{
-          ...inputStyle,
-          width: "auto",
-          minWidth: "10rem",
-          padding: "0.3rem 0.5rem",
-          fontSize: "0.85rem",
-          fontFamily: row.category_slug ? tokens.fontMono : undefined,
-        }}
+        className={
+          row.category_slug
+            ? `${styles.categorySelect} ${styles.categorySelectMono}`
+            : styles.categorySelect
+        }
       >
         <option value="">— uncategorized —</option>
         {BANK_CATEGORY_OPTIONS.map((c) => (
           <option key={c.slug} value={c.slug}>{c.label}</option>
         ))}
-      </select>
+      </Select>
       {err && (
-        <span title={err} style={{ color: tokens.negative, fontSize: "0.8rem" }}>
+        <span title={err} className={styles.errorMark}>
           ⚠
         </span>
       )}
     </div>
   );
 }
-
-// ── Cell + header styles (table-specific, kept local) ──────────
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const thStyle: React.CSSProperties = {
-  padding: "0.6rem 0.75rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.78rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: `1px solid ${tokens.border}`,
-};
