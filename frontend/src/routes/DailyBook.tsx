@@ -3,9 +3,9 @@ import { Link, useSearchParams } from "react-router-dom";
 
 import { useDailyPeriod, type DailyReportRow } from "../api/dailybook";
 import {
-  Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  tokens,
+  Button, Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
 } from "../components/ui";
+import styles from "./DailyBook.module.css";
 
 // /app/daily — the Daily Book landing page. A calendar of the
 // chosen month + a monthly summary strip. Each day cell is a link
@@ -98,31 +98,28 @@ export default function DailyBook() {
         title="Daily Book"
         subtitle={`${MONTH_NAMES[month]} ${year}`}
         actions={(
-          <div style={navRow}>
-            <button
-              type="button"
+          <div className={styles.navRow}>
+            <Button
+              tone="secondary" size="sm"
               onClick={() => navMonth(-1)}
-              style={navBtnStyle}
               aria-label="Previous month"
             >
               ←
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              tone="secondary" size="sm"
               onClick={() => navMonth(0)}
-              style={navBtnStyle}
               title="Jump to current month"
             >
               Today
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              tone="secondary" size="sm"
               onClick={() => navMonth(1)}
-              style={navBtnStyle}
               aria-label="Next month"
             >
               →
-            </button>
+            </Button>
           </div>
         )}
       />
@@ -201,15 +198,15 @@ function Calendar({
 
   return (
     <div>
-      <div style={weekHeaderRow}>
+      <div className={styles.weekHeaderRow}>
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-          <div key={d} style={weekHeaderCell}>{d}</div>
+          <div key={d} className={styles.weekHeaderCell}>{d}</div>
         ))}
       </div>
-      <div style={gridStyle}>
+      <div className={styles.grid}>
         {cells.map((day, i) => {
           if (day == null) {
-            return <div key={`b${i}`} style={emptyCellStyle} />;
+            return <div key={`b${i}`} className={styles.emptyCell} />;
           }
           const iso = `${year}-${pad2(month + 1)}-${pad2(day)}`;
           const report = reportByDate.get(iso);
@@ -249,28 +246,28 @@ function CalendarCell({
     : 0;
   const over = (report?.over_short ?? 0);
 
-  const styles: React.CSSProperties = {
-    ...cellBaseStyle,
-    ...(hasReport ? cellHasReportStyle : {}),
-    ...(isToday ? cellTodayStyle : {}),
-    ...(locked ? cellLockedStyle : {}),
-  };
+  const cls = [
+    styles.cell,
+    hasReport ? styles.cellHasReport : "",
+    isToday   ? styles.cellToday    : "",
+    locked    ? styles.cellLocked   : "",
+    "ds-card--interactive",
+  ].filter(Boolean).join(" ");
 
   return (
     <Link
       to={`/daily/edit?date=${iso}`}
-      style={styles}
+      className={cls}
       aria-label={`Open daily book for ${iso}`}
-      className="ds-card--interactive"
     >
-      <div style={cellHeaderStyle}>
-        <span style={cellDayStyle}>{day}</span>
+      <div className={styles.cellHeader}>
+        <span className={styles.cellDay}>{day}</span>
         {locked && (
           <svg
             width="14" height="14" viewBox="0 0 24 24"
             stroke="currentColor" fill="none" strokeWidth="2"
             strokeLinecap="round" strokeLinejoin="round"
-            style={{ color: tokens.warning }}
+            className={styles.lockIcon}
             aria-label="Locked"
           >
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -280,14 +277,10 @@ function CalendarCell({
       </div>
       {hasReport ? (
         <>
-          <div style={cellMoneyStyle}>{fmtMoney(total)}</div>
+          <div className={styles.cellMoney}>{fmtMoney(total)}</div>
           {Math.abs(over) >= 0.005 && (
             <span
-              style={{
-                ...overPillStyle,
-                color: over > 0 ? tokens.accent : tokens.negative,
-                borderColor: over > 0 ? tokens.accent : tokens.negative,
-              }}
+              className={`${styles.overPill} ${over > 0 ? styles.overPos : styles.overNeg}`}
               title={`Over/short: ${fmtMoney2(over)}`}
             >
               {over > 0 ? "+" : ""}{fmtMoney2(over)}
@@ -295,7 +288,7 @@ function CalendarCell({
           )}
         </>
       ) : (
-        <div style={cellEmptyHintStyle}>—</div>
+        <div className={styles.cellEmptyHint}>—</div>
       )}
     </Link>
   );
@@ -304,162 +297,23 @@ function CalendarCell({
 
 function Legend() {
   return (
-    <div style={legendStyle}>
-      <span style={legendItem}>
-        <span style={{ ...swatchStyle, ...cellTodayStyle }} />
+    <div className={styles.legend}>
+      <span className={styles.legendItem}>
+        <span className={`${styles.swatch} ${styles.cellToday}`} />
         Today
       </span>
-      <span style={legendItem}>
-        <span style={{ ...swatchStyle, ...cellHasReportStyle }} />
+      <span className={styles.legendItem}>
+        <span className={`${styles.swatch} ${styles.cellHasReport}`} />
         Has entry
       </span>
-      <span style={legendItem}>
-        <span
-          style={{ ...swatchStyle, ...cellLockedStyle }}
-        />
+      <span className={styles.legendItem}>
+        <span className={`${styles.swatch} ${styles.cellLocked}`} />
         Locked
       </span>
-      <span style={legendItem}>
-        <span style={{ ...swatchStyle }} />
+      <span className={styles.legendItem}>
+        <span className={styles.swatch} />
         No entry yet
       </span>
     </div>
   );
 }
-
-
-// ── Styles ───────────────────────────────────────────────────
-
-const navRow: React.CSSProperties = {
-  display: "inline-flex",
-  gap: "0.4rem",
-  alignItems: "center",
-};
-
-const navBtnStyle: React.CSSProperties = {
-  background: tokens.surface,
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "0.5rem 0.9rem",
-  fontFamily: tokens.fontBody,
-  fontSize: "0.9rem",
-  fontWeight: 500,
-  cursor: "pointer",
-  minWidth: "2.5rem",
-};
-
-const gridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, 1fr)",
-  gap: "0.5rem",
-};
-
-const weekHeaderRow: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(7, 1fr)",
-  gap: "0.5rem",
-  marginBottom: "0.5rem",
-};
-
-const weekHeaderCell: React.CSSProperties = {
-  fontSize: "0.7rem",
-  letterSpacing: "0.08em",
-  textTransform: "uppercase",
-  color: tokens.textMuted,
-  textAlign: "center",
-  padding: "0.4rem 0",
-  fontWeight: 600,
-};
-
-const cellBaseStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  padding: "0.7rem 0.65rem",
-  borderRadius: "0.65rem",
-  border: `1px solid ${tokens.border}`,
-  background: tokens.surface2,
-  textDecoration: "none",
-  color: tokens.text,
-  minHeight: "5.25rem",
-};
-
-const cellHasReportStyle: React.CSSProperties = {
-  background: tokens.surface,
-  borderColor: "rgba(63, 255, 0, 0.25)",
-};
-
-const cellTodayStyle: React.CSSProperties = {
-  borderColor: tokens.accent,
-  boxShadow: "0 0 0 1px rgba(63, 255, 0, 0.35) inset",
-};
-
-const cellLockedStyle: React.CSSProperties = {
-  borderStyle: "dashed",
-  opacity: 0.94,
-};
-
-const emptyCellStyle: React.CSSProperties = {
-  background: "transparent",
-  minHeight: "5.25rem",
-};
-
-const cellHeaderStyle: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  fontFamily: tokens.fontDisplay,
-};
-
-const cellDayStyle: React.CSSProperties = {
-  fontSize: "1rem",
-  fontWeight: 700,
-};
-
-const cellMoneyStyle: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  color: tokens.text,
-};
-
-const cellEmptyHintStyle: React.CSSProperties = {
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-
-const overPillStyle: React.CSSProperties = {
-  display: "inline-block",
-  alignSelf: "flex-start",
-  fontFamily: tokens.fontMono,
-  fontSize: "0.65rem",
-  fontWeight: 600,
-  padding: "0.1rem 0.35rem",
-  borderRadius: "0.3rem",
-  border: "1px solid transparent",
-};
-
-const legendStyle: React.CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "1rem",
-  marginTop: "1rem",
-  paddingTop: "0.75rem",
-  borderTop: `1px solid ${tokens.border}`,
-  fontSize: "0.75rem",
-  color: tokens.textMuted,
-};
-
-const legendItem: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.45rem",
-};
-
-const swatchStyle: React.CSSProperties = {
-  display: "inline-block",
-  width: "1.25rem",
-  height: "0.9rem",
-  borderRadius: "0.25rem",
-};

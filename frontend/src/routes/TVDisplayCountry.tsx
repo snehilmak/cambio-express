@@ -5,7 +5,11 @@ import {
   useTVDisplayCountryDetail,
   type TVDisplayBankRow,
 } from "../api/tvDisplay";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Button, ButtonLink, Card, ErrorState, Field, Input, Loading, PageHeader,
+  PageShell, Table, tdStyle, thStyle,
+} from "../components/ui";
+import styles from "./TVDisplayCountry.module.css";
 
 // /app/tv-display/countries/:id — country editor for the rate
 // board. The mutation surface (banks add/remove, rate matrix
@@ -54,19 +58,19 @@ export default function TVDisplayCountry() {
 
   if (isLoading) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="75rem">
         <Loading label="Loading country…" />
-      </main>
+      </PageShell>
     );
   }
   if (isError || !data) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="75rem">
         <ErrorState
           message={`Couldn't load country — ${error instanceof Error ? error.message : "unknown error"}`}
           onRetry={() => { void refetch(); }}
         />
-      </main>
+      </PageShell>
     );
   }
 
@@ -86,58 +90,57 @@ export default function TVDisplayCountry() {
   }
 
   return (
-    <main style={pageStyle}>
-      <header>
-        <Link to="/tv-display" style={backLink}>← Back to TV Display</Link>
-        <h1 style={titleStyle}>{data.country_name || "Country"}</h1>
-        <p style={muted}>
-          {data.country_code} · {data.banks.length} bank
-          {data.banks.length === 1 ? "" : "s"} · {data.mt_companies.length} company column
-          {data.mt_companies.length === 1 ? "" : "s"}
-        </p>
-      </header>
+    <PageShell maxWidth="75rem">
+      <div>
+        <Link to="/tv-display" className={styles.backLink}>← Back to TV Display</Link>
+        <PageHeader
+          title={data.country_name || "Country"}
+          subtitle={
+            `${data.country_code} · ${data.banks.length} bank` +
+            `${data.banks.length === 1 ? "" : "s"} · ` +
+            `${data.mt_companies.length} company column` +
+            `${data.mt_companies.length === 1 ? "" : "s"}`
+          }
+        />
+      </div>
 
       <form
         method="POST"
         action={`/tv-display/countries/${cid}`}
-        style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+        className={styles.form}
       >
-        <section style={cardStyle}>
-          <h2 style={cardH2}>Country header</h2>
+        <Card>
+          <h2 className={styles.cardH2}>Country header</h2>
           <Field label="Country name">
-            <input
+            <Input
               name="country_name"
               defaultValue={data.country_name}
               maxLength={80}
-              style={inputStyle}
             />
           </Field>
           <Field label="ISO country code">
-            <input
+            <Input
               name="country_code"
               defaultValue={data.country_code}
               maxLength={4}
-              style={inputStyle}
             />
           </Field>
-          <Field label="MT companies (comma-separated slugs)">
-            <input
+          <Field
+            label="MT companies (comma-separated slugs)"
+            hint="These become the column headers in the public board's rate grid. Order is preserved."
+          >
+            <Input
               name="mt_companies"
               value={companiesText}
               onChange={(e) => setCompaniesText(e.target.value)}
               maxLength={500}
-              style={inputStyle}
             />
-            <small style={muted}>
-              These become the column headers in the public board's rate grid.
-              Order is preserved.
-            </small>
           </Field>
-        </section>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={cardH2}>Banks &amp; rate matrix</h2>
-          <table style={tableStyle}>
+        <Card>
+          <h2 className={styles.cardH2}>Banks &amp; rate matrix</h2>
+          <Table>
             <thead>
               <tr>
                 <th style={thStyle}>Bank</th>
@@ -176,30 +179,30 @@ export default function TVDisplayCountry() {
                 />
               ))}
             </tbody>
-          </table>
-        </section>
+          </Table>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={cardH2}>Add new banks</h2>
+        <Card>
+          <h2 className={styles.cardH2}>Add new banks</h2>
           {newBankNames.map((name, idx) => (
-            <input
+            <Input
               key={idx}
               name="new_bank_name"
               value={name}
               onChange={(e) => setNewBankAt(idx, e.target.value)}
               placeholder="Bank name (leave blank to skip)"
               maxLength={120}
-              style={{ ...inputStyle, marginBottom: "0.5rem" }}
+              className={styles.newBankInput}
             />
           ))}
-        </section>
+        </Card>
 
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button type="submit" style={btnPrimary}>Save changes</button>
-          <Link to="/tv-display" style={btnOutlineLink}>Cancel</Link>
+        <div className={styles.actions}>
+          <Button type="submit">Save changes</Button>
+          <ButtonLink href="/tv-display" tone="secondary">Cancel</ButtonLink>
         </div>
       </form>
-    </main>
+    </PageShell>
   );
 }
 
@@ -219,38 +222,37 @@ function BankRow({
   setRate: (bankId: number, idx: number, v: string) => void;
 }) {
   return (
-    <tr style={toDelete ? { opacity: 0.4 } : undefined}>
+    <tr className={toDelete ? styles.rowToDelete : undefined}>
       <td style={tdStyle}>
-        <input
+        <Input
           name={`bank-${bank.id}-name`}
           value={bankName}
           onChange={(e) => setBankName(e.target.value)}
           maxLength={120}
-          style={inputSmall}
         />
       </td>
       <td style={tdStyle}>
-        <input
+        <Input
           name={`bank-${bank.id}-sort`}
           type="number"
           value={bankSort}
           onChange={(e) => setBankSort(Number(e.target.value) || 0)}
-          style={{ ...inputSmall, width: "5rem" }}
+          style={{ width: "5rem" }}
         />
       </td>
       {companies.map((_, idx) => (
         <td key={idx} style={tdStyle}>
-          <input
+          <Input
             name={`rate-${bank.id}-${idx}`}
             value={rateGrid[`rate-${bank.id}-${idx}`] ?? ""}
             onChange={(e) => setRate(bank.id, idx, e.target.value)}
             placeholder="—"
-            style={{ ...inputSmall, width: "6rem" }}
+            style={{ width: "6rem" }}
           />
         </td>
       ))}
       <td style={tdStyle}>
-        <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <label className={styles.deleteLabel}>
           <input
             type="checkbox"
             name={`bank-${bank.id}-delete`}
@@ -264,80 +266,3 @@ function BankRow({
     </tr>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "block", marginBottom: "0.75rem" }}>
-      <div style={fieldLabel}>{label}</div>
-      {children}
-    </label>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1, padding: "2rem 1.5rem", maxWidth: "75rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-  display: "flex", flexDirection: "column", gap: "1.25rem",
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)", fontWeight: 600,
-  margin: "0.25rem 0 0",
-};
-const backLink: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)",
-  textDecoration: "none", fontSize: "0.85rem",
-};
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.25rem",
-};
-const cardH2: React.CSSProperties = {
-  margin: "0 0 0.75rem", fontSize: "1rem",
-};
-const fieldLabel: React.CSSProperties = {
-  fontSize: "0.75rem", textTransform: "uppercase",
-  letterSpacing: "0.05em", color: "var(--db-text-muted, #a3a3a3)",
-  fontWeight: 600, marginBottom: "0.25rem",
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "0.5rem 0.65rem",
-  background: "var(--db-surface-1, #0a0a0a)",
-  color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.4rem", fontSize: "0.9rem",
-  fontFamily: "inherit",
-};
-const inputSmall: React.CSSProperties = {
-  ...inputStyle, padding: "0.3rem 0.5rem", fontSize: "0.85rem",
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse",
-};
-const thStyle: React.CSSProperties = {
-  textAlign: "left", padding: "0.4rem 0.5rem",
-  borderBottom: "1px solid var(--db-border, #262626)",
-  fontSize: "0.7rem", textTransform: "uppercase",
-  color: "var(--db-text-muted, #a3a3a3)", fontWeight: 500,
-};
-const tdStyle: React.CSSProperties = {
-  padding: "0.4rem 0.5rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-};
-const btnPrimary: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)", color: "#000",
-  border: "none", padding: "0.6rem 1.1rem",
-  borderRadius: "0.5rem", fontWeight: 600,
-  fontSize: "0.9rem", cursor: "pointer",
-};
-const btnOutlineLink: React.CSSProperties = {
-  background: "transparent", color: "inherit",
-  border: "1px solid var(--db-border, #262626)",
-  padding: "0.6rem 1.1rem", borderRadius: "0.5rem",
-  fontSize: "0.9rem", cursor: "pointer",
-  textDecoration: "none", display: "inline-block",
-};
-const muted: React.CSSProperties = {
-  color: "var(--db-text-muted, #a3a3a3)", fontSize: "0.85rem", margin: 0,
-};

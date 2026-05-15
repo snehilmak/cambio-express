@@ -1,0 +1,138 @@
+/* Page-specific styles for DailyBook.tsx. */
+
+.navRow {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+}
+
+.weekHeaderRow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.weekHeaderCell {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--db-text-muted, #a3a3a3);
+  text-align: center;
+  padding: 0.4rem 0;
+  font-weight: 600;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.7rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--db-border, #262626);
+  background: var(--db-surface-2, #141414);
+  text-decoration: none;
+  color: var(--db-text, #f5f5f5);
+  min-height: 5.25rem;
+}
+
+.cellHasReport {
+  background: var(--db-surface, #0a0a0a);
+  border-color: rgba(63, 255, 0, 0.25);
+}
+
+.cellToday {
+  border-color: var(--db-accent, #3fff00);
+  box-shadow: 0 0 0 1px rgba(63, 255, 0, 0.35) inset;
+}
+
+.cellLocked {
+  border-style: dashed;
+  opacity: 0.94;
+}
+
+.emptyCell {
+  background: transparent;
+  min-height: 5.25rem;
+}
+
+.cellHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+}
+
+.cellDay {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.lockIcon {
+  color: var(--db-warning, #ffb800);
+}
+
+.cellMoney {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--db-text, #f5f5f5);
+}
+
+.cellEmptyHint {
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.overPill {
+  display: inline-block;
+  align-self: flex-start;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
+  border: 1px solid transparent;
+}
+
+.overPos {
+  color: var(--db-accent, #3fff00);
+  border-color: var(--db-accent, #3fff00);
+}
+
+.overNeg {
+  color: var(--db-negative, #ff3b30);
+  border-color: var(--db-negative, #ff3b30);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--db-border, #262626);
+  font-size: 0.75rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 1.25rem;
+  height: 0.9rem;
+  border-radius: 0.25rem;
+  border: 1px solid var(--db-border, #262626);
+  background: var(--db-surface-2, #141414);
+}
