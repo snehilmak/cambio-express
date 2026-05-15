@@ -10,8 +10,9 @@ import {
 } from "../api/billing";
 import { ApiError } from "../lib/api";
 import {
-  ErrorState, Loading, PageHeader, PageShell, tokens,
+  Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Pill,
 } from "../components/ui";
+import styles from "./AdminSubscription.module.css";
 
 // /app/admin/subscription — current plan hero + account snapshot +
 // add-ons grid + cancel modal. Mirrors the legacy
@@ -87,34 +88,34 @@ export default function AdminSubscription() {
     <PageShell maxWidth="70rem">
       <PageHeader title="Billing & Subscription" />
 
-      {error && <ErrorState message={error} />}
+      {error && <Alert tone="error">{error}</Alert>}
 
       {inactive && data.retention_days_left != null && (
-        <div style={bannerError}>
+        <Alert tone="error">
           Your subscription is canceled. Your store data is safe for{" "}
           <strong>
             {data.retention_days_left} more day
             {data.retention_days_left === 1 ? "" : "s"}
           </strong>
           . Resubscribe before then to pick up where you left off.
-          <Link to="/subscribe" style={{ marginLeft: "1rem", color: "inherit" }}>
+          <Link to="/subscribe" className={styles.resubLink}>
             Resubscribe
           </Link>
-        </div>
+        </Alert>
       )}
 
-      <div style={twoColGrid}>
-        <div style={planHero}>
-          <div style={planEyebrow}>Current Plan</div>
-          <div style={planName}>{plan_label}</div>
+      <div className={styles.twoColGrid}>
+        <div className={styles.planHero}>
+          <div className={styles.planEyebrow}>Current Plan</div>
+          <div className={styles.planName}>{plan_label}</div>
           {plan_price && (
-            <div style={planPrice}>{plan_price} · per store</div>
+            <div className={styles.planPrice}>{plan_price} · per store</div>
           )}
           {!plan_price && trial && (
-            <div style={planPrice}>Free · trial</div>
+            <div className={styles.planPrice}>Free · trial</div>
           )}
 
-          <div style={planMeta}>
+          <div className={styles.planMeta}>
             {trial && data.trial_status === "active" && (
               <>
                 Your free trial ends in{" "}
@@ -155,31 +156,30 @@ export default function AdminSubscription() {
             )}
           </div>
 
-          <div style={planActions}>
+          <div className={styles.planActions}>
             {has_paid_plan ? (
               <>
-                <button
-                  type="button"
-                  style={btnPrimaryDark}
+                <Button
+                  busy={busy === "portal"}
                   disabled={busy === "portal"}
                   onClick={() => handlePortal("portal")}
                 >
                   {busy === "portal" ? "Opening…" : "Manage Billing"}
-                </button>
-                <Link to="/subscribe" style={btnGhostDark}>
-                  Change Plan
+                </Button>
+                <Link to="/subscribe" style={{ textDecoration: "none" }}>
+                  <Button tone="secondary">Change Plan</Button>
                 </Link>
               </>
             ) : (
-              <Link to="/subscribe" style={btnPrimaryDark}>
-                Choose a Plan
+              <Link to="/subscribe" style={{ textDecoration: "none" }}>
+                <Button>Choose a Plan</Button>
               </Link>
             )}
           </div>
           {has_paid_plan && (
             <button
               type="button"
-              style={cancelLink}
+              className={styles.cancelLink}
               onClick={() => setShowCancel(true)}
             >
               Cancel subscription
@@ -187,10 +187,8 @@ export default function AdminSubscription() {
           )}
         </div>
 
-        <div style={cardStyle}>
-          <h3 style={{ margin: 0, marginBottom: "0.75rem", fontWeight: 600 }}>
-            Account
-          </h3>
+        <Card>
+          <h3 className={styles.cardH3}>Account</h3>
           <InfoRow label="Store" value={store.name || "—"} />
           <InfoRow label="Billing Email" value={store.email || "—"} />
           <InfoRow
@@ -204,13 +202,13 @@ export default function AdminSubscription() {
             mono
           />
           <InfoRow label="Active Add-ons" value={String(data.active_addon_count)} />
-        </div>
+        </Card>
       </div>
 
-      <h2 style={{ fontSize: "1.1rem", margin: "1.5rem 0 0.75rem" }}>Add-ons</h2>
+      <h2 className={styles.addonsHeading}>Add-ons</h2>
 
       {!has_paid_plan && (
-        <div style={bannerWarn}>
+        <div className={styles.bannerWarn}>
           Add-ons require an active <strong>Basic</strong> or{" "}
           <strong>Pro</strong> subscription.{" "}
           <Link to="/subscribe" style={{ color: "inherit", textDecoration: "underline" }}>
@@ -220,38 +218,34 @@ export default function AdminSubscription() {
         </div>
       )}
 
-      <div style={addonGrid}>
+      <div className={styles.addonGrid}>
         {data.addons.map((a) => (
-          <div key={a.key} style={addonCard}>
-            <div style={addonRow}>
+          <Card key={a.key} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div className={styles.addonRow}>
               <div>
-                <div style={addonName}>{a.name}</div>
-                <div style={mutedStyle}>{a.tagline}</div>
+                <div className={styles.addonName}>{a.name}</div>
+                <div className={styles.muted}>{a.tagline}</div>
               </div>
-              <div style={{ textAlign: "right", display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-end" }}>
+              <div className={styles.addonRowEnd}>
                 {a.status === "coming_soon" && (
-                  <span style={comingPill}>Coming Soon</span>
+                  <Pill tone="warning">Coming Soon</Pill>
                 )}
-                <span style={addonPrice}>{a.price_label}</span>
+                <span className={styles.addonPrice}>{a.price_label}</span>
               </div>
             </div>
-            <p style={addonDesc}>{a.description}</p>
-            <div style={addonFoot}>
-              <span style={mutedStyle}>
-                {a.is_active ? (
-                  <span style={badgeGreen}>Active</span>
-                ) : (
-                  "Not added"
-                )}
+            <p className={styles.addonDesc}>{a.description}</p>
+            <div className={styles.addonFoot}>
+              <span className={styles.muted}>
+                {a.is_active ? <Pill tone="accent">Active</Pill> : "Not added"}
               </span>
               <button
                 type="button"
+                className={styles.btnLinkLive}
                 disabled={
                   busy === `addon:${a.key}` ||
                   (!has_paid_plan && a.status !== "coming_soon")
                 }
                 onClick={() => handleToggle(a)}
-                style={a.status === "coming_soon" || a.is_active ? btnLinkLive : btnLinkLive}
               >
                 {a.status === "coming_soon"
                   ? "Notify Me"
@@ -260,23 +254,23 @@ export default function AdminSubscription() {
                     : "Add"}
               </button>
             </div>
-          </div>
+          </Card>
         ))}
         {data.addons.length === 0 && (
-          <p style={mutedStyle}>No add-ons available right now.</p>
+          <p className={styles.muted}>No add-ons available right now.</p>
         )}
       </div>
 
       {showCancel && has_paid_plan && (
-        <div style={modalBackdrop} onClick={() => setShowCancel(false)}>
-          <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalBackdrop} onClick={() => setShowCancel(false)}>
+          <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: 0 }}>Before you cancel</h3>
             <p>
               You're about to cancel your <strong>{plan_label}</strong>{" "}
               subscription. We hold your data so you can come back without
               losing a thing.
             </p>
-            <div style={infoBox}>
+            <div className={styles.infoBox}>
               <strong>Your data is safe for 6 months.</strong>
               <br />
               Reports, transfers, batches, employees, and settings stay
@@ -284,25 +278,21 @@ export default function AdminSubscription() {
               months and you're right back in. After 6 months, all of this
               store's data is permanently deleted.
             </div>
-            <p style={mutedStyle}>
+            <p className={styles.muted}>
               Clicking continue takes you to Stripe to confirm the cancellation.
             </p>
-            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                style={btnOutline}
-                onClick={() => setShowCancel(false)}
-              >
+            <div className={styles.modalActions}>
+              <Button tone="secondary" onClick={() => setShowCancel(false)}>
                 Keep Subscription
-              </button>
-              <button
-                type="button"
-                style={btnDanger}
+              </Button>
+              <Button
+                tone="danger"
+                busy={busy === "cancel"}
                 disabled={busy === "cancel"}
                 onClick={() => handlePortal("cancel")}
               >
                 {busy === "cancel" ? "Opening…" : "Continue to Cancel"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -313,226 +303,11 @@ export default function AdminSubscription() {
 
 function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "0.4rem 0", borderBottom: `1px solid ${tokens.borderSubtle}` }}>
-      <span style={mutedStyle}>{label}</span>
-      <span style={mono ? { ...moneyValue, fontSize: "0.85rem" } : undefined}>
+    <div className={styles.infoRow}>
+      <span className={styles.muted}>{label}</span>
+      <span className={mono ? styles.monoSm : undefined}>
         {value}
       </span>
     </div>
   );
 }
-
-const twoColGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: "1.25rem",
-  marginBottom: "1.5rem",
-};
-const planHero: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.accent}`,
-  borderRadius: "0.75rem",
-  padding: "1.5rem",
-  position: "relative",
-};
-const planEyebrow: React.CSSProperties = {
-  fontSize: "0.75rem",
-  letterSpacing: "0.1em",
-  textTransform: "uppercase",
-  color: tokens.accent,
-  fontWeight: 600,
-};
-const planName: React.CSSProperties = {
-  fontSize: "1.75rem",
-  fontFamily: tokens.fontDisplay,
-  marginTop: "0.25rem",
-};
-const planPrice: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-const planMeta: React.CSSProperties = {
-  marginTop: "1rem",
-  fontSize: "0.9rem",
-  color: tokens.textMuted,
-};
-const planActions: React.CSSProperties = {
-  marginTop: "1.25rem",
-  display: "flex",
-  gap: "0.5rem",
-  flexWrap: "wrap",
-};
-const cardStyle: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-const btnPrimaryDark: React.CSSProperties = {
-  background: tokens.accent,
-  color: "#000",
-  padding: "0.55rem 1rem",
-  borderRadius: "0.5rem",
-  fontSize: "0.9rem",
-  fontWeight: 600,
-  textDecoration: "none",
-  border: "none",
-  cursor: "pointer",
-};
-const btnGhostDark: React.CSSProperties = {
-  background: "transparent",
-  color: "inherit",
-  padding: "0.55rem 1rem",
-  borderRadius: "0.5rem",
-  fontSize: "0.9rem",
-  fontWeight: 500,
-  border: `1px solid ${tokens.border}`,
-  textDecoration: "none",
-  cursor: "pointer",
-};
-const cancelLink: React.CSSProperties = {
-  background: "transparent",
-  color: tokens.textMuted,
-  border: "none",
-  padding: "0.5rem 0",
-  marginTop: "0.5rem",
-  fontSize: "0.85rem",
-  cursor: "pointer",
-  textDecoration: "underline",
-  display: "block",
-};
-const mutedStyle: React.CSSProperties = {
-  color: tokens.textMuted,
-  fontSize: "0.85rem",
-};
-const moneyValue: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-const bannerError: React.CSSProperties = {
-  color: tokens.negative,
-  background: "rgba(255,59,48,0.08)",
-  border: "1px solid rgba(255,59,48,0.4)",
-  padding: "0.75rem 1rem",
-  borderRadius: "0.5rem",
-  marginBottom: "1.25rem",
-};
-const bannerWarn: React.CSSProperties = {
-  background: "rgba(255,204,0,0.08)",
-  border: "1px solid rgba(255,204,0,0.4)",
-  color: "var(--db-warning, #ffcc00)",
-  padding: "0.75rem 1rem",
-  borderRadius: "0.5rem",
-  marginBottom: "1rem",
-};
-const addonGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: "1rem",
-};
-const addonCard: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.75rem",
-};
-const addonRow: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "0.75rem",
-};
-const addonName: React.CSSProperties = {
-  fontSize: "1.05rem",
-  fontWeight: 600,
-};
-const addonPrice: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-const addonDesc: React.CSSProperties = {
-  margin: 0,
-  fontSize: "0.9rem",
-  color: tokens.textMuted,
-};
-const addonFoot: React.CSSProperties = {
-  marginTop: "auto",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "0.5rem",
-  paddingTop: "0.5rem",
-};
-const btnLinkLive: React.CSSProperties = {
-  background: "transparent",
-  border: `1px solid ${tokens.accent}`,
-  color: tokens.accent,
-  padding: "0.4rem 0.85rem",
-  borderRadius: "0.5rem",
-  fontSize: "0.85rem",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-const badgeGreen: React.CSSProperties = {
-  background: "rgba(63,255,0,0.15)",
-  color: tokens.accent,
-  padding: "0.15rem 0.55rem",
-  borderRadius: "999px",
-  fontSize: "0.75rem",
-  fontWeight: 600,
-};
-const comingPill: React.CSSProperties = {
-  background: "rgba(255,204,0,0.15)",
-  color: "var(--db-warning, #ffcc00)",
-  padding: "0.15rem 0.55rem",
-  borderRadius: "999px",
-  fontSize: "0.7rem",
-  fontWeight: 600,
-};
-const modalBackdrop: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  zIndex: 100,
-};
-const modalCard: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.75rem",
-  padding: "1.5rem",
-  maxWidth: "32rem",
-  width: "90%",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.75rem",
-};
-const infoBox: React.CSSProperties = {
-  background: "rgba(63,255,0,0.05)",
-  border: "1px solid rgba(63,255,0,0.2)",
-  padding: "0.75rem 1rem",
-  borderRadius: "0.5rem",
-};
-const btnOutline: React.CSSProperties = {
-  background: "transparent",
-  border: `1px solid ${tokens.border}`,
-  color: "inherit",
-  padding: "0.5rem 1rem",
-  borderRadius: "0.5rem",
-  cursor: "pointer",
-};
-const btnDanger: React.CSSProperties = {
-  background: tokens.negative,
-  color: "#fff",
-  padding: "0.5rem 1rem",
-  borderRadius: "0.5rem",
-  border: "none",
-  fontWeight: 600,
-  cursor: "pointer",
-};

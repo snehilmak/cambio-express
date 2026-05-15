@@ -1,0 +1,196 @@
+/* Page-specific styles for AdminSubscription.tsx. */
+
+.twoColGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.planHero {
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-accent, #3fff00);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  position: relative;
+}
+
+.planEyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--db-accent, #3fff00);
+  font-weight: 600;
+}
+
+.planName {
+  font-size: 1.75rem;
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  margin-top: 0.25rem;
+}
+
+.planPrice {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.planMeta {
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.planActions {
+  margin-top: 1.25rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cancelLink {
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  border: none;
+  padding: 0.5rem 0;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  display: block;
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.bannerWarn {
+  background: rgba(255, 204, 0, 0.08);
+  border: 1px solid rgba(255, 204, 0, 0.4);
+  color: var(--db-warning, #ffcc00);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.addonGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+}
+
+.addonRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.addonRowEnd {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+}
+
+.addonName {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.addonPrice {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.addonDesc {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.addonFoot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.btnLinkLive {
+  background: transparent;
+  border: 1px solid var(--db-accent, #3fff00);
+  color: var(--db-accent, #3fff00);
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modalCard {
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 32rem;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.infoBox {
+  background: rgba(63, 255, 0, 0.05);
+  border: 1px solid rgba(63, 255, 0, 0.2);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.monoSm {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+}
+
+.cardH3 {
+  margin: 0;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.addonsHeading {
+  font-size: 1.1rem;
+  margin: 1.5rem 0 0.75rem;
+}
+
+.resubLink {
+  margin-left: 1rem;
+  color: inherit;
+}
