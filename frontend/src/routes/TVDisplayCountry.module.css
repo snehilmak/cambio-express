@@ -1,0 +1,44 @@
+/* Page-specific styles for TVDisplayCountry.tsx. */
+
+.backLink {
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.cardH2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.rowToDelete {
+  opacity: 0.4;
+}
+
+.deleteLabel {
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.newBankInput {
+  margin-bottom: 0.5rem;
+}
