@@ -1,0 +1,127 @@
+/* Page-specific styles for AdminReferrals.tsx.
+ *
+ * The referral hero deliberately uses a navy-+-gold accent
+ * palette that's separate from the dark+neon main theme — it's a
+ * marketing affordance for the referral program. Keep this in
+ * the module rather than promoting it to a shared brand token.
+ */
+
+.cardTitle {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.cardHeaderCount {
+  margin-left: auto;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.lead {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.hero {
+  background: linear-gradient(135deg, #0a1a2e 0%, #050d1a 100%);
+  border: 1px solid #1f3656;
+  border-radius: 1rem;
+  padding: 1.75rem;
+  margin-bottom: 1rem;
+  color: #e9eef5;
+}
+
+.heroLabel {
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffd96e;
+  font-weight: 600;
+}
+
+.heroCode {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 2.2rem;
+  color: #ffd96e;
+  margin-top: 0.4rem;
+  letter-spacing: 0.15em;
+}
+
+.heroMeta {
+  margin-top: 0.85rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.55;
+}
+
+.shareRow {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.shareInput {
+  flex: 1;
+  min-width: 16rem;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.btnGold {
+  background: #d4a92a;
+  color: #fff;
+  border: none;
+  padding: 0.65rem 1.1rem;
+  border-radius: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+}
+
+.howBox {
+  background: var(--db-surface-2, #141414);
+  border-left: 3px solid #d4a92a;
+  border-radius: 0.4rem;
+  padding: 0.85rem 1.1rem;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--db-text, #f5f5f5);
+  margin-bottom: 1rem;
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.txnId {
+  margin-left: 0.5rem;
+}
+
+.emptyTable {
+  padding: 1.4rem 0;
+  text-align: center;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.9rem;
+}
