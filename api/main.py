@@ -1,26 +1,23 @@
 """FastAPI app factory + router mounting.
 
-This is the entry point the Dockerized FastAPI image will boot from
-once Flask is gone. During the strangler-fig migration, the legacy
-Flask app continues to own / and the rest of the URL space; FastAPI
-only handles routes under `settings.api_prefix` (default `/api/v2`).
+This is the production entry point — ``asgi.py`` routes
+``/api/v2/*`` here at the ASGI layer. Flask was retired in
+PR #550; the historical strangler-fig dispatcher is gone.
 
 Two ways this app gets exercised:
 
-1. **Mounted inside Flask (current strangler-fig phase):** the Flask
-   app uses `werkzeug.middleware.dispatcher.DispatcherMiddleware`
-   to forward `/api/v2/*` requests into the FastAPI ASGI app via
-   `a2wsgi.ASGIMiddleware`. The dispatcher strips the mount prefix
-   before forwarding, so route paths inside FastAPI are RELATIVE —
-   `/health`, not `/api/v2/health`. We set `root_path` on the
-   FastAPI app so OpenAPI URLs reflect the mount point.
+1. **Mounted by ``asgi.py``:** the top-level ASGI router strips
+   the ``/api/v2`` prefix before forwarding, so route paths inside
+   FastAPI are RELATIVE — ``/health``, not ``/api/v2/health``. We
+   set ``root_path`` on the FastAPI app so OpenAPI URLs still
+   reflect the mount point.
 
-2. **Standalone (post-cleanup, or for direct uvicorn):** routes
-   live at the same paths but the prefix lives in the request URL
-   the client sends (since there's no dispatcher anymore).
+2. **Standalone (for direct uvicorn / tests):** routes live at the
+   same paths but the prefix lives in the request URL the client
+   sends.
 
-Mixed routing rule: never put `/api/v2` in a FastAPI route
-declaration. The mount or the OpenAPI `root_path` carry it.
+Rule: never put ``/api/v2`` in a FastAPI route declaration. The
+mount or the OpenAPI ``root_path`` carry it.
 """
 import os
 

@@ -26,7 +26,7 @@ from sqlalchemy import (
     Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer,
     String, UniqueConstraint,
 )
-from werkzeug.security import check_password_hash, generate_password_hash
+from api.Core.PasswordHash import check_password_hash, generate_password_hash
 
 from api.Core.Database import Base
 
