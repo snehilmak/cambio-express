@@ -9,8 +9,9 @@ import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
   Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader, PageShell,
-  Section, tokens,
+  Section, Table, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./Customers.module.css";
 
 // Customer search at /app/customers. Live-search box; results
 // split into "exact matches" (phone/full-name match) and
@@ -76,15 +77,7 @@ export default function Customers() {
           />
         </Field>
         {isFetching && (
-          <p
-            style={{
-              margin: "0.5rem 0 0",
-              fontSize: "0.85rem",
-              color: tokens.textMuted,
-            }}
-          >
-            Searching…
-          </p>
+          <p className={styles.searching}>Searching…</p>
         )}
       </Card>
 
@@ -124,80 +117,45 @@ export default function Customers() {
 
 function CustomerTable({ rows }: { rows: CustomerRow[] }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}
-      >
-        <thead>
-          <tr>
-            {["Name", "Phone", "DOB", "Address", "Home store"].map((h) => (
-              <th key={h} style={thStyle}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.id}>
-              <td style={cellStyle}>
-                <strong>{c.full_name}</strong>
-              </td>
-              <td style={cellStyle}>
-                <span
-                  style={{
-                    fontFamily: tokens.fontMono,
-                    fontSize: "0.9rem",
-                  }}
-                  // Full number copied to clipboard via the row's
-                  // detail page; the list view only shows the last
-                  // 4 digits per compliance (over-the-shoulder PII).
-                  title="Open the customer for the full number"
-                >
-                  {c.phone_country} {maskPhone(c.phone_number)}
-                </span>
-              </td>
-              <td style={cellStyle}>
-                <span
-                  style={{
-                    fontFamily: tokens.fontMono,
-                    fontSize: "0.85rem",
-                    color: tokens.textMuted,
-                  }}
-                >
-                  {c.dob || "—"}
-                </span>
-              </td>
-              <td style={cellStyle}>{c.address || "—"}</td>
-              <td style={cellStyle}>
-                {c.home_store_name ? (
-                  <span style={{ color: tokens.textMuted }}>
-                    {c.home_store_name}
-                  </span>
-                ) : (
-                  <span style={{ color: tokens.textMuted }}>
-                    (this store)
-                  </span>
-                )}
-              </td>
-            </tr>
+    <Table>
+      <thead>
+        <tr>
+          {["Name", "Phone", "DOB", "Address", "Home store"].map((h) => (
+            <th key={h} style={thStyle}>{h}</th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((c) => (
+          <tr key={c.id}>
+            <td style={tdStyle}>
+              <strong>{c.full_name}</strong>
+            </td>
+            <td style={tdStyle}>
+              <span
+                className={styles.phone}
+                // Full number copied to clipboard via the row's
+                // detail page; the list view only shows the last
+                // 4 digits per compliance (over-the-shoulder PII).
+                title="Open the customer for the full number"
+              >
+                {c.phone_country} {maskPhone(c.phone_number)}
+              </span>
+            </td>
+            <td style={tdStyle}>
+              <span className={styles.dob}>
+                {c.dob || "—"}
+              </span>
+            </td>
+            <td style={tdStyle}>{c.address || "—"}</td>
+            <td style={tdStyle}>
+              <span className={styles.muted}>
+                {c.home_store_name || "(this store)"}
+              </span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.6rem 0.75rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.78rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: `1px solid ${tokens.border}`,
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};

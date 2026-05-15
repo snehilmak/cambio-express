@@ -9,8 +9,9 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
-  TableSkeleton, tokens,
+  Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./Batches.module.css";
 
 // Read-only ACH batches list at /app/batches. Sort by clicking
 // column headers (URL-driven). Variance cell colored red when
@@ -103,118 +104,58 @@ function BatchesTable({
   onSort: (s: BatchSort) => void;
 }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.92rem",
-        }}
-      >
-        <thead>
-          <tr>
-            {COLUMNS.map((c, i) => {
-              const sortable = Boolean(c.slug);
-              const arrow =
-                sortable && c.slug === sort
-                  ? direction === "asc" ? " ▲" : " ▼"
-                  : "";
-              return (
-                <th
-                  key={i}
-                  onClick={sortable ? () => onSort(c.slug) : undefined}
-                  style={{
-                    textAlign: c.align === "right" ? "right" : "left",
-                    padding: "0.6rem 0.75rem",
-                    color: tokens.textMuted,
-                    fontWeight: 500,
-                    fontSize: "0.78rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    borderBottom: `1px solid ${tokens.border}`,
-                    cursor: sortable ? "pointer" : "default",
-                    userSelect: "none",
-                  }}
-                >
-                  {c.label}{arrow}
-                </th>
-              );
-            })}
+    <Table>
+      <thead>
+        <tr>
+          {COLUMNS.map((c, i) => {
+            const sortable = Boolean(c.slug);
+            const arrow =
+              sortable && c.slug === sort
+                ? direction === "asc" ? " ▲" : " ▼"
+                : "";
+            return (
+              <th
+                key={i}
+                onClick={sortable ? () => onSort(c.slug) : undefined}
+                style={{ ...thStyle, textAlign: c.align === "right" ? "right" : "left" }}
+                className={sortable ? styles.sortableTh : undefined}
+              >
+                {c.label}{arrow}
+              </th>
+            );
+          })}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className={styles.row}>
+            <td style={tdStyle}>
+              <Link to={`/batches/${r.id}/edit`} className={styles.cellLink}>
+                <span className={styles.monoMuted}>{r.ach_date}</span>
+              </Link>
+            </td>
+            <td style={tdStyle}>{r.company}</td>
+            <td style={tdStyle}>
+              <Link to={`/batches/${r.id}/edit`} className={styles.cellLink}>
+                <span className={styles.mono}>{r.batch_ref}</span>
+              </Link>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={styles.mono}>${r.ach_amount.toFixed(2)}</span>
+            </td>
+            <td style={tdStyle}>
+              <span className={styles.mono}>${r.transfers_total.toFixed(2)}</span>
+              <span className={styles.transferCount}>({r.transfer_count})</span>
+            </td>
+            <td style={tdStyle}>
+              <span className={r.variance < 0 ? styles.varianceNeg : styles.variancePos}>
+                {r.variance >= 0 ? "+" : ""}${r.variance.toFixed(2)}
+              </span>
+            </td>
+            <td style={tdStyle}>{r.status}</td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              style={{ transition: "background 120ms ease" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.surface;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <td style={cellStyle}>
-                <Link
-                  to={`/batches/${r.id}/edit`}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span style={monoMuted}>{r.ach_date}</span>
-                </Link>
-              </td>
-              <td style={cellStyle}>{r.company}</td>
-              <td style={cellStyle}>
-                <Link
-                  to={`/batches/${r.id}/edit`}
-                  style={{ color: "inherit", textDecoration: "none" }}
-                >
-                  <span style={mono}>{r.batch_ref}</span>
-                </Link>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>${r.ach_amount.toFixed(2)}</span>
-              </td>
-              <td style={cellStyle}>
-                <span style={mono}>${r.transfers_total.toFixed(2)}</span>
-                <span
-                  style={{
-                    color: tokens.textMuted,
-                    marginLeft: "0.5rem",
-                  }}
-                >
-                  ({r.transfer_count})
-                </span>
-              </td>
-              <td style={cellStyle}>
-                <span
-                  style={{
-                    ...mono,
-                    color: r.variance < 0 ? tokens.negative : tokens.accent,
-                  }}
-                >
-                  {r.variance >= 0 ? "+" : ""}${r.variance.toFixed(2)}
-                </span>
-              </td>
-              <td style={cellStyle}>{r.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </Table>
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const monoMuted: React.CSSProperties = {
-  ...mono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};

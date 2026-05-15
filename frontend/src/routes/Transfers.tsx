@@ -8,8 +8,10 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   ButtonLink, Card, Empty, EmptyState, ErrorState, Field, Input,
-  PageHeader, PageShell, Pager, Pill, Select, TableSkeleton, tokens,
+  PageHeader, PageShell, Pager, Pill, Select, Table, TableSkeleton,
+  tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./Transfers.module.css";
 
 // Poll the transfers list this often so two cashiers sharing one
 // employee login on different machines see each other's edits
@@ -127,7 +129,7 @@ export default function Transfers() {
           ? `${data.total.toLocaleString()} total · page ${data.page} of ${data.total_pages || 1}`
           : "—"}
         actions={(
-          <div style={{ display: "inline-flex", gap: "0.5rem", alignItems: "center" }}>
+          <div className={styles.headerActions}>
             {data && dataUpdatedAt > 0 && (
               <Pill tone="accent">
                 {isFetching ? "Syncing…" : `Live · synced ${formatSyncTime(dataUpdatedAt)}`}
@@ -189,15 +191,7 @@ function FilterBar({
   q, onQChange, dateFrom, dateTo, status, onSet, busy,
 }: FilterBarProps) {
   return (
-    <Card
-      style={{
-        marginBottom: "1rem",
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) 8rem 8rem 9rem",
-        gap: "0.75rem",
-        alignItems: "end",
-      }}
-    >
+    <Card className={styles.filterBar}>
       <Field label="Search">
         <Input
           type="search"
@@ -231,104 +225,54 @@ function FilterBar({
         </Select>
       </Field>
       {/* Subtle in-flight indicator without shifting layout. */}
-      {busy && (
-        <span
-          style={{
-            gridColumn: "1 / -1",
-            color: tokens.textMuted,
-            fontSize: "0.85rem",
-          }}
-        >
-          Updating…
-        </span>
-      )}
+      {busy && <span className={styles.filterBusy}>Updating…</span>}
     </Card>
   );
 }
 
 function TransfersTable({ rows }: { rows: TransferRow[] }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}>
-        <thead>
-          <tr>
-            {["Date", "Company", "Sender", "Recipient", "Country", "Confirm #", "Status", "Total"]
-              .map((h, i, a) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: i === a.length - 1 ? "right" : "left",
-                    padding: "0.6rem 0.75rem",
-                    color: tokens.textMuted,
-                    fontWeight: 500,
-                    fontSize: "0.78rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    borderBottom: `1px solid ${tokens.border}`,
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
+    <Table>
+      <thead>
+        <tr>
+          {["Date", "Company", "Sender", "Recipient", "Country", "Confirm #", "Status", "Total"]
+            .map((h, i, a) => (
+              <th
+                key={h}
+                style={{ ...thStyle, textAlign: i === a.length - 1 ? "right" : "left" }}
+              >
+                {h}
+              </th>
+            ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} className={styles.row}>
+            <td style={tdStyle}>
+              <Link to={`/transfers/${r.id}`} className={styles.cellLink}>
+                <span className={styles.monoMuted}>{r.send_date}</span>
+              </Link>
+            </td>
+            <td style={tdStyle}>{r.company}</td>
+            <td style={tdStyle}>{r.sender_name}</td>
+            <td style={tdStyle}>{r.recipient_name || "—"}</td>
+            <td style={tdStyle}>{r.country || "—"}</td>
+            <td style={tdStyle}>
+              <Link to={`/transfers/${r.id}`} className={styles.cellLink}>
+                <span className={styles.monoMuted}>{r.confirm_number || "—"}</span>
+              </Link>
+            </td>
+            <td style={tdStyle}>{r.status}</td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={styles.mono}>${r.total_collected.toFixed(2)}</span>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              style={{ transition: "background 120ms ease" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.surface;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <td style={cellStyle}>
-                <Link to={`/transfers/${r.id}`} style={linkStyle}>
-                  <span style={monoMuted}>{r.send_date}</span>
-                </Link>
-              </td>
-              <td style={cellStyle}>{r.company}</td>
-              <td style={cellStyle}>{r.sender_name}</td>
-              <td style={cellStyle}>{r.recipient_name || "—"}</td>
-              <td style={cellStyle}>{r.country || "—"}</td>
-              <td style={cellStyle}>
-                <Link to={`/transfers/${r.id}`} style={linkStyle}>
-                  <span style={monoMuted}>{r.confirm_number || "—"}</span>
-                </Link>
-              </td>
-              <td style={cellStyle}>{r.status}</td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>${r.total_collected.toFixed(2)}</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </Table>
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const monoMuted: React.CSSProperties = {
-  ...mono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-
-const linkStyle: React.CSSProperties = {
-  color: "inherit",
-  textDecoration: "none",
-};
 
 
 // Format the TanStack Query `dataUpdatedAt` timestamp for the

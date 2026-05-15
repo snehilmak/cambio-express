@@ -1,0 +1,22 @@
+/* Page-specific styles for Customers.tsx. */
+
+.searching {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.phone {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.9rem;
+}
+
+.dob {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+}
