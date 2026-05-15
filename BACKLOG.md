@@ -4,66 +4,40 @@ Tracked work we're deferring. Anything in **Before going live** must be
 closed out before public / paid launch; the other sections can happen on
 any cadence.
 
-## Final phase — Flask-SQLAlchemy → plain SQLAlchemy (defer Flask removal)
+## Flask removal — complete
 
-**Status (May 2026): Flask-SQLAlchemy retired.** Steps 1–5 below have
-landed (PRs #489 / #491 / #492 / this one). `app.py` no longer imports
-`flask_sqlalchemy`; the `db` namespace is a thin shim that exposes
-`db.Model`/`db.session`/`db.engine`/SQLAlchemy column types/etc against
-the same engine FastAPI uses. The remaining items (steps 6–8) are about
-deleting Flask itself.
+**Status (May 2026): Flask is fully removed.** Production runs on
+``asgi:asgi_app`` only — FastAPI + Starlette + Pure SQLAlchemy.
+``app.py``, ``api/Flask/``, ``blueprints/``, ``flask`` /
+``Flask-WTF`` / ``Flask-Limiter`` / ``werkzeug`` are all gone from
+the repo and the dep tree.
 
-The architecture cleanup ran through chunks 1–3 (legacy Jinja UI,
-redirect/mutation blueprints, cookie-session auth) plus the Later phase
-(webhooks → FastAPI, emails → standalone Jinja2). What's left to actually
-delete Flask is the Flask-SQLAlchemy → plain SQLAlchemy migration.
+PRs that closed out the multi-month arc:
 
-**Scope** (verified May 2026):
-- **44 model classes** in `app.py` declared as `class Foo(db.Model)`.
-  Each migrates to `api/Modules/<domain>/Models/` and switches to
-  `class Foo(Base)` where `Base = api.Core.Database.Base` (shared
-  declarative base, already wired in `api/Core/Database/session.py`).
-- **~200 occurrences** of `db.session.X` or `Model.query.X` in `app.py`.
-  Each call site migrates to a FastAPI `Session` via `Depends(get_db)`
-  or, for cron commands, to `SessionLocal()`.
-- **~20 occurrences** across the surviving `blueprints/` (`push.py`,
-  `tv.py`, `tv_pair.py`, `tv_board.py`).
-- The Flask-SQLAlchemy bridge (`db = SQLAlchemy(app)`) gets deleted once
-  no references to `db.session` / `Model.query` remain.
-- CLI commands (`@app.cli.command`) migrate to standalone scripts that do
-  `from api.Core.Database import SessionLocal; with SessionLocal() as s:`.
-- Static + SPA shell serving migrate to FastAPI `StaticFiles`.
-- `app.py` deletes; `asgi:asgi_app` becomes the sole entry.
-
-**Order of operations** (each step lands as its own PR):
-1. ~~Move models out of `app.py` into `api/Modules/<domain>/Models/__init__.py`~~
-   — defer; models stayed in `app.py` and we kept ``db.Model`` working
-   via the shim instead.
-2. ~~Switch the inheritance via `model_class=Base`~~ — landed PR #489
-   (Step 1). `db.Model is Base` so `db.session` and `SessionLocal()`
-   bind to the same engine + see the same mappers.
-3. ~~Migrate the surviving Flask blueprints~~ — landed PR #489 (Step 3:
-   `tv.py`, `tv_pair.py`, `tv_board.py` use `SessionLocal()` directly;
-   `push.py` deleted entirely since the SPA never called it).
-4. ~~Migrate `Model.query.filter_by(...)` to `session.query(Model)`~~ —
-   landed PR #492 (Step 4: 42 sites in `app.py`). The 565 test-side
-   call sites still use `Model.query` and keep working via
-   `Base.query = scoped_session.query_property()` on the shim.
-5. ~~Delete Flask-SQLAlchemy~~ — landed this PR (Step 5). `app.py`'s
-   `db` is now a 50-line shim re-exporting `sqlalchemy` types + a
-   scoped session bound to the FastAPI-shared engine. Removed
-   `flask-sqlalchemy` from `requirements.txt`.
-6. Migrate CLI commands to standalone scripts. Update Render's cron
-   service definitions.
-7. Migrate static + SPA shell serving (`@app.route("/app/...")`
-   + `send_from_directory`) to FastAPI `StaticFiles`.
-8. Delete `app.py` + every surviving blueprint. `asgi:asgi_app`
-   becomes the sole entrypoint; `requirements.txt` drops Flask,
-   Flask-WTF, Flask-Limiter.
-
-**Risk** is high — touches every route and a substantial fraction of every
-model file. Recommended to spread across multiple deploy windows, not
-ship as a single big-bang PR.
+* **#546** — delete dead Flask-Limiter / CSRF / session /
+  context-processors (no live consumers after blueprint migrations)
+* **#547** — migrate 65 CSV report routes to FastAPI; SPA uses
+  fetch + blob download for JWT-authed CSV exports
+* **#548** — move SPA-cutover redirects + error handlers off Flask
+  into the ASGI layer
+* **#549** — migrate test fixtures from ``Flask.test_client`` to
+  ``httpx + ASGITransport``
+* **#550** — delete ``app.py``, ``blueprints/``, ``api/Flask/``;
+  drop ``flask`` + ``pytest-flask`` from requirements
+* **#551** — sweep test suite from ``Model.query.X`` to
+  ``db.session.query(Model).X`` (SQLA 2.0 invariant #11)
+* **#552** — trim residual Flask scaffolding from the conftest
+  (CSRF, logger, root_path, config shims)
+* **#553** — replace 1030 ``flask_app.app_context()`` blocks with
+  honestly-named ``db_session()`` context manager
+* **#554** — collapse ``tests/_db_shim.py`` + ``tests/_models.py``
+  into ``tests/_app.py``
+* **#555** — replace bare ``TestClient(api_app)`` with yield
+  fixtures; drop the autoclose monkey-patch
+* **#556** — drop ``werkzeug`` dep; replace with stdlib-only
+  ``api/Core/PasswordHash.py`` that reads/writes the same
+  ``scrypt:N:r:p$salt$hex`` format (no migration, no forced
+  password rotation)
 
 ## Post-SPA-migration cleanup (new — work top-down)
 
@@ -158,32 +132,19 @@ reports rendered ApexCharts inline.
 
 ### D. Backend cleanup (legacy Flask half)
 
-The SPA migration left the Flask side intact (form-POST handlers
-still serve mutation traffic for many of the 301'd routes). These
-items decompose the monolith.
+Most of this section closed out when Flask was retired (see the
+top-level "Flask removal — complete" entry). What's left is
+infrastructure that's still relevant in the FastAPI-only world.
 
 - [x] **D1. Delete the 16 remaining Jinja templates that are no
       longer rendered.** Landed (PR #424).
-- [x] **D2. Split `app.py` into Flask Blueprints.** Landed in 29
-      phases (PRs #433–#460, #461, #462, this PR). Every
-      form-handling route now lives under `blueprints/`. Only the
-      SPA fallback routes (`/app/*`), the two webhooks
-      (`/webhooks/{resend,stripe}`), and helper / model / init code
-      remain in `app.py`. Files under `blueprints/`:
-      `account`, `admin_extras`, `admin_redirects`,
-      `admin_settings_form`, `admin_settings_mutations`, `auth`,
-      `auth_redirects`, `bank_mutations`, `bank_redirects`,
-      `billing`, `bookkeeping_mutations`, `bookkeeping_redirects`,
-      `customers_api`, `landing`, `owner`, `push`, `pwa`,
-      `spa_cutover`, `spa_redirects`, `subscription`,
-      `superadmin_extras`, `superadmin_misc_mutations`,
-      `superadmin_redirects`, `superadmin_store_mutations`,
-      `transfers_redirects`, `tv`, `tv_board`, `tv_pair`.
-- [ ] **D3. Retire `@login_required` cookie-session path on routes
-      the SPA has fully replaced.** Once we audit what still POSTs
-      to Flask, convert remaining form-POST handlers to FastAPI
-      endpoints, then delete the session-cookie path entirely.
-      (Requires BACKLOG #1 cookie JWT first.)
+- [x] **D2. Split `app.py` into Flask Blueprints.** Done as an
+      intermediate step; the entire monolith + all blueprints
+      were retired in PRs #546–#550 (see top of file).
+- [x] **D3. Retire `@login_required` cookie-session path.**
+      Closed by the Flask removal — the session-cookie auth path
+      no longer exists. JWT in the Authorization header is the
+      sole auth surface on `/api/v2/*`.
 - [x] **D4. Adopt Alembic.** Landed (PR #430) — baseline migration
       `99691740424c_baseline_2026_05` pins the current schema;
       `_ADDED_COLUMNS` still primary but Alembic now available for
@@ -193,13 +154,12 @@ items decompose the monolith.
       path on Render. Today every webhook does its Stripe SDK calls
       + audit insert + email send synchronously inside the HTTP
       request.
-- [x] **D6. Edge rate limiting.** Landed —
-      `Flask-Limiter` 3.8 on the Flask side + `slowapi` 0.1.9 on
-      the FastAPI side. Both share the same `RATELIMIT_STORAGE_URI`
-      env var (in-memory in dev, Redis in prod) and the same
-      `RATELIMIT_ENABLED` kill-switch. Tunings:
-      - Auth burst: 10/min + 50/hour per IP — applied to every
-        `auth.*` Flask Blueprint endpoint and to
+- [x] **D6. Edge rate limiting.** Landed — `slowapi` 0.1.9 on every
+      auth route + the two webhooks. The Flask-Limiter twin is
+      gone (Flask itself is gone). Storage shared across workers
+      via `RATELIMIT_STORAGE_URI` (in-memory in dev, Redis in prod);
+      `RATELIMIT_ENABLED` is the kill-switch. Tunings:
+      - Auth burst: 10/min + 50/hour per IP on
         `/api/v2/auth/login`.
       - Forgot/reset password: 5/min + 20/hour per IP (lower
         because each request triggers an SMTP send).
@@ -208,10 +168,7 @@ items decompose the monolith.
       - Webhooks (`/webhooks/{stripe,resend}`): 120/min per IP.
         Signature verification is the real defense; this is just a
         flood ceiling.
-      Regression guards in `tests/test_rate_limiting.py` (4 tests)
-      use a subprocess-with-fresh-env trick so they exercise the
-      decorator path even though the conftest disables the limiter
-      for the rest of the suite. See the file docstring for why.
+      Regression guards in `tests/test_rate_limiting.py`.
 
 ### E. Observability + ops
 
@@ -292,52 +249,43 @@ impact ÷ effort. Numbers are an estimate.
 
 ### P0 — do before public launch
 1. [ ] **Cookie-based JWT** (httpOnly + Secure + SameSite=Strict) instead
-       of localStorage. Closes the XSS-exfil risk and lets legacy Flask
-       + SPA share the same auth so users don't have to log in twice
-       during the transition. ~1 PR.
+       of localStorage. Closes the XSS-exfil risk — XSS would be able to
+       read the access token from `localStorage` today. With Flask gone
+       there's no "share with legacy Flask" angle; the only audience is
+       the React SPA. ~1 PR.
 2. [ ] **Refresh tokens.** Today access tokens are 30 min with no refresh
        — users get bumped mid-workflow. Add `/auth/refresh` endpoint +
        rotation; SPA fetches a new access token before the old one
        expires. ~1 PR.
-3. [ ] **CI builds the SPA.** Add `npm ci && npm run build` (and ESLint)
-       to `.github/workflows/ci.yml`. A TypeScript regression sails
-       through today. ~1 PR.
-4. [ ] **Sentry + structured (JSON) logging.** Errors today go to stdout;
-       no aggregation, no alerting, no per-user breadcrumbs. ~1 PR each.
+3. [x] **CI builds the SPA.** Landed (PR #426). `npm ci && npm run lint
+       --max-warnings 0 && npm run build` runs in `.github/workflows/
+       ci.yml`; a TypeScript regression fails the PR.
+4. [x] **Sentry + structured (JSON) logging.** Landed (BACKLOG E1 / E2,
+       PR #429). Sentry Python + React opt-in via DSN env vars;
+       structlog with X-Request-ID middleware in
+       `api/Core/Observability/`.
 
 ### P1 — do before/during full SPA cutover
-5. [ ] **Coverage tracks `api/` too.** `--source=app` only covers `app.py`
-       — every new FastAPI module is invisible to the `--fail-under=60`
-       threshold. New code can ship at 0% coverage and CI is happy.
-       Change `--source=app` → `--source=app,api`. Trivial.
+5. [x] **Coverage tracks `api/` too.** Landed in PR #550 — coverage
+       source is now `--source=api` (app.py is gone). Total coverage
+       is ~93% as of the last run.
 6. [ ] **Generate TS types from FastAPI OpenAPI schema.**
        `frontend/src/api/*.ts` has hand-written interfaces mirroring
        `Requests/*.py` Pydantic — drift is inevitable. Add
        `openapi-typescript` to the SPA build, single source of truth.
        ~1 PR.
-7. [ ] **Retire the WSGI-wraps-ASGI bridge — promoted to BLOCKER.**
-       `a2wsgi.ASGIMiddleware` runs FastAPI inside Flask's sync WSGI
-       worker — every request goes sync→async→sync, every API call
-       creates an asyncio task that the WSGI worker can't cleanly
-       reap. **This isn't theoretical anymore**: a May 2026 deploy
-       turned the SPA-cutover redirect on by default and the site
-       went unusably slow + login-network-error timeouts under
-       prod traffic. The cutover flag is now default OFF (see
-       `SPA_CUTOVER_ENABLED` in app.py); the SPA stays available
-       at `/app/*` for opt-in. Until this bridge is retired, any
-       page that fans out multiple `/api/v2/*` calls (the SPA's
-       first paint typically does ~3) compounds the problem.
-       Fix: run `uvicorn api.main:api_app` as its own Render
-       service with nginx routing `/api/v2/*` → FastAPI,
-       `/app/*` → static SPA build, `/` → Flask. Multi-file but
-       mechanical. **Do this before the next attempt at flipping
-       SPA_CUTOVER_ENABLED on.**
+7. [x] **Retire the WSGI-wraps-ASGI bridge.** Closed by the Flask
+       removal (PR #550). `asgi.py` is the production entrypoint —
+       FastAPI runs as native ASGI under uvicorn; no a2wsgi anywhere
+       in the request path. The SPA-cutover flag (`SPA_CUTOVER_ENABLED`)
+       is also gone; cutover redirects live in the ASGI router
+       (`api/SpaCutover.py`).
 
 ### P2 — quality of life as the codebase grows
-8. [ ] **Alembic for migrations.** `_ADDED_COLUMNS` is pragmatic for
-       solo work but can't drop, rename, backfill atomically, or roll
-       back. The cost shows up the first time you need to alter an
-       existing column. ~1 PR + ongoing.
+8. [x] **Alembic for migrations.** Landed (PR #430). Baseline migration
+       `99691740424c_baseline_2026_05` pins the current schema;
+       `_ADDED_COLUMNS` is now a safety net rather than the primary
+       schema mechanism.
 9. [ ] **Shared SPA component library.** Every route file re-declares
        `cardStyle`, `inputStyle`, `pageStyle`, `pagerBtn`, etc. (~200
        lines of token boilerplate per route). Extract `<Card>`,
@@ -383,12 +331,11 @@ impact ÷ effort. Numbers are an estimate.
       least once before paid launch. See
       [`deployment.md`](docs/architecture/deployment.md) §4
       "Backups" for the trial-restore steps.
-- [x] **Rate limiting** — landed (BACKLOG D6). Flask-Limiter on
-      every auth Blueprint endpoint + the two webhooks; slowapi on
-      `/api/v2/auth/{login,forgot-password,reset-password,signup}`.
-      Both share `RATELIMIT_STORAGE_URI` (Redis in prod) and
-      `RATELIMIT_ENABLED` kill-switch. Tests in
-      `tests/test_rate_limiting.py`.
+- [x] **Rate limiting** — landed (BACKLOG D6). slowapi on every
+      auth route + the two webhooks (Flask-Limiter was retired
+      alongside Flask itself in PR #546). `RATELIMIT_STORAGE_URI`
+      → Redis in prod; `RATELIMIT_ENABLED` is the kill-switch.
+      Tests in `tests/test_rate_limiting.py`.
 - [x] **Employee action audit** — landed. Transfers, daily reports,
       batches, return-checks (create/update/delete/payment/loss/
       fraud/reopen), roster (create/reactivate/deactivate/rename),
@@ -406,14 +353,14 @@ impact ÷ effort. Numbers are an estimate.
       `/webhooks/stripe`. Step-by-step verification:
       [`deployment.md`](docs/architecture/deployment.md) §3
       "Secrets rotation → Stripe live mode swap".
-- [x] **Data retention cron** — landed. `render.yaml` now declares
+- [x] **Data retention cron** — landed. `render.yaml` declares
       a `type: cron` service `dinerobook-data-retention-purge`
-      that runs `flask purge-expired-stores` daily at 03:15 UTC.
-      Shares the production DB via `fromDatabase:` and reads the
-      same `SECRET_KEY` as the web service (so the prod-secret
-      safety gate in `app.py` doesn't reject the cron boot). CLI
+      that runs `python -m scripts.purge_expired_stores` daily at
+      03:15 UTC. Shares the production DB via `fromDatabase:`. CLI
       is idempotent — re-running on a quiet day is a no-op.
       Regression guard in `tests/test_data_retention_cron.py`.
+      (Originally invoked via `flask purge-expired-stores`; moved
+      to the standalone script in PR #550 when Flask was retired.)
 - [x] **CI/CD agents** — landed across PRs #425 (coverage source),
       #426 (SPA build + eslint --max-warnings 0 in CI), and the
       pre-existing "Syntax + Import + Tests" job. Every PR now
@@ -439,37 +386,27 @@ impact ÷ effort. Numbers are an estimate.
 - [x] **Secrets audit** — landed at
       [`docs/architecture/secrets-audit.md`](docs/architecture/secrets-audit.md).
       Repo scan confirmed no live Stripe / AWS / bearer tokens
-      committed; only documented dev-fallback values for
-      `SECRET_KEY` + the two seed passwords. Added two prod
-      safety gates in `app.py`:
-      - `RuntimeError` at boot if `APP_BASE_URL` starts with
-        `https://` and `SECRET_KEY` is missing (forces a real
-        signing key in prod).
-      - CRITICAL-level log when `SUPERADMIN_PASSWORD` /
-        `ADMIN_PASSWORD` are missing in prod (loud but doesn't
-        block deploy).
-      Tests in `tests/test_secrets_audit_safety_gate.py` (5
-      subprocess tests).
-- [x] **CSRF protection** — landed. Flask-WTF's `CSRFProtect`
-      installs a `before_request` hook that rejects any
-      POST/PUT/PATCH/DELETE on a Flask route without a valid
-      `csrf_token` form field (or `X-CSRFToken` header). Token is
-      derived from the session, so cross-origin forgeries can't
-      forge it. Every `<form method="POST">` in the legacy
-      templates renders `{{ csrf_token() }}`. Webhook
-      (`/webhooks/{stripe,resend}`) + WebAuthn passkey JSON
-      routes are `csrf.exempt(...)`-listed because their callers
-      don't have a session token (webhook signatures + the
-      session cookie are the actual auth). FastAPI side is moot:
-      JWT in Authorization header isn't cross-site-attachable.
-      Kill-switch `WTF_CSRF_ENABLED=False` for the test conftest.
-      Regression guard in `tests/test_csrf_protection.py`.
-- [x] **Session cookie hardening** — `Secure`, `HttpOnly`,
-      `SameSite=Lax` set in `app.py` after the SQLAlchemy config
-      block. `Secure` gates on `APP_BASE_URL` starting with
-      `https://` so dev / CI / sqlite mode keeps working over HTTP.
-      Also bounds `PERMANENT_SESSION_LIFETIME` to 7 days. Regression
-      guard in `tests/test_session_cookie_hardening.py`.
+      committed; only documented dev-fallback values. The Flask-
+      era SECRET_KEY safety gate is gone (no cookie session to
+      sign) but the seed-password warning survives — fires a
+      CRITICAL log line when `SUPERADMIN_PASSWORD` /
+      `ADMIN_PASSWORD` are missing in prod (loud but doesn't block
+      deploy). See `api/Core/Boot.py::warn_default_seed_passwords`.
+      Tests in `tests/test_secrets_audit_safety_gate.py`.
+- [x] **CSRF protection** — closed by the Flask removal. Flask was
+      the only cookie-authenticated POST surface; `/api/v2/*` uses
+      Bearer JWT in the Authorization header, which is naturally
+      CSRF-immune (browsers don't attach it cross-origin). Webhook
+      endpoints verify provider signatures (Stripe
+      `Stripe-Signature`, Resend HMAC). If a cookie-authenticated
+      POST surface is ever reintroduced, add CSRF protection at
+      that point.
+- [x] **Session cookie hardening** — closed by the Flask removal.
+      Flask's session cookie was the only one we minted and it
+      doesn't exist anymore. The remaining cookie (`ds_last_store`
+      slug-tracker) is HttpOnly + SameSite=Lax + Secure (in
+      `api/Modules/Auth/Controllers/__init__.py::
+      _set_last_store_slug_cookie`).
 
 ## Nice to have (post-launch)
 - [x] **Daily Book Money Transfers — editable per-company breakdown.**
@@ -621,30 +558,34 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] Graduate inline chat smoke tests to committed regression tests in
       `tests/`. Current gap: subscription, superadmin controls, customer
       directory, forgot-password flow.
-- [ ] `pytest-cov` report + target ≥ 80% line coverage.
-- [x] Split `app.py` (~13k lines) into Flask blueprints. **Done**
-      via D2 above — 29 phases of extraction shipped between
-      PRs #433–#476. Every form-handling route now lives under
-      `blueprints/`; `app.py` is down to ~7,500 lines (models,
-      helpers, init, SPA-fallback routes, and the two webhooks).
-      The reports module noted as "priority slice" was ported to
-      FastAPI under `api/Modules/Reports/` rather than carved
-      into a new Flask blueprint.
+- [x] `pytest-cov` report + target ≥ 80% line coverage. Landed —
+      the CI workflow runs `coverage report --fail-under=80`
+      (currently passing at ~93%, scope is `--source=api`).
+- [x] Split `app.py` into Flask blueprints, then delete both.
+      Blueprint split landed via D2 (29 phases); the entire
+      monolith + blueprints + Flask itself were retired in
+      PRs #546–#550 (see the "Flask removal — complete" entry
+      at the top).
 - [ ] Replace the PR description smoke-test lists with committed tests
       so the "Test plan" checklist can stay short.
-- [ ] **Data-fn unit tests for 5 superadmin reports** still missing
-      coverage: `_sa_churn_cohort_data`, `_sa_trial_expiry_timing_data`,
-      `_sa_bank_sync_adoption_data`, `_sa_tv_display_adoption_data`,
-      `_sa_login_activity_data`. Pattern lives in
-      `tests/test_superadmin_reports.py` — each test seeds 2-3 stores /
-      events, calls the data fn directly, asserts on the returned rows
-      + totals shape.
-- [ ] **SQLAlchemy 2.0 migration** — ~50 sites still use legacy
-      `Model.query.filter_by(...).first()` / `.all()` instead of
-      `db.session.execute(select(...)).scalar_one_or_none()`. The
-      `db.session.get(Model, id)` invariant is already enforced; the
-      `.query.*` API works but emits deprecation warnings and will
-      break on a future SQLAlchemy major. `grep -nE '\.query\.(filter|all|first|count|order_by)' app.py` to find them.
+- [x] **Data-fn unit tests for 5 superadmin reports** — closed
+      out during the Reports → FastAPI migration. The functions
+      moved to ``api/Modules/Superadmin/Services/reports.py``
+      and gained coverage in the matching test modules:
+      ``churn_cohort`` + ``trial_expiry_timing`` in
+      ``test_mrr_churn_service.py`` / ``test_conversion_service.py``;
+      ``bank_sync_adoption`` + ``tv_display_adoption`` in
+      ``test_adoption_service.py``; ``login_activity`` in
+      ``test_reports_service.py``.
+- [x] **SQLAlchemy 2.0 migration** — landed (PR #551). 507
+      ``Model.query.X`` sites across 127 test files swept to
+      ``db.session.query(Model).X`` (filter_by / filter / all /
+      first / one / count / delete / update / ...). ``.get(id)``
+      sites rewritten to ``db.session.get(Model, id)``. The
+      ``LegacyAPIWarning`` no longer appears in the suite output.
+      The optional further step — moving to ``db.session.execute(
+      select(...))`` — is a much smaller and cosmetic delta and
+      can ride a separate cleanup whenever it's worth doing.
 - [ ] **Hex sweep on `daily_list.html`** — the calendar still inlines
       `#2d2410`, `#0f1d3f`, `#0f2e1f`, `#86efac`, `#2d1215`, `#fca5a5`
       for dark-mode shades. Add the missing semantic tokens to
