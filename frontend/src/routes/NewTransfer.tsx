@@ -1,4 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
@@ -18,7 +20,6 @@ import {
   createTransfer,
   previewFederalTax,
   useEmployees,
-  type CreateTransferBody,
 } from "../api/transfers";
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
@@ -26,27 +27,35 @@ import { getCurrentIdentity } from "../lib/auth";
 
 // New transfer form at /app/transfers/new.
 //
-// **Canonical example** for the SPA component-library migration
-// (P2 #9). This file demonstrates how a route migrates from inline
-// style constants to the kit primitives in
-// ``frontend/src/components/ui``: ``PageShell``, ``PageHeader``,
-// ``Section``, ``Card``, ``Field``, ``Input``, ``Select``, ``Button``,
-// ``FormActions``. Other heavily-inlined routes (BatchForm,
-// EditTransfer, EditMonthly, Settings, AdminSubscription, …)
+// **Canonical example** for the SPA's form stack:
+//
+//   1. Layout — kit primitives from ``frontend/src/components/ui``
+//      (P2 #9, PR #561). Forms compose ``<PageShell>`` /
+//      ``<PageHeader>`` / ``<Card>`` / ``<Section>`` / ``<Field>`` /
+//      ``<Input>`` / ``<Select>`` / ``<Button>`` / ``<FormActions>``.
+//   2. State + validation — ``react-hook-form`` + ``zod`` (P2 #10,
+//      this PR). One ``useForm()`` per page; validation lives in
+//      a Zod schema co-located with the route. Fields register via
+//      ``register("field")``; complex inputs (autocomplete, …) wrap
+//      in ``<Controller>``. Submit handler receives the parsed
+//      payload — no manual coercion, no manual `disabled={...}`
+//      guards.
+//
+// Other forms (BatchForm, EditTransfer, EditMonthly, Settings, …)
 // migrate on-touch following this pattern.
 
 const COMPANIES = [
   "Intermex", "Maxi", "Barri", "Sigue", "Vigo", "Western Union",
   "MoneyGram", "Cibao", "RIA", "Other",
-];
+] as const;
 const SERVICES = [
   "Money Transfer", "Bill Payment", "Top Up", "Recharge",
-];
+] as const;
 const COUNTRIES = [
   "United States", "Mexico", "Guatemala", "El Salvador", "Honduras",
   "Dominican Republic", "Colombia", "Ecuador", "Peru", "Other",
-];
-const STATUSES = ["Sent", "Pending", "Cancelled", "Returned"];
+] as const;
+const STATUSES = ["Sent", "Pending", "Cancelled", "Returned"] as const;
 
 function todayIso() {
   const d = new Date();
@@ -54,59 +63,107 @@ function todayIso() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// ── Validation schema ──────────────────────────────────────────
+//
+// Mirrors ``api/Modules/Transfers/Requests/CreateTransferRequest``.
+// Server-side is still the source of truth — Zod here is for
+// instant client feedback + type narrowing through the form. When
+// the OpenAPI → Zod generator lands (BACKLOG P1 #6 v2), this
+// hand-written schema is the first to retire.
+
+const transferSchema = z.object({
+  send_date: z.string().min(1, "Date is required"),
+  company: z.enum(COMPANIES),
+  service_type: z.enum(SERVICES),
+  status: z.enum(STATUSES),
+
+  sender_name: z.string().min(1, "Sender name is required"),
+  sender_phone_country: z.string(),
+  sender_phone: z.string(),
+  sender_address: z.string(),
+  sender_dob: z.string(),
+  customer_id: z.number().int().positive().nullable(),
+
+  country: z.enum(COUNTRIES),
+  recipient_name: z.string(),
+  recipient_phone: z.string(),
+
+  // ``z.coerce.number()`` parses the <input type="number"> string
+  // payload — no more ``Number(form.send_amount) || 0`` after the
+  // resolver.
+  send_amount: z.coerce.number().positive("Send amount must be > 0"),
+  fee: z.coerce.number().min(0, "Fee must be ≥ 0"),
+  confirm_number: z.string(),
+
+  // Employee is required — surfaces as a field-level error if the
+  // operator submits with the default ``— Select —`` option.
+  employee_id: z
+    .number({ message: "Pick an employee" })
+    .int()
+    .positive(),
+});
+
+type TransferFormValues = z.infer<typeof transferSchema>;
+
+// ``defaultValues`` is the RHF-side counterpart to the schema —
+// shapes the form's initial state. Zod doesn't see this; it only
+// validates whatever lands in ``handleSubmit``.
+const defaultValues = {
+  send_date: todayIso(),
+  company: "Intermex" as const,
+  service_type: "Money Transfer" as const,
+  status: "Sent" as const,
+  sender_name: "",
+  sender_phone_country: "+1",
+  sender_phone: "",
+  sender_address: "",
+  sender_dob: "",
+  customer_id: null as number | null,
+  country: "Mexico" as const,
+  recipient_name: "",
+  recipient_phone: "",
+  send_amount: 0,
+  fee: 0,
+  confirm_number: "",
+  employee_id: undefined as unknown as number,  // forces validator to fire
+};
+
+
 export default function NewTransfer() {
   const navigate = useNavigate();
   const identity = getCurrentIdentity();
   const roster = useEmployees();
   const storeInfo = useStoreInfo();
 
-  const [form, setForm] = useState<CreateTransferBody>({
-    send_date: todayIso(),
-    company: COMPANIES[0],
-    service_type: "Money Transfer",
-    sender_name: "",
-    sender_phone_country: "+1",
-    sender_phone: "",
-    send_amount: 0,
-    fee: 0,
-    country: "Mexico",
-    recipient_name: "",
-    recipient_phone: "",
-    confirm_number: "",
-    status: "Sent",
-    employee_id: null,
+  const {
+    register, handleSubmit, control, setValue, setError, clearErrors,
+    formState: { errors, isSubmitting },
+  } = useForm<TransferFormValues>({
+    resolver: zodResolver(transferSchema),
+    defaultValues,
+    mode: "onSubmit",  // surface field errors on submit, not as the user types
   });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  function set<K extends keyof CreateTransferBody>(
-    key: K,
-    value: CreateTransferBody[K],
-  ) {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
+  // ``useWatch`` (vs ``watch``) gets us a stable subscription to
+  // just these fields, so the rest of the form doesn't re-render
+  // on every keystroke. Used by the federal-tax preview + the
+  // "linked to customer #N" notice.
+  const sendAmount = useWatch({ control, name: "send_amount" });
+  const serviceType = useWatch({ control, name: "service_type" });
+  const country = useWatch({ control, name: "country" });
+  const customerId = useWatch({ control, name: "customer_id" });
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setBusy(true);
+  async function onSubmit(values: TransferFormValues) {
+    clearErrors("root");
     try {
-      const result = await createTransfer({
-        ...form,
-        // Coerce numeric fields — <input type="number"> gives
-        // strings on some browsers.
-        send_amount: Number(form.send_amount) || 0,
-        fee: Number(form.fee) || 0,
-      });
+      const result = await createTransfer(values);
       navigate(`/transfers/${result.transfer.id}`, { replace: true });
     } catch (err) {
-      setError(
-        err instanceof ApiError
+      setError("root", {
+        message: err instanceof ApiError
           ? err.message
           : "Could not save the transfer. Please try again.",
-      );
-    } finally {
-      setBusy(false);
+      });
     }
   }
 
@@ -133,45 +190,31 @@ export default function NewTransfer() {
       />
 
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
         <Card>
           <Section title="When + how">
             <Grid>
-              <Field label="Date">
-                <Input
-                  type="date"
-                  value={form.send_date}
-                  onChange={(e) => set("send_date", e.target.value)}
-                  required
-                />
+              <Field label="Date" highlight={!!errors.send_date}>
+                <Input type="date" {...register("send_date")} required />
               </Field>
               <Field label="Company">
-                <Select
-                  value={form.company}
-                  onChange={(e) => set("company", e.target.value)}
-                >
+                <Select {...register("company")}>
                   {COMPANIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </Select>
               </Field>
               <Field label="Service">
-                <Select
-                  value={form.service_type}
-                  onChange={(e) => set("service_type", e.target.value)}
-                >
+                <Select {...register("service_type")}>
                   {SERVICES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </Select>
               </Field>
               <Field label="Status">
-                <Select
-                  value={form.status}
-                  onChange={(e) => set("status", e.target.value)}
-                >
+                <Select {...register("status")}>
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
@@ -184,61 +227,55 @@ export default function NewTransfer() {
         <Card>
           <Section title="Sender">
             <Grid>
-              <Field label="Full name">
-                <SenderAutocomplete
-                  value={form.sender_name}
-                  onChange={(v) => set("sender_name", v)}
-                  onPick={(row) => {
-                    // Autofill the rest of the sender block from the
-                    // picked customer row + remember the customer_id
-                    // so the upsert reuses the same record.
-                    setForm((f) => ({
-                      ...f,
-                      sender_name: row.full_name,
-                      sender_phone_country: row.phone_country || "+1",
-                      sender_phone: row.phone_number,
-                      sender_address: row.address,
-                      sender_dob: row.dob || "",
-                      customer_id: row.id,
-                    }));
-                  }}
-                  onClearPickedId={() => set("customer_id", null)}
-                  required
+              <Field label="Full name" highlight={!!errors.sender_name}>
+                <Controller
+                  control={control}
+                  name="sender_name"
+                  render={({ field }) => (
+                    <SenderAutocomplete
+                      value={field.value}
+                      onChange={field.onChange}
+                      onPick={(row) => {
+                        // Autofill the rest of the sender block + pin
+                        // ``customer_id`` so the upsert reuses the row.
+                        setValue("sender_name", row.full_name);
+                        setValue("sender_phone_country",
+                          row.phone_country || "+1");
+                        setValue("sender_phone", row.phone_number);
+                        setValue("sender_address", row.address);
+                        setValue("sender_dob", row.dob || "");
+                        setValue("customer_id", row.id);
+                      }}
+                      onClearPickedId={() =>
+                        setValue("customer_id", null)
+                      }
+                      required
+                    />
+                  )}
                 />
               </Field>
               <Field label="Phone country">
                 <Input
                   type="text"
-                  value={form.sender_phone_country}
-                  onChange={(e) => set("sender_phone_country", e.target.value)}
                   placeholder="+1"
+                  {...register("sender_phone_country")}
                 />
               </Field>
               <Field label="Phone">
-                <Input
-                  type="tel"
-                  value={form.sender_phone}
-                  onChange={(e) => set("sender_phone", e.target.value)}
-                />
+                <Input type="tel" {...register("sender_phone")} />
               </Field>
               <Field label="Address">
-                <Input
-                  type="text"
-                  value={form.sender_address}
-                  onChange={(e) => set("sender_address", e.target.value)}
-                />
+                <Input type="text" {...register("sender_address")} />
               </Field>
             </Grid>
-            {form.customer_id && (
-              <p
-                style={{
-                  margin: "0.5rem 0 0",
-                  fontSize: "0.85rem",
-                  color: tokens.textMuted,
-                }}
-              >
-                Linked to customer #{form.customer_id} — edits sync
-                back to the customer directory.
+            {customerId != null && (
+              <p style={{
+                margin: "0.5rem 0 0",
+                fontSize: "0.85rem",
+                color: tokens.textMuted,
+              }}>
+                Linked to customer #{customerId} — edits sync back to
+                the customer directory.
               </p>
             )}
           </Section>
@@ -248,28 +285,17 @@ export default function NewTransfer() {
           <Section title="Recipient">
             <Grid>
               <Field label="Country">
-                <Select
-                  value={form.country}
-                  onChange={(e) => set("country", e.target.value)}
-                >
+                <Select {...register("country")}>
                   {COUNTRIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </Select>
               </Field>
               <Field label="Recipient name">
-                <Input
-                  type="text"
-                  value={form.recipient_name}
-                  onChange={(e) => set("recipient_name", e.target.value)}
-                />
+                <Input type="text" {...register("recipient_name")} />
               </Field>
               <Field label="Recipient phone">
-                <Input
-                  type="tel"
-                  value={form.recipient_phone}
-                  onChange={(e) => set("recipient_phone", e.target.value)}
-                />
+                <Input type="tel" {...register("recipient_phone")} />
               </Field>
             </Grid>
           </Section>
@@ -278,39 +304,34 @@ export default function NewTransfer() {
         <Card>
           <Section title="Amounts">
             <Grid>
-              <Field label="Send amount (USD)">
+              <Field label="Send amount (USD)"
+                     highlight={!!errors.send_amount}>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.send_amount}
-                  onChange={(e) =>
-                    set("send_amount", Number(e.target.value))
-                  }
+                  type="number" step="0.01" min="0"
+                  {...register("send_amount", { valueAsNumber: true })}
                   required
                 />
+                {errors.send_amount && (
+                  <FieldError>{errors.send_amount.message}</FieldError>
+                )}
               </Field>
-              <Field label="Fee (USD)">
+              <Field label="Fee (USD)" highlight={!!errors.fee}>
                 <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.fee}
-                  onChange={(e) => set("fee", Number(e.target.value))}
+                  type="number" step="0.01" min="0"
+                  {...register("fee", { valueAsNumber: true })}
                 />
+                {errors.fee && (
+                  <FieldError>{errors.fee.message}</FieldError>
+                )}
               </Field>
               <FederalTaxPreview
-                sendAmount={form.send_amount}
-                serviceType={form.service_type}
-                country={form.country ?? ""}
+                sendAmount={sendAmount}
+                serviceType={serviceType}
+                country={country ?? ""}
                 rate={storeInfo.data?.store.federal_tax_rate ?? 0}
               />
               <Field label="Confirm #">
-                <Input
-                  type="text"
-                  value={form.confirm_number}
-                  onChange={(e) => set("confirm_number", e.target.value)}
-                />
+                <Input type="text" {...register("confirm_number")} />
               </Field>
             </Grid>
           </Section>
@@ -319,13 +340,11 @@ export default function NewTransfer() {
         <Card>
           <Section title="Processed by">
             <Grid>
-              <Field label="Employee">
+              <Field label="Employee" highlight={!!errors.employee_id}>
                 <Select
-                  value={form.employee_id ?? ""}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    set("employee_id", v ? Number(v) : null);
-                  }}
+                  {...register("employee_id", {
+                    setValueAs: (v) => v === "" ? null : Number(v),
+                  })}
                   required
                   disabled={roster.isLoading}
                 >
@@ -336,16 +355,17 @@ export default function NewTransfer() {
                     </option>
                   ))}
                 </Select>
+                {errors.employee_id && (
+                  <FieldError>{errors.employee_id.message}</FieldError>
+                )}
               </Field>
             </Grid>
             {roster.isError && (
-              <p
-                style={{
-                  margin: "0.5rem 0 0",
-                  fontSize: "0.85rem",
-                  color: tokens.negative,
-                }}
-              >
+              <p style={{
+                margin: "0.5rem 0 0",
+                fontSize: "0.85rem",
+                color: tokens.negative,
+              }}>
                 Couldn't load roster. Add cashiers via Settings → Team
                 on the legacy admin page.
               </p>
@@ -354,13 +374,11 @@ export default function NewTransfer() {
               !roster.isError &&
               roster.data &&
               roster.data.employees.length === 0 && (
-                <p
-                  style={{
-                    margin: "0.5rem 0 0",
-                    fontSize: "0.85rem",
-                    color: tokens.textMuted,
-                  }}
-                >
+                <p style={{
+                  margin: "0.5rem 0 0",
+                  fontSize: "0.85rem",
+                  color: tokens.textMuted,
+                }}>
                   No active employees on this store's roster yet. Add
                   them via Settings → Team on the legacy admin page.
                 </p>
@@ -368,9 +386,13 @@ export default function NewTransfer() {
           </Section>
         </Card>
 
-        {error && (
-          <p role="alert" style={{ color: tokens.negative, textAlign: "center", padding: "0.5rem 0" }}>
-            {error}
+        {errors.root && (
+          <p role="alert" style={{
+            color: tokens.negative,
+            textAlign: "center",
+            padding: "0.5rem 0",
+          }}>
+            {errors.root.message}
           </p>
         )}
 
@@ -378,16 +400,12 @@ export default function NewTransfer() {
           <Button
             tone="secondary"
             onClick={() => navigate("/transfers")}
-            disabled={busy}
+            disabled={isSubmitting}
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            busy={busy}
-            disabled={busy || !form.sender_name || !form.send_amount}
-          >
-            {busy ? "Saving…" : "Save transfer"}
+          <Button type="submit" busy={isSubmitting}>
+            {isSubmitting ? "Saving…" : "Save transfer"}
           </Button>
         </FormActions>
       </form>
@@ -396,22 +414,40 @@ export default function NewTransfer() {
 }
 
 
-// Auto-fit grid for the form rows — repeated four times above so it
-// pays its keep as a local helper, not yet generic enough for the
-// kit.
+// ── Local helpers ──────────────────────────────────────────────
+
+
 function Grid({ children }: { children: React.ReactNode }) {
+  // Auto-fit grid for form rows — repeated several times above
+  // so it pays its keep as a local helper, not yet generic enough
+  // for the kit.
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-        gap: "0.75rem",
-      }}
-    >
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
+      gap: "0.75rem",
+    }}>
       {children}
     </div>
   );
 }
+
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  // Field-scoped validation message. Slot under a ``<Field>``
+  // input to surface the Zod issue inline.
+  return (
+    <span style={{
+      display: "block",
+      marginTop: "0.3rem",
+      fontSize: "0.78rem",
+      color: tokens.negative,
+    }}>
+      {children}
+    </span>
+  );
+}
+
 
 // Read-only client-side preview of the federal tax the server is
 // about to compute. Mirrors the rule in
@@ -452,14 +488,12 @@ function FederalTaxPreview({
         }}
       />
       {exempt && (
-        <span
-          style={{
-            display: "block",
-            marginTop: "0.25rem",
-            fontSize: "0.75rem",
-            color: tokens.textMuted,
-          }}
-        >
+        <span style={{
+          display: "block",
+          marginTop: "0.25rem",
+          fontSize: "0.75rem",
+          color: tokens.textMuted,
+        }}>
           Exempt — {country === "United States"
             ? "domestic recipient"
             : `${serviceType} service`}

@@ -62,9 +62,15 @@ Non-negotiables:
   `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`,
   `Button`, `ButtonLink`, `Pill`, `Pager`, `Table`, `EmptyState`,
   `ErrorState`, `KpiCard`, `KpiGrid`, `FormActions`. Reach for
-  these before writing inline styles. The canonical migration
-  example (showing how a route swaps inline-style constants for
-  kit primitives) is `frontend/src/routes/NewTransfer.tsx`.
+  these before writing inline styles.
+- **Forms.** `react-hook-form` + `zod` is the standard stack
+  (PR #562). One `useForm()` per page, schema co-located with
+  the route. Plain inputs use `register("field")`; custom
+  components (autocompletes, etc.) wrap in `<Controller>`.
+  `useWatch({ control, name })` for fields the rest of the form
+  shouldn't re-render against. The canonical example for the
+  full layout-+-form stack is
+  `frontend/src/routes/NewTransfer.tsx`.
 - **Emoji is retired from nav.** Replace any new emoji nav icon with
   an inline stroke SVG matching the existing set
   (`stroke-width:2; stroke-linecap:round; fill:none; currentColor`).
