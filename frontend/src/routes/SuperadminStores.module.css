@@ -1,0 +1,46 @@
+/* Page-specific styles for SuperadminStores.tsx. */
+
+.storeName {
+  font-weight: 500;
+}
+
+.storeMeta {
+  color: var(--db-text-muted, #a3a3a3);
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.78rem;
+}
+
+.stripeId {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.8rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.dash {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.trialRetention {
+  color: var(--db-negative, #ff3b30);
+  font-size: 0.85rem;
+}
+
+.trialEnds {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.planPill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}

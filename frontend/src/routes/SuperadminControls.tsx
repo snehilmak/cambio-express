@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 import { useDashboardSummary } from "../api/dashboard";
 import {
   ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell, Section,
-  tokens,
 } from "../components/ui";
+import styles from "./SuperadminControls.module.css";
 
 // /app/superadmin/controls — Platform hub. KPI tiles fed by the
 // existing /api/v2/dashboard/summary (superadmin-shaped payload),
@@ -123,7 +123,7 @@ export default function SuperadminControls() {
       )}
 
       <Section title="Hubs">
-        <div style={quickLinkGrid}>
+        <div className={styles.quickLinkGrid}>
           <QuickLink
             to="/superadmin/stores"
             title="Stores"
@@ -168,18 +168,12 @@ function fmt(n: number | undefined): React.ReactNode {
 
 function ComingSoon({ title, desc }: { title: string; desc: string }) {
   return (
-    <div style={{ ...quickLink, opacity: 0.6, cursor: "default" }}>
-      <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+    <div className={styles.quickLinkDisabled}>
+      <div className={styles.quickLinkTitleRow}>
         {title}
-        <span style={{
-          fontSize: "0.65rem", padding: "0.1rem 0.4rem",
-          borderRadius: "999px", background: "rgba(255,204,0,0.15)",
-          color: "var(--db-warning, #ffcc00)",
-        }}>
-          Coming soon
-        </span>
+        <span className={styles.comingPill}>Coming soon</span>
       </div>
-      <div style={muted}>{desc}</div>
+      <div className={styles.muted}>{desc}</div>
     </div>
   );
 }
@@ -188,24 +182,9 @@ function QuickLink({
   to, title, desc,
 }: { to: string; title: string; desc: string }) {
   return (
-    <Link to={to} style={quickLink}>
-      <div style={{ fontWeight: 600 }}>{title}</div>
-      <div style={muted}>{desc}</div>
+    <Link to={to} className={styles.quickLink}>
+      <div className={styles.quickLinkTitle}>{title}</div>
+      <div className={styles.muted}>{desc}</div>
     </Link>
   );
 }
-
-const quickLinkGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "0.75rem",
-};
-const quickLink: React.CSSProperties = {
-  display: "block", padding: "1rem",
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", textDecoration: "none", color: "inherit",
-};
-const muted: React.CSSProperties = {
-  color: tokens.textMuted, fontSize: "0.85rem", margin: 0,
-};

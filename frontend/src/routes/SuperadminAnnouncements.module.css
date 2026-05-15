@@ -1,0 +1,68 @@
+/* Page-specific styles for SuperadminAnnouncements.tsx. */
+
+.gap {
+  height: 1rem;
+}
+
+.helpText {
+  margin: 0.25rem 0 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.checkRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0;
+  font-size: 0.95rem;
+}
+
+.error {
+  color: var(--db-negative, #ff3b30);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.submitRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.cellWide {
+  max-width: 32rem;
+}
+
+.dateCell {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.dash {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.actionsRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.rowError {
+  color: var(--db-negative, #ff3b30);
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}

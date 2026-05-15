@@ -1,0 +1,20 @@
+/* Page-specific styles for SuperadminAuditLog.tsx. */
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.targetId {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+}
+
+.dash {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.detailsCell {
+  color: var(--db-text-muted, #a3a3a3);
+}

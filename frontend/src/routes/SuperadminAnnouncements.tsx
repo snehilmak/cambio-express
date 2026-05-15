@@ -10,12 +10,13 @@ import {
   type CreateAnnouncementBody,
 } from "../api/announcements";
 import {
-  Button, Card, Empty, EmptyState, ErrorState, Field, inputStyle, monoStyle,
-  PageHeader, PageShell, Pill, SectionTitle, TableSkeleton, tokens,
-  type PillTone,
+  Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input,
+  PageHeader, PageShell, Pill, SectionTitle, Select, Table, TableSkeleton,
+  Textarea, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import styles from "./SuperadminAnnouncements.module.css";
 
 // Superadmin-only banner CRUD at /app/superadmin/announcements.
 // Mirrors the legacy /superadmin/controls?tab=announcements panel.
@@ -58,17 +59,11 @@ export default function SuperadminAnnouncements() {
 
       <CreateForm onCreated={refresh} />
 
-      <div style={{ height: "1rem" }} />
+      <div className={styles.gap} />
 
       <Card>
         <SectionTitle>History</SectionTitle>
-        <p
-          style={{
-            margin: "0.25rem 0 1rem",
-            color: tokens.textMuted,
-            fontSize: "0.85rem",
-          }}
-        >
+        <p className={styles.helpText}>
           Banners shown to every user across the app. Disable to hide
           without deleting; delete to remove permanently.
         </p>
@@ -83,7 +78,7 @@ export default function SuperadminAnnouncements() {
           <EmptyState title="No announcements yet." />
         )}
         {data && data.rows.length > 0 && (
-          <Table rows={data.rows} onChanged={refresh} />
+          <AnnouncementsTable rows={data.rows} onChanged={refresh} />
         )}
       </Card>
     </PageShell>
@@ -133,69 +128,49 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
   return (
     <Card>
       <SectionTitle>Post a new banner</SectionTitle>
-      <form
-        onSubmit={onSubmit}
-        style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginTop: "0.75rem" }}
-      >
+      <form onSubmit={onSubmit} className={styles.form}>
         <Field label="Message">
-          <textarea
+          <Textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             placeholder="Maintenance window Friday 9pm–11pm CT"
             rows={2}
             required
-            style={{ ...inputStyle, resize: "vertical", minHeight: "3.5rem" }}
+            style={{ minHeight: "3.5rem" }}
           />
         </Field>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-            gap: "0.75rem",
-          }}
-        >
+        <div className={styles.fieldGrid}>
           <Field label="Level">
-            <select
+            <Select
               value={level}
               onChange={(e) =>
                 setLevel(e.target.value as CreateAnnouncementBody["level"])
               }
-              style={inputStyle}
             >
               {LEVELS.map((l) => (
                 <option key={l} value={l}>{l}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="Expires (days)">
-            <input
+            <Input
               type="number"
               min="0"
               max="365"
               value={expiresDays}
               onChange={(e) => setExpiresDays(e.target.value)}
-              style={inputStyle}
               placeholder="0 = no expiry"
             />
           </Field>
           <Field label="Schedule for later (optional)">
-            <input
+            <Input
               type="datetime-local"
               value={scheduleLocal}
               onChange={(e) => setScheduleLocal(e.target.value)}
-              style={inputStyle}
             />
           </Field>
           <Field label="Email blast">
-            <label
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                padding: "0.55rem 0",
-                fontSize: "0.95rem",
-              }}
-            >
+            <label className={styles.checkRow}>
               <input
                 type="checkbox"
                 checked={broadcast}
@@ -205,15 +180,8 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
             </label>
           </Field>
         </div>
-        {err && (
-          <p
-            role="alert"
-            style={{ color: tokens.negative, fontSize: "0.9rem", margin: 0 }}
-          >
-            {err}
-          </p>
-        )}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        {err && <Alert tone="error">{err}</Alert>}
+        <div className={styles.submitRow}>
           <Button
             type="submit"
             tone="primary"
@@ -228,45 +196,29 @@ function CreateForm({ onCreated }: { onCreated: () => void }) {
   );
 }
 
-function Table({
+function AnnouncementsTable({
   rows, onChanged,
 }: {
   rows: AnnouncementRow[];
   onChanged: () => void;
 }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}>
-        <thead>
-          <tr>
-            {["Message", "Level", "Status", "Posted", "Expires", "Actions"].map(
-              (h, i) => (
-                <th
-                  key={i}
-                  style={{
-                    textAlign: "left",
-                    padding: "0.6rem 0.75rem",
-                    color: tokens.textMuted,
-                    fontWeight: 500,
-                    fontSize: "0.78rem",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    borderBottom: `1px solid ${tokens.border}`,
-                  }}
-                >
-                  {h}
-                </th>
-              ),
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <Row key={r.id} row={r} onChanged={onChanged} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table>
+      <thead>
+        <tr>
+          {["Message", "Level", "Status", "Posted", "Expires", "Actions"].map(
+            (h, i) => (
+              <th key={i} style={thStyle}>{h}</th>
+            ),
+          )}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <Row key={r.id} row={r} onChanged={onChanged} />
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
@@ -301,11 +253,13 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
 
   return (
     <tr>
-      <td style={{ ...cellStyle, maxWidth: "32rem" }}>{row.message}</td>
-      <td style={cellStyle}>
+      <td style={{ ...tdStyle, verticalAlign: "top" }} className={styles.cellWide}>
+        {row.message}
+      </td>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
         <Pill tone={LEVEL_TONE[row.level] ?? "neutral"}>{row.level}</Pill>
       </td>
-      <td style={cellStyle}>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
         {row.is_visible ? (
           <Pill tone="accent">live</Pill>
         ) : !row.is_active ? (
@@ -318,44 +272,34 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
           <Pill tone="warning">expired</Pill>
         )}
       </td>
-      <td style={cellStyle}>
-        <span style={{ ...monoStyle, fontSize: "0.85rem", color: tokens.textMuted }}>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
+        <span className={styles.dateCell}>
           {row.created_at.slice(0, 10)}
         </span>
       </td>
-      <td style={cellStyle}>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
         {row.expires_at ? (
-          <span style={{ ...monoStyle, fontSize: "0.85rem", color: tokens.textMuted }}>
+          <span className={styles.dateCell}>
             {row.expires_at.slice(0, 10)}
           </span>
         ) : (
-          <span style={{ color: tokens.textMuted }}>—</span>
+          <span className={styles.dash}>—</span>
         )}
       </td>
-      <td style={cellStyle}>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <Button tone="secondary" busy={busy} onClick={onToggle}>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
+        <div className={styles.actionsRow}>
+          <Button tone="secondary" size="sm" busy={busy} onClick={onToggle}>
             {row.is_active ? "Disable" : "Enable"}
           </Button>
-          <Button tone="danger" busy={busy} onClick={onDelete}>
+          <Button tone="danger" size="sm" busy={busy} onClick={onDelete}>
             Delete
           </Button>
         </div>
-        {err && (
-          <span style={{ color: tokens.negative, fontSize: "0.8rem", marginLeft: "0.5rem" }}>
-            {err}
-          </span>
-        )}
+        {err && <span className={styles.rowError}>{err}</span>}
       </td>
     </tr>
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  verticalAlign: "top",
-};
 
 // True when `starts_at` is a parseable future date — drives the
 // "scheduled" status pill on each table row.
