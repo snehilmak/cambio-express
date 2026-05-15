@@ -32,66 +32,6 @@ _wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=
 from tests._app import db, db_session
 
 
-# ─────────────────────────────────────────────────────────────
-# FastAPI TestClient leak plug
-#
-# Bare `TestClient(api_app)` instances (~189 call sites across
-# ~11 test files) skip the recommended context-manager form, so
-# FastAPI's lifespan + httpx Session never get cleanly shut
-# down. The leftover asyncio coroutines hang on as "Task pending"
-# warnings and — when GC'd mid-test — rollback the SQLAlchemy
-# session of whatever test happens to be running. That used to
-# produce 50/50 flakes on tests like
-# test_webhook_persists_event_on_valid_request.
-#
-# Fix: monkey-patch TestClient to register every instance for
-# teardown. The autouse `_close_fastapi_clients` fixture below
-# closes them all between tests, draining the pending tasks
-# before they can interfere with the next test.
-#
-# This eliminates the need to refactor the 189 call sites
-# individually — they keep working unchanged. Removing this
-# block is safe once those sites all use `with TestClient(...)
-# as c:` form.
-import fastapi.testclient as _fastapi_testclient
-_OrigTestClient = _fastapi_testclient.TestClient
-_open_fastapi_clients: list = []
-
-
-class _AutoCloseTestClient(_OrigTestClient):
-    """Drop-in TestClient that registers itself with the autouse
-    fixture for guaranteed teardown after each test."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        _open_fastapi_clients.append(self)
-
-
-_fastapi_testclient.TestClient = _AutoCloseTestClient
-# Also re-export under fastapi.testclient module attr so re-imports
-# pick up the patched version even after fastapi/starlette internal
-# caching.
-import sys as _sys
-if "fastapi.testclient" in _sys.modules:
-    _sys.modules["fastapi.testclient"].TestClient = _AutoCloseTestClient
-
-
-@pytest.fixture(autouse=True)
-def _close_fastapi_clients():
-    """After each test, walk the list of TestClient instances
-    created during the test and exit them properly. Each `__exit__`
-    closes httpx + drains FastAPI's lifespan tasks so the next
-    test starts with a clean asyncio state."""
-    yield
-    while _open_fastapi_clients:
-        c = _open_fastapi_clients.pop()
-        try:
-            c.__exit__(None, None, None)
-        except Exception:
-            # Don't let a single client teardown failure mask the
-            # actual test result; keep popping.
-            pass
-
 
 # ─────────────────────────────────────────────────────────────
 # Flask-compatible test client backed by Starlette's TestClient
@@ -355,21 +295,15 @@ def seed_test_data():
 @pytest.fixture(autouse=True)
 def clean_db():
     with db_session():
-        # Defensive cleanup: bare FastAPI TestClient instances in many
-        # tests leak pending asyncio tasks ("Task was destroyed but it
-        # is pending!") that hold references to SQLAlchemy sessions
-        # and silently rollback this test's seed. See the comment in
-        # .github/workflows/ci.yml for the full backstory. Until the
-        # 189 TestClient call sites are refactored to use `with`
-        # blocks, force a session.remove() at start so any leaked
-        # session is detached before we drop+create+seed.
+        # Drop the thread-local scoped session before drop_all so
+        # the schema reset doesn't fight a connection still bound
+        # to the previous test's transactions.
         db.session.remove()
         db.drop_all()
         db.create_all()
         seed_test_data()
-        # Verify seed actually persisted — if a leaked async task
-        # rolled back the seed transaction, the row is gone before
-        # the test even starts. Retry once to make CI deterministic.
+        # Retry-once guard against a teardown that races the seed —
+        # cheap, deterministic, makes CI flake-free.
         from api.Modules.Tenancy.Models import Store
         if db.session.query(Store).filter_by(slug="test-store").first() is None:
             db.session.remove()

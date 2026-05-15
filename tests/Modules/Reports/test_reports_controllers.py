@@ -18,6 +18,7 @@ from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
@@ -49,42 +50,44 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
     return t.id
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 # ── parse_period / parse_store_ids dependency contracts ─────
 
 
-def test_store_ids_required_returns_422(test_store_id):
+def test_store_ids_required_returns_422(test_store_id, api_client):
     """`store_ids` is a required Query — missing it must 422."""
-    resp = _client().get("/reports/sales-by-company")
+    resp = api_client.get("/reports/sales-by-company")
     assert resp.status_code == 422
 
 
-def test_store_ids_non_numeric_returns_422(test_store_id):
-    resp = _client().get(
+def test_store_ids_non_numeric_returns_422(test_store_id, api_client):
+    resp = api_client.get(
         "/reports/sales-by-company", params={"store_ids": "abc,def"},
     )
     assert resp.status_code == 422
 
 
-def test_store_ids_empty_string_returns_422(test_store_id):
-    resp = _client().get(
+def test_store_ids_empty_string_returns_422(test_store_id, api_client):
+    resp = api_client.get(
         "/reports/sales-by-company", params={"store_ids": ""},
     )
     assert resp.status_code == 422
 
 
-def test_period_swaps_when_from_after_to(test_store_id):
+def test_period_swaps_when_from_after_to(test_store_id, api_client):
     """Mirrors `_report_period`: if the caller passes `from > to`,
     the dependency swaps them so the SQL window is non-empty."""
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, send_date=yesterday)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -98,13 +101,13 @@ def test_period_swaps_when_from_after_to(test_store_id):
     assert body["totals"]["sent"] == 100.0
 
 
-def test_period_falls_back_to_defaults_on_garbage_input(test_store_id):
+def test_period_falls_back_to_defaults_on_garbage_input(test_store_id, api_client):
     """`_report_period` swallows ValueError and falls back to today /
     first-of-month. The dependency mirrors that."""
     today = date.today()
     with db_session():
         _seed_transfer(test_store_id, send_amount=42.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -120,11 +123,11 @@ def test_period_falls_back_to_defaults_on_garbage_input(test_store_id):
 # ── Per-route happy-path response envelopes ─────────────────
 
 
-def test_sales_by_company_envelope(test_store_id):
+def test_sales_by_company_envelope(test_store_id, api_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, company="Intermex")
         _seed_transfer(test_store_id, send_amount=300.0, company="Maxi")
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-company",
         params={"store_ids": str(test_store_id)},
     )
@@ -136,13 +139,13 @@ def test_sales_by_company_envelope(test_store_id):
     assert body["totals"]["sent"] == 400.0
 
 
-def test_sales_by_service_envelope(test_store_id):
+def test_sales_by_service_envelope(test_store_id, api_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0,
                         service_type="Money Transfer")
         _seed_transfer(test_store_id, send_amount=200.0,
                         service_type="Bill Payment")
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-service",
         params={"store_ids": str(test_store_id)},
     )
@@ -152,11 +155,11 @@ def test_sales_by_service_envelope(test_store_id):
     assert types == {"Money Transfer", "Bill Payment"}
 
 
-def test_by_destination_country_envelope(test_store_id):
+def test_by_destination_country_envelope(test_store_id, api_client):
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, country="MX")
         _seed_transfer(test_store_id, send_amount=200.0, country="GT")
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/by-destination-country",
         params={"store_ids": str(test_store_id)},
     )
@@ -166,12 +169,12 @@ def test_by_destination_country_envelope(test_store_id):
     assert countries == {"MX", "GT"}
 
 
-def test_top_recipients_respects_limit_query_param(test_store_id):
+def test_top_recipients_respects_limit_query_param(test_store_id, api_client):
     with db_session():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1),
                             recipient_name=f"R{i}")
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 2},
     )
@@ -182,21 +185,21 @@ def test_top_recipients_respects_limit_query_param(test_store_id):
     assert body["totals"]["sent"] == 1500.0
 
 
-def test_top_recipients_rejects_out_of_range_limit(test_store_id):
+def test_top_recipients_rejects_out_of_range_limit(test_store_id, api_client):
     """`limit` is bounded `[1, 500]` — out-of-range values 422."""
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 0},
     )
     assert resp.status_code == 422
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/top-recipients",
         params={"store_ids": str(test_store_id), "limit": 501},
     )
     assert resp.status_code == 422
 
 
-def test_top_customers_respects_sort_by(test_store_id):
+def test_top_customers_respects_sort_by(test_store_id, api_client):
     from api.Modules.Customers.Models import Customer
     from tests._app import db
     today = date.today()
@@ -211,7 +214,7 @@ def test_top_customers_respects_sort_by(test_store_id):
             test_store_id, send_amount=500.0, customer_id=cid,
             recipient_name="R1",
         )
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/top-customers",
         params={"store_ids": str(test_store_id), "sort_by": "sent"},
     )
@@ -221,16 +224,16 @@ def test_top_customers_respects_sort_by(test_store_id):
     assert body["rows"][0]["phone"] == "+15551234"
 
 
-def test_top_customers_rejects_invalid_sort_by(test_store_id):
+def test_top_customers_rejects_invalid_sort_by(test_store_id, api_client):
     """`sort_by` is regex-restricted to `sent|count`."""
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/top-customers",
         params={"store_ids": str(test_store_id), "sort_by": "garbage"},
     )
     assert resp.status_code == 422
 
 
-def test_sales_by_employee_resolves_user(test_store_id):
+def test_sales_by_employee_resolves_user(test_store_id, api_client):
     from api.Modules.Tenancy.Models import User
     from tests._app import db
     with db_session():
@@ -242,7 +245,7 @@ def test_sales_by_employee_resolves_user(test_store_id):
         db.session.add(u); db.session.commit()
         uid = u.id
         _seed_transfer(test_store_id, created_by=uid, send_amount=300.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-employee",
         params={"store_ids": str(test_store_id)},
     )
@@ -252,7 +255,7 @@ def test_sales_by_employee_resolves_user(test_store_id):
     assert body["rows"][0]["username"] == "cash@x.com"
 
 
-def test_cashier_productivity_resolves_storeemployee(test_store_id):
+def test_cashier_productivity_resolves_storeemployee(test_store_id, api_client):
     from api.Modules.Tenancy.Models import StoreEmployee
     from tests._app import db
     with db_session():
@@ -262,7 +265,7 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id):
         db.session.add(e); db.session.commit()
         eid = e.id
         _seed_transfer(test_store_id, employee_id=eid, send_amount=50.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/cashier-productivity",
         params={"store_ids": str(test_store_id)},
     )
@@ -275,7 +278,7 @@ def test_cashier_productivity_resolves_storeemployee(test_store_id):
 # ── Multi-store + period filtering through the controller ──
 
 
-def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
+def test_store_ids_multi_value_aggregates_across_stores(test_store_id, api_client):
     """Comma-separated `store_ids=1,2` must aggregate across both."""
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
@@ -286,7 +289,7 @@ def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
         sid2 = s2.id
         _seed_transfer(test_store_id, send_amount=100.0)
         _seed_transfer(sid2, send_amount=200.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-company",
         params={"store_ids": f"{test_store_id},{sid2}"},
     )
@@ -294,13 +297,13 @@ def test_store_ids_multi_value_aggregates_across_stores(test_store_id):
     assert resp.json()["totals"]["sent"] == 300.0
 
 
-def test_period_filter_excludes_out_of_range_rows(test_store_id):
+def test_period_filter_excludes_out_of_range_rows(test_store_id, api_client):
     today = date.today()
     last_year = today - timedelta(days=365)
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0, send_date=last_year)
         _seed_transfer(test_store_id, send_amount=200.0, send_date=today)
-    resp = _client().get(
+    resp = api_client.get(
         "/reports/sales-by-company",
         params={
             "store_ids": str(test_store_id),
@@ -331,10 +334,10 @@ def test_flask_dispatcher_routes_reports_to_fastapi(client, test_store_id):
     assert body["totals"]["sent"] == 99.0
 
 
-def test_openapi_includes_reports_paths():
+def test_openapi_includes_reports_paths(api_client):
     """Sanity check: the FastAPI OpenAPI doc enumerates every report
     path so frontend/codegen tooling can discover them."""
-    resp = _client().get("/openapi.json")
+    resp = api_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     expected = {

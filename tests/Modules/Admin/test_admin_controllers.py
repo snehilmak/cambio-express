@@ -1,11 +1,14 @@
 """HTTP integration tests for the Admin Controllers."""
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 def _login(client_, store_id):

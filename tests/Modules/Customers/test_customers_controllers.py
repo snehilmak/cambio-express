@@ -13,6 +13,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
 def _seed_customer(store_id, *, full_name, phone_country="+1",
@@ -52,24 +53,26 @@ def _link(owner_id, store_id):
     db.session.add(l); db.session.commit()
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 # ── /search ─────────────────────────────────────────────────
 
 
-def test_search_requires_store_id():
+def test_search_requires_store_id(api_client):
     """`store_id` is a required Query — missing it must 422."""
-    resp = _client().get("/customers/search", params={"q": "alice"})
+    resp = api_client.get("/customers/search", params={"q": "alice"})
     assert resp.status_code == 422
 
 
-def test_search_short_query_returns_empty_envelope(test_store_id):
+def test_search_short_query_returns_empty_envelope(test_store_id, api_client):
     with db_session():
         _seed_customer(test_store_id, full_name="Alice", phone_number="5550000")
-    resp = _client().get(
+    resp = api_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "a"},
     )
@@ -78,11 +81,11 @@ def test_search_short_query_returns_empty_envelope(test_store_id):
     assert body == {"matches": [], "suggestions": []}
 
 
-def test_search_returns_envelope_with_matches(test_store_id):
+def test_search_returns_envelope_with_matches(test_store_id, api_client):
     with db_session():
         _seed_customer(test_store_id, full_name="Alice Smith",
                         phone_country="+1", phone_number="5551234")
-    resp = _client().get(
+    resp = api_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "alice"},
     )
@@ -99,7 +102,7 @@ def test_search_returns_envelope_with_matches(test_store_id):
     assert row["home_store_id"] == test_store_id
 
 
-def test_search_decorates_cross_store_rows_with_home_name(test_store_id):
+def test_search_decorates_cross_store_rows_with_home_name(test_store_id, api_client):
     """Customer logged at sibling store → row carries `home_store_name`
     so the UI can label it "from Store B"."""
     from tests._app import db
@@ -110,7 +113,7 @@ def test_search_decorates_cross_store_rows_with_home_name(test_store_id):
         _link(oid, s2_id)
         _seed_customer(s2_id, full_name="Maria",
                         phone_country="+1", phone_number="5559999")
-    resp = _client().get(
+    resp = api_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "maria"},
     )
@@ -122,13 +125,13 @@ def test_search_decorates_cross_store_rows_with_home_name(test_store_id):
     assert matches[0]["home_store_id"] == s2_id
 
 
-def test_search_excludes_stores_outside_umbrella(test_store_id):
+def test_search_excludes_stores_outside_umbrella(test_store_id, api_client):
     """Security property: a stranger store's customer must not leak
     through the autocomplete."""
     with db_session():
         s2_id = _seed_store("stranger")
         _seed_customer(s2_id, full_name="Hidden", phone_number="5550000")
-    resp = _client().get(
+    resp = api_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "hidden"},
     )
@@ -136,12 +139,12 @@ def test_search_excludes_stores_outside_umbrella(test_store_id):
     assert resp.json()["matches"] == []
 
 
-def test_search_fuzzy_suggestions_in_response(test_store_id):
+def test_search_fuzzy_suggestions_in_response(test_store_id, api_client):
     """A typo of an existing customer surfaces them under `suggestions`."""
     with db_session():
         _seed_customer(test_store_id, full_name="Maria Gonzalez",
                         phone_number="5551234")
-    resp = _client().get(
+    resp = api_client.get(
         "/customers/search",
         params={"store_id": test_store_id, "q": "Maria Gonzales"},
     )
@@ -155,14 +158,14 @@ def test_search_fuzzy_suggestions_in_response(test_store_id):
 # ── /upsert ─────────────────────────────────────────────────
 
 
-def test_upsert_creates_customer(test_store_id):
+def test_upsert_creates_customer(test_store_id, api_client):
     body = {
         "full_name": "Alice",
         "phone_country": "+1",
         "phone_number": "5551234",
         "address": "123 Main",
     }
-    resp = _client().post(
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id}, json=body,
     )
@@ -174,12 +177,12 @@ def test_upsert_creates_customer(test_store_id):
     assert out["home_store_id"] == test_store_id
 
 
-def test_upsert_reuses_existing_phone(test_store_id):
+def test_upsert_reuses_existing_phone(test_store_id, api_client):
     """Second upsert with same phone returns the same id."""
     with db_session():
         cid = _seed_customer(test_store_id, full_name="Alice Old",
                               phone_number="5551234")
-    resp = _client().post(
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -194,8 +197,8 @@ def test_upsert_reuses_existing_phone(test_store_id):
     assert out["full_name"] == "Alice New"
 
 
-def test_upsert_rejects_invalid_dob(test_store_id):
-    resp = _client().post(
+def test_upsert_rejects_invalid_dob(test_store_id, api_client):
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -208,8 +211,8 @@ def test_upsert_rejects_invalid_dob(test_store_id):
     assert resp.status_code == 422
 
 
-def test_upsert_accepts_well_formed_dob(test_store_id):
-    resp = _client().post(
+def test_upsert_accepts_well_formed_dob(test_store_id, api_client):
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -223,10 +226,10 @@ def test_upsert_accepts_well_formed_dob(test_store_id):
     assert resp.json()["customer"]["dob"] == "1990-01-15"
 
 
-def test_upsert_rejects_extra_fields(test_store_id):
+def test_upsert_rejects_extra_fields(test_store_id, api_client):
     """Pydantic schema sets `extra="forbid"` — typos in the request
     body should fail loudly instead of being silently dropped."""
-    resp = _client().post(
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id},
         json={
@@ -239,8 +242,8 @@ def test_upsert_rejects_extra_fields(test_store_id):
     assert resp.status_code == 422
 
 
-def test_upsert_requires_full_name(test_store_id):
-    resp = _client().post(
+def test_upsert_requires_full_name(test_store_id, api_client):
+    resp = api_client.post(
         "/customers/upsert",
         params={"store_id": test_store_id}, json={},
     )
@@ -263,8 +266,8 @@ def test_flask_dispatcher_routes_customers_to_fastapi(client, test_store_id):
     assert len(body["matches"]) == 1
 
 
-def test_openapi_includes_customer_paths():
-    resp = _client().get("/openapi.json")
+def test_openapi_includes_customer_paths(api_client):
+    resp = api_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/customers/search" in paths
