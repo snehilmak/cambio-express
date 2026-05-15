@@ -248,30 +248,51 @@ export function Section({
 // ── Field + Input ─────────────────────────────────────────────────────
 
 export function Field({
-  label, highlight, children,
+  label, highlight, error, hint, children,
 }: {
   label: ReactNode;
   /** Tints the label red when the server flagged a field-level
-   *  validation error. */
+   *  validation error. Inferred to ``true`` when ``error`` is set. */
   highlight?: boolean;
+  /** Field-level error message. Renders below ``children`` in the
+   *  negative color, and tints the label red. The server's
+   *  ``field_errors`` envelope maps 1:1 to this prop. */
+  error?: ReactNode;
+  /** Small muted help text below ``children`` (above the error if
+   *  both are present). For the "you can't deactivate yourself"
+   *  class of inline guidance. */
+  hint?: ReactNode;
   children: ReactNode;
 }) {
+  const isErr = Boolean(error) || highlight;
   return (
     <label style={{ display: "flex", flexDirection: "column", gap: "0.45rem" }}>
-      <span
-        style={{
-          // Slightly bigger + bolder than the original 0.78rem / 400.
-          // 0.8rem / 600 reads as a proper form label instead of a
-          // whisper.
-          fontSize: "0.8rem",
-          fontWeight: 600,
-          color: highlight ? tokens.negative : tokens.text,
-          letterSpacing: "0",
-        }}
-      >
-        {label}
-      </span>
+      {label !== "" && label != null && (
+        <span
+          style={{
+            // Slightly bigger + bolder than the original 0.78rem / 400.
+            // 0.8rem / 600 reads as a proper form label instead of a
+            // whisper.
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            color: isErr ? tokens.negative : tokens.text,
+            letterSpacing: "0",
+          }}
+        >
+          {label}
+        </span>
+      )}
       {children}
+      {hint && (
+        <span style={{ fontSize: "0.78rem", color: tokens.textMuted }}>
+          {hint}
+        </span>
+      )}
+      {error && (
+        <span style={{ fontSize: "0.8rem", color: tokens.negative }}>
+          {error}
+        </span>
+      )}
     </label>
   );
 }
@@ -744,6 +765,55 @@ export function Pill({
     >
       {children}
     </span>
+  );
+}
+
+// ── Alert ─────────────────────────────────────────────────────────────
+//
+// Inline banner for form errors, success confirmations, and
+// neutral notices. Replaces the ``alertErrorStyle`` /
+// ``serverError`` blocks that were duplicated across ~10 routes
+// (AdminUserForm, SuperadminStoreForm, AccountProfile, etc.).
+// Use for in-form messaging; for global cross-page announcements
+// the topbar banner system in ``base.html`` is the right surface.
+
+export type AlertTone = "error" | "warning" | "success" | "info";
+
+const alertPalette: Record<AlertTone, { bg: string; border: string; fg: string }> = {
+  error:   { bg: "rgba(255,59,48,0.08)",  border: "rgba(255,59,48,0.3)",  fg: tokens.negative },
+  warning: { bg: "rgba(255,184,0,0.08)",  border: "rgba(255,184,0,0.3)",  fg: tokens.warning },
+  success: { bg: "rgba(63,255,0,0.08)",   border: "rgba(63,255,0,0.3)",   fg: tokens.accent },
+  info:    { bg: "rgba(99,166,255,0.08)", border: "rgba(99,166,255,0.3)", fg: "#63a6ff" },
+};
+
+export function Alert({
+  tone = "error", children, role,
+}: {
+  tone?: AlertTone;
+  children: ReactNode;
+  /** Forwarded to the wrapper element. Defaults to ``alert`` for
+   *  ``error`` and ``warning`` so screen readers announce them; the
+   *  ``success`` / ``info`` variants default to ``status`` which is
+   *  less interruptive. */
+  role?: string;
+}) {
+  const c = alertPalette[tone];
+  const resolvedRole =
+    role ?? (tone === "error" || tone === "warning" ? "alert" : "status");
+  return (
+    <div
+      role={resolvedRole}
+      style={{
+        padding: "0.6rem 0.85rem",
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        borderRadius: "0.5rem",
+        color: c.fg,
+        fontSize: "0.88rem",
+      }}
+    >
+      {children}
+    </div>
   );
 }
 

@@ -60,9 +60,21 @@ Non-negotiables:
   `docs/design-system/README.md`. Code-level primitives live in
   `frontend/src/components/ui/index.tsx` — `PageShell`,
   `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`,
-  `Button`, `ButtonLink`, `Pill`, `Pager`, `Table`, `EmptyState`,
-  `ErrorState`, `KpiCard`, `KpiGrid`, `FormActions`. Reach for
-  these before writing inline styles.
+  `Textarea`, `Button`, `ButtonLink`, `Alert`, `Pill`, `Pager`,
+  `Table`, `EmptyState`, `ErrorState`, `KpiCard`, `KpiGrid`,
+  `FormActions`. Reach for these before writing inline styles.
+- **Inline styles vs CSS Modules.** New routes should reach for
+  kit primitives first. Anything left over (page-specific layouts,
+  one-off treatments) goes into a co-located `<Route>.module.css`
+  file rather than `style={{ ... }}` constants at the bottom of
+  the route. The canonical example post-migration is
+  `frontend/src/routes/AdminUserForm.tsx` +
+  `AdminUserForm.module.css` — every input/button/alert is a kit
+  primitive; only the card header row + checkbox row are in the
+  module. Vite's `vite/client` types already handle `.module.css`
+  imports, no config change needed. Forms use `<Field error=...
+  hint=...>` for field-level validation + inline help; server-
+  level errors render through `<Alert tone="error">`.
 - **Forms.** `react-hook-form` + `zod` is the standard stack
   (PR #562). One `useForm()` per page, schema co-located with
   the route. Plain inputs use `register("field")`; custom
