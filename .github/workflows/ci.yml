@@ -96,6 +96,35 @@ jobs:
         # be cleaned up before they reach this gate.
         run: npm run lint -- --max-warnings 0
 
+      # ── OpenAPI types in sync gate ──────────────────────────
+      # ``frontend/src/api/openapi.d.ts`` is generated from the
+      # FastAPI app's OpenAPI schema via ``npm run generate-types``
+      # (chains ``python -m scripts.dump_openapi`` →
+      # ``openapi-typescript``). It's checked into the repo so the
+      # SPA build doesn't need a live backend, but that means it
+      # can drift when someone edits a Pydantic schema without
+      # regenerating. Re-run the generator here and fail if the
+      # output differs from what's committed.
+      - name: Verify OpenAPI types are in sync
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+          SECRET_KEY: "ci-secret"
+          STRIPE_SECRET_KEY: "sk_test_ci"
+          STRIPE_BASIC_PRICE_ID: "price_basic_ci"
+          STRIPE_PRO_PRICE_ID: "price_pro_ci"
+          STRIPE_WEBHOOK_SECRET: "whsec_ci"
+          DINEROBOOK_SKIP_INIT_DB: "1"
+        working-directory: frontend
+        run: |
+          npm run generate-types
+          if ! git diff --exit-code -- src/api/openapi.json src/api/openapi.d.ts; then
+            echo ""
+            echo "❌ Generated OpenAPI types are out of date."
+            echo "Run 'npm run generate-types' from the frontend/"
+            echo "directory and commit the result."
+            exit 1
+          fi
+
       - name: Build frontend (tsc + vite)
         working-directory: frontend
         run: npm run build
