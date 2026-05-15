@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 
 import {
   BANK_CATEGORY_OPTIONS,
@@ -14,9 +13,10 @@ import {
 } from "../api/bankSync";
 import { ApiError } from "../lib/api";
 import {
-  Card, EmptyState, ErrorState, Loading, PageHeader, PageShell, Section,
-  tokens,
+  Button, ButtonLink, Card, EmptyState, ErrorState, Field, Input, Loading,
+  PageHeader, PageShell, Section, Select, Table, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./BankRules.module.css";
 
 // /app/bank/rules — bank reconcile rules CRUD. The legacy
 // /bank/rules Jinja page rendered the same list + create form;
@@ -63,6 +63,8 @@ const EMPTY_FORM: FormState = {
   auto_post: false,
   description: "",
 };
+
+const SPAN_2 = { gridColumn: "span 2" } as const;
 
 export default function BankRules() {
   const rules = useBankRules();
@@ -148,7 +150,9 @@ export default function BankRules() {
       <PageHeader
         title="Bank Rules"
         actions={(
-          <Link to="/bank-transactions" style={btnOutlineLink}>← Transactions</Link>
+          <ButtonLink href="/bank-transactions" tone="secondary" size="sm">
+            ← Transactions
+          </ButtonLink>
         )}
       />
 
@@ -156,139 +160,130 @@ export default function BankRules() {
 
       <Section title={editingId ? "Edit rule" : "Create new rule"}>
         <Card>
-          <form onSubmit={handleSubmit} style={formGrid}>
-          <FormField label="Match type" span={1}>
-            <select
-              value={form.desc_match_type}
-              onChange={(e) => setForm({ ...form, desc_match_type: e.target.value })}
-              style={inputStyle}
-            >
-              {MATCH_TYPE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Match value" span={1}>
-            <input
-              required
-              value={form.desc_match_value}
-              onChange={(e) => setForm({ ...form, desc_match_value: e.target.value })}
-              placeholder="e.g. REMOTE DEPOSIT FEE"
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="Sign filter" span={1}>
-            <select
-              value={form.sign_filter}
-              onChange={(e) => setForm({ ...form, sign_filter: e.target.value })}
-              style={inputStyle}
-            >
-              {SIGN_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Account filter (optional)" span={1}>
-            <select
-              value={form.account_filter_id}
-              onChange={(e) => setForm({ ...form, account_filter_id: e.target.value })}
-              style={inputStyle}
-            >
-              <option value="">Any account</option>
-              {(accounts.data?.rows ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label}{a.last4 ? ` ••${a.last4}` : ""}
-                </option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Min amount $" span={1}>
-            <input
-              type="number"
-              step="0.01"
-              value={form.amount_min}
-              onChange={(e) => setForm({ ...form, amount_min: e.target.value })}
-              placeholder="(blank = no min)"
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="Max amount $" span={1}>
-            <input
-              type="number"
-              step="0.01"
-              value={form.amount_max}
-              onChange={(e) => setForm({ ...form, amount_max: e.target.value })}
-              placeholder="(blank = no max)"
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="Target category" span={1}>
-            <select
-              value={form.target_kind}
-              onChange={(e) => setForm({ ...form, target_kind: e.target.value })}
-              style={inputStyle}
-            >
-              {BANK_CATEGORY_OPTIONS.map((o) => (
-                <option key={o.slug} value={o.slug}>{o.label}</option>
-              ))}
-            </select>
-          </FormField>
-          <FormField label="Priority" span={1}>
-            <input
-              type="number"
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
-              style={inputStyle}
-            />
-          </FormField>
-          <FormField label="Description (memo)" span={2}>
-            <input
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="What this rule does"
-              style={inputStyle}
-            />
-          </FormField>
-          <label style={{ ...checkRow }}>
-            <input
-              type="checkbox"
-              checked={form.enabled}
-              onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-            />
-            Enabled
-          </label>
-          <label style={checkRow}>
-            <input
-              type="checkbox"
-              checked={form.auto_post}
-              onChange={(e) => setForm({ ...form, auto_post: e.target.checked })}
-            />
-            Auto-post matching transactions to daily book
-          </label>
-          <div style={{ gridColumn: "span 2", display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-            <button type="submit" disabled={busy} style={btnPrimary}>
-              {editingId ? (busy ? "Saving…" : "Save changes") : (busy ? "Creating…" : "Create rule")}
-            </button>
-            {editingId && (
-              <button
-                type="button"
-                style={btnOutline}
-                onClick={() => {
-                  setEditingId(null);
-                  setForm(EMPTY_FORM);
-                }}
+          <form onSubmit={handleSubmit} className={styles.formGrid}>
+            <Field label="Match type">
+              <Select
+                value={form.desc_match_type}
+                onChange={(e) => setForm({ ...form, desc_match_type: e.target.value })}
               >
-                Cancel
-              </button>
-            )}
-          </div>
+                {MATCH_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Match value">
+              <Input
+                required
+                value={form.desc_match_value}
+                onChange={(e) => setForm({ ...form, desc_match_value: e.target.value })}
+                placeholder="e.g. REMOTE DEPOSIT FEE"
+              />
+            </Field>
+            <Field label="Sign filter">
+              <Select
+                value={form.sign_filter}
+                onChange={(e) => setForm({ ...form, sign_filter: e.target.value })}
+              >
+                {SIGN_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Account filter (optional)">
+              <Select
+                value={form.account_filter_id}
+                onChange={(e) => setForm({ ...form, account_filter_id: e.target.value })}
+              >
+                <option value="">Any account</option>
+                {(accounts.data?.rows ?? []).map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}{a.last4 ? ` ••${a.last4}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Min amount $">
+              <Input
+                type="number"
+                step="0.01"
+                value={form.amount_min}
+                onChange={(e) => setForm({ ...form, amount_min: e.target.value })}
+                placeholder="(blank = no min)"
+              />
+            </Field>
+            <Field label="Max amount $">
+              <Input
+                type="number"
+                step="0.01"
+                value={form.amount_max}
+                onChange={(e) => setForm({ ...form, amount_max: e.target.value })}
+                placeholder="(blank = no max)"
+              />
+            </Field>
+            <Field label="Target category">
+              <Select
+                value={form.target_kind}
+                onChange={(e) => setForm({ ...form, target_kind: e.target.value })}
+              >
+                {BANK_CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.slug} value={o.slug}>{o.label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Priority">
+              <Input
+                type="number"
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Description (memo)" style={SPAN_2}>
+              <Input
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                placeholder="What this rule does"
+              />
+            </Field>
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={form.enabled}
+                onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
+              />
+              Enabled
+            </label>
+            <label className={styles.checkRow}>
+              <input
+                type="checkbox"
+                checked={form.auto_post}
+                onChange={(e) => setForm({ ...form, auto_post: e.target.checked })}
+              />
+              Auto-post matching transactions to daily book
+            </label>
+            <div className={styles.formActions}>
+              <Button type="submit" busy={busy} disabled={busy}>
+                {editingId ? (busy ? "Saving…" : "Save changes") : (busy ? "Creating…" : "Create rule")}
+              </Button>
+              {editingId && (
+                <Button
+                  type="button"
+                  tone="secondary"
+                  onClick={() => {
+                    setEditingId(null);
+                    setForm(EMPTY_FORM);
+                  }}
+                >
+                  Cancel
+                </Button>
+              )}
+            </div>
           </form>
         </Card>
       </Section>
 
       <Section
-        title={`Your rules`}
-        actions={<span style={muted}>({rules.data?.total ?? 0})</span>}
+        title="Your rules"
+        actions={<span className={styles.muted}>({rules.data?.total ?? 0})</span>}
       >
         <Card>
           {rules.isLoading && <Loading />}
@@ -296,7 +291,7 @@ export default function BankRules() {
             <EmptyState title="No rules yet" body="Create one above to start auto-categorising bank transactions." />
           )}
           {(rules.data?.rows ?? []).length > 0 && (
-            <table style={tableStyle}>
+            <Table>
               <thead>
                 <tr>
                   <th style={thStyle}>Description</th>
@@ -310,7 +305,7 @@ export default function BankRules() {
               </thead>
               <tbody>
                 {(rules.data?.rows ?? []).map((r) => (
-                  <tr key={r.id} style={!r.enabled ? { opacity: 0.5 } : undefined}>
+                  <tr key={r.id} className={!r.enabled ? styles.rowDisabled : undefined}>
                     <td style={tdStyle}>{r.description || "—"}</td>
                     <td style={tdStyle}>
                       <code>{r.desc_match_type}</code>: {r.desc_match_value}
@@ -319,119 +314,20 @@ export default function BankRules() {
                     <td style={tdStyle}>{r.account_filter_label || "Any"}</td>
                     <td style={tdStyle}>{r.target_kind}</td>
                     <td style={tdStyle}>{r.match_count}</td>
-                    <td style={{ ...tdStyle, textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button type="button" style={btnOutlineSm} onClick={() => startEdit(r)}>
-                        Edit
-                      </button>{" "}
-                      <button type="button" style={btnOutlineSm} onClick={() => handleToggle(r)}>
+                    <td style={tdStyle} className={styles.actionsCell}>
+                      <Button tone="secondary" size="sm" onClick={() => startEdit(r)}>Edit</Button>
+                      <Button tone="secondary" size="sm" onClick={() => handleToggle(r)}>
                         {r.enabled ? "Disable" : "Enable"}
-                      </button>{" "}
-                      <button type="button" style={btnDangerSm} onClick={() => handleDelete(r)}>
-                        Delete
-                      </button>
+                      </Button>
+                      <Button tone="danger" size="sm" onClick={() => handleDelete(r)}>Delete</Button>
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           )}
         </Card>
       </Section>
     </PageShell>
   );
 }
-
-function FormField({ label, span, children }: { label: string; span: 1 | 2; children: React.ReactNode }) {
-  return (
-    <label style={{ gridColumn: span === 2 ? "span 2" : undefined }}>
-      <div style={fieldLabel}>{label}</div>
-      {children}
-    </label>
-  );
-}
-
-const formGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "0.75rem 1rem",
-};
-const fieldLabel: React.CSSProperties = {
-  fontSize: "0.7rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: tokens.textMuted,
-  fontWeight: 600,
-  marginBottom: "0.25rem",
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "0.5rem 0.65rem",
-  background: tokens.surface,
-  color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.4rem",
-  fontSize: "0.85rem",
-  fontFamily: "inherit",
-};
-const checkRow: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: "0.5rem",
-  fontSize: "0.85rem",
-};
-const muted: React.CSSProperties = {
-  color: tokens.textMuted,
-  fontSize: "0.85rem",
-};
-const btnPrimary: React.CSSProperties = {
-  background: tokens.accent,
-  color: "#000",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "0.5rem",
-  fontWeight: 600,
-  fontSize: "0.85rem",
-  cursor: "pointer",
-};
-const btnOutline: React.CSSProperties = {
-  background: "transparent",
-  color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  padding: "0.5rem 1rem",
-  borderRadius: "0.5rem",
-  fontSize: "0.85rem",
-  cursor: "pointer",
-};
-const btnOutlineLink: React.CSSProperties = {
-  ...btnOutline,
-  textDecoration: "none",
-  display: "inline-block",
-};
-const btnOutlineSm: React.CSSProperties = {
-  ...btnOutline,
-  padding: "0.25rem 0.6rem",
-  fontSize: "0.75rem",
-};
-const btnDangerSm: React.CSSProperties = {
-  ...btnOutlineSm,
-  color: tokens.negative,
-  borderColor: tokens.negative,
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: "0.85rem",
-};
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.5rem 0.75rem",
-  borderBottom: `1px solid ${tokens.border}`,
-  fontSize: "0.7rem",
-  textTransform: "uppercase",
-  color: tokens.textMuted,
-  fontWeight: 500,
-};
-const tdStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};

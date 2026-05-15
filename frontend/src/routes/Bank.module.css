@@ -1,0 +1,102 @@
+/* Page-specific styles for Bank.tsx. */
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.mutedInline {
+  font-weight: 400;
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0;
+}
+
+.mutedSmall {
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.emptyConnect {
+  text-align: center;
+  padding: 1.5rem 1rem;
+}
+
+.emptyConnect h3 {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+}
+
+.accountGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.accountCard {
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.accountLabel {
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.balance {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.nicknameForm {
+  margin-top: 0.5rem;
+  display: flex;
+  gap: 0.4rem;
+}
+
+.nicknameInput {
+  flex: 1;
+  padding: 0.4rem 0.5rem;
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  color: inherit;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.disconnectForm {
+  margin-top: 0.5rem;
+  text-align: right;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.amountPos {
+  color: var(--db-accent, #3fff00);
+}
+
+.amountNeg {
+  color: var(--db-negative, #ff3b30);
+}

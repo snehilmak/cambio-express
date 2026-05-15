@@ -1,0 +1,39 @@
+/* Page-specific styles for BankRules.tsx. */
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.formActions {
+  grid-column: span 2;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.rowDisabled {
+  opacity: 0.5;
+}
+
+.actionsCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionsCell > * + * {
+  margin-left: 0.25rem;
+}

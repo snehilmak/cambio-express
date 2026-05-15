@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import {
   startStripeConnect,
@@ -8,9 +7,10 @@ import {
   type BankAccountRow,
 } from "../api/bankSync";
 import {
-  Card, EmptyState, ErrorState, Loading, PageHeader, PageShell,
-  TableSkeleton, tokens,
+  Button, ButtonLink, Card, EmptyState, ErrorState, Loading, PageHeader,
+  PageShell, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./Bank.module.css";
 
 declare global {
   interface Window {
@@ -70,27 +70,27 @@ export default function Bank() {
       {connectError && <ErrorState message={connectError} />}
 
       <Card>
-        <header style={sectionHeader}>
-          <span style={cardTitle}>
+        <header className={styles.sectionHeader}>
+          <span className={styles.cardTitle}>
             Connected Bank Accounts
             {accountList.length > 0 && (
-              <span style={mutedInline}> {accountList.length} of 6</span>
+              <span className={styles.mutedInline}> {accountList.length} of 6</span>
             )}
           </span>
           {accountList.length > 0 && (
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div className={styles.headerActions}>
               <form method="POST" action="/bank/stripe/refresh">
-                <button type="submit" style={btnOutline}>Refresh</button>
+                <Button type="submit" tone="secondary" size="sm">Refresh</Button>
               </form>
               {!atCap && (
-                <button
-                  type="button"
-                  style={btnPrimary}
+                <Button
+                  size="sm"
+                  busy={busy}
                   disabled={busy}
                   onClick={handleConnect}
                 >
                   {busy ? "Opening Stripe…" : "＋ Connect another"}
-                </button>
+                </Button>
               )}
             </div>
           )}
@@ -105,27 +105,25 @@ export default function Bank() {
         )}
 
         {!accounts.isLoading && !accounts.isError && accountList.length === 0 && (
-          <div style={emptyState}>
-            <h3 style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
-              Connect your bank
-            </h3>
-            <p style={muted}>
+          <div className={styles.emptyConnect}>
+            <h3>Connect your bank</h3>
+            <p className={styles.muted}>
               Link your accounts securely through Stripe Financial Connections.
               We only see balances — never your bank login.
             </p>
-            <button
-              type="button"
-              style={{ ...btnPrimary, marginTop: "1rem" }}
+            <Button
+              busy={busy}
               disabled={busy}
               onClick={handleConnect}
+              style={{ marginTop: "1rem" }}
             >
               {busy ? "Opening Stripe…" : "Connect Bank via Stripe →"}
-            </button>
+            </Button>
           </div>
         )}
 
         {accountList.length > 0 && (
-          <div style={accountGrid}>
+          <div className={styles.accountGrid}>
             {accountList.map((a) => (
               <AccountCard key={a.id} acct={a} />
             ))}
@@ -135,17 +133,15 @@ export default function Bank() {
 
       {accountList.length > 0 && (
         <Card>
-          <header style={sectionHeader}>
-            <span style={cardTitle}>Recent Transactions</span>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+          <header className={styles.sectionHeader}>
+            <span className={styles.cardTitle}>Recent Transactions</span>
+            <div className={styles.headerActions}>
               <form method="POST" action="/bank/stripe/sync-transactions">
-                <button type="submit" style={btnPrimary}>
-                  Sync transactions
-                </button>
+                <Button type="submit" size="sm">Sync transactions</Button>
               </form>
-              <Link to="/bank-transactions" style={btnOutlineLink}>
+              <ButtonLink href="/bank-transactions" tone="secondary" size="sm">
                 View all →
-              </Link>
+              </ButtonLink>
             </div>
           </header>
 
@@ -157,7 +153,7 @@ export default function Bank() {
             />
           )}
           {txnList.length > 0 && (
-            <table style={tableStyle}>
+            <Table>
               <thead>
                 <tr>
                   <th style={thStyle}>Posted</th>
@@ -180,18 +176,15 @@ export default function Bank() {
                     <td style={tdStyle}>{t.description || "—"}</td>
                     <td style={tdStyle}>{t.status}</td>
                     <td
-                      style={{
-                        ...tdStyle,
-                        textAlign: "right",
-                        color: t.amount >= 0 ? tokens.accent : tokens.negative,
-                      }}
+                      style={{ ...tdStyle, textAlign: "right" }}
+                      className={t.amount >= 0 ? styles.amountPos : styles.amountNeg}
                     >
                       {t.amount >= 0 ? "+" : ""}${Math.abs(t.amount).toFixed(2)}
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           )}
         </Card>
       )}
@@ -202,18 +195,18 @@ export default function Bank() {
 function AccountCard({ acct }: { acct: BankAccountRow }) {
   const [nickname, setNickname] = useState(acct.nickname || "");
   return (
-    <div style={accountCard}>
-      <div style={mutedSmall}>
+    <div className={styles.accountCard}>
+      <div className={styles.mutedSmall}>
         {acct.institution_name || "Bank"}
         {acct.category && ` · ${acct.category}`}
       </div>
-      <div style={{ fontWeight: 600, marginTop: "0.25rem" }}>
+      <div className={styles.accountLabel}>
         {acct.label}
       </div>
-      <div style={balance}>
+      <div className={styles.balance}>
         ${acct.last_balance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
-      <div style={mutedSmall}>
+      <div className={styles.mutedSmall}>
         {acct.last_balance_as_of
           ? `As of ${new Date(acct.last_balance_as_of).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
           : "Balance not yet refreshed."}
@@ -221,7 +214,7 @@ function AccountCard({ acct }: { acct: BankAccountRow }) {
       <form
         method="POST"
         action={`/bank/stripe/nickname/${acct.id}`}
-        style={{ marginTop: "0.5rem", display: "flex", gap: "0.4rem" }}
+        className={styles.nicknameForm}
       >
         <input
           type="text"
@@ -230,19 +223,9 @@ function AccountCard({ acct }: { acct: BankAccountRow }) {
           onChange={(e) => setNickname(e.target.value)}
           placeholder="Set nickname (e.g. MSB Checking)"
           maxLength={60}
-          style={{
-            flex: 1,
-            padding: "0.4rem 0.5rem",
-            background: tokens.surface,
-            border: `1px solid ${tokens.border}`,
-            color: "inherit",
-            borderRadius: "0.4rem",
-            fontSize: "0.85rem",
-          }}
+          className={styles.nicknameInput}
         />
-        <button type="submit" style={btnOutlineSm}>
-          Save
-        </button>
+        <Button type="submit" tone="secondary" size="sm">Save</Button>
       </form>
       <form
         method="POST"
@@ -250,9 +233,9 @@ function AccountCard({ acct }: { acct: BankAccountRow }) {
         onSubmit={(e) => {
           if (!confirm(`Disconnect ${acct.label}?`)) e.preventDefault();
         }}
-        style={{ marginTop: "0.5rem", textAlign: "right" }}
+        className={styles.disconnectForm}
       >
-        <button type="submit" style={btnDangerSm}>Disconnect</button>
+        <Button type="submit" tone="danger" size="sm">Disconnect</Button>
       </form>
     </div>
   );
@@ -272,103 +255,3 @@ function ensureStripeJs(): Promise<void> {
   });
   return _stripeLoadPromise;
 }
-
-const sectionHeader: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: "1rem",
-  marginBottom: "1rem",
-};
-const cardTitle: React.CSSProperties = {
-  fontWeight: 600,
-};
-const mutedInline: React.CSSProperties = {
-  fontWeight: 400,
-  marginLeft: "0.5rem",
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-};
-const muted: React.CSSProperties = {
-  color: tokens.textMuted,
-  margin: 0,
-};
-const mutedSmall: React.CSSProperties = {
-  ...muted,
-  fontSize: "0.75rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-};
-const emptyState: React.CSSProperties = {
-  textAlign: "center",
-  padding: "1.5rem 1rem",
-};
-const accountGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-  gap: "1rem",
-};
-const accountCard: React.CSSProperties = {
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "1rem",
-};
-const balance: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "1.5rem",
-  fontWeight: 700,
-  margin: "0.5rem 0 0.25rem",
-};
-const btnPrimary: React.CSSProperties = {
-  background: tokens.accent,
-  color: "#000",
-  border: "none",
-  padding: "0.4rem 0.85rem",
-  borderRadius: "0.5rem",
-  fontWeight: 600,
-  fontSize: "0.85rem",
-  cursor: "pointer",
-};
-const btnOutline: React.CSSProperties = {
-  background: "transparent",
-  color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  padding: "0.4rem 0.85rem",
-  borderRadius: "0.5rem",
-  fontSize: "0.85rem",
-  cursor: "pointer",
-};
-const btnOutlineLink: React.CSSProperties = {
-  ...btnOutline,
-  textDecoration: "none",
-  display: "inline-block",
-};
-const btnOutlineSm: React.CSSProperties = {
-  ...btnOutline,
-  padding: "0.25rem 0.6rem",
-  fontSize: "0.75rem",
-};
-const btnDangerSm: React.CSSProperties = {
-  ...btnOutlineSm,
-  color: tokens.negative,
-  borderColor: tokens.negative,
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  fontSize: "0.9rem",
-};
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.5rem 0.75rem",
-  borderBottom: `1px solid ${tokens.border}`,
-  fontWeight: 500,
-  fontSize: "0.75rem",
-  textTransform: "uppercase",
-  color: tokens.textMuted,
-};
-const tdStyle: React.CSSProperties = {
-  padding: "0.5rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
