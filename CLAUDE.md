@@ -544,10 +544,11 @@ cd frontend && npm run generate-types
 That chains `python -m scripts.dump_openapi` (dumps
 `api_app.openapi()` to `openapi.json`) with `openapi-typescript`
 (turns the JSON into the `.d.ts`). Both files are checked in
-so the SPA build doesn't need a live backend, and CI verifies
-the committed copy matches what the script regenerates from the
-current Pydantic models — a forgotten regenerate fails the
-"Verify OpenAPI types are in sync" step.
+so the SPA build doesn't need a live backend. There's no CI
+gate enforcing sync — regenerate after Pydantic-schema edits as
+part of your normal commit. If the committed `.d.ts` is stale,
+TypeScript will catch the drift at the call site when you
+import a renamed/removed field.
 
 Consume the types via `import type { components } from "./openapi"`:
 
