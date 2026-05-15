@@ -1,0 +1,54 @@
+/* Page-specific styles for SuperadminControls.tsx. */
+
+.quickLinkGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.quickLink {
+  display: block;
+  padding: 1rem;
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.quickLinkDisabled {
+  display: block;
+  padding: 1rem;
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+  opacity: 0.6;
+  cursor: default;
+}
+
+.quickLinkTitle {
+  font-weight: 600;
+}
+
+.quickLinkTitleRow {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.comingPill {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 204, 0, 0.15);
+  color: var(--db-warning, #ffcc00);
+}
