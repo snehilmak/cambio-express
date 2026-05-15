@@ -1,0 +1,44 @@
+/* Page-specific styles for Batches.tsx. */
+
+.sortableTh {
+  cursor: pointer;
+  user-select: none;
+}
+
+.row {
+  transition: background 120ms ease;
+}
+
+.row:hover {
+  background: var(--db-surface, #0a0a0a);
+}
+
+.cellLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.transferCount {
+  color: var(--db-text-muted, #a3a3a3);
+  margin-left: 0.5rem;
+}
+
+.variancePos {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  color: var(--db-accent, #3fff00);
+}
+
+.varianceNeg {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  color: var(--db-negative, #ff3b30);
+}
