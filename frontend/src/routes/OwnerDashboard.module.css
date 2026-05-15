@@ -1,0 +1,76 @@
+/* Page-specific styles for OwnerDashboard.tsx. */
+
+.tabBar {
+  display: flex;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.tab {
+  padding: 0.4rem 0.85rem;
+  background: transparent;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tabActive {
+  padding: 0.4rem 0.85rem;
+  background: var(--db-accent, #3fff00);
+  color: #000;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.chartHost {
+  height: 280px;
+}
+
+.storeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.storeCard {
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  text-decoration: none;
+  color: inherit;
+}
+
+.storeName {
+  font-weight: 600;
+}
+
+.storeMeta {
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-top: 0.25rem;
+}
+
+.storeOver {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  margin-top: 0.4rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0;
+}
+
+.deltaPos {
+  color: var(--db-accent, #3fff00);
+}
+
+.deltaNeg {
+  color: var(--db-negative, #ff3b30);
+}

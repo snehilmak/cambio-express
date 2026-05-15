@@ -1,0 +1,46 @@
+/* Page-specific styles for Subscribe.tsx. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tileTitle {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.tilePrice {
+  font-size: 1.6rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.tileBlurb {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.cadence {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.inlineLink {
+  color: var(--db-accent, #3fff00);
+  text-decoration: none;
+}

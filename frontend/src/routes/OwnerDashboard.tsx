@@ -8,10 +8,11 @@ import { Line } from "react-chartjs-2";
 
 import { useOwnerDashboard } from "../api/owner";
 import {
-  ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, tdStyle, thStyle, tokens,
+  Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
+  Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { moneyChartOptions } from "../lib/chartOptions";
+import styles from "./OwnerDashboard.module.css";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
@@ -25,6 +26,9 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
+const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
+const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
+
 export default function OwnerDashboard() {
   const [period, setPeriod] = useState<Period>("month");
   const { data, isLoading, isError, error, refetch } = useOwnerDashboard(period);
@@ -34,13 +38,13 @@ export default function OwnerDashboard() {
       <PageHeader
         title="Owner Dashboard"
         actions={(
-          <div style={tabBar}>
+          <div className={styles.tabBar}>
             {PERIODS.map((p) => (
               <button
                 key={p.value}
                 type="button"
                 onClick={() => setPeriod(p.value)}
-                style={p.value === period ? tabActive : tab}
+                className={p.value === period ? styles.tabActive : styles.tab}
               >
                 {p.label}
               </button>
@@ -84,8 +88,8 @@ export default function OwnerDashboard() {
 
           {data.series_labels.length > 0 && (
             <Section title="Volume trend">
-              <div style={chartCard}>
-                <div style={{ height: 280 }}>
+              <Card>
+                <div className={styles.chartHost}>
                   <Line
                     data={{
                       labels: data.series_labels,
@@ -102,33 +106,33 @@ export default function OwnerDashboard() {
                     options={moneyChartOptions("Volume")}
                   />
                 </div>
-              </div>
+              </Card>
             </Section>
           )}
 
           <Section title="Stores">
-            <div style={storeGrid}>
+            <div className={styles.storeGrid}>
               {data.stores.map((s) => (
-                <Link key={s.id} to={`/owner/store/${s.id}`} style={storeCard}>
-                  <div style={storeName}>{s.name}</div>
-                  <div style={storeMeta}>
+                <Link key={s.id} to={`/owner/store/${s.id}`} className={styles.storeCard}>
+                  <div className={styles.storeName}>{s.name}</div>
+                  <div className={styles.storeMeta}>
                     {s.count.toLocaleString()} transfers ·{" "}
                     ${Math.round(s.volume).toLocaleString()}
                   </div>
-                  <div style={storeOver}>
+                  <div className={styles.storeOver}>
                     {s.over_short >= 0 ? "+" : "-"}${Math.abs(s.over_short).toFixed(2)} over/short
                   </div>
                 </Link>
               ))}
               {data.stores.length === 0 && (
-                <p style={muted}>No stores linked yet.</p>
+                <p className={styles.muted}>No stores linked yet.</p>
               )}
             </div>
           </Section>
 
           {data.company_breakdown.length > 0 && (
             <Section title={`Company breakdown (${data.prev_label})`}>
-              <table style={tableStyle}>
+              <Table>
                 <thead>
                   <tr>
                     <th style={thStyle}>Company</th>
@@ -145,7 +149,7 @@ export default function OwnerDashboard() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </Table>
             </Section>
           )}
         </>
@@ -162,54 +166,8 @@ function fmtDelta(
   if (typeof delta !== "number") return undefined;
   const sign = delta >= 0 ? "▲" : "▼";
   return (
-    <span style={{ color: delta >= 0 ? tokens.accent : tokens.negative }}>
+    <span className={delta >= 0 ? styles.deltaPos : styles.deltaNeg}>
       {sign} {prefix}{Math.abs(Math.round(delta)).toLocaleString()}{suffix}
     </span>
   );
 }
-
-const tabBar: React.CSSProperties = {
-  display: "flex", border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", overflow: "hidden",
-};
-const tab: React.CSSProperties = {
-  padding: "0.4rem 0.85rem", background: "transparent",
-  color: "inherit", border: "none", cursor: "pointer", fontSize: "0.85rem",
-};
-const tabActive: React.CSSProperties = {
-  ...tab, background: tokens.accent, color: "#000", fontWeight: 600,
-};
-const chartCard: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.75rem", padding: "1.25rem",
-};
-const storeGrid: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "0.75rem",
-};
-const storeCard: React.CSSProperties = {
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", padding: "0.85rem 1rem",
-  textDecoration: "none", color: "inherit",
-};
-const storeName: React.CSSProperties = { fontWeight: 600 };
-const storeMeta: React.CSSProperties = {
-  fontSize: "0.85rem", color: tokens.textMuted,
-  marginTop: "0.25rem",
-};
-const storeOver: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem", marginTop: "0.4rem",
-  color: tokens.textMuted,
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
-};
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
-const muted: React.CSSProperties = {
-  color: tokens.textMuted, margin: 0,
-};

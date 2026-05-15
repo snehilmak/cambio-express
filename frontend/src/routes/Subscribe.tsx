@@ -5,8 +5,9 @@ import { startCheckout } from "../api/billing";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Card, Empty, PageHeader, PageShell, tokens,
+  Alert, Button, Card, Empty, PageHeader, PageShell,
 } from "../components/ui";
+import styles from "./Subscribe.module.css";
 
 // Plan picker at /app/subscribe. Mirrors the legacy /subscribe
 // Jinja form. Each plan tile POSTs /api/v2/billing/checkout, gets
@@ -89,99 +90,34 @@ export default function Subscribe() {
         title="Choose a plan"
         subtitle={(
           <>
-            Cancel any time from <Link to="/settings" style={linkStyle}>Settings</Link>.
+            Cancel any time from{" "}
+            <Link to="/settings" className={styles.inlineLink}>Settings</Link>.
             Yearly billing saves two months.
           </>
         )}
       />
 
-      {error && (
-        <p
-          role="alert"
-          style={{
-            margin: 0,
-            padding: "1rem 0",
-            textAlign: "center",
-            color: tokens.negative,
-            marginBottom: "1rem",
-          }}
-        >
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="error">{error}</Alert>}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
-          gap: "1rem",
-        }}
-      >
+      <div className={styles.grid}>
         {PLANS.map((p) => (
-          <Card key={p.slug} padding="1.5rem" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            <h2 style={tileTitle}>{p.label}</h2>
-            <p style={tilePrice}>
-              <span style={mono}>{p.price}</span>{" "}
-              <span style={{ color: tokens.textMuted }}>
-                {p.cadence}
-              </span>
+          <Card key={p.slug} padding="1.5rem" className={styles.tile}>
+            <h2 className={styles.tileTitle}>{p.label}</h2>
+            <p className={styles.tilePrice}>
+              <span className={styles.mono}>{p.price}</span>{" "}
+              <span className={styles.cadence}>{p.cadence}</span>
             </p>
-            <p style={tileBlurb}>{p.blurb}</p>
-            <button
-              type="button"
+            <p className={styles.tileBlurb}>{p.blurb}</p>
+            <Button
               onClick={() => pickPlan(p.slug)}
+              busy={busy === p.slug}
               disabled={busy !== null}
-              style={{
-                ...primaryBtn,
-                opacity: busy !== null ? 0.6 : 1,
-                cursor: busy !== null ? "wait" : "pointer",
-              }}
             >
               {busy === p.slug ? "Redirecting…" : "Subscribe"}
-            </button>
+            </Button>
           </Card>
         ))}
       </div>
     </PageShell>
   );
 }
-
-const tileTitle: React.CSSProperties = {
-  fontFamily: tokens.fontDisplay,
-  fontSize: "1.2rem",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const tilePrice: React.CSSProperties = {
-  fontSize: "1.6rem",
-  margin: 0,
-  fontWeight: 600,
-};
-
-const tileBlurb: React.CSSProperties = {
-  margin: 0,
-  color: tokens.textMuted,
-  fontSize: "0.9rem",
-  flex: 1,
-};
-
-const primaryBtn: React.CSSProperties = {
-  background: tokens.accent,
-  color: tokens.onAccent,
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1rem",
-  fontFamily: tokens.fontDisplay,
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const linkStyle: React.CSSProperties = {
-  color: tokens.accent,
-  textDecoration: "none",
-};
