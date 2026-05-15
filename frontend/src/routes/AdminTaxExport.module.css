@@ -1,0 +1,51 @@
+/* Page-specific styles for AdminTaxExport.tsx. */
+
+.lead {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.controls {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.yearLabel {
+  min-width: 10rem;
+}
+
+.infoBox {
+  margin-top: 1.5rem;
+  padding: 1rem 1.1rem;
+  background: rgba(94, 169, 255, 0.08);
+  border: 1px solid rgba(94, 169, 255, 0.3);
+  border-radius: 0.6rem;
+  color: var(--db-info, #5ea9ff);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.infoHeading {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.list {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.fine {
+  margin-top: 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}

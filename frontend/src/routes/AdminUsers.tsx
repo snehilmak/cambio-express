@@ -6,9 +6,10 @@ import {
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
-  TableSkeleton, tokens,
+  Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
+  PageShell, Pill, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./AdminUsers.module.css";
 
 // /app/admin/users — per-store user roster + entry point to the
 // Add / Edit forms. Mirrors the legacy admin_users.html surface:
@@ -56,20 +57,20 @@ export default function AdminUsers() {
           <EmptyState title="No users yet" body="Add one to get started." />
         )}
         {data && data.rows.length > 0 && (
-          <Table rows={data.rows} selfId={identity.user_id} />
+          <UserTable rows={data.rows} selfId={identity.user_id} />
         )}
       </Card>
 
-      <section style={infoCalloutStyle}>
-        <h2 style={cardTitleStyle}>Access Levels</h2>
-        <div style={accessLevelsStyle}>
-          <p style={{ margin: 0 }}>
-            <strong style={strongStyle}>Super Admin</strong> — Full
+      <section className={styles.infoCallout}>
+        <h2 className={styles.calloutTitle}>Access Levels</h2>
+        <div className={styles.accessLevels}>
+          <p>
+            <strong>Super Admin</strong> — Full
             access: all transfers from all employees, ACH batch log,
             bank data, reconciliation, user management.
           </p>
-          <p style={{ margin: "0.5rem 0 0" }}>
-            <strong style={strongStyle}>Employee</strong> — Can only
+          <p>
+            <strong>Employee</strong> — Can only
             log new transfers and view their own entries. No bank
             data, no ACH batches, no other employees' data.
           </p>
@@ -80,95 +81,56 @@ export default function AdminUsers() {
 }
 
 
-function Table({
+function UserTable({
   rows, selfId,
 }: { rows: AdminUserRow[]; selfId: number }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}>
-        <thead>
-          <tr>
-            {["Username", "Full Name", "Role", "Status", "Created", ""].map((h) => (
-              <th key={h} style={thStyle}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((u) => (
-            <tr key={u.id}>
-              <td style={cellStyle}>
-                <strong>{u.username}</strong>
-              </td>
-              <td style={cellStyle}>{u.full_name || "—"}</td>
-              <td style={cellStyle}>
-                <RoleBadge role={u.role} />
-              </td>
-              <td style={cellStyle}>
-                <StatusBadge active={u.is_active} />
-              </td>
-              <td style={{ ...cellStyle, ...monoCell }}>
-                {formatCreated(u.created_at)}
-              </td>
-              <td style={cellStyle}>
-                {u.id !== selfId ? (
-                  <Link
-                    to={`/admin/users/${u.id}/edit`}
-                    style={btnOutlineSmStyle}
-                  >
-                    Edit
-                  </Link>
-                ) : (
-                  <span style={mutedSmallStyle}>(you)</span>
-                )}
-              </td>
-            </tr>
+    <Table>
+      <thead>
+        <tr>
+          {["Username", "Full Name", "Role", "Status", "Created", ""].map((h) => (
+            <th key={h} style={thStyle}>{h}</th>
           ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-
-function RoleBadge({ role }: { role: string }) {
-  const isAdmin = role === "admin";
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "0.15rem 0.5rem",
-      borderRadius: "999px",
-      background: isAdmin
-        ? "rgba(63,255,0,0.10)"
-        : "rgba(94,169,255,0.10)",
-      color: isAdmin ? "#3fff00" : "#5ea9ff",
-      border: `1px solid ${isAdmin ? "rgba(63,255,0,0.35)" : "rgba(94,169,255,0.35)"}`,
-      fontSize: "0.78rem",
-      fontWeight: 500,
-      letterSpacing: "0.02em",
-    }}>
-      {isAdmin ? "Super Admin" : "Employee"}
-    </span>
-  );
-}
-
-
-function StatusBadge({ active }: { active: boolean }) {
-  return (
-    <span style={{
-      display: "inline-block",
-      padding: "0.15rem 0.5rem",
-      borderRadius: "999px",
-      background: active
-        ? "rgba(63,255,0,0.10)"
-        : "rgba(255,77,109,0.10)",
-      color: active ? "#3fff00" : "#ff4d6d",
-      border: `1px solid ${active ? "rgba(63,255,0,0.35)" : "rgba(255,77,109,0.35)"}`,
-      fontSize: "0.78rem",
-      fontWeight: 500,
-      letterSpacing: "0.02em",
-    }}>
-      {active ? "Active" : "Inactive"}
-    </span>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((u) => (
+          <tr key={u.id}>
+            <td style={tdStyle}>
+              <strong>{u.username}</strong>
+            </td>
+            <td style={tdStyle}>{u.full_name || "—"}</td>
+            <td style={tdStyle}>
+              <Pill tone={u.role === "admin" ? "accent" : "info"}>
+                {u.role === "admin" ? "Super Admin" : "Employee"}
+              </Pill>
+            </td>
+            <td style={tdStyle}>
+              <Pill tone={u.is_active ? "accent" : "negative"}>
+                {u.is_active ? "Active" : "Inactive"}
+              </Pill>
+            </td>
+            <td style={tdStyle}>
+              <span className={styles.monoCell}>
+                {formatCreated(u.created_at)}
+              </span>
+            </td>
+            <td style={tdStyle}>
+              {u.id !== selfId ? (
+                <Link
+                  to={`/admin/users/${u.id}/edit`}
+                  style={{ textDecoration: "none" }}
+                >
+                  <Button tone="secondary" size="sm">Edit</Button>
+                </Link>
+              ) : (
+                <span className={styles.mutedSmall}>(you)</span>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
@@ -184,67 +146,3 @@ function formatCreated(iso: string): string {
   const yy = d.getUTCFullYear();
   return `${mm}/${dd}/${yy}`;
 }
-
-
-const infoCalloutStyle: React.CSSProperties = {
-  marginTop: "1.25rem",
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderLeft: `3px solid ${tokens.accent}`,
-  borderRadius: "0.75rem",
-  padding: "1.25rem",
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  margin: "0 0 0.6rem", fontSize: "0.95rem", fontWeight: 600,
-  fontFamily: tokens.fontDisplay,
-};
-
-const accessLevelsStyle: React.CSSProperties = {
-  color: tokens.textMuted,
-  fontSize: "0.88rem", lineHeight: 1.6,
-};
-
-const strongStyle: React.CSSProperties = {
-  color: tokens.text, fontWeight: 600,
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.6rem 0.75rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.78rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: `1px solid ${tokens.border}`,
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  verticalAlign: "middle",
-};
-
-const monoCell: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-  whiteSpace: "nowrap",
-};
-
-const btnOutlineSmStyle: React.CSSProperties = {
-  padding: "0.35rem 0.75rem",
-  fontWeight: 500, fontSize: "0.82rem",
-  background: "transparent",
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.4rem",
-  textDecoration: "none",
-  display: "inline-block",
-};
-
-const mutedSmallStyle: React.CSSProperties = {
-  color: tokens.textMuted,
-  fontSize: "0.85rem",
-};

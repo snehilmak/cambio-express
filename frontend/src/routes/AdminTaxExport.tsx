@@ -3,8 +3,10 @@ import { useState } from "react";
 import { useTaxExportYears } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  ButtonLink, Card, Empty, ErrorState, PageHeader, PageShell, Section, tokens,
+  ButtonLink, Card, Empty, ErrorState, Field, PageHeader, PageShell,
+  Section, Select,
 } from "../components/ui";
+import styles from "./AdminTaxExport.module.css";
 
 // /app/admin/tax-export — year-end packet picker + download link.
 //
@@ -36,7 +38,7 @@ export default function AdminTaxExport() {
 
       <Section title="Year-end packet">
         <Card padding="1.5rem">
-          <p style={leadStyle}>
+          <p className={styles.lead}>
             Download every transfer, every monthly P&amp;L, and every
             closed daily book for a calendar year as a single ZIP. Hand
             the ZIP to your accountant — the README inside explains
@@ -50,20 +52,18 @@ export default function AdminTaxExport() {
             />
           )}
 
-          <div style={controlsStyle}>
-            <label style={labelStyle}>
-              <span style={labelTextStyle}>Year</span>
-              <select
+          <div className={styles.controls}>
+            <Field label="Year" style={{ minWidth: "10rem" }}>
+              <Select
                 value={year}
                 onChange={(e) => setSelectedYear(Number(e.target.value))}
                 disabled={isLoading || !data}
-                style={selectStyle}
               >
                 {(data?.years ?? [year]).map((y) => (
                   <option key={y} value={y}>{y}</option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Field>
 
             <ButtonLink
               href={`/admin/tax-export.zip?year=${year}`}
@@ -73,11 +73,9 @@ export default function AdminTaxExport() {
             </ButtonLink>
           </div>
 
-          <div style={infoBoxStyle}>
-            <div style={{ fontWeight: 600, marginBottom: "0.4rem" }}>
-              What's inside
-            </div>
-            <ul style={listStyle}>
+          <div className={styles.infoBox}>
+            <div className={styles.infoHeading}>What's inside</div>
+            <ul className={styles.list}>
               <li>
                 <strong>transfers_{year}.csv</strong> — full transfer
                 ledger including Canceled / Rejected rows. Use the
@@ -105,7 +103,7 @@ export default function AdminTaxExport() {
             </ul>
           </div>
 
-          <p style={fineStyle}>
+          <p className={styles.fine}>
             All money values are USD. Send amounts are what the customer
             handed over; fees are what the store retained; federal tax
             is the portion that left with the ACH withdrawal (not store
@@ -116,52 +114,3 @@ export default function AdminTaxExport() {
     </PageShell>
   );
 }
-
-
-const leadStyle: React.CSSProperties = {
-  margin: 0, color: tokens.textMuted,
-  fontSize: "0.95rem", lineHeight: 1.55,
-};
-
-const controlsStyle: React.CSSProperties = {
-  marginTop: "1.25rem", display: "flex", flexWrap: "wrap",
-  gap: "0.75rem", alignItems: "flex-end",
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "flex", flexDirection: "column", gap: "0.35rem",
-  minWidth: "10rem",
-};
-
-const labelTextStyle: React.CSSProperties = {
-  fontSize: "0.7rem", letterSpacing: "0.06em",
-  textTransform: "uppercase", fontWeight: 600,
-  color: tokens.textMuted,
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "0.6rem 0.75rem",
-  background: "var(--db-bg-input, #0d0d0d)",
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", fontSize: "0.95rem",
-};
-
-const infoBoxStyle: React.CSSProperties = {
-  marginTop: "1.5rem", padding: "1rem 1.1rem",
-  background: "rgba(94,169,255,0.08)",
-  border: "1px solid rgba(94,169,255,0.3)",
-  borderRadius: "0.6rem", color: "var(--db-info, #5ea9ff)",
-  fontSize: "0.9rem", lineHeight: 1.55,
-};
-
-const listStyle: React.CSSProperties = {
-  margin: 0, paddingLeft: "1.25rem",
-  color: tokens.textMuted,
-  fontSize: "0.88rem", lineHeight: 1.7,
-};
-
-const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: tokens.textMuted,
-  fontSize: "0.85rem", lineHeight: 1.55,
-};
