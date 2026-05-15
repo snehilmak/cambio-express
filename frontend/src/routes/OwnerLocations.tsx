@@ -9,8 +9,9 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell,
-  TableSkeleton, tokens,
+  Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./OwnerLocations.module.css";
 
 // Owner umbrella: per-store stats grid at /app/owner/locations.
 // Period selector (today/month/year) drives the date window for
@@ -62,34 +63,18 @@ export default function OwnerLocations() {
           : "—"}
       />
 
-      <div
-        style={{
-          display: "flex",
-          gap: "1rem",
-          marginBottom: "1rem",
-          flexWrap: "wrap",
-          alignItems: "flex-end",
-        }}
-      >
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          {PERIODS.map((p) => {
-            const active = period === p.slug;
-            return (
-              <button
-                key={p.slug}
-                type="button"
-                onClick={() => setParam("period", p.slug)}
-                style={{
-                  ...filterBtn,
-                  background: active ? tokens.accent : "transparent",
-                  color: active ? tokens.onAccent : tokens.text,
-                  borderColor: active ? tokens.accent : tokens.border,
-                }}
-              >
-                {p.label}
-              </button>
-            );
-          })}
+      <div className={styles.toolbar}>
+        <div className={styles.periodGroup}>
+          {PERIODS.map((p) => (
+            <button
+              key={p.slug}
+              type="button"
+              onClick={() => setParam("period", p.slug)}
+              className={period === p.slug ? styles.periodBtnActive : styles.periodBtn}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
         <Input
           type="search"
@@ -124,137 +109,75 @@ export default function OwnerLocations() {
         {data && data.matched === 0 && !isLoading && data.total > 0 && (
           <EmptyState title={`No stores match "${q}".`} />
         )}
-        {data && data.matched > 0 && <Table rows={data.rows} />}
+        {data && data.matched > 0 && <StoreTable rows={data.rows} />}
       </Card>
     </PageShell>
   );
 }
 
-function Table({ rows }: { rows: OwnerStoreRow[] }) {
+function StoreTable({ rows }: { rows: OwnerStoreRow[] }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.92rem",
-        }}
-      >
-        <thead>
-          <tr>
-            {[
-              ["Store",      "left"],
-              ["Transfers",  "right"],
-              ["Volume",     "right"],
-              ["Over/Short", "right"],
-              ["Companies",  "left"],
-            ].map(([label, align], i) => (
-              <th
-                key={i}
-                style={{
-                  textAlign: align as "left" | "right",
-                  padding: "0.6rem 0.75rem",
-                  color: tokens.textMuted,
-                  fontWeight: 500,
-                  fontSize: "0.78rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: `1px solid ${tokens.border}`,
-                }}
-              >
-                {label}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.store_id}>
-              <td style={cellStyle}>
-                <div style={{ fontWeight: 500 }}>{r.store_name}</div>
-                <div
-                  style={{
-                    color: tokens.textMuted,
-                    fontFamily: tokens.fontMono,
-                    fontSize: "0.78rem",
-                  }}
-                >
-                  {r.store_slug}
-                </div>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>{r.transfer_count.toLocaleString()}</span>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>${r.volume.toFixed(2)}</span>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span
-                  style={{
-                    ...mono,
-                    color:
-                      r.over_short < 0
-                        ? tokens.negative
-                        : r.over_short > 0
-                          ? tokens.accent
-                          : tokens.textMuted,
-                  }}
-                >
-                  {r.over_short >= 0 ? "+" : ""}${r.over_short.toFixed(2)}
-                </span>
-              </td>
-              <td style={cellStyle}>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.35rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {r.companies.length === 0 ? (
-                    <span style={{ color: tokens.textMuted }}>—</span>
-                  ) : (
-                    r.companies.slice(0, 5).map((c) => (
-                      <span key={c.company} style={chipStyle}>
-                        {c.company} · {c.count}
-                      </span>
-                    ))
-                  )}
-                </div>
-              </td>
-            </tr>
+    <Table>
+      <thead>
+        <tr>
+          {[
+            ["Store",      "left"],
+            ["Transfers",  "right"],
+            ["Volume",     "right"],
+            ["Over/Short", "right"],
+            ["Companies",  "left"],
+          ].map(([label, align], i) => (
+            <th
+              key={i}
+              style={{ ...thStyle, textAlign: align as "left" | "right" }}
+            >
+              {label}
+            </th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.store_id}>
+            <td style={tdStyle}>
+              <div className={styles.storeName}>{r.store_name}</div>
+              <div className={styles.storeSlug}>{r.store_slug}</div>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={styles.mono}>{r.transfer_count.toLocaleString()}</span>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={styles.mono}>${r.volume.toFixed(2)}</span>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span
+                className={
+                  r.over_short < 0
+                    ? styles.overShortNeg
+                    : r.over_short > 0
+                      ? styles.overShortPos
+                      : styles.overShortZero
+                }
+              >
+                {r.over_short >= 0 ? "+" : ""}${r.over_short.toFixed(2)}
+              </span>
+            </td>
+            <td style={tdStyle}>
+              <div className={styles.companyChips}>
+                {r.companies.length === 0 ? (
+                  <span className={styles.dash}>—</span>
+                ) : (
+                  r.companies.slice(0, 5).map((c) => (
+                    <span key={c.company} className={styles.chip}>
+                      {c.company} · {c.count}
+                    </span>
+                  ))
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
-
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const filterBtn: React.CSSProperties = {
-  border: "1px solid",
-  borderRadius: "999px",
-  padding: "0.4rem 0.9rem",
-  fontSize: "0.85rem",
-  fontFamily: tokens.fontBody,
-  cursor: "pointer",
-};
-
-const chipStyle: React.CSSProperties = {
-  display: "inline-block",
-  background: "rgba(255,255,255,0.06)",
-  color: tokens.text,
-  borderRadius: "999px",
-  padding: "0.15rem 0.55rem",
-  fontSize: "0.78rem",
-  fontFamily: tokens.fontMono,
-};

@@ -1,0 +1,57 @@
+/* Page-specific styles for OwnerStoreDetail.tsx. */
+
+.backLink {
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: none;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.tabBar {
+  display: flex;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.tab {
+  padding: 0.4rem 0.85rem;
+  background: transparent;
+  color: inherit;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.tabActive {
+  padding: 0.4rem 0.85rem;
+  background: var(--db-accent, #3fff00);
+  color: #000;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.chartHost {
+  height: 280px;
+}
+
+.chartHostShort {
+  height: 220px;
+  margin-bottom: 1rem;
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0;
+}
+
+.deltaPos {
+  color: var(--db-accent, #3fff00);
+}
+
+.deltaNeg {
+  color: var(--db-negative, #ff3b30);
+}
