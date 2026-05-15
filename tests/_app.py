@@ -13,14 +13,75 @@ context manager that does the same thing the stub's
 ``app_context()`` did (yield, then drop the scoped session on
 exit).
 
-Nothing here belongs in production. Future work: rewrite the test
-suite to call ``SessionLocal()`` directly and delete this module.
+PR #554 consolidated the previously-separate ``tests/_db_shim.py``
+and ``tests/_models.py`` here so the test-only compatibility shim
+is one self-contained file. Nothing here belongs in production.
+Future work: rewrite the test suite to call ``SessionLocal()``
+directly and delete this module.
 """
 from __future__ import annotations
 
 import contextlib
 
-from tests._db_shim import db
+import sqlalchemy as _sa
+from sqlalchemy.orm import (
+    relationship as _sa_relationship,
+    scoped_session as _scoped_session_cls,
+    sessionmaker as _sessionmaker,
+)
+
+from api.Core.Database import Base
+from api.Core.Database.session import _get_engine
+
+
+# ── ``db`` shim — Flask-SQLAlchemy-shaped facade ────────────────
+#
+# Never required Flask despite its historical name; the original
+# ``api/Flask/Database.py`` was framework-free except for a
+# ``teardown_appcontext`` hook that ``db_session`` below replicates.
+#
+# Public surface (matches what ~130 tests already use):
+#   - ``db.Model`` — SQLAlchemy declarative ``Base``.
+#   - ``db.session`` — thread-local scoped session.
+#   - ``db.engine`` — the same engine FastAPI uses.
+#   - ``db.create_all`` / ``db.drop_all`` — schema reset between tests.
+#   - ``db.relationship`` — re-export for legacy model files.
+#   - ``db.<sqlalchemy-name>`` — transparent ``Column``, ``Integer``,
+#     ``func``, etc.
+
+_engine = _get_engine()
+_Session = _sessionmaker(
+    autocommit=False, autoflush=False, bind=_engine, future=True,
+)
+_scoped_session = _scoped_session_cls(_Session)
+Base.query = _scoped_session.query_property()
+
+
+class _DB:
+    """Drop-in replacement for the Flask-SQLAlchemy ``db`` object."""
+
+    Model = Base
+    metadata = Base.metadata
+    engine = _engine
+    session = _scoped_session
+    relationship = staticmethod(_sa_relationship)
+
+    @staticmethod
+    def create_all():
+        Base.metadata.create_all(bind=_engine)
+
+    @staticmethod
+    def drop_all():
+        Base.metadata.drop_all(bind=_engine)
+
+    def __getattr__(self, name):
+        return getattr(_sa, name)
+
+
+db = _DB()
+
+
+# ── Scope helper ────────────────────────────────────────────────
 
 
 @contextlib.contextmanager
@@ -36,6 +97,9 @@ def db_session():
         yield
     finally:
         db.session.remove()
+
+
+# ── Operator helpers (from the legacy ``app.py``) ───────────────
 
 
 def find_or_upsert_customer(
@@ -59,7 +123,47 @@ def purge_expired_stores():
         return _svc(s)
 
 
-# Re-export the model classes for any test still doing
-# ``from tests._app import Store, User``. New code imports from
-# ``api.Modules.<domain>.Models`` directly.
-from tests._models import *  # noqa: E402, F401, F403
+# ── Aggregate model re-exports ──────────────────────────────────
+#
+# Legacy callers ``from tests._app import Store, User, …`` keep
+# working. New code imports from ``api.Modules.<domain>.Models``
+# directly.
+from api.Modules.Announcements.Models import (  # noqa: E402, F401
+    Announcement, PushSubscription,
+)
+from api.Modules.Audit.Models import (  # noqa: E402, F401
+    OperatorAuditLog, SuperadminAuditLog, TransferAudit,
+)
+from api.Modules.Auth.Models import (  # noqa: E402, F401
+    LoginEvent, Passkey, PasswordResetToken, RecoveryCode,
+)
+from api.Modules.BankSync.Models import (  # noqa: E402, F401
+    BankRule, BankTransaction, StripeBankAccount,
+)
+from api.Modules.Batches.Models import ACHBatch  # noqa: E402, F401
+from api.Modules.Billing.Models import (  # noqa: E402, F401
+    DiscountCode, FeatureFlag, ReferralCode, ReferralRedemption,
+    StoreFeatureOverride,
+)
+from api.Modules.Customers.Models import Customer  # noqa: E402, F401
+from api.Modules.DailyBook.Models import (  # noqa: E402, F401
+    CheckDeposit, DailyDrop, DailyLineItem, DailyReport,
+    MoneyTransferSummary,
+)
+from api.Modules.Monthly.Models import MonthlyFinancial  # noqa: E402, F401
+from api.Modules.ReturnChecks.Models import (  # noqa: E402, F401
+    RETURN_CHECK_BOOKED, RETURN_CHECK_STATUSES,
+    ReturnCheck, ReturnCheckPayment,
+)
+from api.Modules.Tenancy.Models import (  # noqa: E402, F401
+    OwnerConnectCode, Store, StoreEmployee, StoreOwnerLink, User,
+)
+from api.Modules.Transfers.Models import Transfer  # noqa: E402, F401
+from api.Modules.TVDisplay.Models import (  # noqa: E402, F401
+    TVBankCatalog, TVCatalogLogo, TVCompanyCatalog, TVDisplay,
+    TVDisplayCountry, TVDisplayPayoutBank, TVDisplayRate,
+    TVPairing, TVPendingPair,
+)
+from api.Modules.Webhooks.Models import (  # noqa: E402, F401
+    EmailEvent, WebhookEvent,
+)
