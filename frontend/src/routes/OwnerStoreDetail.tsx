@@ -8,10 +8,11 @@ import { Bar, Line } from "react-chartjs-2";
 
 import { useOwnerStoreDetail } from "../api/owner";
 import {
-  ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
-  Section, tdStyle, thStyle, tokens,
+  Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
+  Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import { moneyChartOptions } from "../lib/chartOptions";
+import styles from "./OwnerStoreDetail.module.css";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip,
@@ -26,6 +27,9 @@ const PERIODS: Array<{ value: Period; label: string }> = [
   { value: "year",  label: "This Year" },
 ];
 
+const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
+const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
+
 export default function OwnerStoreDetail() {
   const { storeId } = useParams<{ storeId: string }>();
   const sid = Number(storeId);
@@ -35,17 +39,17 @@ export default function OwnerStoreDetail() {
   return (
     <PageShell gap="1.25rem">
       <div>
-        <Link to="/owner/locations" style={backLink}>← All locations</Link>
+        <Link to="/owner/locations" className={styles.backLink}>← All locations</Link>
         <PageHeader
           title={data?.store.name || "Store"}
           actions={(
-            <div style={tabBar}>
+            <div className={styles.tabBar}>
               {PERIODS.map((p) => (
                 <button
                   key={p.value}
                   type="button"
                   onClick={() => setPeriod(p.value)}
-                  style={p.value === period ? tabActive : tab}
+                  className={p.value === period ? styles.tabActive : styles.tab}
                 >
                   {p.label}
                 </button>
@@ -86,8 +90,8 @@ export default function OwnerStoreDetail() {
           </KpiGrid>
 
           <Section title="30-day daily receipts vs over/short">
-            <div style={chartCard}>
-              <div style={{ height: 280 }}>
+            <Card>
+              <div className={styles.chartHost}>
                 <Line
                   data={{
                     labels: data.daily_labels.map((d) =>
@@ -168,13 +172,13 @@ export default function OwnerStoreDetail() {
                   }}
                 />
               </div>
-            </div>
+            </Card>
           </Section>
 
           {data.company_rows.length > 0 && (
             <Section title="Company breakdown">
-              <div style={chartCard}>
-                <div style={{ height: 220, marginBottom: "1rem" }}>
+              <Card>
+                <div className={styles.chartHostShort}>
                   <Bar
                     data={{
                       labels: data.company_rows.map((c) => c.company),
@@ -187,7 +191,7 @@ export default function OwnerStoreDetail() {
                     options={moneyChartOptions("Volume")}
                   />
                 </div>
-                <table style={tableStyle}>
+                <Table>
                   <thead>
                     <tr>
                       <th style={thStyle}>Company</th>
@@ -208,17 +212,17 @@ export default function OwnerStoreDetail() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                </Table>
+              </Card>
             </Section>
           )}
 
           <Section title="Recent transfers">
-            <div style={chartCard}>
+            <Card>
               {data.recent_transfers.length === 0 ? (
-                <p style={muted}>No transfers yet for this store.</p>
+                <p className={styles.muted}>No transfers yet for this store.</p>
               ) : (
-                <table style={tableStyle}>
+                <Table>
                   <thead>
                     <tr>
                       <th style={thStyle}>Date</th>
@@ -243,9 +247,9 @@ export default function OwnerStoreDetail() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </Table>
               )}
-            </div>
+            </Card>
           </Section>
         </>
       )}
@@ -260,37 +264,8 @@ function fmtDelta(
 ): React.ReactNode {
   const sign = delta >= 0 ? "▲" : "▼";
   return (
-    <span style={{ color: delta >= 0 ? tokens.accent : tokens.negative }}>
+    <span className={delta >= 0 ? styles.deltaPos : styles.deltaNeg}>
       {sign} {prefix}{Math.abs(Math.round(delta)).toLocaleString()}{suffix}
     </span>
   );
 }
-
-const backLink: React.CSSProperties = {
-  fontSize: "0.85rem", color: tokens.textMuted,
-  textDecoration: "none", display: "block", marginBottom: "0.5rem",
-};
-const tabBar: React.CSSProperties = {
-  display: "flex", border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", overflow: "hidden",
-};
-const tab: React.CSSProperties = {
-  padding: "0.4rem 0.85rem", background: "transparent", color: "inherit",
-  border: "none", cursor: "pointer", fontSize: "0.85rem",
-};
-const tabActive: React.CSSProperties = {
-  ...tab, background: tokens.accent, color: "#000", fontWeight: 600,
-};
-const chartCard: React.CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.75rem", padding: "1.25rem",
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
-};
-const thStyleR: React.CSSProperties = { ...thStyle, textAlign: "right" };
-const tdStyleR: React.CSSProperties = { ...tdStyle, textAlign: "right" };
-const muted: React.CSSProperties = {
-  color: tokens.textMuted, margin: 0,
-};

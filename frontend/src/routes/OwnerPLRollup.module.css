@@ -1,0 +1,49 @@
+/* Page-specific styles for OwnerPLRollup.tsx. */
+
+.nav {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.storeName {
+  font-weight: 500;
+}
+
+.storeSlug {
+  color: var(--db-text-muted, #a3a3a3);
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.78rem;
+}
+
+.noPL {
+  color: var(--db-warning, #ffb800);
+}
+
+.totalsLabel {
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.moneyDefault {
+  color: var(--db-text, #f5f5f5);
+}
+
+.moneyPos {
+  color: var(--db-accent, #3fff00);
+}
+
+.moneyNeg {
+  color: var(--db-negative, #ff3b30);
+}
+
+.moneyZero {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.bold {
+  font-weight: 600;
+}

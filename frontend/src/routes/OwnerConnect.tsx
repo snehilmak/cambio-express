@@ -9,8 +9,9 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  thStyle, tokens,
+  Table, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./OwnerConnect.module.css";
 
 // /app/owner/connect — owner mints 8-character invite codes that
 // store admins redeem on their settings page to link a store to
@@ -51,7 +52,7 @@ export default function OwnerConnect() {
     return (
       <PageShell maxWidth="40rem">
         <PageHeader title="Connect a Store" />
-        <p style={mutedStyle}>
+        <p className={styles.deny}>
           Only owners can mint store-connect codes.
         </p>
       </PageShell>
@@ -128,7 +129,7 @@ export default function OwnerConnect() {
           )}
           {!isLoading && !active && (
             <>
-              <p style={leadStyle}>
+              <p className={styles.lead}>
                 No active code. Generate one to give to a store admin —
                 they'll enter it on their store's Settings → Owner Access
                 page to link their store to your umbrella. Codes are
@@ -141,23 +142,23 @@ export default function OwnerConnect() {
           )}
           {active && (
             <>
-              <p style={leadStyle}>
+              <p className={styles.lead}>
                 Share this code with the store admin you want to connect.
                 They enter it on their store's Settings → Owner Access
                 page. Code expires on{" "}
                 <strong>{formatDate(active.expires_at)}</strong>.
               </p>
-              <div style={codeRowStyle}>
+              <div className={styles.codeRow}>
                 <input
                   type="text" readOnly value={active.code}
-                  style={codeInputStyle}
+                  className={styles.codeInput}
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <Button tone="secondary" onClick={handleCopy}>
                   {copied ? "Copied" : "Copy"}
                 </Button>
               </div>
-              <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+              <div className={styles.actionsRow}>
                 <Button tone="secondary" onClick={handleRevoke} disabled={busy}>
                   Revoke
                 </Button>
@@ -172,15 +173,11 @@ export default function OwnerConnect() {
 
       <Section
         title="Recently redeemed"
-        actions={(
-          <span style={{ color: tokens.textMuted, fontSize: "0.78rem" }}>
-            Last 10
-          </span>
-        )}
+        actions={<span className={styles.mutedSm}>Last 10</span>}
       >
         <Card>
           {redeemed.length > 0 ? (
-            <table style={tableStyle}>
+            <Table>
               <thead>
                 <tr>
                   <th style={thStyle}>Code</th>
@@ -191,17 +188,17 @@ export default function OwnerConnect() {
               <tbody>
                 {redeemed.map((r) => (
                   <tr key={r.id}>
-                    <td style={{ ...cellStyle, ...mono }}>{r.code}</td>
-                    <td style={cellStyle}>{r.used_by_store_name || "—"}</td>
-                    <td style={{ ...cellStyle, color: tokens.textMuted }}>
+                    <td style={tdStyle} className={styles.mono}>{r.code}</td>
+                    <td style={tdStyle}>{r.used_by_store_name || "—"}</td>
+                    <td style={tdStyle} className={styles.cellMuted}>
                       {formatDate(r.used_at)}
                     </td>
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           ) : (
-            <p style={emptyStyle}>
+            <p className={styles.empty}>
               No codes redeemed yet. Stores you've connected will show
               up here.
             </p>
@@ -209,11 +206,11 @@ export default function OwnerConnect() {
         </Card>
       </Section>
 
-      <p style={fineStyle}>
+      <p className={styles.fine}>
         To disconnect a store, head to your{" "}
-        <a href="/app/dashboard" style={inlineLinkStyle}>Dashboard</a>{" "}
+        <a href="/app/dashboard" className={styles.inlineLink}>Dashboard</a>{" "}
         or{" "}
-        <a href="/app/owner/locations" style={inlineLinkStyle}>Locations</a>{" "}
+        <a href="/app/owner/locations" className={styles.inlineLink}>Locations</a>{" "}
         page — only the owner can break the link, store admins can't.
       </p>
     </PageShell>
@@ -230,59 +227,3 @@ function formatDate(iso: string): string {
   const yr    = d.getUTCFullYear();
   return `${month} ${day}, ${yr}`;
 }
-
-
-const leadStyle: React.CSSProperties = {
-  margin: "0 0 1rem", color: tokens.textMuted,
-  fontSize: "0.85rem", lineHeight: 1.55,
-};
-
-const codeRowStyle: React.CSSProperties = {
-  display: "flex", gap: "0.6rem", alignItems: "center",
-  marginBottom: "0.85rem",
-};
-
-const codeInputStyle: React.CSSProperties = {
-  flex: 1,
-  fontFamily: tokens.fontMono,
-  fontSize: "1.4rem", letterSpacing: "0.25em",
-  fontWeight: 600, textAlign: "center",
-  padding: "0.65rem 0.75rem",
-  background: "var(--db-bg-input, #0d0d0d)",
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-};
-
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse",
-  fontSize: "0.88rem",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.6rem 0.7rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: "0", color: tokens.textMuted,
-  fontSize: "0.88rem",
-};
-
-const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: tokens.textMuted,
-  fontSize: "0.78rem", lineHeight: 1.55,
-};
-
-const inlineLinkStyle: React.CSSProperties = {
-  color: tokens.accent,
-  textDecoration: "none",
-};
-
-const mutedStyle: React.CSSProperties = {
-  marginTop: "1rem", color: tokens.textMuted,
-};

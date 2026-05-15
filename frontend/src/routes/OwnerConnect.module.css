@@ -1,0 +1,71 @@
+/* Page-specific styles for OwnerConnect.tsx. */
+
+.lead {
+  margin: 0 0 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.codeRow {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.codeInput {
+  flex: 1;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.4rem;
+  letter-spacing: 0.25em;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.65rem 0.75rem;
+  background: var(--db-bg-input, #0d0d0d);
+  color: var(--db-text, #f5f5f5);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+}
+
+.actionsRow {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.mutedSm {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.78rem;
+}
+
+.cellMuted {
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.empty {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.88rem;
+}
+
+.fine {
+  margin-top: 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.inlineLink {
+  color: var(--db-accent, #3fff00);
+  text-decoration: none;
+}
+
+.deny {
+  margin-top: 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
