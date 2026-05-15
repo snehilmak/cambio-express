@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
   createBatch,
@@ -9,7 +9,11 @@ import {
 } from "../api/batches";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { Loading } from "../components/ui";
+import {
+  Alert, Button, ButtonLink, Card, Field, FormActions, Input, Loading,
+  PageHeader, PageShell, Select, Textarea,
+} from "../components/ui";
+import styles from "./BatchForm.module.css";
 
 // Combined New/Edit form for ACH batches at /app/batches/new
 // and /app/batches/:id/edit. Mirrors the legacy batch_form.html
@@ -111,233 +115,95 @@ export default function BatchForm() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>{isEdit ? "Edit batch" : "New ACH batch"}</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to manage ACH batches.
-        </p>
-      </main>
+      <PageShell maxWidth="62rem">
+        <PageHeader title={isEdit ? "Edit batch" : "New ACH batch"} />
+        <p>Sign in as a store admin to manage ACH batches.</p>
+      </PageShell>
     );
   }
 
   if (isEdit && (detail.isLoading || !detail.data)) {
-    return <main style={pageStyle}><Loading /></main>;
+    return <PageShell maxWidth="62rem"><Loading /></PageShell>;
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>
-          {isEdit ? `Edit batch #${batchId}` : "New ACH batch"}
-        </h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontSize: "0.95rem",
-          }}
-        >
-          Track an ACH withdrawal from a money-transfer company.
-        </p>
-      </header>
+    <PageShell maxWidth="62rem">
+      <PageHeader
+        title={isEdit ? `Edit batch #${batchId}` : "New ACH batch"}
+        subtitle="Track an ACH withdrawal from a money-transfer company."
+      />
 
       <form
         onSubmit={onSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
-        <section style={cardStyle}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-              gap: "0.75rem",
-            }}
-          >
+        <Card>
+          <div className={styles.fieldGrid}>
             <Field label="ACH date" highlight={field === "ach_date"}>
-              <input type="date" required
+              <Input type="date" required
                 value={form.ach_date}
-                onChange={(e) => set("ach_date", e.target.value)}
-                style={inputStyle} />
+                onChange={(e) => set("ach_date", e.target.value)} />
             </Field>
             <Field label="Company">
-              <select value={form.company}
-                onChange={(e) => set("company", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.company}
+                onChange={(e) => set("company", e.target.value)}>
                 {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Batch ref" highlight={field === "batch_ref"}>
-              <input type="text" required
+              <Input type="text" required
                 value={form.batch_ref}
                 onChange={(e) => set("batch_ref", e.target.value)}
-                style={inputStyle}
                 placeholder="From bank statement" />
             </Field>
             <Field label="ACH amount (USD)">
-              <input type="number" step="0.01" min="0" required
+              <Input type="number" step="0.01" min="0" required
                 value={form.ach_amount}
-                onChange={(e) => set("ach_amount", Number(e.target.value))}
-                style={inputStyle} />
+                onChange={(e) => set("ach_amount", Number(e.target.value))} />
             </Field>
             <Field label="Status">
-              <select value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.status}
+                onChange={(e) => set("status", e.target.value)}>
                 {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Reconciled">
-              <select
+              <Select
                 value={form.reconciled ? "yes" : "no"}
                 onChange={(e) => set("reconciled", e.target.value === "yes")}
-                style={inputStyle}>
+              >
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
-              </select>
+              </Select>
             </Field>
             <Field label="Transfer dates (optional)">
-              <input type="text"
+              <Input type="text"
                 value={form.transfer_dates}
                 onChange={(e) => set("transfer_dates", e.target.value)}
-                style={inputStyle}
                 placeholder="e.g. 2026-03-10..14" />
             </Field>
           </div>
           <Field label="Notes (optional)">
-            <textarea
+            <Textarea
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
               rows={3}
-              style={{ ...inputStyle, resize: "vertical", minHeight: "5rem" }}
             />
           </Field>
-        </section>
+        </Card>
 
-        {error && (
-          <p
-            role="alert"
-            style={{
-              ...emptyStyle,
-              color: "var(--db-negative, #ff3b30)",
-            }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <Link to="/batches" style={cancelBtnStyle}>Cancel</Link>
-          <button
-            type="submit"
+        <FormActions>
+          <ButtonLink href="/batches" tone="secondary">Cancel</ButtonLink>
+          <Button
+            type="submit" busy={busy}
             disabled={busy || !form.batch_ref || !form.ach_date}
-            style={{
-              ...saveBtnStyle,
-              opacity: busy || !form.batch_ref || !form.ach_date ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create batch"}
-          </button>
-        </div>
+          </Button>
+        </FormActions>
       </form>
-    </main>
+    </PageShell>
   );
 }
-
-function Field({
-  label, highlight, children,
-}: {
-  label: string;
-  highlight?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: highlight
-            ? "var(--db-negative, #ff3b30)"
-            : "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "62rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.75rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "1.5rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};

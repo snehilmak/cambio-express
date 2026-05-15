@@ -2,7 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Alert, Button, Card, ErrorState, Field, FormActions, Input, Loading,
+  PageHeader, PageShell, Select,
+} from "../components/ui";
 import {
   previewFederalTax,
   updateTransfer,
@@ -13,6 +16,7 @@ import {
 import { useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import styles from "./EditTransfer.module.css";
 
 // Edit-transfer page at /app/transfers/:id/edit. Loads the
 // existing transfer via the read-side hook, lets the user mutate
@@ -106,34 +110,32 @@ export default function EditTransfer() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit transfer</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to edit transfers.
-        </p>
-      </main>
+      <PageShell maxWidth="62rem">
+        <PageHeader title="Edit transfer" />
+        <p>Sign in as a store admin to edit transfers.</p>
+      </PageShell>
     );
   }
 
   if (!Number.isFinite(transferId)) {
     return (
-      <main style={pageStyle}>
-        <p style={emptyStyle}>Invalid transfer ID.</p>
-      </main>
+      <PageShell maxWidth="62rem">
+        <p>Invalid transfer ID.</p>
+      </PageShell>
     );
   }
 
   if (detail.isLoading || form == null) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="62rem">
         <Loading />
-      </main>
+      </PageShell>
     );
   }
 
   if (detail.isError) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="62rem">
         <ErrorState
           message={
             detail.error instanceof Error
@@ -142,63 +144,52 @@ export default function EditTransfer() {
           }
           onRetry={() => { void detail.refetch(); }}
         />
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Edit transfer #{transferId}</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}
-        >
-          Federal tax is recomputed server-side on save.
-        </p>
-      </header>
+    <PageShell maxWidth="62rem">
+      <PageHeader
+        title={`Edit transfer #${transferId}`}
+        subtitle="Federal tax is recomputed server-side on save."
+      />
 
       <form
         onSubmit={onSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>When + how</h2>
-          <Grid>
+        <Card>
+          <h2 className={styles.sectionTitle}>When + how</h2>
+          <div className={styles.grid}>
             <Field label="Date">
-              <input type="date" value={form.send_date}
-                onChange={(e) => set("send_date", e.target.value)}
-                style={inputStyle} required />
+              <Input type="date" value={form.send_date}
+                onChange={(e) => set("send_date", e.target.value)} required />
             </Field>
             <Field label="Company">
-              <select value={form.company}
-                onChange={(e) => set("company", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.company}
+                onChange={(e) => set("company", e.target.value)}>
                 {COMPANIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Service">
-              <select value={form.service_type}
-                onChange={(e) => set("service_type", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.service_type}
+                onChange={(e) => set("service_type", e.target.value)}>
                 {SERVICES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Status">
-              <select value={form.status}
-                onChange={(e) => set("status", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.status}
+                onChange={(e) => set("status", e.target.value)}>
                 {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
+              </Select>
             </Field>
-          </Grid>
-        </section>
+          </div>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Sender</h2>
-          <Grid>
+        <Card>
+          <h2 className={styles.sectionTitle}>Sender</h2>
+          <div className={styles.grid}>
             <Field label="Full name">
               <SenderAutocomplete
                 value={form.sender_name}
@@ -223,70 +214,60 @@ export default function EditTransfer() {
               />
             </Field>
             <Field label="Phone country">
-              <input type="text" value={form.sender_phone_country}
+              <Input type="text" value={form.sender_phone_country}
                 onChange={(e) => set("sender_phone_country", e.target.value)}
-                style={inputStyle} placeholder="+1" />
+                placeholder="+1" />
             </Field>
             <Field label="Phone">
-              <input type="tel" value={form.sender_phone}
-                onChange={(e) => set("sender_phone", e.target.value)}
-                style={inputStyle} />
+              <Input type="tel" value={form.sender_phone}
+                onChange={(e) => set("sender_phone", e.target.value)} />
             </Field>
             <Field label="Address">
-              <input type="text" value={form.sender_address}
-                onChange={(e) => set("sender_address", e.target.value)}
-                style={inputStyle} />
+              <Input type="text" value={form.sender_address}
+                onChange={(e) => set("sender_address", e.target.value)} />
             </Field>
-          </Grid>
+          </div>
           {form.customer_id && (
-            <p style={{
-              margin: "0.5rem 0 0",
-              fontSize: "0.85rem",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}>
+            <p className={styles.note}>
               Linked to customer #{form.customer_id} — edits sync
               back to the customer directory.
             </p>
           )}
-        </section>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Recipient</h2>
-          <Grid>
+        <Card>
+          <h2 className={styles.sectionTitle}>Recipient</h2>
+          <div className={styles.grid}>
             <Field label="Country">
-              <select value={form.country}
-                onChange={(e) => set("country", e.target.value)}
-                style={inputStyle}>
+              <Select value={form.country}
+                onChange={(e) => set("country", e.target.value)}>
                 {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              </Select>
             </Field>
             <Field label="Recipient name">
-              <input type="text" value={form.recipient_name}
-                onChange={(e) => set("recipient_name", e.target.value)}
-                style={inputStyle} />
+              <Input type="text" value={form.recipient_name}
+                onChange={(e) => set("recipient_name", e.target.value)} />
             </Field>
             <Field label="Recipient phone">
-              <input type="tel" value={form.recipient_phone}
-                onChange={(e) => set("recipient_phone", e.target.value)}
-                style={inputStyle} />
+              <Input type="tel" value={form.recipient_phone}
+                onChange={(e) => set("recipient_phone", e.target.value)} />
             </Field>
-          </Grid>
-        </section>
+          </div>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Amounts</h2>
-          <Grid>
+        <Card>
+          <h2 className={styles.sectionTitle}>Amounts</h2>
+          <div className={styles.grid}>
             <Field label="Send amount (USD)">
-              <input type="number" step="0.01" min="0"
+              <Input type="number" step="0.01" min="0"
                 value={form.send_amount}
                 onChange={(e) => set("send_amount", Number(e.target.value))}
-                style={inputStyle} required />
+                required />
             </Field>
             <Field label="Fee (USD)">
-              <input type="number" step="0.01" min="0"
+              <Input type="number" step="0.01" min="0"
                 value={form.fee}
-                onChange={(e) => set("fee", Number(e.target.value))}
-                style={inputStyle} />
+                onChange={(e) => set("fee", Number(e.target.value))} />
             </Field>
             <Field
               label={
@@ -295,7 +276,7 @@ export default function EditTransfer() {
                   : "Federal tax preview"
               }
             >
-              <input
+              <Input
                 type="text"
                 readOnly
                 tabIndex={-1}
@@ -305,34 +286,26 @@ export default function EditTransfer() {
                   country: form.country,
                   rate: storeInfo.data?.store.federal_tax_rate ?? 0,
                 }).toFixed(2)}`}
-                style={{
-                  ...inputStyle,
-                  background: "var(--db-surface-2, #141414)",
-                  color: "var(--db-text-muted, #a3a3a3)",
-                  cursor: "default",
-                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                }}
+                className={styles.taxPreview}
               />
             </Field>
             <Field label="Confirm #">
-              <input type="text" value={form.confirm_number}
-                onChange={(e) => set("confirm_number", e.target.value)}
-                style={inputStyle} />
+              <Input type="text" value={form.confirm_number}
+                onChange={(e) => set("confirm_number", e.target.value)} />
             </Field>
-          </Grid>
-        </section>
+          </div>
+        </Card>
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Processed by</h2>
-          <Grid>
+        <Card>
+          <h2 className={styles.sectionTitle}>Processed by</h2>
+          <div className={styles.grid}>
             <Field label="Employee">
-              <select
+              <Select
                 value={form.employee_id ?? ""}
                 onChange={(e) => {
                   const v = e.target.value;
                   set("employee_id", v ? Number(v) : null);
                 }}
-                style={inputStyle}
                 required
                 disabled={roster.isLoading}
               >
@@ -340,149 +313,33 @@ export default function EditTransfer() {
                 {roster.data?.employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.name}</option>
                 ))}
-              </select>
+              </Select>
             </Field>
-          </Grid>
-          <p style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.85rem",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}>
+          </div>
+          <p className={styles.note}>
             Required: who made this edit.
           </p>
-        </section>
+        </Card>
 
-        {error && (
-          <p role="alert" style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}>
-            {error}
-          </p>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button type="button"
+        <FormActions>
+          <Button
+            tone="secondary"
             onClick={() => navigate(`/transfers/${transferId}`)}
-            style={cancelBtnStyle} disabled={busy}>
+            disabled={busy}
+          >
             Cancel
-          </button>
-          <button type="submit"
+          </Button>
+          <Button
+            type="submit"
+            busy={busy}
             disabled={busy || !form.sender_name || !form.send_amount || !form.employee_id}
-            style={{
-              ...saveBtnStyle,
-              opacity:
-                busy || !form.sender_name || !form.send_amount || !form.employee_id
-                  ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}>
+          >
             {busy ? "Saving…" : "Save changes"}
-          </button>
-        </div>
+          </Button>
+        </FormActions>
       </form>
-    </main>
+    </PageShell>
   );
 }
-
-function Field({
-  label, children,
-}: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span style={{
-        fontSize: "0.78rem",
-        color: "var(--db-text-muted, #a3a3a3)",
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-      }}>
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-function Grid({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-      gap: "0.75rem",
-    }}>
-      {children}
-    </div>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "62rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
-  margin: "0 0 1rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  cursor: "pointer",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "1.5rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};

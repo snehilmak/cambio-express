@@ -1,0 +1,33 @@
+/* Page-specific styles for EditMonthly.tsx. */
+
+.sectionTitle {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0 0 1rem;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.headerMono {
+  margin: 0.35rem 0 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.headerNote {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  line-height: 1.5;
+}
+
+.monoInput {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}

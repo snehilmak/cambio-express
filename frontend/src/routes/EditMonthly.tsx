@@ -8,7 +8,11 @@ import {
 } from "../api/monthly";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { Loading } from "../components/ui";
+import {
+  Alert, Button, Card, Field, FormActions, Input, Loading, PageHeader,
+  PageShell, Textarea,
+} from "../components/ui";
+import styles from "./EditMonthly.module.css";
 
 // Edit page for the monthly P&L at /app/monthly/edit?year=Y&month=M.
 //
@@ -125,55 +129,38 @@ export default function EditMonthly() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit monthly P&L</h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to edit monthly P&L.
-        </p>
-      </main>
+      <PageShell maxWidth="78rem">
+        <PageHeader title="Edit monthly P&L" />
+        <p>Sign in as a store admin to edit monthly P&L.</p>
+      </PageShell>
     );
   }
 
   if (!Number.isFinite(year) || !Number.isFinite(month)) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit monthly P&L</h1>
-        <p style={emptyStyle}>
-          Missing year or month. Open a P&L first, then click Edit.
-        </p>
-      </main>
+      <PageShell maxWidth="78rem">
+        <PageHeader title="Edit monthly P&L" />
+        <p>Missing year or month. Open a P&L first, then click Edit.</p>
+      </PageShell>
     );
   }
 
   if (detail.isLoading || form == null) {
     return (
-      <main style={pageStyle}>
+      <PageShell maxWidth="78rem">
         <Loading />
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>Edit monthly P&L</h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-          }}
-        >
+    <PageShell maxWidth="78rem">
+      <header>
+        <PageHeader title="Edit monthly P&L" />
+        <p className={styles.headerMono}>
           {MONTH_NAMES[month - 1]} {year}
         </p>
-        <p
-          style={{
-            margin: "0.5rem 0 0",
-            fontSize: "0.85rem",
-            color: "var(--db-text-muted, #a3a3a3)",
-            lineHeight: 1.5,
-          }}
-        >
+        <p className={styles.headerNote}>
           Auto-derived fields (cash purchases / expenses / payroll /
           check cashing fees / return-check P&L / bank charges when
           bank-sync data exists) are server-recomputed on save and
@@ -186,32 +173,14 @@ export default function EditMonthly() {
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
         {SECTIONS.map((sec) => (
-          <section key={sec} style={cardStyle}>
-            <h2 style={sectionTitleStyle}>{sec}</h2>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-                gap: "0.75rem",
-              }}
-            >
+          <Card key={sec}>
+            <h2 className={styles.sectionTitle}>{sec}</h2>
+            <div className={styles.fieldGrid}>
               {FIELDS.filter((f) => f.section === sec).map((f) => (
-                <label
-                  key={f.key}
-                  style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}
-                >
-                  <span
-                    style={{
-                      fontSize: "0.78rem",
-                      color: "var(--db-text-muted, #a3a3a3)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                    }}
-                  >
-                    {f.label}
-                  </span>
-                  <input
+                <Field key={f.key} label={f.label}>
+                  <Input
                     type="number" step="0.01"
+                    className={styles.monoInput}
                     value={
                       typeof form[f.key] === "number"
                         ? (form[f.key] as number)
@@ -220,134 +189,37 @@ export default function EditMonthly() {
                     onChange={(e) =>
                       set(f.key, Number(e.target.value) as never)
                     }
-                    style={inputStyle}
                   />
-                </label>
+                </Field>
               ))}
             </div>
-          </section>
+          </Card>
         ))}
 
-        <section style={cardStyle}>
-          <h2 style={sectionTitleStyle}>Notes</h2>
-          <textarea
+        <Card>
+          <h2 className={styles.sectionTitle}>Notes</h2>
+          <Textarea
             value={form.notes ?? ""}
             onChange={(e) => set("notes", e.target.value)}
             rows={4}
-            style={{ ...inputStyle, resize: "vertical", minHeight: "5rem" }}
           />
-        </section>
+        </Card>
 
-        {err && (
-          <p
-            role="alert"
-            style={{
-              ...emptyStyle,
-              color: "var(--db-negative, #ff3b30)",
-            }}
-          >
-            {err}
-          </p>
-        )}
+        {err && <Alert tone="error">{err}</Alert>}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button
-            type="button"
+        <FormActions>
+          <Button
+            tone="secondary"
             onClick={() => navigate(`/monthly?year=${year}&month=${month}`)}
-            style={cancelBtnStyle}
             disabled={busy}
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            style={{
-              ...saveBtnStyle,
-              opacity: busy ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}
-          >
+          </Button>
+          <Button type="submit" busy={busy} disabled={busy}>
             {busy ? "Saving…" : "Save"}
-          </button>
-        </div>
+          </Button>
+        </FormActions>
       </form>
-    </main>
+    </PageShell>
   );
 }
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "78rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
-  margin: "0 0 1rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  cursor: "pointer",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "2rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
