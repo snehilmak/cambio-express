@@ -561,6 +561,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Logout Route
+         * @description Clear the httpOnly access-token cookie.
+         *
+         *     Stateless on the server — JWTs aren't revocable mid-TTL without
+         *     a denylist. Until the refresh-token PR lands, ``/logout`` is
+         *     purely a cookie-clear: the access token is still cryptographically
+         *     valid until it expires, but the browser no longer ships it.
+         *     Callers using ``Authorization: Bearer`` (scripts / tests) can
+         *     discard the token client-side; no server cooperation needed.
+         */
+        post: operations["logout_route_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -6560,7 +6587,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6593,7 +6622,9 @@ export interface operations {
             path: {
                 addon_key: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6629,7 +6660,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6660,7 +6693,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6691,7 +6726,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6722,7 +6759,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6757,7 +6796,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6788,7 +6829,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6819,7 +6862,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6850,7 +6895,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6887,7 +6934,9 @@ export interface operations {
             path: {
                 employee_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -6924,7 +6973,9 @@ export interface operations {
             path: {
                 employee_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6953,7 +7004,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -6984,7 +7037,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7021,7 +7076,9 @@ export interface operations {
             path: {
                 user_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7054,7 +7111,9 @@ export interface operations {
             path: {
                 user_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7089,7 +7148,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7120,7 +7181,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7157,7 +7220,9 @@ export interface operations {
             path: {
                 ann_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7188,7 +7253,9 @@ export interface operations {
             path: {
                 ann_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7223,7 +7290,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7519,6 +7588,24 @@ export interface operations {
             };
         };
     };
+    logout_route_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     me_route_auth_me_get: {
         parameters: {
             query?: never;
@@ -7526,7 +7613,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7559,7 +7648,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7590,7 +7681,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7625,7 +7718,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7658,7 +7753,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7691,7 +7788,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7732,7 +7831,9 @@ export interface operations {
             path: {
                 passkey_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7761,7 +7862,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -7792,7 +7895,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -7990,7 +8095,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8023,7 +8130,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8054,7 +8163,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8091,7 +8202,9 @@ export interface operations {
             path: {
                 rule_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8128,7 +8241,9 @@ export interface operations {
             path: {
                 rule_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8159,7 +8274,9 @@ export interface operations {
             path: {
                 rule_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8204,7 +8321,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8237,7 +8356,9 @@ export interface operations {
             path: {
                 txn_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8274,7 +8395,9 @@ export interface operations {
             path: {
                 txn_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8309,7 +8432,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8340,7 +8465,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8377,7 +8504,9 @@ export interface operations {
             path: {
                 batch_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8410,7 +8539,9 @@ export interface operations {
             path: {
                 batch_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8447,7 +8578,9 @@ export interface operations {
             path: {
                 batch_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8478,7 +8611,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8513,7 +8648,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8651,7 +8788,9 @@ export interface operations {
                 store_id: number;
                 item_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8749,7 +8888,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8790,7 +8931,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8824,7 +8967,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8862,7 +9007,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8896,7 +9043,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -8930,7 +9079,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -8968,7 +9119,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9002,7 +9155,9 @@ export interface operations {
                 store_id: number;
                 report_date: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9033,7 +9188,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9064,7 +9221,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9095,7 +9254,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -9132,7 +9293,9 @@ export interface operations {
             path: {
                 key: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9163,7 +9326,9 @@ export interface operations {
             path: {
                 key: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9197,7 +9362,9 @@ export interface operations {
                 key: string;
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -9235,7 +9402,9 @@ export interface operations {
                 key: string;
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9266,7 +9435,9 @@ export interface operations {
             path: {
                 key: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -9323,7 +9494,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9357,7 +9530,9 @@ export interface operations {
                 year: number;
                 month: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9391,7 +9566,9 @@ export interface operations {
                 year: number;
                 month: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -9426,7 +9603,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9457,7 +9636,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9490,7 +9671,9 @@ export interface operations {
             path: {
                 code_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9523,7 +9706,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9558,7 +9743,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9592,7 +9779,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9623,7 +9812,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9658,7 +9849,9 @@ export interface operations {
             path: {
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -9691,7 +9884,9 @@ export interface operations {
             path: {
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -9724,7 +9919,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10527,7 +10724,9 @@ export interface operations {
             path: {
                 slug: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10561,7 +10760,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10592,7 +10793,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -10629,7 +10832,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10662,7 +10867,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -10699,7 +10906,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10732,7 +10941,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10765,7 +10976,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10798,7 +11011,9 @@ export interface operations {
             path: {
                 rc_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10829,7 +11044,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10865,7 +11082,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10896,7 +11115,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -10929,7 +11150,9 @@ export interface operations {
             path: {
                 discount_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -10964,7 +11187,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11000,7 +11225,9 @@ export interface operations {
             path: {
                 slug: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11036,7 +11263,9 @@ export interface operations {
             path: {
                 slug: string;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11067,7 +11296,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11098,7 +11329,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11135,7 +11368,9 @@ export interface operations {
             path: {
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11168,7 +11403,9 @@ export interface operations {
             path: {
                 store_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11251,7 +11488,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11286,7 +11525,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11353,7 +11594,9 @@ export interface operations {
             path: {
                 transfer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11390,7 +11633,9 @@ export interface operations {
             path: {
                 transfer_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11419,7 +11664,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11452,7 +11699,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {
@@ -11489,7 +11738,9 @@ export interface operations {
             path: {
                 country_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11522,7 +11773,9 @@ export interface operations {
             path: {
                 country_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11551,7 +11804,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11584,7 +11839,9 @@ export interface operations {
             path: {
                 pairing_id: number;
             };
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11613,7 +11870,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -11644,7 +11903,9 @@ export interface operations {
                 authorization?: string | null;
             };
             path?: never;
-            cookie?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
         };
         requestBody: {
             content: {

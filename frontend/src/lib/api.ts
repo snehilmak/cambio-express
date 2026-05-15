@@ -1,16 +1,18 @@
 // Tiny API client used by every SPA fetch. Wraps `fetch` so:
-//   • the bearer JWT (if present) is added to every request
-//   • a 401 response clears the token and triggers a redirect to
-//     /app/login (saves callers from threading auth-state errors
-//     through every component)
-//   • non-2xx becomes a thrown ApiError with the parsed body
-//   • JSON request bodies get the right Content-Type
+//   • ``credentials: "include"`` ships the httpOnly access-token
+//     cookie automatically (PR #559 — see ``./auth.ts`` for the
+//     cookie-vs-localStorage rationale).
+//   • a 401 response clears the local identity hint and triggers
+//     a redirect to /app/login (saves callers from threading
+//     auth-state errors through every component).
+//   • non-2xx becomes a thrown ApiError with the parsed body.
+//   • JSON request bodies get the right Content-Type.
 //
 // We intentionally don't import any HTTP library — `fetch` is
 // browser-native, smaller bundle, and good enough for the SPA's
 // needs. TanStack Query handles caching/retries on top.
 
-import { clearAccessToken, getAccessToken } from "./auth";
+import { clearAccessToken } from "./auth";
 
 export class ApiError extends Error {
   status: number;
@@ -32,10 +34,12 @@ export async function api<T = unknown>(
   options: ApiOptions = {},
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  const token = getAccessToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const init: RequestInit = { ...options, headers };
+  const init: RequestInit = {
+    ...options,
+    headers,
+    credentials: "include",  // ship the db_access_token httpOnly cookie
+  };
   if (options.json !== undefined) {
     headers.set("Content-Type", "application/json");
     init.body = JSON.stringify(options.json);
@@ -49,11 +53,11 @@ export async function api<T = unknown>(
 
   if (!resp.ok) {
     if (resp.status === 401) {
-      // Token is expired or invalid. Drop it so the next paint
-      // sees an unauthed identity and bounces the user to login.
+      // Cookie's already expired or never existed. Drop the local
+      // identity hint so the next paint renders unauthed.
       clearAccessToken();
       // Hard navigation to avoid a stale React tree referencing
-      // the cleared token. Skip the redirect when we're already
+      // a cleared identity. Skip the redirect when we're already
       // on /app/login (e.g. a bad-creds POST shouldn't reload).
       const onLogin = window.location.pathname === "/app/login";
       if (!onLogin) window.location.assign("/app/login");
@@ -82,18 +86,16 @@ export async function api<T = unknown>(
 
 
 // CSV downloads can't ride a plain <a href download> because the
-// browser won't attach our Authorization header on a top-level
-// navigation. Instead, fetch the bytes with the bearer token,
-// turn the response into a Blob, and trigger a download with a
-// synthetic anchor click. Memory-bound, but report CSVs are tiny.
+// browser doesn't attach ``credentials`` on a top-level navigation
+// the way it does on a fetch. Instead, fetch the bytes with the
+// cookie attached (credentials: "include"), turn the response into
+// a Blob, and trigger a download with a synthetic anchor click.
+// Memory-bound, but report CSVs are tiny.
 export async function downloadCsv(
   path: string,
   filename: string,
 ): Promise<void> {
-  const headers = new Headers();
-  const token = getAccessToken();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
-  const resp = await fetch(path, { headers });
+  const resp = await fetch(path, { credentials: "include" });
   if (!resp.ok) {
     if (resp.status === 401) {
       clearAccessToken();

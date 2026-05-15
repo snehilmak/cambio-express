@@ -10,9 +10,10 @@ share.
   GET  /auth/me   → returns the verified principal from the bearer
                      token (no DB roundtrip — claims-only).
 """
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
 
+import os
 import jwt
 
 from api.Core.Database import get_db
@@ -82,23 +83,69 @@ from api.Modules.Auth.Services.signup import SignupConflictError
 router = APIRouter()
 
 
+_ACCESS_TOKEN_COOKIE = "db_access_token"
+
+
+def _is_https_prod() -> bool:
+    """``True`` when ``APP_BASE_URL`` points at HTTPS, so cookies
+    get the ``Secure`` flag in prod but stay accessible to dev /
+    CI / test clients running on plain HTTP."""
+    return os.environ.get("APP_BASE_URL", "").startswith("https://")
+
+
+def _set_access_token_cookie(response: Response, token: str) -> None:
+    """Set the httpOnly access-token cookie. ``SameSite=Lax`` so
+    the cookie rides with top-level GETs from external sites (the
+    Stripe-checkout return URL, e.g.) but isn't sent on
+    cross-origin embedded requests — the XSRF protection that
+    closes the Authorization-header-in-localStorage gap PR P0 #1
+    wanted to fix."""
+    response.set_cookie(
+        key=_ACCESS_TOKEN_COOKIE,
+        value=token,
+        max_age=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
+        httponly=True,
+        samesite="lax",
+        secure=_is_https_prod(),
+        path="/",
+    )
+
+
+def _clear_access_token_cookie(response: Response) -> None:
+    """Drop the access-token cookie. Used by ``/auth/logout`` and
+    the 401 response path."""
+    response.delete_cookie(
+        key=_ACCESS_TOKEN_COOKIE,
+        path="/",
+        samesite="lax",
+        secure=_is_https_prod(),
+    )
+
+
 def get_principal(
     authorization: str | None = Header(default=None),
+    db_access_token: str | None = Cookie(default=None),
 ) -> dict:
-    """FastAPI dependency: decode + verify a Bearer JWT and return the
-    claims dict. Raises 401 on missing / malformed / expired / bad
-    signature. Use this on any route that needs an authenticated
-    caller (downstream modules will adopt this once the JWT cutover
-    completes)."""
-    if not authorization or not authorization.lower().startswith("bearer "):
+    """FastAPI dependency: decode + verify a JWT and return the
+    claims dict. Accepts the token from either the
+    ``Authorization: Bearer <token>`` header (used by scripts,
+    tests, and any external API caller) OR the httpOnly
+    ``db_access_token`` cookie (used by the SPA after the
+    cookie-JWT cutover in PR #559).
+
+    Raises 401 on missing / malformed / expired / bad signature.
+    """
+    token: str | None = None
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization.split(" ", 1)[1].strip() or None
+    if token is None and db_access_token:
+        token = db_access_token.strip() or None
+    if token is None:
         raise HTTPException(
             status_code=401,
             detail="Missing or malformed Authorization header",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = authorization.split(" ", 1)[1].strip()
-    if not token:
-        raise HTTPException(status_code=401, detail="Empty bearer token")
     try:
         return decode_access_token(token)
     except jwt.ExpiredSignatureError:
@@ -115,11 +162,19 @@ def get_principal(
 
 def _to_login_response(
     result: LoginResult | LoginPendingResult,
+    response: Response | None = None,
 ) -> LoginResponse:
     """Translate a Service result (full or pending) into the
     polymorphic `LoginResponse` shape. Centralised so the four
     login-ish routes (login, login-cross-store, login/totp,
-    login/recovery) all emit the exact same envelope."""
+    login/recovery) all emit the exact same envelope.
+
+    When the result is a full ``LoginResult`` and a ``Response``
+    is supplied, also drop the JWT into the httpOnly
+    ``db_access_token`` cookie so the SPA can stop reading it
+    from ``localStorage``. Body still carries ``access_token`` for
+    backward compat with non-SPA callers (curl, scripts, tests).
+    """
     if isinstance(result, LoginPendingResult):
         return LoginResponse(
             requires_totp=True,
@@ -129,6 +184,8 @@ def _to_login_response(
             enroll_required=result.enroll_required,
             expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
         )
+    if response is not None:
+        _set_access_token_cookie(response, result.access_token)
     return LoginResponse(
         access_token=result.access_token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -217,7 +274,7 @@ def login_route(
         if store is not None and store.slug:
             _set_last_store_slug_cookie(response, store.slug)
     db.commit()
-    return _to_login_response(result)
+    return _to_login_response(result, response)
 
 
 @router.get(
@@ -250,7 +307,9 @@ def store_by_slug_route(
 
 @router.post("/login-cross-store", response_model=LoginResponse)
 def login_cross_store_route(
-    body: LoginCrossStoreRequest, db: Session = Depends(get_db),
+    body: LoginCrossStoreRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> LoginResponse:
     """Cross-store JWT login for the SPA's generic landing page.
     Same response shape as `/auth/login`, but takes
@@ -270,12 +329,14 @@ def login_cross_store_route(
         )
     except TotpEnrollmentRequired as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    return _to_login_response(result)
+    return _to_login_response(result, response)
 
 
 @router.post("/login/totp", response_model=LoginResponse)
 def login_totp_route(
-    body: TotpLoginRequest, db: Session = Depends(get_db),
+    body: TotpLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> LoginResponse:
     """Exchange a 2FA-pending token + 6-digit TOTP code for a real
     access token. Pending token comes from the previous
@@ -290,12 +351,14 @@ def login_totp_route(
             status_code=401, detail=str(exc) or "Invalid verification code",
         )
     db.commit()  # no-op for TOTP, but keep call shape symmetric with /recovery
-    return _to_login_response(result)
+    return _to_login_response(result, response)
 
 
 @router.post("/login/recovery", response_model=LoginResponse)
 def login_recovery_route(
-    body: RecoveryLoginRequest, db: Session = Depends(get_db),
+    body: RecoveryLoginRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> LoginResponse:
     """Exchange a 2FA-pending token + a single-use recovery code
     for a real access token. Recovery code is consumed on success."""
@@ -308,7 +371,7 @@ def login_recovery_route(
             status_code=401, detail=str(exc) or "Invalid recovery code",
         )
     db.commit()
-    return _to_login_response(result)
+    return _to_login_response(result, response)
 
 
 @router.post(
@@ -354,7 +417,9 @@ def login_totp_enroll_finish_route(
     "/login/totp/enroll/confirm", response_model=LoginResponse,
 )
 def login_totp_enroll_confirm_route(
-    body: TotpEnrollConfirmRequest, db: Session = Depends(get_db),
+    body: TotpEnrollConfirmRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> LoginResponse:
     """User has saved their recovery codes. Exchange the still-valid
     pending token for a real access token. Symmetric with
@@ -366,7 +431,23 @@ def login_totp_enroll_confirm_route(
     except AuthenticationError as exc:
         raise HTTPException(status_code=401, detail=str(exc) or "Invalid pending token")
     db.commit()
-    return _to_login_response(result)
+    return _to_login_response(result, response)
+
+
+@router.post("/logout", status_code=204)
+def logout_route(response: Response) -> Response:
+    """Clear the httpOnly access-token cookie.
+
+    Stateless on the server — JWTs aren't revocable mid-TTL without
+    a denylist. Until the refresh-token PR lands, ``/logout`` is
+    purely a cookie-clear: the access token is still cryptographically
+    valid until it expires, but the browser no longer ships it.
+    Callers using ``Authorization: Bearer`` (scripts / tests) can
+    discard the token client-side; no server cooperation needed.
+    """
+    _clear_access_token_cookie(response)
+    response.status_code = 204
+    return response
 
 
 @router.get("/me")
@@ -502,6 +583,7 @@ def change_password_route(
 def signup_route(
     request: Request,
     body: SignupRequest,
+    response: Response,
     db: Session = Depends(get_db),
 ) -> SignupResponse:
     """Self-service signup. Creates a (Store, admin User) pair
@@ -572,6 +654,7 @@ def signup_route(
         username=result.admin.username,
     )
     token = issue_access_token(issuer)
+    _set_access_token_cookie(response, token)
     return SignupResponse(
         access_token=token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
@@ -588,7 +671,9 @@ def signup_route(
     "/signup/owner", response_model=OwnerSignupResponse, status_code=201,
 )
 def signup_owner_route(
-    body: OwnerSignupRequest, db: Session = Depends(get_db),
+    body: OwnerSignupRequest,
+    response: Response,
+    db: Session = Depends(get_db),
 ) -> OwnerSignupResponse:
     """Self-service signup for a multi-store owner. Creates a User
     with `role="owner"` and `store_id=None`. Owners then connect to
@@ -641,6 +726,7 @@ def signup_owner_route(
         username=result.owner.username,
     )
     token = issue_access_token(issuer)
+    _set_access_token_cookie(response, token)
     return OwnerSignupResponse(
         access_token=token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,

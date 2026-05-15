@@ -185,6 +185,84 @@ def test_me_rejects_garbage_token(api_client):
     assert resp.status_code == 401
 
 
+# ── Cookie-based JWT (PR #559) ──────────────────────────────
+
+
+def test_login_sets_httponly_access_token_cookie(test_store_id, api_client):
+    """Successful login drops the JWT into a httpOnly cookie
+    alongside the body's ``access_token`` field. The SPA reads the
+    cookie (browsers attach it automatically); curl / scripts /
+    tests keep using the body field."""
+    resp = api_client.post(
+        "/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert resp.status_code == 200
+    set_cookie = resp.headers.get_list("set-cookie")
+    matching = [c for c in set_cookie if c.startswith("db_access_token=")]
+    assert matching, f"expected db_access_token cookie; got {set_cookie!r}"
+    cookie = matching[0]
+    # httpOnly so XSS can't read the token via document.cookie.
+    assert "HttpOnly" in cookie
+    # SameSite=Lax — Stripe / SSO redirects need top-level GETs to
+    # carry the cookie, but cross-origin embedded requests don't.
+    assert "SameSite=lax" in cookie or "SameSite=Lax" in cookie
+    # Body still carries the token for non-SPA callers.
+    body = resp.json()
+    assert body["access_token"]
+    # And the cookie value matches what's in the body.
+    cookie_value = cookie.split(";", 1)[0].split("=", 1)[1]
+    assert cookie_value == body["access_token"]
+
+
+def test_get_principal_accepts_cookie_when_no_header(test_store_id, api_client):
+    """A logged-in client doesn't need to send Authorization
+    explicitly — the cookie jar attaches db_access_token and
+    /auth/me succeeds. This is the SPA's post-PR-#559 path."""
+    api_client.post(
+        "/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    # No Authorization header — cookie alone.
+    resp = api_client.get("/auth/me")
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "admin"
+
+
+def test_logout_clears_access_token_cookie(test_store_id, api_client):
+    """``POST /auth/logout`` returns 204 and sets a Set-Cookie
+    header that deletes ``db_access_token`` (Max-Age=0 / past
+    Expires). Subsequent calls without an Authorization header
+    return 401."""
+    api_client.post(
+        "/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    resp = api_client.post("/auth/logout")
+    assert resp.status_code == 204
+    set_cookie = resp.headers.get_list("set-cookie")
+    clears = [c for c in set_cookie if c.startswith("db_access_token=")]
+    assert clears, f"expected db_access_token clear; got {set_cookie!r}"
+    # The clear directive uses Max-Age=0 or an Expires in the past.
+    clear = clears[0]
+    assert "Max-Age=0" in clear or "1970" in clear or "GMT" in clear
+    # And /auth/me now bounces without auth.
+    me = api_client.get("/auth/me")
+    assert me.status_code == 401
+
+
 # ── Strangler-fig dispatch ──────────────────────────────────
 
 
