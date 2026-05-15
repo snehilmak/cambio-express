@@ -7,9 +7,10 @@ import {
 } from "../api/admin";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  Card, Empty, EmptyState, ErrorState, PageHeader, PageShell, Pager,
-  TableSkeleton, tokens,
+  Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
+  Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
+import styles from "./AdminAuditLog.module.css";
 
 // /app/admin/audit-log — merged operator + transfer audit feed
 // for the JWT principal's store. Filters live in the URL so the
@@ -51,30 +52,28 @@ export default function AdminAuditLog() {
       <PageHeader title="Activity Log" />
 
       <Card style={{ marginBottom: "1rem" }}>
-        <div style={cardHeaderStyle}>
+        <div className={styles.cardHeader}>
           Filters
-          <span style={{ marginLeft: "0.5rem", color: tokens.textMuted, fontWeight: 400 }}>
+          <span className={styles.cardHeaderCount}>
             {data ? `${data.total.toLocaleString()} ${data.total === 1 ? "event" : "events"}` : "—"}
           </span>
         </div>
-        <div style={filtersRowStyle}>
-          <FilterField label="Target">
-            <select
+        <div className={styles.filtersRow}>
+          <Field label="Target" style={{ minWidth: "10rem" }}>
+            <Select
               value={target}
               onChange={(e) => setParam("target", e.target.value)}
-              style={selectStyle}
             >
               <option value="">All</option>
               <option value="transfer">Transfer</option>
               <option value="daily_report">Daily Report</option>
               <option value="batch">ACH Batch</option>
-            </select>
-          </FilterField>
-          <FilterField label="Action">
-            <select
+            </Select>
+          </Field>
+          <Field label="Action" style={{ minWidth: "10rem" }}>
+            <Select
               value={action}
               onChange={(e) => setParam("action", e.target.value)}
-              style={selectStyle}
             >
               <option value="">All</option>
               <option value="create">Create</option>
@@ -83,13 +82,12 @@ export default function AdminAuditLog() {
               <option value="lock">Lock</option>
               <option value="unlock">Unlock</option>
               <option value="status_changed">Status changed</option>
-            </select>
-          </FilterField>
-          <FilterField label="User">
-            <select
+            </Select>
+          </Field>
+          <Field label="User" style={{ minWidth: "10rem" }}>
+            <Select
               value={user}
               onChange={(e) => setParam("user", e.target.value)}
-              style={selectStyle}
               disabled={!data}
             >
               <option value="">Any</option>
@@ -98,28 +96,28 @@ export default function AdminAuditLog() {
                   {u.label}{u.role !== "admin" ? ` (${u.role})` : ""}
                 </option>
               ))}
-            </select>
-          </FilterField>
+            </Select>
+          </Field>
           {hasFilters && (
-            <button
-              type="button"
+            <Button
+              tone="secondary"
+              size="sm"
               onClick={() => {
                 const next = new URLSearchParams();
                 setSP(next, { replace: true });
               }}
-              style={clearBtnStyle}
             >
               Clear
-            </button>
+            </Button>
           )}
         </div>
       </Card>
 
       <Card>
-        <div style={cardHeaderStyle}>
+        <div className={styles.cardHeader}>
           Recent activity
           {data && (
-            <span style={{ marginLeft: "auto", color: tokens.textMuted, fontSize: "0.85rem", fontWeight: 400 }}>
+            <span className={styles.cardHeaderPage}>
               Page {data.page} of {data.total_pages}
             </span>
           )}
@@ -137,7 +135,7 @@ export default function AdminAuditLog() {
         )}
         {data && data.rows.length > 0 && (
           <>
-            <Table rows={data.rows} />
+            <AuditTable rows={data.rows} />
             <Pager
               page={data.page}
               totalPages={data.total_pages}
@@ -147,7 +145,7 @@ export default function AdminAuditLog() {
         )}
       </Card>
 
-      <p style={fineStyle}>
+      <p className={styles.fine}>
         Audit covers transfer creates / edits / status changes /
         deletes, daily-report locks / unlocks, and ACH batch creates
         / updates. Saving daily-report fields generates many
@@ -159,63 +157,49 @@ export default function AdminAuditLog() {
 }
 
 
-function FilterField({
-  label, children,
-}: { label: string; children: React.ReactNode }) {
+function AuditTable({ rows }: { rows: AdminAuditRow[] }) {
   return (
-    <label style={fieldStyle}>
-      <span style={fieldLabelStyle}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-
-function Table({ rows }: { rows: AdminAuditRow[] }) {
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.92rem" }}>
-        <thead>
-          <tr>
-            {["When", "Who", "Action", "Target", "Detail"].map((h) => (
-              <th key={h} style={thStyle}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            // ts + target_id is unique enough; (source, ts) collisions
-            // can happen across the same wallclock second so we add
-            // the index as the final tiebreaker.
-            <tr key={`${r.source}-${r.ts}-${r.target_id}-${i}`}>
-              <td style={cellStyle}>
-                <span style={monoMuted}>{formatTs(r.ts)}</span>
-              </td>
-              <td style={cellStyle}>
-                <strong>{r.user_name || "—"}</strong>
-                {r.user_role && (
-                  <span style={{ marginLeft: "0.4rem", color: tokens.textMuted, fontSize: "0.85rem" }}>
-                    ({r.user_role})
-                  </span>
-                )}
-              </td>
-              <td style={cellStyle}>
-                <ActionBadge action={r.action} />
-              </td>
-              <td style={cellStyle}>
-                <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
-                  {r.target_type || "—"}
-                </span>
-                {r.target_label && <div>{r.target_label}</div>}
-              </td>
-              <td style={{ ...cellStyle, fontSize: "0.9rem", maxWidth: "30rem" }}>
-                {r.summary || "—"}
-              </td>
-            </tr>
+    <Table>
+      <thead>
+        <tr>
+          {["When", "Who", "Action", "Target", "Detail"].map((h) => (
+            <th key={h} style={thStyle}>{h}</th>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          // ts + target_id is unique enough; (source, ts) collisions
+          // can happen across the same wallclock second so we add
+          // the index as the final tiebreaker.
+          <tr key={`${r.source}-${r.ts}-${r.target_id}-${i}`}>
+            <td style={tdStyle}>
+              <span className={styles.monoMuted}>{formatTs(r.ts)}</span>
+            </td>
+            <td style={tdStyle}>
+              <strong>{r.user_name || "—"}</strong>
+              {r.user_role && (
+                <span className={styles.userRole}>
+                  ({r.user_role})
+                </span>
+              )}
+            </td>
+            <td style={tdStyle}>
+              <ActionBadge action={r.action} />
+            </td>
+            <td style={tdStyle}>
+              <span className={styles.targetType}>
+                {r.target_type || "—"}
+              </span>
+              {r.target_label && <div>{r.target_label}</div>}
+            </td>
+            <td style={{ ...tdStyle }} className={styles.detailCell}>
+              {r.summary || "—"}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
   );
 }
 
@@ -234,17 +218,12 @@ function ActionBadge({ action }: { action: string }) {
   };
   const c = palette[action] ?? { bg: "#1c1c1c", fg: "#a3a3a3", border: "#2a2a2a" };
   return (
-    <span style={{
-      display: "inline-block",
-      padding: "0.15rem 0.5rem",
-      borderRadius: "999px",
-      background: c.bg,
-      color: c.fg,
-      border: `1px solid ${c.border}`,
-      fontSize: "0.78rem",
-      fontWeight: 500,
-      letterSpacing: "0.02em",
-    }}>{action}</span>
+    <span
+      className={styles.actionBadge}
+      style={{ background: c.bg, color: c.fg, border: `1px solid ${c.border}` }}
+    >
+      {action}
+    </span>
   );
 }
 
@@ -262,72 +241,3 @@ function formatTs(iso: string): string {
   const mm    = String(d.getUTCMinutes()).padStart(2, "0");
   return `${month} ${day}, ${yr} ${hh}:${mm} UTC`;
 }
-
-
-const cardHeaderStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center",
-  fontWeight: 600, fontSize: "0.95rem",
-  marginBottom: "1rem",
-};
-
-const filtersRowStyle: React.CSSProperties = {
-  display: "flex", flexWrap: "wrap",
-  gap: "0.75rem", alignItems: "flex-end",
-};
-
-const fieldStyle: React.CSSProperties = {
-  display: "flex", flexDirection: "column",
-  gap: "0.35rem", minWidth: "10rem",
-};
-
-const fieldLabelStyle: React.CSSProperties = {
-  fontSize: "0.7rem", letterSpacing: "0.06em",
-  textTransform: "uppercase", fontWeight: 600,
-  color: tokens.textMuted,
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "0.55rem 0.75rem",
-  background: "var(--db-bg-input, #0d0d0d)",
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", fontSize: "0.9rem",
-  minWidth: "10rem",
-};
-
-const clearBtnStyle: React.CSSProperties = {
-  padding: "0.55rem 0.85rem",
-  background: "transparent", color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem", fontSize: "0.85rem",
-  cursor: "pointer",
-};
-
-const thStyle: React.CSSProperties = {
-  textAlign: "left",
-  padding: "0.6rem 0.75rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.78rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  borderBottom: `1px solid ${tokens.border}`,
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  verticalAlign: "top",
-};
-
-const monoMuted: React.CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  color: tokens.textMuted,
-  whiteSpace: "nowrap",
-};
-
-const fineStyle: React.CSSProperties = {
-  marginTop: "1rem", color: tokens.textMuted,
-  fontSize: "0.85rem", lineHeight: 1.55,
-};
