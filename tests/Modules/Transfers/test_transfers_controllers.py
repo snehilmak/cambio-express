@@ -7,6 +7,7 @@ from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
 def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
@@ -36,42 +37,44 @@ def _seed_transfer(store_id, *, send_date=None, send_amount=100.0,
     return t.id
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 # ── parse_store_ids contract ────────────────────────────────
 
 
-def test_list_requires_store_ids():
-    resp = _client().get("/transfers")
+def test_list_requires_store_ids(api_client):
+    resp = api_client.get("/transfers")
     assert resp.status_code == 422
 
 
-def test_list_rejects_non_numeric_store_ids():
-    resp = _client().get("/transfers", params={"store_ids": "abc"})
+def test_list_rejects_non_numeric_store_ids(api_client):
+    resp = api_client.get("/transfers", params={"store_ids": "abc"})
     assert resp.status_code == 422
 
 
-def test_list_rejects_empty_store_ids():
-    resp = _client().get("/transfers", params={"store_ids": ""})
+def test_list_rejects_empty_store_ids(api_client):
+    resp = api_client.get("/transfers", params={"store_ids": ""})
     assert resp.status_code == 422
 
 
-def test_list_rejects_invalid_dir():
-    resp = _client().get(
+def test_list_rejects_invalid_dir(api_client):
+    resp = api_client.get(
         "/transfers", params={"store_ids": "1", "dir": "garbage"},
     )
     assert resp.status_code == 422
 
 
-def test_list_rejects_out_of_range_per_page():
-    resp = _client().get(
+def test_list_rejects_out_of_range_per_page(api_client):
+    resp = api_client.get(
         "/transfers", params={"store_ids": "1", "per_page": 0},
     )
     assert resp.status_code == 422
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers", params={"store_ids": "1", "per_page": 1000},
     )
     assert resp.status_code == 422
@@ -80,11 +83,11 @@ def test_list_rejects_out_of_range_per_page():
 # ── Happy paths ─────────────────────────────────────────────
 
 
-def test_list_response_envelope(test_store_id):
+def test_list_response_envelope(test_store_id, api_client):
     with db_session():
         for i in range(3):
             _seed_transfer(test_store_id, send_amount=100.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers", params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 200
@@ -96,13 +99,13 @@ def test_list_response_envelope(test_store_id):
     assert len(body["rows"]) == 3
 
 
-def test_list_filters_company(test_store_id):
+def test_list_filters_company(test_store_id, api_client):
     with db_session():
         _seed_transfer(test_store_id, company="Intermex",
                         confirm_number="X-Intermex")
         _seed_transfer(test_store_id, company="Maxi",
                         confirm_number="X-Maxi")
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "company": "Maxi"},
     )
@@ -112,13 +115,13 @@ def test_list_filters_company(test_store_id):
     assert body["rows"][0]["company"] == "Maxi"
 
 
-def test_list_global_search_q(test_store_id):
+def test_list_global_search_q(test_store_id, api_client):
     with db_session():
         _seed_transfer(test_store_id, sender_name="Alice",
                         confirm_number="X-A")
         _seed_transfer(test_store_id, sender_name="Bob",
                         confirm_number="X-B")
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "q": "alice"},
     )
@@ -126,11 +129,11 @@ def test_list_global_search_q(test_store_id):
     assert resp.json()["total"] == 1
 
 
-def test_list_pagination(test_store_id):
+def test_list_pagination(test_store_id, api_client):
     with db_session():
         for i in range(5):
             _seed_transfer(test_store_id, send_amount=100.0 * (i + 1))
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers",
         params={"store_ids": str(test_store_id), "per_page": 2, "page": 1},
     )
@@ -142,7 +145,7 @@ def test_list_pagination(test_store_id):
     assert len(body["rows"]) == 2
 
 
-def test_list_filters_date_range_string_input(test_store_id):
+def test_list_filters_date_range_string_input(test_store_id, api_client):
     """Controller takes `date_from`/`date_to` as YYYY-MM-DD strings;
     the underlying TransferFilters parses them. Malformed strings drop
     the filter (legacy behavior)."""
@@ -154,7 +157,7 @@ def test_list_filters_date_range_string_input(test_store_id):
                         confirm_number="X-LW")
         _seed_transfer(test_store_id, send_date=today,
                         confirm_number="X-T")
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers",
         params={
             "store_ids": str(test_store_id),
@@ -167,7 +170,7 @@ def test_list_filters_date_range_string_input(test_store_id):
     assert confirms == {"X-T"}
 
 
-def test_list_multi_store_aggregation(test_store_id):
+def test_list_multi_store_aggregation(test_store_id, api_client):
     from api.Modules.Tenancy.Models import Store
     from tests._app import db
     with db_session():
@@ -177,7 +180,7 @@ def test_list_multi_store_aggregation(test_store_id):
         sid2 = s2.id
         _seed_transfer(test_store_id, confirm_number="X-Mine")
         _seed_transfer(sid2, confirm_number="X-Theirs")
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers",
         params={"store_ids": f"{test_store_id},{sid2}"},
     )
@@ -185,14 +188,14 @@ def test_list_multi_store_aggregation(test_store_id):
     assert resp.json()["total"] == 2
 
 
-def test_list_rows_have_total_collected(test_store_id):
+def test_list_rows_have_total_collected(test_store_id, api_client):
     """Wire test: the row payload must include `total_collected`
     (send + fee + tax) so the React table can render the column
     without recomputing client-side."""
     with db_session():
         _seed_transfer(test_store_id, send_amount=100.0,
                         fee=2.0, federal_tax=1.0)
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers", params={"store_ids": str(test_store_id)},
     )
     body = resp.json()
@@ -213,8 +216,8 @@ def test_flask_dispatcher_routes_transfers_to_fastapi(client, test_store_id):
     assert resp.get_json()["total"] == 1
 
 
-def test_openapi_includes_transfers_path():
-    resp = _client().get("/openapi.json")
+def test_openapi_includes_transfers_path(api_client):
+    resp = api_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/transfers" in paths
@@ -249,9 +252,9 @@ def _seed_employee(store_id, *, name="Cashier 1", is_active=True):
     return e.id
 
 
-def test_create_requires_jwt(test_store_id):
+def test_create_requires_jwt(test_store_id, api_client):
     """No bearer header → 401 from get_principal."""
-    resp = _client().post(
+    resp = api_client.post(
         "/transfers",
         json={
             "send_date": "2026-01-15",
@@ -535,9 +538,9 @@ def test_update_returns_404_for_cross_tenant(client, test_store_id):
     assert resp.status_code == 404
 
 
-def test_update_requires_jwt(test_store_id):
+def test_update_requires_jwt(test_store_id, api_client):
     """No bearer header → 401 from get_principal."""
-    resp = _client().put(
+    resp = api_client.put(
         "/transfers/1",
         json={
             "send_date": "2026-01-15",
@@ -588,8 +591,8 @@ def test_employees_returns_active_roster(client, test_store_id):
     assert "ZRetired" not in names
 
 
-def test_employees_requires_jwt():
-    resp = _client().get("/transfers/employees")
+def test_employees_requires_jwt(api_client):
+    resp = api_client.get("/transfers/employees")
     assert resp.status_code == 401
 
 

@@ -1,18 +1,21 @@
 """HTTP integration tests for the Auth Controllers (PR 20)."""
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 # ── POST /auth/login ────────────────────────────────────────
 
 
-def test_login_returns_token_and_summary(test_store_id):
-    resp = _client().post(
+def test_login_returns_token_and_summary(test_store_id, api_client):
+    resp = api_client.post(
         "/auth/login",
         json={
             "username": "admin@test.com",
@@ -31,8 +34,8 @@ def test_login_returns_token_and_summary(test_store_id):
     assert "store.admin" in body["permissions"]
 
 
-def test_login_returns_401_on_bad_password(test_store_id):
-    resp = _client().post(
+def test_login_returns_401_on_bad_password(test_store_id, api_client):
+    resp = api_client.post(
         "/auth/login",
         json={
             "username": "admin@test.com",
@@ -44,8 +47,8 @@ def test_login_returns_401_on_bad_password(test_store_id):
     assert resp.json()["detail"] == "Invalid username or password"
 
 
-def test_login_returns_401_on_unknown_user(test_store_id):
-    resp = _client().post(
+def test_login_returns_401_on_unknown_user(test_store_id, api_client):
+    resp = api_client.post(
         "/auth/login",
         json={
             "username": "ghost@x.com",
@@ -56,7 +59,7 @@ def test_login_returns_401_on_unknown_user(test_store_id):
     assert resp.status_code == 401
 
 
-def test_login_finds_superadmin_with_null_store_id():
+def test_login_finds_superadmin_with_null_store_id(api_client):
     """The seeded superadmin is pre-enrolled in TOTP (see
     tests/conftest.py's seed_test_data) so login returns a 2FA
     pending response, not a full token. enroll_required must be
@@ -64,7 +67,7 @@ def test_login_finds_superadmin_with_null_store_id():
     pending_token via /auth/login/totp to get the access token.
     Tests that need a real bearer token use the
     `login_superadmin(client)` helper from conftest."""
-    resp = _client().post(
+    resp = api_client.post(
         "/auth/login",
         json={
             "username": "superadmin",
@@ -80,10 +83,10 @@ def test_login_finds_superadmin_with_null_store_id():
     assert body["user_id"]
 
 
-def test_login_rejects_extra_fields(test_store_id):
+def test_login_rejects_extra_fields(test_store_id, api_client):
     """Pydantic schema sets extra="forbid" — typos in the request
     body should fail loudly with 422."""
-    resp = _client().post(
+    resp = api_client.post(
         "/auth/login",
         json={
             "username": "admin@test.com",
@@ -95,8 +98,8 @@ def test_login_rejects_extra_fields(test_store_id):
     assert resp.status_code == 422
 
 
-def test_login_rejects_empty_username(test_store_id):
-    resp = _client().post(
+def test_login_rejects_empty_username(test_store_id, api_client):
+    resp = api_client.post(
         "/auth/login",
         json={"username": "", "password": "x", "store_id": test_store_id},
     )
@@ -106,8 +109,8 @@ def test_login_rejects_empty_username(test_store_id):
 # ── GET /auth/me ────────────────────────────────────────────
 
 
-def test_me_returns_principal_for_valid_token(test_store_id):
-    c = _client()
+def test_me_returns_principal_for_valid_token(test_store_id, api_client):
+    c = api_client
     login = c.post(
         "/auth/login",
         json={
@@ -126,28 +129,28 @@ def test_me_returns_principal_for_valid_token(test_store_id):
     assert "store.admin" in body["permissions"]
 
 
-def test_me_rejects_missing_authorization_header():
-    resp = _client().get("/auth/me")
+def test_me_rejects_missing_authorization_header(api_client):
+    resp = api_client.get("/auth/me")
     assert resp.status_code == 401
     assert resp.headers.get("www-authenticate") == "Bearer"
 
 
-def test_me_rejects_non_bearer_authorization():
-    resp = _client().get(
+def test_me_rejects_non_bearer_authorization(api_client):
+    resp = api_client.get(
         "/auth/me", headers={"Authorization": "Basic abc"},
     )
     assert resp.status_code == 401
 
 
-def test_me_rejects_empty_bearer_token():
-    resp = _client().get(
+def test_me_rejects_empty_bearer_token(api_client):
+    resp = api_client.get(
         "/auth/me", headers={"Authorization": "Bearer "},
     )
     assert resp.status_code == 401
 
 
-def test_me_rejects_tampered_token(test_store_id):
-    c = _client()
+def test_me_rejects_tampered_token(test_store_id, api_client):
+    c = api_client
     login = c.post(
         "/auth/login",
         json={
@@ -175,8 +178,8 @@ def test_me_rejects_tampered_token(test_store_id):
     assert "invalid" in resp.headers.get("www-authenticate", "").lower()
 
 
-def test_me_rejects_garbage_token():
-    resp = _client().get(
+def test_me_rejects_garbage_token(api_client):
+    resp = api_client.get(
         "/auth/me", headers={"Authorization": "Bearer not-a-real-jwt"},
     )
     assert resp.status_code == 401
@@ -199,8 +202,8 @@ def test_flask_dispatcher_routes_login_to_fastapi(client, test_store_id):
     assert resp.get_json()["role"] == "admin"
 
 
-def test_openapi_includes_auth_paths():
-    resp = _client().get("/openapi.json")
+def test_openapi_includes_auth_paths(api_client):
+    resp = api_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/auth/login" in paths
@@ -291,11 +294,11 @@ def test_login_records_login_event(client, test_store_id, test_admin_id):
 # Flask `/login` POST behavior including the employee rejection.
 
 
-def test_cross_store_login_admin_finds_store_and_returns_token(test_store_id):
+def test_cross_store_login_admin_finds_store_and_returns_token(test_store_id, api_client):
     """An admin signing in from the cookieless landing page gets
     a JWT scoped to their home store, even though the request body
     didn't carry `store_id`."""
-    resp = _client().post(
+    resp = api_client.post(
         "/auth/login-cross-store",
         json={"username": "admin@test.com", "password": "testpass123!"},
     )
@@ -310,7 +313,7 @@ def test_cross_store_login_admin_finds_store_and_returns_token(test_store_id):
     assert "store.admin" in body["permissions"]
 
 
-def test_cross_store_login_rejects_employee():
+def test_cross_store_login_rejects_employee(api_client):
     """Employees must use their store's slug-scoped sign-in URL.
     The cookieless cross-store login refuses them with the same
     opaque 401 as a bad password — never leaks role info."""
@@ -323,7 +326,7 @@ def test_cross_store_login_rejects_employee():
     u.set_password("emppass123!")
     db.session.add(u); db.session.commit()
     try:
-        resp = _client().post(
+        resp = api_client.post(
             "/auth/login-cross-store",
             json={"username": "empx@test.com", "password": "emppass123!"},
         )
@@ -336,27 +339,27 @@ def test_cross_store_login_rejects_employee():
         db.session.commit()
 
 
-def test_cross_store_login_rejects_bad_password(test_store_id):  # noqa: ARG001
-    resp = _client().post(
+def test_cross_store_login_rejects_bad_password(test_store_id, api_client):  # noqa: ARG001
+    resp = api_client.post(
         "/auth/login-cross-store",
         json={"username": "admin@test.com", "password": "wrong"},
     )
     assert resp.status_code == 401
 
 
-def test_cross_store_login_rejects_unknown_user():
-    resp = _client().post(
+def test_cross_store_login_rejects_unknown_user(api_client):
+    resp = api_client.post(
         "/auth/login-cross-store",
         json={"username": "ghost@nope.com", "password": "x"},
     )
     assert resp.status_code == 401
 
 
-def test_cross_store_login_token_works_against_me(test_store_id):  # noqa: ARG001
+def test_cross_store_login_token_works_against_me(test_store_id, api_client):  # noqa: ARG001
     """The token issued by /auth/login-cross-store must validate
     against /auth/me — same JWT issuer, same signature, same
     claim shape as /auth/login."""
-    c = _client()
+    c = api_client
     login = c.post(
         "/auth/login-cross-store",
         json={"username": "admin@test.com", "password": "testpass123!"},
@@ -507,8 +510,8 @@ def test_change_password_rejects_mismatch(client, test_store_id):
     assert resp.get_json()["detail"]["field"] == "confirm_password"
 
 
-def test_change_password_requires_jwt():
-    resp = _client().post(
+def test_change_password_requires_jwt(api_client):
+    resp = api_client.post(
         "/auth/change-password",
         json={
             "current_password": "x",

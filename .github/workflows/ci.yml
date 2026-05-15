@@ -16,19 +16,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          # Pinned to 3.11 because Python 3.12's stricter asyncio
-          # task lifecycle interacts badly with coverage's tracer
-          # over our 2,300-test suite — leaked "Task was destroyed
-          # but it is pending!" messages corrupt the SQLAlchemy
-          # session state for subsequent tests, manifesting as a
-          # flaky `test_unlock_404_when_no_report` SETUP failure
-          # (the seeded test-store row goes missing). Even with
-          # coverage's `--concurrency=thread` flag the leak is
-          # only reduced, not eliminated, because the underlying
-          # cause is bare FastAPI TestClient instances spread
-          # across many test files (~189 call sites).
-          # Refactoring those is a separate cleanup PR; in the
-          # meantime 3.11 keeps CI green.
+          # Pinned to 3.11. The leaked-TestClient pathology that
+          # originally forced this pin was fixed in PR #555 (every
+          # bare ``TestClient(api_app)`` site migrated to a
+          # ``yield``-managed fixture; the conftest's autoclose
+          # monkey-patch deleted). 3.12 has not been validated end-
+          # to-end yet — bumping deserves its own PR.
           python-version: "3.11"
           cache: pip
 

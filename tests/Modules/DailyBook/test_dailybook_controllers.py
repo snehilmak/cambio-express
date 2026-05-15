@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
 def _seed_report(store_id, report_date, **kwargs):
@@ -15,21 +16,23 @@ def _seed_report(store_id, report_date, **kwargs):
     return r.id
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
 # ── /daily/{store_id}/{report_date} ─────────────────────────
 
 
-def test_get_report_returns_404_when_missing(test_store_id):
+def test_get_report_returns_404_when_missing(test_store_id, api_client):
     today = date.today().isoformat()
-    resp = _client().get(f"/daily/{test_store_id}/{today}")
+    resp = api_client.get(f"/daily/{test_store_id}/{today}")
     assert resp.status_code == 404
 
 
-def test_get_report_returns_summary(test_store_id):
+def test_get_report_returns_summary(test_store_id, api_client):
     today = date.today()
     with db_session():
         _seed_report(
@@ -37,7 +40,7 @@ def test_get_report_returns_summary(test_store_id):
             taxable_sales=100.0, sales_tax=10.0,
             cash_expense=20.0,
         )
-    resp = _client().get(f"/daily/{test_store_id}/{today.isoformat()}")
+    resp = api_client.get(f"/daily/{test_store_id}/{today.isoformat()}")
     assert resp.status_code == 200
     body = resp.json()
     assert body["report"]["taxable_sales"] == 100.0
@@ -45,27 +48,27 @@ def test_get_report_returns_summary(test_store_id):
     assert body["report"]["locked"] is False
 
 
-def test_get_report_rejects_malformed_date(test_store_id):
-    resp = _client().get(f"/daily/{test_store_id}/not-a-date")
+def test_get_report_rejects_malformed_date(test_store_id, api_client):
+    resp = api_client.get(f"/daily/{test_store_id}/not-a-date")
     assert resp.status_code == 422
 
 
-def test_get_report_rejects_zero_store_id():
+def test_get_report_rejects_zero_store_id(api_client):
     """Path validation: store_id must be ≥ 1."""
-    resp = _client().get("/daily/0/2026-05-06")
+    resp = api_client.get("/daily/0/2026-05-06")
     assert resp.status_code == 422
 
 
 # ── /daily/{store_id}/period ────────────────────────────────
 
 
-def test_period_returns_summary(test_store_id):
+def test_period_returns_summary(test_store_id, api_client):
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_report(test_store_id, yesterday, taxable_sales=100.0)
         _seed_report(test_store_id, today, taxable_sales=200.0)
-    resp = _client().get(
+    resp = api_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": yesterday.isoformat(), "to": today.isoformat()},
     )
@@ -75,14 +78,14 @@ def test_period_returns_summary(test_store_id):
     assert body["total_receipts"] == 300.0
 
 
-def test_period_swaps_when_from_after_to(test_store_id):
+def test_period_swaps_when_from_after_to(test_store_id, api_client):
     """Mirror the Reports period dependency: if from > to, swap so the
     SQL window stays non-empty."""
     today = date.today()
     yesterday = today - timedelta(days=1)
     with db_session():
         _seed_report(test_store_id, today, taxable_sales=42.0)
-    resp = _client().get(
+    resp = api_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": today.isoformat(), "to": yesterday.isoformat()},
     )
@@ -90,22 +93,22 @@ def test_period_swaps_when_from_after_to(test_store_id):
     assert resp.json()["total_receipts"] == 42.0
 
 
-def test_period_requires_from_and_to(test_store_id):
-    resp = _client().get(f"/daily/{test_store_id}/period")
+def test_period_requires_from_and_to(test_store_id, api_client):
+    resp = api_client.get(f"/daily/{test_store_id}/period")
     assert resp.status_code == 422
 
 
-def test_period_rejects_malformed_dates(test_store_id):
-    resp = _client().get(
+def test_period_rejects_malformed_dates(test_store_id, api_client):
+    resp = api_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": "not-a-date", "to": "2026-05-06"},
     )
     assert resp.status_code == 422
 
 
-def test_period_empty_range_returns_zeros(test_store_id):
+def test_period_empty_range_returns_zeros(test_store_id, api_client):
     today = date.today().isoformat()
-    resp = _client().get(
+    resp = api_client.get(
         f"/daily/{test_store_id}/period",
         params={"from": today, "to": today},
     )
@@ -130,8 +133,8 @@ def test_flask_dispatcher_routes_daily_to_fastapi(client, test_store_id):
     assert resp.get_json()["report"]["taxable_sales"] == 99.0
 
 
-def test_openapi_includes_daily_paths():
-    resp = _client().get("/openapi.json")
+def test_openapi_includes_daily_paths(api_client):
+    resp = api_client.get("/openapi.json")
     assert resp.status_code == 200
     paths = set(resp.json()["paths"].keys())
     assert "/daily/{store_id}/{report_date}" in paths
@@ -247,9 +250,9 @@ def test_put_rejects_extra_fields(client, test_store_id):
     assert resp.status_code == 422
 
 
-def test_put_requires_jwt(test_store_id):
+def test_put_requires_jwt(test_store_id, api_client):
     today_iso = date.today().isoformat()
-    resp = _client().put(
+    resp = api_client.put(
         f"/daily/{test_store_id}/{today_iso}",
         json={"taxable_sales": 100.0},
     )
@@ -332,9 +335,9 @@ def test_lock_unlock_reject_cross_store_jwt(client, test_store_id):
     assert r2.status_code == 403
 
 
-def test_lock_unlock_require_jwt(test_store_id):
+def test_lock_unlock_require_jwt(test_store_id, api_client):
     today_iso = date.today().isoformat()
-    c = _client()
+    c = api_client
     r1 = c.post(f"/daily/{test_store_id}/{today_iso}/lock")
     r2 = c.post(f"/daily/{test_store_id}/{today_iso}/unlock")
     assert r1.status_code == 401
@@ -477,9 +480,9 @@ def test_line_items_reject_cross_store_jwt(client, test_store_id):
     assert p.status_code == 403
 
 
-def test_line_items_require_jwt(test_store_id):
+def test_line_items_require_jwt(test_store_id, api_client):
     today_iso = date.today().isoformat()
-    c = _client()
+    c = api_client
     g = c.get(f"/daily/{test_store_id}/{today_iso}/line-items")
     p = c.post(
         f"/daily/{test_store_id}/{today_iso}/line-items",

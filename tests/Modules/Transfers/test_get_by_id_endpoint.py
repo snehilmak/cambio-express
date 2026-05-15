@@ -3,6 +3,7 @@ from datetime import date
 
 from fastapi.testclient import TestClient
 from tests._app import db, db_session
+import pytest
 
 
 def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
@@ -22,18 +23,20 @@ def _seed_transfer(store_id, *, send_amount=100.0, fee=2.0,
     return t.id
 
 
-def _client():
+@pytest.fixture
+def api_client():
     from api.main import api_app
-    return TestClient(api_app)
+    with TestClient(api_app) as c:
+        yield c
 
 
-def test_get_transfer_returns_envelope(test_store_id):
+def test_get_transfer_returns_envelope(test_store_id, api_client):
     with db_session():
         tid = _seed_transfer(
             test_store_id, send_amount=500.0,
             fee=5.0, federal_tax=2.0, company="Maxi",
         )
-    resp = _client().get(
+    resp = api_client.get(
         f"/transfers/{tid}", params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 200
@@ -44,15 +47,15 @@ def test_get_transfer_returns_envelope(test_store_id):
     assert body["transfer"]["total_collected"] == 507.0
 
 
-def test_get_transfer_404_for_missing(test_store_id):
-    resp = _client().get(
+def test_get_transfer_404_for_missing(test_store_id, api_client):
+    resp = api_client.get(
         "/transfers/99999",
         params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 404
 
 
-def test_get_transfer_404_for_other_store(test_store_id):
+def test_get_transfer_404_for_other_store(test_store_id, api_client):
     """Cross-tenant lookup returns 404 (never 403) so tenancy
     boundaries stay opaque."""
     from api.Modules.Tenancy.Models import Store
@@ -62,29 +65,29 @@ def test_get_transfer_404_for_other_store(test_store_id):
                     email="o@x.com", plan="trial")
         db.session.add(s2); db.session.commit()
         tid = _seed_transfer(s2.id)
-    resp = _client().get(
+    resp = api_client.get(
         f"/transfers/{tid}",
         params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 404
 
 
-def test_get_transfer_requires_store_ids(test_store_id):
+def test_get_transfer_requires_store_ids(test_store_id, api_client):
     with db_session():
         tid = _seed_transfer(test_store_id)
-    resp = _client().get(f"/transfers/{tid}")
+    resp = api_client.get(f"/transfers/{tid}")
     assert resp.status_code == 422
 
 
-def test_get_transfer_rejects_zero_id(test_store_id):
+def test_get_transfer_rejects_zero_id(test_store_id, api_client):
     """Path validation: transfer_id must be ≥ 1."""
-    resp = _client().get(
+    resp = api_client.get(
         "/transfers/0", params={"store_ids": str(test_store_id)},
     )
     assert resp.status_code == 422
 
 
-def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id):
+def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id, api_client):
     """`store_ids=1,2` finds a transfer in either store — same shape
     as the list endpoint."""
     from api.Modules.Tenancy.Models import Store
@@ -95,7 +98,7 @@ def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id):
         db.session.add(s2); db.session.commit()
         sid2 = s2.id
         tid = _seed_transfer(sid2, send_amount=99.0)
-    resp = _client().get(
+    resp = api_client.get(
         f"/transfers/{tid}",
         params={"store_ids": f"{test_store_id},{sid2}"},
     )
@@ -103,7 +106,7 @@ def test_get_transfer_finds_in_umbrella_via_multi_store_ids(test_store_id):
     assert resp.json()["transfer"]["send_amount"] == 99.0
 
 
-def test_openapi_includes_get_path():
-    resp = _client().get("/openapi.json")
+def test_openapi_includes_get_path(api_client):
+    resp = api_client.get("/openapi.json")
     paths = set(resp.json()["paths"].keys())
     assert "/transfers/{transfer_id}" in paths
