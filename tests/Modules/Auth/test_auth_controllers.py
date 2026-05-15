@@ -263,6 +263,132 @@ def test_logout_clears_access_token_cookie(test_store_id, api_client):
     assert me.status_code == 401
 
 
+# ── Refresh tokens (PR #560) ────────────────────────────────
+
+
+def test_login_sets_refresh_token_cookie(test_store_id, client):
+    """Every login path drops a separate ``db_refresh_token``
+    httpOnly cookie scoped to ``/api/v2/auth``. SPA uses it to
+    silently rotate the access JWT on expiry. We use the conftest
+    ``client`` (full asgi_app, sees ``/api/v2/...`` paths) so the
+    cookie's ``Path=/api/v2/auth`` actually matches subsequent
+    refresh hits."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert resp.status_code == 200
+    set_cookie = resp.headers.get_list("set-cookie")
+    matching = [c for c in set_cookie if c.startswith("db_refresh_token=")]
+    assert matching, f"expected db_refresh_token cookie; got {set_cookie!r}"
+    cookie = matching[0]
+    assert "HttpOnly" in cookie
+    assert "Path=/api/v2/auth" in cookie
+
+
+def test_refresh_rotates_access_and_refresh_cookies(
+    test_store_id, client,
+):
+    """Successful refresh issues a brand-new access cookie + a
+    brand-new refresh cookie. Refresh-token jti rotates (the
+    legitimate test of "rotation happened" — the access JWT
+    might be byte-identical to the login one if both issuances
+    fall in the same wall-clock second, since HS256 + same
+    payload is deterministic)."""
+    from tests.conftest import _starlette_client
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    assert login.status_code == 200
+    old_refresh_jti = _starlette_client.cookies.get("db_refresh_token")
+    assert old_refresh_jti
+
+    refresh = client.post("/api/v2/auth/refresh")
+    assert refresh.status_code == 200, refresh.get_data(as_text=True)
+    new_cookies = refresh.headers.get_list("set-cookie")
+    assert any(c.startswith("db_access_token=") for c in new_cookies)
+    assert any(c.startswith("db_refresh_token=") for c in new_cookies)
+    # Rotation: the cookie jar now holds a NEW jti.
+    new_refresh_jti = _starlette_client.cookies.get("db_refresh_token")
+    assert new_refresh_jti
+    assert new_refresh_jti != old_refresh_jti
+    # Identity claims surface in the body so the SPA can update
+    # its local cache without a separate /auth/me roundtrip.
+    body = refresh.get_json()
+    assert body["role"] == "admin"
+    assert body["store_id"] == test_store_id
+    assert body["username"] == "admin@test.com"
+
+
+def test_refresh_replay_burns_the_chain(test_store_id, client):
+    """Presenting the same refresh token twice — second call is a
+    replay. Server rejects, clears cookies."""
+    client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    from tests.conftest import _starlette_client
+    first_jti = _starlette_client.cookies.get("db_refresh_token")
+    assert first_jti
+
+    rot1 = client.post("/api/v2/auth/refresh")
+    assert rot1.status_code == 200
+
+    # Replay the original jti directly via the session client.
+    replay = _starlette_client.request(
+        "POST", "/api/v2/auth/refresh",
+        cookies={"db_refresh_token": first_jti},
+    )
+    assert replay.status_code == 401, replay.text
+
+
+def test_refresh_without_cookie_returns_401(client):
+    resp = client.post("/api/v2/auth/refresh")
+    assert resp.status_code == 401
+
+
+def test_logout_revokes_refresh_token(test_store_id, client):
+    """Logout clears both cookies AND marks the refresh row
+    revoked, so a subsequent refresh with the same jti fails
+    even if the cookie were replayed."""
+    client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": test_store_id,
+        },
+    )
+    from tests.conftest import _starlette_client
+    captured_jti = _starlette_client.cookies.get("db_refresh_token")
+    assert captured_jti
+
+    logout = client.post("/api/v2/auth/logout")
+    assert logout.status_code == 204
+    clears = logout.headers.get_list("set-cookie")
+    assert any(c.startswith("db_access_token=") for c in clears)
+    assert any(c.startswith("db_refresh_token=") for c in clears)
+
+    replay = _starlette_client.request(
+        "POST", "/api/v2/auth/refresh",
+        cookies={"db_refresh_token": captured_jti},
+    )
+    assert replay.status_code == 401
+
+
 # ── Strangler-fig dispatch ──────────────────────────────────
 
 

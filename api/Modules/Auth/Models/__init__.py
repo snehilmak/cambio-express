@@ -1,6 +1,6 @@
 """Auth — Models.
 
-Four classes own the auth state that isn't on ``User`` itself:
+Five classes own the auth state that isn't on ``User`` itself:
 
 * ``PasswordResetToken`` — short-lived single-use sha256-hashed
                            token for the /forgot-password flow.
@@ -11,6 +11,11 @@ Four classes own the auth state that isn't on ``User`` itself:
                            (laptop Touch ID, phone, hardware key).
 * ``LoginEvent``         — one row per successful login. Drives the
                            DAU/MAU report.
+* ``RefreshToken``       — opaque secret, rotating, 14-day TTL.
+                           Backs the silent-refresh flow on the SPA
+                           so users don't get bounced to /login when
+                           a 30-minute access token expires
+                           mid-workflow.
 
 Re-exports of ``Store``, ``StoreOwnerLink``, ``User`` (which the
 Auth services use heavily) live alongside the canonical definitions
@@ -125,6 +130,49 @@ class LoginEvent(Base):
     )
 
 
+class RefreshToken(Base):
+    """Opaque, rotating, server-side-revocable refresh credential.
+
+    Pairs with the 30-minute ``db_access_token`` JWT to enable
+    silent refresh: when an API request 401s from an expired
+    access cookie, the SPA hits ``/auth/refresh``, which looks up
+    the row keyed by this token's ``jti`` and (if not revoked and
+    not expired) rotates it — issues a fresh access token + fresh
+    refresh token, revokes the old refresh row, and points
+    ``rotated_to_id`` at the successor.
+
+    Why rotate: if the same refresh token is ever presented twice,
+    one of those calls is a replay attack (the legitimate user
+    rotated past it). The repeated presentation flips ``revoked_at``
+    on the successor and ends the chain — a stolen refresh cookie
+    burns out at first attempted reuse.
+
+    Why opaque (not a JWT): refresh tokens MUST be revocable
+    mid-TTL. A JWT can't be unsigned. An opaque token whose secret
+    lives in the DB is revoked by flipping a column.
+    """
+
+    __tablename__ = "refresh_token"
+    id              = Column(Integer, primary_key=True)
+    # 32-byte URL-safe random — 256 bits of entropy.
+    jti             = Column(String(64), unique=True, nullable=False, index=True)
+    user_id         = Column(Integer, ForeignKey("user.id"),
+                              nullable=False, index=True)
+    created_at      = Column(DateTime, default=datetime.utcnow,
+                              nullable=False)
+    expires_at      = Column(DateTime, nullable=False)
+    # NULL until the token is revoked (rotation, logout, or
+    # replay-detected). Once non-NULL the row is dead — refresh
+    # attempts return 401.
+    revoked_at      = Column(DateTime, nullable=True)
+    # When the token was rotated (revoked + a successor minted),
+    # the new row's id goes here. Lets ops trace the chain for
+    # forensics if the replay detector flips.
+    rotated_to_id   = Column(
+        Integer, ForeignKey("refresh_token.id"), nullable=True,
+    )
+
+
 # Re-export Tenancy models so existing
 # ``from api.Modules.Auth.Models import Store`` etc. keep working.
 from api.Modules.Tenancy.Models import (  # noqa: E402
@@ -134,5 +182,5 @@ from api.Modules.Tenancy.Models import (  # noqa: E402
 
 __all__ = [
     "LoginEvent", "Passkey", "PasswordResetToken", "RecoveryCode",
-    "Store", "StoreOwnerLink", "User",
+    "RefreshToken", "Store", "StoreOwnerLink", "User",
 ]
