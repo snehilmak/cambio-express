@@ -1,0 +1,29 @@
+/* Page-specific styles for EditTransfer.tsx. */
+
+.sectionTitle {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0 0 1rem;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+}
+
+.note {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.taxPreview {
+  background: var(--db-surface-2, #141414) !important;
+  color: var(--db-text-muted, #a3a3a3) !important;
+  cursor: default;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
