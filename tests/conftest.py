@@ -17,15 +17,16 @@ os.environ["RATELIMIT_ENABLED"] = "0"
 import pytest
 from datetime import date, datetime, timedelta
 
-# Speed up the test suite by downgrading werkzeug's password hashing to
-# 1 PBKDF2 iteration. Production uses the default 600,000 — deliberately
-# slow to defeat brute force — but tests don't need that, and before this
-# the suite spent roughly 12s inside set_password calls alone. MUST run
-# before `from tests._app import ...` because app binds `generate_password_hash`
-# at import time via `from werkzeug.security import generate_password_hash`.
-import werkzeug.security as _wsec
-_ORIG_HASH = _wsec.generate_password_hash
-_wsec.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=8: (
+# Speed up the test suite by downgrading password hashing to a
+# single PBKDF2 iteration. Production uses the default scrypt cost
+# (matches werkzeug 3.x) — deliberately slow to defeat brute force
+# — but tests don't need that. Before this hook the suite spent
+# roughly 12s inside set_password calls alone. MUST run before
+# ``from tests._app import …`` because the Tenancy model binds
+# ``generate_password_hash`` at import time.
+import api.Core.PasswordHash as _ph
+_ORIG_HASH = _ph.generate_password_hash
+_ph.generate_password_hash = lambda pw, method="pbkdf2:sha256:1", salt_length=8: (
     _ORIG_HASH(pw, method=method, salt_length=salt_length)
 )
 
