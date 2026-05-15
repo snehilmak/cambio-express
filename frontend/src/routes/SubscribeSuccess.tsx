@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 
 import { useStoreInfo } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
-import { tokens } from "../components/ui";
+import { ButtonLink } from "../components/ui";
+import styles from "./SubscribeSuccess.module.css";
 
 // /app/subscribe/success — Stripe Checkout's success_url. Stripe
 // redirects here right after the customer pays; the
@@ -36,8 +37,8 @@ export default function SubscribeSuccess() {
 
   if (!identity) {
     return (
-      <main style={pageStyle}>
-        <p style={{ color: tokens.textMuted }}>
+      <main className={styles.page}>
+        <p className={styles.muted}>
           Sign in to view your subscription status.
         </p>
       </main>
@@ -45,7 +46,7 @@ export default function SubscribeSuccess() {
   }
 
   return (
-    <main style={pageStyle}>
+    <main className={styles.page}>
       {activated ? <Activated plan={plan} /> : <Pending />}
     </main>
   );
@@ -56,17 +57,17 @@ function Activated({ plan }: { plan: string }) {
   const planLabel = plan.charAt(0).toUpperCase() + plan.slice(1);
   return (
     <>
-      <div style={{ ...badgeStyle, ...successBadge }}>
+      <div className={`${styles.badge} ${styles.badgeSuccess}`}>
         <Check />
       </div>
-      <h1 style={titleStyle}>You're on {planLabel}</h1>
-      <p style={leadStyle}>
+      <h1 className={styles.title}>You're on {planLabel}</h1>
+      <p className={styles.lead}>
         Your account is active. You now have full access to all{" "}
         {planLabel} features.
       </p>
-      <a href="/app/dashboard" style={btnPrimaryStyle}>
+      <ButtonLink href="/app/dashboard" tone="primary">
         Go to Dashboard →
-      </a>
+      </ButtonLink>
     </>
   );
 }
@@ -75,19 +76,19 @@ function Activated({ plan }: { plan: string }) {
 function Pending() {
   return (
     <>
-      <div style={{ ...badgeStyle, ...pendingBadge }}>
+      <div className={`${styles.badge} ${styles.badgePending}`}>
         <Clock />
       </div>
-      <h1 style={titleStyle}>Payment Received</h1>
-      <p style={leadStyle}>
+      <h1 className={styles.title}>Payment Received</h1>
+      <p className={styles.lead}>
         We've received your payment and are activating your account.
         This usually takes a few seconds — we'll flip this page
         automatically as soon as the upgrade lands.
       </p>
-      <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
-        <a href="/app/dashboard" style={btnPrimaryStyle}>
+      <div className={styles.actions}>
+        <ButtonLink href="/app/dashboard" tone="primary">
           Go to Dashboard →
-        </a>
+        </ButtonLink>
       </div>
     </>
   );
@@ -114,57 +115,3 @@ function Clock() {
     </svg>
   );
 }
-
-
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  alignItems: "center", textAlign: "center",
-  padding: "4rem 1.5rem", maxWidth: "36rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const badgeStyle: React.CSSProperties = {
-  width: "4.5rem", height: "4.5rem",
-  borderRadius: "1.1rem",
-  display: "inline-flex", alignItems: "center", justifyContent: "center",
-  marginBottom: "1.25rem",
-};
-
-const successBadge: React.CSSProperties = {
-  background: "rgba(63,255,0,0.1)",
-  border: "1px solid rgba(63,255,0,0.3)",
-  color: tokens.accent,
-  boxShadow: "0 0 28px rgba(63,255,0,0.4)",
-};
-
-const pendingBadge: React.CSSProperties = {
-  background: "rgba(255,176,32,0.08)",
-  border: "1px solid rgba(255,176,32,0.3)",
-  color: tokens.warning,
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: tokens.fontDisplay,
-  fontSize: "1.75rem", fontWeight: 600,
-  color: tokens.text,
-  letterSpacing: "-0.025em",
-  margin: "0 0 0.6rem",
-};
-
-const leadStyle: React.CSSProperties = {
-  color: tokens.textMuted,
-  fontSize: "0.95rem",
-  lineHeight: 1.7,
-  margin: "0 0 2rem",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  display: "inline-block",
-  padding: "0.75rem 1.75rem",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-  background: tokens.accent,
-  color: tokens.onAccent,
-  border: "none", borderRadius: "0.5rem",
-  textDecoration: "none",
-};
