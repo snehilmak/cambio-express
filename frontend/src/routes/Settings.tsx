@@ -17,7 +17,11 @@ import {
 } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading, PageHeader, PageShell } from "../components/ui";
+import {
+  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
+  PageHeader, PageShell, SectionTitle,
+} from "../components/ui";
+import styles from "./Settings.module.css";
 
 // Account settings page at /app/settings. v1 ships the
 // change-password card; subsequent PRs add profile / preferences /
@@ -90,96 +94,54 @@ function PasskeysCard() {
   }
 
   return (
-    <section style={cardStyle}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: "0.75rem",
-        marginBottom: "0.6rem",
-      }}>
-        <h2 style={{ ...sectionTitleStyle, flex: 1, margin: 0 }}>Passkeys</h2>
+    <Card>
+      <div className={styles.sectionHead}>
+        <div style={{ flex: 1 }}>
+          <SectionTitle>Passkeys</SectionTitle>
+        </div>
         {supported && !adding && (
-          <button
-            type="button" onClick={() => { setAdding(true); setErr(null); }}
-            style={miniBtnStyle}
+          <Button
+            tone="secondary" size="sm"
+            onClick={() => { setAdding(true); setErr(null); }}
           >
             + Add a passkey
-          </button>
+          </Button>
         )}
       </div>
-      <p
-        style={{
-          margin: "0 0 1rem",
-          fontSize: "0.85rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-        }}
-      >
+      <p className={styles.helpText}>
         Sign in with your device (Touch ID, Face ID, Windows Hello,
         or a hardware key) instead of a password. Passkeys are
         phishing-resistant and count as two-factor auth, so a passkey
         login skips the verification-code step.
       </p>
       {!supported && (
-        <p style={{
-          margin: "0 0 1rem", padding: "0.55rem 0.85rem",
-          background: "rgba(94,169,255,0.08)",
-          border: "1px solid rgba(94,169,255,0.3)",
-          borderRadius: "0.5rem",
-          color: "var(--db-info, #5ea9ff)",
-          fontSize: "0.85rem",
-        }}>
+        <Alert tone="info">
           This browser doesn't expose the WebAuthn API, so passkeys
           aren't available here. Use a modern Chrome, Safari, Firefox,
           or Edge build.
-        </p>
+        </Alert>
       )}
       {adding && (
-        <div style={{
-          marginBottom: "1rem", padding: "0.85rem",
-          background: "var(--db-bg-input, #0d0d0d)",
-          border: "1px solid var(--db-border, #262626)",
-          borderRadius: "0.5rem",
-        }}>
-          <label style={{
-            display: "block", marginBottom: "0.4rem",
-            fontSize: "0.78rem", letterSpacing: "0.05em",
-            textTransform: "uppercase", fontWeight: 600,
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}>
-            Nickname for this passkey
-          </label>
-          <input
-            type="text" value={newName} maxLength={120}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="e.g. MacBook Touch ID"
-            autoFocus disabled={addBusy}
-            style={{
-              width: "100%", boxSizing: "border-box",
-              padding: "0.55rem 0.7rem",
-              background: "var(--db-surface-2, #141414)",
-              color: "var(--db-text, #e5e5e5)",
-              border: "1px solid var(--db-border, #262626)",
-              borderRadius: "0.4rem", fontSize: "0.9rem",
-              marginBottom: "0.6rem",
-            }}
-          />
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="button" onClick={add} disabled={addBusy}
-              style={{
-                ...miniBtnStyle,
-                background: "var(--db-neon, #3fff00)",
-                color: "var(--db-neon-ink, #001a0f)",
-                fontWeight: 600,
-              }}
-            >
+        <div className={styles.addInset}>
+          <Field label="Nickname for this passkey">
+            <Input
+              type="text" value={newName} maxLength={120}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. MacBook Touch ID"
+              autoFocus disabled={addBusy}
+            />
+          </Field>
+          <div className={styles.addInsetActions}>
+            <Button onClick={add} busy={addBusy} disabled={addBusy} size="sm">
               {addBusy ? "Creating…" : "Create passkey"}
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              tone="secondary" size="sm"
               onClick={() => { setAdding(false); setNewName(""); setErr(null); }}
-              disabled={addBusy} style={miniBtnStyle}
+              disabled={addBusy}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -191,68 +153,36 @@ function PasskeysCard() {
         />
       )}
       {data && data.passkeys.length === 0 && !isLoading && (
-        <p style={{ margin: 0, color: "var(--db-text-muted, #a3a3a3)" }}>
-          No passkeys registered yet.
-        </p>
+        <p className={styles.muted}>No passkeys registered yet.</p>
       )}
       {data && data.passkeys.length > 0 && (
-        <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+        <ul className={styles.list}>
           {data.passkeys.map((p) => (
-            <li
-              key={p.id}
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "center",
-                padding: "0.5rem 0",
-                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-              }}
-            >
-              <span style={{ flex: 1 }}>
-                <div style={{ fontWeight: 500 }}>
+            <li key={p.id} className={styles.row}>
+              <span className={styles.rowBody}>
+                <div className={styles.rowTitle}>
                   {p.name || "Unnamed device"}
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.78rem",
-                    color: "var(--db-text-muted, #a3a3a3)",
-                    fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-                  }}
-                >
+                <div className={styles.rowMeta}>
                   Added {p.created_at.slice(0, 10)}
                   {p.last_used_at &&
                     ` · last used ${p.last_used_at.slice(0, 10)}`}
                 </div>
               </span>
-              <button
-                type="button"
+              <Button
+                tone="secondary" size="sm"
                 onClick={() => remove(p.id, p.name)}
+                busy={busyId === p.id}
                 disabled={busyId === p.id}
-                style={{
-                  ...miniBtnStyle,
-                  opacity: busyId === p.id ? 0.5 : 1,
-                  cursor: busyId === p.id ? "wait" : "pointer",
-                }}
               >
                 {busyId === p.id ? "Removing…" : "Remove"}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-      {err && (
-        <p
-          role="alert"
-          style={{
-            margin: "0.5rem 0 0",
-            color: "var(--db-negative, #ff3b30)",
-            fontSize: "0.85rem",
-          }}
-        >
-          {err}
-        </p>
-      )}
-    </section>
+      {err && <Alert tone="error">{err}</Alert>}
+    </Card>
   );
 }
 
@@ -285,48 +215,27 @@ function SubscriptionCard() {
   }
 
   return (
-    <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>Subscription</h2>
-      <p
-        style={{
-          margin: "0 0 1rem",
-          fontSize: "0.85rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-        }}
-      >
+    <Card>
+      <SectionTitle>Subscription</SectionTitle>
+      <p className={styles.subscriptionInfo}>
         Change plan, update payment method, or cancel — all on Stripe's
         secure billing portal. Trial stores can pick a plan instead.
       </p>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <a href="/app/subscribe" style={primaryBtnLink}>
+      <div className={styles.actionsRow}>
+        <ButtonLink href="/app/subscribe" tone="primary">
           Choose / change plan
-        </a>
-        <button
-          type="button"
+        </ButtonLink>
+        <Button
+          tone="secondary"
           onClick={openPortal}
+          busy={busy}
           disabled={busy}
-          style={{
-            ...secondaryBtn,
-            opacity: busy ? 0.6 : 1,
-            cursor: busy ? "wait" : "pointer",
-          }}
         >
           {busy ? "Opening…" : "Manage on Stripe"}
-        </button>
+        </Button>
       </div>
-      {err && (
-        <p
-          role="alert"
-          style={{
-            margin: "0.5rem 0 0",
-            color: "var(--db-negative, #ff3b30)",
-            fontSize: "0.85rem",
-          }}
-        >
-          {err}
-        </p>
-      )}
-    </section>
+      {err && <Alert tone="error">{err}</Alert>}
+    </Card>
   );
 }
 
@@ -386,15 +295,9 @@ function TeamCard() {
   if (identity?.store_id == null) return null;
 
   return (
-    <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>Team</h2>
-      <p
-        style={{
-          margin: "0 0 1rem",
-          fontSize: "0.85rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-        }}
-      >
+    <Card>
+      <SectionTitle>Team</SectionTitle>
+      <p className={styles.helpText}>
         Cashier names that appear in the "Processed by" dropdown
         on the transfer form. Deactivated rows stay so historical
         transfer attribution survives.
@@ -409,57 +312,31 @@ function TeamCard() {
       )}
 
       {data && (
-        <ul style={{ listStyle: "none", padding: 0, margin: "0 0 1rem" }}>
+        <ul className={styles.listSpaced}>
           {data.members.length === 0 && (
-            <li
-              style={{
-                padding: "0.5rem 0",
-                color: "var(--db-text-muted, #a3a3a3)",
-              }}
-            >
-              No team members yet.
-            </li>
+            <li className={styles.emptyRow}>No team members yet.</li>
           )}
           {data.members.map((m) => (
-            <li
-              key={m.id}
-              style={{
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "center",
-                padding: "0.4rem 0",
-                borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  color: m.is_active
-                    ? "var(--db-text, #f5f5f5)"
-                    : "var(--db-text-muted, #a3a3a3)",
-                  textDecoration: m.is_active ? "none" : "line-through",
-                }}
-              >
+            <li key={m.id} className={styles.rowTeam}>
+              <span className={m.is_active ? styles.memberActive : styles.memberInactive}>
                 {m.name}
               </span>
               {canEdit && (
                 <>
-                  <button
-                    type="button"
+                  <Button
+                    tone="secondary" size="sm"
                     onClick={() => toggle(m)}
-                    style={miniBtnStyle}
                     title={m.is_active ? "Deactivate" : "Reactivate"}
                   >
                     {m.is_active ? "Deactivate" : "Reactivate"}
-                  </button>
+                  </Button>
                   {m.is_active && (
-                    <button
-                      type="button"
+                    <Button
+                      tone="secondary" size="sm"
                       onClick={() => remove(m)}
-                      style={miniBtnStyle}
                     >
                       ✕
-                    </button>
+                    </Button>
                   )}
                 </>
               )}
@@ -469,13 +346,12 @@ function TeamCard() {
       )}
 
       {canEdit && (
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <input
+        <div className={styles.actionsInlineRow}>
+          <Input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="New cashier name"
-            style={inputStyle}
             onKeyDown={(e) => {
               if (e.key === "Enter" && newName.trim()) {
                 e.preventDefault();
@@ -483,47 +359,19 @@ function TeamCard() {
               }
             }}
           />
-          <button
-            type="button"
+          <Button
             onClick={add}
+            busy={busy}
             disabled={busy || !newName.trim()}
-            style={{
-              ...saveBtnStyle,
-              opacity: busy || !newName.trim() ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-              whiteSpace: "nowrap",
-            }}
           >
             + Add
-          </button>
+          </Button>
         </div>
       )}
-      {err && (
-        <p
-          role="alert"
-          style={{
-            margin: "0.5rem 0 0",
-            color: "var(--db-negative, #ff3b30)",
-            fontSize: "0.9rem",
-          }}
-        >
-          {err}
-        </p>
-      )}
-    </section>
+      {err && <Alert tone="error">{err}</Alert>}
+    </Card>
   );
 }
-
-const miniBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text-muted, #a3a3a3)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.4rem",
-  padding: "0.25rem 0.6rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.8rem",
-  cursor: "pointer",
-};
 
 function StoreInfoCard() {
   const queryClient = useQueryClient();
@@ -580,151 +428,88 @@ function StoreInfoCard() {
 
   if (identity?.store_id == null) {
     return (
-      <section style={cardStyle}>
-        <h2 style={sectionTitleStyle}>Store</h2>
-        <p
-          style={{
-            margin: 0,
-            fontSize: "0.9rem",
-            color: "var(--db-text-muted, #a3a3a3)",
-          }}
-        >
+      <Card>
+        <SectionTitle>Store</SectionTitle>
+        <p className={styles.muted}>
           Sign in as a store admin to manage store info.
         </p>
-      </section>
+      </Card>
     );
   }
 
   if (isLoading) {
     return (
-      <section style={cardStyle}>
-        <h2 style={sectionTitleStyle}>Store</h2>
+      <Card>
+        <SectionTitle>Store</SectionTitle>
         <Loading />
-      </section>
+      </Card>
     );
   }
   if (isError || !data) {
     return (
-      <section style={cardStyle}>
-        <h2 style={sectionTitleStyle}>Store</h2>
+      <Card>
+        <SectionTitle>Store</SectionTitle>
         <ErrorState
           message="Could not load store info."
           onRetry={() => { void refetch(); }}
         />
-      </section>
+      </Card>
     );
   }
 
   return (
-    <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>Store</h2>
-      <p
-        style={{
-          margin: "0 0 1rem",
-          fontSize: "0.85rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-        }}
-      >
-        Slug{" "}
-        <code
-          style={{
-            fontFamily:
-              "var(--db-font-mono, 'JetBrains Mono', monospace)",
-            color: "var(--db-text, #f5f5f5)",
-          }}
-        >
-          {data.store.slug}
-        </code>{" "}
+    <Card>
+      <SectionTitle>Store</SectionTitle>
+      <p className={styles.slugRow}>
+        Slug <code className={styles.slug}>{data.store.slug}</code>{" "}
         · plan {data.store.plan}
       </p>
-      <form
-        onSubmit={onSubmit}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(15rem, 1fr))",
-          gap: "0.85rem",
-        }}
-      >
+      <form onSubmit={onSubmit} className={styles.storeGrid}>
         <Field label="Store name">
-          <input type="text" value={name}
+          <Input type="text" value={name}
             onChange={(e) => setName(e.target.value)}
-            disabled={!canEdit}
-            style={inputStyle} required />
+            disabled={!canEdit} required />
         </Field>
         <Field label="Email">
-          <input type="email" value={email}
+          <Input type="email" value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={!canEdit}
-            style={inputStyle} />
+            disabled={!canEdit} />
         </Field>
         <Field label="Phone">
-          <input type="tel" value={phone}
+          <Input type="tel" value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            disabled={!canEdit}
-            style={inputStyle} />
+            disabled={!canEdit} />
         </Field>
         <Field label="Address">
-          <input type="text" value={address}
+          <Input type="text" value={address}
             onChange={(e) => setAddress(e.target.value)}
-            disabled={!canEdit}
-            style={inputStyle} />
+            disabled={!canEdit} />
         </Field>
         <Field label="Federal tax rate (%)">
-          <input type="number" step="0.01" min="0" max="100"
+          <Input type="number" step="0.01" min="0" max="100"
             value={taxRatePct}
             onChange={(e) => setTaxRatePct(e.target.value)}
-            disabled={!canEdit}
-            style={inputStyle} />
+            disabled={!canEdit} />
         </Field>
         {err && (
-          <p
-            role="alert"
-            style={{
-              margin: 0,
-              gridColumn: "1 / -1",
-              color: "var(--db-negative, #ff3b30)",
-              fontSize: "0.9rem",
-            }}
-          >
-            {err}
-          </p>
+          <div className={styles.spanFull}>
+            <Alert tone="error">{err}</Alert>
+          </div>
         )}
         {okMsg && (
-          <p
-            role="status"
-            style={{
-              margin: 0,
-              gridColumn: "1 / -1",
-              color: "var(--db-accent, #3fff00)",
-              fontSize: "0.9rem",
-            }}
-          >
-            {okMsg}
-          </p>
+          <div className={styles.spanFull}>
+            <Alert tone="success">{okMsg}</Alert>
+          </div>
         )}
         {canEdit && (
-          <div
-            style={{
-              gridColumn: "1 / -1",
-              display: "flex",
-              justifyContent: "flex-end",
-            }}
-          >
-            <button
-              type="submit"
-              disabled={busy || !name}
-              style={{
-                ...saveBtnStyle,
-                opacity: busy || !name ? 0.6 : 1,
-                cursor: busy ? "wait" : "pointer",
-              }}
-            >
+          <div className={styles.spanFullRight}>
+            <Button type="submit" busy={busy} disabled={busy || !name}>
               {busy ? "Saving…" : "Save"}
-            </button>
+            </Button>
           </div>
         )}
       </form>
-    </section>
+    </Card>
   );
 }
 
@@ -761,154 +546,48 @@ function ChangePasswordCard() {
   }
 
   return (
-    <section style={cardStyle}>
-      <h2 style={sectionTitleStyle}>Change password</h2>
-      <form
-        onSubmit={onSubmit}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.85rem",
-          maxWidth: "26rem",
-        }}
-      >
+    <Card>
+      <SectionTitle>Change password</SectionTitle>
+      <form onSubmit={onSubmit} className={styles.passwordForm}>
         <Field label="Current password">
-          <input
+          <Input
             type="password"
             autoComplete="current-password"
             required
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
-            style={inputStyle}
           />
         </Field>
         <Field label="New password (≥ 8 chars)">
-          <input
+          <Input
             type="password"
             autoComplete="new-password"
             required
             minLength={8}
             value={next}
             onChange={(e) => setNext(e.target.value)}
-            style={inputStyle}
           />
         </Field>
         <Field label="Confirm new password">
-          <input
+          <Input
             type="password"
             autoComplete="new-password"
             required
             minLength={8}
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            style={inputStyle}
           />
         </Field>
-        {error && (
-          <p
-            role="alert"
-            style={{ margin: 0, color: "var(--db-negative, #ff3b30)", fontSize: "0.9rem" }}
-          >
-            {error}
-          </p>
-        )}
-        {okMsg && (
-          <p
-            role="status"
-            style={{ margin: 0, color: "var(--db-accent, #3fff00)", fontSize: "0.9rem" }}
-          >
-            {okMsg}
-          </p>
-        )}
-        <button
+        {error && <Alert tone="error">{error}</Alert>}
+        {okMsg && <Alert tone="success">{okMsg}</Alert>}
+        <Button
           type="submit"
+          busy={busy}
           disabled={busy || !current || !next || !confirm}
-          style={{
-            ...saveBtnStyle,
-            opacity: busy || !current || !next || !confirm ? 0.6 : 1,
-            cursor: busy ? "wait" : "pointer",
-          }}
         >
           {busy ? "Saving…" : "Update password"}
-        </button>
+        </Button>
       </form>
-    </section>
+    </Card>
   );
 }
-
-function Field({
-  label, children,
-}: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.05em",
-  color: "var(--db-text-muted, #a3a3a3)",
-  margin: "0 0 1rem",
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const primaryBtnLink: React.CSSProperties = {
-  ...saveBtnStyle,
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-};
-
-const secondaryBtn: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-};
