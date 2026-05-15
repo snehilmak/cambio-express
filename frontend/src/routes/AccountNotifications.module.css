@@ -1,0 +1,62 @@
+/* Page-specific styles for AccountNotifications.tsx. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+}
+
+.lead {
+  margin: 0 0 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.fine {
+  margin-top: 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.prefRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.checkbox {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+  accent-color: var(--db-accent, #3fff00);
+  cursor: pointer;
+}
+
+.prefBody {
+  flex: 1;
+}
+
+.prefTitle {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--db-text, #f5f5f5);
+  display: block;
+  margin-bottom: 0.25rem;
+  cursor: pointer;
+}
+
+.prefDesc {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.notApplicable {
+  font-style: italic;
+  opacity: 0.85;
+}

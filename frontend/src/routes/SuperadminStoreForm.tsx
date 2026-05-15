@@ -11,7 +11,11 @@ import {
 } from "../api/superadmin";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { ErrorState, Loading } from "../components/ui";
+import {
+  Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
+  PageHeader, PageShell, SectionTitle, Select,
+} from "../components/ui";
+import styles from "./SuperadminStoreForm.module.css";
 
 // /app/superadmin/stores/new + /app/superadmin/stores/:id/edit
 //
@@ -31,6 +35,8 @@ const PLAN_OPTIONS: { value: string; label: string }[] = [
   { value: "pro",      label: "Pro" },
   { value: "inactive", label: "Inactive" },
 ];
+
+const SPAN_2 = { gridColumn: "1 / -1" } as const;
 
 export default function SuperadminStoreForm() {
   const identity = getCurrentIdentity();
@@ -83,31 +89,31 @@ export default function SuperadminStoreForm() {
 
   if (identity?.role !== "superadmin") {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>{isEdit ? "Edit store" : "Add store"}</h1>
+      <PageShell maxWidth="44rem">
+        <PageHeader title={isEdit ? "Edit store" : "Add store"} />
         <ErrorState message="Superadmin scope required." />
-      </main>
+      </PageShell>
     );
   }
 
   if (isEdit && detailQuery.isLoading) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit store</h1>
+      <PageShell maxWidth="44rem">
+        <PageHeader title="Edit store" />
         <Loading />
-      </main>
+      </PageShell>
     );
   }
   if (isEdit && (detailQuery.isError || !detailQuery.data)) {
     const err = detailQuery.error;
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>Edit store</h1>
+      <PageShell maxWidth="44rem">
+        <PageHeader title="Edit store" />
         <ErrorState
           message={`Couldn't load the store.${err instanceof Error ? ` ${err.message}` : ""}`}
           onRetry={() => { void detailQuery.refetch(); }}
         />
-      </main>
+      </PageShell>
     );
   }
 
@@ -208,109 +214,106 @@ export default function SuperadminStoreForm() {
     : "Create a new business account";
 
   return (
-    <main style={pageStyle}>
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          marginBottom: "1.25rem",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <h1 style={titleStyle}>{heading}</h1>
-        <a href="/app/superadmin/stores" style={btnOutlineStyle}>
+    <PageShell maxWidth="44rem">
+      <div className={styles.headerRow}>
+        <PageHeader title={heading} />
+        <ButtonLink href="/app/superadmin/stores" tone="secondary">
           ← Back to stores
-        </a>
-      </header>
+        </ButtonLink>
+      </div>
 
-      <section style={cardStyle}>
-        <h2 style={cardTitleStyle}>{cardTitle}</h2>
+      <Card padding="1.5rem">
+        <SectionTitle>{cardTitle}</SectionTitle>
 
-        {serverError && <div style={alertErrorStyle}>{serverError}</div>}
-        {saved && <div style={alertOkStyle} role="status">Store updated.</div>}
+        <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {serverError && <Alert tone="error">{serverError}</Alert>}
+          {saved && <Alert tone="success">Store updated.</Alert>}
+        </div>
 
         <form onSubmit={onSubmit} autoComplete="off">
-          <div style={sectionTitleStyle}>Business info</div>
+          <div className={styles.sectionTitle}>Business info</div>
 
-          <div style={formGridStyle}>
+          <div className={styles.formGrid}>
             <Field label="Business name *" error={fieldErrors.name}>
-              <input
+              <Input
                 type="text" required maxLength={120}
                 value={name}
                 onChange={(e) => { setName(e.target.value); clearFieldError("name"); }}
                 placeholder="e.g. Austin Money Center"
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
 
-            <Field label="URL slug *" error={fieldErrors.slug}
-                   hint="Lowercase, dashes for spaces. Used in store-scoped URLs.">
-              <input
+            <Field
+              label="URL slug *"
+              error={fieldErrors.slug}
+              hint="Lowercase, dashes for spaces. Used in store-scoped URLs."
+            >
+              <Input
                 type="text" required maxLength={60}
                 value={slug}
                 onChange={(e) => { setSlug(e.target.value); clearFieldError("slug"); }}
                 placeholder="e.g. austin-money-center"
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
 
             <Field label="Email" error={fieldErrors.email}>
-              <input
+              <Input
                 type="email" maxLength={120}
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); clearFieldError("email"); }}
                 placeholder="owner@business.com"
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
 
             <Field label="Phone" error={fieldErrors.phone}>
-              <input
+              <Input
                 type="tel" maxLength={40}
                 value={phone}
                 onChange={(e) => { setPhone(e.target.value); clearFieldError("phone"); }}
                 placeholder="(512) 555-0000"
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
 
-            <Field label="Address" error={fieldErrors.address}
-                   span={2}>
-              <input
+            <Field label="Address" error={fieldErrors.address} style={SPAN_2}>
+              <Input
                 type="text" maxLength={255}
                 value={address}
                 onChange={(e) => { setAddress(e.target.value); clearFieldError("address"); }}
                 placeholder="Full address"
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               />
             </Field>
 
             <Field label="Plan" error={fieldErrors.plan}>
-              <select
+              <Select
                 value={plan}
                 onChange={(e) => { setPlan(e.target.value); clearFieldError("plan"); }}
-                disabled={busy} style={inputStyle}
+                disabled={busy}
               >
                 {PLAN_OPTIONS.map((p) => (
                   <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
-              </select>
+              </Select>
             </Field>
 
             {isEdit && (
-              <Field label="Federal tax rate"
-                     error={fieldErrors.federal_tax_rate}
-                     hint="Decimal, 0.01 = 1%. Applied to every transfer at save time.">
-                <input
+              <Field
+                label="Federal tax rate"
+                error={fieldErrors.federal_tax_rate}
+                hint="Decimal, 0.01 = 1%. Applied to every transfer at save time."
+              >
+                <Input
                   type="number" step="0.0001" min="0" max="1"
                   value={federalTaxRate}
                   onChange={(e) => {
                     setFederalTaxRate(e.target.value);
                     clearFieldError("federal_tax_rate");
                   }}
-                  disabled={busy} style={inputStyle}
+                  disabled={busy}
                 />
               </Field>
             )}
@@ -318,11 +321,10 @@ export default function SuperadminStoreForm() {
 
           {!isEdit && (
             <>
-              <div style={sectionTitleStyle}>Admin login for this store</div>
-              <div style={formGridStyle}>
-                <Field label="Admin full name"
-                       error={fieldErrors.admin_name}>
-                  <input
+              <div className={styles.sectionTitle}>Admin login for this store</div>
+              <div className={styles.formGrid}>
+                <Field label="Admin full name" error={fieldErrors.admin_name}>
+                  <Input
                     type="text" maxLength={120}
                     value={adminName}
                     onChange={(e) => {
@@ -330,27 +332,28 @@ export default function SuperadminStoreForm() {
                       clearFieldError("admin_name");
                     }}
                     placeholder="Store Owner Name"
-                    disabled={busy} style={inputStyle}
+                    disabled={busy}
                   />
                 </Field>
 
-                <Field label="Admin username *"
-                       error={fieldErrors.admin_username}>
-                  <input
+                <Field label="Admin username *" error={fieldErrors.admin_username}>
+                  <Input
                     type="text" required maxLength={80}
                     value={adminUsername}
                     onChange={(e) => {
                       setAdminUsername(e.target.value);
                       clearFieldError("admin_username");
                     }}
-                    disabled={busy} style={inputStyle}
+                    disabled={busy}
                   />
                 </Field>
 
-                <Field label="Admin password *"
-                       error={fieldErrors.admin_password}
-                       span={2}>
-                  <input
+                <Field
+                  label="Admin password *"
+                  error={fieldErrors.admin_password}
+                  style={SPAN_2}
+                >
+                  <Input
                     type="password" required maxLength={200}
                     value={adminPassword}
                     onChange={(e) => {
@@ -359,7 +362,7 @@ export default function SuperadminStoreForm() {
                     }}
                     placeholder="Set a strong password"
                     autoComplete="new-password"
-                    disabled={busy} style={inputStyle}
+                    disabled={busy}
                   />
                 </Field>
               </div>
@@ -367,155 +370,21 @@ export default function SuperadminStoreForm() {
           )}
 
           <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
-            <button
+            <Button
               type="submit"
+              busy={busy}
               disabled={busy || !name || !slug || (!isEdit && !adminPassword)}
-              style={btnPrimaryStyle}
             >
               {busy
                 ? (isEdit ? "Saving…" : "Creating…")
                 : (isEdit ? "Save changes" : "Create store")}
-            </button>
-            <a href="/app/superadmin/stores" style={btnOutlineStyle}>
+            </Button>
+            <ButtonLink href="/app/superadmin/stores" tone="secondary">
               Cancel
-            </a>
+            </ButtonLink>
           </div>
         </form>
-      </section>
-    </main>
+      </Card>
+    </PageShell>
   );
 }
-
-
-function Field({
-  label, error, hint, span, children,
-}: {
-  label:    string;
-  error?:   string;
-  hint?:    string;
-  span?:    number;
-  children: React.ReactNode;
-}) {
-  return (
-    <label
-      style={{
-        ...fieldStyle,
-        ...(span === 2 ? { gridColumn: "1 / -1" } : {}),
-      }}
-    >
-      <span style={labelStyle}>{label}</span>
-      {children}
-      {error && <span style={fieldErrorStyle}>{error}</span>}
-      {hint && !error && <span style={hintStyle}>{hint}</span>}
-    </label>
-  );
-}
-
-
-const pageStyle: React.CSSProperties = {
-  flex: 1, display: "flex", flexDirection: "column",
-  padding: "2rem 1.5rem", maxWidth: "44rem",
-  margin: "0 auto", width: "100%", boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600, margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem", padding: "1.5rem",
-};
-
-const cardTitleStyle: React.CSSProperties = {
-  margin: "0 0 1rem", fontSize: "1.05rem", fontWeight: 600,
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-};
-
-const sectionTitleStyle: React.CSSProperties = {
-  fontSize: "0.78rem",
-  letterSpacing: "0.06em",
-  textTransform: "uppercase",
-  fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
-  margin: "1.5rem 0 0.75rem",
-};
-
-const formGridStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-  gap: "0.75rem 1rem",
-};
-
-const fieldStyle: React.CSSProperties = {
-  display: "flex", flexDirection: "column",
-  gap: "0.35rem",
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: "0.7rem", letterSpacing: "0.06em",
-  textTransform: "uppercase", fontWeight: 600,
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "0.6rem 0.75rem",
-  background: "var(--db-bg-input, #0d0d0d)",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem", fontSize: "0.95rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-};
-
-const hintStyle: React.CSSProperties = {
-  fontSize: "0.78rem", color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const fieldErrorStyle: React.CSSProperties = {
-  fontSize: "0.8rem", color: "var(--db-negative, #ff4d6d)",
-};
-
-const btnPrimaryStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 600, fontSize: "0.92rem",
-  background: "var(--db-neon, #3fff00)",
-  color: "var(--db-neon-ink, #001a0f)",
-  border: "none", borderRadius: "0.5rem",
-  cursor: "pointer",
-};
-
-const btnOutlineStyle: React.CSSProperties = {
-  padding: "0.65rem 1.1rem",
-  fontWeight: 500, fontSize: "0.92rem",
-  background: "transparent",
-  color: "var(--db-text, #e5e5e5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  textDecoration: "none",
-  display: "inline-block",
-  cursor: "pointer",
-};
-
-const alertErrorStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "1rem",
-  background: "rgba(255,77,109,0.08)",
-  border: "1px solid rgba(255,77,109,0.3)",
-  borderRadius: "0.5rem",
-  color: "var(--db-negative, #ff4d6d)",
-  fontSize: "0.88rem",
-};
-
-const alertOkStyle: React.CSSProperties = {
-  padding: "0.6rem 0.85rem",
-  marginBottom: "1rem",
-  background: "rgba(63,255,0,0.08)",
-  border: "1px solid rgba(63,255,0,0.3)",
-  borderRadius: "0.5rem",
-  color: "var(--db-neon, #3fff00)",
-  fontSize: "0.88rem",
-};
-

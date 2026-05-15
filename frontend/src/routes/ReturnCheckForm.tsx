@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import {
   createReturnCheck,
@@ -14,7 +14,12 @@ import {
 } from "../api/returnChecks";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
-import { EmptyState, Loading } from "../components/ui";
+import {
+  Alert, Button, ButtonLink, Card, EmptyState, Field, FormActions, Input,
+  Loading, PageHeader, PageShell, SectionTitle, Table, Textarea,
+  tdStyle, thStyle,
+} from "../components/ui";
+import styles from "./ReturnCheckForm.module.css";
 
 // Combined New/Edit form for return checks at /app/return-checks/new
 // and /app/return-checks/:id/edit. Edit variant also surfaces
@@ -123,172 +128,124 @@ export default function ReturnCheckForm() {
 
   if (identity?.store_id == null) {
     return (
-      <main style={pageStyle}>
-        <h1 style={titleStyle}>
-          {isEdit ? "Edit return check" : "New return check"}
-        </h1>
-        <p style={emptyStyle}>
-          Sign in as a store admin to manage return checks.
-        </p>
-      </main>
+      <PageShell maxWidth="62rem">
+        <PageHeader title={isEdit ? "Edit return check" : "New return check"} />
+        <p>Sign in as a store admin to manage return checks.</p>
+      </PageShell>
     );
   }
 
   if (isEdit && (detail.isLoading || !detail.data)) {
-    return <main style={pageStyle}><Loading /></main>;
+    return <PageShell maxWidth="62rem"><Loading /></PageShell>;
   }
 
   const status = isEdit ? detail.data?.return_check.status ?? "pending" : "pending";
   const recovered = isEdit ? detail.data?.return_check.recovered_total ?? 0 : 0;
 
   return (
-    <main style={pageStyle}>
-      <header style={{ marginBottom: "1.5rem" }}>
-        <h1 style={titleStyle}>
-          {isEdit ? `Return check #${rcId}` : "New return check"}
-        </h1>
-        <p
-          style={{
-            margin: "0.35rem 0 0",
-            color: "var(--db-text-muted, #a3a3a3)",
-            fontSize: "0.95rem",
-          }}
-        >
-          Track a bounced check from a customer and any partial recovery.
-        </p>
-      </header>
+    <PageShell maxWidth="62rem">
+      <PageHeader
+        title={isEdit ? `Return check #${rcId}` : "New return check"}
+        subtitle="Track a bounced check from a customer and any partial recovery."
+      />
 
       <form
         onSubmit={onSubmit}
         style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
       >
-        <section style={cardStyle}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(13rem, 1fr))",
-              gap: "0.75rem",
-            }}
-          >
+        <Card>
+          <div className={styles.fieldGrid}>
             <Field label="Bounced on" highlight={field === "bounced_on"}>
-              <input type="date" required
+              <Input type="date" required
                 value={form.bounced_on}
-                onChange={(e) => set("bounced_on", e.target.value)}
-                style={inputStyle} />
+                onChange={(e) => set("bounced_on", e.target.value)} />
             </Field>
             <Field label="Customer name" highlight={field === "customer_name"}>
-              <input type="text" required
+              <Input type="text" required
                 value={form.customer_name}
-                onChange={(e) => set("customer_name", e.target.value)}
-                style={inputStyle} />
+                onChange={(e) => set("customer_name", e.target.value)} />
             </Field>
             <Field label="Check number">
-              <input type="text"
+              <Input type="text"
                 value={form.check_number ?? ""}
-                onChange={(e) => set("check_number", e.target.value)}
-                style={inputStyle} />
+                onChange={(e) => set("check_number", e.target.value)} />
             </Field>
             <Field label="Payer bank">
-              <input type="text"
+              <Input type="text"
                 value={form.payer_bank ?? ""}
-                onChange={(e) => set("payer_bank", e.target.value)}
-                style={inputStyle} />
+                onChange={(e) => set("payer_bank", e.target.value)} />
             </Field>
             <Field label="Amount (USD)" highlight={field === "amount"}>
-              <input type="number" step="0.01" min="0.01" required
+              <Input type="number" step="0.01" min="0.01" required
                 value={form.amount}
-                onChange={(e) => set("amount", Number(e.target.value))}
-                style={inputStyle} />
+                onChange={(e) => set("amount", Number(e.target.value))} />
             </Field>
           </div>
           <Field label="Notes (optional)">
-            <textarea
+            <Textarea
               value={form.notes ?? ""}
               onChange={(e) => set("notes", e.target.value)}
               rows={3}
-              style={{ ...inputStyle, resize: "vertical", minHeight: "5rem" }}
             />
           </Field>
-        </section>
+        </Card>
 
-        {error && (
-          <p
-            role="alert"
-            style={{ ...emptyStyle, color: "var(--db-negative, #ff3b30)" }}
-          >
-            {error}
-          </p>
-        )}
+        {error && <Alert tone="error">{error}</Alert>}
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <Link to="/return-checks" style={cancelBtnStyle}>Cancel</Link>
-          <button
-            type="submit"
+        <FormActions>
+          <ButtonLink href="/return-checks" tone="secondary">Cancel</ButtonLink>
+          <Button
+            type="submit" busy={busy}
             disabled={busy || !form.customer_name || !form.bounced_on}
-            style={{
-              ...saveBtnStyle,
-              opacity:
-                busy || !form.customer_name || !form.bounced_on ? 0.6 : 1,
-              cursor: busy ? "wait" : "pointer",
-            }}
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create return check"}
-          </button>
-        </div>
+          </Button>
+        </FormActions>
       </form>
 
       {isEdit && (
-        <section style={{ ...cardStyle, marginTop: "1rem" }}>
-          <h2 style={sectionTitle}>Status</h2>
-          <p
-            style={{
-              margin: "0.35rem 0 0.75rem",
-              color: "var(--db-text-muted, #a3a3a3)",
-              fontSize: "0.9rem",
-            }}
-          >
-            Current: <strong style={{ textTransform: "capitalize" }}>{status}</strong>
-            {" · "}Recovered <span style={mono}>${recovered.toFixed(2)}</span>
-            {" of "}<span style={mono}>${form.amount.toFixed(2)}</span>
+        <Card style={{ marginTop: "1rem" }}>
+          <SectionTitle>Status</SectionTitle>
+          <p className={styles.statusLine}>
+            Current: <strong className={styles.statusName}>{status}</strong>
+            {" · "}Recovered <span className={styles.mono}>${recovered.toFixed(2)}</span>
+            {" of "}<span className={styles.mono}>${form.amount.toFixed(2)}</span>
           </p>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <div className={styles.transitionRow}>
             {status === "pending" && (
               <>
-                <button
-                  type="button"
+                <Button
+                  tone="danger"
                   onClick={() => transition(markLoss, "Mark loss")}
                   disabled={busy}
-                  style={dangerBtn}
                 >
                   Mark loss
-                </button>
-                <button
-                  type="button"
+                </Button>
+                <Button
+                  tone="danger"
                   onClick={() => transition(markFraud, "Mark fraud")}
                   disabled={busy}
-                  style={dangerBtn}
                 >
                   Mark fraud
-                </button>
+                </Button>
               </>
             )}
             {status !== "pending" && (
-              <button
-                type="button"
+              <Button
+                tone="secondary"
                 onClick={() => transition(reopenReturnCheck, "Reopen")}
                 disabled={busy}
-                style={secondaryBtn}
               >
                 Reopen
-              </button>
+              </Button>
             )}
           </div>
-        </section>
+        </Card>
       )}
 
       {isEdit && (
-        <section style={{ ...cardStyle, marginTop: "1rem" }}>
-          <h2 style={sectionTitle}>Recovery payments</h2>
+        <Card style={{ marginTop: "1rem" }}>
+          <SectionTitle>Recovery payments</SectionTitle>
           {payments.isLoading && <Loading />}
           {payments.data && payments.data.payments.length === 0 && (
             <EmptyState title="No recovery payments recorded." />
@@ -296,201 +253,37 @@ export default function ReturnCheckForm() {
           {payments.data && payments.data.payments.length > 0 && (
             <PaymentsTable rows={payments.data.payments} />
           )}
-        </section>
+        </Card>
       )}
-    </main>
+    </PageShell>
   );
 }
 
 function PaymentsTable({ rows }: { rows: ReturnCheckPaymentRow[] }) {
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          fontSize: "0.92rem",
-        }}
-      >
-        <thead>
-          <tr>
-            {["Paid on", "Amount", "Method", "Notes"].map((h, i) => (
-              <th
-                key={i}
-                style={{
-                  textAlign: i === 1 ? "right" : "left",
-                  padding: "0.6rem 0.75rem",
-                  color: "var(--db-text-muted, #a3a3a3)",
-                  fontWeight: 500,
-                  fontSize: "0.78rem",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: "1px solid var(--db-border, #262626)",
-                }}
-              >
-                {h}
-              </th>
-            ))}
+    <Table>
+      <thead>
+        <tr>
+          <th style={thStyle}>Paid on</th>
+          <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+          <th style={thStyle}>Method</th>
+          <th style={thStyle}>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr key={p.id}>
+            <td style={tdStyle}>
+              <span className={styles.monoMuted}>{p.paid_on}</span>
+            </td>
+            <td style={{ ...tdStyle, textAlign: "right" }}>
+              <span className={styles.mono}>${p.amount.toFixed(2)}</span>
+            </td>
+            <td style={tdStyle}>{p.method || "—"}</td>
+            <td style={tdStyle}>{p.notes || "—"}</td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map((p) => (
-            <tr key={p.id}>
-              <td style={cellStyle}>
-                <span style={monoMuted}>{p.paid_on}</span>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>${p.amount.toFixed(2)}</span>
-              </td>
-              <td style={cellStyle}>{p.method || "—"}</td>
-              <td style={cellStyle}>{p.notes || "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </Table>
   );
 }
-
-function Field({
-  label, highlight, children,
-}: {
-  label: string;
-  highlight?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-      <span
-        style={{
-          fontSize: "0.78rem",
-          color: highlight
-            ? "var(--db-negative, #ff3b30)"
-            : "var(--db-text-muted, #a3a3a3)",
-          textTransform: "uppercase",
-          letterSpacing: "0.05em",
-        }}
-      >
-        {label}
-      </span>
-      {children}
-    </label>
-  );
-}
-
-const pageStyle: React.CSSProperties = {
-  flex: 1,
-  display: "flex",
-  flexDirection: "column",
-  padding: "2rem 1.5rem",
-  maxWidth: "62rem",
-  margin: "0 auto",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const titleStyle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "clamp(1.5rem, 3.5vw, 2rem)",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "1.1rem",
-  fontWeight: 600,
-  margin: 0,
-};
-
-const cardStyle: React.CSSProperties = {
-  background: "var(--db-surface-2, #141414)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.75rem",
-  padding: "1.25rem 1.5rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.75rem",
-};
-
-const inputStyle: React.CSSProperties = {
-  background: "var(--db-surface, #0a0a0a)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 0.75rem",
-  color: "var(--db-text, #f5f5f5)",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const saveBtnStyle: React.CSSProperties = {
-  background: "var(--db-accent, #3fff00)",
-  color: "var(--db-on-accent, #0a0a0a)",
-  border: "none",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const cancelBtnStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.7rem 1.25rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.95rem",
-  textDecoration: "none",
-  display: "inline-flex",
-  alignItems: "center",
-};
-
-const dangerBtn: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-negative, #ff3b30)",
-  border: "1px solid var(--db-negative, #ff3b30)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 1rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.9rem",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const secondaryBtn: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.55rem 1rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.9rem",
-  cursor: "pointer",
-};
-
-const mono: React.CSSProperties = {
-  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-};
-
-const monoMuted: React.CSSProperties = {
-  ...mono,
-  fontSize: "0.85rem",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
-
-const cellStyle: React.CSSProperties = {
-  padding: "0.7rem 0.75rem",
-  borderBottom: "1px solid var(--db-border-subtle, #1f1f1f)",
-};
-
-const emptyStyle: React.CSSProperties = {
-  margin: 0,
-  padding: "1.5rem 0",
-  textAlign: "center",
-  color: "var(--db-text-muted, #a3a3a3)",
-};
