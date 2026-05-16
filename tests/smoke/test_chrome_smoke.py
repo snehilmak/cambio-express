@@ -169,3 +169,111 @@ def test_return_checks_list_has_edit_affordance(admin_page, smoke_server):
     # The "Record payment" button is the discoverable affordance.
     assert admin_page.get_by_role("button", name="Record payment").first.is_visible()
     assert not admin_page.js_errors
+
+
+# ── Customer directory: search-box debounce + live results ─────
+
+
+def test_customers_search_finds_seeded_row(admin_page, smoke_server):
+    """The customers page is a live-search surface — type two
+    characters and matching rows appear. Backlog gap: nothing in
+    the smoke layer verifies this path, and the entry-point is
+    used by cashiers dozens of times a day.
+
+    Seeds one customer first so a search has something to match.
+    The search debounces 300ms (CLAUDE.md "Table search UX"), so
+    the test fills the input and waits for the API call to
+    settle via ``networkidle`` rather than asserting immediately.
+    """
+    from api.Modules.Customers.Models import Customer
+    from api.Modules.Tenancy.Models import Store
+    from tests._app import db, db_session
+
+    with db_session():
+        store = db.session.query(Store).filter_by(slug="test-store").first()
+        # Idempotent: skip if a prior smoke test already seeded.
+        existing = db.session.query(Customer).filter_by(
+            store_id=store.id, full_name="Smoke Customer LLC",
+        ).first()
+        if existing is None:
+            db.session.add(Customer(
+                store_id=store.id,
+                full_name="Smoke Customer LLC",
+                phone_country="+1",
+                phone_number="5551234567",
+                address="123 Test St",
+            ))
+            db.session.commit()
+
+    admin_page.goto(smoke_server + "/app/customers")
+    admin_page.wait_for_load_state("networkidle")
+    # The search input is type=search — the live-search pattern
+    # uses that across every list page (CLAUDE.md "Table search
+    # UX").
+    search = admin_page.locator("input[type='search']").first
+    search.wait_for(state="visible", timeout=2000)
+    search.fill("Smoke")
+    # Debounce window (300ms) + API round-trip + render.
+    admin_page.wait_for_load_state("networkidle")
+    # The result row renders the seeded full_name verbatim.
+    assert admin_page.get_by_text("Smoke Customer LLC").first.is_visible()
+    assert not admin_page.js_errors
+
+
+# ── Admin subscription: page renders without crash ─────────────
+
+
+def test_admin_subscription_page_loads(admin_page, smoke_server):
+    """``/app/admin/subscription`` is the billing / plan-management
+    surface and a frequent operator destination. The page does a
+    Stripe-summary API call on mount; we only assert that the
+    page renders without JS errors (the demo store starts in
+    trial state, so the "Choose a Plan" CTA is the entry point
+    we lock in)."""
+    admin_page.goto(smoke_server + "/app/admin/subscription")
+    admin_page.wait_for_load_state("networkidle")
+    # PageHeader's title is the canonical "did the page render"
+    # marker.
+    assert admin_page.get_by_role("heading", name="Billing & Subscription").first.is_visible()
+    # On a trial store, the "Choose a Plan" link is the visible
+    # CTA. The link target may be ``/subscribe`` or a Stripe
+    # portal URL depending on plan state — assert by role rather
+    # than href so the test isn't tied to a specific plan flow.
+    cta = admin_page.get_by_role("link", name=re_choose())
+    assert cta.first.is_visible()
+    assert not admin_page.js_errors
+
+
+def re_choose():
+    """Helper — Playwright's ``get_by_role`` accepts a regex via
+    ``re.compile``. Matches the "Choose a Plan" CTA whether the
+    plan is trial / inactive / paid."""
+    import re
+    return re.compile(r"Choose|Change.*plan", re.IGNORECASE)
+
+
+# ── Forgot-password: form renders + accepts a username ─────────
+
+
+def test_forgot_password_form_submits(page, smoke_server):
+    """Logged-out flow: a user lands on /app/login, taps "Forgot
+    password?", submits their username, and gets the
+    "Check your email" generic response (regardless of whether the
+    account exists — CLAUDE.md invariant #10).
+
+    This is the only test in the smoke layer that drives a
+    *logged-out* flow. Uses the raw ``page`` fixture (not the
+    pre-logged-in ``admin_page``)."""
+    page.goto(smoke_server + "/app/forgot-password")
+    page.wait_for_load_state("networkidle")
+    page.fill("input[name='username']", "admin@test.com")
+    page.click("button[type='submit']")
+    # The success-state is a brief generic message; CLAUDE.md
+    # invariant #10 is "always respond with `Check your email`
+    # regardless of whether the account exists." Wait for the
+    # text to appear (server round-trip + re-render).
+    page.wait_for_load_state("networkidle")
+    assert page.get_by_text("Check your email", exact=False).first.is_visible(
+        timeout=3000,
+    )
+    assert not page.js_errors
