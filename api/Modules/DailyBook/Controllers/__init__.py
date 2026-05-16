@@ -1,14 +1,8 @@
 """DailyBook module — Controllers (FastAPI router).
 
-Mounts at `/api/v2/daily/*`. Read-side endpoints:
-
-  GET /daily/{store_id}/{report_date}     → single-day summary or 404.
-  GET /daily/{store_id}/period            → ?from=&to=, period roll-up.
-
-The legacy Flask `/daily/<id>` and monthly P&L pages still serve the
-HTML chrome; this Controller is the JSON surface the React frontend
-will call once cutover ships. Auth gating intentionally NOT here yet
-(auth migration is module 5 of 6 in the ADR).
+Mounts at ``/api/v2/daily/*``. Owns the JSON surface for the
+daily cash-ledger and its line-items — the React SPA at
+``/app/daily/*`` consumes these endpoints.
 """
 from datetime import date, datetime
 

@@ -311,12 +311,9 @@ def delete_transfer(
     on the next page load.
 
     Caller is responsible for committing the surrounding transaction
-    and for emitting the cross-route audit log entry (which is a
-    Flask-side concern via `record_op_audit`).
+    and for emitting the cross-route ``OperatorAuditLog`` entry via
+    ``record_operator_action``.
     """
-    # Lazy import — TransferAudit lives in app.py and isn't part of
-    # the Transfers Models re-export today (audit migration is its
-    # own PR).
     from api.Modules.Audit.Models import TransferAudit
     transfer = get_by_id_in_stores(db, transfer_id, [store_id])
     if transfer is None:

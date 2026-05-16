@@ -1,11 +1,10 @@
-"""Reports module — first vertical slice migrated per the ADR.
+"""Reports module.
 
-Five layers (per `docs/architecture/MIGRATION_ADR.md` §2):
+Five layers (per ``docs/architecture/MIGRATION_ADR.md`` §2):
 
-    Models/        — re-exports of the legacy SQLAlchemy models
-                     during migration; eventually owns its own
-                     model definitions when sibling modules
-                     finish migrating their tables.
+    Models/        — re-exports of the SQLAlchemy models the
+                     reports read from. Tables live in their
+                     owner modules (Transfers, BankSync, etc.).
     Repositories/  — query intent → DB. One method = one query.
     Services/      — business logic (period math, grouping rules,
                      CSV/JSON formatting). Composes repositories.
@@ -13,7 +12,7 @@ Five layers (per `docs/architecture/MIGRATION_ADR.md` §2):
     Controllers/   — FastAPI APIRouter. Validates input, delegates
                      to services, serializes output.
 
-Reports was picked first because it's read-heavy and self-contained
-(no writes, no external integrations beyond the DB). It's the
-reference implementation every later module copies the shape from.
+Reports is the reference implementation later modules copied
+the layer shape from — read-heavy and self-contained (no writes,
+no external integrations beyond the DB).
 """

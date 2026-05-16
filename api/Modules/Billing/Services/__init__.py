@@ -1,6 +1,5 @@
 """Billing — Services. Stripe Checkout + billing-portal +
-subscription-state business logic, lifted out of app.py during the
-Auth/Billing slice of the strangler-fig migration.
+subscription-state business logic.
 """
 from api.Modules.Billing.Services.addons_catalog import ADDONS_CATALOG
 from api.Modules.Billing.Services.checkout import (

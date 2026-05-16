@@ -1,13 +1,12 @@
 """Reports module — Services layer.
 
 A service is a function that:
-  1. Takes a SQLAlchemy `Session` (so it works in both Flask and
-     FastAPI request paths during the strangler-fig migration).
+  1. Takes a SQLAlchemy ``Session``.
   2. Calls one or more Repository functions.
-  3. Applies business logic (renaming dict keys for the template,
+  3. Applies business logic (renaming dict keys for the response,
      resolving FK lookups via a separate query, sorting, limit).
-  4. Returns `(rows, totals)` — same shape as the legacy data fns
-     in `app.py` for drop-in compatibility.
+  4. Returns ``(rows, totals)`` — the shape the report Controllers
+     adapt straight into the JSON envelope the SPA consumes.
 
 Layer rules from the ADR:
     Service → Repository    ✓
@@ -15,11 +14,6 @@ Layer rules from the ADR:
     Service → Service       ✓ (sparingly)
     Service → Controller    ✗
     Service → DB session    via Repository, never raw
-
-The legacy `_sales_by_company_data` etc. in `app.py` are now
-2-line shims that delegate to the corresponding service. Single
-source of truth for the business logic; both Flask templates and
-the new FastAPI controllers (PR 4) hit the same code.
 """
 from .ach_volume import ach_volume
 from .bank_charges import bank_charges_by_account
