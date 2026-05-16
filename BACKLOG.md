@@ -493,8 +493,19 @@ impact ÷ effort. Numbers are an estimate.
       exemptions and is idempotent (rerunning is a no-op). Tests
       in `tests/test_backfill_federal_tax.py`.
 - [ ] Dedicated `/customers` page with search / edit / merge-duplicates.
-- [ ] Recipient autocomplete (same pattern as sender) if repeat
-      recipients become common in the data.
+- [x] Recipient suggestions — landed. When the cashier picks a
+      sender (``customer_id`` set via SenderAutocomplete), a row
+      of "recent recipients" chips appears above the
+      ``recipient_name`` input. Each chip is one of the last 5
+      distinct recipients that customer has sent to (umbrella-
+      scoped, canceled / rejected transfers excluded). Tapping
+      a chip fills name / country / phone in one action — the
+      country only applies if it's still in the dropdown's
+      canonical list, so legacy free-text values don't break
+      validation. Component:
+      ``frontend/src/components/RecipientSuggestions.tsx``;
+      wired into both NewTransfer + EditTransfer. Backed by
+      ``GET /api/v2/customers/{id}/recent-recipients``.
 - [x] **Announcement banner in the SPA chrome** — landed. New
       `GET /api/v2/announcements/active` returns the slim
       `{id, message, level}` rows the banner needs (no audit /

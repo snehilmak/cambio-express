@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
+import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Button,
   Card,
@@ -283,6 +284,30 @@ export default function NewTransfer() {
 
         <Card>
           <Section title="Recipient">
+            {/* Chip row of recent recipients for the picked sender.
+                Hidden when no sender is picked or the sender has no
+                history; otherwise one tap fills name / country /
+                phone in one go. */}
+            <RecipientSuggestions
+              customerId={customerId}
+              storeId={identity.store_id}
+              onPick={(row) => {
+                setValue("recipient_name", row.name);
+                // Only apply the country if it's in the dropdown's
+                // canonical list — past transfers may have free-text
+                // values that no longer match the curated options.
+                if (
+                  row.country
+                  && (COUNTRIES as readonly string[]).includes(row.country)
+                ) {
+                  setValue(
+                    "country",
+                    row.country as (typeof COUNTRIES)[number],
+                  );
+                }
+                setValue("recipient_phone", row.phone);
+              }}
+            />
             <Grid>
               <Field label="Country">
                 <Select {...register("country")}>

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import SenderAutocomplete from "../components/SenderAutocomplete";
+import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
   Alert, Button, Card, ErrorState, Field, FormActions, Input, Loading,
   PageHeader, PageShell, Select,
@@ -237,6 +238,17 @@ export default function EditTransfer() {
 
         <Card>
           <h2 className={styles.sectionTitle}>Recipient</h2>
+          <RecipientSuggestions
+            customerId={form.customer_id ?? null}
+            storeId={identity.store_id}
+            onPick={(row) => {
+              set("recipient_name", row.name);
+              if (row.country && (COUNTRIES as readonly string[]).includes(row.country)) {
+                set("country", row.country);
+              }
+              set("recipient_phone", row.phone);
+            }}
+          />
           <div className={styles.grid}>
             <Field label="Country">
               <Select value={form.country}
