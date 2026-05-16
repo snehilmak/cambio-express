@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 import { useActiveAnnouncements } from "../api/announcements";
 import type { ActiveAnnouncementRow } from "../api/announcements";
@@ -41,6 +42,59 @@ function saveDismissed(s: Set<number>): void {
     /* quota / serialization errors silently ignored — dismissal
        is a UX nicety, not a correctness requirement. */
   }
+}
+
+// Linkify bare http(s):// URLs without pulling in a markdown
+// parser — the only "rich text" we want in banners is clickable
+// links ("click here: https://docs.dinerobook.com/migration"),
+// and matching whole http(s) tokens covers ~100% of that need.
+// Trailing sentence punctuation (.,;:!?)) is stripped from the
+// link so "see https://x.com/post." doesn't include the period.
+// React renders the text/Anchor children as escaped string nodes,
+// so there's no HTML-injection surface to worry about.
+
+const URL_REGEX = /\bhttps?:\/\/[^\s<]+/gi;
+
+function renderWithLinks(message: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  for (const match of message.matchAll(URL_REGEX)) {
+    const start = match.index ?? 0;
+    if (start > cursor) {
+      nodes.push(
+        <Fragment key={`t-${cursor}`}>{message.slice(cursor, start)}</Fragment>,
+      );
+    }
+    let url = match[0];
+    let trailing = "";
+    while (url.length > 0 && ".,;:!?)".includes(url[url.length - 1] ?? "")) {
+      trailing = url[url.length - 1] + trailing;
+      url = url.slice(0, -1);
+    }
+    nodes.push(
+      <a
+        key={`u-${start}`}
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: "inherit", textDecoration: "underline" }}
+      >
+        {url}
+      </a>,
+    );
+    if (trailing) {
+      nodes.push(
+        <Fragment key={`tp-${start}`}>{trailing}</Fragment>,
+      );
+    }
+    cursor = start + match[0].length;
+  }
+  if (cursor < message.length) {
+    nodes.push(
+      <Fragment key={`t-${cursor}-end`}>{message.slice(cursor)}</Fragment>,
+    );
+  }
+  return nodes.length > 0 ? nodes : message;
 }
 
 const palette: Record<string, { bg: string; border: string; fg: string }> = {
@@ -114,7 +168,7 @@ function BannerRow({
       }}
     >
       <span style={{ flex: 1, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-        {row.message}
+        {renderWithLinks(row.message)}
       </span>
       <button
         type="button"

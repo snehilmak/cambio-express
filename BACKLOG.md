@@ -508,7 +508,14 @@ impact ÷ effort. Numbers are an estimate.
       in `tests/Modules/Announcements/test_announcements_controllers.py`
       cover the auth-open contract, slim shape, expired/scheduled/
       inactive omission.
-- [ ] Rich text / markdown links in announcements.
+- [x] Rich text / markdown links in announcements — landed.
+      `<AnnouncementBanner>` auto-links bare `http(s)://...` URLs
+      in the message body (trailing sentence punctuation is
+      stripped so "see https://x.com/post." doesn't include the
+      period). Anchors open in a new tab with `noopener`. No
+      markdown parser pulled in — the only rich-text need
+      operators actually surface is clickable links, and
+      tokenising `http(s)` URLs covers ~100% of that.
 - [x] Scheduled announcements — landed. The Announcement create
       endpoint accepts an optional `start_at_iso` (ISO-8601 UTC);
       omit / empty starts the banner immediately. expires_days is
