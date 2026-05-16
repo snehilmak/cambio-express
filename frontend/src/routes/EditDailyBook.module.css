@@ -1,0 +1,391 @@
+/* Page-specific styles for EditDailyBook.tsx.
+ *
+ * EditDailyBook has the most custom UI in the SPA (collapsible
+ * widget accordions for receipts/disbursements/checks, an
+ * editable MT-breakdown table, sticky totals + save bars) so most
+ * of its styling stays page-specific rather than promoting to kit
+ * primitives. The kit's <Card>/<Button>/<Field>/<Input> handle
+ * the header chrome; everything below moves here.
+ */
+
+.headerActions {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.totalsStrip {
+  position: sticky;
+  top: 0.25rem;
+  z-index: 5;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  background: var(--db-surface, #0a0a0a);
+  padding-bottom: 0.25rem;
+}
+
+.totalsLabel {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 600;
+}
+
+.totalHint {
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.tabBar {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.875rem;
+  padding: 0.35rem;
+}
+
+.tabBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  border: 1px solid transparent;
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.95rem;
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.tabBtnActive {
+  background: var(--db-surface, #0a0a0a);
+  color: var(--db-text, #f5f5f5);
+  border-color: rgba(63, 255, 0, 0.25);
+  box-shadow: 0 1px 0 rgba(63, 255, 0, 0.18) inset;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-bottom: 5rem;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.panelTitle {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0 0 0.85rem;
+  font-weight: 600;
+}
+
+.subText {
+  margin: 0 0 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.inputGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.widget {
+  border: 1px solid var(--db-border, #262626);
+  background: var(--db-surface, #0a0a0a);
+  border-radius: 0.75rem;
+  margin-bottom: 0.65rem;
+  overflow: hidden;
+}
+
+.widgetHeader {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: none;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  color: var(--db-text, #f5f5f5);
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+}
+
+.widgetLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.widgetCaret {
+  display: inline-block;
+  width: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  transition: transform 120ms ease;
+}
+
+.widgetCount {
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.widgetTotal {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.widgetBody {
+  border-top: 1px solid var(--db-border-subtle, #1f1f1f);
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.widgetAddRow {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.addRowTime {
+  flex: 0 0 7.5rem;
+}
+
+.addRowAmount {
+  flex: 0 0 9rem;
+}
+
+.addRowNote {
+  flex: 1;
+  min-width: 10rem;
+}
+
+.addRowEnd {
+  align-self: flex-end;
+}
+
+.widgetTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.widgetTh {
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 600;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.widgetTd {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+  font-size: 0.88rem;
+}
+
+.widgetTdMono {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+  font-size: 0.88rem;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.widgetTdSmall {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.78rem;
+}
+
+.emptyEntries {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.saveBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: var(--db-surface, #0a0a0a);
+  border-top: 1px solid var(--db-border, #262626);
+  padding: 0.85rem 0;
+  z-index: 4;
+}
+
+.saveBarLeft {
+  flex: 1;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+/* MT auto-summary table */
+.mtTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.5rem;
+}
+
+.mtTh {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 600;
+  border-bottom: 1px solid var(--db-border, #262626);
+  background: var(--db-surface, #0a0a0a);
+}
+
+.mtThNum {
+  text-align: right;
+}
+
+.mtTd {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+  font-size: 0.88rem;
+}
+
+.mtTdStrong {
+  font-weight: 600;
+}
+
+.mtTdNum {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  text-align: right;
+}
+
+.mtTdNumStrong {
+  font-weight: 700;
+}
+
+.mtTdNumMuted {
+  color: var(--db-text-muted, #a3a3a3);
+  border-top: 1px solid var(--db-border, #262626);
+}
+
+.mtPanelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.4rem;
+}
+
+.mtPanelHeaderActions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.mtSaveRow {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.mtSaveRowLeft {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  flex: 1;
+}
+
+.mtCellInput {
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  color: var(--db-text, #f5f5f5);
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: right;
+}
+
+.mtCellTd {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.mtResetBtn {
+  margin-left: 0.55rem;
+  background: transparent;
+  border: 1px solid var(--db-border, #262626);
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.mtRowHint {
+  display: inline-block;
+  margin-left: 0.6rem;
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.7rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 500;
+}
+
+.dateBadge {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.dateBadgeSep {
+  opacity: 0.7;
+}
+
+.scrollX {
+  overflow-x: auto;
+}
+
+.error {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  color: var(--db-negative, #ff3b30);
+  background: rgba(255, 59, 48, 0.08);
+  border: 1px solid var(--db-negative, #ff3b30);
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+}
