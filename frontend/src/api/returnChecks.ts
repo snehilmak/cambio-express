@@ -121,3 +121,34 @@ export function useReturnCheckPayments(rcId: number | undefined) {
       ),
   });
 }
+
+export interface RecordPaymentBody {
+  paid_on: string;       // YYYY-MM-DD
+  amount: number;
+  method?: string;       // cash / check / zelle / wire / money_order / other
+  note?: string;
+}
+
+export interface PaymentMutationResponse {
+  // ``null`` on DELETE; populated on POST.
+  payment: ReturnCheckPaymentRow | null;
+  return_check: ReturnCheckRow;
+}
+
+export async function createReturnCheckPayment(
+  rcId: number, body: RecordPaymentBody,
+): Promise<PaymentMutationResponse> {
+  return api<PaymentMutationResponse>(
+    `/api/v2/return-checks/${rcId}/payments`,
+    { method: "POST", json: body },
+  );
+}
+
+export async function deleteReturnCheckPayment(
+  rcId: number, paymentId: number,
+): Promise<PaymentMutationResponse> {
+  return api<PaymentMutationResponse>(
+    `/api/v2/return-checks/${rcId}/payments/${paymentId}`,
+    { method: "DELETE" },
+  );
+}

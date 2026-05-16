@@ -2363,8 +2363,32 @@ export interface paths {
         /** Payments Route */
         get: operations["payments_route_return_checks__rc_id__payments_get"];
         put?: never;
-        post?: never;
+        /**
+         * Record Payment Route
+         * @description Record one installment payment against a pending or
+         *     recovered return check. Auto-creates the matching
+         *     ``DailyLineItem(kind='return_payback')`` and re-derives the
+         *     daily-book total + parent status.
+         */
+        post: operations["record_payment_route_return_checks__rc_id__payments_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/return-checks/{rc_id}/payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Payment Route */
+        delete: operations["delete_payment_route_return_checks__rc_id__payments__payment_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5397,6 +5421,16 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["ReturnCheckRow"][];
         };
+        /**
+         * ReturnCheckPaymentResponse
+         * @description Single-row payload returned by POST/DELETE payment endpoints.
+         *     Includes the refreshed parent ``return_check`` so the client
+         *     can update the recovered_total + status pill in one round-trip.
+         */
+        ReturnCheckPaymentResponse: {
+            payment?: components["schemas"]["ReturnCheckPaymentRow"] | null;
+            return_check: components["schemas"]["ReturnCheckRow"];
+        };
         /** ReturnCheckPaymentRow */
         ReturnCheckPaymentRow: {
             /** Amount */
@@ -5417,6 +5451,32 @@ export interface components {
             paid_on: string;
             /** Return Check Id */
             return_check_id: number;
+        };
+        /**
+         * ReturnCheckPaymentWriteRequest
+         * @description Body for ``POST /return-checks/{id}/payments``.
+         *
+         *     ``paid_on`` is the YYYY-MM-DD the cashier received the
+         *     installment; the matching ``DailyLineItem`` auto-creates with
+         *     this report_date. ``method`` is free-text but the SPA's form
+         *     constrains it to ``cash / check / zelle / wire / money_order /
+         *     other`` for consistency.
+         */
+        ReturnCheckPaymentWriteRequest: {
+            /** Amount */
+            amount: number;
+            /**
+             * Method
+             * @default
+             */
+            method: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Paid On */
+            paid_on: string;
         };
         /** ReturnCheckPaymentsResponse */
         ReturnCheckPaymentsResponse: {
@@ -11064,6 +11124,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReturnCheckPaymentsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_payment_route_return_checks__rc_id__payments_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rc_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnCheckPaymentWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnCheckPaymentResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_payment_route_return_checks__rc_id__payments__payment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rc_id: number;
+                payment_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReturnCheckPaymentResponse"];
                 };
             };
             /** @description Validation Error */

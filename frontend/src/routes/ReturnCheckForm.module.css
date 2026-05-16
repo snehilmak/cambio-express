@@ -37,3 +37,21 @@
   font-size: 0.85rem;
   color: var(--db-text-muted, #a3a3a3);
 }
+
+.paymentForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.paymentFormGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.paymentFormActions {
+  display: flex;
+  justify-content: flex-end;
+}

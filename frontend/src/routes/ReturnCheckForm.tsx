@@ -1,8 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   createReturnCheck,
+  createReturnCheckPayment,
+  deleteReturnCheckPayment,
   markFraud,
   markLoss,
   reopenReturnCheck,
@@ -16,10 +19,19 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, EmptyState, Field, FormActions, Input,
-  Loading, PageHeader, PageShell, SectionTitle, Table, Textarea,
+  Loading, PageHeader, PageShell, SectionTitle, Select, Table, Textarea,
   tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./ReturnCheckForm.module.css";
+
+const PAYMENT_METHODS: Array<{ value: string; label: string }> = [
+  { value: "cash",        label: "Cash"        },
+  { value: "check",       label: "Check"       },
+  { value: "zelle",       label: "Zelle"       },
+  { value: "wire",        label: "Wire"        },
+  { value: "money_order", label: "Money order" },
+  { value: "other",       label: "Other"       },
+];
 
 // Combined New/Edit form for return checks at /app/return-checks/new
 // and /app/return-checks/:id/edit. Edit variant also surfaces
@@ -246,12 +258,29 @@ export default function ReturnCheckForm() {
       {isEdit && (
         <Card style={{ marginTop: "1rem" }}>
           <SectionTitle>Recovery payments</SectionTitle>
+          {status === "pending" && (
+            <RecordPaymentForm
+              rcId={rcId}
+              remaining={Math.max(0, form.amount - recovered)}
+              disabled={busy}
+            />
+          )}
+          {(status === "loss" || status === "fraud") && (
+            <p className={styles.statusLine}>
+              This check is closed as <strong>{status}</strong>.
+              Reopen above to record additional payments.
+            </p>
+          )}
           {payments.isLoading && <Loading />}
           {payments.data && payments.data.payments.length === 0 && (
             <EmptyState title="No recovery payments recorded." />
           )}
           {payments.data && payments.data.payments.length > 0 && (
-            <PaymentsTable rows={payments.data.payments} />
+            <PaymentsTable
+              rows={payments.data.payments}
+              rcId={rcId}
+              canDelete={status !== "loss" && status !== "fraud"}
+            />
           )}
         </Card>
       )}
@@ -259,31 +288,203 @@ export default function ReturnCheckForm() {
   );
 }
 
-function PaymentsTable({ rows }: { rows: ReturnCheckPaymentRow[] }) {
+
+function RecordPaymentForm({
+  rcId, remaining, disabled,
+}: {
+  rcId: number;
+  remaining: number;
+  disabled: boolean;
+}) {
+  const qc = useQueryClient();
+  const identity = getCurrentIdentity();
+  const [paidOn,  setPaidOn]  = useState(() => todayIso());
+  const [amount,  setAmount]  = useState("");
+  const [method,  setMethod]  = useState<string>(PAYMENT_METHODS[0].value);
+  const [note,    setNote]    = useState("");
+  const [busy,    setBusy]    = useState(false);
+  const [error,   setError]   = useState<string | null>(null);
+
+  // The remaining cap is enforced server-side too, but render the
+  // limit hint so a cashier doesn't tab over to a calculator.
+  const cap = remaining;
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    const amt = Number(amount);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setError("Amount must be greater than zero.");
+      return;
+    }
+    if (cap <= 0) {
+      setError("Return check is already fully recovered.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createReturnCheckPayment(rcId, {
+        paid_on: paidOn,
+        amount: amt,
+        method,
+        note,
+      });
+      // Refetch parent + payments so the totals strip + table flip.
+      qc.invalidateQueries({
+        queryKey: ["return-checks", "detail", identity?.store_id, rcId],
+      });
+      qc.invalidateQueries({
+        queryKey: ["return-checks", "payments", identity?.store_id, rcId],
+      });
+      setAmount(""); setNote("");
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not record payment.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <Table>
-      <thead>
-        <tr>
-          <th style={thStyle}>Paid on</th>
-          <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
-          <th style={thStyle}>Method</th>
-          <th style={thStyle}>Notes</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((p) => (
-          <tr key={p.id}>
-            <td style={tdStyle}>
-              <span className={styles.monoMuted}>{p.paid_on}</span>
-            </td>
-            <td style={{ ...tdStyle, textAlign: "right" }}>
-              <span className={styles.mono}>${p.amount.toFixed(2)}</span>
-            </td>
-            <td style={tdStyle}>{p.method || "—"}</td>
-            <td style={tdStyle}>{p.notes || "—"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+    <form onSubmit={onSubmit} className={styles.paymentForm}>
+      <div className={styles.paymentFormGrid}>
+        <Field label="Date">
+          <Input
+            type="date" required
+            value={paidOn}
+            onChange={(e) => setPaidOn(e.target.value)}
+            disabled={busy || disabled}
+          />
+        </Field>
+        <Field
+          label="Amount (USD)"
+          hint={cap > 0 ? `Up to $${cap.toFixed(2)} remaining.` : undefined}
+        >
+          <Input
+            type="number" step="0.01" min="0.01" max={cap || undefined}
+            required
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            disabled={busy || disabled || cap <= 0}
+          />
+        </Field>
+        <Field label="Method">
+          <Select
+            value={method}
+            onChange={(e) => setMethod(e.target.value)}
+            disabled={busy || disabled}
+          >
+            {PAYMENT_METHODS.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Note (optional)">
+          <Input
+            type="text" maxLength={200}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            disabled={busy || disabled}
+            placeholder="e.g. paid in cash at counter"
+          />
+        </Field>
+      </div>
+      {error && <Alert tone="error">{error}</Alert>}
+      <div className={styles.paymentFormActions}>
+        <Button
+          type="submit" busy={busy}
+          disabled={busy || disabled || cap <= 0 || !amount}
+        >
+          {busy ? "Recording…" : "Record payment"}
+        </Button>
+      </div>
+    </form>
   );
 }
+
+
+function PaymentsTable({
+  rows, rcId, canDelete,
+}: {
+  rows: ReturnCheckPaymentRow[];
+  rcId: number;
+  canDelete: boolean;
+}) {
+  const qc = useQueryClient();
+  const identity = getCurrentIdentity();
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onDelete(p: ReturnCheckPaymentRow) {
+    if (!confirm(`Remove the $${p.amount.toFixed(2)} payment from ${p.paid_on}?`)) {
+      return;
+    }
+    setError(null);
+    setBusyId(p.id);
+    try {
+      await deleteReturnCheckPayment(rcId, p.id);
+      qc.invalidateQueries({
+        queryKey: ["return-checks", "detail", identity?.store_id, rcId],
+      });
+      qc.invalidateQueries({
+        queryKey: ["return-checks", "payments", identity?.store_id, rcId],
+      });
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Could not remove payment.",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      {error && <Alert tone="error">{error}</Alert>}
+      <Table>
+        <thead>
+          <tr>
+            <th style={thStyle}>Paid on</th>
+            <th style={{ ...thStyle, textAlign: "right" }}>Amount</th>
+            <th style={thStyle}>Method</th>
+            <th style={thStyle}>Notes</th>
+            {canDelete && <th style={thStyle} aria-label="actions" />}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr key={p.id}>
+              <td style={tdStyle}>
+                <span className={styles.monoMuted}>{p.paid_on}</span>
+              </td>
+              <td style={{ ...tdStyle, textAlign: "right" }}>
+                <span className={styles.mono}>${p.amount.toFixed(2)}</span>
+              </td>
+              <td style={tdStyle}>{p.method || "—"}</td>
+              <td style={tdStyle}>{p.notes || "—"}</td>
+              {canDelete && (
+                <td style={{ ...tdStyle, textAlign: "right" }}>
+                  <Button
+                    tone="danger" size="sm"
+                    busy={busyId === p.id}
+                    disabled={busyId !== null}
+                    onClick={() => onDelete(p)}
+                  >
+                    {busyId === p.id ? "Removing…" : "Remove"}
+                  </Button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </>
+  );
+}
+
+
