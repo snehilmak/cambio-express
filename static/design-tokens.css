@@ -74,6 +74,22 @@
   --db-shadow-card-hvr:  0 0 0 1px var(--db-gray-4), 0 8px 24px rgba(0,0,0,0.4);
   --db-shadow-neon:      0 0 0 1px var(--db-neon), 0 0 24px var(--db-neon-glow-40);
   --db-shadow-dropdown:  0 12px 32px rgba(0,0,0,0.55), 0 0 0 1px var(--db-gray-3);
+
+  /* ── Semantic aliases consumed by the React SPA's kit primitives
+     (frontend/src/components/ui/tokens.ts) and inline styles. These
+     map the surface / text / border vocabulary the components write
+     against onto the concrete --db-bg / --db-gray-* tokens above.
+     Defining them here (rather than only on [data-theme="dark"])
+     means a missing data-theme attribute still renders dark. */
+  --db-surface:        var(--db-bg);
+  --db-surface-2:      var(--db-bg-elevated);
+  --db-surface-3:      var(--db-bg-raised);
+  --db-text:           var(--db-gray-9);
+  --db-text-muted:     var(--db-gray-7);
+  --db-border:         var(--db-gray-3);
+  --db-border-subtle:  var(--db-gray-2);
+  --db-accent:         var(--db-neon);
+  --db-on-accent:      var(--db-neon-ink);
 }
 
 /* ──────────────────────────────────────────────────────────────────────────

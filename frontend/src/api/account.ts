@@ -212,15 +212,18 @@ export async function updateProfile(
 
 
 export interface NotificationsResponse {
-  notify_trial_reminders:    boolean;
-  notify_announcement_email: boolean;
-  trial_toggle_applies:      boolean;
-  role:                      string;
+  notify_trial_reminders:        boolean;
+  notify_announcement_email:     boolean;
+  notify_locked_day_digest:      boolean;
+  trial_toggle_applies:          boolean;
+  locked_day_digest_applies:     boolean;
+  role:                          string;
 }
 
 export interface NotificationsUpdateBody {
   notify_trial_reminders?:    boolean;
   notify_announcement_email?: boolean;
+  notify_locked_day_digest?:  boolean;
 }
 
 export function useNotifications() {

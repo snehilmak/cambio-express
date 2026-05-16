@@ -229,3 +229,74 @@ def test_legacy_account_notifications_redirects_to_app(
     )
     assert resp.status_code == 301
     assert resp.headers["Location"] == "/app/account/notifications"
+
+
+# ── notify_locked_day_digest ────────────────────────────────
+
+
+def test_notifications_get_includes_locked_day_digest(
+    client, test_store_id,
+):
+    """GET exposes the locked-day digest toggle + its
+    ``*_applies`` predicate so the SPA can render an interactive
+    toggle for admins / owners and an informational row for
+    everyone else."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/auth/notifications",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert "notify_locked_day_digest" in body
+    # Seeded admin user — toggle applies.
+    assert body["locked_day_digest_applies"] is True
+    # Default for the column is True; admin@test.com gets it on
+    # by default unless the test seed flipped it.
+    assert body["notify_locked_day_digest"] is True
+
+
+def test_notifications_get_locked_day_digest_does_not_apply_for_employee(
+    client, test_store_id,
+):
+    """Employees never receive the digest — the predicate gates
+    the SPA into a greyed-out informational row for them."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        emp = User(
+            store_id=test_store_id, username="emp@test.com",
+            full_name="Employee", role="employee",
+        )
+        emp.set_password("p123pass!")
+        db.session.add(emp); db.session.commit()
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "emp@test.com", "password": "p123pass!",
+            "store_id": test_store_id,
+        },
+    )
+    token = resp.get_json()["access_token"]
+    body = client.get(
+        "/api/v2/auth/notifications",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["locked_day_digest_applies"] is False
+
+
+def test_notifications_put_persists_locked_day_digest(
+    client, test_store_id,
+):
+    """PUT writes the new value to the User row."""
+    from api.Modules.Tenancy.Models import User
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/auth/notifications",
+        json={"notify_locked_day_digest": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["notify_locked_day_digest"] is False
+    with db_session():
+        u = db.session.query(User).filter_by(
+            username="admin@test.com",
+        ).first()
+        assert u.notify_locked_day_digest is False

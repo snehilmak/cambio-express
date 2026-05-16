@@ -494,10 +494,8 @@ export interface paths {
          *     unknown emails silently no-op.
          *
          *     The raw token is logged to the operator console only when
-         *     SMTP isn't configured (matching the legacy /forgot-password
-         *     Flask flow). Production setups deliver via SMTP and never
-         *     log the URL — the SMTP send happens inline below, lifted from
-         *     the now-retired legacy Flask handler.
+         *     SMTP isn't configured. Production setups deliver via SMTP
+         *     and never log the URL — the SMTP send happens inline below.
          */
         post: operations["forgot_password_route_auth_forgot_password_post"];
         delete?: never;
@@ -538,8 +536,7 @@ export interface paths {
          *     Same response shape as `/auth/login`, but takes
          *     username + password only — the user's home store is looked
          *     up across every store. Employees are rejected here so they
-         *     use their store's slug-scoped sign-in page (parity with the
-         *     legacy Flask `/login` POST).
+         *     use their store's slug-scoped sign-in page.
          */
         post: operations["login_cross_store_route_auth_login_cross_store_post"];
         delete?: never;
@@ -4652,10 +4649,9 @@ export interface components {
          * @description POST body for /auth/login-cross-store. The SPA's generic
          *     landing page doesn't know which store a user belongs to — this
          *     endpoint takes username + password only and looks up the
-         *     user's home store across all stores (first match wins, like
-         *     the legacy Flask `/login` POST). Employees get rejected here
-         *     because they're expected to use their store's slug-scoped
-         *     sign-in URL.
+         *     user's home store across all stores (first match wins).
+         *     Employees get rejected here because they're expected to use
+         *     their store's slug-scoped sign-in URL.
          */
         LoginCrossStoreRequest: {
             /** Password */
@@ -5207,14 +5203,25 @@ export interface components {
         };
         /**
          * NotificationsResponse
-         * @description Per-user notification preferences. `trial_toggle_applies`
-         *     tells the SPA whether to render the Trial-ending toggle as
-         *     interactive (True) or grey/informational (False — already
-         *     paid, or role doesn't own a trial).
+         * @description Per-user notification preferences.
+         *
+         *     Two ``*_applies`` flags tell the SPA when a toggle is
+         *     interactive vs. greyed-out informational:
+         *
+         *       * ``trial_toggle_applies`` — True only for admins / owners
+         *         of a store currently in active / expiring-soon / grace
+         *         trial state.
+         *       * ``locked_day_digest_applies`` — True only for admins /
+         *         owners (employees don't receive the digest). Greyed-out
+         *         for everyone else.
          */
         NotificationsResponse: {
+            /** Locked Day Digest Applies */
+            locked_day_digest_applies: boolean;
             /** Notify Announcement Email */
             notify_announcement_email: boolean;
+            /** Notify Locked Day Digest */
+            notify_locked_day_digest: boolean;
             /** Notify Trial Reminders */
             notify_trial_reminders: boolean;
             /** Role */
@@ -5224,12 +5231,14 @@ export interface components {
         };
         /**
          * NotificationsUpdateRequest
-         * @description PUT body. Both fields optional — None = don't touch.
+         * @description PUT body. Every field optional — None = don't touch.
          *     Empty payload is a no-op (HTTP 200 with current state).
          */
         NotificationsUpdateRequest: {
             /** Notify Announcement Email */
             notify_announcement_email?: boolean | null;
+            /** Notify Locked Day Digest */
+            notify_locked_day_digest?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
         };
