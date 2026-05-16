@@ -230,3 +230,70 @@ def test_legacy_account_profile_redirects_to_app(logged_in_client):
     )
     assert resp.status_code == 301
     assert resp.headers["Location"] == "/app/account/profile"
+
+
+# ── theme_preference ────────────────────────────────────────
+
+
+def test_profile_get_includes_theme_preference(client, test_store_id):
+    """The GET payload exposes ``theme_preference`` so the SPA can
+    render the saved dark / light choice immediately."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/auth/profile",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["theme_preference"] in ("dark", "light")
+
+
+def test_profile_get_falls_back_to_dark_on_missing_value(
+    client, test_store_id,
+):
+    """Defensive: a NULL / empty / unknown theme_preference value
+    (left over from a partial migration or a manual DB edit) must
+    render as ``"dark"`` so the user never sees an unstyled page."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = db.session.query(User).filter_by(
+            username="admin@test.com",
+        ).first()
+        u.theme_preference = ""
+        db.session.commit()
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/auth/profile",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["theme_preference"] == "dark"
+
+
+def test_profile_put_persists_theme_preference(client, test_store_id):
+    """PUT writes the new value to the User row + returns the
+    canonical state."""
+    from api.Modules.Tenancy.Models import User
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/auth/profile",
+        json={"theme_preference": "light"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["theme_preference"] == "light"
+    with db_session():
+        u = db.session.query(User).filter_by(
+            username="admin@test.com",
+        ).first()
+        assert u.theme_preference == "light"
+
+
+def test_profile_put_rejects_invalid_theme_value(client, test_store_id):
+    """Anything outside dark / light → 422 from Pydantic. Keeps
+    the column from accumulating typo values that would render
+    blank."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/auth/profile",
+        json={"theme_preference": "neon"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

@@ -5472,6 +5472,11 @@ export interface components {
             phone: string;
             /** Role */
             role: string;
+            /**
+             * Theme Preference
+             * @enum {string}
+             */
+            theme_preference: "dark" | "light";
             /** Timezone */
             timezone: string;
             /** Timezone Choices */
@@ -5483,13 +5488,9 @@ export interface components {
         };
         /**
          * ProfileUpdateRequest
-         * @description PUT body. All four editable fields are individually
-         *     optional — the SPA could submit only the dirty ones — but
-         *     the legacy form always sends all four, so the service layer
-         *     treats absent == 'don't change'.
-         *
-         *     Validation lives in the Service so the legacy app._update_user_profile
-         *     helper and the FastAPI path can share rules.
+         * @description PUT body. Every field is individually optional — the SPA
+         *     may submit only the dirty ones. Validation lives in the
+         *     Service so a future second caller can share the rules.
          */
         ProfileUpdateRequest: {
             /** Email */
@@ -5498,6 +5499,8 @@ export interface components {
             full_name?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Theme Preference */
+            theme_preference?: ("dark" | "light") | null;
             /** Timezone */
             timezone?: string | null;
         };

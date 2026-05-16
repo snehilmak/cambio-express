@@ -169,6 +169,10 @@ export interface StoreInfoUpdateBody {
   federal_tax_rate?: number;
 }
 
+// Allowed values for the per-user theme toggle. Dark is the
+// design-system default; light is opt-in.
+export type ThemePreference = "dark" | "light";
+
 export interface ProfileResponse {
   user_id:           number;
   username:          string;
@@ -177,16 +181,18 @@ export interface ProfileResponse {
   email:             string;
   phone:             string;
   timezone:          string;
+  theme_preference:  ThemePreference;
   created_at:        string;
   last_login_at:     string;
   timezone_choices:  string[];
 }
 
 export interface ProfileUpdateBody {
-  full_name?: string;
-  email?:     string;
-  phone?:     string;
-  timezone?:  string;
+  full_name?:        string;
+  email?:            string;
+  phone?:            string;
+  timezone?:         string;
+  theme_preference?: ThemePreference;
 }
 
 export function useProfile() {

@@ -260,9 +260,10 @@ _LAST_STORE_SLUG_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 
 
 def _set_last_store_slug_cookie(response: Response, slug: str) -> None:
-    """Mirror app._set_last_store_slug_cookie. Used by the
-    per-store login flow so the SPA's `/app/login/{slug}` page
-    sets the same cookie the legacy Flask route did."""
+    """Set the ``ds_last_store`` cookie. Used by the per-store
+    login flow so ``/app/login/{slug}`` and a bare ``/app/login``
+    can pre-fill the slug field on next visit. HttpOnly + SameSite=Lax
+    + Secure in prod."""
     response.set_cookie(
         key=_LAST_STORE_SLUG_COOKIE,
         value=slug,
@@ -365,8 +366,7 @@ def login_cross_store_route(
     Same response shape as `/auth/login`, but takes
     username + password only — the user's home store is looked
     up across every store. Employees are rejected here so they
-    use their store's slug-scoped sign-in page (parity with the
-    legacy Flask `/login` POST)."""
+    use their store's slug-scoped sign-in page."""
     try:
         result = authenticate_password_cross_store(
             db, username=body.username, password=body.password,
@@ -633,6 +633,7 @@ def update_profile_route(
             email=body.email,
             phone=body.phone,
             timezone=body.timezone,
+            theme_preference=body.theme_preference,
         )
     except ProfileValidationError as exc:
         raise HTTPException(
@@ -967,10 +968,8 @@ def forgot_password_route(
     unknown emails silently no-op.
 
     The raw token is logged to the operator console only when
-    SMTP isn't configured (matching the legacy /forgot-password
-    Flask flow). Production setups deliver via SMTP and never
-    log the URL — the SMTP send happens inline below, lifted from
-    the now-retired legacy Flask handler.
+    SMTP isn't configured. Production setups deliver via SMTP
+    and never log the URL — the SMTP send happens inline below.
     """
     issued = issue_password_reset_token(db, body.email)
     db.commit()
@@ -999,10 +998,8 @@ def send_password_reset_email(
     own ``SessionLocal`` to load the user, since the request
     handler's session is closed by the time the worker runs.
 
-    Body copy + HTML template + SMTP-fallback log line match what
-    the legacy Flask handler used to send so the migration is
-    transparent to recipients. Renders via the Flask-free
-    ``render_email_template`` from the Notifications service.
+    Renders via ``render_email_template`` from the Notifications
+    service.
     """
     import logging
     import os

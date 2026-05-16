@@ -17,10 +17,9 @@ class LoginCrossStoreRequest(BaseModel):
     """POST body for /auth/login-cross-store. The SPA's generic
     landing page doesn't know which store a user belongs to — this
     endpoint takes username + password only and looks up the
-    user's home store across all stores (first match wins, like
-    the legacy Flask `/login` POST). Employees get rejected here
-    because they're expected to use their store's slug-scoped
-    sign-in URL.
+    user's home store across all stores (first match wins).
+    Employees get rejected here because they're expected to use
+    their store's slug-scoped sign-in URL.
     """
 
     model_config = ConfigDict(extra="forbid")

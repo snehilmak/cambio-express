@@ -36,10 +36,8 @@ from api.Modules.Auth.Services.totp import (
 )
 
 
-# Permissions per role. Embedded as JWT claims so subsequent FastAPI
-# requests can authorize without re-hitting the DB. Mirrors the role
-# checks that gate the legacy Flask routes (login_required,
-# admin_required, owner_required, superadmin_required).
+# Permissions per role. Embedded as JWT claims so subsequent
+# requests can authorize without re-hitting the DB.
 _ROLE_PERMISSIONS: dict[str, list[str]] = {
     "superadmin": [
         "platform.admin",
@@ -394,10 +392,10 @@ def finalize_2fa_with_recovery_code(
 def verify_password_cross_store(
     db: Session, username: str, password: str,
 ) -> User | None:
-    """Cross-store credential check used by the legacy Flask `/login`
-    page (which doesn't yet know which store the user belongs to —
-    it picks the first matching username). Returns the User row when
-    creds + is_active pass; `None` otherwise.
+    """Cross-store credential check used by the bare ``/login``
+    page (which doesn't know which store the user belongs to — it
+    picks the first matching username). Returns the User row when
+    creds + is_active pass; ``None`` otherwise.
 
     Distinct from `authenticate_password`:
     - takes only username + password (no store_id)

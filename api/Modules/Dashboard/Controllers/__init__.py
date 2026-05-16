@@ -10,11 +10,8 @@ The payload branches on the caller's JWT role:
                batches, bank-account peek, today/this-month report
                status.
   - employee → today's transfers + same-day totals.
-  - superadmin → platform-wide BI (delegates to the existing
-                 superadmin_dashboard_context Service).
-
-No new aggregation logic is invented here — the route reads from
-the same models the legacy Flask `/dashboard` view used.
+  - superadmin → platform-wide BI (delegates to
+                 ``superadmin_dashboard_context``).
 """
 from datetime import date, datetime
 

@@ -13,15 +13,16 @@ import {
 import styles from "./AccountProfile.module.css";
 
 // /app/account/profile — personal info form (full_name, email,
-// phone, timezone) + read-only metadata (username, role,
-// created_at, last_login_at). Field-level errors mirror the legacy
-// Jinja form: server returns 422 with `field_errors` keyed by name,
-// SPA renders inline.
+// phone, timezone, theme) + read-only metadata (username, role,
+// created_at, last_login_at).
 //
-// The legacy /account/profile also had an "Appearance" theme
-// picker. That UI is intentionally NOT ported — CLAUDE.md
-// invariant #1 fixes the SPA to dark-only, so the picker would
-// have nothing to do.
+// Field-level errors: server returns 422 with ``field_errors``
+// keyed by name; we render inline.
+//
+// The Appearance / theme dropdown writes the same User.theme_preference
+// column the topbar ThemeToggle writes. Server is the source of
+// truth — the topbar's optimistic flip lets the click feel
+// instant, but a Save here is the canonical persistence point.
 
 export default function AccountProfile() {
   const queryClient = useQueryClient();
@@ -39,10 +40,11 @@ export default function AccountProfile() {
     if (!data) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched profile so inputs are controlled from first paint
     setDraft({
-      full_name: data.full_name,
-      email:     data.email,
-      phone:     data.phone,
-      timezone:  data.timezone,
+      full_name:        data.full_name,
+      email:            data.email,
+      phone:            data.phone,
+      timezone:         data.timezone,
+      theme_preference: data.theme_preference,
     });
   }, [data]);
 
@@ -187,6 +189,26 @@ export default function AccountProfile() {
                 {data.timezone_choices.map((tz) => (
                   <option key={tz} value={tz}>{tz}</option>
                 ))}
+              </Select>
+            </Field>
+
+            <Field
+              label="Appearance"
+              error={fieldErrors.theme_preference}
+              hint="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting."
+            >
+              <Select
+                value={draft.theme_preference ?? "dark"}
+                onChange={(e) =>
+                  set(
+                    "theme_preference",
+                    e.target.value as "dark" | "light",
+                  )
+                }
+                disabled={busy}
+              >
+                <option value="dark">Dark (default)</option>
+                <option value="light">Light</option>
               </Select>
             </Field>
 

@@ -1,7 +1,7 @@
 """TOTP + recovery-code Service.
 
-Pure verification + minting helpers. Each is small enough that the
-legacy app.py wrappers can become 1-line delegates.
+Pure verification + minting helpers used by the login Controller's
+TOTP-enroll + TOTP-verify routes.
 
 Why these live in the Auth module:
 - The 2FA flow gates login promotion (see CLAUDE.md invariant #13).

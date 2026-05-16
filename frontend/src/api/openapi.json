@@ -4218,6 +4218,14 @@
             "title": "Role",
             "type": "string"
           },
+          "theme_preference": {
+            "enum": [
+              "dark",
+              "light"
+            ],
+            "title": "Theme Preference",
+            "type": "string"
+          },
           "timezone": {
             "title": "Timezone",
             "type": "string"
@@ -4246,6 +4254,7 @@
           "email",
           "phone",
           "timezone",
+          "theme_preference",
           "created_at",
           "last_login_at",
           "timezone_choices"
@@ -4255,7 +4264,7 @@
       },
       "ProfileUpdateRequest": {
         "additionalProperties": false,
-        "description": "PUT body. All four editable fields are individually\noptional \u2014 the SPA could submit only the dirty ones \u2014 but\nthe legacy form always sends all four, so the service layer\ntreats absent == 'don't change'.\n\nValidation lives in the Service so the legacy app._update_user_profile\nhelper and the FastAPI path can share rules.",
+        "description": "PUT body. Every field is individually optional \u2014 the SPA\nmay submit only the dirty ones. Validation lives in the\nService so a future second caller can share the rules.",
         "properties": {
           "email": {
             "anyOf": [
@@ -4292,6 +4301,21 @@
               }
             ],
             "title": "Phone"
+          },
+          "theme_preference": {
+            "anyOf": [
+              {
+                "enum": [
+                  "dark",
+                  "light"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theme Preference"
           },
           "timezone": {
             "anyOf": [

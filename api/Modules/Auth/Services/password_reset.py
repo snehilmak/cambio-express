@@ -1,9 +1,8 @@
 """Password-reset token Service.
 
-Token-side of the password-reset flow. The legacy Flask
-`/forgot-password` and `/reset-password/<token>` routes glue email
-sending + form rendering onto these helpers; the Service stays
-HTTP-agnostic.
+Token-side of the password-reset flow. The Controller routes glue
+email sending + response rendering onto these helpers; the Service
+stays HTTP-agnostic so it can be exercised directly by unit tests.
 
 Tokens are stored as `sha256(raw_hex)` so the raw token never sits
 in the DB. Single-use, default 1-hour expiry per CLAUDE.md

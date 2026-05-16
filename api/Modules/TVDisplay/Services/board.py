@@ -1,15 +1,9 @@
 """Build the context dict the public TV rate-board template renders.
 
-Extracted from ``_render_tv_board`` in ``app.py``. Pure — no Flask
-``render_template`` or ``url_for`` calls — so the same context-build
-serves both the legacy Flask Jinja render path and the new
-Starlette ``Jinja2Templates`` path.
-
-The only Flask-ism left was ``url_for("tv.tv_catalog_logo", ...)``,
-which we replaced with a hand-built ``/tv/logo/<type>/<slug>``
-string. The path is stable (it's the canonical public URL the TV
-client fetches) and re-encoding it via ``url_for`` was the only
-reason the helper used to depend on the Flask request context.
+Pure — no request-context dependency — so the helper can be
+exercised directly by unit tests. Logo URLs are hand-built as
+``/tv/logo/<type>/<slug>`` (the canonical public URL the TV
+client fetches) instead of going through a routing helper.
 """
 from __future__ import annotations
 
