@@ -65,7 +65,7 @@ def _require_tv_store(claims: dict, db: Session):
         raise HTTPException(status_code=404, detail="Not found")
     from api.Modules.Billing.Services import store_has_addon
     from api.Modules.Tenancy.Models import Store
-    store = db.query(Store).filter(Store.id == int(sid)).one_or_none()
+    store = db.get(Store, int(sid))
     if store is None:
         raise HTTPException(status_code=404, detail="Not found")
     if not store_has_addon(store, "tv_display"):

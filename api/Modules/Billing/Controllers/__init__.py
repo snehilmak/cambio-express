@@ -52,7 +52,7 @@ def _require_billing_scope(claims: dict) -> int:
 
 def _current_store(db: Session, store_id: int):
     from api.Modules.Tenancy.Models import Store
-    store = db.query(Store).filter(Store.id == store_id).one_or_none()
+    store = db.get(Store, store_id)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
     return store

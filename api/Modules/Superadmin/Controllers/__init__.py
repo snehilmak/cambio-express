@@ -75,7 +75,7 @@ def _require_superadmin_user(db: Session, claims: dict) -> User:
         raise HTTPException(
             status_code=401, detail="JWT is missing the subject claim.",
         )
-    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    user = db.get(User, int(sub))
     if user is None:
         raise HTTPException(
             status_code=401, detail="JWT subject does not resolve to a user.",
@@ -176,7 +176,7 @@ def get_store_route(
     federal_tax_rate). 404 when the row doesn't exist."""
     _require_superadmin(claims)
     from api.Modules.Tenancy.Models import Store
-    s = db.query(Store).filter(Store.id == store_id).one_or_none()
+    s = db.get(Store, store_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Store not found")
     return SuperadminStoreDetailResponse(store=_adapt_detail(s))
@@ -273,7 +273,7 @@ def update_store_route(
     timer reset, etc.)."""
     user = _require_superadmin_user(db, claims)
     from api.Modules.Tenancy.Models import Store
-    s = db.query(Store).filter(Store.id == store_id).one_or_none()
+    s = db.get(Store, store_id)
     if s is None:
         raise HTTPException(status_code=404, detail="Store not found")
 
@@ -478,7 +478,7 @@ def toggle_discount_route(
     Inactive codes still exist in the DB + Stripe (so historical
     invoices keep their references) but new Checkout sessions
     that try to apply them are rejected by `is_redeemable`."""
-    _require_superadmin(claims)
+    user = _require_superadmin_user(db, claims)
     from api.Modules.Billing.Models import DiscountCode
     d = db.query(DiscountCode).filter(
         DiscountCode.id == discount_id,
@@ -486,6 +486,19 @@ def toggle_discount_route(
     if d is None:
         raise HTTPException(status_code=404, detail="Discount code not found")
     d.is_active = body.is_active
+    # CLAUDE.md invariant #7: every superadmin mutation records an
+    # audit entry. ``_audit_store`` is hardcoded to target_type="store";
+    # this toggles a DiscountCode, so call the underlying service
+    # directly with the right target_type.
+    record_superadmin_action(
+        db,
+        admin_id=user.id,
+        admin_name=user.full_name or user.username or "",
+        action="toggle_discount",
+        target_type="discount",
+        target_id=str(d.id),
+        details=f"code={d.code or ''}, is_active={body.is_active}",
+    )
     db.commit()
     return DiscountCodeResponse(discount=_adapt_discount(d))
 

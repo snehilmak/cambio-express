@@ -50,7 +50,7 @@ def _require_superadmin_user(db: Session, claims: dict) -> User:
         raise HTTPException(
             status_code=401, detail="JWT is missing the subject claim.",
         )
-    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    user = db.get(User, int(sub))
     if user is None:
         raise HTTPException(
             status_code=401, detail="JWT subject does not resolve.",
@@ -239,7 +239,7 @@ def upsert_override_route(
     flag = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if flag is None:
         raise HTTPException(status_code=404, detail="Feature flag not found")
-    store = db.query(Store).filter(Store.id == store_id).one_or_none()
+    store = db.get(Store, store_id)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
     o = (

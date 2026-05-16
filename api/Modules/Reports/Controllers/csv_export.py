@@ -112,7 +112,7 @@ def _authorize_store_scope(
     if role == "superadmin":
         return list(requested_store_ids)
     if role == "owner":
-        u = db.query(User).filter(User.id == user_id).first() if user_id else None
+        u = db.get(User, user_id) if user_id else None
         allowed = set(owner_store_ids(db, u)) if u else set()
         if not requested_store_ids:
             return list(allowed)
