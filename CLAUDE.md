@@ -141,6 +141,7 @@ pytest tests/                                # full suite
 python -m scripts.purge_expired_stores       # deletes inactive stores past retention
 python -m scripts.send_trial_reminders       # daily cron — trial-ending emails
 python -m scripts.broadcast_announcement N   # resend announcement #N
+python -m scripts.backfill_federal_tax       # one-shot — recompute Transfer.federal_tax
 ```
 Set `DEV_RELOAD=1` for hot-reload on Python edits. The Vite dev
 server (port 5173) handles SPA reload on its own.

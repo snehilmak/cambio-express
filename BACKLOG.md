@@ -484,9 +484,14 @@ impact ÷ effort. Numbers are an estimate.
       the server still recomputes on save per CLAUDE.md invariant
       #9. Hook + helper: `previewFederalTax` in
       `frontend/src/api/transfers.ts`.
-- [ ] Backfill script for `federal_tax` on historical transfers — they
-      currently default to 0 but some of those fee amounts secretly
-      included tax.
+- [x] Backfill script for `federal_tax` on historical transfers —
+      landed. `python -m scripts.backfill_federal_tax` dry-runs by
+      default + prints how many rows would change; pass
+      `--commit` to write. Reuses the same `federal_tax_for`
+      helper the create/edit routes use so the math can't drift
+      from the live path. Honors Bill Payment / domestic-country
+      exemptions and is idempotent (rerunning is a no-op). Tests
+      in `tests/test_backfill_federal_tax.py`.
 - [ ] Dedicated `/customers` page with search / edit / merge-duplicates.
 - [ ] Recipient autocomplete (same pattern as sender) if repeat
       recipients become common in the data.
@@ -509,7 +514,13 @@ impact ÷ effort. Numbers are an estimate.
       Applied to `/app/customers`, `/app/reports/top-customers`,
       and `/app/reports/top-senders`. Customer / transfer detail
       pages still show the full number on click-through.
-- [ ] CSV export on the customer directory.
+- [x] CSV export on the customer directory — landed.
+      `GET /api/v2/customers/export.csv` returns every customer
+      in the owner umbrella alphabetically, admin-only. Frontend
+      has an "Export CSV" button on `/app/customers` for admin /
+      owner / superadmin roles. Tenancy from JWT (not query
+      param) so cashiers can't pivot to another store. Tests in
+      `tests/Modules/Customers/test_customers_controllers.py`.
 - [x] **Email locked-day digest to owner** — landed. The FastAPI
       lock controller fires `send_locked_day_digest(report)` on a
       was-not-locked → locked transition; recipient query +
