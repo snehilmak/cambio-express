@@ -20,6 +20,7 @@ from api.Core.Database import get_db
 from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
+from api.Modules.Auth.Services import resolve_superadmin_user
 from api.Modules.Superadmin.Requests import (
     DiscountCodeListResponse,
     DiscountCodeResponse,
@@ -60,27 +61,6 @@ def _require_superadmin(claims: dict) -> None:
             status_code=403,
             detail="Superadmin scope required.",
         )
-
-
-def _require_superadmin_user(db: Session, claims: dict) -> User:
-    """Resolve JWT → User and gate on role=superadmin. Returns the
-    User row so the audit trail can stamp admin_id + admin_name from
-    canonical DB values (not whatever the JWT claims happen to carry).
-    Used by the mutation endpoints; the read-only endpoints continue
-    to call the cheaper `_require_superadmin(claims)` since they
-    don't audit."""
-    _require_superadmin(claims)
-    sub = claims.get("sub")
-    if sub is None:
-        raise HTTPException(
-            status_code=401, detail="JWT is missing the subject claim.",
-        )
-    user = db.get(User, int(sub))
-    if user is None:
-        raise HTTPException(
-            status_code=401, detail="JWT subject does not resolve to a user.",
-        )
-    return user
 
 
 def _audit_store(db: Session, user: User, action: str,
@@ -202,7 +182,7 @@ def create_store_route(
     Slug normalization (lowercase + dashes) matches the legacy
     handler. Duplicate slugs return 409 with `field=slug` so the SPA
     can render the field-level error inline."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Tenancy.Models import Store
     slug = _normalize_slug(body.slug)
     if not slug:
@@ -271,7 +251,7 @@ def update_store_route(
     Those flows ship separately because they have their own audit
     actions + side effects (cancel-related state cleanup, retention
     timer reset, etc.)."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Tenancy.Models import Store
     s = db.get(Store, store_id)
     if s is None:
@@ -478,7 +458,7 @@ def toggle_discount_route(
     Inactive codes still exist in the DB + Stripe (so historical
     invoices keep their references) but new Checkout sessions
     that try to apply them are rejected by `is_redeemable`."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import DiscountCode
     d = db.query(DiscountCode).filter(
         DiscountCode.id == discount_id,

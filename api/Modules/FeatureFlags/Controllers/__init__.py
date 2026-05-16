@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
-from api.Modules.Auth.Models import User
+from api.Modules.Auth.Services import resolve_superadmin_user
 from api.Modules.FeatureFlags.Requests import (
     FeatureFlagCreateRequest,
     FeatureFlagListResponse,
@@ -38,24 +38,6 @@ from api.Modules.FeatureFlags.Requests import (
 
 
 router = APIRouter()
-
-
-def _require_superadmin_user(db: Session, claims: dict) -> User:
-    if claims.get("role") != "superadmin":
-        raise HTTPException(
-            status_code=403, detail="Superadmin scope required.",
-        )
-    sub = claims.get("sub")
-    if sub is None:
-        raise HTTPException(
-            status_code=401, detail="JWT is missing the subject claim.",
-        )
-    user = db.get(User, int(sub))
-    if user is None:
-        raise HTTPException(
-            status_code=401, detail="JWT subject does not resolve.",
-        )
-    return user
 
 
 def _audit(db, user, action, *, target_id="", details=""):
@@ -86,7 +68,7 @@ def list_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagListResponse:
-    _require_superadmin_user(db, claims)
+    resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
     rows = (
         db.query(FeatureFlag).order_by(FeatureFlag.key.asc()).all()
@@ -102,7 +84,7 @@ def create_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagResponse:
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
     if db.query(FeatureFlag).filter(FeatureFlag.key == body.key).one_or_none():
         raise HTTPException(
@@ -135,7 +117,7 @@ def toggle_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> FeatureFlagResponse:
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
     f = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if f is None:
@@ -156,7 +138,7 @@ def delete_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> None:
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
     f = db.query(FeatureFlag).filter(FeatureFlag.key == key).one_or_none()
     if f is None:
@@ -199,7 +181,7 @@ def list_overrides_route(
     """Every store-level override for a given flag, ordered by
     store name. Useful for the superadmin to see which customers
     have a non-default value at a glance."""
-    _require_superadmin_user(db, claims)
+    resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import StoreFeatureOverride
     from api.Modules.Tenancy.Models import Store
     rows = (
@@ -232,7 +214,7 @@ def upsert_override_route(
 ) -> StoreOverrideResponse:
     """Set (or update) a per-store override. The flag must exist
     globally; the target store must exist. Idempotent."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from datetime import datetime
     from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
     from api.Modules.Tenancy.Models import Store
@@ -279,7 +261,7 @@ def clear_override_route(
     """Clear a per-store override — the store reverts to the
     flag's global default. 404 only when no override exists, so
     DELETE is idempotent for existing overrides."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import StoreFeatureOverride
     o = (
         db.query(StoreFeatureOverride)
