@@ -4,30 +4,39 @@ Mounts at `/api/v2/customers/*` (the parent router in `api/main.py`
 adds `/customers`; the FastAPI app's `root_path="/api/v2"` carries
 the version prefix).
 
-Two routes today:
+Routes:
 
-  GET  /search  → autocomplete; mirrors `/api/customers/search` Flask body.
-  POST /upsert  → create or update a customer; mirrors
-                  `find_or_upsert_customer` from app.py.
+  GET  /search       → autocomplete; mirrors `/api/customers/search`
+                        Flask body.
+  POST /upsert       → create or update a customer; mirrors
+                        `find_or_upsert_customer` from app.py.
+  GET  /{id}         → single-customer detail (umbrella-scoped).
+  GET  /export.csv   → admin-only CSV dump of every customer in the
+                        owner umbrella. Streams as ``text/csv``
+                        with a ``Content-Disposition`` filename.
 
-Auth gating is intentionally NOT here yet — auth migration is module
-5 of 6 in the ADR. The dispatch path is internal-only at this point
-(Flask still serves the user-facing transfer form, which calls the
-legacy `/api/customers/search` route).
+The autocomplete + upsert routes still take ``?store_id=`` as a
+query param (legacy callers); the export route reads the store
+scope from the JWT claims so a cashier can't request another
+store's directory by tweaking the URL.
 
 Layer rules:
     Controller → Service     ✓
-    Controller → Repository  ✗
+    Controller → Repository  ✓ (for read-only export)
     Controller → DB session  ✓ (only via `Depends(get_db)`)
 """
+import csv
+import io
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Customers.Repositories import (
     find_by_id_in_stores,
+    list_for_export,
     sibling_store_ids,
 )
 from api.Modules.Customers.Requests import (
@@ -127,6 +136,82 @@ def upsert_route(
     db.commit()
     home_names = _resolve_home_names(db, [cust], store_id)
     return CustomerUpsertResponse(customer=_row(cust, store_id, home_names))
+
+
+@router.get("/export.csv")
+def export_csv_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> Response:
+    """Admin-only CSV dump of every customer in the caller's owner
+    umbrella.
+
+    Tenancy is derived from the JWT (``claims["store_id"]``) — not
+    from a query param — so a cashier can't request another
+    store's directory by tweaking the URL. Role gating mirrors
+    the other admin-only exports (``/admin/tax-export.zip``):
+    admin / owner / superadmin only.
+
+    The CSV columns + ordering are the ones operators asked for
+    in chat: identification first (name + phone), then context
+    (DOB / address / home store) so a 1099 workflow can be done
+    without bouncing back to the app.
+
+    Declared BEFORE the ``/{customer_id}`` route so FastAPI's
+    path matcher doesn't try to coerce ``"export.csv"`` to an
+    integer ID first.
+    """
+    sid = claims.get("store_id")
+    if sid is None:
+        raise HTTPException(
+            status_code=403,
+            detail="JWT does not carry a store scope.",
+        )
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can export the customer directory.",
+        )
+    sid = int(sid)
+    siblings = sibling_store_ids(db, sid)
+    rows = list_for_export(db, siblings)
+    home_names = _resolve_home_names(db, rows, sid)
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "Full name",
+        "Phone country",
+        "Phone number",
+        "DOB",
+        "Address",
+        "Home store",
+        "Created",
+        "Last updated",
+    ])
+    for c in rows:
+        w.writerow([
+            c.full_name or "",
+            c.phone_country or "",
+            c.phone_number or "",
+            c.dob.isoformat() if c.dob else "",
+            c.address or "",
+            (
+                home_names.get(c.store_id, "")
+                if c.store_id != sid else "(this store)"
+            ),
+            c.created_at.isoformat() if c.created_at else "",
+            c.updated_at.isoformat() if c.updated_at else "",
+        ])
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="customers_{today}.csv"',
+        },
+    )
 
 
 @router.get("/{customer_id}", response_model=CustomerResponse)

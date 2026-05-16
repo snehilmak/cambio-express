@@ -1,9 +1,9 @@
 """Announcement visibility resolution.
 
 Single source of truth for "what banners are showing right now?"
-Used by the global banner zone in `base.html` (admin/employee
-chrome) and any future surface that wants to render the same
-list (e.g. an API endpoint for the mobile app).
+Consumed by `GET /api/v2/announcements/active` (the SPA's
+`<AnnouncementBanner>` mounts inside `AppShell`) and by the
+superadmin CRUD page's `is_visible` derived flag.
 
 Pure read — no DB writes, no commits.
 """

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
+import { AnnouncementBanner } from "./AnnouncementBanner";
 import { UserMenu } from "./UserMenu";
 
 // App chrome wrapping every authed page: sidebar + topbar.
@@ -308,7 +309,12 @@ function Topbar({
 }
 
 function ContentColumn({ children }: { children: React.ReactNode }) {
-  return <div className="app-content">{children}</div>;
+  return (
+    <div className="app-content">
+      <AnnouncementBanner />
+      {children}
+    </div>
+  );
 }
 
 const topbarSpacer: React.CSSProperties = { flex: 1 };

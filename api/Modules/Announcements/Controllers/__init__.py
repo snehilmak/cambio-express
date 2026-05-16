@@ -23,12 +23,15 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Announcements.Requests import (
+    ActiveAnnouncementRow,
+    ActiveAnnouncementsResponse,
     AnnouncementCreateRequest,
     AnnouncementListResponse,
     AnnouncementResponse,
     AnnouncementRow,
     AnnouncementToggleRequest,
 )
+from api.Modules.Announcements.Services import active_announcements
 from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
@@ -105,6 +108,37 @@ def _adapt(a) -> AnnouncementRow:
         created_by=a.created_by,
         broadcast_requested=bool(a.broadcast_requested),
         broadcast_sent_at=_iso(getattr(a, "broadcast_sent_at", None)),
+    )
+
+
+@router.get("/active", response_model=ActiveAnnouncementsResponse)
+def active_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ActiveAnnouncementsResponse:
+    """Currently visible banners for the authed user's SPA chrome.
+
+    Every authed role consumes this — admin, employee, owner,
+    superadmin — so it's gated only on a valid JWT, not on
+    `role=superadmin` like the rest of the controller. The slim
+    `ActiveAnnouncementRow` shape intentionally omits audit /
+    lifecycle fields (no schedule timestamps, no `created_by`)
+    because a cashier doesn't need them and the network response
+    is the same surface every persona sees."""
+    # JWT verification already happened in get_principal; we don't
+    # care which role — every authed user sees the same active
+    # banners. The `sub` claim presence is implicit (FastAPI would
+    # 401 before we get here if the token were missing).
+    if claims.get("sub") is None:
+        raise HTTPException(status_code=401, detail="Missing principal.")
+    rows = active_announcements(db)
+    return ActiveAnnouncementsResponse(
+        rows=[
+            ActiveAnnouncementRow(
+                id=a.id, message=a.message or "", level=a.level or "info",
+            )
+            for a in rows
+        ],
     )
 
 

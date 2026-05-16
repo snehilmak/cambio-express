@@ -242,6 +242,90 @@ def test_create_with_future_start_at_is_not_visible_yet(client):
     assert a["is_visible"] is False
 
 
+# ── /active read-side (SPA banner) ──────────────────────────
+
+
+def test_active_requires_jwt(client):
+    """No token → 401. The active list is authed-only — anonymous
+    visitors don't get a banner peek into platform-wide notices."""
+    resp = client.get("/api/v2/announcements/active")
+    assert resp.status_code == 401
+
+
+def test_active_is_open_to_any_role(client, test_store_id):
+    """An ordinary store admin (NOT a superadmin) can read /active —
+    every authed persona sees the same banner stack."""
+    with db_session():
+        _seed(message="hello world", level="info")
+    token = _login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/announcements/active",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    rows = resp.get_json()["rows"]
+    assert any(r["message"] == "hello world" for r in rows)
+
+
+def test_active_omits_expired_rows(client, test_store_id):
+    with db_session():
+        past = datetime.utcnow() - timedelta(days=1)
+        _seed(message="dead", expires_at=past)
+        _seed(message="alive")
+    token = _login_admin(client, test_store_id)
+    rows = client.get(
+        "/api/v2/announcements/active",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["rows"]
+    msgs = {r["message"] for r in rows}
+    assert "alive" in msgs
+    assert "dead" not in msgs
+
+
+def test_active_omits_scheduled_future_rows(client, test_store_id):
+    """A scheduled banner (starts_at in the future) is is_active=True
+    but must NOT appear in /active until its time arrives — same
+    contract as the visibility helper."""
+    with db_session():
+        future = datetime.utcnow() + timedelta(hours=4)
+        _seed(message="not-yet", starts_at=future)
+        _seed(message="live-now")
+    token = _login_admin(client, test_store_id)
+    rows = client.get(
+        "/api/v2/announcements/active",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["rows"]
+    msgs = {r["message"] for r in rows}
+    assert "live-now" in msgs
+    assert "not-yet" not in msgs
+
+
+def test_active_omits_inactive_rows(client, test_store_id):
+    """is_active=False rows never show even if dates are in window."""
+    with db_session():
+        _seed(message="off", is_active=False)
+    token = _login_admin(client, test_store_id)
+    rows = client.get(
+        "/api/v2/announcements/active",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["rows"]
+    assert all(r["message"] != "off" for r in rows)
+
+
+def test_active_response_shape_is_slim(client, test_store_id):
+    """Banner endpoint must NOT leak audit fields (created_by,
+    starts_at, broadcast_*). The SPA only needs id/message/level."""
+    with db_session():
+        _seed(message="slim", level="warning")
+    token = _login_admin(client, test_store_id)
+    rows = client.get(
+        "/api/v2/announcements/active",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["rows"]
+    row = next(r for r in rows if r["message"] == "slim")
+    assert set(row.keys()) == {"id", "message", "level"}
+
+
 def test_create_with_past_start_at_is_visible_immediately(client):
     """A start_at in the past should still create the row and
     surface it as visible (the schedule has already arrived)."""

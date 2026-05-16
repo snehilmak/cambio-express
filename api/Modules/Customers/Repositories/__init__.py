@@ -8,6 +8,7 @@ standalone FastAPI (request-scoped `Depends(get_db)` session).
 from api.Modules.Customers.Repositories.customers import (
     find_by_id_in_stores,
     find_by_phone_in_stores,
+    list_for_export,
     recent_customers,
     search_by_substring,
     sibling_store_ids,
@@ -16,6 +17,7 @@ from api.Modules.Customers.Repositories.customers import (
 __all__ = [
     "find_by_id_in_stores",
     "find_by_phone_in_stores",
+    "list_for_export",
     "recent_customers",
     "search_by_substring",
     "sibling_store_ids",

@@ -115,3 +115,25 @@ def recent_customers(
           .limit(limit)
           .all()
     )
+
+
+def list_for_export(
+    db: Session, store_ids: Iterable[int],
+) -> list[Customer]:
+    """Every customer in the owner umbrella, ordered alphabetically
+    by full_name. Used by the CSV export endpoint — no pagination
+    since the directory is small enough to ship in one response
+    (operators with thousands of customers can still paginate
+    client-side after import).
+
+    Unlike :func:`recent_customers`, returns every row — the export
+    is meant to be a complete snapshot for accountants / 1099
+    workflows. Alphabetical order matches what humans expect when
+    they open the CSV in a spreadsheet.
+    """
+    return (
+        db.query(Customer)
+          .filter(Customer.store_id.in_(store_ids))
+          .order_by(Customer.full_name.asc(), Customer.id.asc())
+          .all()
+    )

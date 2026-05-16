@@ -1,6 +1,48 @@
 {
   "components": {
     "schemas": {
+      "ActiveAnnouncementRow": {
+        "additionalProperties": false,
+        "description": "Slim shape returned to the SPA banner \u2014 only the fields the\nbanner needs to render. Skips audit/lifecycle fields so a\ncashier's network tab never reveals `created_by`, schedule\ntimestamps, or broadcast state for an internal announcement.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "message",
+          "level"
+        ],
+        "title": "ActiveAnnouncementRow",
+        "type": "object"
+      },
+      "ActiveAnnouncementsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveAnnouncementRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "ActiveAnnouncementsResponse",
+        "type": "object"
+      },
       "AddonListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -8208,6 +8250,72 @@
         ]
       }
     },
+    "/announcements/active": {
+      "get": {
+        "description": "Currently visible banners for the authed user's SPA chrome.\n\nEvery authed role consumes this \u2014 admin, employee, owner,\nsuperadmin \u2014 so it's gated only on a valid JWT, not on\n`role=superadmin` like the rest of the controller. The slim\n`ActiveAnnouncementRow` shape intentionally omits audit /\nlifecycle fields (no schedule timestamps, no `created_by`)\nbecause a cashier doesn't need them and the network response\nis the same surface every persona sees.",
+        "operationId": "active_route_announcements_active_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveAnnouncementsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Active Route",
+        "tags": [
+          "announcements"
+        ]
+      }
+    },
     "/announcements/{ann_id}": {
       "delete": {
         "operationId": "delete_route_announcements__ann_id__delete",
@@ -11025,6 +11133,70 @@
         "summary": "Portal Route",
         "tags": [
           "billing"
+        ]
+      }
+    },
+    "/customers/export.csv": {
+      "get": {
+        "description": "Admin-only CSV dump of every customer in the caller's owner\numbrella.\n\nTenancy is derived from the JWT (``claims[\"store_id\"]``) \u2014 not\nfrom a query param \u2014 so a cashier can't request another\nstore's directory by tweaking the URL. Role gating mirrors\nthe other admin-only exports (``/admin/tax-export.zip``):\nadmin / owner / superadmin only.\n\nThe CSV columns + ordering are the ones operators asked for\nin chat: identification first (name + phone), then context\n(DOB / address / home store) so a 1099 workflow can be done\nwithout bouncing back to the app.\n\nDeclared BEFORE the ``/{customer_id}`` route so FastAPI's\npath matcher doesn't try to coerce ``\"export.csv\"`` to an\ninteger ID first.",
+        "operationId": "export_csv_route_customers_export_csv_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Csv Route",
+        "tags": [
+          "customers"
         ]
       }
     },

@@ -171,14 +171,20 @@ infrastructure that's still relevant in the FastAPI-only world.
         identical until queuing is activated.
       * ``render.yaml`` — worker block staged commented with a
         4-step activation runbook embedded in the comments.
-      Remaining:
+      Remaining (deferred — not blocking; the sync fallback keeps
+      every existing route working at current latency):
       * Provision a managed Redis (Render or Upstash).
       * Set ``REDIS_URL`` + ``JOB_QUEUE_ENABLED=1`` on both web +
         worker services in the Render dashboard.
       * Uncomment the ``- type: worker`` block in ``render.yaml``
         + sync the blueprint.
       * Migrate the next SMTP / Stripe-SDK call sites (trial
-        reminders, locked-day digest, announcement broadcast).
+        reminders, locked-day digest already migrated;
+        announcement broadcast is the obvious next one).
+      Owner action when ready to activate: follow the 4-step
+      runbook embedded as comments above the worker block in
+      ``render.yaml``. Until then, the system is fully
+      functional — D5 is a latency win, not a correctness fix.
 - [x] **D6. Edge rate limiting.** Landed — `slowapi` 0.1.9 on every
       auth route + the two webhooks. The Flask-Limiter twin is
       gone (Flask itself is gone). Storage shared across workers
@@ -478,13 +484,38 @@ impact ÷ effort. Numbers are an estimate.
       the server still recomputes on save per CLAUDE.md invariant
       #9. Hook + helper: `previewFederalTax` in
       `frontend/src/api/transfers.ts`.
-- [ ] Backfill script for `federal_tax` on historical transfers — they
-      currently default to 0 but some of those fee amounts secretly
-      included tax.
+- [x] Backfill script for `federal_tax` on historical transfers —
+      landed. `python -m scripts.backfill_federal_tax` dry-runs by
+      default + prints how many rows would change; pass
+      `--commit` to write. Reuses the same `federal_tax_for`
+      helper the create/edit routes use so the math can't drift
+      from the live path. Honors Bill Payment / domestic-country
+      exemptions and is idempotent (rerunning is a no-op). Tests
+      in `tests/test_backfill_federal_tax.py`.
 - [ ] Dedicated `/customers` page with search / edit / merge-duplicates.
 - [ ] Recipient autocomplete (same pattern as sender) if repeat
       recipients become common in the data.
-- [ ] Rich text / markdown links in announcements.
+- [x] **Announcement banner in the SPA chrome** — landed. New
+      `GET /api/v2/announcements/active` returns the slim
+      `{id, message, level}` rows the banner needs (no audit /
+      schedule fields leak to non-superadmin callers). Open to
+      every authed role — admin, employee, owner, superadmin.
+      `<AnnouncementBanner>` mounts inside `AppShell` between
+      the topbar and the routed content; per-banner dismiss is
+      stored in localStorage so a cashier closing it on one
+      device doesn't suppress it on the back-office laptop.
+      Polls every 5 minutes (pauses in background tabs). Tests
+      in `tests/Modules/Announcements/test_announcements_controllers.py`
+      cover the auth-open contract, slim shape, expired/scheduled/
+      inactive omission.
+- [x] Rich text / markdown links in announcements — landed.
+      `<AnnouncementBanner>` auto-links bare `http(s)://...` URLs
+      in the message body (trailing sentence punctuation is
+      stripped so "see https://x.com/post." doesn't include the
+      period). Anchors open in a new tab with `noopener`. No
+      markdown parser pulled in — the only rich-text need
+      operators actually surface is clickable links, and
+      tokenising `http(s)` URLs covers ~100% of that.
 - [x] Scheduled announcements — landed. The Announcement create
       endpoint accepts an optional `start_at_iso` (ISO-8601 UTC);
       omit / empty starts the banner immediately. expires_days is
@@ -503,7 +534,13 @@ impact ÷ effort. Numbers are an estimate.
       Applied to `/app/customers`, `/app/reports/top-customers`,
       and `/app/reports/top-senders`. Customer / transfer detail
       pages still show the full number on click-through.
-- [ ] CSV export on the customer directory.
+- [x] CSV export on the customer directory — landed.
+      `GET /api/v2/customers/export.csv` returns every customer
+      in the owner umbrella alphabetically, admin-only. Frontend
+      has an "Export CSV" button on `/app/customers` for admin /
+      owner / superadmin roles. Tenancy from JWT (not query
+      param) so cashiers can't pivot to another store. Tests in
+      `tests/Modules/Customers/test_customers_controllers.py`.
 - [x] **Email locked-day digest to owner** — landed. The FastAPI
       lock controller fires `send_locked_day_digest(report)` on a
       was-not-locked → locked transition; recipient query +
@@ -560,21 +597,12 @@ impact ÷ effort. Numbers are an estimate.
       next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
-- [ ] **Inline-CSS audit (mostly done; vestigial).** D1 (PR #424)
-      retired 16 of the 17 templates the original audit flagged.
-      Surviving templates with inline styles today (2026-05):
-      - `templates/admin_settings.html` — 43 attrs. Only rendered
-        on validation failure (GET 301s to `/app/settings`); low
-        impact.
-      - `templates/error.html` — 4 attrs.
-      - `templates/base.html` — 3 attrs.
-      - `templates/_base_chrome.html` — 2 attrs.
-      - `templates/login.html` — 1 attr.
-      Total inline-style count dropped from ~300 to 53. Cleaning
-      `admin_settings.html` would close this entry — but the
-      surface is rarely seen and the SPA-side
-      `frontend/src/routes/Settings.tsx` is the canonical
-      settings page, so this is firmly nice-to-have.
+- [x] **Inline-CSS audit (closed by Flask removal).** D1 retired
+      most templates; the rest (`base.html`, `_base_chrome.html`,
+      `admin_settings.html`, `error.html`, `login.html`) all went
+      away in PRs #546–#550 when Flask itself was removed. Only
+      `templates/tv_display_public.html` + `templates/offline.html`
+      survive — both standalone, both already on `--db-*` tokens.
 - [ ] **Browser smoke layer — make CI green**. PR #200 added a
       Playwright-based smoke layer (`tests/smoke/`) that catches
       silent JS errors in chrome wiring. It runs locally (14 tests
@@ -625,13 +653,10 @@ impact ÷ effort. Numbers are an estimate.
       The optional further step — moving to ``db.session.execute(
       select(...))`` — is a much smaller and cosmetic delta and
       can ride a separate cleanup whenever it's worth doing.
-- [ ] **Hex sweep on `daily_list.html`** — the calendar still inlines
-      `#2d2410`, `#0f1d3f`, `#0f2e1f`, `#86efac`, `#2d1215`, `#fca5a5`
-      for dark-mode shades. Add the missing semantic tokens to
-      `design-tokens.css` (e.g. `--db-cal-today-bg-dark`,
-      `--db-cal-hover-bg-dark`, `--db-pill-over-bg-dark`,
-      `--db-pill-over-fg-dark`, `--db-pill-short-bg-dark`,
-      `--db-pill-short-fg-dark`) and replace the inline hex.
+- [x] **Hex sweep on `daily_list.html`** — closed by Flask
+      removal. The Jinja calendar template was retired in PRs
+      #546–#550; the SPA's daily-book surfaces use `--db-*`
+      tokens via co-located CSS Modules.
 
 ## AI helper bot ("Dino")
 - [ ] **v1 — searchable help center (no LLM, $0 forever).** Floating

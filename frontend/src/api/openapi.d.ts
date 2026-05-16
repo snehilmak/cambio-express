@@ -318,6 +318,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/announcements/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Active Route
+         * @description Currently visible banners for the authed user's SPA chrome.
+         *
+         *     Every authed role consumes this — admin, employee, owner,
+         *     superadmin — so it's gated only on a valid JWT, not on
+         *     `role=superadmin` like the rest of the controller. The slim
+         *     `ActiveAnnouncementRow` shape intentionally omits audit /
+         *     lifecycle fields (no schedule timestamps, no `created_by`)
+         *     because a cashier doesn't need them and the network response
+         *     is the same surface every persona sees.
+         */
+        get: operations["active_route_announcements_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/announcements/{ann_id}": {
         parameters: {
             query?: never;
@@ -1205,6 +1233,42 @@ export interface paths {
          *     502 — Stripe error.
          */
         post: operations["portal_route_billing_portal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/customers/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Csv Route
+         * @description Admin-only CSV dump of every customer in the caller's owner
+         *     umbrella.
+         *
+         *     Tenancy is derived from the JWT (``claims["store_id"]``) — not
+         *     from a query param — so a cashier can't request another
+         *     store's directory by tweaking the URL. Role gating mirrors
+         *     the other admin-only exports (``/admin/tax-export.zip``):
+         *     admin / owner / superadmin only.
+         *
+         *     The CSV columns + ordering are the ones operators asked for
+         *     in chat: identification first (name + phone), then context
+         *     (DOB / address / home store) so a 1099 workflow can be done
+         *     without bouncing back to the app.
+         *
+         *     Declared BEFORE the ``/{customer_id}`` route so FastAPI's
+         *     path matcher doesn't try to coerce ``"export.csv"`` to an
+         *     integer ID first.
+         */
+        get: operations["export_csv_route_customers_export_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2976,6 +3040,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActiveAnnouncementRow
+         * @description Slim shape returned to the SPA banner — only the fields the
+         *     banner needs to render. Skips audit/lifecycle fields so a
+         *     cashier's network tab never reveals `created_by`, schedule
+         *     timestamps, or broadcast state for an internal announcement.
+         */
+        ActiveAnnouncementRow: {
+            /** Id */
+            id: number;
+            /** Level */
+            level: string;
+            /** Message */
+            message: string;
+        };
+        /** ActiveAnnouncementsResponse */
+        ActiveAnnouncementsResponse: {
+            /** Rows */
+            rows: components["schemas"]["ActiveAnnouncementRow"][];
+        };
         /** AddonListResponse */
         AddonListResponse: {
             /** Has Paid Plan */
@@ -7304,6 +7388,39 @@ export interface operations {
             };
         };
     };
+    active_route_announcements_active_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveAnnouncementsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_route_announcements__ann_id__delete: {
         parameters: {
             query?: never;
@@ -8796,6 +8913,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingPortalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_csv_route_customers_export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
