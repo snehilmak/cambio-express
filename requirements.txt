@@ -37,3 +37,10 @@ alembic==1.13.3
 # in dev / CI; production sets RATELIMIT_STORAGE_URI=redis://...
 # so limits hold across workers.
 slowapi==0.1.9
+# Background job queue (BACKLOG D5). RQ + Redis is the lowest-cost
+# path on Render. ``api/Core/Jobs/`` wraps the SDK so callers can
+# enqueue without taking a hard dep — the wrapper falls back to
+# synchronous execution when JOB_QUEUE_ENABLED != 1, which keeps
+# tests + the default dev loop running on SQLite without Redis.
+rq==1.16.2
+redis==5.0.7
