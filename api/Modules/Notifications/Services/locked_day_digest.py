@@ -198,3 +198,30 @@ def run(session: Session, report, base_url: str | None = None) -> int:
                 "locked-day digest: send failed for user_id=%s", u.id,
             )
     return sent
+
+
+def send_locked_day_digest(report_id: int) -> int:
+    """Worker entry-point for the locked-day digest fan-out.
+
+    Takes a primitive ``report_id`` (not the SQLAlchemy ORM
+    object) so the function can be queued by RQ — see
+    ``api.Core.Jobs.enqueue``. Opens its own ``SessionLocal``
+    since the caller's session is already closed by the time
+    the worker runs.
+
+    Returns the number of digest emails sent, mirroring the
+    underlying ``run()`` signature.
+    """
+    from api.Core.Database import SessionLocal
+    from api.Modules.DailyBook.Models import DailyReport
+
+    with SessionLocal() as session:
+        report = session.get(DailyReport, report_id)
+        if report is None:
+            import logging
+            logging.getLogger(__name__).warning(
+                "locked-day digest worker called for report_id=%s "
+                "but row disappeared; skipping.", report_id,
+            )
+            return 0
+        return run(session, report)
