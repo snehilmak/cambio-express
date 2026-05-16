@@ -117,12 +117,19 @@ reports rendered ApexCharts inline.
 - [x] **C1. Code-split the bundle by route.** Landed (PR #428) —
       every `<Route element=>` now uses `lazy(() => import())` with
       a shared `<Suspense fallback={<Loading />}>` wrapper.
-- [ ] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
-      Each route file has 100–300 lines of `const xStyle: CSSProperties
-      = {...}`. Type-checked CSS Modules will give us scoped styles,
-      better DX, smaller JS bundle. (A2/C3 swept the worst offenders
-      into shared primitives; remaining inline styles are
-      page-specific.)
+- [x] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
+      Landed in a long sweep across PRs #563-#581 (Apr–May 2026).
+      Every route (33) and every SPA component (4) now uses kit
+      primitives from `components/ui/` plus a co-located
+      `<Route>.module.css` for page-specific styles. The
+      `components/ui/` kit was also split into one-file-per-
+      component (PR #569) to match modern design-system
+      conventions. Two new kit primitives — `<Alert>` and
+      `<Field error= hint=>` — absorbed the most-duplicated
+      patterns. The codebase no longer contains a single
+      page-level inline `const xStyle: CSSProperties = {...}`
+      block. Pattern documented in CLAUDE.md under "Inline styles
+      vs CSS Modules" and "Component reuse".
 - [x] **C3. Shared `<Page>` layout component.** Landed (PR #439) —
       `<PageShell>` / `<PageHeader>` / `<Section>` enforce the
       padding scale on every route.
@@ -183,11 +190,21 @@ infrastructure that's still relevant in the FastAPI-only world.
       this easy.
 - [x] **E6. eslint --max-warnings 0** in CI on frontend. Landed
       (PR #426).
-- [ ] **E7. Generate TS types from FastAPI OpenAPI.** (BACKLOG #6.)
-- [ ] **E8. E2E smoke tests** with Playwright on the SPA — login,
-      log a transfer, view a report. Would have caught the SPA-
-      build-missing-in-CI class of issues that bit us during
-      migration.
+- [x] **E7. Generate TS types from FastAPI OpenAPI.** Landed
+      (PR #558). `openapi-typescript` runs via
+      `npm run generate-types`; the SPA imports request/response
+      shapes from `frontend/src/api/openapi.d.ts`. Regenerate after
+      every Pydantic-schema edit (no CI gate — drift surfaces at
+      the call site).
+- [ ] **E8. E2E smoke tests** with Playwright on the SPA. Partial:
+      `tests/smoke/test_chrome_smoke.py` covers chrome regressions
+      (every authed route loads with no JS errors, the topbar
+      avatar-dropdown opens, +New Transfer entry-point clickable,
+      return-checks list has an Edit affordance). Still missing:
+      end-to-end **flow** tests — full login → log a transfer →
+      see it in the list → run a report — and CI wiring so the
+      browser layer runs on every PR, not just locally when
+      Chromium is installed.
 
 ### F. Documentation
 
