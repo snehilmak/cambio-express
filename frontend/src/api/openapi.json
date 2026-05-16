@@ -2664,7 +2664,7 @@
       },
       "LoginCrossStoreRequest": {
         "additionalProperties": false,
-        "description": "POST body for /auth/login-cross-store. The SPA's generic\nlanding page doesn't know which store a user belongs to \u2014 this\nendpoint takes username + password only and looks up the\nuser's home store across all stores (first match wins, like\nthe legacy Flask `/login` POST). Employees get rejected here\nbecause they're expected to use their store's slug-scoped\nsign-in URL.",
+        "description": "POST body for /auth/login-cross-store. The SPA's generic\nlanding page doesn't know which store a user belongs to \u2014 this\nendpoint takes username + password only and looks up the\nuser's home store across all stores (first match wins).\nEmployees get rejected here because they're expected to use\ntheir store's slug-scoped sign-in URL.",
         "properties": {
           "password": {
             "minLength": 1,
@@ -3663,10 +3663,18 @@
       },
       "NotificationsResponse": {
         "additionalProperties": false,
-        "description": "Per-user notification preferences. `trial_toggle_applies`\ntells the SPA whether to render the Trial-ending toggle as\ninteractive (True) or grey/informational (False \u2014 already\npaid, or role doesn't own a trial).",
+        "description": "Per-user notification preferences.\n\nTwo ``*_applies`` flags tell the SPA when a toggle is\ninteractive vs. greyed-out informational:\n\n  * ``trial_toggle_applies`` \u2014 True only for admins / owners\n    of a store currently in active / expiring-soon / grace\n    trial state.\n  * ``locked_day_digest_applies`` \u2014 True only for admins /\n    owners (employees don't receive the digest). Greyed-out\n    for everyone else.",
         "properties": {
+          "locked_day_digest_applies": {
+            "title": "Locked Day Digest Applies",
+            "type": "boolean"
+          },
           "notify_announcement_email": {
             "title": "Notify Announcement Email",
+            "type": "boolean"
+          },
+          "notify_locked_day_digest": {
+            "title": "Notify Locked Day Digest",
             "type": "boolean"
           },
           "notify_trial_reminders": {
@@ -3685,7 +3693,9 @@
         "required": [
           "notify_trial_reminders",
           "notify_announcement_email",
+          "notify_locked_day_digest",
           "trial_toggle_applies",
+          "locked_day_digest_applies",
           "role"
         ],
         "title": "NotificationsResponse",
@@ -3693,7 +3703,7 @@
       },
       "NotificationsUpdateRequest": {
         "additionalProperties": false,
-        "description": "PUT body. Both fields optional \u2014 None = don't touch.\nEmpty payload is a no-op (HTTP 200 with current state).",
+        "description": "PUT body. Every field optional \u2014 None = don't touch.\nEmpty payload is a no-op (HTTP 200 with current state).",
         "properties": {
           "notify_announcement_email": {
             "anyOf": [
@@ -3705,6 +3715,17 @@
               }
             ],
             "title": "Notify Announcement Email"
+          },
+          "notify_locked_day_digest": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Locked Day Digest"
           },
           "notify_trial_reminders": {
             "anyOf": [
@@ -8894,7 +8915,7 @@
     },
     "/auth/forgot-password": {
       "post": {
-        "description": "Issue a reset token for the user identified by `email`.\n\nPer the CLAUDE.md security invariant the response is always\n`{\"status\": \"ok\"}` regardless of whether the address matches\na known user \u2014 attackers must not be able to enumerate\nregistered emails via this endpoint. Inactive / superadmin /\nunknown emails silently no-op.\n\nThe raw token is logged to the operator console only when\nSMTP isn't configured (matching the legacy /forgot-password\nFlask flow). Production setups deliver via SMTP and never\nlog the URL \u2014 the SMTP send happens inline below, lifted from\nthe now-retired legacy Flask handler.",
+        "description": "Issue a reset token for the user identified by `email`.\n\nPer the CLAUDE.md security invariant the response is always\n`{\"status\": \"ok\"}` regardless of whether the address matches\na known user \u2014 attackers must not be able to enumerate\nregistered emails via this endpoint. Inactive / superadmin /\nunknown emails silently no-op.\n\nThe raw token is logged to the operator console only when\nSMTP isn't configured. Production setups deliver via SMTP\nand never log the URL \u2014 the SMTP send happens inline below.",
         "operationId": "forgot_password_route_auth_forgot_password_post",
         "requestBody": {
           "content": {
@@ -8979,7 +9000,7 @@
     },
     "/auth/login-cross-store": {
       "post": {
-        "description": "Cross-store JWT login for the SPA's generic landing page.\nSame response shape as `/auth/login`, but takes\nusername + password only \u2014 the user's home store is looked\nup across every store. Employees are rejected here so they\nuse their store's slug-scoped sign-in page (parity with the\nlegacy Flask `/login` POST).",
+        "description": "Cross-store JWT login for the SPA's generic landing page.\nSame response shape as `/auth/login`, but takes\nusername + password only \u2014 the user's home store is looked\nup across every store. Employees are rejected here so they\nuse their store's slug-scoped sign-in page.",
         "operationId": "login_cross_store_route_auth_login_cross_store_post",
         "requestBody": {
           "content": {

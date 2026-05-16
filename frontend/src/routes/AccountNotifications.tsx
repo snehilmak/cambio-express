@@ -36,6 +36,7 @@ export default function AccountNotifications() {
     setDraft({
       notify_trial_reminders:    data.notify_trial_reminders,
       notify_announcement_email: data.notify_announcement_email,
+      notify_locked_day_digest:  data.notify_locked_day_digest,
     });
   }, [data]);
 
@@ -88,6 +89,7 @@ export default function AccountNotifications() {
   const trialNotApplicableNote = data.role === "admin" || data.role === "owner"
     ? "Not applicable for your account right now — you're on a paid plan (or no active trial)."
     : "Not applicable for your account right now — you're on a role that doesn't own a trial.";
+  const digestApplies = data.locked_day_digest_applies;
 
   return (
     <PageShell maxWidth="60rem">
@@ -132,6 +134,26 @@ export default function AccountNotifications() {
                 still see every announcement as a banner when you sign in.
               </PrefRow>
 
+              <PrefRow
+                id="nldd"
+                checked={draft.notify_locked_day_digest ?? false}
+                disabled={busy || !digestApplies}
+                onChange={(v) => set("notify_locked_day_digest", v)}
+                title="Daily book close-out digest"
+              >
+                One email when a daily book is locked, with the receipts /
+                disbursements / over-short totals so you can cross-check
+                against the bank. Sent to admins + linked owners only.
+                {!digestApplies && (
+                  <>
+                    <br />
+                    <em className={styles.notApplicable}>
+                      Not applicable — your role doesn't receive this digest.
+                    </em>
+                  </>
+                )}
+              </PrefRow>
+
               <div style={{ marginTop: "1.25rem" }}>
                 <Button type="submit" busy={busy} disabled={busy}>
                   {busy ? "Saving…" : "Save preferences"}
@@ -173,6 +195,11 @@ export default function AccountNotifications() {
                   control="Toggle above."
                 />
                 <Row
+                  channel="Email"
+                  what="Daily book close-out digest (admins + linked owners)"
+                  control="Toggle above."
+                />
+                <Row
                   channel="Browser push"
                   what="Test pings only (announcement push in roadmap)"
                   control="Enable/disable from the top-right bell in your avatar menu."
@@ -187,10 +214,9 @@ export default function AccountNotifications() {
               </tbody>
             </Table>
             <p className={styles.fine}>
-              More channels coming (announcement broadcast emails, daily
-              summary emails). Each one will land here as a toggle
-              alongside its real sender — we don't ship controls for
-              imaginary notifications.
+              We don't ship controls for imaginary notifications —
+              every toggle on this page has a real sender behind it.
+              New senders land here alongside their toggle.
             </p>
           </Card>
         </Section>
