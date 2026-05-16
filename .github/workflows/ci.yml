@@ -116,12 +116,25 @@ jobs:
       # raw log; `set -e` ensures the first non-zero exit propagates.
       - name: Install Playwright browser
         continue-on-error: true
+        # ``--with-deps`` lets Playwright apt-install the OS libraries
+        # (libnss3, libatk-1.0-0, libxkbcommon0, libgbm1, libasound2t64,
+        # etc.) that Chromium needs at launch time. Without this the
+        # ``playwright install chromium`` step downloads the binary
+        # successfully but the first Chromium spawn in
+        # ``smoke_server`` fails with a cryptic shared-library error,
+        # which is what was masking this slot earlier.
+        #
+        # Diagnostics: print python + playwright + apt versions on
+        # every run so the next failure (if any) is self-diagnosing
+        # from the raw log without having to add ``set -x`` later.
         run: |
           set -ex
+          python --version
+          pip --version
           pip install -r requirements-smoke.txt
           playwright --version
           which playwright
-          playwright install chromium
+          playwright install --with-deps chromium
 
       - name: Run browser smoke tests
         continue-on-error: true
