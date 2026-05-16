@@ -597,21 +597,12 @@ impact ÷ effort. Numbers are an estimate.
       next boot (idempotent, `DROP TABLE IF EXISTS`).
 
 ## Code quality
-- [ ] **Inline-CSS audit (mostly done; vestigial).** D1 (PR #424)
-      retired 16 of the 17 templates the original audit flagged.
-      Surviving templates with inline styles today (2026-05):
-      - `templates/admin_settings.html` — 43 attrs. Only rendered
-        on validation failure (GET 301s to `/app/settings`); low
-        impact.
-      - `templates/error.html` — 4 attrs.
-      - `templates/base.html` — 3 attrs.
-      - `templates/_base_chrome.html` — 2 attrs.
-      - `templates/login.html` — 1 attr.
-      Total inline-style count dropped from ~300 to 53. Cleaning
-      `admin_settings.html` would close this entry — but the
-      surface is rarely seen and the SPA-side
-      `frontend/src/routes/Settings.tsx` is the canonical
-      settings page, so this is firmly nice-to-have.
+- [x] **Inline-CSS audit (closed by Flask removal).** D1 retired
+      most templates; the rest (`base.html`, `_base_chrome.html`,
+      `admin_settings.html`, `error.html`, `login.html`) all went
+      away in PRs #546–#550 when Flask itself was removed. Only
+      `templates/tv_display_public.html` + `templates/offline.html`
+      survive — both standalone, both already on `--db-*` tokens.
 - [ ] **Browser smoke layer — make CI green**. PR #200 added a
       Playwright-based smoke layer (`tests/smoke/`) that catches
       silent JS errors in chrome wiring. It runs locally (14 tests
@@ -662,13 +653,10 @@ impact ÷ effort. Numbers are an estimate.
       The optional further step — moving to ``db.session.execute(
       select(...))`` — is a much smaller and cosmetic delta and
       can ride a separate cleanup whenever it's worth doing.
-- [ ] **Hex sweep on `daily_list.html`** — the calendar still inlines
-      `#2d2410`, `#0f1d3f`, `#0f2e1f`, `#86efac`, `#2d1215`, `#fca5a5`
-      for dark-mode shades. Add the missing semantic tokens to
-      `design-tokens.css` (e.g. `--db-cal-today-bg-dark`,
-      `--db-cal-hover-bg-dark`, `--db-pill-over-bg-dark`,
-      `--db-pill-over-fg-dark`, `--db-pill-short-bg-dark`,
-      `--db-pill-short-fg-dark`) and replace the inline hex.
+- [x] **Hex sweep on `daily_list.html`** — closed by Flask
+      removal. The Jinja calendar template was retired in PRs
+      #546–#550; the SPA's daily-book surfaces use `--db-*`
+      tokens via co-located CSS Modules.
 
 ## AI helper bot ("Dino")
 - [ ] **v1 — searchable help center (no LLM, $0 forever).** Floating

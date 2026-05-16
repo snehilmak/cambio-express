@@ -7,7 +7,8 @@ import { tokens } from "./tokens";
 // ``serverError`` blocks that were duplicated across ~10 routes
 // (AdminUserForm, SuperadminStoreForm, AccountProfile, etc.).
 // Use for in-form messaging; for global cross-page announcements
-// the topbar banner system in ``base.html`` is the right surface.
+// ``<AnnouncementBanner>`` (mounted inside ``AppShell``) is the
+// right surface.
 
 export type AlertTone = "error" | "warning" | "success" | "info";
 
