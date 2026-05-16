@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
+import { UserMenu } from "./UserMenu";
 
 // App chrome wrapping every authed page: sidebar + topbar.
 //
@@ -301,39 +302,7 @@ function Topbar({
         </svg>
       </button>
       <span style={topbarSpacer} />
-      <span
-        style={{
-          fontSize: "0.9rem",
-          fontWeight: 500,
-          color: "var(--db-text, #f5f5f5)",
-          letterSpacing: "-0.005em",
-        }}
-      >
-        {identity?.username || "—"}
-      </span>
-      {identity?.role && (
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "0.18rem 0.55rem",
-            borderRadius: "999px",
-            background: "rgba(63, 255, 0, 0.1)",
-            border: "1px solid rgba(63, 255, 0, 0.35)",
-            color: "var(--db-accent, #3fff00)",
-            fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
-            fontSize: "0.7rem",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.06em",
-          }}
-        >
-          {identity.role}
-        </span>
-      )}
-      <button onClick={onSignOut} style={signOutStyle}>
-        Sign out
-      </button>
+      <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>
   );
 }
@@ -371,18 +340,6 @@ const navLinkStyle = ({
     : "3px solid transparent",
   transition: "background 120ms ease, color 120ms ease",
 });
-
-const signOutStyle: React.CSSProperties = {
-  background: "transparent",
-  color: "var(--db-text, #f5f5f5)",
-  border: "1px solid var(--db-border, #262626)",
-  borderRadius: "0.5rem",
-  padding: "0.4rem 0.85rem",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.85rem",
-  cursor: "pointer",
-  transition: "border-color 120ms ease, background 120ms ease",
-};
 
 // Inline stroke SVGs per CLAUDE.md design system: stroke-width 2,
 // round caps, currentColor, no fill. Match the legacy sidebar's
