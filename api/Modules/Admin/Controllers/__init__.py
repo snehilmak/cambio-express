@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.Admin.Repositories import (
     find_store,
     find_store_user,
@@ -64,19 +65,6 @@ from api.Modules.Admin.Services import (
 router = APIRouter()
 
 
-def _require_store(claims: dict) -> int:
-    sid = claims.get("store_id")
-    if sid is None:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "JWT does not carry a store scope. Sign in as a "
-                "store admin or owner to manage settings."
-            ),
-        )
-    return int(sid)
-
-
 def _to_row(s) -> StoreInfoRow:
     return StoreInfoRow(
         id=s.id,
@@ -96,7 +84,7 @@ def get_store_info(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> StoreInfoResponse:
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     store = find_store(db, store_id)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -118,7 +106,7 @@ def update_store_info_route(
             status_code=403,
             detail="Only store admins can update store info",
         )
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     store = find_store(db, store_id)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -157,7 +145,7 @@ def list_team_route(
     (active + inactive). Inactive rows are surfaced so the
     admin can reactivate them — the legacy "Processed by"
     dropdown filters to active separately."""
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     rows = list_team(db, store_id)
     return TeamListResponse(members=[_team_row(r) for r in rows])
 
@@ -173,7 +161,7 @@ def create_team_member_route(
     """Create a new active StoreEmployee row. Admin role
     required."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     try:
         row = add_team_member(db, store_id, body.name)
     except ValueError as exc:
@@ -194,7 +182,7 @@ def update_team_member_route(
     """Rename and/or toggle active. Cross-store IDs → 404
     (opaque tenancy)."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     member = find_team_member(db, store_id, employee_id)
     if member is None:
         raise HTTPException(status_code=404, detail="Team member not found")
@@ -223,7 +211,7 @@ def deactivate_team_member_route(
     StoreEmployee rows so historical employee_name / employee_id
     attribution on past Transfer rows survives."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     member = find_team_member(db, store_id, employee_id)
     if member is None:
         raise HTTPException(status_code=404, detail="Team member not found")
@@ -257,7 +245,7 @@ def subscription_summary_route(
     Mirrors the legacy /admin/subscription Jinja context so the
     SPA can render the page without a second round-trip.
     """
-    sid = _require_store(claims)
+    sid = resolve_store_scope(claims)
     store = find_store(db, sid)
     if store is None:
         raise HTTPException(status_code=404, detail="Store not found")
@@ -327,7 +315,7 @@ def list_addons_route(
     its is_active flag. has_paid_plan tells the SPA whether the
     Toggle button should be enabled — add-ons require an active
     Basic or Pro subscription per the legacy contract."""
-    sid = _require_store(claims)
+    sid = resolve_store_scope(claims)
     from api.Modules.Billing.Services import (
         ADDONS_CATALOG,
         store_addon_keys, store_feature_enabled, store_has_paid_plan,
@@ -360,7 +348,7 @@ def toggle_addon_route(
     legacy /admin/subscription/addons/<key> form. Requires an
     active paid plan; coming-soon add-ons can be requested but
     not flipped on."""
-    sid = _require_store(claims)
+    sid = resolve_store_scope(claims)
     from api.Modules.Billing.Services import (
         ADDONS_CATALOG,
         store_addon_keys, store_has_paid_plan,
@@ -403,7 +391,7 @@ def list_tax_export_years_route(
     React page. The actual ZIP download still comes from the legacy
     Flask route /admin/tax-export.zip — that streams a multi-MB file
     via Flask's send_file path and is left intact for now."""
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     years = tax_export_year_choices(db, store_id)
     return TaxExportYearsResponse(
         years=years, default_year=tax_export_default_year(years),
@@ -427,7 +415,7 @@ def get_admin_audit_log_route(
     Flask page exactly: target=transfer|daily_report|batch,
     action=create|update|delete|lock|unlock|status_changed,
     user=<id>. `page` is 1-based; per-page is the legacy 50."""
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     payload = list_audit_rows(
         db, store_id=store_id,
         target_filter=target.strip(),
@@ -502,7 +490,7 @@ def list_users_route(
     can spot + reactivate them — the SPA filters/badges them
     in the UI."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     rows = list_store_users(db, store_id)
     return AdminUserListResponse(rows=[_user_row(u) for u in rows])
 
@@ -520,7 +508,7 @@ def create_user_route(
     `User.set_password` (never stored raw). Role limited to
     'admin' / 'employee'."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     try:
         user = create_store_user(
             db, store_id=store_id,
@@ -559,7 +547,7 @@ def get_user_route(
     """Single-user fetch for the Edit form prefill. Cross-store
     IDs and unknown IDs both return 404 — opaque tenancy."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     user = find_store_user(db, store_id, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -581,7 +569,7 @@ def update_user_route(
     field-level error so the SPA can render it inline. Cross-
     store IDs return 404."""
     _require_admin_role(claims)
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     user = find_store_user(db, store_id, user_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -638,7 +626,7 @@ def get_admin_referrals_route(
     Lazily mints a ReferralCode if missing (per CLAUDE.md
     invariant #12 — paid plans only; trial → 409). Powers
     /app/account/referrals."""
-    store_id = _require_store(claims)
+    store_id = resolve_store_scope(claims)
     # Build the share URL on the canonical host so the SPA copy
     # button always offers a public-facing link, even when the
     # admin is using a custom domain or Render preview URL.

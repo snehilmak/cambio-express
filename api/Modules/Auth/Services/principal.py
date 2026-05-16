@@ -17,6 +17,27 @@ from sqlalchemy.orm import Session
 from api.Modules.Auth.Models import User
 
 
+def resolve_store_scope(claims: dict) -> int:
+    """Extract the JWT principal's `store_id`, or 403.
+
+    Used by the Admin / Monthly / BankSync controllers (and any
+    other module gated on "you must be signed in to a specific
+    store"). The detail message is intentionally generic — the
+    SPA route the user is on supplies the page-specific context
+    in its empty state.
+    """
+    sid = claims.get("store_id")
+    if sid is None:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "JWT does not carry a store scope. Sign in as a "
+                "store admin or owner."
+            ),
+        )
+    return int(sid)
+
+
 def resolve_superadmin_user(db: Session, claims: dict) -> User:
     """Resolve JWT claims → ``User`` row, gated on role=superadmin.
 
