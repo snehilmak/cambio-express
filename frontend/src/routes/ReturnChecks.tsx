@@ -1,15 +1,17 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader, PageShell,
-  TableSkeleton, tokens,
+  Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
+  PageShell, TableSkeleton, tokens,
 } from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
-// status pill, click any row to edit. Status transitions
-// (Mark loss / Mark fraud / Reopen) live on the edit page.
+// status pill, click any row (or the explicit Edit button) to
+// open the edit page where you can update fields, record partial
+// payments, or transition the status (Mark loss / Mark fraud /
+// Reopen).
 
 const STATUSES: Array<{ slug: string; label: string }> = [
   { slug: "",          label: "All"       },
@@ -98,6 +100,7 @@ export default function ReturnChecks() {
 }
 
 function Table({ rows }: { rows: ReturnCheckRow[] }) {
+  const navigate = useNavigate();
   return (
     <div style={{ overflowX: "auto" }}>
       <table
@@ -110,18 +113,19 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
         <thead>
           <tr>
             {[
-              "Bounced",
-              "Customer",
-              "Check #",
-              "Bank",
-              "Amount",
-              "Recovered",
-              "Status",
+              { label: "Bounced",   align: "left"  },
+              { label: "Customer",  align: "left"  },
+              { label: "Check #",   align: "left"  },
+              { label: "Bank",      align: "left"  },
+              { label: "Amount",    align: "right" },
+              { label: "Recovered", align: "right" },
+              { label: "Status",    align: "left"  },
+              { label: "",          align: "right" },  // Actions column
             ].map((h, i) => (
               <th
                 key={i}
                 style={{
-                  textAlign: i >= 4 && i <= 5 ? "right" : "left",
+                  textAlign: h.align as "left" | "right",
                   padding: "0.6rem 0.75rem",
                   color: tokens.textMuted,
                   fontWeight: 500,
@@ -131,62 +135,87 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
                   borderBottom: `1px solid ${tokens.border}`,
                 }}
               >
-                {h}
+                {h.label}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr
-              key={r.id}
-              style={{ transition: "background 120ms ease" }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = tokens.surface;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "transparent";
-              }}
-            >
-              <td style={cellStyle}>
-                <Link to={`/return-checks/${r.id}/edit`} style={rowLink}>
+          {rows.map((r) => {
+            // Whole-row click navigates to edit so a cashier can
+            // tap any cell. The explicit Edit button on the right
+            // is the discoverable affordance; this just makes the
+            // rest of the row not feel inert.
+            const open = () => navigate(`/return-checks/${r.id}/edit`);
+            return (
+              <tr
+                key={r.id}
+                style={{
+                  transition: "background 120ms ease",
+                  cursor: "pointer",
+                }}
+                onClick={open}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = tokens.surface;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                <td style={cellStyle}>
                   <span style={monoMuted}>{r.bounced_on}</span>
-                </Link>
-              </td>
-              <td style={cellStyle}>{r.customer_name}</td>
-              <td style={cellStyle}>
-                <span style={mono}>{r.check_number || "—"}</span>
-              </td>
-              <td style={cellStyle}>{r.payer_bank || "—"}</td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span style={mono}>${r.amount.toFixed(2)}</span>
-              </td>
-              <td style={{ ...cellStyle, textAlign: "right" }}>
-                <span
-                  style={{
-                    ...mono,
-                    color: r.recovered_total >= r.amount ? tokens.accent : tokens.text,
-                  }}
-                >
-                  ${r.recovered_total.toFixed(2)}
-                </span>
-                {r.payment_count > 0 && (
+                </td>
+                <td style={cellStyle}>{r.customer_name}</td>
+                <td style={cellStyle}>
+                  <span style={mono}>{r.check_number || "—"}</span>
+                </td>
+                <td style={cellStyle}>{r.payer_bank || "—"}</td>
+                <td style={{ ...cellStyle, textAlign: "right" }}>
+                  <span style={mono}>${r.amount.toFixed(2)}</span>
+                </td>
+                <td style={{ ...cellStyle, textAlign: "right" }}>
                   <span
                     style={{
-                      color: tokens.textMuted,
-                      marginLeft: "0.4rem",
-                      fontSize: "0.85rem",
+                      ...mono,
+                      color: r.recovered_total >= r.amount ? tokens.accent : tokens.text,
                     }}
                   >
-                    ({r.payment_count})
+                    ${r.recovered_total.toFixed(2)}
                   </span>
-                )}
-              </td>
-              <td style={cellStyle}>
-                <StatusPill status={r.status} />
-              </td>
-            </tr>
-          ))}
+                  {r.payment_count > 0 && (
+                    <span
+                      style={{
+                        color: tokens.textMuted,
+                        marginLeft: "0.4rem",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      ({r.payment_count})
+                    </span>
+                  )}
+                </td>
+                <td style={cellStyle}>
+                  <StatusPill status={r.status} />
+                </td>
+                <td
+                  style={{ ...cellStyle, textAlign: "right" }}
+                  // Stop the row-click from firing when the user
+                  // taps the explicit button — otherwise we
+                  // navigate twice and React-Router warns.
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Link
+                    to={`/return-checks/${r.id}/edit`}
+                    style={{ textDecoration: "none" }}
+                  >
+                    <Button tone="secondary" size="sm">
+                      Edit / Record payment
+                    </Button>
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -232,11 +261,6 @@ const monoMuted: React.CSSProperties = {
   ...mono,
   fontSize: "0.85rem",
   color: tokens.textMuted,
-};
-
-const rowLink: React.CSSProperties = {
-  color: "inherit",
-  textDecoration: "none",
 };
 
 const filterBtn: React.CSSProperties = {
