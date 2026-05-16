@@ -1,0 +1,142 @@
+/* Page-specific styles for Settings.tsx. */
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.helpText {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.slugRow {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.slug {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  color: var(--db-text, #f5f5f5);
+}
+
+.addInset {
+  margin-bottom: 1rem;
+  padding: 0.85rem;
+  background: var(--db-bg-input, #0d0d0d);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+}
+
+.addInsetActions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.listSpaced {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.rowTeam {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--db-border-subtle, #1f1f1f);
+}
+
+.rowBody {
+  flex: 1;
+}
+
+.rowTitle {
+  font-weight: 500;
+}
+
+.rowMeta {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.memberActive {
+  flex: 1;
+  color: var(--db-text, #f5f5f5);
+}
+
+.memberInactive {
+  flex: 1;
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: line-through;
+}
+
+.emptyRow {
+  padding: 0.5rem 0;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.muted {
+  margin: 0;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.actionsRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actionsInlineRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.subscriptionInfo {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.storeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 0.85rem;
+}
+
+.spanFull {
+  grid-column: 1 / -1;
+}
+
+.spanFullRight {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.passwordForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-width: 26rem;
+}
