@@ -338,7 +338,32 @@ that was active at registration time.
     - Don't tighten the limits casually — integration tests and
       Stripe webhook retries both burn rate budget. Loosening is
       always safer than the alternative.
-16. **CSRF protection** — Flask has no POST surface anymore so
+16. **Background-job queue (BACKLOG D5)** — heavy / slow work in
+    a request handler goes through ``api.Core.Jobs.enqueue(...)``,
+    not a direct call. Examples: SMTP send (the
+    ``/forgot-password`` flow already uses this — see
+    ``send_password_reset_email`` in
+    ``api/Modules/Auth/Controllers/__init__.py``), Stripe SDK
+    round-trips that don't have to land before the response, and
+    anything that fans out to N recipients.
+    - Activation is opt-in via ``JOB_QUEUE_ENABLED=1`` +
+      ``REDIS_URL`` env vars on both the web service and the
+      worker. Either missing → sync execution (the default; same
+      semantics as a direct call). This keeps the test suite + the
+      default dev loop running without Redis.
+    - Worker service is staged commented in ``render.yaml`` —
+      see the 4-step activation runbook embedded in the YAML
+      comments. Uncomment after Redis is provisioned and the env
+      vars are set.
+    - Args MUST be primitives (ids, dicts, strings) — not ORM
+      objects. RQ pickles args for the worker, and the request
+      session is closed by the time the worker runs. Worker
+      functions open their own ``SessionLocal`` to reload state.
+    - Worker functions are top-level (not closure-scoped) so RQ
+      can pickle them by import path.
+    - Tests in ``tests/Core/test_jobs.py`` exercise both modes
+      (sync + queued) and the defensive partial-env fallback.
+17. **CSRF protection** — Flask has no POST surface anymore so
     Flask-WTF is gone. The SPA talks to FastAPI over Bearer JWT
     in the Authorization header, which is naturally CSRF-immune
     (browsers don't attach it to cross-origin requests by
@@ -520,6 +545,7 @@ Cross-cutting (under `api/Core/`):
 | `Database` | SQLAlchemy engine + `SessionLocal` + `get_db` FastAPI dep |
 | `Observability` | structlog config, Sentry init, `RequestIDMiddleware` |
 | `RateLimit` | slowapi singleton + decorator |
+| `Jobs` | RQ-backed ``enqueue(fn, *args)`` with sync fallback |
 | `Config` | Pydantic-settings env loader |
 
 Top-level files:

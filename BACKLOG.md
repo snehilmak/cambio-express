@@ -156,11 +156,29 @@ infrastructure that's still relevant in the FastAPI-only world.
       `99691740424c_baseline_2026_05` pins the current schema;
       `_ADDED_COLUMNS` still primary but Alembic now available for
       drops / renames / backfills.
-- [ ] **D5. Background job queue** for Stripe webhooks, email send,
+- [~] **D5. Background job queue** for Stripe webhooks, email send,
       ACH retries, retention purge. RQ + Redis is the lowest-cost
-      path on Render. Today every webhook does its Stripe SDK calls
-      + audit insert + email send synchronously inside the HTTP
-      request.
+      path on Render. **Partial — scaffolding + first migration
+      shipped, worker activation pending.**
+      Done so far:
+      * ``api/Core/Jobs.py`` — ``enqueue(fn, *args)`` wrapper with
+        sync fallback (default) + RQ-backed queued mode (when
+        ``JOB_QUEUE_ENABLED=1`` + ``REDIS_URL`` are set).
+        ``tests/Core/test_jobs.py`` covers both modes.
+      * ``/forgot-password`` SMTP send migrated — the route now
+        ``enqueue``s ``send_password_reset_email(user_id,
+        raw_token)``. Sync mode keeps prod behavior bit-for-bit
+        identical until queuing is activated.
+      * ``render.yaml`` — worker block staged commented with a
+        4-step activation runbook embedded in the comments.
+      Remaining:
+      * Provision a managed Redis (Render or Upstash).
+      * Set ``REDIS_URL`` + ``JOB_QUEUE_ENABLED=1`` on both web +
+        worker services in the Render dashboard.
+      * Uncomment the ``- type: worker`` block in ``render.yaml``
+        + sync the blueprint.
+      * Migrate the next SMTP / Stripe-SDK call sites (trial
+        reminders, locked-day digest, announcement broadcast).
 - [x] **D6. Edge rate limiting.** Landed — `slowapi` 0.1.9 on every
       auth route + the two webhooks. The Flask-Limiter twin is
       gone (Flask itself is gone). Storage shared across workers
