@@ -248,6 +248,190 @@ def test_payments_404_when_missing(client, test_store_id):
 # ── Auth ────────────────────────────────────────────────────
 
 
+# ── POST /return-checks/{id}/payments ───────────────────────
+
+
+def test_record_payment_creates_row_and_daily_line_item(
+    client, test_store_id,
+):
+    """Recording a partial pay inserts a ReturnCheckPayment row and
+    auto-creates the matching DailyLineItem(kind='return_payback')
+    so the daily-book stays in sync without double-entry."""
+    from api.Modules.DailyBook.Models import DailyLineItem
+    with db_session():
+        rid = _seed_rc(test_store_id, amount=500.0)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={
+            "paid_on": "2026-04-15",
+            "amount":  200.0,
+            "method":  "cash",
+            "note":    "first installment",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    body = resp.get_json()
+    assert body["payment"]["amount"] == 200.0
+    # Recovered total flows into the parent envelope so the SPA
+    # can render the new "remaining" value without a refetch.
+    assert body["return_check"]["recovered_total"] == 200.0
+    assert body["return_check"]["status"] == "pending"  # still partial
+    with db_session():
+        items = (
+            db.session.query(DailyLineItem)
+              .filter_by(return_check_id=rid, kind="return_payback")
+              .all()
+        )
+        assert len(items) == 1
+        assert items[0].amount == 200.0
+
+
+def test_record_payment_auto_flips_status_to_recovered(
+    client, test_store_id,
+):
+    """When the running total meets the full amount, the check
+    auto-flips pending → recovered with a status_changed_on stamp.
+    Mirrors the legacy form behavior."""
+    with db_session():
+        rid = _seed_rc(test_store_id, amount=300.0)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-15", "amount": 300.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    rc = resp.get_json()["return_check"]
+    assert rc["status"] == "recovered"
+    assert rc["status_changed_on"] != ""
+
+
+def test_record_payment_caps_at_remaining(client, test_store_id):
+    """A second installment that would overshoot gets capped at the
+    remaining balance — matches the legacy submit-time cap so the
+    cashier can't accidentally accrue credit on a returned check."""
+    with db_session():
+        rid = _seed_rc(test_store_id, amount=100.0)
+    token = _login(client, test_store_id)
+    client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-15", "amount": 60.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-16", "amount": 999.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    assert resp.get_json()["payment"]["amount"] == 40.0  # capped
+
+
+def test_record_payment_rejects_on_closed_check(
+    client, test_store_id,
+):
+    """Loss / fraud checks must be reopened before recording a
+    payback — otherwise the daily book reflects payments against
+    a written-off balance."""
+    with db_session():
+        rid = _seed_rc(test_store_id, status="loss")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-15", "amount": 50.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+
+
+def test_record_payment_404_when_check_missing(
+    client, test_store_id,
+):
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/return-checks/9999/payments",
+        json={"paid_on": "2026-04-15", "amount": 10.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+# ── DELETE /return-checks/{id}/payments/{pid} ───────────────
+
+
+def test_delete_payment_removes_row_and_line_item(
+    client, test_store_id,
+):
+    from api.Modules.DailyBook.Models import DailyLineItem
+    with db_session():
+        rid = _seed_rc(test_store_id, amount=400.0)
+    token = _login(client, test_store_id)
+    create = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-15", "amount": 100.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    pid = create.get_json()["payment"]["id"]
+    resp = client.delete(
+        f"/api/v2/return-checks/{rid}/payments/{pid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    rc = resp.get_json()["return_check"]
+    assert rc["recovered_total"] == 0.0
+    with db_session():
+        items = (
+            db.session.query(DailyLineItem)
+              .filter_by(return_check_id=rid, kind="return_payback")
+              .all()
+        )
+        assert items == []
+
+
+def test_delete_payment_reverts_recovered_to_pending(
+    client, test_store_id,
+):
+    """If deleting the final installment drops payments below the
+    full amount, the auto-recovered status reverts to pending."""
+    with db_session():
+        rid = _seed_rc(test_store_id, amount=200.0)
+    token = _login(client, test_store_id)
+    create = client.post(
+        f"/api/v2/return-checks/{rid}/payments",
+        json={"paid_on": "2026-04-15", "amount": 200.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    pid = create.get_json()["payment"]["id"]
+    # Sanity: full payment auto-recovered.
+    assert create.get_json()["return_check"]["status"] == "recovered"
+    resp = client.delete(
+        f"/api/v2/return-checks/{rid}/payments/{pid}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    rc = resp.get_json()["return_check"]
+    assert rc["status"] == "pending"
+    assert rc["status_changed_on"] == ""
+
+
+def test_delete_payment_404_when_payment_missing(
+    client, test_store_id,
+):
+    with db_session():
+        rid = _seed_rc(test_store_id)
+    token = _login(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/return-checks/{rid}/payments/9999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+# ── Auth ────────────────────────────────────────────────────
+
+
 def test_endpoints_require_jwt(client):
     g = client.get("/api/v2/return-checks")
     p = client.post("/api/v2/return-checks", json={
@@ -264,7 +448,12 @@ def test_endpoints_require_jwt(client):
     mf = client.post("/api/v2/return-checks/1/mark-fraud")
     ro = client.post("/api/v2/return-checks/1/reopen")
     pa = client.get("/api/v2/return-checks/1/payments")
-    for r in (g, p, u, ml, mf, ro, pa):
+    pp = client.post(
+        "/api/v2/return-checks/1/payments",
+        json={"paid_on": "2026-04-15", "amount": 10.0},
+    )
+    pd = client.delete("/api/v2/return-checks/1/payments/1")
+    for r in (g, p, u, ml, mf, ro, pa, pp, pd):
         assert r.status_code == 401
 
 

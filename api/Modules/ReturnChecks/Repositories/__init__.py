@@ -53,4 +53,25 @@ def list_payments(
     )
 
 
-__all__ = ["list_return_checks", "find_return_check", "list_payments"]
+def find_payment(
+    db: Session, store_id: int, rc_id: int, payment_id: int,
+) -> ReturnCheckPayment | None:
+    """Single payment scoped to (store, return_check, payment).
+
+    Tenancy is enforced via the parent ReturnCheck — we look up the
+    rc first to confirm it belongs to ``store_id``, then return the
+    payment only if its FK matches.
+    """
+    rc = find_return_check(db, store_id, rc_id)
+    if rc is None:
+        return None
+    return (
+        db.query(ReturnCheckPayment)
+          .filter_by(id=payment_id, return_check_id=rc_id)
+          .first()
+    )
+
+
+__all__ = [
+    "find_payment", "find_return_check", "list_payments", "list_return_checks",
+]

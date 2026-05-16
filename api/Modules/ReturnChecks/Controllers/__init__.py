@@ -2,18 +2,22 @@
 
 Mounts at `/api/v2/return-checks/*`. Endpoints:
 
-  GET    /                  list (optional ?status= filter)
-  GET    /{id}              single-row detail
-  POST   /                  create new pending check
-  PUT    /{id}              edit core fields
-  POST   /{id}/mark-loss    pending → loss
-  POST   /{id}/mark-fraud   pending → fraud
-  POST   /{id}/reopen       loss/fraud/recovered → pending
-  GET    /{id}/payments     list payments
-
-Per-payment write endpoints (POST/DELETE on payments) ship in
-a follow-up PR — they auto-create matching DailyLineItem rows
-which deserves its own focused migration.
+  GET    /                       list (optional ?status= filter)
+  GET    /{id}                   single-row detail
+  POST   /                       create new pending check
+  PUT    /{id}                   edit core fields
+  POST   /{id}/mark-loss         pending → loss
+  POST   /{id}/mark-fraud        pending → fraud
+  POST   /{id}/reopen            loss/fraud/recovered → pending
+  GET    /{id}/payments          list payments
+  POST   /{id}/payments          record an installment + auto-post
+                                 to the daily book; auto-flips
+                                 status to 'recovered' when the
+                                 full amount is reached
+  DELETE /{id}/payments/{pid}    remove an installment + its
+                                 shadow DailyLineItem; reverts
+                                 'recovered' → 'pending' if the
+                                 total drops below the full amount
 """
 from datetime import datetime
 
@@ -29,19 +33,25 @@ from api.Modules.ReturnChecks.Repositories import (
 )
 from api.Modules.ReturnChecks.Requests import (
     ReturnCheckListResponse,
+    ReturnCheckPaymentResponse,
     ReturnCheckPaymentRow,
+    ReturnCheckPaymentWriteRequest,
     ReturnCheckPaymentsResponse,
     ReturnCheckResponse,
     ReturnCheckRow,
     ReturnCheckWriteRequest,
 )
 from api.Modules.ReturnChecks.Services import (
+    RecordPaymentInput,
     ReturnCheckNotFoundError,
+    ReturnCheckPaymentNotFoundError,
     ReturnCheckStateError,
     ReturnCheckWriteInput,
     create_return_check,
+    delete_payment,
     mark_fraud,
     mark_loss,
+    record_payment,
     reopen,
     update_return_check,
 )
@@ -228,6 +238,17 @@ def reopen_route(
     return _transition(db, sid, rc_id, reopen)
 
 
+def _payment_row(p) -> ReturnCheckPaymentRow:
+    return ReturnCheckPaymentRow(
+        id=p.id,
+        return_check_id=p.return_check_id,
+        amount=float(p.amount or 0),
+        paid_on=p.paid_on.isoformat() if p.paid_on else "",
+        method=p.payment_method or "",
+        notes=p.note or "",
+    )
+
+
 @router.get(
     "/{rc_id}/payments",
     response_model=ReturnCheckPaymentsResponse,
@@ -248,15 +269,83 @@ def payments_route(
         raise HTTPException(status_code=404, detail="Return check not found")
     rows = list_payments(db, int(sid), rc_id)
     return ReturnCheckPaymentsResponse(
-        payments=[
-            ReturnCheckPaymentRow(
-                id=p.id,
-                return_check_id=p.return_check_id,
-                amount=float(p.amount or 0),
-                paid_on=p.paid_on.isoformat() if p.paid_on else "",
-                method=p.payment_method or "",
-                notes=p.note or "",
-            )
-            for p in rows
-        ],
+        payments=[_payment_row(p) for p in rows],
+    )
+
+
+@router.post(
+    "/{rc_id}/payments",
+    response_model=ReturnCheckPaymentResponse,
+    status_code=201,
+)
+def record_payment_route(
+    rc_id: int = Path(..., ge=1),
+    body: ReturnCheckPaymentWriteRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ReturnCheckPaymentResponse:
+    """Record one installment payment against a pending or
+    recovered return check. Auto-creates the matching
+    ``DailyLineItem(kind='return_payback')`` and re-derives the
+    daily-book total + parent status."""
+    sid = _require_admin_scope(claims)
+    try:
+        paid_on = datetime.strptime(body.paid_on, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "field": "paid_on",
+                "message": "Date must be YYYY-MM-DD.",
+            },
+        )
+    payload = RecordPaymentInput(
+        paid_on=paid_on,
+        amount=float(body.amount or 0),
+        method=body.method,
+        note=body.note,
+    )
+    try:
+        payment = record_payment(
+            db, store_id=sid, rc_id=rc_id,
+            created_by=claims.get("sub"),
+            payload=payload,
+        )
+    except ReturnCheckNotFoundError:
+        raise HTTPException(status_code=404, detail="Return check not found")
+    except ReturnCheckStateError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    db.commit()
+    db.refresh(payment)
+    rc = find_return_check(db, sid, rc_id)
+    return ReturnCheckPaymentResponse(
+        payment=_payment_row(payment),
+        return_check=_row(rc),
+    )
+
+
+@router.delete(
+    "/{rc_id}/payments/{payment_id}",
+    response_model=ReturnCheckPaymentResponse,
+)
+def delete_payment_route(
+    rc_id: int = Path(..., ge=1),
+    payment_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ReturnCheckPaymentResponse:
+    sid = _require_admin_scope(claims)
+    try:
+        delete_payment(
+            db, store_id=sid, rc_id=rc_id, payment_id=payment_id,
+        )
+    except ReturnCheckNotFoundError:
+        raise HTTPException(status_code=404, detail="Return check not found")
+    except ReturnCheckPaymentNotFoundError:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    db.commit()
+    rc = find_return_check(db, sid, rc_id)
+    return ReturnCheckPaymentResponse(
+        payment=None,
+        return_check=_row(rc),
     )

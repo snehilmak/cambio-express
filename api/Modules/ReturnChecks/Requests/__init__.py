@@ -64,9 +64,40 @@ class ReturnCheckPaymentsResponse(BaseModel):
     payments: list[ReturnCheckPaymentRow]
 
 
+class ReturnCheckPaymentResponse(BaseModel):
+    """Single-row payload returned by POST/DELETE payment endpoints.
+    Includes the refreshed parent ``return_check`` so the client
+    can update the recovered_total + status pill in one round-trip."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    payment: ReturnCheckPaymentRow | None = None
+    return_check: ReturnCheckRow
+
+
+class ReturnCheckPaymentWriteRequest(BaseModel):
+    """Body for ``POST /return-checks/{id}/payments``.
+
+    ``paid_on`` is the YYYY-MM-DD the cashier received the
+    installment; the matching ``DailyLineItem`` auto-creates with
+    this report_date. ``method`` is free-text but the SPA's form
+    constrains it to ``cash / check / zelle / wire / money_order /
+    other`` for consistency.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    paid_on: str    = Field(..., min_length=10, max_length=10)
+    amount:  float  = Field(..., gt=0)
+    method:  str    = Field("", max_length=20)
+    note:    str    = Field("", max_length=200)
+
+
 __all__ = [
     "ReturnCheckListResponse",
+    "ReturnCheckPaymentResponse",
     "ReturnCheckPaymentRow",
+    "ReturnCheckPaymentWriteRequest",
     "ReturnCheckPaymentsResponse",
     "ReturnCheckResponse",
     "ReturnCheckRow",

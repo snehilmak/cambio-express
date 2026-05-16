@@ -4479,6 +4479,30 @@
         "title": "ReturnCheckListResponse",
         "type": "object"
       },
+      "ReturnCheckPaymentResponse": {
+        "additionalProperties": false,
+        "description": "Single-row payload returned by POST/DELETE payment endpoints.\nIncludes the refreshed parent ``return_check`` so the client\ncan update the recovered_total + status pill in one round-trip.",
+        "properties": {
+          "payment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReturnCheckPaymentRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "return_check": {
+            "$ref": "#/components/schemas/ReturnCheckRow"
+          }
+        },
+        "required": [
+          "return_check"
+        ],
+        "title": "ReturnCheckPaymentResponse",
+        "type": "object"
+      },
       "ReturnCheckPaymentRow": {
         "additionalProperties": false,
         "properties": {
@@ -4516,6 +4540,41 @@
           "paid_on"
         ],
         "title": "ReturnCheckPaymentRow",
+        "type": "object"
+      },
+      "ReturnCheckPaymentWriteRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``POST /return-checks/{id}/payments``.\n\n``paid_on`` is the YYYY-MM-DD the cashier received the\ninstallment; the matching ``DailyLineItem`` auto-creates with\nthis report_date. ``method`` is free-text but the SPA's form\nconstrains it to ``cash / check / zelle / wire / money_order /\nother`` for consistency.",
+        "properties": {
+          "amount": {
+            "exclusiveMinimum": 0.0,
+            "title": "Amount",
+            "type": "number"
+          },
+          "method": {
+            "default": "",
+            "maxLength": 20,
+            "title": "Method",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Note",
+            "type": "string"
+          },
+          "paid_on": {
+            "maxLength": 10,
+            "minLength": 10,
+            "title": "Paid On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paid_on",
+          "amount"
+        ],
+        "title": "ReturnCheckPaymentWriteRequest",
         "type": "object"
       },
       "ReturnCheckPaymentsResponse": {
@@ -16105,6 +16164,175 @@
           }
         },
         "summary": "Payments Route",
+        "tags": [
+          "return-checks"
+        ]
+      },
+      "post": {
+        "description": "Record one installment payment against a pending or\nrecovered return check. Auto-creates the matching\n``DailyLineItem(kind='return_payback')`` and re-derives the\ndaily-book total + parent status.",
+        "operationId": "record_payment_route_return_checks__rc_id__payments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rc_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Rc Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnCheckPaymentWriteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnCheckPaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Payment Route",
+        "tags": [
+          "return-checks"
+        ]
+      }
+    },
+    "/return-checks/{rc_id}/payments/{payment_id}": {
+      "delete": {
+        "operationId": "delete_payment_route_return_checks__rc_id__payments__payment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rc_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Rc Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Payment Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnCheckPaymentResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Payment Route",
         "tags": [
           "return-checks"
         ]
