@@ -1,24 +1,19 @@
 """Report Center taxonomy + URL resolution.
 
-Two data tables + two pure helpers, lifted from ``app.py``:
+Two data tables + two pure helpers:
 
   - :data:`REPORT_CATEGORIES` — admin / owner Report Center
     (``/app/reports`` + ``/app/owner/reports``).
   - :data:`SUPERADMIN_REPORT_CATEGORIES` — superadmin BI surface
     (``/app/superadmin/reports``).
   - :func:`url_from_endpoint(name)` — derives the public SPA URL
-    from the legacy Flask-endpoint name (e.g.
+    from the report's slug-style endpoint name (e.g.
     ``report_sales_by_company`` → ``/reports/sales-by-company``).
   - :func:`resolved_categories(registry, endpoint_prefix="")` —
     walks a registry, fills in each entry's ``url`` + ``status``
     fields so the React Report Center can render directly.
 
-Pure — no Flask dependency. The legacy ``app._resolved_report_categories``
-used ``url_for`` first, but every HTML drilldown migrated to the
-SPA (PR #503) so ``url_for`` always raised and we fell through to
-``url_from_endpoint``. Cutting the Flask attempt simplifies the
-control flow and lets this module load without a Flask app
-context.
+Pure — no DB / framework / context dependency.
 """
 from __future__ import annotations
 

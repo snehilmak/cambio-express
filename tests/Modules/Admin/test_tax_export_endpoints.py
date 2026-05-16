@@ -1,10 +1,11 @@
-"""HTTP integration tests for the Admin tax-export year picker.
+"""HTTP integration tests for the Admin tax-export endpoints.
+
+  GET /api/v2/admin/tax-export/years  → picker dropdown payload
+  GET /api/v2/admin/tax-export.zip    → year-end packet ZIP
 
 The matching React page (frontend/src/routes/AdminTaxExport.tsx)
-calls /api/v2/admin/tax-export/years on mount and renders the
-year list. The actual ZIP build still lives on the legacy Flask
-route /admin/tax-export.zip — we don't test that here (it streams
-multi-MB files and would dominate the suite runtime).
+calls both endpoints — the year picker on mount, the ZIP on the
+download button.
 """
 from datetime import date
 from tests._app import db, db_session
@@ -146,3 +147,95 @@ def test_legacy_admin_tax_export_preserves_query_string(
     )
     assert resp.status_code == 301
     assert "year=2024" in resp.headers["Location"]
+
+
+# ── /tax-export.zip ─────────────────────────────────────────
+
+
+def test_tax_pack_requires_jwt(client):
+    resp = client.get("/api/v2/admin/tax-export.zip?year=2024")
+    assert resp.status_code == 401
+
+
+def test_tax_pack_returns_zip_with_expected_files(
+    client, test_store_id,
+):
+    """Happy path — admin downloads the ZIP, gets a non-empty
+    archive with each expected file."""
+    import io
+    import zipfile
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/admin/tax-export.zip?year={date.today().year}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"] == "application/zip"
+    cd = resp.headers["Content-Disposition"]
+    assert "attachment" in cd
+    assert ".zip" in cd
+    payload = resp.get_data()
+    assert len(payload) > 0
+    with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+        names = set(zf.namelist())
+        year = date.today().year
+        assert f"transfers_{year}.csv" in names
+        assert f"monthly_pl_{year}.csv" in names
+        assert f"daily_summary_{year}.csv" in names
+        assert f"customers_{year}.csv" in names
+        assert "README.txt" in names
+
+
+def test_tax_pack_transfers_csv_has_header_row(client, test_store_id):
+    """The transfers CSV always has a header row even when there
+    are zero rows for the year."""
+    import io
+    import zipfile
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/admin/tax-export.zip?year={date.today().year}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    payload = resp.get_data()
+    with zipfile.ZipFile(io.BytesIO(payload)) as zf:
+        year = date.today().year
+        text = zf.read(f"transfers_{year}.csv").decode("utf-8")
+    first_line = text.splitlines()[0]
+    assert "Send Date" in first_line
+    assert "Total Collected" in first_line
+
+
+def test_tax_pack_rejects_cashier_role(client, test_store_id):
+    """An employee-role JWT carries a store scope but can't
+    download — same gating as /customers/export.csv."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = User(
+            store_id=test_store_id, username="cashier@test.com",
+            full_name="Cashier", role="employee",
+        )
+        u.set_password("p123pass!")
+        db.session.add(u); db.session.commit()
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "cashier@test.com", "password": "p123pass!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.get(
+        "/api/v2/admin/tax-export.zip?year=2024",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_tax_pack_rejects_invalid_year(client, test_store_id):
+    """Year validation: < 2000 or > 2100 → 422 from Pydantic."""
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/tax-export.zip?year=1999",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

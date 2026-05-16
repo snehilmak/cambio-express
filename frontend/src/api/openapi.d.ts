@@ -146,6 +146,37 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/tax-export.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download Tax Pack Route
+         * @description Bundle a calendar year of store data into a ZIP and stream
+         *     the bytes.
+         *
+         *     Admin / owner / superadmin only — cashiers see the year picker
+         *     in the UI but the download itself is gated server-side too.
+         *     Store scope comes from the JWT, never a query param, so a
+         *     cashier swapping the URL can't pivot to another store.
+         *
+         *     Memory-bound — the ZIP is built in a ``BytesIO`` and returned
+         *     in one shot. Operators export once a year, so the simpler
+         *     in-memory path is fine; a streaming generator would only pay
+         *     off on multi-GB packs.
+         */
+        get: operations["download_tax_pack_route_admin_tax_export_zip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/tax-export/years": {
         parameters: {
             query?: never;
@@ -156,10 +187,8 @@ export interface paths {
         /**
          * List Tax Export Years Route
          * @description Years offered in the tax-pack year picker, plus the default
-         *     selection (last calendar year). Powers the /app/admin/tax-export
-         *     React page. The actual ZIP download still comes from the legacy
-         *     Flask route /admin/tax-export.zip — that streams a multi-MB file
-         *     via Flask's send_file path and is left intact for now.
+         *     selection (last calendar year). Powers the year dropdown on
+         *     ``/app/admin/tax-export``.
          */
         get: operations["list_tax_export_years_route_admin_tax_export_years_get"];
         put?: never;
@@ -7104,6 +7133,42 @@ export interface operations {
     subscription_summary_route_admin_subscription_get: {
         parameters: {
             query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_tax_pack_route_admin_tax_export_zip_get: {
+        parameters: {
+            query: {
+                /** @description Calendar year to pack (inclusive both ends). */
+                year: number;
+            };
             header?: {
                 authorization?: string | null;
             };

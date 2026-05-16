@@ -1,9 +1,8 @@
 """Customer-driven services.
 
-Migrated from `app.py::_top_customers_data`. Group by
-`Transfer.customer_id`, then resolve the FK to the `Customer` row
-in a single in-clause lookup so the per-row template can show the
-sender's name + phone.
+Group by ``Transfer.customer_id``, then resolve the FK to the
+``Customer`` row in a single in-clause lookup so the response
+row can carry the sender's name + phone.
 
 Walk-in transfers (no `customer_id`) get bucketed as `"(walk-in)"`
 — they can't be tracked across visits, but their volume should

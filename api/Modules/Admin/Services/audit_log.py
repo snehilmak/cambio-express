@@ -1,11 +1,12 @@
 """Admin audit-log Service.
 
-Pulls the merged operator + transfer audit feed for a store,
-applies the same filters the legacy Flask page supports, and
-returns a paginated, normalized payload the SPA can render.
+Pulls the merged ``OperatorAuditLog`` + ``TransferAudit`` feed for
+a store, applies target / action / user filters, and returns a
+paginated payload the SPA renders directly.
 
-Shape mirrors the legacy `admin_audit_log` view in app.py — keep
-the `merged` dict schema in sync if you add a column there.
+The ``merged`` dict shape is the wire contract — every column
+added here must be added to the ``AdminAuditRow`` Pydantic schema
+in lockstep or the response validator will trip.
 """
 from sqlalchemy.orm import Session
 

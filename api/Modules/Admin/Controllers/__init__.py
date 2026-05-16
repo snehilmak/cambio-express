@@ -8,7 +8,7 @@ Mounts at `/api/v2/admin/*`. Endpoints:
 JWT-required, scoped to the principal's store. Superadmin (no
 store scope) → 403.
 """
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -50,6 +50,7 @@ from api.Modules.Admin.Services import (
     TrialPlanError,
     UsernameTakenError,
     add_team_member,
+    build_tax_pack_zip,
     create_store_user,
     deactivate_team_member,
     get_referral_payload,
@@ -387,14 +388,55 @@ def list_tax_export_years_route(
     claims: dict = Depends(get_principal),
 ) -> TaxExportYearsResponse:
     """Years offered in the tax-pack year picker, plus the default
-    selection (last calendar year). Powers the /app/admin/tax-export
-    React page. The actual ZIP download still comes from the legacy
-    Flask route /admin/tax-export.zip — that streams a multi-MB file
-    via Flask's send_file path and is left intact for now."""
+    selection (last calendar year). Powers the year dropdown on
+    ``/app/admin/tax-export``."""
     store_id = resolve_store_scope(claims)
     years = tax_export_year_choices(db, store_id)
     return TaxExportYearsResponse(
         years=years, default_year=tax_export_default_year(years),
+    )
+
+
+@router.get("/tax-export.zip")
+def download_tax_pack_route(
+    year: int = Query(
+        ..., ge=2000, le=2100,
+        description="Calendar year to pack (inclusive both ends).",
+    ),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> Response:
+    """Bundle a calendar year of store data into a ZIP and stream
+    the bytes.
+
+    Admin / owner / superadmin only — cashiers see the year picker
+    in the UI but the download itself is gated server-side too.
+    Store scope comes from the JWT, never a query param, so a
+    cashier swapping the URL can't pivot to another store.
+
+    Memory-bound — the ZIP is built in a ``BytesIO`` and returned
+    in one shot. Operators export once a year, so the simpler
+    in-memory path is fine; a streaming generator would only pay
+    off on multi-GB packs."""
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can download tax packs.",
+        )
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Tenancy.Models import Store
+    store = db.get(Store, store_id)
+    if store is None:
+        raise HTTPException(status_code=404, detail="Store not found.")
+    payload = build_tax_pack_zip(db, store, year)
+    slug = (store.slug or "store").replace("/", "-")
+    filename = f"{slug}-tax-pack-{year}.zip"
+    return Response(
+        content=payload,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
     )
 
 

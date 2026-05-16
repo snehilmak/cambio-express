@@ -1,10 +1,8 @@
-"""Tax-export Service.
+"""Tax-export year-picker helpers.
 
-Pure read-only helpers for the admin tax-export year picker. The
-ZIP build itself stays in app.py — it streams a multi-MB file via
-Flask's send_file path and depends on a swathe of legacy CSV
-helpers (`_tax_pack_*_csv`) we don't need to ship through the SPA
-yet.
+The year-picker dropdown on ``/app/admin/tax-export`` consumes
+``list_year_choices`` + ``default_year`` to know what years to
+offer. The actual ZIP build lives in ``tax_pack.py`` next door.
 """
 from datetime import date
 
