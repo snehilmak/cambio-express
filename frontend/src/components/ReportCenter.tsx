@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 
+import styles from "./ReportCenter.module.css";
+
 // Shared report-center accordion used by /app/reports,
 // /app/owner/reports, and /app/superadmin/reports.
 //
@@ -55,16 +57,16 @@ export default function ReportCenter({
 
   return (
     <section>
-      <header style={headStyle}>
+      <header className={styles.head}>
         <div>
-          <h1 style={titleStyle}>Report Center</h1>
-          <p style={subtitleStyle}>
+          <h1 className={styles.title}>Report Center</h1>
+          <p className={styles.subtitle}>
             Browse every report by category. Use search to jump straight
             to the report you need.
           </p>
         </div>
-        <div style={searchBoxStyle}>
-          <span style={searchIconStyle} aria-hidden="true">
+        <div className={styles.searchBox}>
+          <span className={styles.searchIcon} aria-hidden="true">
             <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
                  strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                  width="16" height="16">
@@ -79,13 +81,13 @@ export default function ReportCenter({
             aria-label="Search reports"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            style={searchInputStyle}
+            className={styles.searchInput}
           />
         </div>
       </header>
 
       {!anyVisible && (
-        <div style={emptyStyle}>No reports match that search.</div>
+        <div className={styles.empty}>No reports match that search.</div>
       )}
 
       {filtered.map((cat) => (
@@ -106,21 +108,21 @@ function CategoryAccordion({
   forceOpen: boolean;
 }) {
   return (
-    <details open={forceOpen} style={catStyle}>
-      <summary style={summaryStyle}>
-        <span style={caretStyle} aria-hidden="true">
+    <details open={forceOpen} className={styles.cat}>
+      <summary className={styles.summary}>
+        <span className={styles.caret} aria-hidden="true">
           <svg viewBox="0 0 24 24" stroke="currentColor" fill="none"
                strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                width="14" height="14">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </span>
-        <span style={iconStyle}
+        <span className={styles.icon}
               dangerouslySetInnerHTML={{ __html: cat.icon }} />
-        <span style={catLabelStyle}>{cat.label}</span>
-        <span style={countStyle}>{cat.reports.length}</span>
+        <span className={styles.catLabel}>{cat.label}</span>
+        <span className={styles.count}>{cat.reports.length}</span>
       </summary>
-      <div style={catBodyStyle}>
+      <div className={styles.catBody}>
         {cat.reports.map((r) => <ReportRowView key={r.key} report={r} />)}
       </div>
     </details>
@@ -131,113 +133,16 @@ function CategoryAccordion({
 function ReportRowView({ report }: { report: ReportRow }) {
   const ready = report.status === "ready" && !!report.url;
   return (
-    <div style={rowStyle}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={rowNameStyle}>{report.label}</div>
-        <div style={rowDescStyle}>{report.description}</div>
+    <div className={styles.row}>
+      <div className={styles.rowBody}>
+        <div className={styles.rowName}>{report.label}</div>
+        <div className={styles.rowDesc}>{report.description}</div>
       </div>
       <div>
         {ready
-          ? <a href={report.url ?? "#"} style={primaryButtonStyle}>View</a>
-          : <span style={pillStyle}>Coming soon</span>}
+          ? <a href={report.url ?? "#"} className={styles.primaryButton}>View</a>
+          : <span className={styles.pill}>Coming soon</span>}
       </div>
     </div>
   );
 }
-
-
-// ── Styles ──────────────────────────────────────────────────
-
-const headStyle: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between", alignItems: "flex-end",
-  gap: 18, flexWrap: "wrap", marginBottom: 18,
-};
-const titleStyle: React.CSSProperties = {
-  fontFamily: "'Space Grotesk', 'Inter', sans-serif",
-  fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text)",
-};
-const subtitleStyle: React.CSSProperties = {
-  margin: "4px 0 0", fontSize: 13, color: "var(--text-muted)",
-};
-const searchBoxStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 8,
-  padding: "8px 12px",
-  background: "var(--surface-2)",
-  border: "1px solid var(--border)", borderRadius: 8,
-  minWidth: 240,
-};
-const searchIconStyle: React.CSSProperties = { color: "var(--text-muted)", display: "inline-flex" };
-const searchInputStyle: React.CSSProperties = {
-  flex: 1, border: 0, background: "transparent", outline: "none",
-  fontSize: 13, color: "var(--text)",
-  fontFamily: "'Inter', sans-serif",
-};
-
-const catStyle: React.CSSProperties = {
-  background: "var(--surface)",
-  border: "1px solid var(--border)", borderRadius: 12,
-  marginBottom: 10, overflow: "hidden",
-};
-const summaryStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 12,
-  padding: "14px 18px", cursor: "pointer", userSelect: "none",
-  listStyle: "none",
-};
-const caretStyle: React.CSSProperties = {
-  color: "var(--text-muted)", display: "inline-flex",
-};
-const iconStyle: React.CSSProperties = {
-  color: "var(--db-neon)", display: "inline-flex",
-  width: 20, height: 20,
-};
-const catLabelStyle: React.CSSProperties = {
-  flex: 1, fontFamily: "'Space Grotesk', 'Inter', sans-serif",
-  fontSize: 15, fontWeight: 700, color: "var(--text)",
-};
-const countStyle: React.CSSProperties = {
-  fontFamily: "'JetBrains Mono', monospace",
-  fontSize: 12, fontWeight: 700, color: "var(--text-muted)",
-  padding: "2px 8px",
-  background: "var(--surface-2)",
-  border: "1px solid var(--border)",
-  borderRadius: 999,
-};
-const catBodyStyle: React.CSSProperties = {
-  borderTop: "1px solid var(--border)",
-  padding: "8px 18px 14px",
-};
-const rowStyle: React.CSSProperties = {
-  display: "flex", alignItems: "center", gap: 14,
-  padding: "12px 0",
-  borderBottom: "1px dashed var(--border)",
-};
-const rowNameStyle: React.CSSProperties = {
-  fontFamily: "'Space Grotesk', 'Inter', sans-serif",
-  fontSize: 14, fontWeight: 700, color: "var(--text)",
-};
-const rowDescStyle: React.CSSProperties = {
-  fontSize: 12.5, color: "var(--text-muted)", marginTop: 2,
-};
-const primaryButtonStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center",
-  padding: "6px 14px",
-  background: "var(--db-neon)", color: "#000",
-  border: "1px solid var(--db-neon)", borderRadius: 6,
-  fontSize: 12.5, fontWeight: 700, textDecoration: "none",
-  fontFamily: "'Inter', sans-serif",
-};
-const pillStyle: React.CSSProperties = {
-  display: "inline-flex", alignItems: "center",
-  padding: "6px 12px",
-  background: "var(--surface-2)", color: "var(--text-muted)",
-  border: "1px solid var(--border)", borderRadius: 999,
-  fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-const emptyStyle: React.CSSProperties = {
-  padding: "30px 20px", textAlign: "center",
-  color: "var(--text-muted)", fontSize: 14,
-  background: "var(--surface)",
-  border: "1px dashed var(--border)", borderRadius: 12,
-  marginBottom: 12,
-};

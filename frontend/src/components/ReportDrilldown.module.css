@@ -1,0 +1,80 @@
+/* Page-specific styles for ReportDrilldown.tsx — shared by every
+ * per-report drilldown wrapper. Page chrome (PageHeader / KpiGrid)
+ * comes from the kit; everything below is the period-picker +
+ * filter-row + table chrome.
+ */
+
+.backLink {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.dateForm {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inputLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--db-text-muted, #a3a3a3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dateInput {
+  padding: 0.35rem 0.5rem;
+  background: var(--db-surface, #0a0a0a);
+  color: inherit;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.btnOutline {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--db-border, #262626);
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.filterRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--db-border, #262626);
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}

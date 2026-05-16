@@ -1,0 +1,91 @@
+/* Page-specific styles for SuperadminBIDrilldown.tsx.
+ *
+ * Most classes mirror the ReportDrilldown component module (the
+ * two share the same period-picker / filter-row / table chrome
+ * pattern). The view-toggle pair is unique to the platform BI
+ * variant, which renders a Chart/Table/Both segmented control.
+ */
+
+.backLink {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  text-decoration: none;
+}
+
+.actionRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.inputLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.7rem;
+  color: var(--db-text-muted, #a3a3a3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dateInput {
+  padding: 0.35rem 0.5rem;
+  background: var(--db-surface, #0a0a0a);
+  color: inherit;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.btnOutline {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--db-border, #262626);
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.filterRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--db-border, #262626);
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.muted {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.viewToggleGroup {
+  display: inline-flex;
+  padding: 0.2rem;
+  background: var(--db-surface, #0a0a0a);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  align-self: flex-end;
+  gap: 0.1rem;
+}
+
+.viewToggleBtn {
+  padding: 0.3rem 0.75rem;
+  border: none;
+  border-radius: 0.35rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-family: inherit;
+}

@@ -16,8 +16,9 @@ import { api, downloadCsv } from "../../lib/api";
 import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
 import {
   Card, EmptyState, ErrorState, KpiCard, KpiGrid,
-  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle, tokens,
+  PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
 } from "../../components/ui";
+import styles from "./SuperadminBIDrilldown.module.css";
 
 ChartJS.register(
   CategoryScale, LinearScale, PointElement, LineElement,
@@ -163,37 +164,37 @@ export default function SuperadminBIDrilldown() {
   return (
     <PageShell gap="1.25rem">
       <div>
-        <Link to="/superadmin/reports" style={backLink}>← Platform Reports</Link>
+        <Link to="/superadmin/reports" className={styles.backLink}>← Platform Reports</Link>
         <PageHeader
           title={title}
           actions={(
-            <div style={actionRow}>
-              <label style={inputLabel}>
+            <div className={styles.actionRow}>
+              <label className={styles.inputLabel}>
                 <span>From</span>
                 <input
                   type="date"
                   value={from}
                   onChange={e => setFrom(e.target.value)}
-                  style={dateInput}
+                  className={styles.dateInput}
                 />
               </label>
-              <label style={inputLabel}>
+              <label className={styles.inputLabel}>
                 <span>To</span>
                 <input
                   type="date"
                   value={to}
                   onChange={e => setTo(e.target.value)}
-                  style={dateInput}
+                  className={styles.dateInput}
                 />
               </label>
               <button
                 type="button"
-                style={btnOutline}
+                className={styles.btnOutline}
                 onClick={() => { void downloadCsv(csvHref, csvFilename); }}
               >
                 Export CSV
               </button>
-              <button type="button" style={btnOutline} onClick={() => window.print()}>
+              <button type="button" className={styles.btnOutline} onClick={() => window.print()}>
                 Print / PDF
               </button>
             </div>
@@ -221,10 +222,10 @@ export default function SuperadminBIDrilldown() {
         </KpiGrid>
       )}
 
-      <div style={filterRow}>
-        <span style={muted}>{fmtDate(from)} – {fmtDate(to)}</span>
+      <div className={styles.filterRow}>
+        <span className={styles.muted}>{fmtDate(from)} – {fmtDate(to)}</span>
         {data && (
-          <span style={muted}>{rows.length.toLocaleString()} {rows.length === 1 ? "row" : "rows"}</span>
+          <span className={styles.muted}>{rows.length.toLocaleString()} {rows.length === 1 ? "row" : "rows"}</span>
         )}
       </div>
 
@@ -248,7 +249,7 @@ export default function SuperadminBIDrilldown() {
               <ChartBlock rows={rows} title={title} />
             )}
             {effectiveMode !== "chart" && (
-              <table style={tableStyle}>
+              <table className={styles.table}>
           <thead>
             <tr>
               {rowKeys.map(k => (
@@ -270,7 +271,7 @@ export default function SuperadminBIDrilldown() {
                     <td key={k} style={{
                       ...tdStyle,
                       textAlign: numeric ? "right" : "left",
-                      fontFamily: numeric ? tokens.fontMono : undefined,
+                      fontFamily: numeric ? "var(--db-font-mono, 'JetBrains Mono', monospace)" : undefined,
                     }}>
                       {fmtCell(k, r[k])}
                     </td>
@@ -368,7 +369,7 @@ function ViewModeToggle({
     <div
       role="group"
       aria-label="View mode"
-      style={viewToggleGroupStyle}
+      className={styles.viewToggleGroup}
     >
       {opts.map(o => {
         const active = mode === o.value;
@@ -378,14 +379,14 @@ function ViewModeToggle({
             type="button"
             aria-pressed={active}
             onClick={() => onChange(o.value)}
+            className={styles.viewToggleBtn}
             style={{
-              ...viewToggleBtnStyle,
               background: active
-                ? tokens.surface2
+                ? "var(--db-surface-2, #141414)"
                 : "transparent",
               color: active
-                ? tokens.text
-                : tokens.textMuted,
+                ? "var(--db-text, #f5f5f5)"
+                : "var(--db-text-muted, #a3a3a3)",
               fontWeight: active ? 600 : 400,
             }}
           >
@@ -497,60 +498,3 @@ function fmtDate(iso: string): string {
     month: "short", day: "numeric", year: "numeric",
   });
 }
-
-const backLink: React.CSSProperties = {
-  color: tokens.textMuted, fontSize: "0.85rem",
-  textDecoration: "none",
-};
-const actionRow: React.CSSProperties = {
-  display: "flex", flexWrap: "wrap", gap: "0.5rem",
-  alignItems: "center",
-};
-const inputLabel: React.CSSProperties = {
-  display: "flex", flexDirection: "column", gap: "0.15rem",
-  fontSize: "0.7rem", color: tokens.textMuted,
-  textTransform: "uppercase", letterSpacing: "0.05em",
-};
-const dateInput: React.CSSProperties = {
-  padding: "0.35rem 0.5rem",
-  background: tokens.surface, color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.4rem", fontSize: "0.85rem",
-  fontFamily: "inherit",
-};
-const btnOutline: React.CSSProperties = {
-  background: "transparent", color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  padding: "0.4rem 0.85rem", borderRadius: "0.5rem",
-  fontSize: "0.85rem", cursor: "pointer",
-  textDecoration: "none", display: "inline-block",
-};
-const filterRow: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between",
-  padding: "0.5rem 0",
-  borderTop: `1px solid ${tokens.border}`,
-  borderBottom: `1px solid ${tokens.border}`,
-};
-const muted: React.CSSProperties = {
-  color: tokens.textMuted, fontSize: "0.85rem", margin: 0,
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
-};
-const viewToggleGroupStyle: React.CSSProperties = {
-  display: "inline-flex",
-  padding: "0.2rem",
-  background: tokens.surface,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  alignSelf: "flex-end",
-  gap: "0.1rem",
-};
-const viewToggleBtnStyle: React.CSSProperties = {
-  padding: "0.3rem 0.75rem",
-  border: "none",
-  borderRadius: "0.35rem",
-  fontSize: "0.8rem",
-  cursor: "pointer",
-  fontFamily: "inherit",
-};
