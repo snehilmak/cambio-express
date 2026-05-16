@@ -169,8 +169,22 @@ def create_route(
     claims: dict = Depends(get_principal),
 ) -> AnnouncementResponse:
     """Mint a new banner. `expires_days=0` (or omitted) means no
-    expiry. `broadcast=True` queues the message for the broadcast-
-    email fan-out (one-shot at create time).
+    expiry.
+
+    `broadcast=True` triggers the email fan-out to opted-in users
+    via ``api.Core.Jobs.enqueue``. In sync mode (the default; no
+    Redis configured) the fan-out runs inline before the response
+    returns — same as the CLI ``scripts.broadcast_announcement``.
+    In queued mode (``JOB_QUEUE_ENABLED=1`` + ``REDIS_URL``) the
+    job is pushed to RQ and the response returns immediately. The
+    underlying ``broadcasts.run()`` is idempotent on
+    ``broadcast_sent_at`` so a worker retry or a manual CLI replay
+    after the auto-fire is a safe no-op.
+
+    Scheduled banners (``start_at_iso`` in the future) defer the
+    broadcast until activation — there's no value in emailing a
+    notice about something that isn't visible yet. The CLI is
+    still available for that manual replay.
 
     `start_at_iso` schedules the banner for a future timestamp —
     the visibility helper (`active_announcements`) skips rows whose
@@ -209,6 +223,17 @@ def create_route(
         ),
     )
     db.commit()
+    # Fan-out happens AFTER the commit so the worker can re-fetch
+    # the row by id. ``broadcasts.run()`` is the underlying sender
+    # and is idempotent on ``broadcast_sent_at``. Scheduled
+    # announcements are deferred — sending an email about a banner
+    # that isn't visible yet creates a worse-than-nothing UX.
+    if body.broadcast and not scheduled:
+        from api.Core.Jobs import enqueue
+        from api.Modules.Notifications.Services.broadcasts import (
+            broadcast_announcement,
+        )
+        enqueue(broadcast_announcement, a.id)
     return AnnouncementResponse(announcement=_adapt(a))
 
 

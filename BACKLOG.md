@@ -179,8 +179,8 @@ infrastructure that's still relevant in the FastAPI-only world.
       * Uncomment the ``- type: worker`` block in ``render.yaml``
         + sync the blueprint.
       * Migrate the next SMTP / Stripe-SDK call sites (trial
-        reminders, locked-day digest already migrated;
-        announcement broadcast is the obvious next one).
+        reminders, locked-day digest, announcement broadcast
+        already migrated).
       Owner action when ready to activate: follow the 4-step
       runbook embedded as comments above the worker block in
       ``render.yaml``. Until then, the system is fully
@@ -716,12 +716,21 @@ gaps. Ordered by "what I'd do next" at the top.
       cookie) and rate-limited at 120/min (signature verification
       is the actual auth). See `app.py` `resend_webhook()` for
       the handler.
-- [ ] **Announcement-broadcast email** — when a superadmin posts an
-      announcement, optionally email the full audience. Pairs with an
-      opt-out toggle on `/account/notifications` + a new email template
-      (`emails/announcement.html`). Fanout strategy is the real work:
-      at 500 stores × 3 users = 1,500 emails, inline in the webhook POST
-      is fine. At higher scale it'd need a queue.
+- [x] **Announcement-broadcast email** — landed. Ticking the
+      "Also email all users" checkbox on the superadmin
+      Announcements form now actually sends the email via the
+      D5 enqueue path. ``broadcasts.broadcast_announcement``
+      is the worker entry-point (top-level, primitive args so
+      RQ can pickle it). In sync mode the orchestrator runs
+      inline before the response returns; in queued mode
+      (Redis activated) it pushes to RQ. Scheduled banners
+      defer the broadcast until the schedule activates — the
+      CLI replay is still available for that. Underlying
+      ``broadcasts.run()`` was already idempotent on
+      ``broadcast_sent_at`` so retries / replays are safe.
+      Opt-out toggle on ``/account/notifications`` and the
+      ``emails/announcement.html`` template were already
+      shipped; this closes the missing trigger.
 - [ ] **Daily summary email** — cron-based per-store nightly digest of
       transfers, totals, new customers. New toggle on notifications
       page + new template + new `flask send-daily-summaries` CLI.
