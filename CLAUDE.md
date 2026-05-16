@@ -40,7 +40,17 @@ single neon-green `#3fff00` accent, Space Grotesk + Inter +
 JetBrains Mono, inline stroke SVG nav icons).
 
 Non-negotiables:
-- **Dark only.** `data-theme="dark"` is unconditional. No light mode.
+- **Dark by default; light is opt-in.** ``data-theme`` flips
+  between ``"dark"`` (default) and ``"light"`` (per-user
+  preference, stored on ``User.theme_preference``). The light
+  palette deliberately darkens the neon accent so links + active
+  nav stay readable on white. New surfaces must work in BOTH
+  themes — use semantic tokens (``--db-surface``, ``--db-text``,
+  ``--db-border``) instead of fixed hex so values flip with the
+  theme attribute. The toggle lives in the topbar
+  (``ThemeToggle.tsx``); the per-device cache + before-paint
+  restore live in ``frontend/src/lib/theme.ts`` +
+  ``frontend/index.html``.
 - **One saturated color.** Neon green `#3fff00` — reserved for CTAs,
   positive values, active nav indicators, primary chart strokes.
   Second accents = jewel tones (`--db-co-intermex/maxi/barri`) or

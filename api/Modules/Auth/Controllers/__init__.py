@@ -633,6 +633,7 @@ def update_profile_route(
             email=body.email,
             phone=body.phone,
             timezone=body.timezone,
+            theme_preference=body.theme_preference,
         )
     except ProfileValidationError as exc:
         raise HTTPException(

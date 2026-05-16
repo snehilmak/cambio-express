@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 
+import { useProfile } from "../api/account";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
+import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import ThemeToggle from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
 // App chrome wrapping every authed page: sidebar + topbar.
@@ -160,6 +163,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // so the CSS class flip is the same code path on every viewport.
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // Pull the user's saved theme preference and apply it. The
+  // inline script in index.html already restored the localStorage
+  // cache for first paint; this catches the case where the user
+  // toggled the theme on another device. Server wins.
+  const { data: profile } = useProfile();
+  useEffect(() => {
+    reconcileTheme(profile?.theme_preference);
+  }, [profile?.theme_preference]);
+
   // Auto-close the drawer on navigation. Without this, tapping a
   // nav link on mobile would route to the new page but leave the
   // drawer open over it. The route-change pulse is the canonical
@@ -311,6 +323,7 @@ function Topbar({
         </svg>
       </button>
       <span style={topbarSpacer} />
+      <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>
   );

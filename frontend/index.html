@@ -5,21 +5,33 @@
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
-      Single source of truth for design tokens lives in Flask's
-      static/design-tokens.css (CLAUDE.md "Design system" invariant).
-      The SPA loads it directly so any token change propagates to
-      both the legacy Jinja site and the new SPA without duplication.
+      Design-system tokens (colors, fonts, spacing) live in
+      /static/design-tokens.css. Both [data-theme="dark"] and
+      [data-theme="light"] are defined there; the inline script
+      below restores the user's saved theme before the React
+      bundle paints so we don't flash dark-on-light or vice versa.
     -->
     <link rel="stylesheet" href="/static/design-tokens.css" />
-    <!--
-      JetBrains Mono is referenced by `--db-font-mono` but the
-      shared design-tokens.css only imports Space Grotesk + Inter.
-      The legacy landing.html loads it inline; mirror that here so
-      SPA pages that use the mono token render correctly.
-    -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" />
+    <script>
+      // Restore the saved theme before first paint. The full
+      // toggle (with server-side persistence on User.theme_preference)
+      // lives in frontend/src/lib/theme.ts — this snippet only
+      // reads the cached localStorage value so the chrome doesn't
+      // flash on reload. Falls back to dark on missing / corrupt.
+      (function () {
+        try {
+          var t = window.localStorage.getItem("dinerobook.theme");
+          if (t === "light") {
+            document.documentElement.setAttribute("data-theme", "light");
+          }
+        } catch (_e) {
+          /* localStorage blocked — stay on dark */
+        }
+      })();
+    </script>
     <title>DineroBook</title>
   </head>
   <body>
