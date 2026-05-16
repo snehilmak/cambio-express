@@ -302,8 +302,22 @@ export interface paths {
         /**
          * Create Route
          * @description Mint a new banner. `expires_days=0` (or omitted) means no
-         *     expiry. `broadcast=True` queues the message for the broadcast-
-         *     email fan-out (one-shot at create time).
+         *     expiry.
+         *
+         *     `broadcast=True` triggers the email fan-out to opted-in users
+         *     via ``api.Core.Jobs.enqueue``. In sync mode (the default; no
+         *     Redis configured) the fan-out runs inline before the response
+         *     returns — same as the CLI ``scripts.broadcast_announcement``.
+         *     In queued mode (``JOB_QUEUE_ENABLED=1`` + ``REDIS_URL``) the
+         *     job is pushed to RQ and the response returns immediately. The
+         *     underlying ``broadcasts.run()`` is idempotent on
+         *     ``broadcast_sent_at`` so a worker retry or a manual CLI replay
+         *     after the auto-fire is a safe no-op.
+         *
+         *     Scheduled banners (``start_at_iso`` in the future) defer the
+         *     broadcast until activation — there's no value in emailing a
+         *     notice about something that isn't visible yet. The CLI is
+         *     still available for that manual replay.
          *
          *     `start_at_iso` schedules the banner for a future timestamp —
          *     the visibility helper (`active_announcements`) skips rows whose
@@ -1353,6 +1367,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/{customer_id}/recent-recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recent Recipients Route
+         * @description Distinct recipients this customer has sent to before, newest
+         *     first. Powers the chip-row above the recipient_name input on the
+         *     transfer form — most senders send to the same 1–2 people, so a
+         *     one-tap chip cuts a lot of typing.
+         *
+         *     Cancelled / rejected transfers are excluded (the underlying
+         *     Service applies that filter). Unknown customer or customer
+         *     outside the umbrella returns an empty list, never 404 — the
+         *     caller's render path is the same either way.
+         */
+        get: operations["recent_recipients_route_customers__customer_id__recent_recipients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daily/{store_id}/line-items/{item_id}": {
         parameters: {
             query?: never;
@@ -1720,9 +1762,8 @@ export interface paths {
         };
         /**
          * Health
-         * @description Tiny liveness probe. Returns 200 + a JSON envelope so a
-         *     load balancer can confirm the FastAPI app is reachable
-         *     independent of the Flask app's health.
+         * @description Tiny liveness probe — 200 + JSON envelope so the load
+         *     balancer can confirm the app is reachable.
          */
         get: operations["health_health_get"];
         put?: never;
@@ -5430,6 +5471,23 @@ export interface components {
             phone?: string | null;
             /** Timezone */
             timezone?: string | null;
+        };
+        /**
+         * RecentRecipientRow
+         * @description One recipient the customer has previously sent to.
+         */
+        RecentRecipientRow: {
+            /** Country */
+            country: string;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone: string;
+        };
+        /** RecentRecipientsResponse */
+        RecentRecipientsResponse: {
+            /** Rows */
+            rows: components["schemas"]["RecentRecipientRow"][];
         };
         /** RecipientRow */
         RecipientRow: {
@@ -9164,6 +9222,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recent_recipients_route_customers__customer_id__recent_recipients_get: {
+        parameters: {
+            query: {
+                /** @description Caller's current store. The recipient lookup is scoped to the owner umbrella containing this store — sibling stores share the history; unrelated stores stay isolated. */
+                store_id: number;
+                /** @description Cap on the number of distinct recipients returned. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                customer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecentRecipientsResponse"];
                 };
             };
             /** @description Validation Error */

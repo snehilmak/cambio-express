@@ -45,8 +45,14 @@ from api.Modules.Customers.Requests import (
     CustomerSearchResponse,
     CustomerUpsertRequest,
     CustomerUpsertResponse,
+    RecentRecipientRow,
+    RecentRecipientsResponse,
 )
-from api.Modules.Customers.Services import search, upsert
+from api.Modules.Customers.Services import (
+    list_recent_recipients,
+    search,
+    upsert,
+)
 
 
 router = APIRouter()
@@ -211,6 +217,43 @@ def export_csv_route(
             "Content-Disposition":
                 f'attachment; filename="customers_{today}.csv"',
         },
+    )
+
+
+@router.get(
+    "/{customer_id}/recent-recipients",
+    response_model=RecentRecipientsResponse,
+)
+def recent_recipients_route(
+    customer_id: int = Path(..., ge=1),
+    store_id: int = Query(
+        ...,
+        description=(
+            "Caller's current store. The recipient lookup is scoped "
+            "to the owner umbrella containing this store — sibling "
+            "stores share the history; unrelated stores stay isolated."
+        ),
+    ),
+    limit: int = Query(
+        5, ge=1, le=20,
+        description="Cap on the number of distinct recipients returned.",
+    ),
+    db: Session = Depends(get_db),
+) -> RecentRecipientsResponse:
+    """Distinct recipients this customer has sent to before, newest
+    first. Powers the chip-row above the recipient_name input on the
+    transfer form — most senders send to the same 1–2 people, so a
+    one-tap chip cuts a lot of typing.
+
+    Cancelled / rejected transfers are excluded (the underlying
+    Service applies that filter). Unknown customer or customer
+    outside the umbrella returns an empty list, never 404 — the
+    caller's render path is the same either way."""
+    rows = list_recent_recipients(
+        db, customer_id, store_id, limit=limit,
+    )
+    return RecentRecipientsResponse(
+        rows=[RecentRecipientRow(**r.to_dict()) for r in rows],
     )
 
 

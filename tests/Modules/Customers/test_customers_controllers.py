@@ -455,3 +455,127 @@ def test_export_csv_empty_when_no_customers(client, test_store_id):
             if s2:
                 db.session.delete(s2)
             db.session.commit()
+
+
+# ── /{customer_id}/recent-recipients ─────────────────────────
+
+
+def _seed_transfer_for_recipient(
+    store_id, customer_id, *, recipient_name="Maria Lopez",
+    country="Mexico", recipient_phone="5550001111",
+    status="Sent",
+):
+    """Seed a Transfer row + the StoreEmployee FK it requires.
+    The recent-recipients lookup groups by recipient_name/country/
+    phone, so several call sites pass different values to test
+    distinctness."""
+    from datetime import date as _date
+    from api.Modules.Transfers.Models import Transfer
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.session.query(StoreEmployee).filter_by(
+        store_id=store_id,
+    ).first()
+    if emp is None:
+        emp = StoreEmployee(
+            store_id=store_id, name="Test cashier", is_active=True,
+        )
+        db.session.add(emp); db.session.flush()
+    t = Transfer(
+        store_id=store_id,
+        send_date=_date.today(),
+        company="Intermex",
+        service_type="Money Transfer",
+        sender_name="Sender",
+        sender_phone="5550000000",
+        sender_phone_country="+1",
+        sender_address="",
+        send_amount=100.0,
+        fee=5.0,
+        federal_tax=0.0,
+        country=country,
+        recipient_name=recipient_name,
+        recipient_phone=recipient_phone,
+        confirm_number="",
+        status=status,
+        employee_id=emp.id,
+        customer_id=customer_id,
+    )
+    db.session.add(t); db.session.commit()
+    return t.id
+
+
+def test_recent_recipients_returns_distinct_rows(test_store_id, api_client):
+    with db_session():
+        cid = _seed_customer(test_store_id, full_name="Sender One")
+        _seed_transfer_for_recipient(
+            test_store_id, cid, recipient_name="Maria Lopez",
+        )
+        _seed_transfer_for_recipient(
+            test_store_id, cid, recipient_name="Jose Garcia",
+        )
+        # Duplicate of Maria Lopez — should still be one row.
+        _seed_transfer_for_recipient(
+            test_store_id, cid, recipient_name="Maria Lopez",
+        )
+    resp = api_client.get(
+        f"/customers/{cid}/recent-recipients",
+        params={"store_id": test_store_id},
+    )
+    assert resp.status_code == 200
+    rows = resp.json()["rows"]
+    names = sorted(r["name"] for r in rows)
+    assert names == ["Jose Garcia", "Maria Lopez"]
+
+
+def test_recent_recipients_excludes_canceled(test_store_id, api_client):
+    """Canceled / Rejected transfers don't surface — those aren't
+    recipients the cashier would expect to reuse."""
+    with db_session():
+        cid = _seed_customer(test_store_id, full_name="Sender Two")
+        _seed_transfer_for_recipient(
+            test_store_id, cid, recipient_name="Live Person",
+            status="Sent",
+        )
+        _seed_transfer_for_recipient(
+            test_store_id, cid, recipient_name="Dead Person",
+            status="Canceled",
+        )
+    resp = api_client.get(
+        f"/customers/{cid}/recent-recipients",
+        params={"store_id": test_store_id},
+    )
+    rows = resp.json()["rows"]
+    names = {r["name"] for r in rows}
+    assert "Live Person" in names
+    assert "Dead Person" not in names
+
+
+def test_recent_recipients_unknown_customer_returns_empty(
+    test_store_id, api_client,
+):
+    """Unknown customer (or one outside the umbrella) returns an
+    empty list, never 404. The SPA renders the empty case the same
+    as "no history" — a 404 here would just be extra error handling."""
+    resp = api_client.get(
+        "/customers/9999999/recent-recipients",
+        params={"store_id": test_store_id},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["rows"] == []
+
+
+def test_recent_recipients_respects_limit(test_store_id, api_client):
+    """``limit=2`` caps the result to 2 rows even when more
+    distinct recipients exist."""
+    with db_session():
+        cid = _seed_customer(test_store_id, full_name="Sender Three")
+        for i in range(4):
+            _seed_transfer_for_recipient(
+                test_store_id, cid, recipient_name=f"Recipient {i}",
+            )
+    resp = api_client.get(
+        f"/customers/{cid}/recent-recipients",
+        params={"store_id": test_store_id, "limit": 2},
+    )
+    rows = resp.json()["rows"]
+    assert len(rows) == 2
