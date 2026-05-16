@@ -1,0 +1,52 @@
+# Local Postgres for the dev loop (backlog P3 — closes the SQLite/
+# Postgres parity gap that bites every codebase that develops on
+# SQLite and ships to Postgres).
+#
+# Why have this:
+# * SQLite ignores FK constraints by default; Postgres enforces.
+# * SQLite's transaction isolation differs (deferred mode); Postgres
+#   has SERIALIZABLE/REPEATABLE READ semantics.
+# * SQLite has no JSON path operators; Postgres has the full jsonb
+#   suite that prod queries may eventually use.
+# * Full-text search syntax / collation diverge.
+#
+# Running locally on SQLite is fine for fast iteration, but anything
+# touching reservations, retention purge, or anomaly aggregation
+# should be tested against this Postgres before opening a PR.
+#
+# Usage:
+#   1. ``docker compose up -d``                                  (start)
+#   2. ``export DATABASE_URL=postgresql://dinerobook:dinerobook@\
+#       localhost:5432/dinerobook``
+#   3. ``alembic upgrade head``                                  (apply schema)
+#   4. ``uvicorn asgi:asgi_app --reload --port 5000``            (run app)
+#   5. ``docker compose down``                                   (when done)
+#
+# The data volume persists across ``up`` / ``down`` cycles so you
+# don't re-seed on every restart. Wipe with
+# ``docker compose down -v``.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: dinerobook-dev-db
+    environment:
+      POSTGRES_USER:     dinerobook
+      POSTGRES_PASSWORD: dinerobook
+      POSTGRES_DB:       dinerobook
+    ports:
+      # 5432 collides with a system Postgres on some dev machines.
+      # Bind on 127.0.0.1 only so it's not exposed beyond localhost,
+      # and let the host port get remapped if needed by overriding
+      # the left side of the binding via a `.env` override.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - dinerobook-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dinerobook -d dinerobook"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  dinerobook-pgdata:
