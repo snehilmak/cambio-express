@@ -396,3 +396,110 @@ def test_create_bad_start_at_iso_falls_back_to_now(client):
     assert resp.status_code == 201
     a = resp.get_json()["announcement"]
     assert a["is_visible"] is True
+
+
+# ── Broadcast fan-out auto-fires on create ──────────────────
+
+
+def test_create_with_broadcast_enqueues_broadcast_job(client, monkeypatch):
+    """`broadcast=True` on create must enqueue the fan-out worker —
+    otherwise the email never goes out (the row just gets
+    broadcast_requested=True and waits for the CLI). Confirms the
+    controller invokes ``enqueue(broadcast_announcement, ann_id)``
+    in sync mode (the default test env)."""
+    calls = []
+
+    def fake_enqueue(fn, *args, **kwargs):
+        calls.append((fn.__name__, args, kwargs))
+        return None
+
+    monkeypatch.setattr("api.Core.Jobs.enqueue", fake_enqueue)
+    token = _login_superadmin(client)
+    resp = client.post(
+        "/api/v2/announcements",
+        json={"message": "Holiday hours", "broadcast": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    ann_id = resp.get_json()["announcement"]["id"]
+    assert any(
+        name == "broadcast_announcement" and args == (ann_id,)
+        for (name, args, _kw) in calls
+    ), f"Expected enqueue(broadcast_announcement, {ann_id}); got {calls!r}"
+
+
+def test_create_without_broadcast_does_not_enqueue(client, monkeypatch):
+    """Default `broadcast=False` keeps fan-out out of the request
+    path — a banner-only post shouldn't email anyone."""
+    calls = []
+
+    def fake_enqueue(fn, *args, **kwargs):
+        calls.append((fn.__name__, args, kwargs))
+        return None
+
+    monkeypatch.setattr("api.Core.Jobs.enqueue", fake_enqueue)
+    token = _login_superadmin(client)
+    resp = client.post(
+        "/api/v2/announcements",
+        json={"message": "banner-only"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    assert all(
+        name != "broadcast_announcement" for (name, _args, _kw) in calls
+    )
+
+
+def test_create_with_broadcast_but_scheduled_does_not_enqueue_yet(
+    client, monkeypatch,
+):
+    """Scheduled banners (start_at_iso in the future) defer the
+    broadcast — emailing about a notice that isn't visible yet
+    would confuse recipients. The CLI replay is still available
+    once the schedule activates."""
+    from datetime import datetime, timedelta, timezone
+    future = (datetime.now(timezone.utc) + timedelta(hours=4)).isoformat()
+    calls = []
+
+    def fake_enqueue(fn, *args, **kwargs):
+        calls.append((fn.__name__, args, kwargs))
+        return None
+
+    monkeypatch.setattr("api.Core.Jobs.enqueue", fake_enqueue)
+    token = _login_superadmin(client)
+    resp = client.post(
+        "/api/v2/announcements",
+        json={
+            "message": "Future maintenance",
+            "broadcast": True,
+            "start_at_iso": future,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    assert all(
+        name != "broadcast_announcement" for (name, _args, _kw) in calls
+    )
+
+
+def test_create_broadcast_runs_inline_in_sync_mode(client):
+    """End-to-end sync-mode test: with no JOB_QUEUE_ENABLED set,
+    creating an announcement with broadcast=True should leave the
+    Announcement row stamped with broadcast_sent_at — meaning
+    the inline ``broadcasts.run()`` actually fired."""
+    from api.Modules.Announcements.Models import Announcement
+    # SMTP isn't configured in tests, so send_email returns False;
+    # the orchestrator still loops recipients + stamps the dedup
+    # timestamp on a "no-op success" pass. That stamp is the signal
+    # the path executed.
+    token = _login_superadmin(client)
+    resp = client.post(
+        "/api/v2/announcements",
+        json={"message": "Sync-mode test", "broadcast": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    ann_id = resp.get_json()["announcement"]["id"]
+    with db_session():
+        ann = db.session.get(Announcement, ann_id)
+        assert ann.broadcast_sent_at is not None

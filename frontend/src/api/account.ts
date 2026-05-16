@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, ApiError } from "./../lib/api";
 import { getCurrentIdentity } from "./../lib/auth";
+import type { components } from "./openapi";
 
 export interface ChangePasswordBody {
   current_password: string;
@@ -457,4 +458,31 @@ export async function registerPasskey(name: string): Promise<PasskeyRow> {
     },
   );
   return finish.passkey;
+}
+
+
+// ── My activity feed ─────────────────────────────────────────
+// Cross-store per-user audit log. Powers /app/account/activity.
+
+export type MyActivityRow = components["schemas"]["MyActivityRow"];
+export type MyActivityResponse = components["schemas"]["MyActivityResponse"];
+
+export interface ActivityFilters {
+  target?: string;
+  action?: string;
+  page?:   number;
+}
+
+export function useMyActivity(filters: ActivityFilters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.target) qs.set("target", filters.target);
+  if (filters.action) qs.set("action", filters.action);
+  if (filters.page && filters.page > 1) qs.set("page", String(filters.page));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return useQuery<MyActivityResponse>({
+    queryKey: ["account", "activity", filters.target ?? "",
+               filters.action ?? "", filters.page ?? 1],
+    queryFn: () =>
+      api<MyActivityResponse>(`/api/v2/auth/activity${suffix}`),
+  });
 }

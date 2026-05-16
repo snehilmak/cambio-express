@@ -1,4 +1,8 @@
 """Auth — Pydantic schemas (request bodies + response payloads)."""
+from api.Modules.Auth.Requests.activity import (
+    MyActivityResponse,
+    MyActivityRow,
+)
 from api.Modules.Auth.Requests.login import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -35,6 +39,8 @@ __all__ = [
     "LoginCrossStoreRequest",
     "LoginRequest",
     "LoginResponse",
+    "MyActivityResponse",
+    "MyActivityRow",
     "NotificationsResponse",
     "NotificationsUpdateRequest",
     "OwnerSignupRequest",

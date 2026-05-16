@@ -380,6 +380,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get My Activity Route
+         * @description Cross-store activity feed for the current user. Returns
+         *     every `OperatorAuditLog` + `TransferAudit` row authored by
+         *     `claims["sub"]`, paginated 50/page newest-first. Available
+         *     to every authed role (employee / admin / owner / superadmin)
+         *     — a cashier sees their own transfers; an admin sees their
+         *     transfers + admin actions; an owner who's worked behind the
+         *     counter at multiple stores sees rows from every store with
+         *     `store_name` attached for disambiguation.
+         */
+        get: operations["get_my_activity_route_auth_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/change-password": {
         parameters: {
             query?: never;
@@ -5059,6 +5086,56 @@ export interface components {
             months: components["schemas"]["MonthLogged"][];
         };
         /**
+         * MyActivityResponse
+         * @description Page-shaped response for the activity feed.
+         */
+        MyActivityResponse: {
+            /** Action Filter */
+            action_filter: string;
+            /** Page */
+            page: number;
+            /** Per Page */
+            per_page: number;
+            /** Rows */
+            rows: components["schemas"]["MyActivityRow"][];
+            /** Target Filter */
+            target_filter: string;
+            /** Total */
+            total: number;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /**
+         * MyActivityRow
+         * @description One row in the per-user activity feed.
+         *
+         *     Mirrors the admin audit-log row shape but adds `store_name`
+         *     so multi-store cashiers (and owners) can tell which store an
+         *     action was logged at. The `user_name`/`user_role` columns are
+         *     omitted — every row in this feed is the same user, so they'd
+         *     be noise.
+         */
+        MyActivityRow: {
+            /** Action */
+            action: string;
+            /** Source */
+            source: string;
+            /** Store Id */
+            store_id: number;
+            /** Store Name */
+            store_name: string;
+            /** Summary */
+            summary: string;
+            /** Target Id */
+            target_id: string;
+            /** Target Label */
+            target_label: string;
+            /** Target Type */
+            target_type: string;
+            /** Ts */
+            ts: string;
+        };
+        /**
          * NotificationsResponse
          * @description Per-user notification preferences. `trial_toggle_applies`
          *     tells the SPA whether to render the Trial-ending toggle as
@@ -7480,6 +7557,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AnnouncementResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_my_activity_route_auth_activity_get: {
+        parameters: {
+            query?: {
+                target?: string;
+                action?: string;
+                page?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyActivityResponse"];
                 };
             };
             /** @description Validation Error */

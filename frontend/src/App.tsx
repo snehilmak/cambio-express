@@ -14,6 +14,7 @@ import NotFound from "./routes/NotFound";
 // handling. Chart.js (~190KB minified) only loads for routes that
 // render charts (owner dashboard + superadmin BI drilldowns).
 
+const AccountActivity = lazy(() => import("./routes/AccountActivity"));
 const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
 const AccountProfile = lazy(() => import("./routes/AccountProfile"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
@@ -225,6 +226,7 @@ export default function App() {
           <Route path="account/referrals"     element={<AdminReferrals />} />
           <Route path="account/profile"       element={<AccountProfile />} />
           <Route path="account/notifications" element={<AccountNotifications />} />
+          <Route path="account/activity"      element={<AccountActivity />} />
           <Route path="tv-display"            element={<TVDisplayAdmin />} />
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
           <Route path="settings"         element={<Settings />} />

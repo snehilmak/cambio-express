@@ -136,3 +136,22 @@ def run(
     ann.broadcast_sent_at = now
     session.commit()
     return sent
+
+
+def broadcast_announcement(announcement_id: int) -> int:
+    """Worker entry-point for the announcement broadcast fan-out.
+
+    Takes a primitive ``announcement_id`` (not the SQLAlchemy ORM
+    object) so the function can be queued by RQ — see
+    ``api.Core.Jobs.enqueue``. Opens its own ``SessionLocal``
+    since the caller's session is already closed by the time the
+    worker runs.
+
+    Returns the count of emails sent, mirroring ``run()``.
+    Idempotent — the underlying ``run()`` already no-ops when
+    ``broadcast_sent_at`` is set.
+    """
+    from api.Core.Database import SessionLocal
+
+    with SessionLocal() as session:
+        return run(session, announcement_id)

@@ -179,8 +179,8 @@ infrastructure that's still relevant in the FastAPI-only world.
       * Uncomment the ``- type: worker`` block in ``render.yaml``
         + sync the blueprint.
       * Migrate the next SMTP / Stripe-SDK call sites (trial
-        reminders, locked-day digest already migrated;
-        announcement broadcast is the obvious next one).
+        reminders, locked-day digest, announcement broadcast
+        already migrated).
       Owner action when ready to activate: follow the 4-step
       runbook embedded as comments above the worker block in
       ``render.yaml``. Until then, the system is fully
@@ -716,12 +716,21 @@ gaps. Ordered by "what I'd do next" at the top.
       cookie) and rate-limited at 120/min (signature verification
       is the actual auth). See `app.py` `resend_webhook()` for
       the handler.
-- [ ] **Announcement-broadcast email** — when a superadmin posts an
-      announcement, optionally email the full audience. Pairs with an
-      opt-out toggle on `/account/notifications` + a new email template
-      (`emails/announcement.html`). Fanout strategy is the real work:
-      at 500 stores × 3 users = 1,500 emails, inline in the webhook POST
-      is fine. At higher scale it'd need a queue.
+- [x] **Announcement-broadcast email** — landed. Ticking the
+      "Also email all users" checkbox on the superadmin
+      Announcements form now actually sends the email via the
+      D5 enqueue path. ``broadcasts.broadcast_announcement``
+      is the worker entry-point (top-level, primitive args so
+      RQ can pickle it). In sync mode the orchestrator runs
+      inline before the response returns; in queued mode
+      (Redis activated) it pushes to RQ. Scheduled banners
+      defer the broadcast until the schedule activates — the
+      CLI replay is still available for that. Underlying
+      ``broadcasts.run()`` was already idempotent on
+      ``broadcast_sent_at`` so retries / replays are safe.
+      Opt-out toggle on ``/account/notifications`` and the
+      ``emails/announcement.html`` template were already
+      shipped; this closes the missing trigger.
 - [ ] **Daily summary email** — cron-based per-store nightly digest of
       transfers, totals, new customers. New toggle on notifications
       page + new template + new `flask send-daily-summaries` CLI.
@@ -741,9 +750,20 @@ gaps. Ordered by "what I'd do next" at the top.
 - [ ] **Sessions / active devices** — "you're signed in on 3 devices,
       sign out the others." Needs a session-store table; pairs with
       passkeys nicely as a security-signal feature.
-- [ ] **Audit log (mine)** — filtered view of `TransferAudit`
-      showing everything the current user did. Data already exists;
-      just a scoped-query page.
+- [x] **Audit log (mine)** — landed.
+      `GET /api/v2/auth/activity` returns the cross-store
+      `OperatorAuditLog` + `TransferAudit` rows authored by the
+      current user, paginated 50/page newest-first. Open to every
+      authed role — a cashier sees their transfers, an admin sees
+      their admin actions, a multi-store owner sees rows from
+      every store with `store_name` attached for disambiguation.
+      Frontend lives at `/app/account/activity` (new sidebar
+      entry under Account). Service in
+      `api/Modules/Audit/Services/my_activity.py`; tests in
+      `tests/Modules/Audit/test_my_activity_endpoint.py` (10
+      cases: auth gating, my-rows-only, store_name attachment,
+      target/action filters, transfer-vs-other-target suppression,
+      ordering, pagination).
 - [ ] **Personal API tokens** — scoped tokens for scripts /
       integrations. Postpone until someone asks.
 - [ ] **Connected accounts (Google / Apple SSO)** — premature today;
