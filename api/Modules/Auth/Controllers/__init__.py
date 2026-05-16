@@ -279,7 +279,6 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
     rather than Flask's. Caller is responsible for committing."""
     from datetime import datetime
     from api.Modules.Auth.Models import LoginEvent
-    from api.Modules.Tenancy.Models import User
     u = db.get(User, user_id)
     if u is None:
         return
@@ -1013,7 +1012,6 @@ def send_password_reset_email(
     from api.Modules.Notifications.Services.templates import (
         render_email_template,
     )
-    from api.Modules.Tenancy.Models import User
 
     base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
     reset_url = f"{base_url}/app/reset-password?token={raw_token}"
@@ -1125,7 +1123,6 @@ def passkey_register_begin_route(
     the SPA echoes back on `/passkeys/register/finish` so the
     server can verify the credential against the same challenge.
     """
-    from api.Modules.Tenancy.Models import User
     from webauthn import generate_registration_options, options_to_json
     from webauthn.helpers import bytes_to_base64url
     from webauthn.helpers.structs import (
@@ -1191,7 +1188,6 @@ def passkey_register_finish_route(
     the SPA can append it client-side without a refetch)."""
     import jwt as _jwt
     from api.Modules.Auth.Models import Passkey
-    from api.Modules.Tenancy.Models import User
     from webauthn import verify_registration_response
     from webauthn.helpers import base64url_to_bytes
     from api.Modules.Auth.Services import (

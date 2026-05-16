@@ -20,6 +20,7 @@ Rule: never put ``/api/v2`` in a FastAPI route declaration. The
 mount or the OpenAPI ``root_path`` carry it.
 """
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -192,8 +193,6 @@ def create_app() -> FastAPI:
     """
     init_logging()
     init_sentry()
-
-    from contextlib import asynccontextmanager
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
