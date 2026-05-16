@@ -1,14 +1,12 @@
 """Sales-* services. All thin transforms over the aggregator.
 
-Migrated from `app.py::_sales_by_company_data`,
-`_sales_by_service_data`, `_top_recipients_data`,
-`_by_destination_country_data`. Same input/output contract:
+Shared contract:
 
     fn(db: Session, store_ids, d_from, d_to) -> (rows, totals)
 
-with rows already sorted (by sent desc) and the grouping key renamed
-from generic `key` to a meaningful column name (`company`,
-`service_type`, etc.) for the templates.
+Rows come back sorted (by sent desc) and the grouping key is
+renamed from the generic ``key`` to a meaningful column name
+(``company``, ``service_type``, etc.) for the response shape.
 
 If a future report needs the unsorted / generic rows, it goes
 straight to `Repositories.transfers.aggregate` — services exist

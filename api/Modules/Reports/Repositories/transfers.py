@@ -1,10 +1,5 @@
 """Transfer-aggregation queries used by every Sales / Top-X report.
 
-Migrated from `app.py::_active_transfers_period_filters` and
-`app.py::_aggregate_transfers`. Those legacy functions now delegate
-here so there's a single place the query logic lives — both Flask
-and FastAPI hit the same code path during the strangler-fig phase.
-
 Two functions:
 
   period_filters(store_ids, d_from, d_to)

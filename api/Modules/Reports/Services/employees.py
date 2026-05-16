@@ -1,7 +1,6 @@
 """Employee-driven services.
 
-Two services with deliberately different group keys (per the ADR
-and the original code in app.py):
+Two services with deliberately different group keys (per the ADR):
 
   sales_by_employee     — Group by `Transfer.created_by`. Answers
                           "which login user authored the most rows?"

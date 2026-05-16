@@ -1,13 +1,13 @@
 """Transfer-table CRUD helpers.
 
-Pulls together the filter + sort + pagination logic from
-`/transfers` route in `app.py`. Each helper takes the Session as the
-first argument so the same code runs under Flask (Flask-SQLAlchemy
-session) and standalone FastAPI (request-scoped `Depends(get_db)` session).
+Owns the filter + sort + pagination logic for the ``/transfers``
+list view. Each helper takes the ``Session`` as the first argument
+(request-scoped via ``Depends(get_db)``).
 
-The big helper is `list_with_filters`: takes a `TransferFilters`
-dataclass and returns `(rows, total)` for paginated rendering. The
-dataclass keeps the controller signature flat — no `**kwargs` smoke.
+The big helper is ``list_with_filters``: takes a ``TransferFilters``
+dataclass and returns ``(rows, total)`` for paginated rendering.
+The dataclass keeps the controller signature flat — no ``**kwargs``
+smoke.
 """
 from dataclasses import dataclass, field
 from datetime import date, datetime
