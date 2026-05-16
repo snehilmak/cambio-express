@@ -1,6 +1,6 @@
 import {
   useCallback, useEffect, useMemo, useState,
-  type CSSProperties, type FormEvent,
+  type FormEvent,
 } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,8 +25,9 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, EmptyState, Field, Input, Loading,
-  PageHeader, PageShell, Pill, Textarea, tokens,
+  PageHeader, PageShell, Pill, Textarea,
 } from "../components/ui";
+import styles from "./EditDailyBook.module.css";
 
 // /app/daily/edit?date=YYYY-MM-DD — the per-day editor.
 //
@@ -295,13 +296,13 @@ export default function EditDailyBook() {
       <PageHeader
         title="Daily book"
         subtitle={(
-          <span style={{ fontFamily: tokens.fontMono, color: tokens.textMuted }}>
+          <span className={styles.dateBadge}>
             {formatHumanDate(date)}{" "}
-            <span style={{ opacity: 0.7 }}>· {date}</span>
+            <span className={styles.dateBadgeSep}>· {date}</span>
           </span>
         )}
         actions={(
-          <div style={headerActionsStyle}>
+          <div className={styles.headerActions}>
             {locked && (
               <Pill tone="warning">
                 Locked · {formatLockedAt(report?.locked_at)}
@@ -326,7 +327,7 @@ export default function EditDailyBook() {
 
       <TabBar active={activeTab} onChange={switchTab} totals={totals} />
 
-      <form onSubmit={onSubmit} style={formStyle}>
+      <form onSubmit={onSubmit} className={styles.form}>
         {activeTab === "receipts" && (
           <ReceiptsPanel
             form={form}
@@ -389,7 +390,7 @@ function TotalsStrip({
 }) {
   const netNeg = net < 0;
   return (
-    <div style={totalsStripStyle}>
+    <div className={styles.totalsStrip}>
       <TotalsCard label="Receipts" value={receipts} tone="accent" />
       <TotalsCard label="Disbursements" value={disbursements} tone="negative" />
       <TotalsCard
@@ -414,37 +415,40 @@ function TotalsCard({
   tone: "accent" | "negative";
   sub?: string;
 }) {
-  const accent = tone === "accent" ? tokens.accent : tokens.negative;
+  // The top-border accent is the only thing that varies between
+  // tones at runtime; everything else lives in the module's
+  // ``.totalsCard`` class. Inline the border-top so the tone
+  // discriminator doesn't need a per-variant CSS class.
+  const borderAccent =
+    tone === "accent" ? "var(--db-accent, #3fff00)" : "var(--db-negative, #ff3b30)";
+  const valueColor =
+    tone === "negative" ? "var(--db-negative, #ff3b30)" : "var(--db-text, #f5f5f5)";
   return (
     <div
       style={{
-        background: tokens.surface2,
-        border: `1px solid ${tokens.border}`,
-        borderTop: `3px solid ${accent}`,
+        background: "var(--db-surface-2, #141414)",
+        border: "1px solid var(--db-border, #262626)",
+        borderTop: `3px solid ${borderAccent}`,
         borderRadius: "0.875rem",
         padding: "0.85rem 1.1rem",
         flex: 1,
         minWidth: "12rem",
       }}
     >
-      <div style={totalsLabelStyle}>{label}</div>
+      <div className={styles.totalsLabel}>{label}</div>
       <div
         style={{
-          fontFamily: tokens.fontMono,
+          fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
           fontSize: "1.55rem",
           fontWeight: 700,
           marginTop: "0.2rem",
-          color: tone === "negative" ? tokens.negative : tokens.text,
+          color: valueColor,
           letterSpacing: "-0.01em",
         }}
       >
         {fmtMoney2(value)}
       </div>
-      {sub && (
-        <div style={{ marginTop: "0.25rem", fontSize: "0.72rem", color: tokens.textMuted }}>
-          {sub}
-        </div>
-      )}
+      {sub && <div className={styles.totalHint}>{sub}</div>}
     </div>
   );
 }
@@ -459,7 +463,7 @@ function TabBar({
   totals: { receipts: number; disbursements: number };
 }) {
   return (
-    <div role="tablist" aria-label="Daily book sections" style={tabBarStyle}>
+    <div role="tablist" aria-label="Daily book sections" className={styles.tabBar}>
       {TAB_DEFS.map((t) => {
         const isActive = t.id === active;
         const hint = (() => {
@@ -474,18 +478,21 @@ function TabBar({
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(t.id)}
-            style={{
-              ...tabBtnStyle,
-              ...(isActive ? tabBtnActiveStyle : null),
-            }}
+            className={
+              isActive
+                ? `${styles.tabBtn} ${styles.tabBtnActive}`
+                : styles.tabBtn
+            }
           >
             <span>{t.label}</span>
             {hint && (
               <span
                 style={{
-                  fontFamily: tokens.fontMono,
+                  fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)",
                   fontSize: "0.72rem",
-                  color: isActive ? tokens.accent : tokens.textMuted,
+                  color: isActive
+                    ? "var(--db-accent, #3fff00)"
+                    : "var(--db-text-muted, #a3a3a3)",
                   fontWeight: 600,
                 }}
               >
@@ -514,7 +521,7 @@ interface PanelProps {
 
 function ReceiptsPanel(props: PanelProps) {
   return (
-    <div style={panelGridStyle}>
+    <div className={styles.panelGrid}>
       <Card padding="1.25rem 1.5rem">
         <PanelTitle>Sales & receipts</PanelTitle>
         <InputGrid>
@@ -532,7 +539,7 @@ function ReceiptsPanel(props: PanelProps) {
 
       <Card padding="1.25rem 1.5rem">
         <PanelTitle>Auto-summed entries</PanelTitle>
-        <p style={subTextStyle}>
+        <p className={styles.subText}>
           Total updates as you add or delete entries — no manual entry needed.
         </p>
         {RECEIPT_LINE_ITEMS.map((f) => (
@@ -555,7 +562,7 @@ function ReceiptsPanel(props: PanelProps) {
 
 function DisbursementsPanel(props: PanelProps) {
   return (
-    <div style={panelGridStyle}>
+    <div className={styles.panelGrid}>
       <Card padding="1.25rem 1.5rem">
         <PanelTitle>Manual disbursements</PanelTitle>
         <InputGrid>
@@ -573,7 +580,7 @@ function DisbursementsPanel(props: PanelProps) {
 
       <Card padding="1.25rem 1.5rem">
         <PanelTitle>Logged entries</PanelTitle>
-        <p style={subTextStyle}>
+        <p className={styles.subText}>
           Tap a row to add a timestamped entry — totals roll up automatically.
         </p>
         {DISBURSEMENT_LINE_ITEMS.map((f) => (
@@ -745,9 +752,9 @@ function TransfersPanel({
   const isLoading = breakdown.isLoading || breakdown.data == null;
 
   return (
-    <div style={panelGridStyle}>
+    <div className={styles.panelGrid}>
       <Card padding="1.25rem 1.5rem">
-        <div style={mtPanelHeaderStyle}>
+        <div className={styles.mtPanelHeader}>
           <PanelTitle>Per-company breakdown</PanelTitle>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
             {savedAt && <Pill tone="accent">Saved {formatTime(savedAt)}</Pill>}
@@ -762,7 +769,7 @@ function TransfersPanel({
             </Button>
           </div>
         </div>
-        <p style={subTextStyle}>
+        <p className={styles.subText}>
           One row per active company. Inputs pre-fill from the operator's
           last save when there is one, otherwise from the day's employee
           transfer log. Saving here writes per-company rows AND syncs the
@@ -773,20 +780,20 @@ function TransfersPanel({
         {isLoading ? (
           <Loading />
         ) : rows.length === 0 ? (
-          <p style={emptyEntriesStyle}>
+          <p className={styles.emptyEntries}>
             No companies configured for this store.
           </p>
         ) : (
           <div style={{ overflowX: "auto" }}>
-            <table style={mtTableStyle}>
+            <table className={styles.mtTable}>
               <thead>
                 <tr>
-                  <th style={mtThStyle}>Company</th>
-                  <th style={mtThNumStyle}>Amount</th>
-                  <th style={mtThNumStyle}>Fees</th>
-                  <th style={mtThNumStyle}>Fed. tax</th>
-                  <th style={mtThNumStyle}>Commission</th>
-                  <th style={mtThNumStyle}>Total</th>
+                  <th className={styles.mtTh}>Company</th>
+                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Amount</th>
+                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fees</th>
+                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Fed. tax</th>
+                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Commission</th>
+                  <th className={`${styles.mtTh} ${styles.mtThNum}`}>Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -803,20 +810,20 @@ function TransfersPanel({
               </tbody>
               <tfoot>
                 <tr>
-                  <td style={mtTdStrongStyle}>TOTAL</td>
-                  <td style={mtTdNumMutedStyle}>
+                  <td className={`${styles.mtTd} ${styles.mtTdStrong}`}>TOTAL</td>
+                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
                     {fmtMoney2(sumDraftField(drafts, "amount"))}
                   </td>
-                  <td style={mtTdNumMutedStyle}>
+                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
                     {fmtMoney2(sumDraftField(drafts, "fees"))}
                   </td>
-                  <td style={mtTdNumMutedStyle}>
+                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
                     {fmtMoney2(sumDraftField(drafts, "federal_tax"))}
                   </td>
-                  <td style={mtTdNumMutedStyle}>
+                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumMuted}`}>
                     {fmtMoney2(sumDraftField(drafts, "commission"))}
                   </td>
-                  <td style={mtTdNumStrongStyle}>
+                  <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumStrong}`}>
                     {fmtMoney2(draftTotal)}
                   </td>
                 </tr>
@@ -827,8 +834,8 @@ function TransfersPanel({
 
         {err && <ErrorRow message={err} />}
 
-        <div style={mtSaveRowStyle}>
-          <span style={{ color: tokens.textMuted, fontSize: "0.85rem", flex: 1 }}>
+        <div className={styles.mtSaveRow}>
+          <span className={styles.mtSaveRowLeft}>
             Grand total syncs to the receipts tab's Money transfer line on save.
           </span>
           <Button
@@ -876,7 +883,7 @@ function MTEditableRow({
 
   return (
     <tr>
-      <td style={mtTdStrongStyle}>
+      <td className={`${styles.mtTd} ${styles.mtTdStrong}`}>
         <span style={{ color: companyAccent(row.company) }}>•</span>{" "}
         {row.company}
         {overridden && (
@@ -884,14 +891,14 @@ function MTEditableRow({
             type="button"
             onClick={() => onResetToAuto(row)}
             disabled={locked}
-            style={mtResetBtnStyle}
+            className={styles.mtResetBtn}
             title={`Reset to auto from transfer log (${fmtMoney2(row.auto_total)})`}
           >
             Reset to auto
           </button>
         )}
         {row.auto_count > 0 && (
-          <span style={mtRowHintStyle}>
+          <span className={styles.mtRowHint}>
             {row.auto_count} {row.auto_count === 1 ? "transfer" : "transfers"} logged
           </span>
         )}
@@ -916,7 +923,7 @@ function MTEditableRow({
         onChange={(v) => onCellChange("commission", v)}
         locked={locked}
       />
-      <td style={mtTdNumStrongStyle}>{fmtMoney2(draftTotal)}</td>
+      <td className={`${styles.mtTd} ${styles.mtTdNum} ${styles.mtTdNumStrong}`}>{fmtMoney2(draftTotal)}</td>
     </tr>
   );
 }
@@ -929,15 +936,14 @@ function MTCellInput({
   locked: boolean;
 }) {
   return (
-    <td style={{ padding: "0.35rem 0.5rem", borderBottom: `1px solid ${tokens.borderSubtle}` }}>
+    <td className={styles.mtCellTd}>
       <input
         type="number"
         step="0.01"
         value={Number.isFinite(value) ? value : 0}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         disabled={locked}
-        className="ds-input"
-        style={mtCellInputStyle}
+        className={`ds-input ${styles.mtCellInput}`}
       />
     </td>
   );
@@ -957,7 +963,7 @@ function companyAccent(name: string): string {
   if (k === "intermex") return "var(--db-co-intermex, #4a87d4)";
   if (k === "maxi")     return "var(--db-co-maxi, #9d52e0)";
   if (k === "barri")    return "var(--db-co-barri, #2cb5b0)";
-  return tokens.textMuted;
+  return "var(--db-text-muted, #a3a3a3)";
 }
 
 function NotesPanel({
@@ -968,10 +974,10 @@ function NotesPanel({
   locked: boolean;
 }) {
   return (
-    <div style={panelGridStyle}>
+    <div className={styles.panelGrid}>
       <Card padding="1.25rem 1.5rem">
         <PanelTitle>Over / short</PanelTitle>
-        <p style={subTextStyle}>
+        <p className={styles.subText}>
           Positive number means the till had more cash than expected;
           negative is short. Folded into "Net position" above.
         </p>
@@ -1060,36 +1066,34 @@ function LineItemWidget({
   const count = items.length;
 
   return (
-    <div style={widgetStyle}>
+    <div className={styles.widget}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        style={widgetHeaderStyle}
+        className={styles.widgetHeader}
         aria-expanded={open}
       >
-        <span style={widgetLabelStyle}>
+        <span className={styles.widgetLabel}>
           <span
-            style={{
-              ...widgetCaretStyle,
-              transform: open ? "rotate(90deg)" : undefined,
-            }}
+            className={styles.widgetCaret}
+            style={{ transform: open ? "rotate(90deg)" : undefined }}
           >
             ▸
           </span>
           {label}
           {readOnly && <Pill tone="info">Auto</Pill>}
-          <span style={widgetCountStyle}>
+          <span className={styles.widgetCount}>
             {count} {count === 1 ? "entry" : "entries"}
           </span>
         </span>
-        <span style={widgetTotalStyle}>{fmtMoney2(total)}</span>
+        <span className={styles.widgetTotal}>{fmtMoney2(total)}</span>
       </button>
 
       {open && (
-        <div style={widgetBodyStyle}>
+        <div className={styles.widgetBody}>
           {!readOnly && (
-            <div style={widgetAddRowStyle}>
-              <div style={{ flex: "0 0 7.5rem" }}>
+            <div className={styles.widgetAddRow}>
+              <div className={styles.addRowTime}>
                 <Field label="Time">
                   <Input
                     type="time"
@@ -1099,7 +1103,7 @@ function LineItemWidget({
                   />
                 </Field>
               </div>
-              <div style={{ flex: "0 0 9rem" }}>
+              <div className={styles.addRowAmount}>
                 <Field label="Amount">
                   <Input
                     type="number"
@@ -1112,7 +1116,7 @@ function LineItemWidget({
                   />
                 </Field>
               </div>
-              <div style={{ flex: 1, minWidth: "10rem" }}>
+              <div className={styles.addRowNote}>
                 <Field label="Note (optional)">
                   <Input
                     type="text"
@@ -1124,7 +1128,7 @@ function LineItemWidget({
                   />
                 </Field>
               </div>
-              <div style={{ alignSelf: "flex-end" }}>
+              <div className={styles.addRowEnd}>
                 <Button
                   type="button"
                   tone="primary"
@@ -1142,30 +1146,30 @@ function LineItemWidget({
           {err && <ErrorRow message={err} />}
 
           {items.length === 0 ? (
-            <p style={emptyEntriesStyle}>
+            <p className={styles.emptyEntries}>
               {readOnly
                 ? "No entries logged for this day yet."
                 : "No entries yet — add one above."}
             </p>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={widgetTableStyle}>
+              <table className={styles.widgetTable}>
                 <thead>
                   <tr>
-                    <th style={widgetThStyle}>Time</th>
-                    <th style={widgetThStyle}>Amount</th>
-                    <th style={widgetThStyle}>Note</th>
-                    {!readOnly && <th style={widgetThStyle} aria-label="actions" />}
+                    <th className={styles.widgetTh}>Time</th>
+                    <th className={styles.widgetTh}>Amount</th>
+                    <th className={styles.widgetTh}>Note</th>
+                    {!readOnly && <th className={styles.widgetTh} aria-label="actions" />}
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id}>
-                      <td style={widgetTdMonoStyle}>{item.at_time || "—"}</td>
-                      <td style={widgetTdMonoStyle}>{fmtMoney2(item.amount)}</td>
-                      <td style={widgetTdStyle}>{item.note || "—"}</td>
+                      <td className={styles.widgetTdMono}>{item.at_time || "—"}</td>
+                      <td className={styles.widgetTdMono}>{fmtMoney2(item.amount)}</td>
+                      <td className={styles.widgetTd}>{item.note || "—"}</td>
                       {!readOnly && (
-                        <td style={widgetTdStyle}>
+                        <td className={styles.widgetTd}>
                           {item.return_check_id == null ? (
                             <Button
                               type="button"
@@ -1177,7 +1181,7 @@ function LineItemWidget({
                               Remove
                             </Button>
                           ) : (
-                            <span style={{ color: tokens.textMuted, fontSize: "0.78rem" }}>
+                            <span className={styles.widgetTdSmall}>
                               from return check
                             </span>
                           )}
@@ -1206,8 +1210,8 @@ function StickySaveBar({
   onLockToggle: () => void;
 }) {
   return (
-    <div style={saveBarStyle}>
-      <div style={{ flex: 1, color: tokens.textMuted, fontSize: "0.85rem" }}>
+    <div className={styles.saveBar}>
+      <div className={styles.saveBarLeft}>
         {locked
           ? "This day is locked. Unlock to edit any field."
           : "Saves apply to every field in every tab."}
@@ -1247,11 +1251,11 @@ function StickySaveBar({
 }
 
 function PanelTitle({ children }: { children: React.ReactNode }) {
-  return <h2 style={panelTitleStyle}>{children}</h2>;
+  return <h2 className={styles.panelTitle}>{children}</h2>;
 }
 
 function InputGrid({ children }: { children: React.ReactNode }) {
-  return <div style={inputGridStyle}>{children}</div>;
+  return <div className={styles.inputGrid}>{children}</div>;
 }
 
 function NumberInput({
@@ -1270,7 +1274,7 @@ function NumberInput({
         value={Number.isFinite(value) ? value : 0}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
         disabled={disabled}
-        style={{ fontFamily: tokens.fontMono }}
+        style={{ fontFamily: "var(--db-font-mono, 'JetBrains Mono', monospace)" }}
       />
     </Field>
   );
@@ -1278,7 +1282,7 @@ function NumberInput({
 
 function ErrorRow({ message }: { message: string }) {
   return (
-    <p role="alert" style={errorStyle}>
+    <p role="alert" className={styles.error}>
       {message}
     </p>
   );
@@ -1380,322 +1384,3 @@ function humanizeError(err: unknown, fallback: string): string {
   return fallback;
 }
 
-// ── Styles ──────────────────────────────────────────────────
-
-const headerActionsStyle: CSSProperties = {
-  display: "inline-flex",
-  gap: "0.5rem",
-  alignItems: "center",
-  flexWrap: "wrap",
-};
-
-const totalsStripStyle: CSSProperties = {
-  position: "sticky",
-  top: "0.25rem",
-  zIndex: 5,
-  display: "flex",
-  gap: "0.75rem",
-  flexWrap: "wrap",
-  background: tokens.surface,
-  paddingBottom: "0.25rem",
-};
-
-const totalsLabelStyle: CSSProperties = {
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.07em",
-  color: tokens.textMuted,
-  fontWeight: 600,
-};
-
-const tabBarStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.4rem",
-  flexWrap: "wrap",
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.875rem",
-  padding: "0.35rem",
-};
-
-const tabBtnStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.55rem",
-  background: "transparent",
-  color: tokens.textMuted,
-  border: "1px solid transparent",
-  borderRadius: "0.65rem",
-  padding: "0.55rem 0.95rem",
-  fontFamily: tokens.fontBody,
-  fontSize: "0.88rem",
-  fontWeight: 600,
-  cursor: "pointer",
-  transition: "background 120ms ease, color 120ms ease, border-color 120ms ease",
-};
-
-const tabBtnActiveStyle: CSSProperties = {
-  background: tokens.surface,
-  color: tokens.text,
-  borderColor: "rgba(63,255,0,0.25)",
-  boxShadow: "0 1px 0 rgba(63,255,0,0.18) inset",
-};
-
-const formStyle: CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "1rem",
-  paddingBottom: "5rem",
-};
-
-const panelGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr)",
-  gap: "1rem",
-};
-
-const panelTitleStyle: CSSProperties = {
-  fontFamily: tokens.fontDisplay,
-  fontSize: "0.85rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-  color: tokens.textMuted,
-  margin: "0 0 0.85rem",
-  fontWeight: 600,
-};
-
-const subTextStyle: CSSProperties = {
-  margin: "0 0 1rem",
-  color: tokens.textMuted,
-  fontSize: "0.85rem",
-};
-
-const inputGridStyle: CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(11.5rem, 1fr))",
-  gap: "0.85rem 1rem",
-};
-
-const widgetStyle: CSSProperties = {
-  border: `1px solid ${tokens.border}`,
-  background: tokens.surface,
-  borderRadius: "0.75rem",
-  marginBottom: "0.65rem",
-  overflow: "hidden",
-};
-
-const widgetHeaderStyle: CSSProperties = {
-  width: "100%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  background: "transparent",
-  border: "none",
-  padding: "0.75rem 1rem",
-  cursor: "pointer",
-  color: tokens.text,
-  fontFamily: tokens.fontBody,
-};
-
-const widgetLabelStyle: CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "0.55rem",
-  fontWeight: 600,
-  fontSize: "0.92rem",
-};
-
-const widgetCaretStyle: CSSProperties = {
-  display: "inline-block",
-  width: "0.85rem",
-  color: tokens.textMuted,
-  transition: "transform 120ms ease",
-};
-
-const widgetCountStyle: CSSProperties = {
-  color: tokens.textMuted,
-  fontWeight: 500,
-  fontSize: "0.8rem",
-};
-
-const widgetTotalStyle: CSSProperties = {
-  fontFamily: tokens.fontMono,
-  fontSize: "0.95rem",
-  fontWeight: 600,
-};
-
-const widgetBodyStyle: CSSProperties = {
-  borderTop: `1px solid ${tokens.borderSubtle}`,
-  padding: "0.85rem 1rem 1rem",
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.85rem",
-};
-
-const widgetAddRowStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.65rem",
-  flexWrap: "wrap",
-};
-
-const widgetTableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-};
-
-const widgetThStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "0.4rem 0.6rem",
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: tokens.textMuted,
-  fontWeight: 600,
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-};
-
-const widgetTdStyle: CSSProperties = {
-  padding: "0.5rem 0.6rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  fontSize: "0.88rem",
-};
-
-const widgetTdMonoStyle: CSSProperties = {
-  ...widgetTdStyle,
-  fontFamily: tokens.fontMono,
-};
-
-const emptyEntriesStyle: CSSProperties = {
-  margin: 0,
-  color: tokens.textMuted,
-  fontSize: "0.85rem",
-  fontStyle: "italic",
-};
-
-const saveBarStyle: CSSProperties = {
-  position: "sticky",
-  bottom: 0,
-  display: "flex",
-  alignItems: "center",
-  gap: "0.65rem",
-  background: tokens.surface,
-  borderTop: `1px solid ${tokens.border}`,
-  padding: "0.85rem 0",
-  zIndex: 4,
-};
-
-const errorStyle: CSSProperties = {
-  margin: 0,
-  padding: "0.65rem 0.85rem",
-  color: tokens.negative,
-  background: "rgba(255, 59, 48, 0.08)",
-  border: `1px solid ${tokens.negative}`,
-  borderRadius: "0.5rem",
-  fontSize: "0.9rem",
-};
-
-// MT auto-summary table styles
-const mtTableStyle: CSSProperties = {
-  width: "100%",
-  borderCollapse: "collapse",
-  marginTop: "0.5rem",
-};
-
-const mtThStyle: CSSProperties = {
-  textAlign: "left",
-  padding: "0.5rem 0.75rem",
-  fontSize: "0.72rem",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-  color: tokens.textMuted,
-  fontWeight: 600,
-  borderBottom: `1px solid ${tokens.border}`,
-  background: tokens.surface,
-};
-
-const mtThNumStyle: CSSProperties = {
-  ...mtThStyle,
-  textAlign: "right",
-};
-
-const mtTdStyle: CSSProperties = {
-  padding: "0.55rem 0.75rem",
-  borderBottom: `1px solid ${tokens.borderSubtle}`,
-  fontSize: "0.88rem",
-};
-
-const mtTdStrongStyle: CSSProperties = {
-  ...mtTdStyle,
-  fontWeight: 600,
-};
-
-const mtTdNumStyle: CSSProperties = {
-  ...mtTdStyle,
-  fontFamily: tokens.fontMono,
-  textAlign: "right",
-};
-
-const mtTdNumStrongStyle: CSSProperties = {
-  ...mtTdNumStyle,
-  fontWeight: 700,
-};
-
-const mtTdNumMutedStyle: CSSProperties = {
-  ...mtTdNumStyle,
-  color: tokens.textMuted,
-  borderTop: `1px solid ${tokens.border}`,
-};
-
-// Editable MT breakdown styles
-const mtPanelHeaderStyle: CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "baseline",
-  gap: "0.75rem",
-  flexWrap: "wrap",
-  marginBottom: "0.4rem",
-};
-
-const mtSaveRowStyle: CSSProperties = {
-  display: "flex",
-  gap: "0.65rem",
-  alignItems: "center",
-  flexWrap: "wrap",
-  marginTop: "1rem",
-  paddingTop: "0.85rem",
-  borderTop: `1px solid ${tokens.borderSubtle}`,
-};
-
-const mtCellInputStyle: CSSProperties = {
-  background: tokens.surface2,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.45rem",
-  padding: "0.4rem 0.55rem",
-  color: tokens.text,
-  fontFamily: tokens.fontMono,
-  fontSize: "0.85rem",
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-  textAlign: "right",
-};
-
-const mtResetBtnStyle: CSSProperties = {
-  marginLeft: "0.55rem",
-  background: "transparent",
-  border: `1px solid ${tokens.border}`,
-  color: tokens.textMuted,
-  fontSize: "0.7rem",
-  padding: "0.15rem 0.5rem",
-  borderRadius: "0.4rem",
-  cursor: "pointer",
-};
-
-const mtRowHintStyle: CSSProperties = {
-  display: "inline-block",
-  marginLeft: "0.6rem",
-  fontFamily: tokens.fontMono,
-  fontSize: "0.7rem",
-  color: tokens.textMuted,
-  fontWeight: 500,
-};
