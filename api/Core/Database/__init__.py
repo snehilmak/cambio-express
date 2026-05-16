@@ -1,18 +1,9 @@
 """Shared SQLAlchemy session lifecycle for FastAPI modules.
 
-During the strangler-fig migration, the new FastAPI modules and the
-legacy Flask app run in the same Python process and read/write the
-same Postgres database. To keep everyone honest, both apps share a
-single SQLAlchemy `Engine`:
-
-  - Flask creates the engine first (via Flask-SQLAlchemy on app
-    init).
-  - FastAPI reuses that engine here. New `Session` instances are
-    minted from it for FastAPI requests, scoped per-request via the
-    `get_db()` dependency.
-
-After the cleanup PR removes Flask, this module owns the engine
-outright and `app.py` no longer exists.
+The ``Engine`` is created on first import; ``Session`` instances
+are minted from it per-request via the ``get_db()`` FastAPI
+dependency. ``Base`` is the declarative base every model in
+``api/Modules/*/Models`` inherits from.
 """
 from .session import Base, SessionLocal, engine, get_db
 

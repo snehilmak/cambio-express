@@ -35,30 +35,10 @@ from api.Modules.Announcements.Services import active_announcements
 from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
+from api.Modules.Auth.Services import resolve_superadmin_user
 
 
 router = APIRouter()
-
-
-def _require_superadmin_user(db: Session, claims: dict) -> User:
-    """Resolve JWT → User and gate on role=superadmin. Returns the
-    User row so the audit trail can stamp admin_id + admin_name from
-    canonical DB values (not whatever the JWT claims happen to carry)."""
-    if claims.get("role") != "superadmin":
-        raise HTTPException(
-            status_code=403, detail="Superadmin scope required.",
-        )
-    sub = claims.get("sub")
-    if sub is None:
-        raise HTTPException(
-            status_code=401, detail="JWT is missing the subject claim.",
-        )
-    user = db.get(User, int(sub))
-    if user is None:
-        raise HTTPException(
-            status_code=401, detail="JWT subject does not resolve to a user.",
-        )
-    return user
 
 
 def _audit(db: Session, user: User, action: str, *,
@@ -150,7 +130,7 @@ def list_route(
     """Every announcement, newest first. Includes inactive + expired
     rows so the superadmin has the full history; the SPA can dim
     the rows where `is_visible` is False."""
-    _require_superadmin_user(db, claims)
+    resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
     rows = (
         db.query(Announcement)
@@ -191,7 +171,7 @@ def create_route(
     `starts_at` is still in the future, so a scheduled announcement
     silently waits until its time arrives. Empty / unparseable
     falls back to "start now"."""
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
     now = datetime.utcnow()
     starts_at = _parse_starts_at(body.start_at_iso, fallback=now)
@@ -273,7 +253,7 @@ def toggle_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> AnnouncementResponse:
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
     a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
     if a is None:
@@ -294,7 +274,7 @@ def delete_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> None:
-    user = _require_superadmin_user(db, claims)
+    user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
     a = db.query(Announcement).filter(Announcement.id == ann_id).one_or_none()
     if a is None:

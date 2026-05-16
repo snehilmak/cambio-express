@@ -6,9 +6,7 @@ and their own files.
 
 Subpackages:
     Config/     — settings via Pydantic BaseSettings (env vars)
-    Database/   — SQLAlchemy engine + session lifecycle, shared
-                  across modules (and bridged to the legacy Flask
-                  engine during the strangler-fig migration)
+    Database/   — SQLAlchemy engine + session lifecycle
     Providers/  — adapters for external services (Stripe, Resend,
                   S3, etc.). Each provider exposes a small interface
                   so services depend on the interface, not the SDK.

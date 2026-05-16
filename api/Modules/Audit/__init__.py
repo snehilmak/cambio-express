@@ -1,6 +1,9 @@
-"""Audit module — append-only logs of admin/operator actions.
+"""Audit module — append-only logs of admin / operator actions.
 
-Re-exports the legacy `SuperadminAuditLog` and `OperatorAuditLog`
-models during the strangler-fig migration window. Once the legacy
-file is gone these will be defined here directly.
+Owns three tables:
+  - ``SuperadminAuditLog`` — platform-admin actions.
+  - ``OperatorAuditLog``   — store-side actions (transfers,
+                              daily reports, batches, etc.).
+  - ``TransferAudit``      — per-Transfer change history,
+                              FK-tied so it cascades on delete.
 """

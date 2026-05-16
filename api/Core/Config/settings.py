@@ -1,13 +1,8 @@
 """Application settings — single Pydantic model, env-driven.
 
-The legacy Flask app reads env vars ad-hoc throughout `app.py`. The
-new FastAPI app reads them all here, in one place, with type
-validation. As modules migrate, each new piece of business logic
-should pull config from `settings`, not from `os.environ`.
-
-The strangler-fig migration uses the same env vars Flask uses, so
-both apps see identical config in dev / staging / prod (no parallel
-secret rotation needed during the rewrite).
+Every piece of business logic should pull config from ``settings``
+here, not from ``os.environ`` directly, so the env-var surface is
+discoverable and type-validated.
 """
 from functools import lru_cache
 
@@ -56,15 +51,12 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = Field(default="")
 
     # ── Tenancy ────────────────────────────────────────────────
-    # The new backend is single-tenant per the ADR. This flag stays
-    # at False going forward; multi-tenant code paths get dropped at
-    # cleanup PR. Keeping the toggle until then so legacy fixtures
-    # continue to work during the strangler-fig migration.
+    # Single-tenant per deployment per ADR §3.
     multi_tenant: bool = Field(
         default=False,
         description=(
             "Single-tenant per deployment per ADR §3. Multi-tenant "
-            "scaffolding survives in app.py (Flask) until cleanup."
+            "scaffolding is not currently in use."
         ),
     )
 

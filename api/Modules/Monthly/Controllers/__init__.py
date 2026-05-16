@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.Monthly.Models import MonthlyFinancial
 from api.Modules.Monthly.Repositories import list_logged_months
 from api.Modules.Monthly.Requests import (
@@ -30,19 +31,6 @@ from api.Modules.Monthly.Services import (
 
 
 router = APIRouter()
-
-
-def _require_store_scope(claims: dict) -> int:
-    sid = claims.get("store_id")
-    if sid is None:
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                "JWT does not carry a store scope. Sign in as a "
-                "store admin or owner to view monthly P&L."
-            ),
-        )
-    return int(sid)
 
 
 def _to_row(s: MonthlySummary) -> MonthlyRow:
@@ -70,7 +58,7 @@ def months_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> MonthsLoggedResponse:
-    store_id = _require_store_scope(claims)
+    store_id = resolve_store_scope(claims)
     pairs = list_logged_months(db, store_id)
     return MonthsLoggedResponse(
         months=[MonthLogged(year=y, month=m) for y, m in pairs],
@@ -87,7 +75,7 @@ def monthly_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> MonthlyResponse:
-    store_id = _require_store_scope(claims)
+    store_id = resolve_store_scope(claims)
     summary = summarize_monthly(db, store_id, int(year), int(month))
     if summary is None:
         raise HTTPException(
@@ -124,7 +112,7 @@ def update_monthly_route(
             status_code=403,
             detail="Only store admins can save monthly P&L.",
         )
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     payload = body.model_dump(exclude_unset=True)
     notes = payload.pop("notes", "")
     fields = {k: v for k, v in payload.items() if v is not None}

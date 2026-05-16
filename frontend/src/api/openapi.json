@@ -4309,6 +4309,48 @@
         "title": "ProfileUpdateRequest",
         "type": "object"
       },
+      "RecentRecipientRow": {
+        "additionalProperties": false,
+        "description": "One recipient the customer has previously sent to.",
+        "properties": {
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "country",
+          "phone"
+        ],
+        "title": "RecentRecipientRow",
+        "type": "object"
+      },
+      "RecentRecipientsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RecentRecipientRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "RecentRecipientsResponse",
+        "type": "object"
+      },
       "RecipientRow": {
         "additionalProperties": false,
         "properties": {
@@ -7028,9 +7070,9 @@
     }
   },
   "info": {
-    "description": "Customer-deployable FastAPI backend, currently being migrated module-by-module from the legacy Flask monolith. See docs/architecture/MIGRATION_ADR.md.",
+    "description": "DineroBook FastAPI backend.",
     "title": "DineroBook API",
-    "version": "2.0.0-alpha"
+    "version": "2.0.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8279,7 +8321,7 @@
         ]
       },
       "post": {
-        "description": "Mint a new banner. `expires_days=0` (or omitted) means no\nexpiry. `broadcast=True` queues the message for the broadcast-\nemail fan-out (one-shot at create time).\n\n`start_at_iso` schedules the banner for a future timestamp \u2014\nthe visibility helper (`active_announcements`) skips rows whose\n`starts_at` is still in the future, so a scheduled announcement\nsilently waits until its time arrives. Empty / unparseable\nfalls back to \"start now\".",
+        "description": "Mint a new banner. `expires_days=0` (or omitted) means no\nexpiry.\n\n`broadcast=True` triggers the email fan-out to opted-in users\nvia ``api.Core.Jobs.enqueue``. In sync mode (the default; no\nRedis configured) the fan-out runs inline before the response\nreturns \u2014 same as the CLI ``scripts.broadcast_announcement``.\nIn queued mode (``JOB_QUEUE_ENABLED=1`` + ``REDIS_URL``) the\njob is pushed to RQ and the response returns immediately. The\nunderlying ``broadcasts.run()`` is idempotent on\n``broadcast_sent_at`` so a worker retry or a manual CLI replay\nafter the auto-fire is a safe no-op.\n\nScheduled banners (``start_at_iso`` in the future) defer the\nbroadcast until activation \u2014 there's no value in emailing a\nnotice about something that isn't visible yet. The CLI is\nstill available for that manual replay.\n\n`start_at_iso` schedules the banner for a future timestamp \u2014\nthe visibility helper (`active_announcements`) skips rows whose\n`starts_at` is still in the future, so a scheduled announcement\nsilently waits until its time arrives. Empty / unparseable\nfalls back to \"start now\".",
         "operationId": "create_route_announcements_post",
         "parameters": [
           {
@@ -11566,6 +11608,75 @@
         ]
       }
     },
+    "/customers/{customer_id}/recent-recipients": {
+      "get": {
+        "description": "Distinct recipients this customer has sent to before, newest\nfirst. Powers the chip-row above the recipient_name input on the\ntransfer form \u2014 most senders send to the same 1\u20132 people, so a\none-tap chip cuts a lot of typing.\n\nCancelled / rejected transfers are excluded (the underlying\nService applies that filter). Unknown customer or customer\noutside the umbrella returns an empty list, never 404 \u2014 the\ncaller's render path is the same either way.",
+        "operationId": "recent_recipients_route_customers__customer_id__recent_recipients_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "customer_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Customer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Caller's current store. The recipient lookup is scoped to the owner umbrella containing this store \u2014 sibling stores share the history; unrelated stores stay isolated.",
+            "in": "query",
+            "name": "store_id",
+            "required": true,
+            "schema": {
+              "description": "Caller's current store. The recipient lookup is scoped to the owner umbrella containing this store \u2014 sibling stores share the history; unrelated stores stay isolated.",
+              "title": "Store Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Cap on the number of distinct recipients returned.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "description": "Cap on the number of distinct recipients returned.",
+              "maximum": 20,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentRecipientsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Recent Recipients Route",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
     "/daily/{store_id}/line-items/{item_id}": {
       "delete": {
         "description": "Delete one line item. The Service rejects deletes for rows\nlinked to a ReturnCheck (see DailyLineItem.return_check_id) \u2014\nthose mirror Return-Checks-side state and must be removed\nfrom there. We also re-derive the DailyReport field after\nthe delete so the daily P&L stays accurate.",
@@ -13085,7 +13196,7 @@
     },
     "/health": {
       "get": {
-        "description": "Tiny liveness probe. Returns 200 + a JSON envelope so a\nload balancer can confirm the FastAPI app is reachable\nindependent of the Flask app's health.",
+        "description": "Tiny liveness probe \u2014 200 + JSON envelope so the load\nbalancer can confirm the app is reachable.",
         "operationId": "health_health_get",
         "responses": {
           "200": {

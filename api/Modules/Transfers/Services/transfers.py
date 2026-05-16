@@ -18,12 +18,26 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session
 
+from api.Modules.Customers.Services import upsert as upsert_customer
+from api.Modules.Tenancy.Models import Store, User
 from api.Modules.Transfers.Models import Transfer
 from api.Modules.Transfers.Repositories import (
     TransferFilters,
     get_by_id_in_stores,
     list_with_filters,
 )
+# Sibling-module imports go through leaf modules (not the package
+# ``__init__``) because the package re-exports symbols from THIS
+# file. Importing through the package would create a partial-init
+# cycle.
+from api.Modules.Transfers.Services.audit import (
+    TRANSFER_AUDIT_FIELDS,
+    record_audit as record_transfer_audit,
+    summarize_changes as summarize_transfer_changes,
+    transfer_snapshot,
+)
+from api.Modules.Transfers.Services.form_inputs import pick_employee
+from api.Modules.Transfers.Services.tax import federal_tax_for
 
 
 @dataclass
@@ -124,15 +138,6 @@ def create_transfer(
     store. Caller is responsible for committing the outer transaction
     so the row is visible to subsequent reads.
     """
-    # Lazy import — these helpers live across modules + app.py.
-    from api.Modules.Tenancy.Models import Store, User
-    from api.Modules.Customers.Services import upsert as upsert_customer
-    from api.Modules.Transfers.Services import (
-        federal_tax_for,
-        pick_employee,
-        record_transfer_audit,
-    )
-
     user = db.query(User).filter_by(id=payload.created_by_user_id).first()
     if user is None:
         raise ValueError(f"Unknown created_by user_id={payload.created_by_user_id}")
@@ -211,16 +216,6 @@ def update_transfer(
     `transfer_snapshot` + `summarize_changes` so the audit log
     only mentions the fields that actually changed.
     """
-    from api.Modules.Tenancy.Models import Store, User
-    from api.Modules.Customers.Services import upsert as upsert_customer
-    from api.Modules.Transfers.Services import (
-        TRANSFER_AUDIT_FIELDS,
-        federal_tax_for,
-        pick_employee,
-        record_transfer_audit,
-        summarize_transfer_changes,
-        transfer_snapshot,
-    )
     from datetime import datetime as _dt
 
     transfer = get_by_id_in_stores(db, transfer_id, [store_id])
@@ -316,12 +311,9 @@ def delete_transfer(
     on the next page load.
 
     Caller is responsible for committing the surrounding transaction
-    and for emitting the cross-route audit log entry (which is a
-    Flask-side concern via `record_op_audit`).
+    and for emitting the cross-route ``OperatorAuditLog`` entry via
+    ``record_operator_action``.
     """
-    # Lazy import — TransferAudit lives in app.py and isn't part of
-    # the Transfers Models re-export today (audit migration is its
-    # own PR).
     from api.Modules.Audit.Models import TransferAudit
     transfer = get_by_id_in_stores(db, transfer_id, [store_id])
     if transfer is None:

@@ -52,6 +52,10 @@ from api.Modules.Auth.Services.password_reset import (
     issue_password_reset_token,
     verify_password_reset_token,
 )
+from api.Modules.Auth.Services.principal import (
+    resolve_store_scope,
+    resolve_superadmin_user,
+)
 from api.Modules.Auth.Services.profile import (
     TIMEZONE_CHOICES as PROFILE_TIMEZONE_CHOICES,
     ProfileValidationError,
@@ -132,6 +136,8 @@ __all__ = [
     "passkey_rp_id",
     "passkey_rp_name",
     "permissions_for",
+    "resolve_store_scope",
+    "resolve_superadmin_user",
     "trial_toggle_applies",
     "update_notifications",
     "update_profile",

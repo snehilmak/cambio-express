@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.BankSync.Models import (
     BankRule, BankTransaction, StripeBankAccount,
 )
@@ -51,16 +52,6 @@ from api.Modules.BankSync.Services import (
 router = APIRouter()
 
 
-def _require_store_scope(claims: dict) -> int:
-    sid = claims.get("store_id")
-    if sid is None:
-        raise HTTPException(
-            status_code=403,
-            detail="JWT does not carry a store scope.",
-        )
-    return int(sid)
-
-
 def _account_labels(db: Session, ids: list[int]) -> dict[int, str]:
     """Bulk-fetch the StripeBankAccount.label for every account_id in
     `ids`. Centralised so the row adapter doesn't N+1."""
@@ -88,7 +79,7 @@ def list_transactions_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> BankTransactionListResponse:
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     filters = BankTransactionFilters.from_query({
         "posted_from": posted_from, "posted_to": posted_to,
         "account_id": account_id, "category_slug": category_slug,
@@ -136,7 +127,7 @@ def list_rules_route(
     """Operator-managed BankRule list. Order matches the auto-
     categorize sync's evaluation order (priority asc, id tie-break)
     so the rules-manager UI shows what would actually fire first."""
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     rules = list_rules(db, [sid], enabled_only=enabled_only)
     account_filter_ids = [
         r.account_filter_id for r in rules if r.account_filter_id is not None
@@ -179,7 +170,7 @@ def list_accounts_route(
     principal's store. Includes both enabled + disconnected accounts
     so the UI can show "previously connected" history; clients filter
     on `enabled` if they only want active ones."""
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     accounts = list_accounts(db, [sid])
     rows = [
         BankAccountRow(
@@ -264,7 +255,7 @@ def categorize_route(
     keeps the metadata-only path for operators who want a P&L tag
     without a daily-book mirror.
     """
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     txn = _find_owned_txn(db, sid, txn_id)
     from api.Modules.BankSync.Services import is_daily_book_kind
     categorize_transaction(
@@ -289,7 +280,7 @@ def uncategorize_route(
     """Clear a transaction's category and remove any auto-created
     DailyLineItem. The row stays in the table — it just goes back
     to "uncategorized" so it can be re-tagged."""
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     txn = _find_owned_txn(db, sid, txn_id)
     uncategorize_transaction(db, txn)
     db.commit()
@@ -394,7 +385,7 @@ def create_rule_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> BankRuleResponse:
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     _validate_rule_body(body)
     _validate_account_owned(db, sid, body.account_filter_id)
     r = BankRule(
@@ -423,7 +414,7 @@ def update_rule_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> BankRuleResponse:
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     _validate_rule_body(body)
     _validate_account_owned(db, sid, body.account_filter_id)
     r = _find_owned_rule(db, sid, rule_id)
@@ -449,7 +440,7 @@ def toggle_rule_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> BankRuleResponse:
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
     r.enabled = body.enabled
     db.commit()
@@ -462,7 +453,7 @@ def delete_rule_route(
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> None:
-    sid = _require_store_scope(claims)
+    sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
     db.delete(r)
     db.commit()

@@ -1,6 +1,5 @@
 """Announcements module — global banner system.
 
-Re-exports the legacy `Announcement` model during the
-strangler-fig migration window. Once the legacy file is gone the
-model will be defined here directly.
+Owns the ``Announcement`` model + the read-side (active banners,
+SPA chrome consumer) and write-side (superadmin CRUD) controllers.
 """
