@@ -11028,6 +11028,70 @@
         ]
       }
     },
+    "/customers/export.csv": {
+      "get": {
+        "description": "Admin-only CSV dump of every customer in the caller's owner\numbrella.\n\nTenancy is derived from the JWT (``claims[\"store_id\"]``) \u2014 not\nfrom a query param \u2014 so a cashier can't request another\nstore's directory by tweaking the URL. Role gating mirrors\nthe other admin-only exports (``/admin/tax-export.zip``):\nadmin / owner / superadmin only.\n\nThe CSV columns + ordering are the ones operators asked for\nin chat: identification first (name + phone), then context\n(DOB / address / home store) so a 1099 workflow can be done\nwithout bouncing back to the app.\n\nDeclared BEFORE the ``/{customer_id}`` route so FastAPI's\npath matcher doesn't try to coerce ``\"export.csv\"`` to an\ninteger ID first.",
+        "operationId": "export_csv_route_customers_export_csv_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Csv Route",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
     "/customers/search": {
       "get": {
         "operationId": "search_route_customers_search_get",

@@ -171,14 +171,20 @@ infrastructure that's still relevant in the FastAPI-only world.
         identical until queuing is activated.
       * ``render.yaml`` — worker block staged commented with a
         4-step activation runbook embedded in the comments.
-      Remaining:
+      Remaining (deferred — not blocking; the sync fallback keeps
+      every existing route working at current latency):
       * Provision a managed Redis (Render or Upstash).
       * Set ``REDIS_URL`` + ``JOB_QUEUE_ENABLED=1`` on both web +
         worker services in the Render dashboard.
       * Uncomment the ``- type: worker`` block in ``render.yaml``
         + sync the blueprint.
       * Migrate the next SMTP / Stripe-SDK call sites (trial
-        reminders, locked-day digest, announcement broadcast).
+        reminders, locked-day digest already migrated;
+        announcement broadcast is the obvious next one).
+      Owner action when ready to activate: follow the 4-step
+      runbook embedded as comments above the worker block in
+      ``render.yaml``. Until then, the system is fully
+      functional — D5 is a latency win, not a correctness fix.
 - [x] **D6. Edge rate limiting.** Landed — `slowapi` 0.1.9 on every
       auth route + the two webhooks. The Flask-Limiter twin is
       gone (Flask itself is gone). Storage shared across workers

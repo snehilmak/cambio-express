@@ -1211,6 +1211,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Csv Route
+         * @description Admin-only CSV dump of every customer in the caller's owner
+         *     umbrella.
+         *
+         *     Tenancy is derived from the JWT (``claims["store_id"]``) — not
+         *     from a query param — so a cashier can't request another
+         *     store's directory by tweaking the URL. Role gating mirrors
+         *     the other admin-only exports (``/admin/tax-export.zip``):
+         *     admin / owner / superadmin only.
+         *
+         *     The CSV columns + ordering are the ones operators asked for
+         *     in chat: identification first (name + phone), then context
+         *     (DOB / address / home store) so a 1099 workflow can be done
+         *     without bouncing back to the app.
+         *
+         *     Declared BEFORE the ``/{customer_id}`` route so FastAPI's
+         *     path matcher doesn't try to coerce ``"export.csv"`` to an
+         *     integer ID first.
+         */
+        get: operations["export_csv_route_customers_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/customers/search": {
         parameters: {
             query?: never;
@@ -8796,6 +8832,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BillingPortalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_csv_route_customers_export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -5,11 +5,12 @@ import {
   useCustomerSearch,
   type CustomerRow,
 } from "../api/customers";
+import { downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
-  Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader, PageShell,
-  Section, Table, tdStyle, thStyle,
+  Button, Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader,
+  PageShell, Section, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Customers.module.css";
 
@@ -43,6 +44,26 @@ export default function Customers() {
 
   const { data, isFetching, isError, error, refetch } = useCustomerSearch(q);
 
+  const [exporting, setExporting] = useState(false);
+
+  const canExport =
+    identity?.role === "admin"
+    || identity?.role === "owner"
+    || identity?.role === "superadmin";
+
+  async function onExport() {
+    setExporting(true);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await downloadCsv(
+        "/api/v2/customers/export.csv",
+        `customers_${today}.csv`,
+      );
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (identity?.store_id == null) {
     return (
       <PageShell maxWidth="70rem">
@@ -65,6 +86,17 @@ export default function Customers() {
               }`
             : "Searching…"
           : "Type at least 2 characters to search."}
+        actions={canExport ? (
+          <Button
+            tone="secondary"
+            size="sm"
+            busy={exporting}
+            disabled={exporting}
+            onClick={onExport}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+        ) : undefined}
       />
 
       <Card style={{ marginBottom: "1rem" }}>

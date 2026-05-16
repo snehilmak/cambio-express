@@ -272,3 +272,186 @@ def test_openapi_includes_customer_paths(api_client):
     paths = set(resp.json()["paths"].keys())
     assert "/customers/search" in paths
     assert "/customers/upsert" in paths
+    assert "/customers/export.csv" in paths
+
+
+# ── /export.csv ─────────────────────────────────────────────
+
+
+def _login_admin(client, store_id):
+    """Drive the password-login flow and return the JWT. Reused
+    across the export-csv tests below."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def test_export_csv_requires_jwt(client):
+    """No Authorization header → 401. Tenancy must come from the
+    JWT, not from a query param, so unauth callers can't request
+    another store's directory."""
+    resp = client.get("/api/v2/customers/export.csv")
+    assert resp.status_code == 401
+
+
+def test_export_csv_rejects_cashier_role(client):
+    """Employees can't dump the full directory — only admin /
+    owner / superadmin can. Mirrors the tax-export ZIP gate."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = User(
+            store_id=None, username="emp_export_test",
+            role="employee", is_active=True,
+        )
+        u.set_password("emppass1234")
+        db.session.add(u); db.session.commit()
+    try:
+        login = client.post(
+            "/api/v2/auth/login",
+            json={
+                "username": "emp_export_test",
+                "password": "emppass1234",
+                "store_id": None,
+            },
+        )
+        token = login.get_json()["access_token"]
+        resp = client.get(
+            "/api/v2/customers/export.csv",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 403
+    finally:
+        with db_session():
+            u2 = db.session.query(User).filter_by(
+                username="emp_export_test",
+            ).first()
+            if u2:
+                db.session.delete(u2); db.session.commit()
+
+
+def test_export_csv_returns_text_csv_with_header(client, test_store_id):
+    """Happy path: admin gets a ``text/csv`` response with the
+    header row + one row per customer in the umbrella."""
+    with db_session():
+        _seed_customer(
+            test_store_id,
+            full_name="Alice Smith",
+            phone_country="+1", phone_number="5551234567",
+            address="123 Main St",
+        )
+        _seed_customer(
+            test_store_id,
+            full_name="Bob Jones",
+            phone_country="+1", phone_number="5559876543",
+            address="456 Oak Ave",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/customers/export.csv",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    assert "customers_" in resp.headers["content-disposition"]
+    body = resp.get_data(as_text=True)
+    # Header row matches the spec the controller writes.
+    first_line = body.splitlines()[0]
+    assert first_line.startswith(
+        "Full name,Phone country,Phone number,DOB,Address,Home store,",
+    )
+    # Alphabetical ordering — Alice before Bob.
+    assert body.index("Alice Smith") < body.index("Bob Jones")
+    # The data row carries phone + address verbatim.
+    assert "5551234567" in body
+    assert "123 Main St" in body
+
+
+def test_export_csv_scoped_to_owner_umbrella(client, test_store_id):
+    """A customer from a store outside the umbrella must NOT appear
+    in the export — same isolation guarantee as the search route."""
+    # Seed an unrelated store + a customer there.
+    with db_session():
+        from api.Modules.Tenancy.Models import Store
+        outsider_store = Store(
+            name="Outsider", slug="outsider",
+            email="o@x.com", plan="trial",
+        )
+        db.session.add(outsider_store); db.session.commit()
+        _seed_customer(
+            outsider_store.id,
+            full_name="Outsider Carol",
+            phone_country="+1", phone_number="5550009999",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/customers/export.csv",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert "Outsider Carol" not in body
+    assert "5550009999" not in body
+
+
+def test_export_csv_empty_when_no_customers(client, test_store_id):
+    """A brand-new store with no customers gets a CSV with only
+    the header row — no error, no 404."""
+    # The test fixture's store may have customers seeded by other
+    # tests in the session; create a fresh admin user in a brand-
+    # new store so this test is hermetic regardless of order.
+    from api.Modules.Tenancy.Models import Store, User
+    with db_session():
+        s = Store(
+            name="Empty Co", slug="empty-export-test",
+            email="empty@x.com", plan="trial",
+        )
+        db.session.add(s); db.session.commit()
+        new_store_id = s.id
+        u = User(
+            store_id=new_store_id, username="admin_empty_export",
+            role="admin", is_active=True,
+        )
+        u.set_password("p123pass!")
+        db.session.add(u); db.session.commit()
+    try:
+        login = client.post(
+            "/api/v2/auth/login",
+            json={
+                "username": "admin_empty_export",
+                "password": "p123pass!",
+                "store_id": new_store_id,
+            },
+        )
+        token = login.get_json()["access_token"]
+        resp = client.get(
+            "/api/v2/customers/export.csv",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200
+        body = resp.get_data(as_text=True)
+        # Header row only; no data lines.
+        lines = [l for l in body.splitlines() if l.strip()]
+        assert len(lines) == 1
+        assert lines[0].startswith("Full name,Phone country,")
+    finally:
+        # Clean up the test-specific store + user so other tests'
+        # store listings aren't polluted.
+        with db_session():
+            u2 = db.session.query(User).filter_by(
+                username="admin_empty_export",
+            ).first()
+            s2 = db.session.query(Store).filter_by(
+                slug="empty-export-test",
+            ).first()
+            if u2:
+                db.session.delete(u2)
+            if s2:
+                db.session.delete(s2)
+            db.session.commit()
