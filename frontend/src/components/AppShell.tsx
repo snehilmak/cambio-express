@@ -143,6 +143,13 @@ const NAV: NavGroup[] = [
         to: "/account/profile", label: "Profile",
         icon: iconCustomers(),
       },
+      // Notifications — per-user email / push preferences. Same
+      // page the UserMenu links to; surfaced here too so it's
+      // discoverable alongside Profile.
+      {
+        to: "/account/notifications", label: "Notifications",
+        icon: iconBell(),
+      },
       // My activity — per-user cross-store audit feed. Open to
       // every role; a cashier sees their transfers, an admin
       // sees their admin actions, an owner sees activity at
@@ -535,6 +542,16 @@ function iconBanner() {
       strokeLinejoin="round">
       <path d="M3 11l18-5v12l-18-5z" />
       <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+    </svg>
+  );
+}
+function iconBell() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
     </svg>
   );
 }
