@@ -137,6 +137,75 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
 
+  # ── Background-job worker (BACKLOG D5) ─────────────────────
+  # Drains the RQ queue at ``api/Core/Jobs.py``. Currently
+  # commented out — the worker fails to start when ``REDIS_URL``
+  # isn't set, and we don't have a managed Redis instance
+  # provisioned on Render yet.
+  #
+  # Activation sequence (one-time, ~15 min):
+  #
+  # 1. Provision Redis. Either:
+  #    - Render's managed Redis (cheapest paid tier ~$7/mo), or
+  #    - Upstash (free tier sufficient for this workload).
+  #    Copy the connection URL.
+  #
+  # 2. In the Render dashboard, on BOTH the ``dinerobook`` web
+  #    service AND the (about-to-be-uncommented) worker service:
+  #    - Add ``REDIS_URL`` env var → the connection URL from step 1
+  #    - Add ``JOB_QUEUE_ENABLED`` env var → ``1``
+  #    Without both, the wrapper falls back to sync execution.
+  #
+  # 3. Uncomment the worker block below + the worker env-var
+  #    mirrors + sync the blueprint. Render brings the worker up.
+  #
+  # 4. Watch the worker logs for the first job. The
+  #    ``/forgot-password`` flow is the canonical test —
+  #    submitting it enqueues a ``send_password_reset_email``
+  #    job that the worker should pick up within ~1s.
+  #
+  # The worker service mirrors every env var the web service
+  # needs because the worker runs the SAME functions (e.g. the
+  # SMTP-send function reads ``SMTP_HOST`` etc.). Keep these in
+  # sync — when a new env var is added to the web service,
+  # mirror it here too.
+  #
+  # - type: worker
+  #   name: dinerobook-worker
+  #   runtime: python
+  #   plan: starter
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: rq worker --url $REDIS_URL default
+  #   envVars:
+  #     - key: DATABASE_URL
+  #       fromDatabase:
+  #         name: dinerobook-db
+  #         property: connectionString
+  #     - key: REDIS_URL
+  #       sync: false
+  #     - key: JOB_QUEUE_ENABLED
+  #       value: "1"
+  #     - key: SECRET_KEY
+  #       sync: false
+  #     - key: APP_BASE_URL
+  #       value: https://dinerobook.com
+  #     - key: SMTP_HOST
+  #       sync: false
+  #     - key: SMTP_PORT
+  #       value: "587"
+  #     - key: SMTP_USER
+  #       sync: false
+  #     - key: SMTP_PASS
+  #       sync: false
+  #     - key: SMTP_FROM
+  #       sync: false
+  #     - key: STRIPE_SECRET_KEY
+  #       sync: false
+  #     - key: STRIPE_WEBHOOK_SECRET
+  #       sync: false
+  #     - key: PYTHON_VERSION
+  #       value: 3.11.0
+
 databases:
   - name: dinerobook-db
     plan: free          # upgrade to starter ($7/mo) for production

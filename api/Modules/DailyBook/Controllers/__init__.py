@@ -288,12 +288,19 @@ def lock_daily_route(
     # state transition so re-clicking the lock button doesn't spam
     # the inbox. Delivery failures are caught + logged inside the
     # Service; we never roll back the lock on email errors.
+    #
+    # Deferred to the job queue (D5) so the SMTP fan-out (N
+    # recipients × ~500ms each) doesn't block the lock route's
+    # response. In sync mode (the default), ``enqueue`` is a
+    # direct call — same behavior as before. In queued mode the
+    # worker picks up the job and the route returns immediately.
     if just_locked:
         try:
+            from api.Core.Jobs import enqueue
             from api.Modules.Notifications.Services.locked_day_digest import (
-                run as _send_locked_day_digest,
+                send_locked_day_digest,
             )
-            _send_locked_day_digest(db, rpt)
+            enqueue(send_locked_day_digest, rpt.id)
         except Exception:
             import logging
             logging.getLogger(__name__).exception(

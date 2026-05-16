@@ -47,6 +47,37 @@ First boot seeds a superadmin (`superadmin / super2025!`) and a demo
 store admin (`admin / cambio2025!`). Override the seed passwords via
 `SUPERADMIN_PASSWORD` / `ADMIN_PASSWORD` env vars in prod.
 
+### Postgres in dev (optional, recommended for DB-heavy work)
+
+The default dev loop runs against a local SQLite file. That's fast
+for UI iteration, but SQLite differs from prod Postgres in ways that
+silently change behavior: foreign-key enforcement, transaction
+isolation, JSON path operators, full-text search syntax. Anything
+touching reservations, retention purge, anomaly aggregation, or
+report queries should be exercised against Postgres before opening
+a PR.
+
+```bash
+# 1. Start Postgres in a container
+docker compose up -d
+
+# 2. Point the app at it (matches the compose service)
+export DATABASE_URL=postgresql://dinerobook:dinerobook@localhost:5432/dinerobook
+
+# 3. Apply the schema
+alembic upgrade head
+
+# 4. Run the dev server as usual
+uvicorn asgi:asgi_app --reload --port 5000
+
+# 5. When done
+docker compose down          # keeps data volume
+docker compose down -v       # wipe data volume too
+```
+
+The volume `dinerobook-pgdata` persists across `up`/`down` so re-
+seeding isn't required on every restart.
+
 ## Project layout
 
 ```

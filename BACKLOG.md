@@ -117,12 +117,19 @@ reports rendered ApexCharts inline.
 - [x] **C1. Code-split the bundle by route.** Landed (PR #428) —
       every `<Route element=>` now uses `lazy(() => import())` with
       a shared `<Suspense fallback={<Loading />}>` wrapper.
-- [ ] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
-      Each route file has 100–300 lines of `const xStyle: CSSProperties
-      = {...}`. Type-checked CSS Modules will give us scoped styles,
-      better DX, smaller JS bundle. (A2/C3 swept the worst offenders
-      into shared primitives; remaining inline styles are
-      page-specific.)
+- [x] **C2. Move inline styles to CSS Modules or Vanilla Extract.**
+      Landed in a long sweep across PRs #563-#581 (Apr–May 2026).
+      Every route (33) and every SPA component (4) now uses kit
+      primitives from `components/ui/` plus a co-located
+      `<Route>.module.css` for page-specific styles. The
+      `components/ui/` kit was also split into one-file-per-
+      component (PR #569) to match modern design-system
+      conventions. Two new kit primitives — `<Alert>` and
+      `<Field error= hint=>` — absorbed the most-duplicated
+      patterns. The codebase no longer contains a single
+      page-level inline `const xStyle: CSSProperties = {...}`
+      block. Pattern documented in CLAUDE.md under "Inline styles
+      vs CSS Modules" and "Component reuse".
 - [x] **C3. Shared `<Page>` layout component.** Landed (PR #439) —
       `<PageShell>` / `<PageHeader>` / `<Section>` enforce the
       padding scale on every route.
@@ -149,11 +156,29 @@ infrastructure that's still relevant in the FastAPI-only world.
       `99691740424c_baseline_2026_05` pins the current schema;
       `_ADDED_COLUMNS` still primary but Alembic now available for
       drops / renames / backfills.
-- [ ] **D5. Background job queue** for Stripe webhooks, email send,
+- [~] **D5. Background job queue** for Stripe webhooks, email send,
       ACH retries, retention purge. RQ + Redis is the lowest-cost
-      path on Render. Today every webhook does its Stripe SDK calls
-      + audit insert + email send synchronously inside the HTTP
-      request.
+      path on Render. **Partial — scaffolding + first migration
+      shipped, worker activation pending.**
+      Done so far:
+      * ``api/Core/Jobs.py`` — ``enqueue(fn, *args)`` wrapper with
+        sync fallback (default) + RQ-backed queued mode (when
+        ``JOB_QUEUE_ENABLED=1`` + ``REDIS_URL`` are set).
+        ``tests/Core/test_jobs.py`` covers both modes.
+      * ``/forgot-password`` SMTP send migrated — the route now
+        ``enqueue``s ``send_password_reset_email(user_id,
+        raw_token)``. Sync mode keeps prod behavior bit-for-bit
+        identical until queuing is activated.
+      * ``render.yaml`` — worker block staged commented with a
+        4-step activation runbook embedded in the comments.
+      Remaining:
+      * Provision a managed Redis (Render or Upstash).
+      * Set ``REDIS_URL`` + ``JOB_QUEUE_ENABLED=1`` on both web +
+        worker services in the Render dashboard.
+      * Uncomment the ``- type: worker`` block in ``render.yaml``
+        + sync the blueprint.
+      * Migrate the next SMTP / Stripe-SDK call sites (trial
+        reminders, locked-day digest, announcement broadcast).
 - [x] **D6. Edge rate limiting.** Landed — `slowapi` 0.1.9 on every
       auth route + the two webhooks. The Flask-Limiter twin is
       gone (Flask itself is gone). Storage shared across workers
@@ -183,11 +208,21 @@ infrastructure that's still relevant in the FastAPI-only world.
       this easy.
 - [x] **E6. eslint --max-warnings 0** in CI on frontend. Landed
       (PR #426).
-- [ ] **E7. Generate TS types from FastAPI OpenAPI.** (BACKLOG #6.)
-- [ ] **E8. E2E smoke tests** with Playwright on the SPA — login,
-      log a transfer, view a report. Would have caught the SPA-
-      build-missing-in-CI class of issues that bit us during
-      migration.
+- [x] **E7. Generate TS types from FastAPI OpenAPI.** Landed
+      (PR #558). `openapi-typescript` runs via
+      `npm run generate-types`; the SPA imports request/response
+      shapes from `frontend/src/api/openapi.d.ts`. Regenerate after
+      every Pydantic-schema edit (no CI gate — drift surfaces at
+      the call site).
+- [ ] **E8. E2E smoke tests** with Playwright on the SPA. Partial:
+      `tests/smoke/test_chrome_smoke.py` covers chrome regressions
+      (every authed route loads with no JS errors, the topbar
+      avatar-dropdown opens, +New Transfer entry-point clickable,
+      return-checks list has an Edit affordance). Still missing:
+      end-to-end **flow** tests — full login → log a transfer →
+      see it in the list → run a report — and CI wiring so the
+      browser layer runs on every PR, not just locally when
+      Chromium is installed.
 
 ### F. Documentation
 
@@ -298,13 +333,17 @@ impact ÷ effort. Numbers are an estimate.
        can be generated from OpenAPI too — composes with #6. ~1 PR.
 
 ### P3 — defer until traffic / scale
-11. [ ] **Postgres in dev** (docker-compose). SQLite hides FK constraint
-       differences, transaction-isolation differences, JSON op
-       differences, full-text search differences. Bites codebases like
-       this regularly. ~1 PR (compose file + dev README).
-12. [ ] **Code-split the SPA.** Bundle is 437kB / 113kB gzip already;
-       without `React.lazy` per-route splitting it'll grow past 1MB
-       once owner dashboard + superadmin controls + TV land. ~1 PR.
+11. [x] **Postgres in dev** (docker-compose). Landed — see the
+       "Postgres in dev (optional)" block in `README.md` plus the
+       `docker-compose.yml` at the repo root. Postgres 16-alpine
+       bound to `127.0.0.1:5432`, persistent volume, healthcheck.
+       Opt-in via `DATABASE_URL=postgresql://...`; the default
+       dev loop and CI keep running on SQLite for speed.
+12. [x] **Code-split the SPA.** Landed (BACKLOG C1, PR #428) —
+       every `<Route element=>` uses `lazy(() => import())` with
+       a shared `<Suspense fallback={<Loading />}>` wrapper, so
+       each route ships as its own chunk. Verified by the per-
+       route filenames in `dist/assets/` on every build.
 
 ## Before going live (public / paid launch)
 

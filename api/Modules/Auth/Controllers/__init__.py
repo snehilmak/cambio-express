@@ -935,17 +935,35 @@ def forgot_password_route(
     issued = issue_password_reset_token(db, body.email)
     db.commit()
     if issued is not None:
-        _deliver_password_reset_email(issued)
+        # Move the SMTP send off the request path so a slow / flaky
+        # mailer doesn't block ``/forgot-password`` for the caller.
+        # In sync mode (the default) ``enqueue`` is a direct call
+        # so behavior is unchanged for tests + the default dev
+        # loop. See ``api/Core/Jobs.py``.
+        from api.Core.Jobs import enqueue
+        enqueue(
+            send_password_reset_email,
+            issued.user.id,
+            issued.raw_token,
+        )
     return {"status": "ok"}
 
 
-def _deliver_password_reset_email(issued) -> None:
+def send_password_reset_email(
+    user_id: int, raw_token: str,
+) -> None:
     """Send the password-reset email.
+
+    Top-level (not closure-scoped) so RQ can pickle it for the
+    background worker. Args are primitives — the worker opens its
+    own ``SessionLocal`` to load the user, since the request
+    handler's session is closed by the time the worker runs.
 
     Body copy + HTML template + SMTP-fallback log line match what
     the legacy Flask handler used to send so the migration is
     transparent to recipients. Renders via the Flask-free
-    ``render_email_template`` from the Notifications service."""
+    ``render_email_template`` from the Notifications service.
+    """
     import logging
     import os
     from datetime import datetime
@@ -954,9 +972,10 @@ def _deliver_password_reset_email(issued) -> None:
     from api.Modules.Notifications.Services.templates import (
         render_email_template,
     )
-    u = issued.user
+    from api.Modules.Tenancy.Models import User
+
     base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
-    reset_url = f"{base_url}/app/reset-password?token={issued.raw_token}"
+    reset_url = f"{base_url}/app/reset-password?token={raw_token}"
     body = (
         "Hi,\n\n"
         "Someone (hopefully you) requested a password reset for your "
@@ -966,28 +985,49 @@ def _deliver_password_reset_email(issued) -> None:
         "If you didn't request this you can safely ignore this email "
         "— your current password will keep working.\n"
     )
-    try:
-        html = render_email_template(
-            "emails/password_reset.html",
-            preheader="Reset your DineroBook password — link expires in 1 hour.",
-            name=u.full_name or "",
-            reset_url=reset_url,
-            year=datetime.utcnow().year,
-            base_url=base_url,
-        )
-    except Exception:
-        html = None
-    to_addr = (u.email or u.username).strip()
     with SessionLocal() as session:
+        u = session.get(User, user_id)
+        if u is None:
+            logging.getLogger("dinerobook").warning(
+                f"[password-reset] user id={user_id} disappeared "
+                f"between enqueue and worker; skipping send."
+            )
+            return
+        try:
+            html = render_email_template(
+                "emails/password_reset.html",
+                preheader=(
+                    "Reset your DineroBook password "
+                    "— link expires in 1 hour."
+                ),
+                name=u.full_name or "",
+                reset_url=reset_url,
+                year=datetime.utcnow().year,
+                base_url=base_url,
+            )
+        except Exception:
+            html = None
+        to_addr = (u.email or u.username).strip()
         delivered = send_email(
             session, to_addr, "Reset your DineroBook password",
             body, html=html,
         )
-    if not delivered:
-        logging.getLogger("dinerobook").warning(
-            f"[password-reset] email send skipped for {u.username}; "
-            f"reset URL: {reset_url}"
-        )
+        if not delivered:
+            logging.getLogger("dinerobook").warning(
+                f"[password-reset] email send skipped for {u.username}; "
+                f"reset URL: {reset_url}"
+            )
+
+
+# Back-compat alias for any external caller that still imports the
+# old name. The private leading-underscore version was internal to
+# this module; the public ``send_password_reset_email`` is the
+# enqueue-safe entry point.
+def _deliver_password_reset_email(issued) -> None:
+    """Deprecated — use ``send_password_reset_email`` directly with
+    primitives. Kept as a thin shim while any external callers
+    rotate over."""
+    send_password_reset_email(issued.user.id, issued.raw_token)
 
 
 @router.post("/reset-password")
