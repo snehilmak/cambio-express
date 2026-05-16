@@ -250,7 +250,7 @@ def finalize_2fa_with_totp(
         claims = decode_pending_2fa_token(pending_token)
     except _jwt.InvalidTokenError as exc:
         raise AuthenticationError(str(exc) or "Invalid pending token")
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None or not user.is_active:
         raise AuthenticationError("Invalid or expired pending session")
     if not verify_totp_token(user, code):
@@ -270,7 +270,7 @@ def _user_for_pending(db: Session, pending_token: str) -> User:
         claims = decode_pending_2fa_token(pending_token)
     except _jwt.InvalidTokenError as exc:
         raise AuthenticationError(str(exc) or "Invalid pending token")
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None or not user.is_active:
         raise AuthenticationError("Invalid or expired pending session")
     return user
@@ -383,7 +383,7 @@ def finalize_2fa_with_recovery_code(
         claims = decode_pending_2fa_token(pending_token)
     except _jwt.InvalidTokenError as exc:
         raise AuthenticationError(str(exc) or "Invalid pending token")
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None or not user.is_active:
         raise AuthenticationError("Invalid or expired pending session")
     if not consume_recovery_code(db, user, code):

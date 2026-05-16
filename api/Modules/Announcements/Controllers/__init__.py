@@ -53,7 +53,7 @@ def _require_superadmin_user(db: Session, claims: dict) -> User:
         raise HTTPException(
             status_code=401, detail="JWT is missing the subject claim.",
         )
-    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    user = db.get(User, int(sub))
     if user is None:
         raise HTTPException(
             status_code=401, detail="JWT subject does not resolve to a user.",

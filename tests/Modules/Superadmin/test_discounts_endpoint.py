@@ -252,3 +252,31 @@ def test_toggle_404_on_unknown_id(client):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 404
+
+
+def test_toggle_records_audit_entry(client):
+    """CLAUDE.md invariant #7: every superadmin mutation MUST
+    record an audit entry. Confirms the toggle endpoint stamps
+    `SuperadminAuditLog` so platform admins can trace who flipped
+    a code (and to which state). Pre-fix the route mutated
+    is_active without auditing — this guards against regression."""
+    from api.Modules.Audit.Models import SuperadminAuditLog
+    discount_id = _seed_code(code="AUDITED", is_active=True)
+    token = _login_superadmin(client)
+    resp = client.post(
+        f"/api/v2/superadmin/discounts/{discount_id}/toggle",
+        json={"is_active": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    with db_session():
+        rows = (
+            db.session.query(SuperadminAuditLog)
+              .filter_by(action="toggle_discount",
+                         target_type="discount",
+                         target_id=str(discount_id))
+              .all()
+        )
+        assert len(rows) == 1
+        assert "AUDITED" in (rows[0].details or "")
+        assert "is_active=False" in (rows[0].details or "")

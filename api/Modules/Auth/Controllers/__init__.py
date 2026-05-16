@@ -279,8 +279,7 @@ def _record_login_event(db: Session, user_id: int, *, method: str = "") -> None:
     rather than Flask's. Caller is responsible for committing."""
     from datetime import datetime
     from api.Modules.Auth.Models import LoginEvent
-    from api.Modules.Tenancy.Models import User
-    u = db.query(User).filter(User.id == user_id).first()
+    u = db.get(User, user_id)
     if u is None:
         return
     u.last_login_at = datetime.utcnow()
@@ -321,7 +320,7 @@ def login_route(
     # the user to their store's URL on next visit.
     if body.store_id is not None:
         from api.Modules.Tenancy.Models import Store
-        store = db.query(Store).filter(Store.id == body.store_id).first()
+        store = db.get(Store, body.store_id)
         if store is not None and store.slug:
             _set_last_store_slug_cookie(response, store.slug)
     db.commit()
@@ -555,7 +554,7 @@ def refresh_route(
         )
     # Look up the user via the refresh row so we can rebuild the
     # full JWT claim set (role, store_id, permissions, …).
-    user = db.query(User).filter(User.id == old_row.user_id).first()
+    user = db.get(User, old_row.user_id)
     if user is None or not user.is_active:
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
@@ -609,7 +608,7 @@ def get_profile_route(
     editable fields (full_name, email, phone, timezone), read-only
     metadata (role, created_at, last_login_at), and the timezone
     dropdown options. Powers /app/account/profile."""
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return ProfileResponse(**get_profile_payload(user))
@@ -624,7 +623,7 @@ def update_profile_route(
     """Update one or more profile fields. Field-level validation
     errors come back as 422 with a `field_errors` dict the SPA
     renders inline (same shape the legacy Jinja form used)."""
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     try:
@@ -653,7 +652,7 @@ def get_notifications_route(
     /app/account/notifications. `trial_toggle_applies` tells the
     SPA whether the Trial-ending toggle should render as
     interactive or as a greyed-out informational row."""
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     return NotificationsResponse(**get_notifications_payload(db, user))
@@ -668,7 +667,7 @@ def update_notifications_route(
     """Apply notification preference changes. Both fields
     optional — None means 'don't touch'. Returns the canonical
     state after the update."""
-    user = db.query(User).filter(User.id == int(claims["sub"])).one_or_none()
+    user = db.get(User, int(claims["sub"]))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
     update_notifications(
@@ -1013,7 +1012,6 @@ def send_password_reset_email(
     from api.Modules.Notifications.Services.templates import (
         render_email_template,
     )
-    from api.Modules.Tenancy.Models import User
 
     base_url = os.environ.get("APP_BASE_URL", "https://dinerobook.com")
     reset_url = f"{base_url}/app/reset-password?token={raw_token}"
@@ -1125,7 +1123,6 @@ def passkey_register_begin_route(
     the SPA echoes back on `/passkeys/register/finish` so the
     server can verify the credential against the same challenge.
     """
-    from api.Modules.Tenancy.Models import User
     from webauthn import generate_registration_options, options_to_json
     from webauthn.helpers import bytes_to_base64url
     from webauthn.helpers.structs import (
@@ -1142,7 +1139,7 @@ def passkey_register_begin_route(
     sub = claims.get("sub")
     if sub is None:
         raise HTTPException(status_code=401, detail="JWT missing sub claim")
-    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    user = db.get(User, int(sub))
     if user is None or not passkey_is_eligible(user):
         raise HTTPException(
             status_code=403,
@@ -1191,7 +1188,6 @@ def passkey_register_finish_route(
     the SPA can append it client-side without a refetch)."""
     import jwt as _jwt
     from api.Modules.Auth.Models import Passkey
-    from api.Modules.Tenancy.Models import User
     from webauthn import verify_registration_response
     from webauthn.helpers import base64url_to_bytes
     from api.Modules.Auth.Services import (
@@ -1202,7 +1198,7 @@ def passkey_register_finish_route(
     sub = claims.get("sub")
     if sub is None:
         raise HTTPException(status_code=401, detail="JWT missing sub claim")
-    user = db.query(User).filter(User.id == int(sub)).one_or_none()
+    user = db.get(User, int(sub))
     if user is None or not passkey_is_eligible(user):
         raise HTTPException(
             status_code=403,
