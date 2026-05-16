@@ -16,8 +16,7 @@ def list_year_choices(db: Session, store_id: int) -> list[int]:
     brand-new store still sees something to click. Sorted
     newest-first.
 
-    Pure SQL — no commit. Mirrors the legacy app._tax_pack_year_choices
-    so a Flask reader and a SPA reader see the same options.
+    Pure SQL — no commit.
     """
     from api.Modules.DailyBook.Models import DailyReport
     from api.Modules.Transfers.Models import Transfer

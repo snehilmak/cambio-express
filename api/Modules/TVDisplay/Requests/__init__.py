@@ -1,10 +1,9 @@
 """TV Display — Pydantic request/response schemas.
 
-Covers the SPA admin landing: read overview + per-country drill-down,
-plus the write actions the landing page exposes (settings save, token
-rotation, Fire TV claim/revoke, country create/delete). The country
-editor's bank/rate matrix POST stays on legacy Flask until the next
-migration slice."""
+Covers the SPA admin landing: read overview + per-country
+drill-down, plus the write actions the landing page exposes
+(settings save, token rotation, Fire TV claim/revoke, country
+create/delete)."""
 from pydantic import BaseModel, ConfigDict, Field
 
 

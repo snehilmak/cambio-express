@@ -1,8 +1,8 @@
 """Account profile Service.
 
-Mirrors the legacy app._update_user_profile validation 1:1 so
-SPA-driven and Flask-driven edits accept the same inputs and
-produce the same `errors` dict. Caller commits.
+Field-level validation for the personal-info form. Caller
+commits — the Service flushes but doesn't commit so a multi-
+field edit can roll back atomically on error.
 """
 import re
 from typing import Optional

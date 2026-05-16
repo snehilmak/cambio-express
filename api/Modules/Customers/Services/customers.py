@@ -1,12 +1,15 @@
 """Customer service layer — upsert and autocomplete search.
 
-These compose the SQL helpers in `Repositories/customers.py` into
-the two business behaviors the legacy Flask code split between
-`find_or_upsert_customer` and the `/api/customers/search` route.
+Two behaviors composed over the SQL helpers in
+``Repositories/customers.py``:
+
+  - ``upsert`` — create-or-update used by the transfer form's
+    sender block + the dedicated /upsert endpoint.
+  - ``search`` — autocomplete for the sender autocomplete.
 
 Both are scoped to the OWNER UMBRELLA — sibling stores under the
 same Owner share customers; unrelated stores are isolated. The
-Repository's `sibling_store_ids` is the single chokepoint that
+Repository's ``sibling_store_ids`` is the single chokepoint that
 controls that scope.
 """
 from datetime import datetime

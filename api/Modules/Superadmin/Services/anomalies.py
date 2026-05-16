@@ -41,10 +41,9 @@ _MAX_ANOMALIES_RETURNED = 25
 
 
 def _store_href(store) -> str:
-    """Build the SPA store-detail URL for a store. Empty string
-    when called with no store. The SPA's `/app/superadmin/stores/
-    <slug>` route renders the same detail page the legacy Flask
-    impersonation handler used to host."""
+    """SPA store-detail URL, or empty string when called with no
+    store. ``/app/superadmin/stores/<slug>`` is the canonical
+    detail page."""
     if store is None:
         return ""
     return f"/app/superadmin/stores/{store.slug}"
@@ -56,8 +55,6 @@ def quiet_store_anomalies(db: Session, today: date) -> list[dict]:
     Only flags stores on a paid plan or active trial — inactive /
     cancelled stores aren't anomalies.
     """
-    # Models pulled lazily so the Service can be imported before
-    # app.py finishes wiring up the Transfer model registry.
     from api.Modules.Transfers.Models import Transfer
 
     cutoff_active = today - timedelta(days=ANOMALY_QUIET_LOOKBACK_ACTIVE_DAYS)

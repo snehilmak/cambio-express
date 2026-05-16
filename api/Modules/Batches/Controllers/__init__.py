@@ -1,19 +1,9 @@
 """Batches module — Controllers (FastAPI router).
 
-Mounts at `/api/v2/batches/*` (the parent router in
-`api/main.py` adds `/batches`; the FastAPI app's
-`root_path="/api/v2"` carries the version prefix).
-
-Read-side only:
-
-  GET /batches → all ACH batches for the JWT principal's store,
-                  sorted, with precomputed transfers_total +
-                  variance + transfer_count.
-
-Write-side (create / edit / link transfers) stays on the
-legacy Flask `/batches/new`, `/batches/<id>/edit`,
-`/batches/<id>/transfers` routes until subsequent PRs
-migrate them.
+Mounts at ``/api/v2/batches/*``. Lists ACH batches for the
+caller's store with precomputed transfers_total + variance, plus
+the per-batch create / edit / link-transfers endpoints the SPA
+batches page uses.
 """
 from datetime import datetime
 

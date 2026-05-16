@@ -67,8 +67,7 @@ def create_owner(
     pre-existing User would clash:
       - any User with `store_id IS NULL` (other owners + superadmin)
       - any per-store admin with the same email (they'd be confused
-        about which login goes where)
-    Same predicate the legacy Flask route used.
+        about which login goes where).
     """
     taken_null = (
         db.query(User)

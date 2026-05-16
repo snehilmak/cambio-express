@@ -58,9 +58,10 @@ router = APIRouter()
 
 
 def _parse_store_ids(store_ids: str) -> list[int]:
-    """Reuse the same comma-separated → list[int] parser shape as the
-    Reports controllers. Mirrors how the legacy Flask routes handle
-    multi-store admin/owner views."""
+    """Comma-separated → list[int] parser. Multi-store admin /
+    owner views pass several IDs in a single query param;
+    matches the Reports controllers' shape so the parsing stays
+    consistent across the API."""
     try:
         ids = [int(s.strip()) for s in store_ids.split(",") if s.strip()]
     except ValueError as e:

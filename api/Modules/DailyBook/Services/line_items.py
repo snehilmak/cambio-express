@@ -56,10 +56,9 @@ def add_line_item(
     DailyReport's discriminated total from these rows after the
     insert).
 
-    `allowed_kinds` is an optional whitelist — passing it makes the
-    Service reject unknown kinds before the INSERT lands. Empty /
-    None skips the check and trusts the caller (legacy Flask path
-    uses `_line_item_kind_or_404` upstream for that).
+    ``allowed_kinds`` is an optional whitelist — passing it makes
+    the Service reject unknown kinds before the INSERT lands.
+    Empty / None skips the check and trusts the caller.
     """
     if allowed_kinds is not None and kind not in allowed_kinds:
         raise LineItemValidationError(f"Unknown line-item kind: {kind!r}")

@@ -23,12 +23,8 @@ Mounts at `/api/v2/tv-display/*`. Endpoints:
            and cascade its banks + rates
 
 Auth + gating: requires JWT principal scoped to a store; admin
-or employee role; the store must have the `tv_display` add-on
-active. Mirrors the legacy `_tv_required()` guard.
-
-Country *editor* (bank+rate matrix POST at
-/tv-display/countries/<id>) and the public kiosk view (/tv/<token>)
-remain on legacy Flask until the next migration slice.
+or employee role; the store must have the ``tv_display`` add-on
+active.
 """
 from datetime import datetime
 
