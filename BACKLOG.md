@@ -315,13 +315,17 @@ impact ÷ effort. Numbers are an estimate.
        can be generated from OpenAPI too — composes with #6. ~1 PR.
 
 ### P3 — defer until traffic / scale
-11. [ ] **Postgres in dev** (docker-compose). SQLite hides FK constraint
-       differences, transaction-isolation differences, JSON op
-       differences, full-text search differences. Bites codebases like
-       this regularly. ~1 PR (compose file + dev README).
-12. [ ] **Code-split the SPA.** Bundle is 437kB / 113kB gzip already;
-       without `React.lazy` per-route splitting it'll grow past 1MB
-       once owner dashboard + superadmin controls + TV land. ~1 PR.
+11. [x] **Postgres in dev** (docker-compose). Landed — see the
+       "Postgres in dev (optional)" block in `README.md` plus the
+       `docker-compose.yml` at the repo root. Postgres 16-alpine
+       bound to `127.0.0.1:5432`, persistent volume, healthcheck.
+       Opt-in via `DATABASE_URL=postgresql://...`; the default
+       dev loop and CI keep running on SQLite for speed.
+12. [x] **Code-split the SPA.** Landed (BACKLOG C1, PR #428) —
+       every `<Route element=>` uses `lazy(() => import())` with
+       a shared `<Suspense fallback={<Loading />}>` wrapper, so
+       each route ships as its own chunk. Verified by the per-
+       route filenames in `dist/assets/` on every build.
 
 ## Before going live (public / paid launch)
 
