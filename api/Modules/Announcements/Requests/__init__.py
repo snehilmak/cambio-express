@@ -69,7 +69,27 @@ class AnnouncementResponse(BaseModel):
     announcement: AnnouncementRow
 
 
+class ActiveAnnouncementRow(BaseModel):
+    """Slim shape returned to the SPA banner — only the fields the
+    banner needs to render. Skips audit/lifecycle fields so a
+    cashier's network tab never reveals `created_by`, schedule
+    timestamps, or broadcast state for an internal announcement."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: int
+    message: str
+    level: str
+
+
+class ActiveAnnouncementsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[ActiveAnnouncementRow]
+
+
 __all__ = [
+    "ActiveAnnouncementRow",
+    "ActiveAnnouncementsResponse",
     "AnnouncementCreateRequest",
     "AnnouncementListResponse",
     "AnnouncementResponse",

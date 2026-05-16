@@ -19,6 +19,10 @@ export type AnnouncementListResponse =
 export type CreateAnnouncementBody =
   components["schemas"]["AnnouncementCreateRequest"];
 type AnnouncementResponse = components["schemas"]["AnnouncementResponse"];
+export type ActiveAnnouncementRow =
+  components["schemas"]["ActiveAnnouncementRow"];
+export type ActiveAnnouncementsResponse =
+  components["schemas"]["ActiveAnnouncementsResponse"];
 
 export function useAnnouncements() {
   const identity = getCurrentIdentity();
@@ -27,6 +31,23 @@ export function useAnnouncements() {
     queryKey: ["announcements", "list", identity?.user_id],
     queryFn: () =>
       api<AnnouncementListResponse>("/api/v2/announcements"),
+  });
+}
+
+// Currently-visible banners for the AppShell top zone. Polled every
+// 5 minutes — banner urgency is "we'd like the cashier to see this
+// soon," not "right this second." Disabled when no identity is
+// loaded so we don't 401-spam during the unauth phase.
+export function useActiveAnnouncements() {
+  const identity = getCurrentIdentity();
+  return useQuery<ActiveAnnouncementsResponse>({
+    enabled: !!identity,
+    queryKey: ["announcements", "active", identity?.user_id],
+    queryFn: () =>
+      api<ActiveAnnouncementsResponse>("/api/v2/announcements/active"),
+    refetchInterval: 5 * 60 * 1000,
+    refetchIntervalInBackground: false,
+    staleTime: 60 * 1000,
   });
 }
 

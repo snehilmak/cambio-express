@@ -495,6 +495,19 @@ impact ÷ effort. Numbers are an estimate.
 - [ ] Dedicated `/customers` page with search / edit / merge-duplicates.
 - [ ] Recipient autocomplete (same pattern as sender) if repeat
       recipients become common in the data.
+- [x] **Announcement banner in the SPA chrome** — landed. New
+      `GET /api/v2/announcements/active` returns the slim
+      `{id, message, level}` rows the banner needs (no audit /
+      schedule fields leak to non-superadmin callers). Open to
+      every authed role — admin, employee, owner, superadmin.
+      `<AnnouncementBanner>` mounts inside `AppShell` between
+      the topbar and the routed content; per-banner dismiss is
+      stored in localStorage so a cashier closing it on one
+      device doesn't suppress it on the back-office laptop.
+      Polls every 5 minutes (pauses in background tabs). Tests
+      in `tests/Modules/Announcements/test_announcements_controllers.py`
+      cover the auth-open contract, slim shape, expired/scheduled/
+      inactive omission.
 - [ ] Rich text / markdown links in announcements.
 - [x] Scheduled announcements — landed. The Announcement create
       endpoint accepts an optional `start_at_iso` (ISO-8601 UTC);
