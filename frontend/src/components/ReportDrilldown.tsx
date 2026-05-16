@@ -8,8 +8,9 @@ import {
 import { downloadCsv } from "../lib/api";
 import {
   EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
-  PageShell, TableSkeleton, tdStyle, thStyle, tokens,
+  PageShell, TableSkeleton, tdStyle, thStyle,
 } from "./ui";
+import styles from "./ReportDrilldown.module.css";
 
 export interface KpiSpec {
   label: string;
@@ -91,11 +92,11 @@ export function ReportDrilldown({
   return (
     <PageShell gap="1.25rem">
       <div>
-        <Link to={backTo} style={backLink}>← Reports</Link>
+        <Link to={backTo} className={styles.backLink}>← Reports</Link>
         <PageHeader
           title={title}
           actions={(
-            <div style={actionRow}>
+            <div className={styles.actionRow}>
               <form
                 style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}
                 onSubmit={(e) => {
@@ -103,28 +104,28 @@ export function ReportDrilldown({
                   // useEffect already syncs to URL — submitting is a noop.
                 }}
               >
-                <label style={inputLabel}>
+                <label className={styles.inputLabel}>
                   <span>From</span>
                   <input
                     type="date"
                     value={from}
                     onChange={(e) => setFrom(e.target.value)}
-                    style={dateInput}
+                    className={styles.dateInput}
                   />
                 </label>
-                <label style={inputLabel}>
+                <label className={styles.inputLabel}>
                   <span>To</span>
                   <input
                     type="date"
                     value={to}
                     onChange={(e) => setTo(e.target.value)}
-                    style={dateInput}
+                    className={styles.dateInput}
                   />
                 </label>
               </form>
               <button
                 type="button"
-                style={btnOutline}
+                className={styles.btnOutline}
                 onClick={() => {
                   void downloadCsv(csvHref, csvFilename(csvUrl, from, to));
                 }}
@@ -133,7 +134,7 @@ export function ReportDrilldown({
               </button>
               <button
                 type="button"
-                style={btnOutline}
+                className={styles.btnOutline}
                 onClick={() => window.print()}
               >
                 Print / PDF
@@ -144,7 +145,7 @@ export function ReportDrilldown({
       </div>
 
       {storeIds.length === 0 && (
-        <p style={muted}>
+        <p className={styles.muted}>
           Sign in to a store to see this report. (Owner-umbrella multi-store
           rollup ships in a follow-up.)
         </p>
@@ -163,12 +164,12 @@ export function ReportDrilldown({
         </KpiGrid>
       )}
 
-      <div style={filterRow}>
-        <span style={muted}>
+      <div className={styles.filterRow}>
+        <span className={styles.muted}>
           {fmtDate(from)} – {fmtDate(to)}
         </span>
         {data && (
-          <span style={muted}>
+          <span className={styles.muted}>
             {rowCount.toLocaleString()} {unit}
           </span>
         )}
@@ -187,7 +188,7 @@ export function ReportDrilldown({
       )}
 
       {data && data.rows.length > 0 && (
-        <table style={tableStyle}>
+        <table className={styles.table}>
           <thead>
             <tr>
               {columns.map((c) => (
@@ -217,7 +218,7 @@ export function ReportDrilldown({
                       style={{
                         ...tdStyle,
                         textAlign: c.align ?? (c.mono ? "right" : "left"),
-                        fontFamily: c.mono ? tokens.fontMono : undefined,
+                        fontFamily: c.mono ? "var(--db-font-mono, 'JetBrains Mono', monospace)" : undefined,
                       }}
                     >
                       {value as React.ReactNode}
@@ -256,44 +257,3 @@ function fmtDate(iso: string): string {
 // eslint-disable-next-line react-refresh/only-export-components -- adjacent helper used by every drilldown wrapper
 export const fmtMoney = (n: number) =>
   `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-const backLink: React.CSSProperties = {
-  color: tokens.textMuted, fontSize: "0.85rem",
-  textDecoration: "none",
-};
-const actionRow: React.CSSProperties = {
-  display: "flex", flexWrap: "wrap", gap: "0.5rem",
-  alignItems: "center",
-};
-const inputLabel: React.CSSProperties = {
-  display: "flex", flexDirection: "column", gap: "0.15rem",
-  fontSize: "0.7rem", color: tokens.textMuted,
-  textTransform: "uppercase", letterSpacing: "0.05em",
-};
-const dateInput: React.CSSProperties = {
-  padding: "0.35rem 0.5rem",
-  background: tokens.surface, color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.4rem", fontSize: "0.85rem",
-  fontFamily: "inherit",
-};
-const btnOutline: React.CSSProperties = {
-  background: "transparent", color: "inherit",
-  border: `1px solid ${tokens.border}`,
-  padding: "0.4rem 0.85rem",
-  borderRadius: "0.5rem", fontSize: "0.85rem",
-  cursor: "pointer", textDecoration: "none",
-  display: "inline-block",
-};
-const filterRow: React.CSSProperties = {
-  display: "flex", justifyContent: "space-between",
-  padding: "0.5rem 0",
-  borderTop: `1px solid ${tokens.border}`,
-  borderBottom: `1px solid ${tokens.border}`,
-};
-const muted: React.CSSProperties = {
-  color: tokens.textMuted, fontSize: "0.85rem", margin: 0,
-};
-const tableStyle: React.CSSProperties = {
-  width: "100%", borderCollapse: "collapse", fontSize: "0.9rem",
-};

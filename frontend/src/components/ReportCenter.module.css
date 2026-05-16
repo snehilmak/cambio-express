@@ -1,0 +1,172 @@
+/* Page-specific styles for ReportCenter.tsx — the shared
+ * accordion used by /app/reports, /app/owner/reports, and
+ * /app/superadmin/reports.
+ */
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.title {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text);
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 240px;
+}
+
+.searchIcon {
+  color: var(--text-muted);
+  display: inline-flex;
+}
+
+.searchInput {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-size: 13px;
+  color: var(--text);
+  font-family: "Inter", sans-serif;
+}
+
+.cat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.caret {
+  color: var(--text-muted);
+  display: inline-flex;
+}
+
+.icon {
+  color: var(--db-neon);
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+}
+
+.catLabel {
+  flex: 1;
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.catBody {
+  border-top: 1px solid var(--border);
+  padding: 8px 18px 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--border);
+}
+
+.rowName {
+  font-family: "Space Grotesk", "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.rowDesc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.primaryButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: var(--db-neon);
+  color: #000;
+  border: 1px solid var(--db-neon);
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  font-family: "Inter", sans-serif;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.empty {
+  padding: 30px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.rowBody {
+  flex: 1;
+  min-width: 0;
+}
