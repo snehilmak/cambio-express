@@ -3558,6 +3558,109 @@
         "title": "MonthsLoggedResponse",
         "type": "object"
       },
+      "MyActivityResponse": {
+        "additionalProperties": false,
+        "description": "Page-shaped response for the activity feed.",
+        "properties": {
+          "action_filter": {
+            "title": "Action Filter",
+            "type": "string"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "per_page": {
+            "title": "Per Page",
+            "type": "integer"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MyActivityRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "target_filter": {
+            "title": "Target Filter",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "title": "Total Pages",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "per_page",
+          "total_pages",
+          "target_filter",
+          "action_filter"
+        ],
+        "title": "MyActivityResponse",
+        "type": "object"
+      },
+      "MyActivityRow": {
+        "additionalProperties": false,
+        "description": "One row in the per-user activity feed.\n\nMirrors the admin audit-log row shape but adds `store_name`\nso multi-store cashiers (and owners) can tell which store an\naction was logged at. The `user_name`/`user_role` columns are\nomitted \u2014 every row in this feed is the same user, so they'd\nbe noise.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "title": "Store Name",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "target_id": {
+            "title": "Target Id",
+            "type": "string"
+          },
+          "target_label": {
+            "title": "Target Label",
+            "type": "string"
+          },
+          "target_type": {
+            "title": "Target Type",
+            "type": "string"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ts",
+          "action",
+          "target_type",
+          "target_id",
+          "target_label",
+          "summary",
+          "source",
+          "store_id",
+          "store_name"
+        ],
+        "title": "MyActivityRow",
+        "type": "object"
+      },
       "NotificationsResponse": {
         "additionalProperties": false,
         "description": "Per-user notification preferences. `trial_toggle_applies`\ntells the SPA whether to render the Trial-ending toggle as\ninteractive (True) or grey/informational (False \u2014 already\npaid, or role doesn't own a trial).",
@@ -8466,6 +8569,105 @@
         "summary": "Toggle Route",
         "tags": [
           "announcements"
+        ]
+      }
+    },
+    "/auth/activity": {
+      "get": {
+        "description": "Cross-store activity feed for the current user. Returns\nevery `OperatorAuditLog` + `TransferAudit` row authored by\n`claims[\"sub\"]`, paginated 50/page newest-first. Available\nto every authed role (employee / admin / owner / superadmin)\n\u2014 a cashier sees their own transfers; an admin sees their\ntransfers + admin actions; an owner who's worked behind the\ncounter at multiple stores sees rows from every store with\n`store_name` attached for disambiguation.",
+        "operationId": "get_my_activity_route_auth_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 40,
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 40,
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyActivityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get My Activity Route",
+        "tags": [
+          "auth"
         ]
       }
     },

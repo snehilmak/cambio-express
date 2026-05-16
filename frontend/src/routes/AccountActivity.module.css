@@ -1,0 +1,65 @@
+/* Page-specific styles for AccountActivity.tsx. Mirrors
+   AdminAuditLog.module.css; could be deduped if the kit ever
+   grows a shared `<AuditTable>` primitive — for now a near-clone
+   is the lightest path. */
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 1rem;
+}
+
+.cardHeaderCount {
+  margin-left: 0.5rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-weight: 400;
+}
+
+.cardHeaderPage {
+  margin-left: auto;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.filtersRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.targetType {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+}
+
+.detailCell {
+  font-size: 0.9rem;
+  max-width: 30rem;
+}
+
+.monoMuted {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  white-space: nowrap;
+}
+
+.fine {
+  margin-top: 1rem;
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.actionBadge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}

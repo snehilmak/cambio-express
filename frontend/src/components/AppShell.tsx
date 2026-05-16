@@ -140,6 +140,14 @@ const NAV: NavGroup[] = [
         to: "/account/profile", label: "Profile",
         icon: iconCustomers(),
       },
+      // My activity — per-user cross-store audit feed. Open to
+      // every role; a cashier sees their transfers, an admin
+      // sees their admin actions, an owner sees activity at
+      // every store they've touched.
+      {
+        to: "/account/activity", label: "My activity",
+        icon: iconAudit(),
+      },
     ],
   },
 ];

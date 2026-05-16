@@ -741,9 +741,20 @@ gaps. Ordered by "what I'd do next" at the top.
 - [ ] **Sessions / active devices** — "you're signed in on 3 devices,
       sign out the others." Needs a session-store table; pairs with
       passkeys nicely as a security-signal feature.
-- [ ] **Audit log (mine)** — filtered view of `TransferAudit`
-      showing everything the current user did. Data already exists;
-      just a scoped-query page.
+- [x] **Audit log (mine)** — landed.
+      `GET /api/v2/auth/activity` returns the cross-store
+      `OperatorAuditLog` + `TransferAudit` rows authored by the
+      current user, paginated 50/page newest-first. Open to every
+      authed role — a cashier sees their transfers, an admin sees
+      their admin actions, a multi-store owner sees rows from
+      every store with `store_name` attached for disambiguation.
+      Frontend lives at `/app/account/activity` (new sidebar
+      entry under Account). Service in
+      `api/Modules/Audit/Services/my_activity.py`; tests in
+      `tests/Modules/Audit/test_my_activity_endpoint.py` (10
+      cases: auth gating, my-rows-only, store_name attachment,
+      target/action filters, transfer-vs-other-target suppression,
+      ordering, pagination).
 - [ ] **Personal API tokens** — scoped tokens for scripts /
       integrations. Postpone until someone asks.
 - [ ] **Connected accounts (Google / Apple SSO)** — premature today;

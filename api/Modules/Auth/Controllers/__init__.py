@@ -10,7 +10,7 @@ share.
   GET  /auth/me   → returns the verified principal from the bearer
                      token (no DB roundtrip — claims-only).
 """
-from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Query, Request, Response
 from sqlalchemy.orm import Session
 
 import os
@@ -25,6 +25,8 @@ from api.Modules.Auth.Requests import (
     LoginCrossStoreRequest,
     LoginRequest,
     LoginResponse,
+    MyActivityResponse,
+    MyActivityRow,
     NotificationsResponse,
     NotificationsUpdateRequest,
     OwnerSignupRequest,
@@ -676,6 +678,45 @@ def update_notifications_route(
     )
     db.commit()
     return NotificationsResponse(**get_notifications_payload(db, user))
+
+
+@router.get("/activity", response_model=MyActivityResponse)
+def get_my_activity_route(
+    target: str = Query("", max_length=40),
+    action: str = Query("", max_length=40),
+    page:   int = Query(1, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> MyActivityResponse:
+    """Cross-store activity feed for the current user. Returns
+    every `OperatorAuditLog` + `TransferAudit` row authored by
+    `claims["sub"]`, paginated 50/page newest-first. Available
+    to every authed role (employee / admin / owner / superadmin)
+    — a cashier sees their own transfers; an admin sees their
+    transfers + admin actions; an owner who's worked behind the
+    counter at multiple stores sees rows from every store with
+    `store_name` attached for disambiguation."""
+    from api.Modules.Audit.Services import list_my_activity
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    payload = list_my_activity(
+        db, user_id=int(sub),
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+        page=page,
+    )
+    return MyActivityResponse(
+        rows=[MyActivityRow(**r) for r in payload["rows"]],
+        total=payload["total"],
+        page=payload["page"],
+        per_page=payload["per_page"],
+        total_pages=payload["total_pages"],
+        target_filter=target.strip(),
+        action_filter=action.strip(),
+    )
 
 
 @router.post("/change-password")
