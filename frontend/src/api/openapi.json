@@ -7596,9 +7596,86 @@
         ]
       }
     },
+    "/admin/tax-export.zip": {
+      "get": {
+        "description": "Bundle a calendar year of store data into a ZIP and stream\nthe bytes.\n\nAdmin / owner / superadmin only \u2014 cashiers see the year picker\nin the UI but the download itself is gated server-side too.\nStore scope comes from the JWT, never a query param, so a\ncashier swapping the URL can't pivot to another store.\n\nMemory-bound \u2014 the ZIP is built in a ``BytesIO`` and returned\nin one shot. Operators export once a year, so the simpler\nin-memory path is fine; a streaming generator would only pay\noff on multi-GB packs.",
+        "operationId": "download_tax_pack_route_admin_tax_export_zip_get",
+        "parameters": [
+          {
+            "description": "Calendar year to pack (inclusive both ends).",
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "Calendar year to pack (inclusive both ends).",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Tax Pack Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/tax-export/years": {
       "get": {
-        "description": "Years offered in the tax-pack year picker, plus the default\nselection (last calendar year). Powers the /app/admin/tax-export\nReact page. The actual ZIP download still comes from the legacy\nFlask route /admin/tax-export.zip \u2014 that streams a multi-MB file\nvia Flask's send_file path and is left intact for now.",
+        "description": "Years offered in the tax-pack year picker, plus the default\nselection (last calendar year). Powers the year dropdown on\n``/app/admin/tax-export``.",
         "operationId": "list_tax_export_years_route_admin_tax_export_years_get",
         "parameters": [
           {

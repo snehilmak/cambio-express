@@ -1,25 +1,28 @@
 import { useState } from "react";
 
 import { useTaxExportYears } from "../api/account";
+import { downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
-  ButtonLink, Card, Empty, ErrorState, Field, PageHeader, PageShell,
+  Button, Card, Empty, ErrorState, Field, PageHeader, PageShell,
   Section, Select,
 } from "../components/ui";
 import styles from "./AdminTaxExport.module.css";
 
-// /app/admin/tax-export — year-end packet picker + download link.
+// /app/admin/tax-export — year-end packet picker + download.
 //
-// Picks a calendar year, then hands off to the legacy Flask route
-// `/admin/tax-export.zip` (which streams a multi-MB ZIP via
-// send_file). The ZIP-build Flask route is deliberately not
-// migrated yet: it composes a swathe of `_tax_pack_*_csv` helpers
-// that don't pay back the porting cost yet.
+// Picks a calendar year and triggers
+// ``GET /api/v2/admin/tax-export.zip?year=<n>``. The download
+// goes through ``downloadCsv`` (a misnamed generic blob-download
+// helper) so the bearer token is attached — a plain ``<a href>``
+// would do an unauthed top-level navigation and 401.
 
 export default function AdminTaxExport() {
   const identity = getCurrentIdentity();
   const { data, isLoading, isError, error, refetch } = useTaxExportYears();
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string>("");
 
   if (identity?.role !== "admin" && identity?.role !== "owner") {
     return (
@@ -31,6 +34,23 @@ export default function AdminTaxExport() {
   }
 
   const year = selectedYear ?? data?.default_year ?? new Date().getFullYear() - 1;
+
+  async function onDownload() {
+    setDownloading(true);
+    setDownloadError("");
+    try {
+      await downloadCsv(
+        `/api/v2/admin/tax-export.zip?year=${year}`,
+        `tax-pack-${year}.zip`,
+      );
+    } catch (err) {
+      setDownloadError(
+        err instanceof Error ? err.message : "Download failed",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <PageShell maxWidth="48rem">
@@ -52,6 +72,13 @@ export default function AdminTaxExport() {
             />
           )}
 
+          {downloadError && (
+            <ErrorState
+              message={`Couldn't build the ZIP: ${downloadError}`}
+              onRetry={() => { void onDownload(); }}
+            />
+          )}
+
           <div className={styles.controls}>
             <Field label="Year" style={{ minWidth: "10rem" }}>
               <Select
@@ -65,12 +92,16 @@ export default function AdminTaxExport() {
               </Select>
             </Field>
 
-            <ButtonLink
-              href={`/admin/tax-export.zip?year=${year}`}
+            <Button
+              type="button"
               tone="primary"
+              onClick={() => { void onDownload(); }}
+              disabled={downloading}
             >
-              Download {year} pack (.zip)
-            </ButtonLink>
+              {downloading
+                ? "Building ZIP…"
+                : `Download ${year} pack (.zip)`}
+            </Button>
           </div>
 
           <div className={styles.infoBox}>

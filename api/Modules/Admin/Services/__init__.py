@@ -9,6 +9,7 @@ from api.Modules.Admin.Services.tax_export import (
     default_year as tax_export_default_year,
     list_year_choices as tax_export_year_choices,
 )
+from api.Modules.Admin.Services.tax_pack import build_tax_pack_zip
 from api.Modules.Admin.Services.team import (
     TeamMemberNotFoundError,
     add_team_member,
@@ -28,6 +29,7 @@ __all__ = [
     "TrialPlanError",
     "UsernameTakenError",
     "add_team_member",
+    "build_tax_pack_zip",
     "create_store_user",
     "deactivate_team_member",
     "get_referral_payload",
