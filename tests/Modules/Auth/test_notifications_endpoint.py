@@ -300,3 +300,70 @@ def test_notifications_put_persists_locked_day_digest(
             username="admin@test.com",
         ).first()
         assert u.notify_locked_day_digest is False
+
+
+# ── notify_daily_summary ────────────────────────────────────
+
+
+def test_notifications_get_includes_daily_summary(
+    client, test_store_id,
+):
+    """GET exposes the daily-summary toggle + its ``*_applies``
+    predicate so the SPA can render it interactive for admin /
+    owner and greyed-out informational for everyone else."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/auth/notifications",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert "notify_daily_summary" in body
+    assert body["daily_summary_applies"] is True
+    # Column default is True for new rows.
+    assert body["notify_daily_summary"] is True
+
+
+def test_notifications_get_daily_summary_not_applies_for_employee(
+    client, test_store_id,
+):
+    """Employees don't receive the digest by design — the
+    predicate gates the SPA into a greyed-out row."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        emp = User(
+            store_id=test_store_id, username="ds_emp@test.com",
+            full_name="Employee", role="employee",
+        )
+        emp.set_password("p123pass!")
+        db.session.add(emp); db.session.commit()
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "ds_emp@test.com", "password": "p123pass!",
+            "store_id": test_store_id,
+        },
+    )
+    token = resp.get_json()["access_token"]
+    body = client.get(
+        "/api/v2/auth/notifications",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["daily_summary_applies"] is False
+
+
+def test_notifications_put_persists_daily_summary(
+    client, test_store_id,
+):
+    from api.Modules.Tenancy.Models import User
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/auth/notifications",
+        json={"notify_daily_summary": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["notify_daily_summary"] is False
+    with db_session():
+        u = db.session.query(User).filter_by(
+            username="admin@test.com",
+        ).first()
+        assert u.notify_daily_summary is False

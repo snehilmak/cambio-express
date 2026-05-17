@@ -36,14 +36,23 @@ def locked_day_digest_applies(user: User) -> bool:
     return user.role in ("admin", "owner")
 
 
+def daily_summary_applies(user: User) -> bool:
+    """Same gating as the locked-day digest — admins / owners only.
+    Cross-checked against
+    ``Notifications.Services.daily_summary.eligible_recipients``."""
+    return user.role in ("admin", "owner")
+
+
 def get_notifications_payload(db: Session, user: User) -> dict:
     """Return the GET payload for the notifications page."""
     return {
         "notify_trial_reminders":    bool(user.notify_trial_reminders),
         "notify_announcement_email": bool(user.notify_announcement_email),
         "notify_locked_day_digest":  bool(user.notify_locked_day_digest),
+        "notify_daily_summary":      bool(user.notify_daily_summary),
         "trial_toggle_applies":      trial_toggle_applies(db, user),
         "locked_day_digest_applies": locked_day_digest_applies(user),
+        "daily_summary_applies":     daily_summary_applies(user),
         "role":                      user.role or "",
     }
 
@@ -53,6 +62,7 @@ def update_notifications(
     notify_trial_reminders:    Optional[bool] = None,
     notify_announcement_email: Optional[bool] = None,
     notify_locked_day_digest:  Optional[bool] = None,
+    notify_daily_summary:      Optional[bool] = None,
 ) -> None:
     """Apply changes. None = don't touch. Caller commits.
 
@@ -65,4 +75,6 @@ def update_notifications(
         user.notify_announcement_email = bool(notify_announcement_email)
     if notify_locked_day_digest is not None:
         user.notify_locked_day_digest = bool(notify_locked_day_digest)
+    if notify_daily_summary is not None:
+        user.notify_daily_summary = bool(notify_daily_summary)
     db.flush()

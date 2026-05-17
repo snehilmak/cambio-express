@@ -37,6 +37,7 @@ export default function AccountNotifications() {
       notify_trial_reminders:    data.notify_trial_reminders,
       notify_announcement_email: data.notify_announcement_email,
       notify_locked_day_digest:  data.notify_locked_day_digest,
+      notify_daily_summary:      data.notify_daily_summary,
     });
   }, [data]);
 
@@ -90,6 +91,7 @@ export default function AccountNotifications() {
     ? "Not applicable for your account right now — you're on a paid plan (or no active trial)."
     : "Not applicable for your account right now — you're on a role that doesn't own a trial.";
   const digestApplies = data.locked_day_digest_applies;
+  const summaryApplies = data.daily_summary_applies;
 
   return (
     <PageShell maxWidth="60rem">
@@ -154,6 +156,28 @@ export default function AccountNotifications() {
                 )}
               </PrefRow>
 
+              <PrefRow
+                id="nds"
+                checked={draft.notify_daily_summary ?? false}
+                disabled={busy || !summaryApplies}
+                onChange={(v) => set("notify_daily_summary", v)}
+                title="Daily summary email"
+              >
+                Nightly per-store email with the prior day's transfer
+                count, send volume, receipts, disbursements, and
+                over-short — so you see the close-out numbers by morning
+                without logging in. Quiet days don't generate an email.
+                Sent to admins + linked owners only.
+                {!summaryApplies && (
+                  <>
+                    <br />
+                    <em className={styles.notApplicable}>
+                      Not applicable — your role doesn't receive this digest.
+                    </em>
+                  </>
+                )}
+              </PrefRow>
+
               <div style={{ marginTop: "1.25rem" }}>
                 <Button type="submit" busy={busy} disabled={busy}>
                   {busy ? "Saving…" : "Save preferences"}
@@ -197,6 +221,11 @@ export default function AccountNotifications() {
                 <Row
                   channel="Email"
                   what="Daily book close-out digest (admins + linked owners)"
+                  control="Toggle above."
+                />
+                <Row
+                  channel="Email"
+                  what="Daily summary (nightly per-store, admins + linked owners)"
                   control="Toggle above."
                 />
                 <Row

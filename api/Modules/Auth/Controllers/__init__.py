@@ -676,6 +676,7 @@ def update_notifications_route(
         notify_trial_reminders=body.notify_trial_reminders,
         notify_announcement_email=body.notify_announcement_email,
         notify_locked_day_digest=body.notify_locked_day_digest,
+        notify_daily_summary=body.notify_daily_summary,
     )
     db.commit()
     return NotificationsResponse(**get_notifications_payload(db, user))
