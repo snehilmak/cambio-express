@@ -19,7 +19,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle,
+  PageHeader, PageShell, SectionTitle, Textarea,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -383,6 +383,9 @@ function StoreInfoCard() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [taxRatePct, setTaxRatePct] = useState("");
+  const [receiptLogoUrl, setReceiptLogoUrl] = useState("");
+  const [receiptFooter, setReceiptFooter] = useState("");
+  const [receiptTaxId, setReceiptTaxId] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -398,6 +401,9 @@ function StoreInfoCard() {
     setPhone(data.store.phone);
     setAddress(data.store.address);
     setTaxRatePct(((data.store.federal_tax_rate || 0) * 100).toFixed(2));
+    setReceiptLogoUrl(data.store.receipt_logo_url);
+    setReceiptFooter(data.store.receipt_footer);
+    setReceiptTaxId(data.store.receipt_tax_id);
   }, [data]);
 
   const canEdit =
@@ -414,6 +420,9 @@ function StoreInfoCard() {
       await updateStoreInfo({
         name, email, phone, address,
         federal_tax_rate: Number(taxRatePct) / 100,
+        receipt_logo_url: receiptLogoUrl,
+        receipt_footer:   receiptFooter,
+        receipt_tax_id:   receiptTaxId,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -491,6 +500,57 @@ function StoreInfoCard() {
             onChange={(e) => setTaxRatePct(e.target.value)}
             disabled={!canEdit} />
         </Field>
+        <div className={styles.spanFull}>
+          <SectionTitle>Receipt customization</SectionTitle>
+          <p className={styles.helpText}>
+            Branding that prints on every transfer receipt at
+            <code> /app/transfers/{"{id}"}/receipt</code>. All three
+            fields are optional — leaving them empty falls back to
+            the default layout (store name as wordmark, no tax ID
+            line, generic system footer).
+          </p>
+        </div>
+        <Field
+          label="Logo URL"
+          hint="Public image URL printed at the top of the receipt. PNG or SVG; square works best. Empty → store name wordmark."
+        >
+          <Input
+            type="url"
+            placeholder="https://cdn.example.com/logo.png"
+            value={receiptLogoUrl}
+            onChange={(e) => setReceiptLogoUrl(e.target.value)}
+            disabled={!canEdit}
+            maxLength={500}
+          />
+        </Field>
+        <Field
+          label="Tax ID / EIN"
+          hint="Federal tax ID printed near the receipt header. Required in some jurisdictions."
+        >
+          <Input
+            type="text"
+            placeholder="EIN 12-3456789"
+            value={receiptTaxId}
+            onChange={(e) => setReceiptTaxId(e.target.value)}
+            disabled={!canEdit}
+            maxLength={40}
+          />
+        </Field>
+        <div className={styles.spanFull}>
+          <Field
+            label="Footer text"
+            hint="Free-form text at the bottom of every receipt — refund policy, compliance disclaimer, thank-you. Empty → generic system footer. Max 500 chars."
+          >
+            <Textarea
+              value={receiptFooter}
+              onChange={(e) => setReceiptFooter(e.target.value)}
+              disabled={!canEdit}
+              rows={3}
+              maxLength={500}
+              placeholder="Refunds within 30 days with the receipt. Thank you for choosing us!"
+            />
+          </Field>
+        </div>
         {err && (
           <div className={styles.spanFull}>
             <Alert tone="error">{err}</Alert>

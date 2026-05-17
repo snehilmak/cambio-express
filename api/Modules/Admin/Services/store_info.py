@@ -14,6 +14,10 @@ from api.Modules.Admin.Models import Store
 # superadmin / the Stripe webhook.
 EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     "name", "email", "phone", "address", "federal_tax_rate",
+    # Receipt customization — see ``Tenancy.Models.Store`` for the
+    # per-field copy. Cleared by an empty string ("" wipes the
+    # logo / footer / tax-id back to the default layout).
+    "receipt_logo_url", "receipt_footer", "receipt_tax_id",
 )
 
 

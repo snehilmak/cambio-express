@@ -77,6 +77,9 @@ def _to_row(s) -> StoreInfoRow:
         plan=s.plan or "trial",
         federal_tax_rate=float(s.federal_tax_rate or 0),
         is_active=bool(s.is_active),
+        receipt_logo_url=s.receipt_logo_url or "",
+        receipt_footer=s.receipt_footer or "",
+        receipt_tax_id=s.receipt_tax_id or "",
     )
 
 

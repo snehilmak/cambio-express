@@ -1,0 +1,264 @@
+/* Printable transfer receipt — see TransferReceipt.tsx for the
+   markup. Screen renders a centered card on the page background;
+   print strips the chrome and reflows the card to fill the page.
+*/
+
+.page {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.shellChrome {
+  width: 100%;
+  max-width: 44rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.backLink {
+  font-size: 0.92rem;
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  color: var(--db-text, #f5f5f5);
+}
+
+.receipt {
+  width: 100%;
+  max-width: 44rem;
+  background: #ffffff;
+  color: #0a0a0a;
+  padding: 2rem 2.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  line-height: 1.5;
+}
+
+.header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #0a0a0a;
+}
+
+.logo {
+  max-width: 5rem;
+  max-height: 5rem;
+  object-fit: contain;
+}
+
+.wordmark {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.headerMeta {
+  flex: 1;
+  font-size: 0.88rem;
+  text-align: right;
+}
+
+.storeName {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+.storeLine {
+  color: #4a5162;
+}
+
+.titleBar {
+  margin: 1rem 0 1.25rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+}
+
+.title {
+  font-size: 1.3rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.meta {
+  font-size: 0.85rem;
+  color: #4a5162;
+  font-family: var(--db-font-mono, monospace);
+}
+
+.parties {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.partyHeading {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+
+.partyName {
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 0.2rem;
+}
+
+.partyLine {
+  font-size: 0.88rem;
+  color: #4a5162;
+}
+
+.amounts {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0 0.75rem;
+  font-size: 0.92rem;
+}
+
+.amounts th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.amounts td {
+  padding: 0.55rem 0.6rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.numCol {
+  text-align: right;
+  font-family: var(--db-font-mono, monospace);
+}
+
+.totalCell {
+  font-weight: 700;
+}
+
+.totalBlock {
+  margin-top: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-top: 2px solid #0a0a0a;
+}
+
+.totalLabel {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.totalAmount {
+  font-family: var(--db-font-mono, monospace);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.signatures {
+  margin-top: 2rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.signatureRow {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.signatureLine {
+  height: 2.2rem;
+  border-bottom: 1px solid #0a0a0a;
+}
+
+.signatureLabel {
+  font-size: 0.78rem;
+  color: #6b7280;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.footer {
+  margin-top: 1.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e5e7eb;
+  font-size: 0.85rem;
+  color: #4a5162;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.footerMeta {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+
+/* ── Print ─────────────────────────────────────────────── */
+
+@media print {
+  /* Hide the SPA shell (sidebar, topbar, announcement banner)
+     so only the receipt prints. The chrome inside this route
+     also disappears via ``.shellChrome { display: none }``. */
+  :global(.app-sidebar),
+  :global(.app-topbar),
+  :global(.app-hamburger),
+  :global(.app-backdrop) {
+    display: none !important;
+  }
+  :global(.app-shell) {
+    grid-template-columns: 1fr !important;
+  }
+  :global(.app-content) {
+    grid-column: 1 !important;
+  }
+  .shellChrome {
+    display: none;
+  }
+  .page {
+    padding: 0;
+  }
+  .receipt {
+    box-shadow: none;
+    border-radius: 0;
+    padding: 1.5rem;
+    max-width: 100%;
+  }
+}
