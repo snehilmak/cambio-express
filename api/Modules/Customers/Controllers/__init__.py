@@ -1,29 +1,23 @@
 """Customers module — Controllers (FastAPI router).
 
-Mounts at `/api/v2/customers/*` (the parent router in `api/main.py`
-adds `/customers`; the FastAPI app's `root_path="/api/v2"` carries
-the version prefix).
+Mounts at ``/api/v2/customers/*``. Routes:
 
-Routes:
+  GET    /search                          → autocomplete
+  POST   /upsert                          → create or update
+  GET    /{id}                            → single-customer detail
+  GET    /{id}/recent-recipients          → chip row
+  GET    /export.csv                      → admin CSV dump
+  POST   /{winner_id}/merge               → merge duplicate into winner
 
-  GET  /search       → autocomplete; mirrors `/api/customers/search`
-                        Flask body.
-  POST /upsert       → create or update a customer; mirrors
-                        `find_or_upsert_customer` from app.py.
-  GET  /{id}         → single-customer detail (umbrella-scoped).
-  GET  /export.csv   → admin-only CSV dump of every customer in the
-                        owner umbrella. Streams as ``text/csv``
-                        with a ``Content-Disposition`` filename.
-
-The autocomplete + upsert routes still take ``?store_id=`` as a
-query param (legacy callers); the export route reads the store
-scope from the JWT claims so a cashier can't request another
-store's directory by tweaking the URL.
+Tenancy: the search / upsert / detail / recent-recipients endpoints
+take ``?store_id=`` as a query param (legacy callers); the export
++ merge endpoints read the store scope from the JWT so a cashier
+can't pivot to another store by tweaking the URL.
 
 Layer rules:
     Controller → Service     ✓
     Controller → Repository  ✓ (for read-only export)
-    Controller → DB session  ✓ (only via `Depends(get_db)`)
+    Controller → DB session  ✓ (only via ``Depends(get_db)``)
 """
 import csv
 import io
@@ -33,13 +27,17 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
+from api.Modules.Audit.Services import record_operator_action
 from api.Modules.Auth.Controllers import get_principal
+from api.Modules.Auth.Models import User
 from api.Modules.Customers.Repositories import (
     find_by_id_in_stores,
     list_for_export,
     sibling_store_ids,
 )
 from api.Modules.Customers.Requests import (
+    CustomerMergeRequest,
+    CustomerMergeResponse,
     CustomerResponse,
     CustomerRow,
     CustomerSearchResponse,
@@ -49,7 +47,10 @@ from api.Modules.Customers.Requests import (
     RecentRecipientsResponse,
 )
 from api.Modules.Customers.Services import (
+    CustomerNotFoundError,
+    SameCustomerError,
     list_recent_recipients,
+    merge_customers,
     search,
     upsert,
 )
@@ -276,3 +277,84 @@ def get_route(
         raise HTTPException(status_code=404, detail="Customer not found")
     home_names = _resolve_home_names(db, [cust], store_id)
     return CustomerResponse(customer=_row(cust, store_id, home_names))
+
+
+@router.post(
+    "/{winner_id}/merge",
+    response_model=CustomerMergeResponse,
+)
+def merge_route(
+    body: CustomerMergeRequest,
+    winner_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> CustomerMergeResponse:
+    """Merge ``body.loser_id`` into ``winner_id``.
+
+    Both customers must live in the caller's owner umbrella —
+    cross-umbrella merges 404 (same shape as a non-existent ID, so
+    a cashier probing the API can't tell "this id exists somewhere"
+    from "no such id").
+
+    Atomic: every Transfer pointing at the loser is re-pointed at
+    the winner, the loser row is deleted, and an OperatorAuditLog
+    entry is stamped — all in one transaction. Any failure rolls
+    back the whole thing.
+
+    Admin / owner / superadmin only. Cashiers (role=employee) get
+    403 because the merge is destructive (loser row is dropped)
+    and the audit trail needs admin attribution.
+    """
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can merge customers.",
+        )
+    sid_raw = claims.get("store_id")
+    if sid_raw is None:
+        raise HTTPException(
+            status_code=403, detail="JWT does not carry a store scope.",
+        )
+    store_id = int(sid_raw)
+    siblings = sibling_store_ids(db, store_id)
+
+    try:
+        result = merge_customers(
+            db,
+            winner_id=winner_id,
+            loser_id=body.loser_id,
+            store_ids=siblings,
+        )
+    except SameCustomerError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except CustomerNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    # Audit trail. Reload the operator User for canonical
+    # admin_name / admin_role — same pattern the other mutation
+    # endpoints follow.
+    sub = claims.get("sub")
+    actor = db.get(User, int(sub)) if sub is not None else None
+    record_operator_action(
+        db,
+        store_id=store_id,
+        user_id=actor.id if actor else None,
+        user_name=(actor.full_name or actor.username) if actor else "",
+        user_role=actor.role if actor else (claims.get("role") or ""),
+        target_type="customer",
+        target_id=str(result.winner_id),
+        target_label=f"merged #{result.loser_id} → #{result.winner_id}",
+        action="merge",
+        summary=(
+            f"Repointed {result.transfers_repointed} transfer(s) "
+            f"from customer #{result.loser_id} to "
+            f"customer #{result.winner_id}."
+        ),
+    )
+
+    db.commit()
+    return CustomerMergeResponse(
+        winner_id=result.winner_id,
+        loser_id=result.loser_id,
+        transfers_repointed=result.transfers_repointed,
+    )

@@ -579,3 +579,296 @@ def test_recent_recipients_respects_limit(test_store_id, api_client):
     )
     rows = resp.json()["rows"]
     assert len(rows) == 2
+
+
+# ── /{winner_id}/merge ─────────────────────────────────────
+
+
+def _seed_basic_transfer(store_id, customer_id, *, status="Sent"):
+    """Tiny transfer row pinned to ``customer_id``. Used by the
+    merge tests to verify FK re-pointing."""
+    from datetime import date as _date
+    from api.Modules.Transfers.Models import Transfer
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.session.query(StoreEmployee).filter_by(
+        store_id=store_id,
+    ).first()
+    if emp is None:
+        emp = StoreEmployee(
+            store_id=store_id, name="cashier", is_active=True,
+        )
+        db.session.add(emp); db.session.flush()
+    t = Transfer(
+        store_id=store_id,
+        send_date=_date.today(),
+        company="Intermex",
+        service_type="Money Transfer",
+        sender_name="Sender",
+        sender_phone="5550000000",
+        sender_phone_country="+1",
+        sender_address="",
+        send_amount=100.0,
+        fee=5.0,
+        federal_tax=0.0,
+        country="Mexico",
+        recipient_name="Recipient",
+        recipient_phone="",
+        confirm_number="",
+        status=status,
+        employee_id=emp.id,
+        customer_id=customer_id,
+    )
+    db.session.add(t); db.session.commit()
+    return t.id
+
+
+def test_merge_requires_jwt(client):
+    resp = client.post(
+        "/api/v2/customers/1/merge", json={"loser_id": 2},
+    )
+    assert resp.status_code == 401
+
+
+def test_merge_rejects_cashier_role(client, test_store_id):
+    """Employees can't merge — destructive operation + audit trail
+    needs admin attribution."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        emp = User(
+            store_id=test_store_id, username="cashier_merge@test.com",
+            full_name="Cashier", role="employee",
+        )
+        emp.set_password("p123pass!")
+        db.session.add(emp); db.session.commit()
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "cashier_merge@test.com",
+            "password": "p123pass!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.post(
+        "/api/v2/customers/1/merge",
+        json={"loser_id": 2},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_merge_repoints_transfers_and_deletes_loser(
+    client, test_store_id,
+):
+    """Happy path: two customers, transfers pinned to each, merge
+    flips the loser's transfers onto the winner and deletes the
+    loser row. Response carries the repointed count."""
+    from api.Modules.Customers.Models import Customer
+    from api.Modules.Transfers.Models import Transfer
+    with db_session():
+        winner_id = _seed_customer(
+            test_store_id, full_name="Maria Lopez",
+            phone_number="5551110000",
+        )
+        loser_id = _seed_customer(
+            test_store_id, full_name="Maria Lopes",  # typo
+            phone_number="5551111111",
+        )
+        _seed_basic_transfer(test_store_id, winner_id)
+        _seed_basic_transfer(test_store_id, loser_id)
+        _seed_basic_transfer(test_store_id, loser_id)
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{winner_id}/merge",
+        json={"loser_id": loser_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["winner_id"] == winner_id
+    assert body["loser_id"] == loser_id
+    assert body["transfers_repointed"] == 2
+    with db_session():
+        # Loser row deleted.
+        assert db.session.get(Customer, loser_id) is None
+        # Every transfer now points at the winner.
+        count = (
+            db.session.query(Transfer)
+              .filter_by(customer_id=winner_id)
+              .count()
+        )
+        assert count == 3
+
+
+def test_merge_records_operator_audit_entry(client, test_store_id):
+    """CLAUDE.md invariant #7 (audit every operator mutation)."""
+    from api.Modules.Audit.Models import OperatorAuditLog
+    with db_session():
+        winner_id = _seed_customer(
+            test_store_id, full_name="Audit Winner",
+            phone_number="5552220000",
+        )
+        loser_id = _seed_customer(
+            test_store_id, full_name="Audit Loser",
+            phone_number="5552220001",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{winner_id}/merge",
+        json={"loser_id": loser_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    with db_session():
+        rows = (
+            db.session.query(OperatorAuditLog)
+              .filter_by(target_type="customer", action="merge")
+              .all()
+        )
+        # At least one entry referencing this merge.
+        assert any(
+            f"#{loser_id}" in (r.summary or "")
+            and r.target_id == str(winner_id)
+            for r in rows
+        ), [r.summary for r in rows]
+
+
+def test_merge_404_on_unknown_winner(client, test_store_id):
+    with db_session():
+        loser_id = _seed_customer(
+            test_store_id, full_name="Lone Customer",
+            phone_number="5559990000",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/customers/9999999/merge",
+        json={"loser_id": loser_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_merge_404_on_unknown_loser(client, test_store_id):
+    with db_session():
+        winner_id = _seed_customer(
+            test_store_id, full_name="Lone Customer 2",
+            phone_number="5559990001",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{winner_id}/merge",
+        json={"loser_id": 9999999},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_merge_400_when_same_customer(client, test_store_id):
+    with db_session():
+        cid = _seed_customer(
+            test_store_id, full_name="Self",
+            phone_number="5559990002",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{cid}/merge",
+        json={"loser_id": cid},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 400
+
+
+def test_merge_rejects_customer_outside_umbrella(
+    client, test_store_id,
+):
+    """A customer that exists but lives in an unrelated store
+    looks 404 from inside this umbrella — never expose its
+    existence."""
+    from api.Modules.Tenancy.Models import Store
+    with db_session():
+        winner_id = _seed_customer(
+            test_store_id, full_name="Mine",
+            phone_number="5558880000",
+        )
+        # Customer at an unrelated store (no StoreOwnerLink between
+        # it and test_store_id).
+        unrelated = Store(
+            name="Unrelated", slug="unrelated-merge",
+            email="unrelated@x.com", plan="basic",
+        )
+        db.session.add(unrelated); db.session.flush()
+        outside_id = _seed_customer(
+            unrelated.id, full_name="Outsider",
+            phone_number="5558880001",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{winner_id}/merge",
+        json={"loser_id": outside_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_merge_rejects_extra_fields(client, test_store_id):
+    """Pydantic ``extra="forbid"`` — typo'd field → 422."""
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/customers/1/merge",
+        json={"loser_id": 2, "extra": "nope"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_merge_rejects_missing_loser_id(client, test_store_id):
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        "/api/v2/customers/1/merge",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_merge_owner_umbrella_succeeds(client, test_store_id):
+    """A customer at a sibling store (linked via StoreOwnerLink to
+    the caller's store via a shared owner) is mergeable — that's
+    the whole point of the owner-umbrella scoping."""
+    from api.Modules.Tenancy.Models import Store, StoreOwnerLink, User
+    with db_session():
+        # Sibling store + owner link.
+        sibling = Store(
+            name="Sibling", slug="sibling-merge",
+            email="sib@x.com", plan="basic",
+        )
+        db.session.add(sibling); db.session.flush()
+        owner = User(
+            store_id=None, username="owner_merge@test.com",
+            full_name="Owner", role="owner",
+        )
+        owner.set_password("pw")
+        db.session.add(owner); db.session.flush()
+        db.session.add_all([
+            StoreOwnerLink(store_id=test_store_id, owner_id=owner.id),
+            StoreOwnerLink(store_id=sibling.id, owner_id=owner.id),
+        ])
+        db.session.commit()
+        winner_id = _seed_customer(
+            test_store_id, full_name="Maria Lopez",
+            phone_number="5557770000",
+        )
+        loser_id = _seed_customer(
+            sibling.id, full_name="Maria Lopez 2",
+            phone_number="5557770001",
+        )
+    token = _login_admin(client, test_store_id)
+    resp = client.post(
+        f"/api/v2/customers/{winner_id}/merge",
+        json={"loser_id": loser_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["winner_id"] == winner_id
+    assert body["loser_id"] == loser_id

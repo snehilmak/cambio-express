@@ -11,12 +11,18 @@ from api.Modules.Customers.Requests.customers import (
     CustomerUpsertRequest,
     CustomerUpsertResponse,
 )
+from api.Modules.Customers.Requests.merge import (
+    CustomerMergeRequest,
+    CustomerMergeResponse,
+)
 from api.Modules.Customers.Requests.recent_recipients import (
     RecentRecipientRow,
     RecentRecipientsResponse,
 )
 
 __all__ = [
+    "CustomerMergeRequest",
+    "CustomerMergeResponse",
     "CustomerResponse",
     "CustomerRow",
     "CustomerSearchResponse",

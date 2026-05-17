@@ -1762,6 +1762,48 @@
         "title": "CreateTransferRequest",
         "type": "object"
       },
+      "CustomerMergeRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``POST /customers/{winner_id}/merge``. The winner\nis in the path; the loser goes here so the eligibility check\nhas both IDs in one place.",
+        "properties": {
+          "loser_id": {
+            "description": "ID of the duplicate customer to delete. All Transfers pointing at this row will be re-pointed to the winner.",
+            "minimum": 1.0,
+            "title": "Loser Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "loser_id"
+        ],
+        "title": "CustomerMergeRequest",
+        "type": "object"
+      },
+      "CustomerMergeResponse": {
+        "additionalProperties": false,
+        "description": "Shape returned to the SPA after a successful merge.",
+        "properties": {
+          "loser_id": {
+            "title": "Loser Id",
+            "type": "integer"
+          },
+          "transfers_repointed": {
+            "title": "Transfers Repointed",
+            "type": "integer"
+          },
+          "winner_id": {
+            "title": "Winner Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "winner_id",
+          "loser_id",
+          "transfers_repointed"
+        ],
+        "title": "CustomerMergeResponse",
+        "type": "object"
+      },
       "CustomerResponse": {
         "additionalProperties": false,
         "description": "Single-customer payload returned by GET /customers/{id}. Same\n`customer` field name as CustomerUpsertResponse so the React\nfrontend can reuse the same parser.",
@@ -11815,6 +11857,92 @@
           }
         },
         "summary": "Recent Recipients Route",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/customers/{winner_id}/merge": {
+      "post": {
+        "description": "Merge ``body.loser_id`` into ``winner_id``.\n\nBoth customers must live in the caller's owner umbrella \u2014\ncross-umbrella merges 404 (same shape as a non-existent ID, so\na cashier probing the API can't tell \"this id exists somewhere\"\nfrom \"no such id\").\n\nAtomic: every Transfer pointing at the loser is re-pointed at\nthe winner, the loser row is deleted, and an OperatorAuditLog\nentry is stamped \u2014 all in one transaction. Any failure rolls\nback the whole thing.\n\nAdmin / owner / superadmin only. Cashiers (role=employee) get\n403 because the merge is destructive (loser row is dropped)\nand the audit trail needs admin attribution.",
+        "operationId": "merge_route_customers__winner_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "winner_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Winner Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerMergeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Merge Route",
         "tags": [
           "customers"
         ]

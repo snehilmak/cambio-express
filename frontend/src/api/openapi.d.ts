@@ -1421,6 +1421,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/customers/{winner_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Route
+         * @description Merge ``body.loser_id`` into ``winner_id``.
+         *
+         *     Both customers must live in the caller's owner umbrella —
+         *     cross-umbrella merges 404 (same shape as a non-existent ID, so
+         *     a cashier probing the API can't tell "this id exists somewhere"
+         *     from "no such id").
+         *
+         *     Atomic: every Transfer pointing at the loser is re-pointed at
+         *     the winner, the loser row is deleted, and an OperatorAuditLog
+         *     entry is stamped — all in one transaction. Any failure rolls
+         *     back the whole thing.
+         *
+         *     Admin / owner / superadmin only. Cashiers (role=employee) get
+         *     403 because the merge is destructive (loser row is dropped)
+         *     and the audit trail needs admin attribution.
+         */
+        post: operations["merge_route_customers__winner_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/daily/{store_id}/line-items/{item_id}": {
         parameters: {
             query?: never;
@@ -4159,6 +4193,31 @@ export interface components {
              * @default
              */
             status_notes: string;
+        };
+        /**
+         * CustomerMergeRequest
+         * @description Body for ``POST /customers/{winner_id}/merge``. The winner
+         *     is in the path; the loser goes here so the eligibility check
+         *     has both IDs in one place.
+         */
+        CustomerMergeRequest: {
+            /**
+             * Loser Id
+             * @description ID of the duplicate customer to delete. All Transfers pointing at this row will be re-pointed to the winner.
+             */
+            loser_id: number;
+        };
+        /**
+         * CustomerMergeResponse
+         * @description Shape returned to the SPA after a successful merge.
+         */
+        CustomerMergeResponse: {
+            /** Loser Id */
+            loser_id: number;
+            /** Transfers Repointed */
+            transfers_repointed: number;
+            /** Winner Id */
+            winner_id: number;
         };
         /**
          * CustomerResponse
@@ -9342,6 +9401,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecentRecipientsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_route_customers__winner_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                winner_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerMergeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerMergeResponse"];
                 };
             };
             /** @description Validation Error */

@@ -492,7 +492,23 @@ impact ÷ effort. Numbers are an estimate.
       from the live path. Honors Bill Payment / domestic-country
       exemptions and is idempotent (rerunning is a no-op). Tests
       in `tests/test_backfill_federal_tax.py`.
-- [ ] Dedicated `/customers` page with search / edit / merge-duplicates.
+- [x] Dedicated `/customers` page with search / merge-duplicates —
+      landed. ``/app/customers`` already had search + CSV export;
+      this batch shipped the "Merge duplicates" mode + the
+      backing endpoint. Admin / owner picks two customers, the UI
+      shows winner / loser side-by-side, and confirming fires
+      ``POST /api/v2/customers/{winner_id}/merge`` which:
+      * re-points every ``Transfer.customer_id`` from loser →
+        winner across the owner umbrella,
+      * deletes the loser ``Customer`` row,
+      * stamps an ``OperatorAuditLog`` entry (target_type=
+        ``customer``, action=``merge``).
+      Atomic — any failure rolls back the whole transaction.
+      Cross-umbrella merges 404 (same shape as a non-existent
+      id, so a cashier probing the API can't tell "this id exists
+      somewhere" from "no such id"). Cashiers get 403 because the
+      operation is destructive. Inline-edit (separate from merge)
+      is still a backlog item.
 - [x] Recipient suggestions — landed. When the cashier picks a
       sender (``customer_id`` set via SenderAutocomplete), a row
       of "recent recipients" chips appears above the
