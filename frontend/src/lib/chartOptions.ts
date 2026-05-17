@@ -26,17 +26,39 @@ import type { ChartOptions, ChartType, TooltipItem } from "chart.js";
 // generic over the chart type and consumers pick the variant
 // that fits their `<Line>` or `<Bar>` call site.
 
-// Design-token mirror. Keep in sync with static/design-tokens.css.
-// chart.js renders into <canvas> so we can't pass `var(--db-*)`
-// directly — these literal values are what the design system
-// resolves to in dark mode.
-const TOKEN = {
-  textMuted: "#a3a3a3",
-  borderSubtle: "#1f1f1f",
-  surface2: "#141414",
-  border: "#262626",
-  text: "#f5f5f5",
-} as const;
+// chart.js renders into <canvas> so we can't pass ``var(--db-*)``
+// directly. Instead, resolve the design-system variables off the
+// document at call time. This means a Bar/Line built right after
+// the theme flips automatically picks up the new palette; an
+// existing chart re-renders on the next state change. The
+// fallback hex values match the dark-mode resolved tokens so
+// pre-mount or SSR contexts (no ``document``) still look right.
+function _resolveToken(name: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const value = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  return value || fallback;
+}
+
+function _tokens() {
+  return {
+    textMuted:    _resolveToken("--db-text-muted", "#a3a3a3"),
+    borderSubtle: _resolveToken("--db-border-subtle", "#1f1f1f"),
+    surface2:     _resolveToken("--db-surface-2", "#141414"),
+    border:       _resolveToken("--db-border", "#262626"),
+    text:         _resolveToken("--db-text", "#f5f5f5"),
+  };
+}
+
+
+/** Resolved theme tokens for inline chart options that can't use
+ *  ``moneyChartOptions`` / ``countChartOptions`` directly (e.g.
+ *  dual-axis charts). Returns the same palette ``baseOptions``
+ *  uses so routes mixing the two stay visually consistent. */
+export function chartTokens() {
+  return _tokens();
+}
 
 
 // Shared base — extracted so the two presets only differ in their
@@ -45,6 +67,7 @@ function baseOptions<T extends ChartType = "line">(
   label: string,
   format: (v: number) => string,
 ): ChartOptions<T> {
+  const t = _tokens();
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -61,10 +84,10 @@ function baseOptions<T extends ChartType = "line">(
       tooltip: {
         mode: "index",
         intersect: false,
-        backgroundColor: TOKEN.surface2,
-        titleColor: TOKEN.text,
-        bodyColor: TOKEN.text,
-        borderColor: TOKEN.border,
+        backgroundColor: t.surface2,
+        titleColor: t.text,
+        bodyColor: t.text,
+        borderColor: t.border,
         borderWidth: 1,
         padding: 10,
         cornerRadius: 8,
@@ -83,20 +106,20 @@ function baseOptions<T extends ChartType = "line">(
       y: {
         beginAtZero: true,
         ticks: {
-          color: TOKEN.textMuted,
+          color: t.textMuted,
           callback: (v: string | number) =>
             format(typeof v === "number" ? v : Number(v)),
         },
-        grid: { color: TOKEN.borderSubtle },
+        grid: { color: t.borderSubtle },
       },
       x: {
         ticks: {
-          color: TOKEN.textMuted,
+          color: t.textMuted,
           maxRotation: 0,
           autoSkip: true,
           autoSkipPadding: 12,
         },
-        grid: { color: TOKEN.borderSubtle },
+        grid: { color: t.borderSubtle },
       },
     },
   } as unknown as ChartOptions<T>;
