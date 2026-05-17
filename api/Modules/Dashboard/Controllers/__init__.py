@@ -180,12 +180,23 @@ def _employee_summary(db: Session, store_id: int) -> dict:
 
 
 def _superadmin_summary(db: Session) -> dict:
-    """Delegate to the existing service. Map ORM rows + datetimes
-    into JSON-native primitives so FastAPI's encoder can serialise
-    without a custom encoder."""
+    """Delegate to the existing service. Two responsibilities:
+
+      1. Map ORM rows + datetimes into JSON-native primitives so
+         FastAPI's encoder can serialise without a custom encoder.
+      2. Adapt the legacy ``*_count`` / ``estimated_mrr`` field
+         names that ``superadmin_dashboard_context`` returns to
+         the ``*_stores`` / ``mrr_total`` shape the SPA expects.
+         Without the adapter the platform KPI tiles render as
+         "—" because the SPA reads keys that don't exist in the
+         response.
+    """
+    from datetime import datetime as _dt
     from api.Modules.Superadmin.Services.dashboard import (
         superadmin_dashboard_context,
     )
+    from api.Modules.Tenancy.Models import Store
+
     ctx = superadmin_dashboard_context(db)
 
     def _safe(v):
@@ -200,7 +211,45 @@ def _superadmin_summary(db: Session) -> dict:
                     for c in v.__table__.columns}
         return v
 
-    return {k: _safe(v) for k, v in ctx.items()}
+    out = {k: _safe(v) for k, v in ctx.items()}
+
+    # SPA-facing aliases. Don't drop the original ``*_count`` keys —
+    # any internal Python consumer keeps working — just publish the
+    # ``*_stores`` shape the React SuperadminControls + Dashboard
+    # routes read.
+    if "active_count" in out:
+        out.setdefault("active_stores", out["active_count"])
+    if "trial_count" in out:
+        out.setdefault("trial_stores", out["trial_count"])
+    if "paid_count" in out:
+        out.setdefault("paid_stores", out["paid_count"])
+    if "inactive_count" in out:
+        out.setdefault("inactive_stores", out["inactive_count"])
+    if "estimated_mrr" in out:
+        mrr = out["estimated_mrr"]
+        out.setdefault("mrr_total", mrr)
+        if isinstance(mrr, (int, float)):
+            # ARR = MRR × 12. Cheap derived value the SPA shows
+            # next to MRR on the Platform Controls overview.
+            out.setdefault("arr_total", float(mrr) * 12.0)
+    if "churn_30d" in out:
+        out.setdefault("cancellations_30d", out["churn_30d"])
+
+    # Retention queue: stores past cancellation, still inside the
+    # 180-day data-retention window. Counted live so the KPI tile
+    # always reflects current state (no separate flag to keep in
+    # sync).
+    now = _dt.utcnow()
+    out.setdefault(
+        "retention_queue",
+        db.query(Store)
+          .filter(
+              Store.data_retention_until.isnot(None),
+              Store.data_retention_until > now,
+          )
+          .count(),
+    )
+    return out
 
 
 @router.get("/summary")
