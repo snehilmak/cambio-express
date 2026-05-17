@@ -285,6 +285,9 @@ def get_receipt_route(
             receipt_logo_url=store.receipt_logo_url or "",
             receipt_footer=store.receipt_footer or "",
             receipt_tax_id=store.receipt_tax_id or "",
+            legal_name=store.legal_name or "",
+            ein=store.ein or "",
+            legal_address=store.legal_address or "",
         ),
         transfer=ReceiptTransfer(
             id=transfer.id,

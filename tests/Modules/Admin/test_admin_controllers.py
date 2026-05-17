@@ -687,3 +687,128 @@ def test_put_store_info_rejects_bad_time_format_in_hours(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── Business legal info ─────────────────────────────────────
+
+
+def test_get_store_info_includes_legal_fields_defaults(
+    client, test_store_id,
+):
+    """Unconfigured store comes back with empty strings on every
+    legal-info field. SPA renders blank inputs in that state."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["store"]
+    assert body["legal_name"] == ""
+    assert body["ein"] == ""
+    assert body["legal_address"] == ""
+
+
+def test_put_store_info_persists_legal_fields(client, test_store_id):
+    """All three legal-info fields round-trip PUT → DB → GET.
+    Operator can fill them once and the receipt + future tax pack
+    read from the column without re-asking."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={
+            "legal_name": "Test Remittance LLC",
+            "ein": "12-3456789",
+            "legal_address": "100 Main St, Houston, TX 77002",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()["store"]
+    assert body["legal_name"] == "Test Remittance LLC"
+    assert body["ein"] == "12-3456789"
+    assert body["legal_address"] == "100 Main St, Houston, TX 77002"
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.legal_name == "Test Remittance LLC"
+        assert s.ein == "12-3456789"
+        assert s.legal_address == "100 Main St, Houston, TX 77002"
+
+
+def test_put_store_info_normalizes_ein_loose_input(
+    client, test_store_id,
+):
+    """Operator can paste any reasonable EIN format ("EIN
+    12-3456789", "12 3456789", "123456789") and the server
+    canonicalizes to "XX-XXXXXXX". Keeps downstream tax-pack /
+    receipt code from re-implementing the normalization."""
+    token = _login(client, test_store_id)
+    for variant in ("123456789", "EIN 12-3456789", "12 3456789"):
+        resp = client.put(
+            "/api/v2/admin/store-info",
+            json={"ein": variant},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert resp.status_code == 200, variant
+        assert resp.get_json()["store"]["ein"] == "12-3456789", variant
+
+
+def test_put_store_info_rejects_short_ein(client, test_store_id):
+    """An 8-digit EIN trips the normalizer — partial paste shouldn't
+    silently truncate or pad. Empty string is still accepted (it's
+    the explicit clear)."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"ein": "12345678"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert "9 digits" in resp.get_data(as_text=True)
+
+
+def test_put_store_info_clears_ein_with_empty_string(
+    client, test_store_id,
+):
+    """Empty string wipes the EIN — operator can revoke without
+    nulling the column manually."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    client.put(
+        "/api/v2/admin/store-info",
+        json={"ein": "12-3456789"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"ein": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["store"]["ein"] == ""
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.ein == ""
+
+
+def test_put_store_info_rejects_oversized_legal_name(client, test_store_id):
+    """``legal_name`` max_length=200 keeps the column predictable
+    for tax-pack export buffers."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"legal_name": "x" * 201},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_store_info_rejects_oversized_legal_address(
+    client, test_store_id,
+):
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"legal_address": "x" * 501},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

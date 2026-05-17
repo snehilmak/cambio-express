@@ -126,12 +126,22 @@ export default function TransferReceipt() {
             {store.receipt_logo_url && (
               <div className={styles.storeName}>{store.name}</div>
             )}
-            {store.address && (
-              <div className={styles.storeLine}>{store.address}</div>
+            {store.legal_name && store.legal_name !== store.name && (
+              <div className={styles.storeLine}>{store.legal_name}</div>
+            )}
+            {(store.legal_address || store.address) && (
+              <div className={styles.storeLine}>
+                {store.legal_address || store.address}
+              </div>
             )}
             <div className={styles.storeLine}>
               {[store.phone, store.email].filter(Boolean).join(" · ")}
             </div>
+            {store.ein && (
+              <div className={styles.storeLine}>
+                EIN: {store.ein}
+              </div>
+            )}
             {store.receipt_tax_id && (
               <div className={styles.storeLine}>
                 Tax ID: {store.receipt_tax_id}

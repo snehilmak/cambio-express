@@ -113,6 +113,18 @@ class Store(Base):
     # is a separate backlog item and reads from this column when
     # it ships.
     store_hours      = Column(JSON, nullable=True)
+    # Business-legal block. Separate from the public-facing
+    # ``name`` / ``address`` so the wordmark + storefront copy
+    # can stay short while the receipt header + future tax pack
+    # carry the registered entity. ``ein`` is the canonical
+    # federal tax ID (distinct from ``receipt_tax_id``, which is
+    # freeform display copy the operator can tweak per-receipt).
+    # All three default to empty string — an unconfigured store
+    # falls back to ``Store.name`` / ``Store.address`` on every
+    # render.
+    legal_name       = Column(String(200), default="")
+    ein              = Column(String(20),  default="")
+    legal_address    = Column(String(500), default="")
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

@@ -389,6 +389,9 @@ function StoreInfoCard() {
   const [receiptTaxId, setReceiptTaxId] = useState("");
   const [timezone, setTimezone] = useState("");
   const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
+  const [legalName, setLegalName] = useState("");
+  const [ein, setEin] = useState("");
+  const [legalAddress, setLegalAddress] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -413,6 +416,9 @@ function StoreInfoCard() {
         ? data.store.store_hours.map((h) => ({ ...h }))
         : defaultHours(),
     );
+    setLegalName(data.store.legal_name);
+    setEin(data.store.ein);
+    setLegalAddress(data.store.legal_address);
   }, [data]);
 
   const canEdit =
@@ -434,6 +440,9 @@ function StoreInfoCard() {
         receipt_tax_id:   receiptTaxId,
         timezone,
         store_hours: hours,
+        legal_name:    legalName,
+        ein,
+        legal_address: legalAddress,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -526,6 +535,57 @@ function StoreInfoCard() {
             ))}
           </Select>
         </Field>
+        <div className={styles.spanFull}>
+          <SectionTitle>Business legal info</SectionTitle>
+          <p className={styles.helpText}>
+            Registered entity details that print on receipts when set
+            and feed future tax / 1099 exports. Distinct from the
+            public-facing store name + address — your wordmark can
+            stay short while the receipt header carries the legal
+            entity.
+          </p>
+        </div>
+        <Field
+          label="Legal entity name"
+          hint="As registered with the state, e.g. 'Maxi Remittance Services LLC'. Empty → falls back to the store name on the receipt."
+        >
+          <Input
+            type="text"
+            placeholder="My Business LLC"
+            value={legalName}
+            onChange={(e) => setLegalName(e.target.value)}
+            disabled={!canEdit}
+            maxLength={200}
+          />
+        </Field>
+        <Field
+          label="EIN / Federal tax ID"
+          hint="9 digits, e.g. 12-3456789. Operator can paste any format; the server normalizes on save."
+        >
+          <Input
+            type="text"
+            placeholder="12-3456789"
+            value={ein}
+            onChange={(e) => setEin(e.target.value)}
+            disabled={!canEdit}
+            maxLength={20}
+          />
+        </Field>
+        <div className={styles.spanFull}>
+          <Field
+            label="Legal address"
+            hint="Registered business address. Empty → uses the public address on the receipt. Max 500 chars."
+          >
+            <Textarea
+              value={legalAddress}
+              onChange={(e) => setLegalAddress(e.target.value)}
+              disabled={!canEdit}
+              rows={2}
+              maxLength={500}
+              placeholder="123 Main St, Suite 400, Houston, TX 77002"
+            />
+          </Field>
+        </div>
         <div className={styles.spanFull}>
           <SectionTitle>Receipt customization</SectionTitle>
           <p className={styles.helpText}>

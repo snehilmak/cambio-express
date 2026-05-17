@@ -132,6 +132,32 @@ def test_receipt_carries_store_customization_fields(
     assert body["store"]["receipt_tax_id"] == "EIN 12-3456789"
 
 
+def test_receipt_carries_business_legal_fields(client, test_store_id):
+    """legal_name / ein / legal_address surface on the receipt
+    payload so the SPA print view renders the registered-entity
+    block. Empty strings stay empty (the renderer suppresses the
+    line)."""
+    from api.Modules.Tenancy.Models import Store
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        s.legal_name    = "Test Remittance LLC"
+        s.ein           = "12-3456789"
+        s.legal_address = "100 Main St, Houston, TX 77002"
+        db.session.commit()
+        tid = _seed_transfer(test_store_id)
+    token = _login_admin(client, test_store_id)
+    body = client.get(
+        f"/api/v2/transfers/{tid}/receipt"
+        f"?store_ids={test_store_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()
+    assert body["store"]["legal_name"] == "Test Remittance LLC"
+    assert body["store"]["ein"] == "12-3456789"
+    assert body["store"]["legal_address"] == (
+        "100 Main St, Houston, TX 77002"
+    )
+
+
 def test_receipt_defaults_empty_strings_when_not_customized(
     client, test_store_id,
 ):
@@ -149,6 +175,9 @@ def test_receipt_defaults_empty_strings_when_not_customized(
     assert body["store"]["receipt_logo_url"] == ""
     assert body["store"]["receipt_footer"] == ""
     assert body["store"]["receipt_tax_id"] == ""
+    assert body["store"]["legal_name"] == ""
+    assert body["store"]["ein"] == ""
+    assert body["store"]["legal_address"] == ""
 
 
 # ── Tenancy ─────────────────────────────────────────────────

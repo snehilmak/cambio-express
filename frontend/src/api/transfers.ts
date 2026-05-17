@@ -283,6 +283,9 @@ export interface ReceiptStore {
   receipt_logo_url: string;
   receipt_footer:   string;
   receipt_tax_id:   string;
+  legal_name:       string;
+  ein:              string;
+  legal_address:    string;
 }
 
 export interface ReceiptTransfer {

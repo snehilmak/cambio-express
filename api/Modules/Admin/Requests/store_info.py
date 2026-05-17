@@ -51,6 +51,9 @@ class StoreInfoRow(BaseModel):
     # substitutes defaults when the column is NULL) so the SPA
     # can render a complete schedule without nullability checks.
     store_hours:      list[StoreHourEntry] = []
+    legal_name:       str = ""
+    ein:              str = ""
+    legal_address:    str = ""
 
 
 class StoreInfoResponse(BaseModel):
@@ -75,3 +78,6 @@ class StoreInfoUpdateRequest(BaseModel):
     receipt_tax_id:   str | None = Field(None, max_length=40)
     timezone:         str | None = Field(None, max_length=60)
     store_hours:      list[StoreHourEntry] | None = None
+    legal_name:       str | None = Field(None, max_length=200)
+    ein:              str | None = Field(None, max_length=20)
+    legal_address:    str | None = Field(None, max_length=500)

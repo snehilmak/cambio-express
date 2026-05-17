@@ -25,6 +25,10 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # Weekly business hours — validated via
     # ``Services.store_hours.validate_hours_payload``.
     "store_hours",
+    # Business-legal block — empty strings are valid (fall back
+    # to public-facing ``name`` / ``address`` on the receipt
+    # render). ``ein`` shape is normalized at the service layer.
+    "legal_name", "ein", "legal_address",
 )
 
 
@@ -86,6 +90,28 @@ def update_store_info(
             # bad payload coming from a non-SPA caller (CLI,
             # scripts) still hits the same guard.
             v = validate_hours_payload(v)
+        if k == "ein":
+            # Normalize loose operator input ("12 3456789", "EIN
+            # 12-3456789") to the canonical "XX-XXXXXXX" form so
+            # downstream callers (tax pack, receipt) can rely on
+            # a single shape. Empty string is allowed (clears the
+            # field).
+            v = _normalize_ein(v)
         setattr(store, k, v)
     db.flush()
     return store
+
+
+def _normalize_ein(raw: str) -> str:
+    """Strip non-digits, then format as XX-XXXXXXX. Empty input
+    returns empty. Anything other than 0 or 9 digits raises so
+    a partial / pasted-with-extra-chars EIN doesn't silently
+    land in the DB."""
+    digits = "".join(c for c in raw if c.isdigit())
+    if not digits:
+        return ""
+    if len(digits) != 9:
+        raise ValueError(
+            f"EIN must be 9 digits (got {len(digits)}).",
+        )
+    return f"{digits[:2]}-{digits[2:]}"

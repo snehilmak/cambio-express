@@ -11,7 +11,9 @@ from pydantic import BaseModel, ConfigDict
 
 class ReceiptStore(BaseModel):
     """Store header — branding + identifiers printed at the top
-    of the receipt."""
+    of the receipt. Legal-info fields are empty strings unless
+    the operator filled them on /app/settings — the renderer
+    suppresses the corresponding line when blank."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,6 +24,9 @@ class ReceiptStore(BaseModel):
     receipt_logo_url: str
     receipt_footer:   str
     receipt_tax_id:   str
+    legal_name:       str = ""
+    ein:              str = ""
+    legal_address:    str = ""
 
 
 class ReceiptTransfer(BaseModel):

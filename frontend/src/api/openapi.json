@@ -4481,14 +4481,29 @@
       },
       "ReceiptStore": {
         "additionalProperties": false,
-        "description": "Store header \u2014 branding + identifiers printed at the top\nof the receipt.",
+        "description": "Store header \u2014 branding + identifiers printed at the top\nof the receipt. Legal-info fields are empty strings unless\nthe operator filled them on /app/settings \u2014 the renderer\nsuppresses the corresponding line when blank.",
         "properties": {
           "address": {
             "title": "Address",
             "type": "string"
           },
+          "ein": {
+            "default": "",
+            "title": "Ein",
+            "type": "string"
+          },
           "email": {
             "title": "Email",
+            "type": "string"
+          },
+          "legal_address": {
+            "default": "",
+            "title": "Legal Address",
+            "type": "string"
+          },
+          "legal_name": {
+            "default": "",
+            "title": "Legal Name",
             "type": "string"
           },
           "name": {
@@ -5531,6 +5546,11 @@
             "title": "Address",
             "type": "string"
           },
+          "ein": {
+            "default": "",
+            "title": "Ein",
+            "type": "string"
+          },
           "email": {
             "default": "",
             "title": "Email",
@@ -5549,6 +5569,16 @@
             "default": true,
             "title": "Is Active",
             "type": "boolean"
+          },
+          "legal_address": {
+            "default": "",
+            "title": "Legal Address",
+            "type": "string"
+          },
+          "legal_name": {
+            "default": "",
+            "title": "Legal Name",
+            "type": "string"
           },
           "name": {
             "title": "Name",
@@ -5629,6 +5659,18 @@
             ],
             "title": "Address"
           },
+          "ein": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ein"
+          },
           "email": {
             "anyOf": [
               {
@@ -5653,6 +5695,30 @@
               }
             ],
             "title": "Federal Tax Rate"
+          },
+          "legal_address": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Address"
+          },
+          "legal_name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legal Name"
           },
           "name": {
             "anyOf": [

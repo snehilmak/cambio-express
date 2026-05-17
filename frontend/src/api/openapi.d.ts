@@ -5712,13 +5712,30 @@ export interface components {
         /**
          * ReceiptStore
          * @description Store header — branding + identifiers printed at the top
-         *     of the receipt.
+         *     of the receipt. Legal-info fields are empty strings unless
+         *     the operator filled them on /app/settings — the renderer
+         *     suppresses the corresponding line when blank.
          */
         ReceiptStore: {
             /** Address */
             address: string;
+            /**
+             * Ein
+             * @default
+             */
+            ein: string;
             /** Email */
             email: string;
+            /**
+             * Legal Address
+             * @default
+             */
+            legal_address: string;
+            /**
+             * Legal Name
+             * @default
+             */
+            legal_name: string;
             /** Name */
             name: string;
             /** Phone */
@@ -6261,6 +6278,11 @@ export interface components {
              */
             address: string;
             /**
+             * Ein
+             * @default
+             */
+            ein: string;
+            /**
              * Email
              * @default
              */
@@ -6277,6 +6299,16 @@ export interface components {
              * @default true
              */
             is_active: boolean;
+            /**
+             * Legal Address
+             * @default
+             */
+            legal_address: string;
+            /**
+             * Legal Name
+             * @default
+             */
+            legal_name: string;
             /** Name */
             name: string;
             /**
@@ -6330,10 +6362,16 @@ export interface components {
         StoreInfoUpdateRequest: {
             /** Address */
             address?: string | null;
+            /** Ein */
+            ein?: string | null;
             /** Email */
             email?: string | null;
             /** Federal Tax Rate */
             federal_tax_rate?: number | null;
+            /** Legal Address */
+            legal_address?: string | null;
+            /** Legal Name */
+            legal_name?: string | null;
             /** Name */
             name?: string | null;
             /** Phone */

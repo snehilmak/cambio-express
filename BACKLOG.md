@@ -289,15 +289,19 @@ Honest review of the SPA migration architecture. Top of the list = highest
 impact ÷ effort. Numbers are an estimate.
 
 ### P0 — do before public launch
-1. [ ] **Cookie-based JWT** (httpOnly + Secure + SameSite=Strict) instead
-       of localStorage. Closes the XSS-exfil risk — XSS would be able to
-       read the access token from `localStorage` today. With Flask gone
-       there's no "share with legacy Flask" angle; the only audience is
-       the React SPA. ~1 PR.
-2. [ ] **Refresh tokens.** Today access tokens are 30 min with no refresh
-       — users get bumped mid-workflow. Add `/auth/refresh` endpoint +
-       rotation; SPA fetches a new access token before the old one
-       expires. ~1 PR.
+1. [x] **Cookie-based JWT** — landed (PR #559). The access token
+       lives in a `db_access_token` httpOnly+Secure+SameSite=Lax
+       cookie set by the login + refresh endpoints; the SPA only
+       caches non-secret parsed claims (role, store_id, user_id)
+       under `db.identity` in localStorage so route gating can
+       run synchronously. XSS can read those claims but cannot
+       exfiltrate the actual token.
+2. [x] **Refresh tokens** — landed. `/auth/refresh` rotates a
+       `db_refresh_token` httpOnly cookie (14-day TTL, single-
+       use chain) and re-issues the 30-min access cookie. The
+       SPA refreshes proactively before expiry; every session
+       carries a stable `sid` UUID so `account/sessions` can
+       collapse the chain into one row per browser.
 3. [x] **CI builds the SPA.** Landed (PR #426). `npm ci && npm run lint
        --max-warnings 0 && npm run build` runs in `.github/workflows/
        ci.yml`; a TypeScript regression fails the PR.
@@ -310,11 +314,12 @@ impact ÷ effort. Numbers are an estimate.
 5. [x] **Coverage tracks `api/` too.** Landed in PR #550 — coverage
        source is now `--source=api` (app.py is gone). Total coverage
        is ~93% as of the last run.
-6. [ ] **Generate TS types from FastAPI OpenAPI schema.**
-       `frontend/src/api/*.ts` has hand-written interfaces mirroring
-       `Requests/*.py` Pydantic — drift is inevitable. Add
-       `openapi-typescript` to the SPA build, single source of truth.
-       ~1 PR.
+6. [x] **Generate TS types from FastAPI OpenAPI schema** —
+       landed (BACKLOG E7, PR #558). `npm run generate-types`
+       runs `python -m scripts.dump_openapi | openapi-typescript`
+       and writes `frontend/src/api/openapi.d.ts`. New SPA code
+       imports `components["schemas"][...]`; existing
+       hand-written interfaces migrate on-touch.
 7. [x] **Retire the WSGI-wraps-ASGI bridge.** Closed by the Flask
        removal (PR #550). `asgi.py` is the production entrypoint —
        FastAPI runs as native ASGI under uvicorn; no a2wsgi anywhere
@@ -804,11 +809,17 @@ gaps. Ordered by "what I'd do next" at the top.
       deliverability.
 
 ### Personal (`/account/*`)
-- [ ] **Notifications page** — toggles for email + push. v1 below;
-      follow-ups include announcement-broadcast email (needs a new
-      sender in the superadmin announcement POST) and daily-summary
-      email (needs a new cron). Ship the senders alongside the
-      toggles, not before — empty toggles are a trust-eroder.
+- [x] **Notifications page** — landed.
+      ``/app/account/notifications`` exposes the four ``User.notify_*``
+      toggles (trial reminders, announcement broadcast, locked-day
+      digest, daily summary) backed by ``GET/PUT
+      /api/v2/auth/notifications``. The trial-reminder toggle
+      renders as a greyed-out informational row for non-admins
+      whose store is on a paid plan — ``trial_toggle_applies``
+      on the GET tells the SPA. Every toggle has a live sender
+      already shipped, so saving the page is never a no-op.
+      Future channels (push, SMS) add one column + one toggle
+      each.
 - [x] **Sessions / active devices** — landed.
       ``/app/account/sessions`` (new Devices sidebar entry under
       Account) lists every browser the current user is signed in
@@ -915,5 +926,17 @@ gaps. Ordered by "what I'd do next" at the top.
 - [ ] **Consolidated billing** — one Stripe customer for N stores
       instead of one-per-store. Big architectural change, meaningful
       revenue upside.
-- [ ] **Business legal info** — legal name, EIN, address. Avoid
-      duplicating on each store.
+- [~] **Business legal info** — partial.
+      Per-store columns landed (``Store.legal_name``,
+      ``Store.ein``, ``Store.legal_address``; migration
+      ``c4d6f8a1b2e3``). Settings page exposes the three
+      fields; the admin endpoint normalizes loose EIN input
+      ("EIN 12-3456789", "12 3456789", "123456789") to canonical
+      "XX-XXXXXXX". Receipt header renders the legal entity +
+      EIN line when set, and falls back to the public store
+      name + address otherwise.
+      Cross-store dedup (one entry per owner umbrella, applied
+      to every linked store) stays open under "Cross-store
+      defaults" — once owner-settings ships, the legal block
+      moves up there and the per-store columns become an
+      override.

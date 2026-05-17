@@ -91,6 +91,9 @@ def _to_row(s) -> StoreInfoRow:
         # Always 7 entries — defaults fill in if the column is
         # NULL or malformed.
         store_hours=parse_stored_hours(s.store_hours),
+        legal_name=s.legal_name or "",
+        ein=s.ein or "",
+        legal_address=s.legal_address or "",
     )
 
 
