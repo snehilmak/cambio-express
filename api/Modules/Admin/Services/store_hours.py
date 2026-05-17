@@ -12,11 +12,14 @@ operator never sees an empty 7-row form.
 
 The "no transfers outside business hours" gating rule is a
 separate backlog item; this module owns the read / validate /
-write side only.
+write side only, plus the ``is_open_at`` predicate the
+indicator / future-gate use to ask "is the store open right
+now?".
 """
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from typing import Any
 
 
@@ -107,6 +110,42 @@ def validate_hours_payload(payload: Any) -> list[dict[str, Any]]:
     # Order by day for stable storage / display.
     out.sort(key=lambda e: e["day"])
     return out
+
+
+def is_open_at(stored_hours: Any, when: datetime) -> bool:
+    """Return True if ``when`` falls inside the store's open
+    window for that weekday. Callers pass the raw column value
+    — we run it through ``parse_stored_hours`` so a NULL /
+    malformed column treats every day as open 09:00-18:00 (the
+    default schedule), which is the safest default for a
+    soft-warning indicator. ``when`` is expected to already be
+    in the store's local timezone.
+    """
+    hours = parse_stored_hours(stored_hours)
+    # ``date.weekday()`` returns 0=Monday … 6=Sunday — same
+    # convention as our schema.
+    entry = hours[when.weekday()]
+    if entry.get("closed"):
+        return False
+    open_min  = _minute_of_day(entry.get("open"))
+    close_min = _minute_of_day(entry.get("close"))
+    now_min   = when.hour * 60 + when.minute
+    if open_min is None or close_min is None:
+        # Defensive — ``parse_stored_hours`` already substituted
+        # defaults so this branch only fires for genuinely
+        # broken inputs the read-side healer couldn't fix.
+        return False
+    return open_min <= now_min < close_min
+
+
+def _minute_of_day(value: Any) -> int | None:
+    if not isinstance(value, str) or not _TIME_RE.match(value):
+        return None
+    hh, mm = value.split(":", 1)
+    hour = int(hh)
+    if hour > 23:
+        return None
+    return hour * 60 + int(mm)
 
 
 # ── Internal helpers ─────────────────────────────────────────
