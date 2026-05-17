@@ -85,7 +85,11 @@ const NAV: NavGroup[] = [
   },
   {
     title: "Books",
-    roles: ["admin", "employee", "superadmin"],
+    // Superadmin doesn't see Books / Finance / Owner — those
+    // surfaces need a ``store_id`` JWT scope, which superadmin
+    // doesn't carry. Platform-level views (stores list,
+    // anomalies, audit log) live under the Platform section.
+    roles: ["admin", "employee"],
     items: [
       { to: "/transfers",     label: "Transfers",     icon: iconTransfers() },
       { to: "/customers",     label: "Customers",     icon: iconCustomers() },
@@ -95,9 +99,9 @@ const NAV: NavGroup[] = [
   },
   {
     title: "Finance",
-    // Employees don't reconcile bank or close monthly — keep the
-    // Finance section admin-only (superadmin sees it for support).
-    roles: ["admin", "superadmin"],
+    // Admin only — employees don't reconcile bank or close
+    // monthly, and superadmin works at the platform level.
+    roles: ["admin"],
     items: [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
@@ -107,7 +111,9 @@ const NAV: NavGroup[] = [
   },
   {
     title: "Owner",
-    roles: ["owner", "superadmin"],
+    // Owner umbrella surfaces — superadmin uses Platform > Stores
+    // to drill into individual owners' shops instead.
+    roles: ["owner"],
     items: [
       { to: "/owner/locations", label: "Locations",   icon: iconOwner() },
       { to: "/owner/pl-rollup", label: "P&L rollup",  icon: iconRollup() },
@@ -129,12 +135,14 @@ const NAV: NavGroup[] = [
   {
     title: "Account",
     items: [
-      // Settings is admin-only (employees, owners use a smaller
-      // profile screen — `/account/profile`). Superadmin sees
-      // Settings because they may be impersonating a store.
+      // Settings is admin-only — needs a store-scoped JWT.
+      // Employees + owners use ``/account/profile`` for personal
+      // info; superadmin reaches per-store settings via Platform
+      // → Stores → drill-in (the page itself 403s without a
+      // store_id in claims).
       {
         to: "/settings", label: "Settings",
-        roles: ["admin", "superadmin"],
+        roles: ["admin"],
         icon: iconSettings(),
       },
       // Profile is everyone — single place to change password,
