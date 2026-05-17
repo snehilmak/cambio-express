@@ -10,6 +10,11 @@ disbursements for the prior day):
     stamps it on a successful pass so a re-run on the same day
     is a no-op.
 
+Upgrade is idempotent — skips ``add_column`` calls for columns
+that already exist (a DB bootstrapped via ``create_all`` before
+this revision shipped will already have them from the model
+definition).
+
 Revision ID: 7a1c93f0d2b8
 Revises: 4b267ce786aa
 Create Date: 2026-05-17 02:30:00.000000
@@ -19,6 +24,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -28,24 +34,33 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(table: str, column: str) -> bool:
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    cols = {c["name"] for c in inspector.get_columns(table)}
+    return column in cols
+
+
 def upgrade() -> None:
-    op.add_column(
-        "user",
-        sa.Column(
-            "notify_daily_summary",
-            sa.Boolean(),
-            nullable=True,
-            server_default=sa.true(),
-        ),
-    )
-    op.add_column(
-        "store",
-        sa.Column(
-            "daily_summary_sent_for",
-            sa.Date(),
-            nullable=True,
-        ),
-    )
+    if not _has_column("user", "notify_daily_summary"):
+        op.add_column(
+            "user",
+            sa.Column(
+                "notify_daily_summary",
+                sa.Boolean(),
+                nullable=True,
+                server_default=sa.true(),
+            ),
+        )
+    if not _has_column("store", "daily_summary_sent_for"):
+        op.add_column(
+            "store",
+            sa.Column(
+                "daily_summary_sent_for",
+                sa.Date(),
+                nullable=True,
+            ),
+        )
 
 
 def downgrade() -> None:
