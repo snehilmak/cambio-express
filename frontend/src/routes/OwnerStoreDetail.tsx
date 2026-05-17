@@ -11,7 +11,7 @@ import {
   Card, ErrorState, KpiCard, KpiGrid, Loading, PageHeader, PageShell,
   Section, Table, tdStyle, thStyle,
 } from "../components/ui";
-import { moneyChartOptions } from "../lib/chartOptions";
+import { chartTokens, moneyChartOptions } from "../lib/chartOptions";
 import styles from "./OwnerStoreDetail.module.css";
 
 ChartJS.register(
@@ -121,55 +121,61 @@ export default function OwnerStoreDetail() {
                       },
                     ],
                   }}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: "index", intersect: false },
-                    plugins: {
-                      legend: { labels: { color: "#a3a3a3" } },
-                      tooltip: {
-                        mode: "index",
-                        intersect: false,
-                        backgroundColor: "#141414",
-                        titleColor: "#f5f5f5",
-                        bodyColor: "#f5f5f5",
-                        borderColor: "#262626",
-                        borderWidth: 1,
-                        padding: 10,
-                        cornerRadius: 8,
-                        callbacks: {
-                          label: (ctx) => {
-                            const y = (ctx.parsed as { y?: number | null }).y ?? 0;
-                            const lbl = ctx.dataset.label || "";
-                            return `${lbl}: $${y.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                  options={(() => {
+                    // Inline IIFE so the chart tokens are resolved on
+                    // every render — picks up theme flips without
+                    // re-mounting the route.
+                    const t = chartTokens();
+                    return {
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      interaction: { mode: "index", intersect: false },
+                      plugins: {
+                        legend: { labels: { color: t.textMuted } },
+                        tooltip: {
+                          mode: "index",
+                          intersect: false,
+                          backgroundColor: t.surface2,
+                          titleColor: t.text,
+                          bodyColor: t.text,
+                          borderColor: t.border,
+                          borderWidth: 1,
+                          padding: 10,
+                          cornerRadius: 8,
+                          callbacks: {
+                            label: (ctx) => {
+                              const y = (ctx.parsed as { y?: number | null }).y ?? 0;
+                              const lbl = ctx.dataset.label || "";
+                              return `${lbl}: $${y.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                            },
                           },
                         },
                       },
-                    },
-                    scales: {
-                      y: {
-                        beginAtZero: true,
-                        ticks: {
-                          color: "#a3a3a3",
-                          callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: {
+                            color: t.textMuted,
+                            callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          },
+                          grid: { color: t.borderSubtle },
                         },
-                        grid: { color: "#1f1f1f" },
-                      },
-                      y1: {
-                        position: "right",
-                        beginAtZero: true,
-                        ticks: {
-                          color: "#a3a3a3",
-                          callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                        y1: {
+                          position: "right",
+                          beginAtZero: true,
+                          ticks: {
+                            color: t.textMuted,
+                            callback: (v) => `$${(typeof v === "number" ? v : Number(v)).toLocaleString(undefined, { maximumFractionDigits: 0 })}`,
+                          },
+                          grid: { drawOnChartArea: false },
                         },
-                        grid: { drawOnChartArea: false },
+                        x: {
+                          ticks: { color: t.textMuted, maxRotation: 0, autoSkip: true },
+                          grid: { color: t.borderSubtle },
+                        },
                       },
-                      x: {
-                        ticks: { color: "#a3a3a3", maxRotation: 0, autoSkip: true },
-                        grid: { color: "#1f1f1f" },
-                      },
-                    },
-                  }}
+                    };
+                  })()}
                 />
               </div>
             </Card>
