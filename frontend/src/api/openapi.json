@@ -5475,6 +5475,40 @@
         "title": "SignupResponse",
         "type": "object"
       },
+      "StoreHourEntry": {
+        "additionalProperties": false,
+        "description": "One row in the weekly schedule. ``day`` is 0..6 (ISO,\n0=Monday). ``open`` / ``close`` are \"HH:MM\" 24-hour strings.\n``closed`` overrides the open/close pair \u2014 when True the\ntimes are ignored at the gating layer.\n\nPydantic-level validation is intentionally light (string\npresence + range) \u2014 the deeper checks (open < close, no\nduplicate days, exactly 7 entries) live in\n``Services.store_hours.validate_hours_payload`` so they can\nbe tested without instantiating a request.",
+        "properties": {
+          "close": {
+            "maxLength": 5,
+            "title": "Close",
+            "type": "string"
+          },
+          "closed": {
+            "default": false,
+            "title": "Closed",
+            "type": "boolean"
+          },
+          "day": {
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Day",
+            "type": "integer"
+          },
+          "open": {
+            "maxLength": 5,
+            "title": "Open",
+            "type": "string"
+          }
+        },
+        "required": [
+          "day",
+          "open",
+          "close"
+        ],
+        "title": "StoreHourEntry",
+        "type": "object"
+      },
       "StoreInfoResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5548,6 +5582,14 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "store_hours": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/StoreHourEntry"
+            },
+            "title": "Store Hours",
+            "type": "array"
           },
           "timezone": {
             "default": "",
@@ -5671,6 +5713,20 @@
               }
             ],
             "title": "Receipt Tax Id"
+          },
+          "store_hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoreHourEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Hours"
           },
           "timezone": {
             "anyOf": [

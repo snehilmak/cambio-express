@@ -164,6 +164,14 @@ export interface StoreInfoRow {
   receipt_tax_id:   string;
   timezone:         string;
   timezone_choices: string[];
+  store_hours:      StoreHourEntry[];
+}
+
+export interface StoreHourEntry {
+  day:    number;
+  open:   string;
+  close:  string;
+  closed: boolean;
 }
 
 export interface StoreInfoUpdateBody {
@@ -176,6 +184,7 @@ export interface StoreInfoUpdateBody {
   receipt_footer?:   string;
   receipt_tax_id?:   string;
   timezone?:         string;
+  store_hours?:      StoreHourEntry[];
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

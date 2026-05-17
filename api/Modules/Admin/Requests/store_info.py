@@ -2,6 +2,26 @@
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class StoreHourEntry(BaseModel):
+    """One row in the weekly schedule. ``day`` is 0..6 (ISO,
+    0=Monday). ``open`` / ``close`` are "HH:MM" 24-hour strings.
+    ``closed`` overrides the open/close pair — when True the
+    times are ignored at the gating layer.
+
+    Pydantic-level validation is intentionally light (string
+    presence + range) — the deeper checks (open < close, no
+    duplicate days, exactly 7 entries) live in
+    ``Services.store_hours.validate_hours_payload`` so they can
+    be tested without instantiating a request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day:    int  = Field(..., ge=0, le=6)
+    open:   str  = Field(..., max_length=5)
+    close:  str  = Field(..., max_length=5)
+    closed: bool = False
+
+
 class StoreInfoRow(BaseModel):
     """Read shape — fields the SPA's settings page renders.
     Slug / plan / billing fields are read-only here; the
@@ -27,6 +47,10 @@ class StoreInfoRow(BaseModel):
     receipt_tax_id:   str = ""
     timezone:         str = ""
     timezone_choices: list[str] = []
+    # Always exactly 7 entries on the read side (the adapter
+    # substitutes defaults when the column is NULL) so the SPA
+    # can render a complete schedule without nullability checks.
+    store_hours:      list[StoreHourEntry] = []
 
 
 class StoreInfoResponse(BaseModel):
@@ -50,3 +74,4 @@ class StoreInfoUpdateRequest(BaseModel):
     receipt_footer:   str | None = Field(None, max_length=500)
     receipt_tax_id:   str | None = Field(None, max_length=40)
     timezone:         str | None = Field(None, max_length=60)
+    store_hours:      list[StoreHourEntry] | None = None

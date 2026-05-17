@@ -22,6 +22,9 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # next layer of the per-request render chain (user.timezone
     # → store.timezone → browser default)".
     "timezone",
+    # Weekly business hours — validated via
+    # ``Services.store_hours.validate_hours_payload``.
+    "store_hours",
 )
 
 
@@ -61,6 +64,11 @@ def update_store_info(
 
     Caller commits.
     """
+    # Lazy import — keeps the validation logic colocated with its
+    # tests but out of the module-load critical path.
+    from api.Modules.Admin.Services.store_hours import (
+        validate_hours_payload,
+    )
     for k, v in fields.items():
         if k not in EDITABLE_STORE_FIELDS:
             raise ValueError(f"Field {k!r} is not admin-editable")
@@ -73,6 +81,11 @@ def update_store_info(
             raise ValueError(
                 f"Timezone {v!r} is not in the allowed list."
             )
+        if k == "store_hours":
+            # Re-validate the shape at the service layer so a
+            # bad payload coming from a non-SPA caller (CLI,
+            # scripts) still hits the same guard.
+            v = validate_hours_payload(v)
         setattr(store, k, v)
     db.flush()
     return store

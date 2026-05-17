@@ -23,7 +23,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer,
+    JSON, Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer,
     String, UniqueConstraint,
 )
 from api.Core.PasswordHash import check_password_hash, generate_password_hash
@@ -103,6 +103,16 @@ class Store(Base):
     # audit-log entries, etc. render in store-local time for
     # operators who haven't customized their profile.
     timezone         = Column(String(60), default="")
+    # Weekly business-hours schedule. JSON list of exactly 7
+    # entries (one per ISO weekday, Mon-Sun) — see
+    # ``api/Modules/Admin/Services/store_hours.py`` for the
+    # canonical shape + validation. NULL means "not configured"
+    # — the settings page hydrates a sane default (Mon-Sat
+    # 09:00-18:00 / Sun closed) so the operator can save in one
+    # click. The "no transfers outside hours" enforcement rule
+    # is a separate backlog item and reads from this column when
+    # it ships.
+    store_hours      = Column(JSON, nullable=True)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

@@ -850,8 +850,19 @@ gaps. Ordered by "what I'd do next" at the top.
       connect-code pages migrated; the remaining `.toLocaleString(…UTC…)`
       callsites (AdminUsers, TVDisplayAdmin) can adopt the helper
       on-touch.
-- [ ] **Store hours** (open/close per day) — gate "no transfers
-      outside business hours" rule; useful for peak-hour heatmap.
+- [~] **Store hours** (open/close per day) — schema + admin UI
+      landed. ``Store.store_hours`` is a JSON list of 7 entries
+      (Mon-first, ``{day, open, close, closed}``); migration
+      ``8a4b2e9d7c61`` adds the column idempotently.
+      ``Admin.Services.store_hours`` owns validation (exactly 7
+      entries, unique days, ``HH:MM`` 24-hour times, open<close
+      unless closed). Settings page exposes a 7-row editor with
+      a per-day "Closed" toggle. NULL on read renders a sensible
+      Mon-Sat 9-6 / Sun closed default so the operator can save
+      in one click.
+      Pending follow-ups (own backlog items): "no transfers
+      outside business hours" gating on the transfer form,
+      peak-hour heatmap on the dashboard.
 - [x] **Receipt customization** — landed. Three new Store
       columns (``receipt_logo_url``, ``receipt_footer``,
       ``receipt_tax_id``) flow through the admin settings page

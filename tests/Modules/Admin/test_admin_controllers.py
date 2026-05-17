@@ -543,3 +543,147 @@ def test_put_store_info_rejects_oversized_timezone(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── Store hours ─────────────────────────────────────────────
+
+
+def _full_week_hours(closed_days: tuple[int, ...] = ()) -> list[dict]:
+    """Helper for the test-side schedule. Mon-Sun, 09:00-18:00
+    by default, with ``closed_days`` flipped to closed=True."""
+    return [
+        {
+            "day": d, "open": "09:00", "close": "18:00",
+            "closed": d in closed_days,
+        }
+        for d in range(7)
+    ]
+
+
+def test_get_store_info_includes_default_store_hours(
+    client, test_store_id,
+):
+    """A store with ``store_hours == NULL`` gets a default 7-row
+    schedule on the read side so the settings UI can hydrate
+    without nullability gymnastics."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["store"]
+    assert len(body["store_hours"]) == 7
+    # Defaults: Mon-Sat open 09:00-18:00, Sun closed.
+    days_open = {row["day"] for row in body["store_hours"] if not row["closed"]}
+    assert 0 in days_open and 5 in days_open
+    sunday = next(row for row in body["store_hours"] if row["day"] == 6)
+    assert sunday["closed"] is True
+
+
+def test_put_store_info_persists_store_hours(client, test_store_id):
+    """A valid 7-row payload round-trips PUT → DB → next GET,
+    and the column actually stores the JSON list (not a string-
+    encoded blob)."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    payload = _full_week_hours(closed_days=(5, 6))
+    payload[0]["open"]  = "08:30"
+    payload[0]["close"] = "17:30"
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": payload},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    saved = resp.get_json()["store"]["store_hours"]
+    monday = next(r for r in saved if r["day"] == 0)
+    assert monday["open"] == "08:30"
+    assert monday["close"] == "17:30"
+    assert {r["day"] for r in saved if r["closed"]} == {5, 6}
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert isinstance(s.store_hours, list)
+        assert len(s.store_hours) == 7
+
+
+def test_put_store_info_rejects_short_store_hours(client, test_store_id):
+    """Anything other than 7 entries trips the validator. We
+    don't want partial schedules in the DB because every read
+    path expects a full week."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": _full_week_hours()[:3]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert "7" in resp.get_data(as_text=True)
+
+
+def test_put_store_info_rejects_duplicate_day_in_hours(
+    client, test_store_id,
+):
+    """Duplicate ``day`` values can sneak in via a buggy client
+    sending the same row twice — the service catches it before
+    the column gets written."""
+    token = _login(client, test_store_id)
+    payload = _full_week_hours()
+    payload[6]["day"] = 0  # Two Mondays, no Sunday.
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": payload},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_store_info_rejects_open_after_close(client, test_store_id):
+    """Open must come before close on any day that isn't marked
+    closed — otherwise gating rules can't reason about "is the
+    store open at time X?"."""
+    token = _login(client, test_store_id)
+    payload = _full_week_hours()
+    payload[0]["open"]  = "18:00"
+    payload[0]["close"] = "09:00"
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": payload},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_store_info_allows_inverted_times_on_closed_day(
+    client, test_store_id,
+):
+    """A day marked ``closed`` short-circuits the open-vs-close
+    check — the times are ignored at the gating layer so the
+    operator can park any sentinel value without tripping
+    validation."""
+    token = _login(client, test_store_id)
+    payload = _full_week_hours(closed_days=(0,))
+    payload[0]["open"]  = "23:59"
+    payload[0]["close"] = "00:00"
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": payload},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+
+
+def test_put_store_info_rejects_bad_time_format_in_hours(
+    client, test_store_id,
+):
+    """Times must be HH:MM strings — a Pydantic-level max_length
+    catches obvious garbage; the service-layer regex catches
+    drift like "9:00" (single-digit hour) that the Pydantic
+    string constraint wouldn't notice."""
+    token = _login(client, test_store_id)
+    payload = _full_week_hours()
+    payload[0]["open"] = "9:00"
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"store_hours": payload},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
