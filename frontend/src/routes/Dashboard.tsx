@@ -6,6 +6,7 @@ import {
   type EmployeeDashboard,
   type DashboardSummary,
 } from "../api/dashboard";
+import { useStoreInfo } from "../api/account";
 import {
   ButtonLink,
   Card,
@@ -24,6 +25,7 @@ import {
   tokens,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import { getOpenStatus } from "../lib/datetime";
 
 // Role-shaped dashboard. /api/v2/dashboard/summary returns one
 // payload tagged by role; we render the matching panel.
@@ -43,6 +45,16 @@ export default function Dashboard() {
   // owner-shaped JWTs are detected via its own `enabled` flag (see
   // useDashboardSummary in ../api/dashboard.ts).
   const { data, isLoading, isError, error, refetch } = useDashboardSummary();
+  // Store-info lookup powers the "Open now" pill. Owners /
+  // superadmin (no store_id on the JWT) are excluded; the hook
+  // gates itself.
+  const { data: storeInfo } = useStoreInfo();
+  const openStatus = identity?.role !== "superadmin"
+    ? getOpenStatus(
+        storeInfo?.store?.store_hours,
+        storeInfo?.store?.timezone,
+      )
+    : null;
 
   if (identity?.role === "owner") {
     return <Navigate to="/owner/dashboard" replace />;
@@ -57,7 +69,22 @@ export default function Dashboard() {
 
   return (
     <PageShell>
-      <PageHeader title={title} />
+      <PageHeader
+        title={title}
+        actions={openStatus ? (
+          <span
+            title={
+              openStatus.todayLabel
+                ? `${openStatus.dayLabel}: ${openStatus.todayLabel}`
+                : `${openStatus.dayLabel}: closed all day`
+            }
+          >
+            <Pill tone={openStatus.open ? "accent" : "negative"}>
+              {openStatus.open ? "Open now" : "Closed now"}
+            </Pill>
+          </span>
+        ) : undefined}
+      />
 
       {isLoading && (
         <Card>

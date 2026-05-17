@@ -862,18 +862,25 @@ gaps. Ordered by "what I'd do next" at the top.
       callsites (AdminUsers, TVDisplayAdmin) can adopt the helper
       on-touch.
 - [~] **Store hours** (open/close per day) — schema + admin UI
-      landed. ``Store.store_hours`` is a JSON list of 7 entries
+      + read-side indicators landed.
+      Schema: ``Store.store_hours`` is a JSON list of 7 entries
       (Mon-first, ``{day, open, close, closed}``); migration
       ``8a4b2e9d7c61`` adds the column idempotently.
       ``Admin.Services.store_hours`` owns validation (exactly 7
       entries, unique days, ``HH:MM`` 24-hour times, open<close
-      unless closed). Settings page exposes a 7-row editor with
-      a per-day "Closed" toggle. NULL on read renders a sensible
-      Mon-Sat 9-6 / Sun closed default so the operator can save
-      in one click.
-      Pending follow-ups (own backlog items): "no transfers
-      outside business hours" gating on the transfer form,
-      peak-hour heatmap on the dashboard.
+      unless closed), read-side coercion, and an ``is_open_at``
+      predicate that powers both backend gates and SPA
+      indicators. NULL on read renders a sensible Mon-Sat 9-6 /
+      Sun closed default so the operator can save in one click.
+      SPA: Dashboard carries an "Open now" / "Closed now" pill
+      (uses store.timezone for the comparison), and the New
+      Transfer form shows a soft yellow warning banner when the
+      cashier is logging outside hours. ``getOpenStatus`` in
+      ``frontend/src/lib/datetime.ts`` is the single source of
+      truth.
+      Pending follow-ups (own backlog items): server-side
+      gating toggle ("block transfers outside business hours" —
+      default off), peak-hour heatmap on the dashboard.
 - [~] **Receipt customization** — built but currently HIDDEN.
       DineroBook is a ledger, not a money-transmitter, so the
       customer-facing receipt surface doesn't fit the product

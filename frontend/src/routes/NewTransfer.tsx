@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
+  Alert,
   Button,
   Card,
   Field,
@@ -17,6 +18,7 @@ import {
   Select,
   tokens,
 } from "../components/ui";
+import { getOpenStatus } from "../lib/datetime";
 import {
   createTransfer,
   previewFederalTax,
@@ -188,6 +190,11 @@ export default function NewTransfer() {
           "Federal tax preview updates as you type; the server "
           + "recomputes the final value on save."
         }
+      />
+
+      <OutOfHoursNotice
+        hours={storeInfo.data?.store?.store_hours}
+        storeTimezone={storeInfo.data?.store?.timezone}
       />
 
       <form
@@ -525,5 +532,31 @@ function FederalTaxPreview({
         </span>
       )}
     </Field>
+  );
+}
+
+
+// Soft warning above the New Transfer form when the operator is
+// logging outside the store's configured business hours. Not a
+// gate — the save endpoint still accepts the entry. Hidden when
+// store_hours is missing (no opinion to express) or when we're
+// currently inside the open window.
+function OutOfHoursNotice({
+  hours, storeTimezone,
+}: {
+  hours: NonNullable<ReturnType<typeof useStoreInfo>["data"]>["store"]["store_hours"] | undefined;
+  storeTimezone: string | undefined;
+}) {
+  const status = getOpenStatus(hours, storeTimezone);
+  if (!status || status.open) return null;
+  return (
+    <Alert tone="warning">
+      Heads up — you're logging this outside the store's usual
+      business hours
+      ({status.todayLabel
+        ? `${status.dayLabel}: ${status.todayLabel}`
+        : `closed all day ${status.dayLabel}`}).
+      The transfer will still save normally.
+    </Alert>
   );
 }

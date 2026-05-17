@@ -4,11 +4,14 @@ These exercise the validation + read-side coercion in isolation
 — no HTTP layer involved. The controller-level happy path is
 covered by ``test_admin_controllers.py``.
 """
+from datetime import datetime
+
 import pytest
 
 from api.Modules.Admin.Services.store_hours import (
     DEFAULT_HOURS,
     default_hours,
+    is_open_at,
     parse_stored_hours,
     validate_hours_payload,
 )
@@ -150,3 +153,75 @@ def test_validate_hours_payload_normalizes_sort_order():
     payload = list(reversed(_full_week()))
     out = validate_hours_payload(payload)
     assert [row["day"] for row in out] == list(range(7))
+
+
+# ── is_open_at ──────────────────────────────────────────────
+
+
+def _mon(hour: int, minute: int = 0) -> datetime:
+    # 2026-05-18 is a Monday — anchor every test on a known
+    # weekday so the day-of-week math is deterministic.
+    return datetime(2026, 5, 18, hour, minute)
+
+
+def _sun(hour: int = 12) -> datetime:
+    # 2026-05-17 is a Sunday.
+    return datetime(2026, 5, 17, hour)
+
+
+def test_is_open_at_inside_window():
+    """Mid-day on a configured open day returns True."""
+    assert is_open_at(_full_week(), _mon(12, 0)) is True
+
+
+def test_is_open_at_before_open_time():
+    """Right before the open boundary returns False."""
+    assert is_open_at(_full_week(), _mon(8, 59)) is False
+
+
+def test_is_open_at_at_open_boundary():
+    """Open boundary is inclusive — the store opens AT 09:00."""
+    assert is_open_at(_full_week(), _mon(9, 0)) is True
+
+
+def test_is_open_at_at_close_boundary():
+    """Close boundary is exclusive — "closes at 18:00" means
+    18:00 itself counts as closed."""
+    assert is_open_at(_full_week(), _mon(18, 0)) is False
+
+
+def test_is_open_at_after_close():
+    assert is_open_at(_full_week(), _mon(20, 30)) is False
+
+
+def test_is_open_at_closed_day():
+    """``closed=True`` short-circuits regardless of the time
+    pair on the entry."""
+    assert is_open_at(_full_week(closed=(0,)), _mon(12, 0)) is False
+
+
+def test_is_open_at_sunday_default_closed():
+    """The default schedule closes Sunday — every hour returns
+    False there."""
+    for hour in (0, 9, 12, 17, 23):
+        assert is_open_at(DEFAULT_HOURS, _sun(hour)) is False
+
+
+def test_is_open_at_null_falls_back_to_defaults():
+    """A NULL ``stored_hours`` is healed through
+    ``parse_stored_hours`` — Monday open at noon is True."""
+    assert is_open_at(None, _mon(12, 0)) is True
+
+
+def test_is_open_at_uses_weekday_index_correctly():
+    """Tuesday-only schedule (everything else closed) opens
+    Tuesday but closes Monday + Wednesday — pins the
+    ``date.weekday()`` ↔ ``day`` mapping."""
+    hours = _full_week(closed=(0, 2, 3, 4, 5, 6))
+    # 2026-05-19 is a Tuesday.
+    tuesday_noon = datetime(2026, 5, 19, 12)
+    monday_noon  = _mon(12, 0)
+    wed_noon     = datetime(2026, 5, 20, 12)
+    assert is_open_at(hours, tuesday_noon) is True
+    assert is_open_at(hours, monday_noon)  is False
+    assert is_open_at(hours, wed_noon)     is False
