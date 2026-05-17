@@ -121,7 +121,7 @@
 
 .item:hover,
 .item:focus-visible {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
   color: var(--db-text, #f5f5f5);
   outline: none;
 }
