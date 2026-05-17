@@ -398,6 +398,17 @@ impact ÷ effort. Numbers are an estimate.
       `/webhooks/stripe`. Step-by-step verification:
       [`deployment.md`](docs/architecture/deployment.md) §3
       "Secrets rotation → Stripe live mode swap".
+- [ ] **Re-enable cron services** (ops) — the two crons declared in
+      `render.yaml` (`dinerobook-data-retention-purge`,
+      `dinerobook-daily-summary`) were deleted from the Render
+      dashboard pre-launch to stay under the free-tier instance
+      cap (paid `starter` plan, no real users to email or expired
+      stores to purge yet). Re-create them via Blueprint sync
+      before public launch — the YAML is still the source of
+      truth, so it's a single sync action plus filling in the
+      `sync: false` SMTP envvars on the daily-summary cron. The
+      web service is unaffected by their absence; both crons are
+      idempotent so a missed day on either is a no-op.
 - [x] **Data retention cron** — landed. `render.yaml` declares
       a `type: cron` service `dinerobook-data-retention-purge`
       that runs `python -m scripts.purge_expired_stores` daily at
