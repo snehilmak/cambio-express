@@ -30,6 +30,7 @@ runs in O(1).
 from __future__ import annotations
 
 import secrets
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional
@@ -49,11 +50,15 @@ DEFAULT_REFRESH_TOKEN_TTL_SECONDS = 14 * 24 * 60 * 60
 class IssuedRefreshToken:
     """Result of ``issue`` / ``rotate``: the opaque token string
     (returned to the client in the cookie) + the database row's
-    expiry (used by the caller to set the cookie's Max-Age)."""
+    expiry (used by the caller to set the cookie's Max-Age).
+    ``session_id`` is exposed so the caller can embed it in the
+    access-token JWT (the SPA reads it back to mark the "current"
+    row on the sessions panel)."""
 
     jti: str
     expires_at: datetime
     user_id: int
+    session_id: str
 
 
 def _now() -> datetime:
@@ -67,24 +72,55 @@ def _mint_jti() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _mint_session_id() -> str:
+    """Stable per-login UUID. Copied through every ``rotate()`` so
+    the full chain of refresh tokens for one browser shares the
+    same id."""
+    return str(uuid.uuid4())
+
+
 def issue(
     session: Session, *, user_id: int,
     ttl_seconds: int = DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    user_agent: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> IssuedRefreshToken:
     """Mint a fresh refresh token for ``user_id`` and persist it.
     Called from every login path (password / 2FA / signup) right
-    after the access JWT is issued."""
+    after the access JWT is issued, AND from ``rotate()`` to mint
+    the successor row.
+
+    ``session_id`` defaults to a fresh UUID. Callers (specifically
+    ``rotate``) pass the OLD row's value so the full chain stays
+    correlated.
+
+    ``user_agent`` / ``ip_address`` are stored truncated to the
+    column widths so a pathological client can't fill the DB."""
     now = _now()
     expires_at = now + timedelta(seconds=ttl_seconds)
     jti = _mint_jti()
+    sid = session_id or _mint_session_id()
+    # Truncate per column width to avoid SQLAlchemy errors on
+    # absurd headers. Real-world User-Agent strings sit well
+    # under 255 chars; IPv6 is 39 chars (45 with the optional
+    # zone id).
+    ua = (user_agent or "")[:255] or None
+    ip = (ip_address or "")[:45] or None
     session.add(RefreshToken(
         jti=jti,
         user_id=user_id,
+        session_id=sid,
+        user_agent=ua,
+        ip_address=ip,
         created_at=now,
         expires_at=expires_at,
     ))
     session.flush()
-    return IssuedRefreshToken(jti=jti, expires_at=expires_at, user_id=user_id)
+    return IssuedRefreshToken(
+        jti=jti, expires_at=expires_at,
+        user_id=user_id, session_id=sid,
+    )
 
 
 def _lookup_active(
@@ -122,11 +158,21 @@ class RefreshTokenUnknown(RefreshTokenInvalid):
 def rotate(
     session: Session, *, jti: str,
     ttl_seconds: int = DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+    user_agent: Optional[str] = None,
+    ip_address: Optional[str] = None,
 ) -> tuple[RefreshToken, IssuedRefreshToken]:
     """Validate the presented refresh token, mint a successor, mark
     the old row revoked + linked to the new one. Returns the OLD
     row (so the caller can read ``user_id``) + the new
-    ``IssuedRefreshToken`` (jti + expiry for the cookie).
+    ``IssuedRefreshToken`` (jti + expiry + session_id for the
+    cookie + JWT).
+
+    The successor inherits the OLD row's ``session_id`` so the
+    full chain of refresh tokens for one browser stays correlated
+    on the sessions panel. ``user_agent`` / ``ip_address`` are
+    re-captured per-rotation — a user who refreshes from a new
+    coffee-shop IP sees the new IP on their session row, but it's
+    still the same session.
 
     Replay detection: if the presented token is already revoked,
     raise ``RefreshTokenRevoked``. The legitimate user rotated past
@@ -149,8 +195,15 @@ def rotate(
         session.flush()
         raise RefreshTokenExpired()
 
-    # Mint the successor, then revoke + link the old row.
-    new = issue(session, user_id=row.user_id, ttl_seconds=ttl_seconds)
+    # Mint the successor inheriting session_id; revoke + link old.
+    new = issue(
+        session,
+        user_id=row.user_id,
+        ttl_seconds=ttl_seconds,
+        user_agent=user_agent,
+        ip_address=ip_address,
+        session_id=row.session_id,  # propagate chain identity
+    )
     successor = _lookup_active(session, new.jti)
     assert successor is not None  # we just inserted it
     row.revoked_at = now

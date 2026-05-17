@@ -498,3 +498,47 @@ export function useMyActivity(filters: ActivityFilters = {}) {
       api<MyActivityResponse>(`/api/v2/auth/activity${suffix}`),
   });
 }
+
+
+// ── Active sessions / devices ───────────────────────────────
+
+export interface ActiveSessionRow {
+  session_id:   string;
+  user_agent:   string;
+  ip_address:   string;
+  started_at:   string;
+  last_used_at: string;
+  expires_at:   string;
+  is_current:   boolean;
+}
+
+export interface ActiveSessionsResponse {
+  sessions: ActiveSessionRow[];
+}
+
+export interface SessionRevokeResponse {
+  revoked: number;
+}
+
+export function useActiveSessions() {
+  return useQuery<ActiveSessionsResponse>({
+    queryKey: ["account", "sessions"],
+    queryFn: () => api<ActiveSessionsResponse>("/api/v2/auth/sessions"),
+  });
+}
+
+export async function revokeSession(
+  sessionId: string,
+): Promise<SessionRevokeResponse> {
+  return api<SessionRevokeResponse>(
+    `/api/v2/auth/sessions/${encodeURIComponent(sessionId)}`,
+    { method: "DELETE" },
+  );
+}
+
+export async function revokeOtherSessions(): Promise<SessionRevokeResponse> {
+  return api<SessionRevokeResponse>(
+    "/api/v2/auth/sessions/others",
+    { method: "DELETE" },
+  );
+}
