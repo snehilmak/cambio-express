@@ -455,3 +455,91 @@ def test_put_store_info_rejects_employee_role(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── Store timezone ──────────────────────────────────────────
+
+
+def test_get_store_info_includes_timezone_defaults(client, test_store_id):
+    """A fresh store comes back with ``timezone == ""`` (unset,
+    fall through to user / browser) and a non-empty
+    ``timezone_choices`` list for the dropdown."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["store"]
+    assert body["timezone"] == ""
+    assert "America/Chicago" in body["timezone_choices"]
+    # The "" sentinel shouldn't appear in the SPA dropdown — it's
+    # the "use default" option handled by the UI.
+    assert "" not in body["timezone_choices"]
+
+
+def test_put_store_info_persists_timezone(client, test_store_id):
+    """A whitelisted IANA tz round-trips PUT → DB → next GET."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"timezone": "America/Chicago"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.get_json()["store"]["timezone"] == "America/Chicago"
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.timezone == "America/Chicago"
+
+
+def test_put_store_info_clears_timezone_with_empty_string(
+    client, test_store_id,
+):
+    """Passing ``""`` wipes the column so the render layer falls
+    back to user / browser defaults."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    # Set first.
+    client.put(
+        "/api/v2/admin/store-info",
+        json={"timezone": "America/New_York"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Now clear.
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"timezone": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["store"]["timezone"] == ""
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.timezone == ""
+
+
+def test_put_store_info_rejects_unknown_timezone(client, test_store_id):
+    """A hand-crafted POST with a non-whitelisted tz string is
+    rejected by the service-layer guard — keeps a bad value from
+    silently breaking the render layer (Intl quietly ignores bad
+    tz strings)."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"timezone": "Mars/Olympus_Mons"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert "timezone" in resp.get_data(as_text=True).lower()
+
+
+def test_put_store_info_rejects_oversized_timezone(client, test_store_id):
+    """Pydantic max_length=60 catches before Postgres' VARCHAR(60)
+    truncation could hide a bug."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"timezone": "Z" * 61},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

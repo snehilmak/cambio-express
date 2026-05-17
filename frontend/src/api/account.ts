@@ -162,6 +162,8 @@ export interface StoreInfoRow {
   receipt_logo_url: string;
   receipt_footer:   string;
   receipt_tax_id:   string;
+  timezone:         string;
+  timezone_choices: string[];
 }
 
 export interface StoreInfoUpdateBody {
@@ -173,6 +175,7 @@ export interface StoreInfoUpdateBody {
   receipt_logo_url?: string;
   receipt_footer?:   string;
   receipt_tax_id?:   string;
+  timezone?:         string;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

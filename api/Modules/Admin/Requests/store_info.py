@@ -25,6 +25,8 @@ class StoreInfoRow(BaseModel):
     receipt_logo_url: str = ""
     receipt_footer:   str = ""
     receipt_tax_id:   str = ""
+    timezone:         str = ""
+    timezone_choices: list[str] = []
 
 
 class StoreInfoResponse(BaseModel):
@@ -47,3 +49,4 @@ class StoreInfoUpdateRequest(BaseModel):
     receipt_logo_url: str | None = Field(None, max_length=500)
     receipt_footer:   str | None = Field(None, max_length=500)
     receipt_tax_id:   str | None = Field(None, max_length=40)
+    timezone:         str | None = Field(None, max_length=60)

@@ -19,7 +19,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Textarea,
+  PageHeader, PageShell, SectionTitle, Select, Textarea,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -386,6 +386,7 @@ function StoreInfoCard() {
   const [receiptLogoUrl, setReceiptLogoUrl] = useState("");
   const [receiptFooter, setReceiptFooter] = useState("");
   const [receiptTaxId, setReceiptTaxId] = useState("");
+  const [timezone, setTimezone] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -404,6 +405,7 @@ function StoreInfoCard() {
     setReceiptLogoUrl(data.store.receipt_logo_url);
     setReceiptFooter(data.store.receipt_footer);
     setReceiptTaxId(data.store.receipt_tax_id);
+    setTimezone(data.store.timezone);
   }, [data]);
 
   const canEdit =
@@ -423,6 +425,7 @@ function StoreInfoCard() {
         receipt_logo_url: receiptLogoUrl,
         receipt_footer:   receiptFooter,
         receipt_tax_id:   receiptTaxId,
+        timezone,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -499,6 +502,21 @@ function StoreInfoCard() {
             value={taxRatePct}
             onChange={(e) => setTaxRatePct(e.target.value)}
             disabled={!canEdit} />
+        </Field>
+        <Field
+          label="Timezone"
+          hint="Default timezone for date / time rendering. Cashiers can override on their personal profile. Empty = use the browser default."
+        >
+          <Select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            disabled={!canEdit}
+          >
+            <option value="">Use browser default</option>
+            {(data.store.timezone_choices ?? []).map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </Select>
         </Field>
         <div className={styles.spanFull}>
           <SectionTitle>Receipt customization</SectionTitle>

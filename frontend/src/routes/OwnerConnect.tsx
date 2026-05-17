@@ -5,8 +5,10 @@ import {
   generateOwnerConnectCode, revokeOwnerConnectCode, useOwnerConnectCodes,
   type OwnerConnectCodeRow,
 } from "../api/owner";
+import { useProfile } from "../api/account";
 import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate as formatDateTz } from "../lib/datetime";
 import {
   Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
   Table, tdStyle, thStyle,
@@ -29,6 +31,10 @@ export default function OwnerConnect() {
   const identity = getCurrentIdentity();
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useOwnerConnectCodes();
+  const { data: profile } = useProfile();
+  const userTz = profile?.timezone ?? "";
+  const formatDate = (iso: string) =>
+    formatDateTz(iso, { userTimezone: userTz });
 
   const [busy, setBusy] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -218,12 +224,3 @@ export default function OwnerConnect() {
 }
 
 
-function formatDate(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const day   = String(d.getUTCDate()).padStart(2, "0");
-  const yr    = d.getUTCFullYear();
-  return `${month} ${day}, ${yr}`;
-}
