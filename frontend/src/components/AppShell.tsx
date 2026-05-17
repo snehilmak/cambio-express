@@ -359,12 +359,14 @@ const navLinkStyle = ({
   color: isActive
     ? "var(--db-text, #f5f5f5)"
     : "var(--db-text-muted, #a3a3a3)",
-  // Match the legacy `.nav-link.active` from static/shell.css —
-  // neon glow fades from the left bar across the row instead of
-  // a flat surface inversion. Reads as "this is the live page"
-  // not "this row was clicked once."
+  // Active-row treatment: neon glow fades from the left edge across
+  // the row instead of a flat surface inversion. Reads as "this is
+  // the live page" not "this row was clicked once." The glow color
+  // pulls from ``--db-neon-glow-25`` so it darkens with the accent
+  // when light mode is on (a bright neon tint on white was too
+  // washed-out to read as "active").
   background: isActive
-    ? "linear-gradient(90deg, rgba(63, 255, 0, 0.16), transparent 65%)"
+    ? "linear-gradient(90deg, var(--db-neon-glow-25, rgba(63, 255, 0, 0.25)), transparent 65%)"
     : "transparent",
   fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
   fontSize: "0.92rem",
