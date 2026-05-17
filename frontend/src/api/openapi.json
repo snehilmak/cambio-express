@@ -3663,14 +3663,22 @@
       },
       "NotificationsResponse": {
         "additionalProperties": false,
-        "description": "Per-user notification preferences.\n\nTwo ``*_applies`` flags tell the SPA when a toggle is\ninteractive vs. greyed-out informational:\n\n  * ``trial_toggle_applies`` \u2014 True only for admins / owners\n    of a store currently in active / expiring-soon / grace\n    trial state.\n  * ``locked_day_digest_applies`` \u2014 True only for admins /\n    owners (employees don't receive the digest). Greyed-out\n    for everyone else.",
+        "description": "Per-user notification preferences.\n\nThree ``*_applies`` flags tell the SPA when a toggle is\ninteractive vs. greyed-out informational:\n\n  * ``trial_toggle_applies`` \u2014 True only for admins / owners\n    of a store currently in active / expiring-soon / grace\n    trial state.\n  * ``locked_day_digest_applies`` \u2014 True only for admins /\n    owners (employees don't receive the digest by design).\n  * ``daily_summary_applies`` \u2014 same as the locked-day digest:\n    admins / owners only.",
         "properties": {
+          "daily_summary_applies": {
+            "title": "Daily Summary Applies",
+            "type": "boolean"
+          },
           "locked_day_digest_applies": {
             "title": "Locked Day Digest Applies",
             "type": "boolean"
           },
           "notify_announcement_email": {
             "title": "Notify Announcement Email",
+            "type": "boolean"
+          },
+          "notify_daily_summary": {
+            "title": "Notify Daily Summary",
             "type": "boolean"
           },
           "notify_locked_day_digest": {
@@ -3694,8 +3702,10 @@
           "notify_trial_reminders",
           "notify_announcement_email",
           "notify_locked_day_digest",
+          "notify_daily_summary",
           "trial_toggle_applies",
           "locked_day_digest_applies",
+          "daily_summary_applies",
           "role"
         ],
         "title": "NotificationsResponse",
@@ -3715,6 +3725,17 @@
               }
             ],
             "title": "Notify Announcement Email"
+          },
+          "notify_daily_summary": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Daily Summary"
           },
           "notify_locked_day_digest": {
             "anyOf": [

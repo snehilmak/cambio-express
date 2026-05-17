@@ -742,9 +742,33 @@ gaps. Ordered by "what I'd do next" at the top.
       Opt-out toggle on ``/account/notifications`` and the
       ``emails/announcement.html`` template were already
       shipped; this closes the missing trigger.
-- [ ] **Daily summary email** — cron-based per-store nightly digest of
-      transfers, totals, new customers. New toggle on notifications
-      page + new template + new `flask send-daily-summaries` CLI.
+- [x] **Daily summary email** — landed. Per-store nightly close-out
+      digest sent to opted-in admins + linked owners. Body carries
+      transfer count, send volume, receipts, disbursements, over /
+      short, and net position for the prior day. Quiet days (no
+      transfer + no daily-report row) skip the email entirely so
+      we don't spam zero-volume stores.
+
+      Vertical slice landed:
+      * Service: ``api/Modules/Notifications/Services/daily_summary.py``
+        — ``compute_daily_totals``, ``eligible_recipients``,
+        ``stores_with_activity``, ``run`` (orchestrator stamps
+        ``Store.daily_summary_sent_for`` for idempotency), and
+        ``send_daily_summary`` (D5 worker entry-point).
+      * Template: ``templates/emails/daily_summary.html``.
+      * CLI: ``scripts/send_daily_summaries.py`` with
+        ``--date YYYY-MM-DD`` for backfills.
+      * Cron: ``dinerobook-daily-summary`` in ``render.yaml`` at
+        02:00 UTC daily.
+      * Migration: ``7a1c93f0d2b8`` adds
+        ``User.notify_daily_summary`` (opt-out, default True for
+        admins/owners) + ``Store.daily_summary_sent_for`` (dedup).
+      * Notifications endpoint exposes the toggle + a
+        ``daily_summary_applies`` predicate (employees get a
+        greyed-out informational row).
+      * SPA toggle on ``/app/account/notifications`` next to the
+        locked-day digest toggle.
+      * Tests: 15 service tests + 3 toggle tests + 3 CLI tests.
 - [ ] **DMARC reporting mailbox + dashboard** — once DMARC is tightened
       for BIMI, the `rua=` address receives daily XML aggregate reports
       from receivers. Parse them into a superadmin page showing which

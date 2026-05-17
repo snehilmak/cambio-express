@@ -215,8 +215,10 @@ export interface NotificationsResponse {
   notify_trial_reminders:        boolean;
   notify_announcement_email:     boolean;
   notify_locked_day_digest:      boolean;
+  notify_daily_summary:          boolean;
   trial_toggle_applies:          boolean;
   locked_day_digest_applies:     boolean;
+  daily_summary_applies:         boolean;
   role:                          string;
 }
 
@@ -224,6 +226,7 @@ export interface NotificationsUpdateBody {
   notify_trial_reminders?:    boolean;
   notify_announcement_email?: boolean;
   notify_locked_day_digest?:  boolean;
+  notify_daily_summary?:      boolean;
 }
 
 export function useNotifications() {

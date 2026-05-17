@@ -9,15 +9,16 @@ from pydantic import BaseModel, ConfigDict
 class NotificationsResponse(BaseModel):
     """Per-user notification preferences.
 
-    Two ``*_applies`` flags tell the SPA when a toggle is
+    Three ``*_applies`` flags tell the SPA when a toggle is
     interactive vs. greyed-out informational:
 
       * ``trial_toggle_applies`` — True only for admins / owners
         of a store currently in active / expiring-soon / grace
         trial state.
       * ``locked_day_digest_applies`` — True only for admins /
-        owners (employees don't receive the digest). Greyed-out
-        for everyone else.
+        owners (employees don't receive the digest by design).
+      * ``daily_summary_applies`` — same as the locked-day digest:
+        admins / owners only.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -25,8 +26,10 @@ class NotificationsResponse(BaseModel):
     notify_trial_reminders:        bool
     notify_announcement_email:     bool
     notify_locked_day_digest:      bool
+    notify_daily_summary:          bool
     trial_toggle_applies:          bool
     locked_day_digest_applies:     bool
+    daily_summary_applies:         bool
     role:                          str
 
 
@@ -39,3 +42,4 @@ class NotificationsUpdateRequest(BaseModel):
     notify_trial_reminders:    Optional[bool] = None
     notify_announcement_email: Optional[bool] = None
     notify_locked_day_digest:  Optional[bool] = None
+    notify_daily_summary:      Optional[bool] = None

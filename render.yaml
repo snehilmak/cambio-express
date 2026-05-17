@@ -137,6 +137,46 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.0
 
+  # ── Daily-summary digest cron ────────────────────────────
+  # Sends a per-store nightly close-out summary to opted-in
+  # admins + linked owners (one email per store × recipient).
+  # Idempotent — re-running on the same day is a no-op via
+  # ``Store.daily_summary_sent_for``.
+  - type: cron
+    name: dinerobook-daily-summary
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    # 02:00 UTC daily — runs after the data-retention purge, gives
+    # the prior US-day a few hours to settle before we summarize.
+    schedule: "0 2 * * *"
+    startCommand: python -m scripts.send_daily_summaries
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dinerobook-db
+          property: connectionString
+      # APP_BASE_URL is read by the orchestrator for the "Open in
+      # DineroBook" CTA link in the email body. Without it the
+      # email falls back to the default https://dinerobook.com.
+      - key: APP_BASE_URL
+        value: https://dinerobook.com
+      # Reuse the same SMTP credentials the web service uses. Cron
+      # without SMTP configured logs the would-be sends at WARNING
+      # and still stamps the dedup column.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
   # ── Background-job worker (BACKLOG D5) ─────────────────────
   # Drains the RQ queue at ``api/Core/Jobs.py``. Currently
   # commented out — the worker fails to start when ``REDIS_URL``

@@ -64,6 +64,11 @@ class Store(Base):
     # first time it sends; cleared on checkout.session.completed so a
     # second trial (post-reactivation) gets its own fresh reminder.
     trial_reminder_sent_at = Column(DateTime, nullable=True)
+    # Daily-summary digest dedup. Stamped by the
+    # ``send_daily_summaries`` cron after a successful pass — a
+    # re-run on the same date is a no-op. Set NEVER cleared (once
+    # we've sent for a date, we've sent).
+    daily_summary_sent_for = Column(Date, nullable=True)
     # Comma-separated list of money-transfer companies this store works
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
@@ -127,6 +132,12 @@ class User(Base):
     # trial-reminder opt-out pattern) — close-outs are a high-signal
     # event the owner usually wants to see.
     notify_locked_day_digest = Column(Boolean, default=True)
+    # Daily-summary digest fires nightly via the
+    # ``send_daily_summaries`` cron — one email per store with the
+    # previous day's transfer count + receipts + disbursements +
+    # over/short. Goes to admins + linked owners. Opt-out (default
+    # True) so close-out numbers reach owners by morning.
+    notify_daily_summary = Column(Boolean, default=True)
     # Deliverability suppression — stamped when Resend reports a hard
     # bounce on this user's email. ``_send_email()`` skips suppressed
     # recipients.

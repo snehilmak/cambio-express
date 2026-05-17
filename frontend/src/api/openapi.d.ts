@@ -5205,21 +5205,26 @@ export interface components {
          * NotificationsResponse
          * @description Per-user notification preferences.
          *
-         *     Two ``*_applies`` flags tell the SPA when a toggle is
+         *     Three ``*_applies`` flags tell the SPA when a toggle is
          *     interactive vs. greyed-out informational:
          *
          *       * ``trial_toggle_applies`` — True only for admins / owners
          *         of a store currently in active / expiring-soon / grace
          *         trial state.
          *       * ``locked_day_digest_applies`` — True only for admins /
-         *         owners (employees don't receive the digest). Greyed-out
-         *         for everyone else.
+         *         owners (employees don't receive the digest by design).
+         *       * ``daily_summary_applies`` — same as the locked-day digest:
+         *         admins / owners only.
          */
         NotificationsResponse: {
+            /** Daily Summary Applies */
+            daily_summary_applies: boolean;
             /** Locked Day Digest Applies */
             locked_day_digest_applies: boolean;
             /** Notify Announcement Email */
             notify_announcement_email: boolean;
+            /** Notify Daily Summary */
+            notify_daily_summary: boolean;
             /** Notify Locked Day Digest */
             notify_locked_day_digest: boolean;
             /** Notify Trial Reminders */
@@ -5237,6 +5242,8 @@ export interface components {
         NotificationsUpdateRequest: {
             /** Notify Announcement Email */
             notify_announcement_email?: boolean | null;
+            /** Notify Daily Summary */
+            notify_daily_summary?: boolean | null;
             /** Notify Locked Day Digest */
             notify_locked_day_digest?: boolean | null;
             /** Notify Trial Reminders */
