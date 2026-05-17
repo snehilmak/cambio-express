@@ -97,6 +97,13 @@
      a fully-opaque ``--db-surface-2`` would feel too heavy. */
   --db-fill-subtle:    rgba(255, 255, 255, 0.04);
   --db-fill-neutral:   rgba(255, 255, 255, 0.06);
+
+  /* Brand-mark colors — FIXED across both themes. The DineroBook
+     logo badge is brand identity; it must look the same on a
+     light page as on a dark page. Don't override these inside
+     [data-theme="light"]. */
+  --db-brand:      #3fff00;
+  --db-brand-ink:  #001a0f;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
