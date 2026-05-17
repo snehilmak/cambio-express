@@ -95,6 +95,14 @@ class Store(Base):
     receipt_logo_url = Column(String(500), default="")
     receipt_footer   = Column(String(500), default="")
     receipt_tax_id   = Column(String(40),  default="")
+    # IANA timezone (e.g. ``America/Chicago``). Used as a fallback
+    # for date / time rendering when the viewing user hasn't set
+    # their own ``User.timezone``. Empty string means "unset" —
+    # the renderer keeps falling back (to the browser default).
+    # Admins set this on /app/settings so daily-book timestamps,
+    # audit-log entries, etc. render in store-local time for
+    # operators who haven't customized their profile.
+    timezone         = Column(String(60), default="")
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

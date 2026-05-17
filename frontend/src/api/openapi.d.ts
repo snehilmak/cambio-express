@@ -6280,6 +6280,16 @@ export interface components {
             receipt_tax_id: string;
             /** Slug */
             slug: string;
+            /**
+             * Timezone
+             * @default
+             */
+            timezone: string;
+            /**
+             * Timezone Choices
+             * @default []
+             */
+            timezone_choices: string[];
         };
         /**
          * StoreInfoUpdateRequest
@@ -6303,6 +6313,8 @@ export interface components {
             receipt_logo_url?: string | null;
             /** Receipt Tax Id */
             receipt_tax_id?: string | null;
+            /** Timezone */
+            timezone?: string | null;
         };
         /**
          * StoreLookupResponse

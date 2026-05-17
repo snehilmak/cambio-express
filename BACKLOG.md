@@ -839,12 +839,17 @@ gaps. Ordered by "what I'd do next" at the top.
       passkeys cover most of the "sign in without a password" need.
 
 ### Store (`/admin/settings`)
-- [ ] **Store timezone** — one column on `Store`. Fallback chain for
-      date rendering: user TZ → store TZ → UTC. Today we render
-      everything UTC. Small schema change, bigger refactor if we want
-      it to flow through every `.strftime()` in the codebase — so
-      start with one high-value page (daily report) and spread from
-      there.
+- [x] **Store timezone** — landed. New ``Store.timezone`` column
+      (whitelisted IANA strings, validated on PUT
+      ``/api/v2/admin/store-info``) plus a settings-page dropdown
+      so admins set the default for cashiers who haven't
+      customized their own ``User.timezone``. SPA renders through
+      a single ``frontend/src/lib/datetime.ts`` helper with the
+      fallback chain ``user TZ → store TZ → browser default``.
+      Audit log + my-activity feed + account profile + owner
+      connect-code pages migrated; the remaining `.toLocaleString(…UTC…)`
+      callsites (AdminUsers, TVDisplayAdmin) can adopt the helper
+      on-touch.
 - [ ] **Store hours** (open/close per day) — gate "no transfers
       outside business hours" rule; useful for peak-hour heatmap.
 - [x] **Receipt customization** — landed. Three new Store

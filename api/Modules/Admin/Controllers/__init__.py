@@ -67,6 +67,9 @@ router = APIRouter()
 
 
 def _to_row(s) -> StoreInfoRow:
+    # Lazy import — keeps Admin Controllers from pulling Services
+    # at module-load time.
+    from api.Modules.Admin.Services.store_info import ALLOWED_TIMEZONES
     return StoreInfoRow(
         id=s.id,
         name=s.name or "",
@@ -80,6 +83,10 @@ def _to_row(s) -> StoreInfoRow:
         receipt_logo_url=s.receipt_logo_url or "",
         receipt_footer=s.receipt_footer or "",
         receipt_tax_id=s.receipt_tax_id or "",
+        timezone=s.timezone or "",
+        # Drop the leading "" sentinel for the SPA dropdown — the
+        # UI surfaces "Use default" as its own option.
+        timezone_choices=[tz for tz in ALLOWED_TIMEZONES if tz],
     )
 
 

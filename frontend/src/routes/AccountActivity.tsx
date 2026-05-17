@@ -1,7 +1,8 @@
 import { useSearchParams } from "react-router-dom";
 
-import { useMyActivity } from "../api/account";
+import { useMyActivity, useProfile, useStoreInfo } from "../api/account";
 import type { MyActivityRow } from "../api/account";
+import { formatTimestamp } from "../lib/datetime";
 import {
   Button, Card, EmptyState, ErrorState, Field, PageHeader, PageShell,
   Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
@@ -14,6 +15,10 @@ import styles from "./AccountActivity.module.css";
 // store cashier or an owner who works behind the counter).
 
 export default function AccountActivity() {
+  const { data: profile } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const userTz  = profile?.timezone ?? "";
+  const storeTz = storeInfo?.store?.timezone ?? "";
   const [sp, setSP] = useSearchParams();
   const page   = Number(sp.get("page") ?? 1) || 1;
   const target = sp.get("target") ?? "";
@@ -104,7 +109,11 @@ export default function AccountActivity() {
         )}
         {data && data.rows.length > 0 && (
           <>
-            <ActivityTable rows={data.rows} />
+            <ActivityTable
+              rows={data.rows}
+              userTimezone={userTz}
+              storeTimezone={storeTz}
+            />
             <Pager
               page={data.page}
               totalPages={data.total_pages}
@@ -124,7 +133,13 @@ export default function AccountActivity() {
 }
 
 
-function ActivityTable({ rows }: { rows: MyActivityRow[] }) {
+function ActivityTable({
+  rows, userTimezone, storeTimezone,
+}: {
+  rows: MyActivityRow[];
+  userTimezone: string;
+  storeTimezone: string;
+}) {
   return (
     <Table>
       <thead>
@@ -138,7 +153,9 @@ function ActivityTable({ rows }: { rows: MyActivityRow[] }) {
         {rows.map((r, i) => (
           <tr key={`${r.source}-${r.ts}-${r.target_id}-${i}`}>
             <td style={tdStyle}>
-              <span className={styles.monoMuted}>{formatTs(r.ts)}</span>
+              <span className={styles.monoMuted}>
+                {formatTimestamp(r.ts, { userTimezone, storeTimezone })}
+              </span>
             </td>
             <td style={tdStyle}>
               {r.store_name || "—"}
@@ -187,14 +204,3 @@ function ActionBadge({ action }: { action: string }) {
 }
 
 
-function formatTs(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const day   = String(d.getUTCDate()).padStart(2, "0");
-  const yr    = d.getUTCFullYear();
-  const hh    = String(d.getUTCHours()).padStart(2, "0");
-  const mm    = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${yr} ${hh}:${mm} UTC`;
-}

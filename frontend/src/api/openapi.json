@@ -5548,6 +5548,19 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "timezone": {
+            "default": "",
+            "title": "Timezone",
+            "type": "string"
+          },
+          "timezone_choices": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Timezone Choices",
+            "type": "array"
           }
         },
         "required": [
@@ -5658,6 +5671,18 @@
               }
             ],
             "title": "Receipt Tax Id"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
           }
         },
         "title": "StoreInfoUpdateRequest",

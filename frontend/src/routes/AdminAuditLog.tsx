@@ -5,6 +5,8 @@ import {
   type AdminAuditRow,
   type AdminAuditUserOption,
 } from "../api/admin";
+import { useProfile, useStoreInfo } from "../api/account";
+import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
@@ -18,6 +20,10 @@ import styles from "./AdminAuditLog.module.css";
 
 export default function AdminAuditLog() {
   const identity = getCurrentIdentity();
+  const { data: profile } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const userTz  = profile?.timezone ?? "";
+  const storeTz = storeInfo?.store?.timezone ?? "";
   const [sp, setSP] = useSearchParams();
   const page   = Number(sp.get("page") ?? 1) || 1;
   const target = sp.get("target") ?? "";
@@ -135,7 +141,11 @@ export default function AdminAuditLog() {
         )}
         {data && data.rows.length > 0 && (
           <>
-            <AuditTable rows={data.rows} />
+            <AuditTable
+              rows={data.rows}
+              userTimezone={userTz}
+              storeTimezone={storeTz}
+            />
             <Pager
               page={data.page}
               totalPages={data.total_pages}
@@ -157,7 +167,13 @@ export default function AdminAuditLog() {
 }
 
 
-function AuditTable({ rows }: { rows: AdminAuditRow[] }) {
+function AuditTable({
+  rows, userTimezone, storeTimezone,
+}: {
+  rows: AdminAuditRow[];
+  userTimezone: string;
+  storeTimezone: string;
+}) {
   return (
     <Table>
       <thead>
@@ -174,7 +190,9 @@ function AuditTable({ rows }: { rows: AdminAuditRow[] }) {
           // the index as the final tiebreaker.
           <tr key={`${r.source}-${r.ts}-${r.target_id}-${i}`}>
             <td style={tdStyle}>
-              <span className={styles.monoMuted}>{formatTs(r.ts)}</span>
+              <span className={styles.monoMuted}>
+                {formatTimestamp(r.ts, { userTimezone, storeTimezone })}
+              </span>
             </td>
             <td style={tdStyle}>
               <strong>{r.user_name || "—"}</strong>
@@ -225,19 +243,4 @@ function ActionBadge({ action }: { action: string }) {
       {action}
     </span>
   );
-}
-
-
-// Server returns ISO timestamps. Render as "May 09, 2026 17:42 UTC"
-// to match the legacy %b %d, %Y %H:%M UTC format.
-function formatTs(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const day   = String(d.getUTCDate()).padStart(2, "0");
-  const yr    = d.getUTCFullYear();
-  const hh    = String(d.getUTCHours()).padStart(2, "0");
-  const mm    = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${yr} ${hh}:${mm} UTC`;
 }

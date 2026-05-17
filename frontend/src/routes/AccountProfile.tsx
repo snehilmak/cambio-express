@@ -2,10 +2,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
-  updateProfile, useProfile,
+  updateProfile, useProfile, useStoreInfo,
   type ProfileUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, Section, Select,
@@ -27,6 +28,8 @@ import styles from "./AccountProfile.module.css";
 export default function AccountProfile() {
   const queryClient = useQueryClient();
   const { data, isLoading, isError, error, refetch } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const storeTz = storeInfo?.store?.timezone ?? "";
 
   const [draft, setDraft] = useState<ProfileUpdateBody>({});
   const [busy, setBusy]   = useState(false);
@@ -116,7 +119,10 @@ export default function AccountProfile() {
       })
     : "—";
   const lastLogin = data.last_login_at
-    ? formatTs(data.last_login_at)
+    ? formatTimestamp(data.last_login_at, {
+        userTimezone: data.timezone,
+        storeTimezone: storeTz,
+      })
     : "—";
 
   return (
@@ -251,13 +257,3 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
 }
 
 
-function formatTs(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const month = d.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
-  const day   = String(d.getUTCDate()).padStart(2, "0");
-  const yr    = d.getUTCFullYear();
-  const hh    = String(d.getUTCHours()).padStart(2, "0");
-  const mm    = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${month} ${day}, ${yr} ${hh}:${mm} UTC`;
-}
