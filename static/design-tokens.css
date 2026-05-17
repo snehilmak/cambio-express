@@ -90,6 +90,20 @@
   --db-border-subtle:  var(--db-gray-2);
   --db-accent:         var(--db-neon);
   --db-on-accent:      var(--db-neon-ink);
+
+  /* Subtle translucent fills — white-on-dark in dark mode, the
+     [data-theme="light"] block overrides these to a black tint.
+     Used for button hover states + neutral pill backgrounds where
+     a fully-opaque ``--db-surface-2`` would feel too heavy. */
+  --db-fill-subtle:    rgba(255, 255, 255, 0.04);
+  --db-fill-neutral:   rgba(255, 255, 255, 0.06);
+
+  /* Brand-mark colors — FIXED across both themes. The DineroBook
+     logo badge is brand identity; it must look the same on a
+     light page as on a dark page. Don't override these inside
+     [data-theme="light"]. */
+  --db-brand:      #3fff00;
+  --db-brand-ink:  #001a0f;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
@@ -172,6 +186,12 @@
   --db-shadow-card-hvr:  0 0 0 1px var(--db-gray-4), 0 4px 14px rgba(15,18,32,0.08);
   --db-shadow-neon:      0 0 0 1px var(--db-neon), 0 0 16px var(--db-neon-glow-25);
   --db-shadow-dropdown:  0 12px 32px rgba(15,18,32,0.12), 0 0 0 1px var(--db-gray-3);
+
+  /* Translucent fills flip to black-on-white so they stay visible
+     against the light surfaces (a white tint on white is
+     invisible — that was the original bug). */
+  --db-fill-subtle:  rgba(15, 18, 32, 0.04);
+  --db-fill-neutral: rgba(15, 18, 32, 0.06);
 }
 
 [data-theme="light"] {
