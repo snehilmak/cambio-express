@@ -40,7 +40,7 @@ export default function HighValueTransfers() {
             onChange={e => commitThreshold(e.target.value)}
             style={{
               padding: "0.35rem 0.5rem",
-              background: "var(--db-surface-1, #0a0a0a)", color: "inherit",
+              background: "var(--db-surface, #0a0a0a)", color: "inherit",
               border: "1px solid var(--db-border, #262626)",
               borderRadius: "0.4rem", fontSize: "0.85rem",
             }}

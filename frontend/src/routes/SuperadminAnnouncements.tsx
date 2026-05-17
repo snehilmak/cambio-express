@@ -206,11 +206,12 @@ function AnnouncementsTable({
     <Table>
       <thead>
         <tr>
-          {["Message", "Level", "Status", "Posted", "Expires", "Actions"].map(
-            (h, i) => (
-              <th key={i} style={thStyle}>{h}</th>
-            ),
-          )}
+          {[
+            "Message", "Level", "Status", "Posted", "Expires",
+            "Broadcast", "Actions",
+          ].map((h, i) => (
+            <th key={i} style={thStyle}>{h}</th>
+          ))}
         </tr>
       </thead>
       <tbody>
@@ -287,6 +288,9 @@ function Row({ row, onChanged }: { row: AnnouncementRow; onChanged: () => void }
         )}
       </td>
       <td style={{ ...tdStyle, verticalAlign: "top" }}>
+        <BroadcastCell row={row} />
+      </td>
+      <td style={{ ...tdStyle, verticalAlign: "top" }}>
         <div className={styles.actionsRow}>
           <Button tone="secondary" size="sm" busy={busy} onClick={onToggle}>
             {row.is_active ? "Disable" : "Enable"}
@@ -322,4 +326,27 @@ function formatScheduleHint(iso: string): string {
   return d.toLocaleDateString(undefined, {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
+}
+
+
+// Broadcast-state pill: shows whether "Also email all users" was
+// ticked at create time and whether the fan-out has fired yet.
+//
+//   not requested  → "—"            (creator didn't ask for email)
+//   requested + not sent → "pending"  (queued or scheduled banner not yet activated)
+//   sent           → "sent · MMM dd"  (with date the broadcast landed)
+function BroadcastCell({ row }: { row: AnnouncementRow }) {
+  if (!row.broadcast_requested) {
+    return <span className={styles.dash}>—</span>;
+  }
+  if (!row.broadcast_sent_at) {
+    return <Pill tone="warning">pending</Pill>;
+  }
+  const sent = new Date(row.broadcast_sent_at);
+  const stamp = Number.isNaN(sent.getTime())
+    ? row.broadcast_sent_at.slice(0, 10)
+    : sent.toLocaleDateString(undefined, {
+        month: "short", day: "numeric",
+      });
+  return <Pill tone="accent">sent · {stamp}</Pill>;
 }
