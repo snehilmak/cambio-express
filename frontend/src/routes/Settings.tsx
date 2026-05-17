@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -13,6 +13,7 @@ import {
   usePasskeys,
   useStoreInfo,
   useTeam,
+  type StoreHourEntry,
   type TeamMemberRow,
 } from "../api/account";
 import { ApiError } from "../lib/api";
@@ -387,6 +388,7 @@ function StoreInfoCard() {
   const [receiptFooter, setReceiptFooter] = useState("");
   const [receiptTaxId, setReceiptTaxId] = useState("");
   const [timezone, setTimezone] = useState("");
+  const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -406,6 +408,11 @@ function StoreInfoCard() {
     setReceiptFooter(data.store.receipt_footer);
     setReceiptTaxId(data.store.receipt_tax_id);
     setTimezone(data.store.timezone);
+    setHours(
+      data.store.store_hours && data.store.store_hours.length === 7
+        ? data.store.store_hours.map((h) => ({ ...h }))
+        : defaultHours(),
+    );
   }, [data]);
 
   const canEdit =
@@ -426,6 +433,7 @@ function StoreInfoCard() {
         receipt_footer:   receiptFooter,
         receipt_tax_id:   receiptTaxId,
         timezone,
+        store_hours: hours,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -569,6 +577,20 @@ function StoreInfoCard() {
             />
           </Field>
         </div>
+        <div className={styles.spanFull}>
+          <SectionTitle>Business hours</SectionTitle>
+          <p className={styles.helpText}>
+            One row per day (Monday-first). Toggle "Closed" to mark
+            the day off; open / close times use 24-hour
+            <code> HH:MM</code> format. Saving with no edits keeps
+            the default Mon-Sat 9-6 / Sun closed template.
+          </p>
+          <StoreHoursEditor
+            hours={hours}
+            onChange={setHours}
+            disabled={!canEdit}
+          />
+        </div>
         {err && (
           <div className={styles.spanFull}>
             <Alert tone="error">{err}</Alert>
@@ -667,5 +689,77 @@ function ChangePasswordCard() {
         </Button>
       </form>
     </Card>
+  );
+}
+
+// ── Store hours ───────────────────────────────────────────────
+
+const DAY_LABELS = [
+  "Monday", "Tuesday", "Wednesday", "Thursday",
+  "Friday", "Saturday", "Sunday",
+] as const;
+
+// Mirrors ``Services.store_hours.DEFAULT_HOURS`` so the UI can
+// hydrate a complete schedule when the column is NULL.
+function defaultHours(): StoreHourEntry[] {
+  return [
+    { day: 0, open: "09:00", close: "18:00", closed: false },
+    { day: 1, open: "09:00", close: "18:00", closed: false },
+    { day: 2, open: "09:00", close: "18:00", closed: false },
+    { day: 3, open: "09:00", close: "18:00", closed: false },
+    { day: 4, open: "09:00", close: "18:00", closed: false },
+    { day: 5, open: "09:00", close: "18:00", closed: false },
+    { day: 6, open: "10:00", close: "14:00", closed: true },
+  ];
+}
+
+function StoreHoursEditor({
+  hours, onChange, disabled,
+}: {
+  hours: StoreHourEntry[];
+  onChange: (next: StoreHourEntry[]) => void;
+  disabled: boolean;
+}) {
+  function setRow(idx: number, patch: Partial<StoreHourEntry>) {
+    onChange(hours.map((h, i) => (i === idx ? { ...h, ...patch } : h)));
+  }
+  return (
+    <div className={styles.hoursTable}>
+      {hours.map((row, i) => (
+        <Fragment key={row.day}>
+          <span
+            className={`${styles.hoursDay} ${row.closed ? styles.hoursClosed : ""}`}
+          >
+            {DAY_LABELS[row.day]}
+          </span>
+          <label>
+            <input
+              type="checkbox"
+              checked={row.closed}
+              disabled={disabled}
+              onChange={(e) => setRow(i, { closed: e.target.checked })}
+            />{" "}
+            Closed
+          </label>
+          <Input
+            type="time"
+            value={row.open}
+            disabled={disabled || row.closed}
+            className={styles.hoursTime}
+            onChange={(e) => setRow(i, { open: e.target.value })}
+            aria-label={`${DAY_LABELS[row.day]} open time`}
+          />
+          <span className={styles.hoursDashCell}>—</span>
+          <Input
+            type="time"
+            value={row.close}
+            disabled={disabled || row.closed}
+            className={styles.hoursTime}
+            onChange={(e) => setRow(i, { close: e.target.value })}
+            aria-label={`${DAY_LABELS[row.day]} close time`}
+          />
+        </Fragment>
+      ))}
+    </div>
   );
 }

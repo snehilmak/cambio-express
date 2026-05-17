@@ -6214,6 +6214,32 @@ export interface components {
             /** Username */
             username: string;
         };
+        /**
+         * StoreHourEntry
+         * @description One row in the weekly schedule. ``day`` is 0..6 (ISO,
+         *     0=Monday). ``open`` / ``close`` are "HH:MM" 24-hour strings.
+         *     ``closed`` overrides the open/close pair — when True the
+         *     times are ignored at the gating layer.
+         *
+         *     Pydantic-level validation is intentionally light (string
+         *     presence + range) — the deeper checks (open < close, no
+         *     duplicate days, exactly 7 entries) live in
+         *     ``Services.store_hours.validate_hours_payload`` so they can
+         *     be tested without instantiating a request.
+         */
+        StoreHourEntry: {
+            /** Close */
+            close: string;
+            /**
+             * Closed
+             * @default false
+             */
+            closed: boolean;
+            /** Day */
+            day: number;
+            /** Open */
+            open: string;
+        };
         /** StoreInfoResponse */
         StoreInfoResponse: {
             store: components["schemas"]["StoreInfoRow"];
@@ -6281,6 +6307,11 @@ export interface components {
             /** Slug */
             slug: string;
             /**
+             * Store Hours
+             * @default []
+             */
+            store_hours: components["schemas"]["StoreHourEntry"][];
+            /**
              * Timezone
              * @default
              */
@@ -6313,6 +6344,8 @@ export interface components {
             receipt_logo_url?: string | null;
             /** Receipt Tax Id */
             receipt_tax_id?: string | null;
+            /** Store Hours */
+            store_hours?: components["schemas"]["StoreHourEntry"][] | null;
             /** Timezone */
             timezone?: string | null;
         };

@@ -70,6 +70,7 @@ def _to_row(s) -> StoreInfoRow:
     # Lazy import — keeps Admin Controllers from pulling Services
     # at module-load time.
     from api.Modules.Admin.Services.store_info import ALLOWED_TIMEZONES
+    from api.Modules.Admin.Services.store_hours import parse_stored_hours
     return StoreInfoRow(
         id=s.id,
         name=s.name or "",
@@ -87,6 +88,9 @@ def _to_row(s) -> StoreInfoRow:
         # Drop the leading "" sentinel for the SPA dropdown — the
         # UI surfaces "Use default" as its own option.
         timezone_choices=[tz for tz in ALLOWED_TIMEZONES if tz],
+        # Always 7 entries — defaults fill in if the column is
+        # NULL or malformed.
+        store_hours=parse_stored_hours(s.store_hours),
     )
 
 

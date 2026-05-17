@@ -398,6 +398,17 @@ impact ÷ effort. Numbers are an estimate.
       `/webhooks/stripe`. Step-by-step verification:
       [`deployment.md`](docs/architecture/deployment.md) §3
       "Secrets rotation → Stripe live mode swap".
+- [ ] **Re-enable cron services** (ops) — the two crons declared in
+      `render.yaml` (`dinerobook-data-retention-purge`,
+      `dinerobook-daily-summary`) were deleted from the Render
+      dashboard pre-launch to stay under the free-tier instance
+      cap (paid `starter` plan, no real users to email or expired
+      stores to purge yet). Re-create them via Blueprint sync
+      before public launch — the YAML is still the source of
+      truth, so it's a single sync action plus filling in the
+      `sync: false` SMTP envvars on the daily-summary cron. The
+      web service is unaffected by their absence; both crons are
+      idempotent so a missed day on either is a no-op.
 - [x] **Data retention cron** — landed. `render.yaml` declares
       a `type: cron` service `dinerobook-data-retention-purge`
       that runs `python -m scripts.purge_expired_stores` daily at
@@ -850,8 +861,19 @@ gaps. Ordered by "what I'd do next" at the top.
       connect-code pages migrated; the remaining `.toLocaleString(…UTC…)`
       callsites (AdminUsers, TVDisplayAdmin) can adopt the helper
       on-touch.
-- [ ] **Store hours** (open/close per day) — gate "no transfers
-      outside business hours" rule; useful for peak-hour heatmap.
+- [~] **Store hours** (open/close per day) — schema + admin UI
+      landed. ``Store.store_hours`` is a JSON list of 7 entries
+      (Mon-first, ``{day, open, close, closed}``); migration
+      ``8a4b2e9d7c61`` adds the column idempotently.
+      ``Admin.Services.store_hours`` owns validation (exactly 7
+      entries, unique days, ``HH:MM`` 24-hour times, open<close
+      unless closed). Settings page exposes a 7-row editor with
+      a per-day "Closed" toggle. NULL on read renders a sensible
+      Mon-Sat 9-6 / Sun closed default so the operator can save
+      in one click.
+      Pending follow-ups (own backlog items): "no transfers
+      outside business hours" gating on the transfer form,
+      peak-hour heatmap on the dashboard.
 - [x] **Receipt customization** — landed. Three new Store
       columns (``receipt_logo_url``, ``receipt_footer``,
       ``receipt_tax_id``) flow through the admin settings page

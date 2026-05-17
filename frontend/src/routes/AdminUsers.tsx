@@ -4,7 +4,9 @@ import {
   useAdminUsers,
   type AdminUserRow,
 } from "../api/admin";
+import { useProfile, useStoreInfo } from "../api/account";
 import { getCurrentIdentity } from "../lib/auth";
+import { formatDate } from "../lib/datetime";
 import {
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
   PageShell, Pill, Table, TableSkeleton, tdStyle, thStyle,
@@ -20,6 +22,10 @@ import styles from "./AdminUsers.module.css";
 export default function AdminUsers() {
   const identity = getCurrentIdentity();
   const { data, isLoading, isError, error, refetch } = useAdminUsers();
+  const { data: profile } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const userTz  = profile?.timezone ?? "";
+  const storeTz = storeInfo?.store?.timezone ?? "";
 
   if (
     !identity
@@ -57,7 +63,12 @@ export default function AdminUsers() {
           <EmptyState title="No users yet" body="Add one to get started." />
         )}
         {data && data.rows.length > 0 && (
-          <UserTable rows={data.rows} selfId={identity.user_id} />
+          <UserTable
+            rows={data.rows}
+            selfId={identity.user_id}
+            userTimezone={userTz}
+            storeTimezone={storeTz}
+          />
         )}
       </Card>
 
@@ -82,8 +93,13 @@ export default function AdminUsers() {
 
 
 function UserTable({
-  rows, selfId,
-}: { rows: AdminUserRow[]; selfId: number }) {
+  rows, selfId, userTimezone, storeTimezone,
+}: {
+  rows: AdminUserRow[];
+  selfId: number;
+  userTimezone: string;
+  storeTimezone: string;
+}) {
   return (
     <Table>
       <thead>
@@ -112,7 +128,7 @@ function UserTable({
             </td>
             <td style={tdStyle}>
               <span className={styles.monoCell}>
-                {formatCreated(u.created_at)}
+                {formatDate(u.created_at, { userTimezone, storeTimezone })}
               </span>
             </td>
             <td style={tdStyle}>
@@ -135,14 +151,3 @@ function UserTable({
 }
 
 
-// Server returns ISO timestamps. Render as "MM/DD/YYYY" (UTC) to
-// match the legacy `created_at.strftime('%m/%d/%Y')` cell.
-function formatCreated(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(d.getUTCDate()).padStart(2, "0");
-  const yy = d.getUTCFullYear();
-  return `${mm}/${dd}/${yy}`;
-}
