@@ -20,7 +20,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select, Textarea,
+  PageHeader, PageShell, SectionTitle, Select,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
@@ -526,57 +526,13 @@ function StoreInfoCard() {
             ))}
           </Select>
         </Field>
-        <div className={styles.spanFull}>
-          <SectionTitle>Receipt customization</SectionTitle>
-          <p className={styles.helpText}>
-            Branding that prints on every transfer receipt at
-            <code> /app/transfers/{"{id}"}/receipt</code>. All three
-            fields are optional — leaving them empty falls back to
-            the default layout (store name as wordmark, no tax ID
-            line, generic system footer).
-          </p>
-        </div>
-        <Field
-          label="Logo URL"
-          hint="Public image URL printed at the top of the receipt. PNG or SVG; square works best. Empty → store name wordmark."
-        >
-          <Input
-            type="url"
-            placeholder="https://cdn.example.com/logo.png"
-            value={receiptLogoUrl}
-            onChange={(e) => setReceiptLogoUrl(e.target.value)}
-            disabled={!canEdit}
-            maxLength={500}
-          />
-        </Field>
-        <Field
-          label="Tax ID / EIN"
-          hint="Federal tax ID printed near the receipt header. Required in some jurisdictions."
-        >
-          <Input
-            type="text"
-            placeholder="EIN 12-3456789"
-            value={receiptTaxId}
-            onChange={(e) => setReceiptTaxId(e.target.value)}
-            disabled={!canEdit}
-            maxLength={40}
-          />
-        </Field>
-        <div className={styles.spanFull}>
-          <Field
-            label="Footer text"
-            hint="Free-form text at the bottom of every receipt — refund policy, compliance disclaimer, thank-you. Empty → generic system footer. Max 500 chars."
-          >
-            <Textarea
-              value={receiptFooter}
-              onChange={(e) => setReceiptFooter(e.target.value)}
-              disabled={!canEdit}
-              rows={3}
-              maxLength={500}
-              placeholder="Refunds within 30 days with the receipt. Thank you for choosing us!"
-            />
-          </Field>
-        </div>
+        {/* Receipt customization fields are intentionally hidden —
+           DineroBook is a ledger, not a money-transmitter, so
+           customer-facing receipts don't belong here. The columns
+           still live on Store and the state hooks above still
+           hydrate / send them (empty strings round-trip cleanly)
+           so re-enabling is a single-file revert. See App.tsx
+           lazy-import comment for the matching route hide. */}
         <div className={styles.spanFull}>
           <SectionTitle>Business hours</SectionTitle>
           <p className={styles.helpText}>

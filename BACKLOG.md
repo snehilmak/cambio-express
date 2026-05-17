@@ -874,28 +874,32 @@ gaps. Ordered by "what I'd do next" at the top.
       Pending follow-ups (own backlog items): "no transfers
       outside business hours" gating on the transfer form,
       peak-hour heatmap on the dashboard.
-- [x] **Receipt customization** — landed. Three new Store
-      columns (``receipt_logo_url``, ``receipt_footer``,
-      ``receipt_tax_id``) flow through the admin settings page
-      to a new printable transfer-receipt route at
-      ``/app/transfers/{id}/receipt``. The receipt page renders
-      a clean card on screen + a print-CSS-stripped page-fill
-      layout when the operator clicks "Print" (chrome hidden, no
-      box shadow, edge-to-edge). Backed by a new
-      ``GET /api/v2/transfers/{id}/receipt`` endpoint that returns
-      ``{store, transfer}`` in one shot.
+- [~] **Receipt customization** — built but currently HIDDEN.
+      DineroBook is a ledger, not a money-transmitter, so the
+      customer-facing receipt surface doesn't fit the product
+      today. The full feature still lives in the codebase so
+      enabling it later is a one-line revert.
 
-      Migration ``2d8f1e6c4a09`` adds the three columns (all
-      default to empty string). Settings page on the store admin
-      side exposes the fields with hint copy and a textarea for
-      the footer. The "Print receipt" button on the edit-transfer
-      page navigates to the receipt route.
+      What's still in the repo (unused):
+        * ``Store.receipt_logo_url`` / ``receipt_footer`` /
+          ``receipt_tax_id`` columns (migration ``2d8f1e6c4a09``).
+        * ``GET /api/v2/transfers/{id}/receipt`` + Pydantic
+          schemas + the round-trip tests.
+        * ``frontend/src/routes/TransferReceipt.tsx`` +
+          ``.module.css``.
+        * Read-/write-side adapters on the admin store-info
+          endpoint (empty strings round-trip cleanly).
 
-      Tests: 7 endpoint tests (auth, happy-path, customization
-      round-trip, defaults, tenancy 404, route-ordering doesn't
-      shadow the transfer-detail endpoint) + 5 settings tests
-      (defaults, persistence, empty-clear, oversize 422, role
-      gate).
+      What's hidden:
+        * SPA route ``/app/transfers/{id}/receipt`` is not
+          registered in ``App.tsx``.
+        * "Print receipt" action on the edit-transfer page.
+        * "Receipt customization" section on
+          ``/app/settings``.
+
+      To re-enable: revert the "hide receipt printing" commit.
+      To wipe entirely: drop the route file + endpoint + the
+      three columns (Alembic migration required).
 - [ ] **Currency / locale** — hardcoded USD today. Needed before any
       non-US expansion.
 - [ ] **Data export (`/admin/settings/export`)** — consolidate the

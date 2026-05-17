@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
-  Alert, Button, ButtonLink, Card, ErrorState, Field, FormActions, Input,
+  Alert, Button, Card, ErrorState, Field, FormActions, Input,
   Loading, PageHeader, PageShell, Select,
 } from "../components/ui";
 import {
@@ -149,20 +149,16 @@ export default function EditTransfer() {
     );
   }
 
+  // Print-receipt action is intentionally hidden — see App.tsx
+  // comment near the (now-disabled) receipt route. The
+  // ButtonLink + ``/app/transfers/{id}/receipt`` href can come back
+  // by reverting this commit if we ever decide a customer-facing
+  // receipt belongs in a ledger product.
   return (
     <PageShell maxWidth="62rem">
       <PageHeader
         title={`Edit transfer #${transferId}`}
         subtitle="Federal tax is recomputed server-side on save."
-        actions={(
-          <ButtonLink
-            tone="secondary"
-            size="sm"
-            href={`/app/transfers/${transferId}/receipt`}
-          >
-            Print receipt
-          </ButtonLink>
-        )}
       />
 
       <form
