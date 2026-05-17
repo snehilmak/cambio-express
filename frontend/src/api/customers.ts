@@ -50,3 +50,25 @@ export function useCustomerSearch(q: string) {
     placeholderData: keepPreviousData,
   });
 }
+
+
+// ── Merge ────────────────────────────────────────────────────
+
+export interface CustomerMergeResponse {
+  winner_id:           number;
+  loser_id:            number;
+  transfers_repointed: number;
+}
+
+/** Merge ``loser_id`` into ``winner_id``. All Transfers pointing
+ *  at the loser get re-pointed at the winner, then the loser row
+ *  is deleted. Server enforces umbrella scoping + admin role. */
+export async function mergeCustomers(
+  winnerId: number,
+  loserId:  number,
+): Promise<CustomerMergeResponse> {
+  return api<CustomerMergeResponse>(
+    `/api/v2/customers/${winnerId}/merge`,
+    { method: "POST", json: { loser_id: loserId } },
+  );
+}
