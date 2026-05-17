@@ -331,3 +331,127 @@ def test_team_endpoints_require_jwt(client):
     assert p.status_code == 401
     assert u.status_code == 401
     assert d.status_code == 401
+
+
+# ── Receipt-customization fields ────────────────────────────
+
+
+def test_get_store_info_includes_receipt_fields_defaults(
+    client, test_store_id,
+):
+    """A store that's never customized its receipt branding gets
+    empty strings for the three receipt_* fields — the SPA
+    settings form renders empty inputs in that state."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["store"]
+    assert "receipt_logo_url" in body
+    assert "receipt_footer" in body
+    assert "receipt_tax_id" in body
+    assert body["receipt_logo_url"] == ""
+    assert body["receipt_footer"] == ""
+    assert body["receipt_tax_id"] == ""
+
+
+def test_put_store_info_persists_receipt_customization(
+    client, test_store_id,
+):
+    """All three receipt_* fields round-trip from PUT body →
+    DB → next GET. They're set / cleared independently of the
+    other Store fields."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={
+            "receipt_logo_url": "https://cdn.example.com/logo.png",
+            "receipt_footer": "Refunds within 30 days with the receipt.",
+            "receipt_tax_id": "EIN 12-3456789",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()["store"]
+    assert body["receipt_logo_url"] == "https://cdn.example.com/logo.png"
+    assert body["receipt_footer"] == "Refunds within 30 days with the receipt."
+    assert body["receipt_tax_id"] == "EIN 12-3456789"
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.receipt_logo_url == "https://cdn.example.com/logo.png"
+        assert s.receipt_footer == "Refunds within 30 days with the receipt."
+        assert s.receipt_tax_id == "EIN 12-3456789"
+
+
+def test_put_store_info_clears_receipt_field_with_empty_string(
+    client, test_store_id,
+):
+    """Passing ``""`` wipes the field back to the default layout
+    — the SPA UI relies on this to let an operator turn off the
+    custom footer without nulling the column."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    # First set it.
+    client.put(
+        "/api/v2/admin/store-info",
+        json={"receipt_footer": "Custom message"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Now clear it.
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"receipt_footer": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["store"]["receipt_footer"] == ""
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.receipt_footer == ""
+
+
+def test_put_store_info_rejects_oversized_receipt_field(
+    client, test_store_id,
+):
+    """Pydantic max_length is the boundary check — 500 chars is
+    the column width. Anything bigger gets 422 instead of crashing
+    on the INSERT."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"receipt_footer": "x" * 501},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_put_store_info_rejects_employee_role(client, test_store_id):
+    """Cashiers (role=employee) can't edit store info — the
+    role gate applies to every editable field, including the new
+    receipt customization ones."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        emp = User(
+            store_id=test_store_id,
+            username="receipt_emp@test.com",
+            full_name="Receipt Emp",
+            role="employee",
+        )
+        emp.set_password("p123pass!")
+        db.session.add(emp); db.session.commit()
+    login = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "receipt_emp@test.com",
+            "password": "p123pass!",
+            "store_id": test_store_id,
+        },
+    )
+    token = login.get_json()["access_token"]
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"receipt_footer": "Cashier shouldn't write this"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403

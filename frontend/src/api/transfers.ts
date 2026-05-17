@@ -271,3 +271,59 @@ export function useTransfers({
     refetchInterval: pollMs && pollMs > 0 ? pollMs : false,
   });
 }
+
+
+// ── Receipt ─────────────────────────────────────────────────
+
+export interface ReceiptStore {
+  name:             string;
+  address:          string;
+  phone:            string;
+  email:            string;
+  receipt_logo_url: string;
+  receipt_footer:   string;
+  receipt_tax_id:   string;
+}
+
+export interface ReceiptTransfer {
+  id:                   number;
+  send_date:            string;
+  created_at:           string;
+  company:              string;
+  service_type:         string;
+  sender_name:          string;
+  sender_phone:         string;
+  sender_phone_country: string;
+  sender_address:       string;
+  recipient_name:       string;
+  recipient_phone:      string;
+  country:              string;
+  confirm_number:       string;
+  send_amount:          number;
+  fee:                  number;
+  federal_tax:          number;
+  total_collected:      number;
+  status:               string;
+  employee_name:        string;
+}
+
+export interface TransferReceiptResponse {
+  store:    ReceiptStore;
+  transfer: ReceiptTransfer;
+}
+
+export function useTransferReceipt(transferId: number) {
+  const identity = getCurrentIdentity();
+  const storeId = identity?.store_id;
+  return useQuery<TransferReceiptResponse>({
+    enabled:
+      Number.isFinite(transferId)
+      && storeId !== null && storeId !== undefined,
+    queryKey: ["transfers", "receipt", transferId, storeId],
+    queryFn: () =>
+      api<TransferReceiptResponse>(
+        `/api/v2/transfers/${transferId}/receipt`
+        + `?store_ids=${storeId}`,
+      ),
+  });
+}

@@ -847,8 +847,28 @@ gaps. Ordered by "what I'd do next" at the top.
       there.
 - [ ] **Store hours** (open/close per day) — gate "no transfers
       outside business hours" rule; useful for peak-hour heatmap.
-- [ ] **Receipt customization** — logo + footer text + tax-ID line.
-      Customers already ask for this.
+- [x] **Receipt customization** — landed. Three new Store
+      columns (``receipt_logo_url``, ``receipt_footer``,
+      ``receipt_tax_id``) flow through the admin settings page
+      to a new printable transfer-receipt route at
+      ``/app/transfers/{id}/receipt``. The receipt page renders
+      a clean card on screen + a print-CSS-stripped page-fill
+      layout when the operator clicks "Print" (chrome hidden, no
+      box shadow, edge-to-edge). Backed by a new
+      ``GET /api/v2/transfers/{id}/receipt`` endpoint that returns
+      ``{store, transfer}`` in one shot.
+
+      Migration ``2d8f1e6c4a09`` adds the three columns (all
+      default to empty string). Settings page on the store admin
+      side exposes the fields with hint copy and a textarea for
+      the footer. The "Print receipt" button on the edit-transfer
+      page navigates to the receipt route.
+
+      Tests: 7 endpoint tests (auth, happy-path, customization
+      round-trip, defaults, tenancy 404, route-ordering doesn't
+      shadow the transfer-detail endpoint) + 5 settings tests
+      (defaults, persistence, empty-clear, oversize 422, role
+      gate).
 - [ ] **Currency / locale** — hardcoded USD today. Needed before any
       non-US expansion.
 - [ ] **Data export (`/admin/settings/export`)** — consolidate the

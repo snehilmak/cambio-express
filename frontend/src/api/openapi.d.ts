@@ -3014,6 +3014,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/transfers/{transfer_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Receipt Route
+         * @description Printable-receipt payload — transfer fields + the store's
+         *     branding metadata (logo URL, footer copy, tax ID) merged into
+         *     one response so the SPA's ``/app/transfers/{id}/receipt``
+         *     route doesn't have to chain two fetches.
+         *
+         *     Tenancy: ``store_ids`` is the caller's owner umbrella (comma
+         *     separated). The transfer must live inside one of those
+         *     stores. Returns 404 (never 403) to keep store boundaries
+         *     opaque.
+         */
+        get: operations["get_receipt_route_transfers__transfer_id__receipt_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tv-display/claim": {
         parameters: {
             query?: never;
@@ -5682,6 +5710,76 @@ export interface components {
             timezone?: string | null;
         };
         /**
+         * ReceiptStore
+         * @description Store header — branding + identifiers printed at the top
+         *     of the receipt.
+         */
+        ReceiptStore: {
+            /** Address */
+            address: string;
+            /** Email */
+            email: string;
+            /** Name */
+            name: string;
+            /** Phone */
+            phone: string;
+            /** Receipt Footer */
+            receipt_footer: string;
+            /** Receipt Logo Url */
+            receipt_logo_url: string;
+            /** Receipt Tax Id */
+            receipt_tax_id: string;
+        };
+        /**
+         * ReceiptTransfer
+         * @description Transfer body — the ledger details the customer signs off on.
+         *
+         *     Every numeric field is a plain ``float`` (USD). Dates / times
+         *     are ISO-8601 strings — the SPA formats per the user's locale.
+         *     Empty strings on optional fields render as blanks rather than
+         *     a missing column.
+         */
+        ReceiptTransfer: {
+            /** Company */
+            company: string;
+            /** Confirm Number */
+            confirm_number: string;
+            /** Country */
+            country: string;
+            /** Created At */
+            created_at: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Federal Tax */
+            federal_tax: number;
+            /** Fee */
+            fee: number;
+            /** Id */
+            id: number;
+            /** Recipient Name */
+            recipient_name: string;
+            /** Recipient Phone */
+            recipient_phone: string;
+            /** Send Amount */
+            send_amount: number;
+            /** Send Date */
+            send_date: string;
+            /** Sender Address */
+            sender_address: string;
+            /** Sender Name */
+            sender_name: string;
+            /** Sender Phone */
+            sender_phone: string;
+            /** Sender Phone Country */
+            sender_phone_country: string;
+            /** Service Type */
+            service_type: string;
+            /** Status */
+            status: string;
+            /** Total Collected */
+            total_collected: number;
+        };
+        /**
          * RecentRecipientRow
          * @description One recipient the customer has previously sent to.
          */
@@ -6125,6 +6223,10 @@ export interface components {
          * @description Read shape — fields the SPA's settings page renders.
          *     Slug / plan / billing fields are read-only here; the
          *     superadmin owns those.
+         *
+         *     Receipt customization fields drive ``/app/transfers/{id}/receipt``
+         *     — empty values fall back to the default layout (store name +
+         *     system footer).
          */
         StoreInfoRow: {
             /**
@@ -6161,6 +6263,21 @@ export interface components {
              * @default trial
              */
             plan: string;
+            /**
+             * Receipt Footer
+             * @default
+             */
+            receipt_footer: string;
+            /**
+             * Receipt Logo Url
+             * @default
+             */
+            receipt_logo_url: string;
+            /**
+             * Receipt Tax Id
+             * @default
+             */
+            receipt_tax_id: string;
             /** Slug */
             slug: string;
         };
@@ -6180,6 +6297,12 @@ export interface components {
             name?: string | null;
             /** Phone */
             phone?: string | null;
+            /** Receipt Footer */
+            receipt_footer?: string | null;
+            /** Receipt Logo Url */
+            receipt_logo_url?: string | null;
+            /** Receipt Tax Id */
+            receipt_tax_id?: string | null;
         };
         /**
          * StoreLookupResponse
@@ -6878,6 +7001,14 @@ export interface components {
             total: number;
             /** Total Pages */
             total_pages: number;
+        };
+        /**
+         * TransferReceiptResponse
+         * @description Full receipt payload — both halves in one envelope.
+         */
+        TransferReceiptResponse: {
+            store: components["schemas"]["ReceiptStore"];
+            transfer: components["schemas"]["ReceiptTransfer"];
         };
         /**
          * TransferResponse
@@ -12608,6 +12739,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_receipt_route_transfers__transfer_id__receipt_get: {
+        parameters: {
+            query: {
+                /** @description Caller's store scope, comma-separated. Cross-tenant lookups 404. */
+                store_ids: string;
+            };
+            header?: never;
+            path: {
+                transfer_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferReceiptResponse"];
+                };
             };
             /** @description Validation Error */
             422: {

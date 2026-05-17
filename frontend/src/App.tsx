@@ -63,6 +63,7 @@ const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
 const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
 const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
 const TransferDetail = lazy(() => import("./routes/TransferDetail"));
+const TransferReceipt = lazy(() => import("./routes/TransferReceipt"));
 const Transfers = lazy(() => import("./routes/Transfers"));
 const TVDisplayAdmin = lazy(() => import("./routes/TVDisplayAdmin"));
 const TVDisplayCountry = lazy(() => import("./routes/TVDisplayCountry"));
@@ -141,8 +142,9 @@ export default function App() {
           <Route path="dashboard"        element={<Dashboard />} />
           <Route path="transfers"        element={<Transfers />} />
           <Route path="transfers/new"      element={<NewTransfer />} />
-          <Route path="transfers/:id"      element={<TransferDetail />} />
-          <Route path="transfers/:id/edit" element={<EditTransfer />} />
+          <Route path="transfers/:id"         element={<TransferDetail />} />
+          <Route path="transfers/:id/edit"    element={<EditTransfer />} />
+          <Route path="transfers/:id/receipt" element={<TransferReceipt />} />
           <Route path="customers"        element={<Customers />} />
           <Route path="daily"            element={<DailyBook />} />
           <Route path="daily/edit"       element={<EditDailyBook />} />

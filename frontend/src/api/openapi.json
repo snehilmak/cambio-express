@@ -4479,6 +4479,156 @@
         "title": "ProfileUpdateRequest",
         "type": "object"
       },
+      "ReceiptStore": {
+        "additionalProperties": false,
+        "description": "Store header \u2014 branding + identifiers printed at the top\nof the receipt.",
+        "properties": {
+          "address": {
+            "title": "Address",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "receipt_footer": {
+            "title": "Receipt Footer",
+            "type": "string"
+          },
+          "receipt_logo_url": {
+            "title": "Receipt Logo Url",
+            "type": "string"
+          },
+          "receipt_tax_id": {
+            "title": "Receipt Tax Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "address",
+          "phone",
+          "email",
+          "receipt_logo_url",
+          "receipt_footer",
+          "receipt_tax_id"
+        ],
+        "title": "ReceiptStore",
+        "type": "object"
+      },
+      "ReceiptTransfer": {
+        "additionalProperties": false,
+        "description": "Transfer body \u2014 the ledger details the customer signs off on.\n\nEvery numeric field is a plain ``float`` (USD). Dates / times\nare ISO-8601 strings \u2014 the SPA formats per the user's locale.\nEmpty strings on optional fields render as blanks rather than\na missing column.",
+        "properties": {
+          "company": {
+            "title": "Company",
+            "type": "string"
+          },
+          "confirm_number": {
+            "title": "Confirm Number",
+            "type": "string"
+          },
+          "country": {
+            "title": "Country",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "federal_tax": {
+            "title": "Federal Tax",
+            "type": "number"
+          },
+          "fee": {
+            "title": "Fee",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "recipient_phone": {
+            "title": "Recipient Phone",
+            "type": "string"
+          },
+          "send_amount": {
+            "title": "Send Amount",
+            "type": "number"
+          },
+          "send_date": {
+            "title": "Send Date",
+            "type": "string"
+          },
+          "sender_address": {
+            "title": "Sender Address",
+            "type": "string"
+          },
+          "sender_name": {
+            "title": "Sender Name",
+            "type": "string"
+          },
+          "sender_phone": {
+            "title": "Sender Phone",
+            "type": "string"
+          },
+          "sender_phone_country": {
+            "title": "Sender Phone Country",
+            "type": "string"
+          },
+          "service_type": {
+            "title": "Service Type",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total_collected": {
+            "title": "Total Collected",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "send_date",
+          "created_at",
+          "company",
+          "service_type",
+          "sender_name",
+          "sender_phone",
+          "sender_phone_country",
+          "sender_address",
+          "recipient_name",
+          "recipient_phone",
+          "country",
+          "confirm_number",
+          "send_amount",
+          "fee",
+          "federal_tax",
+          "total_collected",
+          "status",
+          "employee_name"
+        ],
+        "title": "ReceiptTransfer",
+        "type": "object"
+      },
       "RecentRecipientRow": {
         "additionalProperties": false,
         "description": "One recipient the customer has previously sent to.",
@@ -5340,7 +5490,7 @@
       },
       "StoreInfoRow": {
         "additionalProperties": false,
-        "description": "Read shape \u2014 fields the SPA's settings page renders.\nSlug / plan / billing fields are read-only here; the\nsuperadmin owns those.",
+        "description": "Read shape \u2014 fields the SPA's settings page renders.\nSlug / plan / billing fields are read-only here; the\nsuperadmin owns those.\n\nReceipt customization fields drive ``/app/transfers/{id}/receipt``\n\u2014 empty values fall back to the default layout (store name +\nsystem footer).",
         "properties": {
           "address": {
             "default": "",
@@ -5378,6 +5528,21 @@
           "plan": {
             "default": "trial",
             "title": "Plan",
+            "type": "string"
+          },
+          "receipt_footer": {
+            "default": "",
+            "title": "Receipt Footer",
+            "type": "string"
+          },
+          "receipt_logo_url": {
+            "default": "",
+            "title": "Receipt Logo Url",
+            "type": "string"
+          },
+          "receipt_tax_id": {
+            "default": "",
+            "title": "Receipt Tax Id",
             "type": "string"
           },
           "slug": {
@@ -5457,6 +5622,42 @@
               }
             ],
             "title": "Phone"
+          },
+          "receipt_footer": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Footer"
+          },
+          "receipt_logo_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Logo Url"
+          },
+          "receipt_tax_id": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Tax Id"
           }
         },
         "title": "StoreInfoUpdateRequest",
@@ -6912,6 +7113,24 @@
           "page_amount"
         ],
         "title": "TransferListResponse",
+        "type": "object"
+      },
+      "TransferReceiptResponse": {
+        "additionalProperties": false,
+        "description": "Full receipt payload \u2014 both halves in one envelope.",
+        "properties": {
+          "store": {
+            "$ref": "#/components/schemas/ReceiptStore"
+          },
+          "transfer": {
+            "$ref": "#/components/schemas/ReceiptTransfer"
+          }
+        },
+        "required": [
+          "store",
+          "transfer"
+        ],
+        "title": "TransferReceiptResponse",
         "type": "object"
       },
       "TransferResponse": {
@@ -18877,6 +19096,61 @@
           }
         },
         "summary": "Update Route",
+        "tags": [
+          "transfers"
+        ]
+      }
+    },
+    "/transfers/{transfer_id}/receipt": {
+      "get": {
+        "description": "Printable-receipt payload \u2014 transfer fields + the store's\nbranding metadata (logo URL, footer copy, tax ID) merged into\none response so the SPA's ``/app/transfers/{id}/receipt``\nroute doesn't have to chain two fetches.\n\nTenancy: ``store_ids`` is the caller's owner umbrella (comma\nseparated). The transfer must live inside one of those\nstores. Returns 404 (never 403) to keep store boundaries\nopaque.",
+        "operationId": "get_receipt_route_transfers__transfer_id__receipt_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "transfer_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Transfer Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Caller's store scope, comma-separated. Cross-tenant lookups 404.",
+            "in": "query",
+            "name": "store_ids",
+            "required": true,
+            "schema": {
+              "description": "Caller's store scope, comma-separated. Cross-tenant lookups 404.",
+              "title": "Store Ids",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransferReceiptResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Receipt Route",
         "tags": [
           "transfers"
         ]

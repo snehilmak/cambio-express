@@ -4,8 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import SenderAutocomplete from "../components/SenderAutocomplete";
 import RecipientSuggestions from "../components/RecipientSuggestions";
 import {
-  Alert, Button, Card, ErrorState, Field, FormActions, Input, Loading,
-  PageHeader, PageShell, Select,
+  Alert, Button, ButtonLink, Card, ErrorState, Field, FormActions, Input,
+  Loading, PageHeader, PageShell, Select,
 } from "../components/ui";
 import {
   previewFederalTax,
@@ -154,6 +154,15 @@ export default function EditTransfer() {
       <PageHeader
         title={`Edit transfer #${transferId}`}
         subtitle="Federal tax is recomputed server-side on save."
+        actions={(
+          <ButtonLink
+            tone="secondary"
+            size="sm"
+            href={`/app/transfers/${transferId}/receipt`}
+          >
+            Print receipt
+          </ButtonLink>
+        )}
       />
 
       <form

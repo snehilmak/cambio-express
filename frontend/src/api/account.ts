@@ -159,6 +159,9 @@ export interface StoreInfoRow {
   plan: string;
   federal_tax_rate: number;
   is_active: boolean;
+  receipt_logo_url: string;
+  receipt_footer:   string;
+  receipt_tax_id:   string;
 }
 
 export interface StoreInfoUpdateBody {
@@ -167,6 +170,9 @@ export interface StoreInfoUpdateBody {
   phone?: string;
   address?: string;
   federal_tax_rate?: number;
+  receipt_logo_url?: string;
+  receipt_footer?:   string;
+  receipt_tax_id?:   string;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

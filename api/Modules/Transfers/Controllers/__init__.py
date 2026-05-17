@@ -36,8 +36,11 @@ from api.Modules.Transfers.Repositories import (
 from api.Modules.Transfers.Requests import (
     CreateTransferRequest,
     EmployeeRow,
+    ReceiptStore,
+    ReceiptTransfer,
     RosterResponse,
     TransferListResponse,
+    TransferReceiptResponse,
     TransferResponse,
     TransferRow,
 )
@@ -236,6 +239,79 @@ def create_route(
         raise HTTPException(status_code=422, detail=str(exc))
     db.commit()
     return TransferResponse(transfer=_to_row(transfer))
+
+
+@router.get(
+    "/{transfer_id}/receipt",
+    response_model=TransferReceiptResponse,
+)
+def get_receipt_route(
+    transfer_id: int = Path(..., ge=1),
+    store_ids: str = Query(
+        ...,
+        description=(
+            "Caller's store scope, comma-separated. Cross-tenant "
+            "lookups 404."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> TransferReceiptResponse:
+    """Printable-receipt payload — transfer fields + the store's
+    branding metadata (logo URL, footer copy, tax ID) merged into
+    one response so the SPA's ``/app/transfers/{id}/receipt``
+    route doesn't have to chain two fetches.
+
+    Tenancy: ``store_ids`` is the caller's owner umbrella (comma
+    separated). The transfer must live inside one of those
+    stores. Returns 404 (never 403) to keep store boundaries
+    opaque.
+    """
+    from api.Modules.Tenancy.Models import Store
+    ids = _parse_store_ids(store_ids)
+    transfer = get_by_id_in_stores(db, transfer_id, ids)
+    if transfer is None:
+        raise HTTPException(status_code=404, detail="Transfer not found")
+    store = db.get(Store, transfer.store_id)
+    if store is None:
+        # The transfer's FK target vanished — exceedingly rare but
+        # 404 is still the right answer ("can't render the receipt").
+        raise HTTPException(status_code=404, detail="Store not found")
+    return TransferReceiptResponse(
+        store=ReceiptStore(
+            name=store.name or "",
+            address=store.address or "",
+            phone=store.phone or "",
+            email=store.email or "",
+            receipt_logo_url=store.receipt_logo_url or "",
+            receipt_footer=store.receipt_footer or "",
+            receipt_tax_id=store.receipt_tax_id or "",
+        ),
+        transfer=ReceiptTransfer(
+            id=transfer.id,
+            send_date=(
+                transfer.send_date.isoformat() if transfer.send_date else ""
+            ),
+            created_at=(
+                transfer.created_at.isoformat() if transfer.created_at else ""
+            ),
+            company=transfer.company or "",
+            service_type=transfer.service_type or "Money Transfer",
+            sender_name=transfer.sender_name or "",
+            sender_phone=transfer.sender_phone or "",
+            sender_phone_country=transfer.sender_phone_country or "",
+            sender_address=transfer.sender_address or "",
+            recipient_name=transfer.recipient_name or "",
+            recipient_phone=transfer.recipient_phone or "",
+            country=transfer.country or "",
+            confirm_number=transfer.confirm_number or "",
+            send_amount=float(transfer.send_amount or 0),
+            fee=float(transfer.fee or 0),
+            federal_tax=float(transfer.federal_tax or 0),
+            total_collected=float(transfer.total_collected),
+            status=transfer.status or "Sent",
+            employee_name=transfer.employee_name or "",
+        ),
+    )
 
 
 @router.get("/{transfer_id}", response_model=TransferResponse)

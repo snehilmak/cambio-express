@@ -79,6 +79,22 @@ class Store(Base):
     # can't tamper with it. Admins override via Settings → Store if their
     # state or vendor has a different rate.
     federal_tax_rate = Column(Float, default=0.01, nullable=False)
+    # Receipt customization. Stamped onto every printed transfer
+    # receipt under /app/transfers/{id}/receipt. All three default
+    # to "" so an unconfigured store falls back to the plain
+    # receipt layout (store name + system footer).
+    #   - receipt_logo_url: public URL of the store's logo image
+    #     for the receipt header. Empty → use the store name as a
+    #     text wordmark.
+    #   - receipt_footer:   free-form text printed at the bottom
+    #     of every receipt. Refund policy, compliance line,
+    #     thank-you. Trimmed to keep the printable area on one
+    #     thermal-printer page.
+    #   - receipt_tax_id:   federal tax ID / EIN / VAT — printed
+    #     near the header when set. Some jurisdictions require it.
+    receipt_logo_url = Column(String(500), default="")
+    receipt_footer   = Column(String(500), default="")
+    receipt_tax_id   = Column(String(40),  default="")
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both
