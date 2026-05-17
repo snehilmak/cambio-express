@@ -174,6 +174,33 @@ def list_route(
     )
 
 
+def _enforce_business_hours_gate(db: Session, store_id: int) -> None:
+    """When the store has ``enforce_business_hours=True``, reject
+    transfer create / update with 422 if the current store-local
+    time falls outside the configured ``store_hours`` window.
+    Default-off — silently passes for stores that haven't opted
+    in. The soft yellow warning on the New Transfer form fires
+    regardless; this is the hard gate the operator opts into."""
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.Admin.Services.store_hours import (
+        is_open_at, store_now,
+    )
+    store = db.get(Store, store_id)
+    if store is None or not store.enforce_business_hours:
+        return
+    when = store_now(store.timezone)
+    if not is_open_at(store.store_hours, when):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This store has business-hours enforcement on. "
+                "Transfers can only be logged during the configured "
+                "open hours — update them on /app/settings if this "
+                "should be allowed."
+            ),
+        )
+
+
 @router.post("", response_model=TransferResponse, status_code=201)
 def create_route(
     body: CreateTransferRequest,
@@ -196,6 +223,7 @@ def create_route(
             ),
         )
     user_id = int(claims["sub"])
+    _enforce_business_hours_gate(db, int(store_id_claim))
 
     try:
         send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()
@@ -357,6 +385,7 @@ def update_route(
             ),
         )
     user_id = int(claims["sub"])
+    _enforce_business_hours_gate(db, int(store_id_claim))
 
     try:
         send_date = datetime.strptime(body.send_date, "%Y-%m-%d").date()

@@ -389,6 +389,7 @@ function StoreInfoCard() {
   const [receiptTaxId, setReceiptTaxId] = useState("");
   const [timezone, setTimezone] = useState("");
   const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
+  const [enforceHours, setEnforceHours] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -413,6 +414,7 @@ function StoreInfoCard() {
         ? data.store.store_hours.map((h) => ({ ...h }))
         : defaultHours(),
     );
+    setEnforceHours(Boolean(data.store.enforce_business_hours));
   }, [data]);
 
   const canEdit =
@@ -434,6 +436,7 @@ function StoreInfoCard() {
         receipt_tax_id:   receiptTaxId,
         timezone,
         store_hours: hours,
+        enforce_business_hours: enforceHours,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -546,6 +549,20 @@ function StoreInfoCard() {
             onChange={setHours}
             disabled={!canEdit}
           />
+          <label className={styles.enforceRow}>
+            <input
+              type="checkbox"
+              checked={enforceHours}
+              disabled={!canEdit}
+              onChange={(e) => setEnforceHours(e.target.checked)}
+            />{" "}
+            Block transfers outside these hours
+            <span className={styles.enforceHint}>
+              {" "}— refuses transfer saves with an error when
+              outside the open window. The soft warning on the New
+              Transfer form fires regardless of this toggle.
+            </span>
+          </label>
         </div>
         {err && (
           <div className={styles.spanFull}>

@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 
 # ── Constants ────────────────────────────────────────────────
@@ -110,6 +111,19 @@ def validate_hours_payload(payload: Any) -> list[dict[str, Any]]:
     # Order by day for stable storage / display.
     out.sort(key=lambda e: e["day"])
     return out
+
+
+def store_now(timezone: str | None) -> datetime:
+    """Current wall-clock datetime in the given IANA timezone
+    (or UTC if empty / unknown). Naive — strips tzinfo so it
+    composes with ``is_open_at`` cleanly. Bad tz strings degrade
+    to UTC silently; the operator can fix the value in Settings."""
+    tz_name = (timezone or "").strip() or "UTC"
+    try:
+        tz = ZoneInfo(tz_name)
+    except ZoneInfoNotFoundError:
+        tz = ZoneInfo("UTC")
+    return datetime.now(tz=tz).replace(tzinfo=None)
 
 
 def is_open_at(stored_hours: Any, when: datetime) -> bool:

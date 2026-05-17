@@ -687,3 +687,47 @@ def test_put_store_info_rejects_bad_time_format_in_hours(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── enforce_business_hours toggle ───────────────────────────
+
+
+def test_get_store_info_includes_enforce_business_hours_default_false(
+    client, test_store_id,
+):
+    """Fresh store comes back with enforce_business_hours=False.
+    The Settings page renders the toggle in the off position."""
+    token = _login(client, test_store_id)
+    body = client.get(
+        "/api/v2/admin/store-info",
+        headers={"Authorization": f"Bearer {token}"},
+    ).get_json()["store"]
+    assert body["enforce_business_hours"] is False
+
+
+def test_put_store_info_persists_enforce_business_hours(
+    client, test_store_id,
+):
+    """Toggle round-trips PUT → DB → next GET, and the column
+    stores a real Boolean (not None) so the transfer gate can
+    check it cheaply."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"enforce_business_hours": True},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["store"]["enforce_business_hours"] is True
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.enforce_business_hours is True
+    # Flip back off.
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"enforce_business_hours": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["store"]["enforce_business_hours"] is False
