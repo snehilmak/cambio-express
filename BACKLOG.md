@@ -798,9 +798,27 @@ gaps. Ordered by "what I'd do next" at the top.
       sender in the superadmin announcement POST) and daily-summary
       email (needs a new cron). Ship the senders alongside the
       toggles, not before — empty toggles are a trust-eroder.
-- [ ] **Sessions / active devices** — "you're signed in on 3 devices,
-      sign out the others." Needs a session-store table; pairs with
-      passkeys nicely as a security-signal feature.
+- [x] **Sessions / active devices** — landed.
+      ``/app/account/sessions`` (new Devices sidebar entry under
+      Account) lists every browser the current user is signed in
+      on. Backed by the refresh-token chain: each ``/auth/login``
+      call mints a stable ``session_id`` UUID that propagates
+      forward through every ``rotate()``, so a chain of refresh
+      tokens for one browser collapses to one panel row. The JWT
+      now carries a ``sid`` claim so each request can identify
+      its own session cheaply.
+      Three endpoints:
+        * ``GET /api/v2/auth/sessions``
+        * ``DELETE /api/v2/auth/sessions/{session_id}`` (revoke one)
+        * ``DELETE /api/v2/auth/sessions/others`` (revoke every
+          session except the current one — "Sign out everywhere
+          else").
+      Per-row User-Agent + IP are captured on login and
+      re-captured on every rotation. Migration ``9c5e21a4f8b3``
+      adds the columns + an index on ``(user_id, session_id)``.
+      Tests: 13 service tests + 11 endpoint tests cover the chain
+      collapse, current-session flag, cross-user isolation,
+      legacy-NULL bucket, and per-row JSON shape.
 - [x] **Audit log (mine)** — landed.
       `GET /api/v2/auth/activity` returns the cross-store
       `OperatorAuditLog` + `TransferAudit` rows authored by the

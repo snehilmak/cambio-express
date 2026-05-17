@@ -158,6 +158,17 @@ class RefreshToken(Base):
     jti             = Column(String(64), unique=True, nullable=False, index=True)
     user_id         = Column(Integer, ForeignKey("user.id"),
                               nullable=False, index=True)
+    # Stable UUID across rotation. Issued fresh on each login path
+    # call; copied forward by ``rotate()``. Treat ``NULL`` (legacy
+    # rows from before the column landed) as a singleton session
+    # per user — the list endpoint groups by ``(user_id, session_id)``.
+    session_id      = Column(String(36), nullable=True)
+    # Device metadata captured per row — re-captured on rotate so
+    # the most-recent (head) row's values reflect the latest
+    # request. Useful for "Chrome on macOS, last used 5 min ago"
+    # rendering on the sessions panel.
+    user_agent      = Column(String(255), nullable=True)
+    ip_address      = Column(String(45), nullable=True)
     created_at      = Column(DateTime, default=datetime.utcnow,
                               nullable=False)
     expires_at      = Column(DateTime, nullable=False)

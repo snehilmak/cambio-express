@@ -20,6 +20,8 @@ from api.Core.Database import get_db
 from api.Core.RateLimit import limiter as _rate_limiter
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Requests import (
+    ActiveSessionRow,
+    ActiveSessionsResponse,
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginCrossStoreRequest,
@@ -36,6 +38,7 @@ from api.Modules.Auth.Requests import (
     RecoveryLoginRequest,
     ReferralPreviewResponse,
     ResetPasswordRequest,
+    SessionRevokeResponse,
     SignupRequest,
     SignupResponse,
     StoreLookupResponse,
@@ -195,23 +198,51 @@ def get_principal(
         )
 
 
+def _client_user_agent(request: Request | None) -> str:
+    """Pull the User-Agent header off the request, capped at 255
+    chars (the refresh-token column width). Empty when no request
+    is in play (e.g. tests using the Service directly)."""
+    if request is None:
+        return ""
+    return (request.headers.get("user-agent") or "")[:255]
+
+
+def _client_ip_address(request: Request | None) -> str:
+    """Best-effort client IP. Prefers the proxy-forwarded chain
+    header set by Render's edge, falls back to the direct socket
+    peer. Capped at 45 chars (IPv6 + zone-id)."""
+    if request is None:
+        return ""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd:
+        # X-Forwarded-For is a comma-separated chain
+        # (client, proxy1, proxy2). The client is the leftmost.
+        return fwd.split(",", 1)[0].strip()[:45]
+    client = request.client
+    return (client.host if client else "")[:45]
+
+
 def _to_login_response(
     result: LoginResult | LoginPendingResult,
     response: Response | None = None,
     db: Session | None = None,
+    request: Request | None = None,
 ) -> LoginResponse:
     """Translate a Service result (full or pending) into the
-    polymorphic `LoginResponse` shape. Centralised so the four
-    login-ish routes (login, login-cross-store, login/totp,
-    login/recovery) all emit the exact same envelope.
+    polymorphic ``LoginResponse`` shape. Centralised so every
+    login-ish route emits the exact same envelope.
 
     When the result is a full ``LoginResult`` and a ``Response``
-    is supplied, also drop the JWT into the httpOnly
-    ``db_access_token`` cookie + mint a refresh token (httpOnly
-    ``db_refresh_token``, scoped to ``/api/v2/auth``) so the SPA
-    can silently refresh expired access cookies via
-    ``/auth/refresh``. Body still carries ``access_token`` for
-    backward compat with non-SPA callers (curl, scripts, tests).
+    is supplied, also:
+
+      1. Issue a refresh token (which mints the chain's
+         ``session_id`` + captures the User-Agent / IP off the
+         request) and set the ``db_refresh_token`` cookie.
+      2. Re-mint the access token with the new ``sid`` claim and
+         set the ``db_access_token`` cookie.
+
+    Body still carries ``access_token`` for backward compat with
+    non-SPA callers (curl, scripts, tests).
     """
     if isinstance(result, LoginPendingResult):
         return LoginResponse(
@@ -222,23 +253,42 @@ def _to_login_response(
             enroll_required=result.enroll_required,
             expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
         )
-    if response is not None:
-        _set_access_token_cookie(response, result.access_token)
-        if db is not None:
-            from api.Modules.Auth.Services.refresh import (
-                DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
-            )
-            issued = _issue_refresh(db, user_id=result.user_id)
-            # Commit so the refresh row is visible to the next
-            # ``SessionLocal`` (refresh hits a fresh session via
-            # ``Depends(get_db)``).
-            db.commit()
-            _set_refresh_token_cookie(
-                response, issued.jti,
-                max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
-            )
+
+    access_token = result.access_token
+    if response is not None and db is not None:
+        from api.Modules.Auth.Services.refresh import (
+            DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+        )
+        issued = _issue_refresh(
+            db, user_id=result.user_id,
+            user_agent=_client_user_agent(request),
+            ip_address=_client_ip_address(request),
+        )
+        # Re-mint the access token now that we have a session_id
+        # so every authed request can identify its own session
+        # cheaply (no extra DB lookup).
+        from api.Modules.Auth.Services.login import permissions_for
+        issuer = JWTIssuer(
+            sub=result.user_id,
+            role=result.role,
+            store_id=result.store_id,
+            permissions=list(result.permissions or permissions_for(result.role)),
+            full_name=result.full_name,
+            username=result.username,
+            session_id=issued.session_id,
+        )
+        access_token = issue_access_token(issuer)
+        db.commit()
+        _set_access_token_cookie(response, access_token)
+        _set_refresh_token_cookie(
+            response, issued.jti,
+            max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
+        )
+    elif response is not None:
+        _set_access_token_cookie(response, access_token)
+
     return LoginResponse(
-        access_token=result.access_token,
+        access_token=access_token,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
         user_id=result.user_id,
         username=result.username,
@@ -325,7 +375,7 @@ def login_route(
         if store is not None and store.slug:
             _set_last_store_slug_cookie(response, store.slug)
     db.commit()
-    return _to_login_response(result, response, db)
+    return _to_login_response(result, response, db, request)
 
 
 @router.get(
@@ -358,6 +408,7 @@ def store_by_slug_route(
 
 @router.post("/login-cross-store", response_model=LoginResponse)
 def login_cross_store_route(
+    request: Request,
     body: LoginCrossStoreRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -379,11 +430,12 @@ def login_cross_store_route(
         )
     except TotpEnrollmentRequired as exc:
         raise HTTPException(status_code=409, detail=str(exc))
-    return _to_login_response(result, response, db)
+    return _to_login_response(result, response, db, request)
 
 
 @router.post("/login/totp", response_model=LoginResponse)
 def login_totp_route(
+    request: Request,
     body: TotpLoginRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -401,11 +453,12 @@ def login_totp_route(
             status_code=401, detail=str(exc) or "Invalid verification code",
         )
     db.commit()  # no-op for TOTP, but keep call shape symmetric with /recovery
-    return _to_login_response(result, response, db)
+    return _to_login_response(result, response, db, request)
 
 
 @router.post("/login/recovery", response_model=LoginResponse)
 def login_recovery_route(
+    request: Request,
     body: RecoveryLoginRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -421,7 +474,7 @@ def login_recovery_route(
             status_code=401, detail=str(exc) or "Invalid recovery code",
         )
     db.commit()
-    return _to_login_response(result, response, db)
+    return _to_login_response(result, response, db, request)
 
 
 @router.post(
@@ -467,6 +520,7 @@ def login_totp_enroll_finish_route(
     "/login/totp/enroll/confirm", response_model=LoginResponse,
 )
 def login_totp_enroll_confirm_route(
+    request: Request,
     body: TotpEnrollConfirmRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -481,7 +535,7 @@ def login_totp_enroll_confirm_route(
     except AuthenticationError as exc:
         raise HTTPException(status_code=401, detail=str(exc) or "Invalid pending token")
     db.commit()
-    return _to_login_response(result, response, db)
+    return _to_login_response(result, response, db, request)
 
 
 @router.post("/logout", status_code=204)
@@ -513,7 +567,7 @@ def logout_route(
 @router.post("/refresh", response_model=LoginResponse)
 @_rate_limiter.limit("20/minute;200/hour")
 def refresh_route(
-    request: Request,  # noqa: ARG001 — required by slowapi
+    request: Request,
     response: Response,
     db_refresh_token: str | None = Cookie(default=None),
     db: Session = Depends(get_db),
@@ -544,7 +598,11 @@ def refresh_route(
         RefreshTokenInvalid, rotate as _rotate,
     )
     try:
-        old_row, new = _rotate(db, jti=db_refresh_token)
+        old_row, new = _rotate(
+            db, jti=db_refresh_token,
+            user_agent=_client_user_agent(request),
+            ip_address=_client_ip_address(request),
+        )
     except RefreshTokenInvalid:
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
@@ -565,6 +623,9 @@ def refresh_route(
         store_id=user.store_id, permissions=perms,
         full_name=user.full_name or "",
         username=user.username,
+        # Propagate the session_id (inherited by ``rotate()``) so
+        # the SPA can keep flagging "this device" after refresh.
+        session_id=new.session_id,
     ))
     _set_access_token_cookie(response, new_access)
     _set_refresh_token_cookie(
@@ -818,9 +879,18 @@ def signup_route(
         )
     db.commit()
 
-    # Issue a JWT scoped to the new store. Same shape as login —
-    # the SPA stores it in localStorage and lands on /dashboard.
+    # Issue a refresh token first (mints the session_id), then the
+    # access JWT (which embeds the session_id). Same flow the
+    # password-login path uses via ``_to_login_response``.
     perms = permissions_for(result.admin.role)
+    from api.Modules.Auth.Services.refresh import (
+        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+    )
+    issued_rt = _issue_refresh(
+        db, user_id=result.admin.id,
+        user_agent=_client_user_agent(request),
+        ip_address=_client_ip_address(request),
+    )
     issuer = JWTIssuer(
         sub=result.admin.id,
         role=result.admin.role,
@@ -828,14 +898,10 @@ def signup_route(
         permissions=perms,
         full_name=result.admin.full_name or "",
         username=result.admin.username,
+        session_id=issued_rt.session_id,
     )
     token = issue_access_token(issuer)
     _set_access_token_cookie(response, token)
-    from api.Modules.Auth.Services.refresh import (
-        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
-    )
-    # Commit the user/store first so the refresh-token FK can land.
-    issued_rt = _issue_refresh(db, user_id=result.admin.id)
     db.commit()
     _set_refresh_token_cookie(
         response, issued_rt.jti,
@@ -857,6 +923,7 @@ def signup_route(
     "/signup/owner", response_model=OwnerSignupResponse, status_code=201,
 )
 def signup_owner_route(
+    request: Request,
     body: OwnerSignupRequest,
     response: Response,
     db: Session = Depends(get_db),
@@ -903,6 +970,14 @@ def signup_owner_route(
     db.commit()
 
     perms = permissions_for(result.owner.role)
+    from api.Modules.Auth.Services.refresh import (
+        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
+    )
+    issued_rt = _issue_refresh(
+        db, user_id=result.owner.id,
+        user_agent=_client_user_agent(request),
+        ip_address=_client_ip_address(request),
+    )
     issuer = JWTIssuer(
         sub=result.owner.id,
         role=result.owner.role,
@@ -910,14 +985,10 @@ def signup_owner_route(
         permissions=perms,
         full_name=result.owner.full_name or "",
         username=result.owner.username,
+        session_id=issued_rt.session_id,
     )
     token = issue_access_token(issuer)
     _set_access_token_cookie(response, token)
-    from api.Modules.Auth.Services.refresh import (
-        DEFAULT_REFRESH_TOKEN_TTL_SECONDS, issue as _issue_refresh,
-    )
-    # Commit the user/store first so the refresh-token FK can land.
-    issued_rt = _issue_refresh(db, user_id=result.owner.id)
     db.commit()
     _set_refresh_token_cookie(
         response, issued_rt.jti,
@@ -1324,3 +1395,105 @@ def delete_passkey_route(
     db.delete(p)
     db.commit()
     return None
+
+
+# ── Active sessions / devices ───────────────────────────────
+
+
+@router.get("/sessions", response_model=ActiveSessionsResponse)
+def list_sessions_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ActiveSessionsResponse:
+    """Active sessions (one per refresh-token chain) for the
+    caller. The current session is flagged with ``is_current``
+    via the ``sid`` JWT claim — used by the SPA to render
+    "This device" + suppress the revoke button on the row that
+    would log the user out of the page they're on.
+    """
+    from api.Modules.Auth.Services.sessions import list_active_sessions
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    rows = list_active_sessions(
+        db,
+        user_id=int(sub),
+        current_session_id=claims.get("sid"),
+    )
+    return ActiveSessionsResponse(
+        sessions=[
+            ActiveSessionRow(
+                session_id=r.session_id,
+                user_agent=r.user_agent,
+                ip_address=r.ip_address,
+                started_at=r.started_at.isoformat(),
+                last_used_at=r.last_used_at.isoformat(),
+                expires_at=r.expires_at.isoformat(),
+                is_current=r.is_current,
+            )
+            for r in rows
+        ],
+    )
+
+
+@router.delete(
+    "/sessions/others",
+    response_model=SessionRevokeResponse,
+)
+def revoke_other_sessions_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SessionRevokeResponse:
+    """Revoke every active session for the caller EXCEPT the one
+    that signed this request. Useful when the user spots an
+    unrecognised device on the panel and wants to nuke everything
+    in one click without logging themselves out.
+
+    Returns the count of refresh rows actually revoked (sum
+    across every revoked chain — a long-lived session can hold
+    several rotated rows).
+    """
+    from api.Modules.Auth.Services.sessions import (
+        LEGACY_SESSION_ID, revoke_other_sessions as _revoke_others,
+    )
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    keep = claims.get("sid") or LEGACY_SESSION_ID
+    n = _revoke_others(db, user_id=int(sub), keep_session_id=keep)
+    db.commit()
+    return SessionRevokeResponse(revoked=n)
+
+
+@router.delete(
+    "/sessions/{session_id}",
+    response_model=SessionRevokeResponse,
+)
+def revoke_session_route(
+    session_id: str,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> SessionRevokeResponse:
+    """Revoke a single session by its UUID. The user_id filter is
+    the security boundary — a caller can only revoke their OWN
+    sessions; cross-user requests return ``{revoked: 0}``.
+
+    The caller may revoke their own current session (the SPA hides
+    the button on the current row but the API allows it — useful
+    for "kill this tab from another device").
+    """
+    from api.Modules.Auth.Services.sessions import (
+        revoke_session as _revoke_one,
+    )
+    sub = claims.get("sub")
+    if sub is None:
+        raise HTTPException(
+            status_code=401, detail="JWT is missing the subject claim.",
+        )
+    n = _revoke_one(db, user_id=int(sub), session_id=session_id)
+    db.commit()
+    return SessionRevokeResponse(revoked=n)

@@ -43,6 +43,68 @@
         "title": "ActiveAnnouncementsResponse",
         "type": "object"
       },
+      "ActiveSessionRow": {
+        "additionalProperties": false,
+        "description": "One refresh-token chain (== one browser / one login).",
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "ip_address": {
+            "title": "Ip Address",
+            "type": "string"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "last_used_at": {
+            "title": "Last Used At",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "started_at": {
+            "title": "Started At",
+            "type": "string"
+          },
+          "user_agent": {
+            "title": "User Agent",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "user_agent",
+          "ip_address",
+          "started_at",
+          "last_used_at",
+          "expires_at",
+          "is_current"
+        ],
+        "title": "ActiveSessionRow",
+        "type": "object"
+      },
+      "ActiveSessionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/ActiveSessionRow"
+            },
+            "title": "Sessions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "title": "ActiveSessionsResponse",
+        "type": "object"
+      },
       "AddonListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -5140,6 +5202,21 @@
         "title": "ServiceTypeRow",
         "type": "object"
       },
+      "SessionRevokeResponse": {
+        "additionalProperties": false,
+        "description": "Echoed back after a revoke call so the SPA knows how many\nrefresh rows actually changed state (chains span N rows after\na long-lived login).",
+        "properties": {
+          "revoked": {
+            "title": "Revoked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revoked"
+        ],
+        "title": "SessionRevokeResponse",
+        "type": "object"
+      },
       "SignupRequest": {
         "additionalProperties": false,
         "description": "POST body for /auth/signup. Mirrors the legacy /signup\nJinja form. Returns a JWT on success so the SPA can drop\nthe new admin straight onto the dashboard without a second\nlogin round-trip.",
@@ -10120,6 +10197,213 @@
           }
         },
         "summary": "Reset Password Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/sessions": {
+      "get": {
+        "description": "Active sessions (one per refresh-token chain) for the\ncaller. The current session is flagged with ``is_current``\nvia the ``sid`` JWT claim \u2014 used by the SPA to render\n\"This device\" + suppress the revoke button on the row that\nwould log the user out of the page they're on.",
+        "operationId": "list_sessions_route_auth_sessions_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActiveSessionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Sessions Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/sessions/others": {
+      "delete": {
+        "description": "Revoke every active session for the caller EXCEPT the one\nthat signed this request. Useful when the user spots an\nunrecognised device on the panel and wants to nuke everything\nin one click without logging themselves out.\n\nReturns the count of refresh rows actually revoked (sum\nacross every revoked chain \u2014 a long-lived session can hold\nseveral rotated rows).",
+        "operationId": "revoke_other_sessions_route_auth_sessions_others_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRevokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Other Sessions Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/sessions/{session_id}": {
+      "delete": {
+        "description": "Revoke a single session by its UUID. The user_id filter is\nthe security boundary \u2014 a caller can only revoke their OWN\nsessions; cross-user requests return ``{revoked: 0}``.\n\nThe caller may revoke their own current session (the SPA hides\nthe button on the current row but the API allows it \u2014 useful\nfor \"kill this tab from another device\").",
+        "operationId": "revoke_session_route_auth_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionRevokeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke Session Route",
         "tags": [
           "auth"
         ]

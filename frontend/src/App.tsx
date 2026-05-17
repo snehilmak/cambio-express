@@ -17,6 +17,7 @@ import NotFound from "./routes/NotFound";
 const AccountActivity = lazy(() => import("./routes/AccountActivity"));
 const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
 const AccountProfile = lazy(() => import("./routes/AccountProfile"));
+const AccountSessions = lazy(() => import("./routes/AccountSessions"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
@@ -227,6 +228,7 @@ export default function App() {
           <Route path="account/profile"       element={<AccountProfile />} />
           <Route path="account/notifications" element={<AccountNotifications />} />
           <Route path="account/activity"      element={<AccountActivity />} />
+          <Route path="account/sessions"      element={<AccountSessions />} />
           <Route path="tv-display"            element={<TVDisplayAdmin />} />
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
           <Route path="settings"         element={<Settings />} />

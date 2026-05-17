@@ -46,13 +46,21 @@ def _secret() -> str:
 class JWTIssuer:
     """Bundle of the inputs for `issue_access_token`. A user-facing
     Service constructs one of these per logged-in user and reuses it
-    across the HTTP response."""
+    across the HTTP response.
+
+    ``session_id`` is the stable per-login UUID minted by
+    ``Services.refresh.issue`` (and propagated through every
+    rotation). Embedding it in the access token lets every
+    request know which session it belongs to without an extra DB
+    lookup — the sessions panel uses it to flag "This device".
+    """
     sub: int  # user id
     role: str
     store_id: int | None
     permissions: list[str]
     full_name: str = ""
     username: str = ""
+    session_id: str | None = None
 
 
 def issue_access_token(
@@ -61,7 +69,7 @@ def issue_access_token(
     """Mint an HS256 JWT carrying the issuer's claims. Returns the
     encoded token string."""
     now = _now()
-    payload = {
+    payload: dict[str, Any] = {
         "sub": str(issuer.sub),
         "role": issuer.role,
         "store_id": issuer.store_id,
@@ -71,6 +79,8 @@ def issue_access_token(
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(seconds=ttl_seconds)).timestamp()),
     }
+    if issuer.session_id is not None:
+        payload["sid"] = issuer.session_id
     return jwt.encode(payload, _secret(), algorithm=JWT_ALGORITHM)
 
 

@@ -32,8 +32,15 @@ from api.Modules.Auth.Requests.profile import (
     ProfileResponse,
     ProfileUpdateRequest,
 )
+from api.Modules.Auth.Requests.sessions import (
+    ActiveSessionRow,
+    ActiveSessionsResponse,
+    SessionRevokeResponse,
+)
 
 __all__ = [
+    "ActiveSessionRow",
+    "ActiveSessionsResponse",
     "ChangePasswordRequest",
     "ForgotPasswordRequest",
     "LoginCrossStoreRequest",
@@ -50,6 +57,7 @@ __all__ = [
     "RecoveryLoginRequest",
     "ReferralPreviewResponse",
     "ResetPasswordRequest",
+    "SessionRevokeResponse",
     "SignupRequest",
     "SignupResponse",
     "StoreLookupResponse",

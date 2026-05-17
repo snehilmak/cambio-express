@@ -934,6 +934,83 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sessions Route
+         * @description Active sessions (one per refresh-token chain) for the
+         *     caller. The current session is flagged with ``is_current``
+         *     via the ``sid`` JWT claim — used by the SPA to render
+         *     "This device" + suppress the revoke button on the row that
+         *     would log the user out of the page they're on.
+         */
+        get: operations["list_sessions_route_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Other Sessions Route
+         * @description Revoke every active session for the caller EXCEPT the one
+         *     that signed this request. Useful when the user spots an
+         *     unrecognised device on the panel and wants to nuke everything
+         *     in one click without logging themselves out.
+         *
+         *     Returns the count of refresh rows actually revoked (sum
+         *     across every revoked chain — a long-lived session can hold
+         *     several rotated rows).
+         */
+        delete: operations["revoke_other_sessions_route_auth_sessions_others_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Session Route
+         * @description Revoke a single session by its UUID. The user_id filter is
+         *     the security boundary — a caller can only revoke their OWN
+         *     sessions; cross-user requests return ``{revoked: 0}``.
+         *
+         *     The caller may revoke their own current session (the SPA hides
+         *     the button on the current row but the API allows it — useful
+         *     for "kill this tab from another device").
+         */
+        delete: operations["revoke_session_route_auth_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/signup": {
         parameters: {
             query?: never;
@@ -3187,6 +3264,31 @@ export interface components {
         ActiveAnnouncementsResponse: {
             /** Rows */
             rows: components["schemas"]["ActiveAnnouncementRow"][];
+        };
+        /**
+         * ActiveSessionRow
+         * @description One refresh-token chain (== one browser / one login).
+         */
+        ActiveSessionRow: {
+            /** Expires At */
+            expires_at: string;
+            /** Ip Address */
+            ip_address: string;
+            /** Is Current */
+            is_current: boolean;
+            /** Last Used At */
+            last_used_at: string;
+            /** Session Id */
+            session_id: string;
+            /** Started At */
+            started_at: string;
+            /** User Agent */
+            user_agent: string;
+        };
+        /** ActiveSessionsResponse */
+        ActiveSessionsResponse: {
+            /** Sessions */
+            sessions: components["schemas"]["ActiveSessionRow"][];
         };
         /** AddonListResponse */
         AddonListResponse: {
@@ -5946,6 +6048,16 @@ export interface components {
             tax: number;
         };
         /**
+         * SessionRevokeResponse
+         * @description Echoed back after a revoke call so the SPA knows how many
+         *     refresh rows actually changed state (chains span N rows after
+         *     a long-lived login).
+         */
+        SessionRevokeResponse: {
+            /** Revoked */
+            revoked: number;
+        };
+        /**
          * SignupRequest
          * @description POST body for /auth/signup. Mirrors the legacy /signup
          *     Jinja form. Returns a JWT on success so the SPA can drop
@@ -8545,6 +8657,107 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_route_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActiveSessionsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_route_auth_sessions_others_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRevokeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_session_route_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRevokeResponse"];
                 };
             };
             /** @description Validation Error */
