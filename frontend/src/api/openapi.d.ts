@@ -6266,6 +6266,11 @@ export interface components {
              */
             email: string;
             /**
+             * Enforce Business Hours
+             * @default false
+             */
+            enforce_business_hours: boolean;
+            /**
              * Federal Tax Rate
              * @default 0.01
              */
@@ -6332,6 +6337,8 @@ export interface components {
             address?: string | null;
             /** Email */
             email?: string | null;
+            /** Enforce Business Hours */
+            enforce_business_hours?: boolean | null;
             /** Federal Tax Rate */
             federal_tax_rate?: number | null;
             /** Name */

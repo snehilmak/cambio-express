@@ -5536,6 +5536,11 @@
             "title": "Email",
             "type": "string"
           },
+          "enforce_business_hours": {
+            "default": false,
+            "title": "Enforce Business Hours",
+            "type": "boolean"
+          },
           "federal_tax_rate": {
             "default": 0.01,
             "title": "Federal Tax Rate",
@@ -5640,6 +5645,17 @@
               }
             ],
             "title": "Email"
+          },
+          "enforce_business_hours": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enforce Business Hours"
           },
           "federal_tax_rate": {
             "anyOf": [

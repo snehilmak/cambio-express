@@ -109,10 +109,15 @@ class Store(Base):
     # canonical shape + validation. NULL means "not configured"
     # — the settings page hydrates a sane default (Mon-Sat
     # 09:00-18:00 / Sun closed) so the operator can save in one
-    # click. The "no transfers outside hours" enforcement rule
-    # is a separate backlog item and reads from this column when
-    # it ships.
+    # click.
     store_hours      = Column(JSON, nullable=True)
+    # When True, the transfer create / update endpoints refuse
+    # saves outside the configured ``store_hours`` window. The
+    # soft yellow warning on the New Transfer form fires
+    # independently — this toggle is what escalates the warning
+    # into a hard 422 gate. Default False so existing stores
+    # keep working without opt-in.
+    enforce_business_hours = Column(Boolean, default=False)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

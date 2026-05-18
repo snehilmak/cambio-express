@@ -25,6 +25,11 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # Weekly business hours — validated via
     # ``Services.store_hours.validate_hours_payload``.
     "store_hours",
+    # Opt-in toggle: gate transfer create / update when current
+    # store-local time is outside the configured open window.
+    # Default False on the column; flips on from the Settings
+    # page only.
+    "enforce_business_hours",
 )
 
 
@@ -86,6 +91,10 @@ def update_store_info(
             # bad payload coming from a non-SPA caller (CLI,
             # scripts) still hits the same guard.
             v = validate_hours_payload(v)
+        if k == "enforce_business_hours":
+            # Coerce truthy values so a CLI / curl POST with "1"
+            # or "true" still writes a Boolean column cleanly.
+            v = bool(v)
         setattr(store, k, v)
     db.flush()
     return store

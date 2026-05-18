@@ -878,9 +878,15 @@ gaps. Ordered by "what I'd do next" at the top.
       cashier is logging outside hours. ``getOpenStatus`` in
       ``frontend/src/lib/datetime.ts`` is the single source of
       truth.
-      Pending follow-ups (own backlog items): server-side
-      gating toggle ("block transfers outside business hours" —
-      default off), peak-hour heatmap on the dashboard.
+      Server-side gating: ``Store.enforce_business_hours``
+      boolean (default False, migration ``e5b4c3d2f1a9``) +
+      a controller helper that calls ``is_open_at`` against
+      ``store_now(store.timezone)`` and refuses transfer
+      create / update with 422 when the toggle is on and
+      outside hours. Settings page exposes the toggle right
+      under the 7-day editor.
+      Pending follow-ups (own backlog items): peak-hour
+      heatmap on the dashboard.
 - [~] **Receipt customization** — built but currently HIDDEN.
       DineroBook is a ledger, not a money-transmitter, so the
       customer-facing receipt surface doesn't fit the product

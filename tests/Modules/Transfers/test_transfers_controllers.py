@@ -680,3 +680,162 @@ def test_update_status_only_records_status_changed_audit(
         ]
         # Last audit row was the status-only PUT.
         assert actions[-1] == "status_changed"
+
+
+# ── Business-hours enforcement gate ─────────────────────────
+
+
+def _flask_dispatcher_login(client, store_id) -> str:
+    """Log the seeded admin in via the Flask dispatcher path
+    (``/api/v2/auth/login``) — same flow the SPA takes in
+    production. Distinct from ``_login_admin_token`` above,
+    which targets the FastAPI TestClient directly via
+    ``/auth/login``."""
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "admin@test.com",
+            "password": "testpass123!",
+            "store_id": store_id,
+        },
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    return resp.get_json()["access_token"]
+
+
+def _valid_transfer_body(emp_id: int) -> dict:
+    return {
+        "send_date": "2026-01-15",
+        "company": "Intermex",
+        "service_type": "Money Transfer",
+        "sender_name": "Hours Sender",
+        "sender_phone": "5551234567",
+        "send_amount": 100.0,
+        "fee": 5.0,
+        "country": "Mexico",
+        "recipient_name": "Hours Recipient",
+        "employee_id": emp_id,
+    }
+
+
+def _set_store_hours_closed_now(store_id: int) -> None:
+    """Flip the store's enforce toggle on AND clamp every weekday
+    to ``closed=True`` so ``is_open_at`` always returns False —
+    keeps the test deterministic regardless of when CI runs."""
+    from api.Modules.Tenancy.Models import Store
+    from tests._app import db
+    with db_session():
+        s = db.session.get(Store, store_id)
+        s.enforce_business_hours = True
+        s.store_hours = [
+            {"day": d, "open": "09:00", "close": "18:00", "closed": True}
+            for d in range(7)
+        ]
+        db.session.commit()
+
+
+def _set_store_hours_open_24_7(store_id: int) -> None:
+    """Always-open schedule + enforce ON. Confirms the gate
+    isn't a blanket reject — it actually consults the schedule."""
+    from api.Modules.Tenancy.Models import Store
+    from tests._app import db
+    with db_session():
+        s = db.session.get(Store, store_id)
+        s.enforce_business_hours = True
+        s.store_hours = [
+            {"day": d, "open": "00:00", "close": "23:59", "closed": False}
+            for d in range(7)
+        ]
+        db.session.commit()
+
+
+def test_create_passes_when_enforce_business_hours_is_off(
+    client, test_store_id,
+):
+    """Default-off behavior: even with a fully-closed schedule
+    the create endpoint still 201s because the toggle is False.
+    Guards against a regression that wires the gate
+    unconditionally."""
+    from api.Modules.Tenancy.Models import Store
+    from tests._app import db
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate Off")
+        s = db.session.get(Store, test_store_id)
+        # Closed schedule, but enforce toggle stays False.
+        s.enforce_business_hours = False
+        s.store_hours = [
+            {"day": d, "open": "09:00", "close": "18:00", "closed": True}
+            for d in range(7)
+        ]
+        db.session.commit()
+    token = _flask_dispatcher_login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/transfers",
+        json=_valid_transfer_body(emp_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+
+
+def test_create_blocked_when_outside_business_hours(
+    client, test_store_id,
+):
+    """Toggle on + every day closed → POST refuses with 422 and
+    surfaces a helpful error message."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate Closed")
+    _set_store_hours_closed_now(test_store_id)
+    token = _flask_dispatcher_login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/transfers",
+        json=_valid_transfer_body(emp_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    body = resp.get_data(as_text=True).lower()
+    assert "business-hours" in body or "open hours" in body
+
+
+def test_create_allowed_with_enforce_on_and_open_window(
+    client, test_store_id,
+):
+    """Toggle on + always-open schedule → POST 201s. Confirms the
+    gate actually consults ``is_open_at`` instead of blocking
+    every save once the toggle is on."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate Open")
+    _set_store_hours_open_24_7(test_store_id)
+    token = _flask_dispatcher_login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/transfers",
+        json=_valid_transfer_body(emp_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+
+
+def test_update_blocked_when_outside_business_hours(
+    client, test_store_id,
+):
+    """Same gate fires on PUT — operator can't sneak edits past
+    the enforcement by saving a 201, then mutating after-hours."""
+    # First create while the gate is off / open.
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Update Gate")
+    _set_store_hours_open_24_7(test_store_id)
+    token = _flask_dispatcher_login(client, test_store_id)
+    created = client.post(
+        "/api/v2/transfers",
+        json=_valid_transfer_body(emp_id),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert created.status_code == 201
+    tid = created.get_json()["transfer"]["id"]
+    # Now flip to fully-closed and attempt an update.
+    _set_store_hours_closed_now(test_store_id)
+    resp = client.put(
+        f"/api/v2/transfers/{tid}",
+        json=_valid_transfer_body(emp_id) | {"send_amount": 200.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
