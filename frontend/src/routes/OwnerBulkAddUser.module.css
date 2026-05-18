@@ -39,7 +39,7 @@
 }
 
 .storeRow:hover {
-  border-color: var(--db-border-strong, #444);
+  border-color: var(--db-accent, #3fff00);
   background: var(--db-fill-neutral, rgba(255,255,255,0.04));
 }
 
