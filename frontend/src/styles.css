@@ -120,13 +120,22 @@ body {
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    width: 16rem;
-    max-width: 80vw;
+    /* Mobile drawer needs an opaque surface — the page content
+       sits underneath in the same grid cell and would bleed
+       through the (now-transparent) slim-column aside.  Setting
+       the background only inside the mobile media query so the
+       desktop slim icon column stays styled by
+       SlimSidebar.module.css. */
+    background: var(--db-surface-2, #141414);
+    border-right: 1px solid var(--db-border, #262626);
+    width: 18rem;
+    max-width: 86vw;
     z-index: 50;
     transform: translateX(-100%);
     transition: transform 200ms ease;
     grid-row: auto;
     grid-column: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
   }
   .app-sidebar.is-open { transform: translateX(0); }
   .app-topbar {
