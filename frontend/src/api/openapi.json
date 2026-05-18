@@ -1503,6 +1503,22 @@
         "title": "BillingPortalResponse",
         "type": "object"
       },
+      "BreakPunchRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``/timeclock/break/start`` and\n``/timeclock/break/stop`` \u2014 just identifies which roster\nmember is taking / ending the break.",
+        "properties": {
+          "store_employee_id": {
+            "minimum": 1.0,
+            "title": "Store Employee Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_employee_id"
+        ],
+        "title": "BreakPunchRequest",
+        "type": "object"
+      },
       "ByDestinationCountryResponse": {
         "additionalProperties": false,
         "properties": {
@@ -7659,12 +7675,28 @@
       },
       "TimeClockEntryRow": {
         "additionalProperties": false,
-        "description": "One shift row. ``clock_out_at`` / ``hours_worked`` are\nNone while the shift is in progress.",
+        "description": "One shift row. ``clock_out_at`` / ``hours_worked`` are\nNone while the shift is in progress.\n\nBreak tracking: ``break_started_at`` is non-null while the\ncashier is on break; ``break_minutes`` is the running\ntotal accumulated across pause/resume cycles. The\n``hours_worked`` value at clock-out already subtracts\n``break_minutes``.",
         "properties": {
           "adjusted": {
             "default": false,
             "title": "Adjusted",
             "type": "boolean"
+          },
+          "break_minutes": {
+            "default": 0.0,
+            "title": "Break Minutes",
+            "type": "number"
+          },
+          "break_started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Break Started At"
           },
           "clock_in_at": {
             "title": "Clock In At",
@@ -20554,6 +20586,158 @@
         "summary": "Update Store Route",
         "tags": [
           "superadmin"
+        ]
+      }
+    },
+    "/timeclock/break/start": {
+      "post": {
+        "description": "Pause the picked roster member's open shift. Sets\n``break_started_at`` to now. 409 when nobody's clocked in\nor when the shift is already on break.",
+        "operationId": "break_start_route_timeclock_break_start_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakPunchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeClockPunchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Break Start Route",
+        "tags": [
+          "timeclock"
+        ]
+      }
+    },
+    "/timeclock/break/stop": {
+      "post": {
+        "description": "Resume the picked roster member's shift. Adds the\nelapsed break time to ``break_minutes`` and clears\n``break_started_at``. 409 when no break is in progress.",
+        "operationId": "break_stop_route_timeclock_break_stop_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BreakPunchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeClockPunchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Break Stop Route",
+        "tags": [
+          "timeclock"
         ]
       }
     },

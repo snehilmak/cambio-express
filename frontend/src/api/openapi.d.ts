@@ -3203,6 +3203,50 @@ export interface paths {
         patch: operations["update_store_route_superadmin_stores__store_id__patch"];
         trace?: never;
     };
+    "/timeclock/break/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Break Start Route
+         * @description Pause the picked roster member's open shift. Sets
+         *     ``break_started_at`` to now. 409 when nobody's clocked in
+         *     or when the shift is already on break.
+         */
+        post: operations["break_start_route_timeclock_break_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timeclock/break/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Break Stop Route
+         * @description Resume the picked roster member's shift. Adds the
+         *     elapsed break time to ``break_minutes`` and clears
+         *     ``break_started_at``. 409 when no break is in progress.
+         */
+        post: operations["break_stop_route_timeclock_break_stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/timeclock/clock-in": {
         parameters: {
             query?: never;
@@ -4477,6 +4521,16 @@ export interface components {
         BillingPortalResponse: {
             /** Url */
             url: string;
+        };
+        /**
+         * BreakPunchRequest
+         * @description Body for ``/timeclock/break/start`` and
+         *     ``/timeclock/break/stop`` — just identifies which roster
+         *     member is taking / ending the break.
+         */
+        BreakPunchRequest: {
+            /** Store Employee Id */
+            store_employee_id: number;
         };
         /** ByDestinationCountryResponse */
         ByDestinationCountryResponse: {
@@ -7650,6 +7704,12 @@ export interface components {
          * TimeClockEntryRow
          * @description One shift row. ``clock_out_at`` / ``hours_worked`` are
          *     None while the shift is in progress.
+         *
+         *     Break tracking: ``break_started_at`` is non-null while the
+         *     cashier is on break; ``break_minutes`` is the running
+         *     total accumulated across pause/resume cycles. The
+         *     ``hours_worked`` value at clock-out already subtracts
+         *     ``break_minutes``.
          */
         TimeClockEntryRow: {
             /**
@@ -7657,6 +7717,13 @@ export interface components {
              * @default false
              */
             adjusted: boolean;
+            /**
+             * Break Minutes
+             * @default 0
+             */
+            break_minutes: number;
+            /** Break Started At */
+            break_started_at?: string | null;
             /** Clock In At */
             clock_in_at: string;
             /** Clock Out At */
@@ -13843,6 +13910,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperadminStoreDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    break_start_route_timeclock_break_start_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    break_stop_route_timeclock_break_stop_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
                 };
             };
             /** @description Validation Error */

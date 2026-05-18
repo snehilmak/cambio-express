@@ -17,6 +17,14 @@ export interface TimeClockEntryRow {
   notes:             string;
   status:            TimeClockStatus;
   adjusted:          boolean;
+  /** Set while the cashier is on break; null after End break
+   *  or clock-out. */
+  break_started_at:  string | null;
+  /** Running total of break minutes accumulated across all
+   *  pause/resume cycles within this shift. ``clock_out``
+   *  subtracts this from elapsed wall-clock before computing
+   *  ``hours_worked``. */
+  break_minutes:     number;
 }
 
 export interface TimeClockStatusResponse {
@@ -283,5 +291,28 @@ export function usePaystub(
     enabled: storeEmployeeId != null
              && storeEmployeeId > 0
              && Boolean(from && to),
+  });
+}
+
+
+// ── Break tracking (v2) ────────────────────────────────────
+
+export function useStartBreakMutation() {
+  return useMutation({
+    mutationFn: (input: { store_employee_id: number }) =>
+      api<TimeClockPunchResponse>("/api/v2/timeclock/break/start", {
+        method: "POST",
+        json: input,
+      }),
+  });
+}
+
+export function useStopBreakMutation() {
+  return useMutation({
+    mutationFn: (input: { store_employee_id: number }) =>
+      api<TimeClockPunchResponse>("/api/v2/timeclock/break/stop", {
+        method: "POST",
+        json: input,
+      }),
   });
 }

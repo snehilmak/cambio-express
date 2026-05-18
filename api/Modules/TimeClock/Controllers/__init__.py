@@ -31,6 +31,7 @@ from api.Modules.TimeClock.Models import TimeClockEntry
 from api.Modules.TimeClock.Requests import (
     AdminCreateEntryRequest,
     AdminUpdateEntryRequest,
+    BreakPunchRequest,
     ClockPunchRequest,
     PaystubResponse,
     PunchChallengeRequest,
@@ -46,16 +47,20 @@ from api.Modules.TimeClock.Requests import (
 )
 from api.Modules.TimeClock.Services import (
     AlreadyClockedInError,
+    AlreadyOnBreakError,
     EntryNotFoundError,
     NotClockedInError,
+    NotOnBreakError,
     RosterEmployeeNotFoundError,
     admin_create_entry,
     admin_delete_entry,
     admin_update_entry,
     clock_in,
     clock_out,
+    end_break,
     entries_for_period,
     open_entries_for_store,
+    start_break,
 )
 
 
@@ -90,6 +95,11 @@ def _to_row(
         notes=entry.notes or "",
         status=status,
         adjusted=bool(entry.adjusted),
+        break_started_at=(
+            entry.break_started_at.isoformat()
+            if entry.break_started_at else None
+        ),
+        break_minutes=float(entry.break_minutes or 0.0),
     )
 
 
@@ -201,6 +211,82 @@ def clock_out_route(
         entry_id=entry.id,
         store_employee_id=body.store_employee_id,
         action="clock_out",
+    )
+    db.commit()
+    return TimeClockPunchResponse(
+        entry=_to_row(entry, _names_for(db, [entry])),
+    )
+
+
+@router.post(
+    "/break/start", response_model=TimeClockPunchResponse,
+)
+def break_start_route(
+    body: BreakPunchRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockPunchResponse:
+    """Pause the picked roster member's open shift. Sets
+    ``break_started_at`` to now. 409 when nobody's clocked in
+    or when the shift is already on break."""
+    store_id = resolve_store_scope(claims)
+    user_id = _user_id_from(claims)
+    try:
+        entry = start_break(
+            db,
+            store_id=store_id,
+            store_employee_id=body.store_employee_id,
+        )
+    except RosterEmployeeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except NotClockedInError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except AlreadyOnBreakError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    _audit_punch(
+        db,
+        store_id=store_id, user_id=user_id, claims=claims,
+        entry_id=entry.id,
+        store_employee_id=body.store_employee_id,
+        action="break_start",
+    )
+    db.commit()
+    return TimeClockPunchResponse(
+        entry=_to_row(entry, _names_for(db, [entry])),
+    )
+
+
+@router.post(
+    "/break/stop", response_model=TimeClockPunchResponse,
+)
+def break_stop_route(
+    body: BreakPunchRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockPunchResponse:
+    """Resume the picked roster member's shift. Adds the
+    elapsed break time to ``break_minutes`` and clears
+    ``break_started_at``. 409 when no break is in progress."""
+    store_id = resolve_store_scope(claims)
+    user_id = _user_id_from(claims)
+    try:
+        entry = end_break(
+            db,
+            store_id=store_id,
+            store_employee_id=body.store_employee_id,
+        )
+    except RosterEmployeeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except NotClockedInError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except NotOnBreakError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    _audit_punch(
+        db,
+        store_id=store_id, user_id=user_id, claims=claims,
+        entry_id=entry.id,
+        store_employee_id=body.store_employee_id,
+        action="break_stop",
     )
     db.commit()
     return TimeClockPunchResponse(

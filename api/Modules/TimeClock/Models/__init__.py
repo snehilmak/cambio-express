@@ -44,6 +44,15 @@ class TimeClockEntry(Base):
     # every row. Computed at clock-out.
     hours_worked        = Column(Float, nullable=True)
     notes               = Column(String(500), default="")
+    # Break tracking. ``break_started_at`` is set while the
+    # cashier is on break (non-null = currently paused);
+    # ``break_minutes`` is the running total across multiple
+    # pause/resume cycles inside the same shift. ``clock_out``
+    # subtracts ``break_minutes`` from the elapsed wall-clock
+    # to compute ``hours_worked``, so a 9-to-5 shift with a
+    # 60-min lunch records 7.0 hours.
+    break_started_at    = Column(DateTime, nullable=True)
+    break_minutes       = Column(Float, default=0.0, nullable=True)
     # Payroll workflow status. ``pending`` is the default for
     # fresh entries (clock-in / clock-out / admin back-fill);
     # the admin moves rows to ``approved`` before they count

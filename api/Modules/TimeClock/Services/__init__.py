@@ -28,6 +28,16 @@ class NotClockedInError(ValueError):
     no open shift."""
 
 
+class AlreadyOnBreakError(ValueError):
+    """Raised when ``start_break`` is called for an entry that's
+    already paused."""
+
+
+class NotOnBreakError(ValueError):
+    """Raised when ``end_break`` is called for an entry that
+    isn't currently paused."""
+
+
 class RosterEmployeeNotFoundError(ValueError):
     """Raised when the picked ``store_employee_id`` doesn't
     belong to the store on the JWT — keeps a malicious POST
@@ -133,17 +143,92 @@ def clock_out(
             f"{emp.name} is not currently clocked in.",
         )
     now = datetime.utcnow()
+    # Auto-end any open break — common case is the cashier
+    # forgets to tap "End break" and just clocks out. Counts
+    # the time-on-break against the running ``break_minutes``
+    # total so it doesn't accidentally inflate hours_worked.
+    if entry.break_started_at is not None:
+        elapsed_break_sec = (now - entry.break_started_at).total_seconds()
+        entry.break_minutes = round(
+            float(entry.break_minutes or 0.0) + elapsed_break_sec / 60, 4,
+        )
+        entry.break_started_at = None
     delta = now - entry.clock_in_at
     entry.clock_out_at      = now
     entry.clock_out_user_id = user_id
+    # Subtract break minutes from the elapsed wall-clock so a
+    # 9-to-5 shift with a 60-min lunch records 7.0 hours.
+    elapsed_hours = delta.total_seconds() / 3600
+    break_hours   = float(entry.break_minutes or 0.0) / 60
     # Round to 4 decimal places (~14 seconds) — enough
     # precision for payroll without floating-point noise.
-    entry.hours_worked      = round(delta.total_seconds() / 3600, 4)
+    entry.hours_worked      = round(max(0.0, elapsed_hours - break_hours), 4)
     if notes_append:
         suffix = (notes_append or "")[:500]
         existing = (entry.notes or "").strip()
         combined = f"{existing}\n{suffix}" if existing else suffix
         entry.notes = combined[:500]
+    db.flush()
+    return entry
+
+
+def start_break(
+    db: Session,
+    *,
+    store_id: int,
+    store_employee_id: int,
+) -> TimeClockEntry:
+    """Pause the picked roster member's open shift. Sets
+    ``break_started_at`` to now. Raises ``NotClockedInError``
+    when no shift is open and ``AlreadyOnBreakError`` when
+    one's already paused.
+
+    Caller commits.
+    """
+    emp = _require_roster_member(db, store_id, store_employee_id)
+    entry = open_entry_for(db, store_id, store_employee_id)
+    if entry is None:
+        raise NotClockedInError(
+            f"{emp.name} is not currently clocked in — start a "
+            "shift before taking a break.",
+        )
+    if entry.break_started_at is not None:
+        raise AlreadyOnBreakError(
+            f"{emp.name} is already on break.",
+        )
+    entry.break_started_at = datetime.utcnow()
+    db.flush()
+    return entry
+
+
+def end_break(
+    db: Session,
+    *,
+    store_id: int,
+    store_employee_id: int,
+) -> TimeClockEntry:
+    """Resume the picked roster member's shift. Adds the
+    elapsed break time to ``break_minutes`` and clears
+    ``break_started_at``. Raises ``NotOnBreakError`` when no
+    break is in progress.
+
+    Caller commits.
+    """
+    emp = _require_roster_member(db, store_id, store_employee_id)
+    entry = open_entry_for(db, store_id, store_employee_id)
+    if entry is None:
+        raise NotClockedInError(
+            f"{emp.name} is not currently clocked in.",
+        )
+    if entry.break_started_at is None:
+        raise NotOnBreakError(
+            f"{emp.name} is not currently on break.",
+        )
+    elapsed_sec = (datetime.utcnow() - entry.break_started_at).total_seconds()
+    entry.break_minutes = round(
+        float(entry.break_minutes or 0.0) + elapsed_sec / 60, 4,
+    )
+    entry.break_started_at = None
     db.flush()
     return entry
 
@@ -393,15 +478,19 @@ def _fmt(value) -> str:
 
 __all__ = [
     "AlreadyClockedInError",
+    "AlreadyOnBreakError",
     "EntryNotFoundError",
     "NotClockedInError",
+    "NotOnBreakError",
     "RosterEmployeeNotFoundError",
     "admin_create_entry",
     "admin_delete_entry",
     "admin_update_entry",
     "clock_in",
     "clock_out",
+    "end_break",
     "entries_for_period",
     "open_entries_for_store",
     "open_entry_for",
+    "start_break",
 ]
