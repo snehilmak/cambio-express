@@ -1,0 +1,25 @@
+/* Page-specific styles for TimeClock.tsx. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+}
+
+.panelTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+  color: var(--db-text, #f5f5f5);
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.9rem;
+}

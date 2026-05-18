@@ -65,6 +65,20 @@ def _register_routers(app: FastAPI) -> None:
     from api.Modules.Admin.Controllers import router as admin_router
     app.include_router(admin_router, prefix="/admin", tags=["admin"])
 
+    from api.Modules.TimeClock.Controllers import (
+        admin_router as timeclock_admin_router,
+        router as timeclock_router,
+    )
+    app.include_router(
+        timeclock_router, prefix="/timeclock", tags=["timeclock"],
+    )
+    # Admin-side payroll history mounted at /admin/timeclock so
+    # the SPA + the sidebar nav both point to the same prefix
+    # as the rest of the admin payroll surface.
+    app.include_router(
+        timeclock_admin_router, prefix="/admin", tags=["timeclock"],
+    )
+
     from api.Modules.ReturnChecks.Controllers import (
         router as return_checks_router,
     )
