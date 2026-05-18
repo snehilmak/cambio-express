@@ -3636,6 +3636,8 @@ export interface components {
             clock_out_at?: string | null;
             /** Notes */
             notes?: string | null;
+            /** Status */
+            status?: ("pending" | "approved" | "rejected") | null;
         };
         /** AdminUserCreateRequest */
         AdminUserCreateRequest: {
@@ -7222,8 +7224,24 @@ export interface components {
          * TimeClockEntryList
          * @description Payroll history page — paginated by date range, not
          *     cursor (a single biweekly window for a store is small).
+         *
+         *     ``total_hours`` is every closed shift; ``approved_hours``
+         *     + ``pending_hours`` split that total by status so the SPA
+         *     can render distinct headline KPIs (the inspiration shows
+         *     Scheduled / Spend / Remaining; we ship Approved / Pending
+         *     / Total since shift scheduling is a separate v2 item).
          */
         TimeClockEntryList: {
+            /**
+             * Approved Hours
+             * @default 0
+             */
+            approved_hours: number;
+            /**
+             * Pending Hours
+             * @default 0
+             */
+            pending_hours: number;
             /** Rows */
             rows: components["schemas"]["TimeClockEntryRow"][];
             /** Total Hours */
@@ -7235,6 +7253,11 @@ export interface components {
          *     None while the shift is in progress.
          */
         TimeClockEntryRow: {
+            /**
+             * Adjusted
+             * @default false
+             */
+            adjusted: boolean;
             /** Clock In At */
             clock_in_at: string;
             /** Clock Out At */
@@ -7250,6 +7273,12 @@ export interface components {
              * @default
              */
             notes: string;
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected";
             /** Store Employee Id */
             store_employee_id: number;
         };

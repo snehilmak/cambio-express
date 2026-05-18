@@ -268,8 +268,13 @@ def admin_create_entry(
 # moving an entry to a different person is a different concept
 # than fixing its times.
 _ADMIN_EDITABLE_FIELDS: tuple[str, ...] = (
-    "clock_in_at", "clock_out_at", "notes",
+    "clock_in_at", "clock_out_at", "notes", "status",
 )
+
+
+# Allowed values for ``TimeClockEntry.status``. Mirrored by
+# the Pydantic ``Literal`` on the request schema.
+VALID_STATUSES: tuple[str, ...] = ("pending", "approved", "rejected")
 
 
 def admin_update_entry(
@@ -281,13 +286,18 @@ def admin_update_entry(
 ) -> tuple[TimeClockEntry, str]:
     """Apply admin edits to an entry. ``patch`` is a dict keyed
     on the editable fields (``clock_in_at`` / ``clock_out_at``
-    as ``datetime`` or None, ``notes`` as str). Unknown keys
-    raise ``ValueError``; missing keys are left untouched.
+    as ``datetime`` or None, ``notes`` as str, ``status`` as
+    one of ``VALID_STATUSES``). Unknown keys raise ``ValueError``;
+    missing keys are left untouched.
 
     Recomputes ``hours_worked`` whenever either timestamp
     changes (or when the row is opened by clearing
     ``clock_out_at``). Captures a field-level diff in the
     returned summary so the audit view shows what changed.
+
+    Sets ``adjusted=True`` on any non-no-op patch — surfaces the
+    "this row was edited" badge in the admin view. A pure
+    status-change still counts as an adjustment.
 
     Caller commits.
     """
@@ -300,6 +310,10 @@ def admin_update_entry(
     for k, v in patch.items():
         if k not in _ADMIN_EDITABLE_FIELDS:
             raise ValueError(f"Field {k!r} is not admin-editable.")
+        if k == "status" and v not in VALID_STATUSES:
+            raise ValueError(
+                f"status must be one of {VALID_STATUSES!r}.",
+            )
         old = getattr(entry, k)
         if old == v:
             continue
@@ -316,6 +330,12 @@ def admin_update_entry(
             f"hours_worked: {_fmt(entry.hours_worked)} → {_fmt(new_hours)}",
         )
         entry.hours_worked = new_hours
+    if diffs:
+        # Stamp the "edited after the fact" flag so the
+        # admin view's "Adjusted: Yes" badge lights up. A
+        # no-op patch leaves the flag alone.
+        if not entry.adjusted:
+            entry.adjusted = True
     db.flush()
     if not diffs:
         summary = "Admin update · no-op (no fields changed)"

@@ -883,3 +883,221 @@ def test_admin_history_rejects_employee_role(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 403
+
+
+# ── Status + Adjusted (v2) ──────────────────────────────────
+
+
+def test_clock_in_defaults_to_pending_status(client, test_store_id):
+    """New punches start ``pending`` so the admin reviews
+    them before payroll counts the hours."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Pending Pete")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp.get_json()["entry"]
+    assert row["status"] == "pending"
+    assert row["adjusted"] is False
+
+
+def test_admin_create_defaults_to_pending_status(client, test_store_id):
+    """Admin back-fill also starts ``pending`` — the admin
+    still needs to explicitly approve it before payroll counts
+    the hours."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Backfill Status")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": emp_id,
+            "clock_in_at":  "2026-05-15T09:00:00",
+            "clock_out_at": "2026-05-15T17:00:00",
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp.get_json()["entry"]
+    assert row["status"] == "pending"
+    assert row["adjusted"] is False
+
+
+def test_admin_update_can_change_status(client, test_store_id):
+    """Admin moves an entry to approved via the edit endpoint —
+    matches the inspiration where status lives on the edit
+    form, no separate Approve / Reject endpoints."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Approve Me")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"status": "approved"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    row = resp.get_json()["entry"]
+    assert row["status"] == "approved"
+    assert row["adjusted"] is True  # status-only change still counts
+
+
+def test_admin_update_rejects_invalid_status(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Bad Status")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"status": "maybe"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Pydantic Literal catches it at the schema layer → 422.
+    assert resp.status_code == 422
+
+
+def test_admin_update_sets_adjusted_on_any_field(client, test_store_id):
+    """``adjusted`` flips to True on any non-no-op patch —
+    timestamp edit, note edit, or status change all qualify."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Adjust Anna")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+            notes="seed",
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"notes": "fixed"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp.get_json()["entry"]
+    assert row["adjusted"] is True
+
+
+def test_admin_update_noop_leaves_adjusted_alone(client, test_store_id):
+    """Posting the same notes the row already had → no-op,
+    ``adjusted`` stays False."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="No Op")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            notes="same",
+            adjusted=False,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"notes": "same"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp.get_json()["entry"]
+    assert row["adjusted"] is False
+
+
+def test_admin_list_splits_hours_by_status(client, test_store_id):
+    """``approved_hours`` + ``pending_hours`` come back
+    separately so the SPA can paint three distinct KPI tiles
+    matching the inspiration."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    today_dt = datetime.combine(date.today(), datetime.min.time())
+    anchor   = today_dt + timedelta(hours=12)
+    with db_session():
+        emp = _seed_employee(test_store_id, name="KPI Kim")
+        # Approved: 3h
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=4),
+            clock_out_at=anchor - timedelta(hours=1),
+            hours_worked=3.0, status="approved",
+        ))
+        # Pending: 2h
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=6),
+            clock_out_at=anchor - timedelta(hours=4),
+            hours_worked=2.0, status="pending",
+        ))
+        # Rejected: 1h (counts toward total_hours but not the
+        # other splits)
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=8),
+            clock_out_at=anchor - timedelta(hours=7),
+            hours_worked=1.0, status="rejected",
+        ))
+        db.session.commit()
+    token = _login(client, test_store_id)
+    today    = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    resp = client.get(
+        f"/api/v2/admin/timeclock?from={today}&to={tomorrow}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    body = resp.get_json()
+    assert body["approved_hours"] == 3.0
+    assert body["pending_hours"]  == 2.0
+    assert body["total_hours"]    == 6.0
+
+
+def test_admin_update_history_records_status_change(client, test_store_id):
+    """Status-change diff lands in the audit summary so the
+    history view shows when a shift was approved / rejected."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    from api.Modules.Audit.Models import OperatorAuditLog
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="History Status")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0, status="pending",
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"status": "approved"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    with db_session():
+        audit = (
+            db.session.query(OperatorAuditLog)
+              .filter_by(
+                  store_id=test_store_id,
+                  target_type="time_clock_entry",
+                  target_id=str(entry_id),
+                  action="admin_update",
+              )
+              .one()
+        )
+        assert "status" in audit.summary
+        assert "approved" in audit.summary

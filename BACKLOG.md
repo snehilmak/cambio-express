@@ -925,32 +925,48 @@ gaps. Ordered by "what I'd do next" at the top.
       picker. Today cashiers print from the browser dialog.
 
 ### Time clock / payroll
-- [~] **Time clock v1 + admin CRUD** — landed. Per-StoreEmployee
-      shift tracking (``TimeClockEntry`` table, migration
-      ``f6e7a8b9c0d1``). Endpoints:
+- [~] **Time clock v1 + admin CRUD + approval workflow** —
+      landed. Per-StoreEmployee shift tracking
+      (``TimeClockEntry`` table, migrations ``f6e7a8b9c0d1``
+      + ``a9c2b4e7d1f5``). Endpoints:
       ``POST   /api/v2/timeclock/clock-in``,
       ``POST   /api/v2/timeclock/clock-out``,
       ``GET    /api/v2/timeclock/status``,
-      ``GET    /api/v2/admin/timeclock?from=&to=&store_employee_id=``,
+      ``GET    /api/v2/admin/timeclock?from=&to=&store_employee_id=``
+      (returns ``total_hours`` + ``approved_hours`` +
+      ``pending_hours``),
       ``POST   /api/v2/admin/timeclock`` (admin back-fill),
-      ``PUT    /api/v2/admin/timeclock/{id}`` (admin edit),
+      ``PUT    /api/v2/admin/timeclock/{id}`` (admin edit —
+      can change ``status`` ∈ ``pending / approved / rejected``),
       ``DELETE /api/v2/admin/timeclock/{id}`` (admin remove),
       ``GET    /api/v2/admin/timeclock/{id}/history`` (per-entry
       audit chain).
+      Schema columns: ``status`` (defaults ``pending`` on
+      every fresh entry — clock-in, clock-out, admin back-fill)
+      and ``adjusted`` (auto-set True on any non-no-op admin
+      edit, including a pure status change). Only approved
+      hours count toward payroll headlines.
       Server-side guards: one open shift per employee (409 on
       double-tap), inactive roster members can't punch,
-      cross-tenant ids → 404, admin edits validate open<close,
-      hours_worked recomputed on every clock-out / admin edit.
-      Audit row per punch + per admin mutation; the admin
-      ``admin_update`` summary carries a field-level diff
-      ("clock_out_at: 17:00 → 18:00; hours_worked: 8.0 → 9.0")
-      so the per-entry history view replays what changed.
+      cross-tenant ids → 404, admin edits validate
+      open<close, hours_worked recomputed on every clock-out
+      / admin edit. Audit row per punch + per admin mutation;
+      the admin ``admin_update`` summary carries a field-level
+      diff so the per-entry history view replays what changed.
       SPA: ``/app/timeclock`` punch page for all roles,
-      ``/app/admin/timeclock`` payroll history with inline
-      Edit / Delete / History buttons + a "+ New entry"
-      modal for admin / owner. Sidebar entries under
-      Workspace (Time clock) and Finance (Payroll).
-      v2 items below.
+      ``/app/admin/timeclock`` payroll history with:
+        * 3 KPI tiles (Approved / Pending / Total hours)
+        * per-employee grouping (one card per roster member,
+          date-range header above each)
+        * status + adjusted pills on every row
+        * inline Edit / Logs / Delete on desktop, single
+          "Actions" button that opens a Logs / Overview /
+          Edit / Delete bottom sheet on narrow viewports
+          (matches the inspiration screen)
+        * status dropdown in the Edit modal
+        * "+ New entry" modal for admin / owner
+      Sidebar entries under Workspace (Time clock) and Finance
+      (Payroll). v2 items below.
 - [ ] **Time clock v2 — passkey-required punch** — buddy-punching
       defense. Reuse the existing WebAuthn ``Passkey``
       infrastructure: extend the punch endpoints with a

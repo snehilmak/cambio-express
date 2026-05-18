@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   adminCreateEntry, adminDeleteEntry, adminUpdateEntry,
   useAdminTimeClock, useTimeClockHistory,
-  type TimeClockEntryRow,
+  type TimeClockEntryRow, type TimeClockStatus,
 } from "../api/timeclock";
 import { useEmployees } from "../api/transfers";
 import { useProfile, useStoreInfo } from "../api/account";
@@ -12,7 +12,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, Card, EmptyState, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Select, Table, TableSkeleton,
+  Loading, PageHeader, PageShell, Pill, Select, Table, TableSkeleton,
   Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
@@ -20,16 +20,28 @@ import styles from "./AdminTimeClock.module.css";
 
 // /app/admin/timeclock — payroll history view. Admins can:
 //   • Filter by date window + roster member
-//   • Back-fill shifts (e.g. cashier forgot to punch)
-//   • Edit timestamps / notes on any existing entry
+//   • See split KPI tiles for Approved / Pending / Total hours
+//   • Inspect entries grouped per roster member with a date-range
+//     header (matches the inspiration screen)
+//   • Back-fill shifts (cashier forgot to punch) via "+ New entry"
+//   • Edit timestamps / notes / status on any existing entry
 //   • Delete entries (audit chain survives)
-//   • Inspect the audit chain per entry (clock-in / -out /
-//     admin edits, newest-first)
+//   • Inspect the per-entry audit chain (clock-in / -out /
+//     admin_* rows, newest-first) via Logs
+// On narrow viewports the inline Edit / Logs / Delete buttons
+// collapse into a single "Actions" button that opens a bottom
+// sheet. The status column flips between pending / approved /
+// rejected pills; ``Adjusted: Yes`` lights up on any row an
+// admin has touched after the fact.
 
 type ModalState =
   | { kind: "closed" }
   | { kind: "create" }
   | { kind: "edit"; row: TimeClockEntryRow };
+
+type SheetState =
+  | { kind: "closed" }
+  | { kind: "open"; row: TimeClockEntryRow };
 
 export default function AdminTimeClock() {
   const identity      = getCurrentIdentity();
@@ -49,6 +61,7 @@ export default function AdminTimeClock() {
   const [empFilter, setEmpFilter] = useState<number | "">("");
 
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
+  const [sheet, setSheet] = useState<SheetState>({ kind: "closed" });
   const [expandedHistoryId, setExpandedHistoryId] =
     useState<number | null>(null);
 
@@ -64,6 +77,23 @@ export default function AdminTimeClock() {
     queryClient.invalidateQueries({ queryKey: ["timeclock"] });
   }
 
+  // Group rows by store_employee_id so we can render an
+  // inspiration-style section per roster member.
+  const groups = useMemo(() => {
+    const rows = data.data?.rows ?? [];
+    const map = new Map<number, TimeClockEntryRow[]>();
+    for (const r of rows) {
+      const list = map.get(r.store_employee_id) ?? [];
+      list.push(r);
+      map.set(r.store_employee_id, list);
+    }
+    return Array.from(map.entries()).map(([sid, rows]) => ({
+      storeEmployeeId: sid,
+      employeeName: rows[0]?.employee_name ?? "",
+      rows,
+    }));
+  }, [data.data]);
+
   if (!canView) {
     return (
       <PageShell>
@@ -77,13 +107,15 @@ export default function AdminTimeClock() {
     <PageShell>
       <PageHeader
         title="Payroll history"
-        subtitle="Shift entries within the selected window. Open shifts show but don't count toward closed-period hours."
+        subtitle="Approved hours feed payroll; pending shifts are still waiting on admin review."
         actions={(
           <Button onClick={() => setModal({ kind: "create" })}>
             + New entry
           </Button>
         )}
       />
+
+      <KpiRow data={data.data} />
 
       <Card>
         <div className={styles.filterRow}>
@@ -116,44 +148,45 @@ export default function AdminTimeClock() {
         </div>
       </Card>
 
-      <Card>
-        <div className={styles.summaryRow}>
-          <strong>Total hours</strong>
-          <span className={styles.totalNumber}>
-            {data.data ? data.data.total_hours.toFixed(2) : "—"}
-          </span>
-          <span className={styles.subtle}>
-            ({data.data ? data.data.rows.length : 0} entries in window)
-          </span>
-        </div>
-
-        {data.isLoading && <TableSkeleton rows={5} cols={6} />}
-        {data.isError && (
+      {data.isLoading && (
+        <Card><TableSkeleton rows={5} cols={6} /></Card>
+      )}
+      {data.isError && (
+        <Card>
           <ErrorState
             message="Couldn't load payroll history."
             onRetry={() => { void data.refetch(); }}
           />
-        )}
-        {data.data && data.data.rows.length === 0 && !data.isLoading && (
+        </Card>
+      )}
+      {data.data && groups.length === 0 && !data.isLoading && (
+        <Card>
           <EmptyState title="No shifts in this window." />
-        )}
-        {data.data && data.data.rows.length > 0 && (
+        </Card>
+      )}
+      {data.data && groups.map((g) => (
+        <Card key={g.storeEmployeeId}>
+          <EmployeeGroupHeader
+            employeeName={g.employeeName}
+            from={from} to={to}
+            onOverview={() => setEmpFilter(g.storeEmployeeId)}
+            isFiltered={empFilter === g.storeEmployeeId}
+          />
           <Table>
             <thead>
               <tr>
                 {[
-                  "Roster name", "Clock in", "Clock out",
-                  "Hours", "Notes", "",
+                  "Time in", "Time out", "Total hours",
+                  "Status", "Adjusted", "",
                 ].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {data.data.rows.map((r) => (
+              {g.rows.map((r) => (
                 <Fragment key={r.id}>
                   <tr>
-                    <td style={tdStyle}>{r.employee_name}</td>
                     <td style={tdStyle}>
                       <span className={styles.mono}>
                         {formatTimestamp(r.clock_in_at, {
@@ -171,12 +204,20 @@ export default function AdminTimeClock() {
                       </span>
                     </td>
                     <td style={tdStyle}>
-                      {r.hours_worked == null
-                        ? "—"
-                        : r.hours_worked.toFixed(2)}
+                      <span className={styles.totalCell}>
+                        {r.hours_worked == null
+                          ? "—"
+                          : r.hours_worked.toFixed(2)}
+                      </span>
                     </td>
-                    <td style={tdStyle}>{r.notes || "—"}</td>
                     <td style={tdStyle}>
+                      <StatusPill status={r.status} />
+                    </td>
+                    <td style={tdStyle}>
+                      <AdjustedBadge adjusted={r.adjusted} />
+                    </td>
+                    <td style={tdStyle}>
+                      {/* Desktop: inline buttons */}
                       <div className={styles.rowActions}>
                         <Button
                           size="sm" tone="secondary"
@@ -190,9 +231,18 @@ export default function AdminTimeClock() {
                             expandedHistoryId === r.id ? null : r.id,
                           )}
                         >
-                          {expandedHistoryId === r.id ? "Hide" : "History"}
+                          {expandedHistoryId === r.id ? "Hide logs" : "Logs"}
                         </Button>
                         <DeleteEntryButton entryId={r.id} onDone={refresh} />
+                      </div>
+                      {/* Mobile: single button → bottom sheet */}
+                      <div className={styles.mobileActions}>
+                        <Button
+                          size="sm" tone="secondary"
+                          onClick={() => setSheet({ kind: "open", row: r })}
+                        >
+                          Actions
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -207,8 +257,8 @@ export default function AdminTimeClock() {
               ))}
             </tbody>
           </Table>
-        )}
-      </Card>
+        </Card>
+      ))}
 
       {modal.kind !== "closed" && (
         <EntryModal
@@ -221,8 +271,109 @@ export default function AdminTimeClock() {
           }}
         />
       )}
+
+      {sheet.kind === "open" && (
+        <ActionSheet
+          row={sheet.row}
+          onClose={() => setSheet({ kind: "closed" })}
+          onOverview={() => {
+            setEmpFilter(sheet.row.store_employee_id);
+            setSheet({ kind: "closed" });
+          }}
+          onEdit={() => {
+            const row = sheet.row;
+            setSheet({ kind: "closed" });
+            setModal({ kind: "edit", row });
+          }}
+          onLogs={() => {
+            setExpandedHistoryId(sheet.row.id);
+            setSheet({ kind: "closed" });
+          }}
+          onDeleted={refresh}
+        />
+      )}
     </PageShell>
   );
+}
+
+
+// ── KPI tiles ───────────────────────────────────────────────
+
+
+function KpiRow({
+  data,
+}: { data: { approved_hours: number; pending_hours: number; total_hours: number } | undefined }) {
+  const approved = data?.approved_hours ?? 0;
+  const pending  = data?.pending_hours ?? 0;
+  const total    = data?.total_hours ?? 0;
+  return (
+    <div className={styles.kpiRow}>
+      <KpiTile label="Approved hours" value={approved}
+        accent="accent" />
+      <KpiTile label="Pending hours" value={pending}
+        accent="warning" />
+      <KpiTile label="Total hours (window)" value={total}
+        accent="info" />
+    </div>
+  );
+}
+
+
+function KpiTile({
+  label, value, accent,
+}: { label: string; value: number; accent: "accent" | "warning" | "info" }) {
+  return (
+    <div className={`${styles.kpiTile} ${styles[`kpi_${accent}`]}`}>
+      <div className={styles.kpiLabel}>{label}</div>
+      <div className={styles.kpiValue}>{value.toFixed(2)}</div>
+    </div>
+  );
+}
+
+
+// ── Per-employee group header ───────────────────────────────
+
+
+function EmployeeGroupHeader({
+  employeeName, from, to, onOverview, isFiltered,
+}: {
+  employeeName: string;
+  from: string;
+  to: string;
+  onOverview: () => void;
+  isFiltered: boolean;
+}) {
+  return (
+    <div className={styles.groupHeader}>
+      <div className={styles.groupName}>
+        {employeeName.toUpperCase()}
+        <span className={styles.groupRange}>
+          {" — "}{from} to {to}
+        </span>
+      </div>
+      {!isFiltered && (
+        <Button size="sm" tone="secondary" onClick={onOverview}>
+          Overview only
+        </Button>
+      )}
+    </div>
+  );
+}
+
+
+// ── Status + Adjusted badges ────────────────────────────────
+
+
+function StatusPill({ status }: { status: TimeClockStatus }) {
+  if (status === "approved") return <Pill tone="accent">approved</Pill>;
+  if (status === "rejected") return <Pill tone="negative">rejected</Pill>;
+  return <Pill tone="warning">pending</Pill>;
+}
+
+
+function AdjustedBadge({ adjusted }: { adjusted: boolean }) {
+  if (adjusted) return <Pill tone="info">Yes</Pill>;
+  return <span className={styles.subtle}>No</span>;
 }
 
 
@@ -308,6 +459,79 @@ function DeleteEntryButton({
 }
 
 
+// ── Mobile action sheet ─────────────────────────────────────
+
+
+function ActionSheet({
+  row, onClose, onOverview, onEdit, onLogs, onDeleted,
+}: {
+  row: TimeClockEntryRow;
+  onClose: () => void;
+  onOverview: () => void;
+  onEdit: () => void;
+  onLogs: () => void;
+  onDeleted: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function onDelete() {
+    if (!window.confirm(
+      "Delete this time-clock entry? The audit row will survive.",
+    )) return;
+    setBusy(true);
+    try {
+      await adminDeleteEntry(row.id);
+      onDeleted();
+      onClose();
+    } catch (e) {
+      window.alert(
+        e instanceof ApiError ? e.message : "Couldn't delete.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className={styles.sheetBackdrop} onClick={onClose}>
+      <div
+        className={styles.sheetCard}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className={styles.sheetGrip} />
+        <button
+          type="button"
+          className={`${styles.sheetItem} ${styles.sheetLogs}`}
+          onClick={onLogs}
+        >
+          Logs
+        </button>
+        <button
+          type="button"
+          className={`${styles.sheetItem} ${styles.sheetOverview}`}
+          onClick={onOverview}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          className={`${styles.sheetItem} ${styles.sheetEdit}`}
+          onClick={onEdit}
+        >
+          Edit
+        </button>
+        <button
+          type="button"
+          className={`${styles.sheetItem} ${styles.sheetDelete}`}
+          onClick={onDelete}
+          disabled={busy}
+        >
+          {busy ? "Deleting…" : "Delete"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
 // ── Create / edit modal ─────────────────────────────────────
 
 
@@ -334,6 +558,9 @@ function EntryModal({
     row && row.clock_out_at ? _toLocalInput(row.clock_out_at) : "",
   );
   const [notes, setNotes]   = useState(row?.notes ?? "");
+  const [status, setStatus] = useState<TimeClockStatus>(
+    row?.status ?? "pending",
+  );
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState<string | null>(null);
 
@@ -350,6 +577,7 @@ function EntryModal({
             ? new Date(clockOut).toISOString()
             : null,
           notes,
+          status,
         });
       } else {
         if (empId === "") {
@@ -419,6 +647,23 @@ function EntryModal({
                 onChange={(e) => setClockOut(e.target.value)}
               />
             </Field>
+            {isEdit && (
+              <Field
+                label="Status"
+                style={{ gridColumn: "1 / -1" }}
+                hint="Only approved hours count toward payroll totals."
+              >
+                <Select
+                  value={status}
+                  onChange={(e) =>
+                    setStatus(e.target.value as TimeClockStatus)}
+                >
+                  <option value="pending">pending</option>
+                  <option value="approved">approved</option>
+                  <option value="rejected">rejected</option>
+                </Select>
+              </Field>
+            )}
             <Field label="Notes" style={{ gridColumn: "1 / -1" }}>
               <Textarea
                 value={notes}

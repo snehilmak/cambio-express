@@ -5,6 +5,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
 
+export type TimeClockStatus = "pending" | "approved" | "rejected";
+
 export interface TimeClockEntryRow {
   id:                number;
   store_employee_id: number;
@@ -13,6 +15,8 @@ export interface TimeClockEntryRow {
   clock_out_at:      string | null;
   hours_worked:      number | null;
   notes:             string;
+  status:            TimeClockStatus;
+  adjusted:          boolean;
 }
 
 export interface TimeClockStatusResponse {
@@ -24,8 +28,10 @@ export interface TimeClockPunchResponse {
 }
 
 export interface TimeClockEntryList {
-  rows:        TimeClockEntryRow[];
-  total_hours: number;
+  rows:           TimeClockEntryRow[];
+  total_hours:    number;
+  approved_hours: number;
+  pending_hours:  number;
 }
 
 
@@ -101,6 +107,7 @@ export interface AdminUpdateEntryBody {
   clock_in_at?:  string;
   clock_out_at?: string | null;
   notes?:        string;
+  status?:       TimeClockStatus;
 }
 
 export function adminCreateEntry(

@@ -67,6 +67,10 @@ admin_router = APIRouter()
 def _to_row(
     entry: TimeClockEntry, name_lookup: dict[int, str],
 ) -> TimeClockEntryRow:
+    # Default-coerce ``status`` / ``adjusted`` so a row that
+    # predates the migration (column-NULL on legacy data) still
+    # renders consistently in the SPA.
+    status = entry.status if entry.status in ("pending", "approved", "rejected") else "pending"
     return TimeClockEntryRow(
         id=entry.id,
         store_employee_id=entry.store_employee_id,
@@ -79,6 +83,8 @@ def _to_row(
         ),
         hours_worked=entry.hours_worked,
         notes=entry.notes or "",
+        status=status,
+        adjusted=bool(entry.adjusted),
     )
 
 
@@ -242,14 +248,28 @@ def admin_entries_route(
         end=end_dt,
         store_employee_id=store_employee_id,
     )
+    # Closed rows only; the split lets the SPA show distinct
+    # "Approved" + "Pending" headline KPIs.
+    closed_rows = [r for r in rows if r.clock_out_at is not None]
     total_hours = round(
-        sum((r.hours_worked or 0.0) for r in rows if r.clock_out_at is not None),
+        sum((r.hours_worked or 0.0) for r in closed_rows), 2,
+    )
+    approved_hours = round(
+        sum((r.hours_worked or 0.0) for r in closed_rows
+            if r.status == "approved"),
+        2,
+    )
+    pending_hours = round(
+        sum((r.hours_worked or 0.0) for r in closed_rows
+            if (r.status or "pending") == "pending"),
         2,
     )
     names = _names_for(db, rows)
     return TimeClockEntryList(
         rows=[_to_row(r, names) for r in rows],
         total_hours=total_hours,
+        approved_hours=approved_hours,
+        pending_hours=pending_hours,
     )
 
 
@@ -366,6 +386,13 @@ def admin_update_route(
         )
     if "notes" in set_fields:
         patch["notes"] = (body.notes or "")[:500]
+    if "status" in set_fields:
+        if body.status is None:
+            raise HTTPException(
+                status_code=422,
+                detail="status cannot be null — pick pending / approved / rejected.",
+            )
+        patch["status"] = body.status
     try:
         entry, audit_summary = admin_update_entry(
             db,

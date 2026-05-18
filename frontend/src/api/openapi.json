@@ -406,6 +406,22 @@
               }
             ],
             "title": "Notes"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "pending",
+                  "approved",
+                  "rejected"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
           }
         },
         "title": "AdminUpdateEntryRequest",
@@ -7177,8 +7193,18 @@
       },
       "TimeClockEntryList": {
         "additionalProperties": false,
-        "description": "Payroll history page \u2014 paginated by date range, not\ncursor (a single biweekly window for a store is small).",
+        "description": "Payroll history page \u2014 paginated by date range, not\ncursor (a single biweekly window for a store is small).\n\n``total_hours`` is every closed shift; ``approved_hours``\n+ ``pending_hours`` split that total by status so the SPA\ncan render distinct headline KPIs (the inspiration shows\nScheduled / Spend / Remaining; we ship Approved / Pending\n/ Total since shift scheduling is a separate v2 item).",
         "properties": {
+          "approved_hours": {
+            "default": 0.0,
+            "title": "Approved Hours",
+            "type": "number"
+          },
+          "pending_hours": {
+            "default": 0.0,
+            "title": "Pending Hours",
+            "type": "number"
+          },
           "rows": {
             "items": {
               "$ref": "#/components/schemas/TimeClockEntryRow"
@@ -7202,6 +7228,11 @@
         "additionalProperties": false,
         "description": "One shift row. ``clock_out_at`` / ``hours_worked`` are\nNone while the shift is in progress.",
         "properties": {
+          "adjusted": {
+            "default": false,
+            "title": "Adjusted",
+            "type": "boolean"
+          },
           "clock_in_at": {
             "title": "Clock In At",
             "type": "string"
@@ -7239,6 +7270,16 @@
           "notes": {
             "default": "",
             "title": "Notes",
+            "type": "string"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
             "type": "string"
           },
           "store_employee_id": {

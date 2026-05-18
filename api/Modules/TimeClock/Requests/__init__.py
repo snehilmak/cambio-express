@@ -1,5 +1,13 @@
 """Pydantic request / response schemas for the TimeClock module."""
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
+
+# Mirrored from ``Services.VALID_STATUSES`` — kept here as a
+# Literal so OpenAPI surfaces the choices to the SPA's
+# generated types.
+TimeClockStatus = Literal["pending", "approved", "rejected"]
 
 
 class ClockPunchRequest(BaseModel):
@@ -26,6 +34,8 @@ class TimeClockEntryRow(BaseModel):
     clock_out_at:      str | None = None
     hours_worked:      float | None = None
     notes:             str = ""
+    status:            TimeClockStatus = "pending"
+    adjusted:          bool = False
 
 
 class TimeClockStatusResponse(BaseModel):
@@ -51,14 +61,23 @@ class TimeClockPunchResponse(BaseModel):
 
 class TimeClockEntryList(BaseModel):
     """Payroll history page — paginated by date range, not
-    cursor (a single biweekly window for a store is small)."""
+    cursor (a single biweekly window for a store is small).
+
+    ``total_hours`` is every closed shift; ``approved_hours``
+    + ``pending_hours`` split that total by status so the SPA
+    can render distinct headline KPIs (the inspiration shows
+    Scheduled / Spend / Remaining; we ship Approved / Pending
+    / Total since shift scheduling is a separate v2 item).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     rows: list[TimeClockEntryRow]
     # Aggregated total ``hours_worked`` across closed rows in
     # the window. Open entries don't count.
-    total_hours: float
+    total_hours:    float
+    approved_hours: float = 0.0
+    pending_hours:  float = 0.0
 
 
 # ── Admin CRUD ──────────────────────────────────────────────
@@ -99,6 +118,7 @@ class AdminUpdateEntryRequest(BaseModel):
     clock_in_at:  str | None = Field(None, max_length=40)
     clock_out_at: str | None = Field(None, max_length=40)
     notes:        str | None = Field(None, max_length=500)
+    status:       TimeClockStatus | None = None
 
 
 class TimeClockHistoryRow(BaseModel):
