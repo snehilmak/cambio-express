@@ -110,7 +110,12 @@ export function SlimSidebar({
             onClick={() => setOpenGroup(null)}
           />
           <div className={styles.flyoutPanel} role="menu">
-            <div className={styles.flyoutHeader}>{activeGroup.title}</div>
+            <div className={styles.flyoutHeader}>
+              <span className={styles.flyoutHeaderIcon}>
+                {activeGroup.icon}
+              </span>
+              {activeGroup.title}
+            </div>
             <div className={styles.tileGrid}>
               {activeGroup.items.map((item) => (
                 <NavLink

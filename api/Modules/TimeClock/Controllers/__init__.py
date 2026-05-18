@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
-from api.Modules.TimeClock.Models import TimeClockEntry
+from api.Modules.TimeClock.Models import TimeClockEntry, TimeClockShift
 from api.Modules.TimeClock.Requests import (
     AdminCreateEntryRequest,
     AdminUpdateEntryRequest,
@@ -36,6 +36,10 @@ from api.Modules.TimeClock.Requests import (
     PaystubResponse,
     PunchChallengeRequest,
     PunchChallengeResponse,
+    ShiftCreateRequest,
+    ShiftList,
+    ShiftRow,
+    ShiftUpdateRequest,
     TimeClockCredentialList,
     TimeClockCredentialRow,
     TimeClockEntryList,
@@ -61,6 +65,13 @@ from api.Modules.TimeClock.Services import (
     entries_for_period,
     open_entries_for_store,
     start_break,
+)
+from api.Modules.TimeClock.Services.shifts import (
+    ShiftNotFoundError,
+    create_shift,
+    delete_shift,
+    shifts_for_period,
+    update_shift,
 )
 
 
@@ -611,6 +622,152 @@ def admin_entry_history_route(
         )
         for r in rows
     ])
+
+
+# ── Admin: shift scheduling ─────────────────────────────────
+
+
+def _shift_to_row(shift: TimeClockShift, names: dict[int, str]) -> ShiftRow:
+    return ShiftRow(
+        id=shift.id,
+        store_employee_id=shift.store_employee_id,
+        employee_name=names.get(shift.store_employee_id, ""),
+        shift_date=shift.shift_date,
+        start_time=shift.start_time,
+        end_time=shift.end_time,
+        notes=shift.notes or "",
+    )
+
+
+def _shift_names_for(
+    db: Session, shifts: list[TimeClockShift],
+) -> dict[int, str]:
+    from api.Modules.Tenancy.Models import StoreEmployee
+    ids = {s.store_employee_id for s in shifts}
+    if not ids:
+        return {}
+    return {
+        emp_id: name
+        for (emp_id, name) in (
+            db.query(StoreEmployee.id, StoreEmployee.name)
+              .filter(StoreEmployee.id.in_(ids))
+              .all()
+        )
+    }
+
+
+@admin_router.get(
+    "/timeclock/shifts", response_model=ShiftList,
+)
+def admin_shifts_list_route(
+    from_: date = Query(..., alias="from"),
+    to:    date = Query(...),
+    store_employee_id: int | None = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ShiftList:
+    """Planned shifts with ``shift_date`` in ``[from, to)``.
+    Half-open window matches the payroll history endpoint above
+    so the SPA can share its biweekly-window picker."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    if to <= from_:
+        raise HTTPException(
+            status_code=422, detail="'to' must be after 'from'.",
+        )
+    if (to - from_) > timedelta(days=370):
+        raise HTTPException(
+            status_code=422,
+            detail="Date window cannot exceed 370 days.",
+        )
+    shifts = shifts_for_period(
+        db, store_id=store_id, start=from_, end=to,
+        store_employee_id=store_employee_id,
+    )
+    names = _shift_names_for(db, shifts)
+    return ShiftList(rows=[_shift_to_row(s, names) for s in shifts])
+
+
+@admin_router.post(
+    "/timeclock/shifts", response_model=ShiftRow, status_code=201,
+)
+def admin_shift_create_route(
+    body: ShiftCreateRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ShiftRow:
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    try:
+        shift = create_shift(
+            db,
+            store_id=store_id,
+            store_employee_id=body.store_employee_id,
+            shift_date=body.shift_date,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            notes=body.notes,
+            created_by_user_id=_user_id_from(claims),
+        )
+    except RosterEmployeeNotFoundError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    db.refresh(shift)
+    names = _shift_names_for(db, [shift])
+    return _shift_to_row(shift, names)
+
+
+@admin_router.patch(
+    "/timeclock/shifts/{shift_id}", response_model=ShiftRow,
+)
+def admin_shift_update_route(
+    shift_id: int = Path(..., ge=1),
+    body: ShiftUpdateRequest = ...,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> ShiftRow:
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    try:
+        shift = update_shift(
+            db,
+            store_id=store_id,
+            shift_id=shift_id,
+            store_employee_id=body.store_employee_id,
+            shift_date=body.shift_date,
+            start_time=body.start_time,
+            end_time=body.end_time,
+            notes=body.notes,
+        )
+    except ShiftNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except RosterEmployeeNotFoundError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    db.commit()
+    db.refresh(shift)
+    names = _shift_names_for(db, [shift])
+    return _shift_to_row(shift, names)
+
+
+@admin_router.delete(
+    "/timeclock/shifts/{shift_id}", status_code=204,
+)
+def admin_shift_delete_route(
+    shift_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    try:
+        delete_shift(db, store_id=store_id, shift_id=shift_id)
+    except ShiftNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    db.commit()
 
 
 # ── Internal helpers ────────────────────────────────────────

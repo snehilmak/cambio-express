@@ -1006,14 +1006,18 @@ gaps. Ordered by "what I'd do next" at the top.
       Windows Hello / Touch ID / Face ID / hardware key all
       flow through this same path natively — WebAuthn is the
       OS-level glue.
-- [ ] **Time clock v2 — geofence** — refuse clock-in when
-      ``navigator.geolocation`` is more than X meters from
-      ``Store.address`` (geocode the address once at save
-      time, store lat/lng). Per-store opt-in. The browser
-      permission prompt makes this a "soft" defense — a
-      cashier who denies geolocation can still punch — so it
-      pairs with the passkey check above for a real anti-
-      buddy-punch story.
+- [x] **Time clock v2 — geofence** — landed.
+      ``Store.timeclock_geofence_lat/lng/radius_m`` +
+      ``timeclock_require_geofence`` toggle. Punch flow reads
+      ``navigator.geolocation`` and the server rejects with a
+      distance hint when outside the radius (Haversine in
+      ``api/Modules/TimeClock/Services/geofence.py``). Admin
+      pins the location from /app/settings via "Use my current
+      location" (or manual lat/lng entry); the passkey check
+      stacks on top via a separate toggle so the two anti-
+      buddy-punching gates are independently switchable. The
+      browser permission prompt makes this a "soft" defense
+      so the passkey check is the real anti-spoofing layer.
 - [x] **Time clock v2 — break tracking** — landed.
       ``TimeClockEntry.break_started_at`` (DateTime, nullable;
       non-null = currently paused) + ``break_minutes`` (Float
@@ -1035,10 +1039,22 @@ gaps. Ordered by "what I'd do next" at the top.
       flip to "(on break)" while paused. Paid-vs-unpaid
       distinction stays operator-managed via the notes field
       — uniform "break" semantics keeps the math simple.
-- [ ] **Time clock v2 — shift scheduling** — planned shift
-      table + late-arrival / no-show flags on the
-      ``TimeClockEntry`` row when actual diverges from
-      planned by > X minutes.
+- [~] **Time clock v2 — shift scheduling** — partial.
+      v1 ships ``TimeClockShift`` (store_id, store_employee_id,
+      shift_date Date, start_time Time, end_time Time, notes,
+      created_at, created_by_user_id) + admin CRUD endpoints
+      (``GET/POST/PATCH/DELETE /api/v2/admin/timeclock/shifts``)
+      + a /app/admin/timeclock/schedule weekly grid (7-day
+      columns, inline add/edit form per day, today highlight).
+      Tenancy: every CRUD path resolves ``store_id`` from the
+      JWT and 404s cross-tenant ids.  Times are store-local
+      (Date + Time, no tz) so a schedule survives a timezone
+      change.  Overnight shifts not v1 — split into two rows
+      (one ending at 23:59, one starting at 00:00) until a real
+      "spans midnight" follow-up.
+      Remaining: late-arrival / no-show flags derived from
+      joining ``TimeClockShift`` against ``TimeClockEntry`` at
+      read time (admin payroll view + a "missed shift" digest).
 - [~] **Payroll check / paystub printing** — partial.
       Printable paystub view landed; check printing with MICR
       lines stays a separate item (needs Store-level bank

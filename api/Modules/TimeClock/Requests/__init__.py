@@ -1,4 +1,5 @@
 """Pydantic request / response schemas for the TimeClock module."""
+from datetime import date as _date, time as _time
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -261,3 +262,48 @@ class BreakPunchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     store_employee_id: int = Field(..., ge=1)
+
+
+# ── Shift scheduling ───────────────────────────────────────
+
+
+class ShiftCreateRequest(BaseModel):
+    """Body for ``POST /api/v2/admin/timeclock/shifts`` —
+    admin schedules a planned shift for a roster member.
+    All times are **store-local** (Date + Time), matching how
+    operators think about schedules.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int = Field(..., ge=1)
+    shift_date:        _date
+    start_time:        _time
+    end_time:          _time
+    notes:             str = Field("", max_length=500)
+
+
+class ShiftUpdateRequest(BaseModel):
+    """Partial-update payload for
+    ``PATCH /api/v2/admin/timeclock/shifts/{id}``.  Every field
+    is optional; omitted fields keep their existing value."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int | None = Field(None, ge=1)
+    shift_date:        _date | None = None
+    start_time:        _time | None = None
+    end_time:          _time | None = None
+    notes:             str | None = Field(None, max_length=500)
+
+
+class ShiftRow(BaseModel):
+    id:                int
+    store_employee_id: int
+    employee_name:     str
+    shift_date:        _date
+    start_time:        _time
+    end_time:          _time
+    notes:             str
+
+
+class ShiftList(BaseModel):
+    rows: list[ShiftRow]
