@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Column, DateTime, Float, ForeignKey, Index, Integer, String,
+    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String,
 )
 
 from api.Core.Database import Base
@@ -43,6 +43,19 @@ class TimeClockEntry(Base):
     # every row. Computed at clock-out.
     hours_worked        = Column(Float, nullable=True)
     notes               = Column(String(500), default="")
+    # Payroll workflow status. ``pending`` is the default for
+    # fresh entries (clock-in / clock-out / admin back-fill);
+    # the admin moves rows to ``approved`` before they count
+    # toward payroll, or ``rejected`` if the shift shouldn't be
+    # paid. ``approved_hours`` is the headline payroll number
+    # on the admin view.
+    status              = Column(String(20), default="pending", nullable=True)
+    # True whenever an admin has edited the row after the fact.
+    # Set automatically by ``admin_update_entry`` on any
+    # non-no-op patch. Surfaces as an "Adjusted: Yes" badge in
+    # the admin view so a payroll reviewer can spot rows that
+    # don't match what the cashier originally punched.
+    adjusted            = Column(Boolean, default=False, nullable=True)
 
     __table_args__ = (
         # "Is this employee currently clocked in?" — open rows

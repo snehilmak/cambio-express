@@ -126,3 +126,153 @@
   gap: 0.5rem;
   justify-content: flex-end;
 }
+
+/* ── KPI tile row ──────────────────────────────────────── */
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: 0.85rem;
+}
+
+.kpiTile {
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.75rem;
+  padding: 0.9rem 1rem;
+  background: var(--db-surface, #0d0d0d);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 5rem;
+}
+
+.kpi_accent  { border-color: rgba(63,255,0,0.45); }
+.kpi_warning { border-color: rgba(255,184,0,0.45); }
+.kpi_info    { border-color: rgba(99,166,255,0.45); }
+
+.kpiLabel {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.kpiValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.55rem;
+  font-weight: 600;
+  color: var(--db-text, #f5f5f5);
+}
+
+.kpi_accent  .kpiValue { color: var(--db-accent, #3fff00); }
+.kpi_warning .kpiValue { color: #ffb800; }
+.kpi_info    .kpiValue { color: #63a6ff; }
+
+/* ── Per-employee group header ─────────────────────────── */
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--db-border, #262626);
+}
+
+.groupName {
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
+.groupRange {
+  font-weight: 400;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.totalCell {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-weight: 600;
+  color: var(--db-accent, #3fff00);
+}
+
+/* ── Mobile bottom-sheet ───────────────────────────────── */
+
+.mobileActions {
+  display: none;
+}
+
+@media (max-width: 36rem) {
+  .rowActions    { display: none; }
+  .mobileActions { display: flex; }
+  .filterRow     { flex-direction: column; align-items: stretch; }
+  .filterRow > * { width: 100%; }
+}
+
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+.sheetCard {
+  background: var(--db-surface-2, #141414);
+  border-top-left-radius: 1.5rem;
+  border-top-right-radius: 1.5rem;
+  padding: 1rem 1rem 1.5rem;
+  width: 100%;
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: db-sheet-up 180ms ease-out;
+}
+
+.sheetGrip {
+  width: 3rem;
+  height: 0.25rem;
+  background: var(--db-text-muted, #a3a3a3);
+  opacity: 0.5;
+  border-radius: 999px;
+  margin: 0 auto 0.5rem;
+}
+
+.sheetItem {
+  appearance: none;
+  border: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+}
+
+.sheetItem:active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+.sheetLogs     {
+  background: rgba(255, 142, 71, 0.12); color: #ff8e47;
+}
+.sheetOverview {
+  background: rgba(184, 95, 255, 0.12); color: #b85fff;
+}
+.sheetEdit     {
+  background: rgba(255, 184, 0, 0.12); color: #ffb800;
+}
+.sheetDelete   {
+  background: rgba(255, 65, 65, 0.12); color: #ff4141;
+}
+
+@keyframes db-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
