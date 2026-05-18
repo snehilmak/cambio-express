@@ -167,7 +167,7 @@ export function TwoFactorEnroll() {
       const r = await totpEnrollConfirm(pending.pending_token);
       if ("access_token" in r && typeof r.access_token === "string") {
         setAccessToken(r.access_token);
-        navigate("/dashboard", { replace: true });
+        navigate("/home", { replace: true });
       } else {
         setError("Server returned an unexpected response.");
       }
@@ -318,7 +318,7 @@ function VerifyForm({
       });
       if (r.access_token) {
         setAccessToken(r.access_token);
-        navigate("/dashboard", { replace: true });
+        navigate("/home", { replace: true });
       } else {
         setError("Server returned an unexpected response.");
       }

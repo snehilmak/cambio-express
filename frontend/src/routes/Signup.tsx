@@ -68,7 +68,7 @@ export default function Signup() {
         ref_code:   refCode.trim().toUpperCase(),
       });
       setAccessToken(result.access_token);
-      navigate("/dashboard", { replace: true });
+      navigate("/home", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
