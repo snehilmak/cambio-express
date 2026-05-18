@@ -967,17 +967,39 @@ gaps. Ordered by "what I'd do next" at the top.
         * "+ New entry" modal for admin / owner
       Sidebar entries under Workspace (Time clock) and Finance
       (Payroll). v2 items below.
-- [ ] **Time clock v2 — passkey-required punch** — buddy-punching
-      defense. Reuse the existing WebAuthn ``Passkey``
-      infrastructure: extend the punch endpoints with a
-      pre-flight WebAuthn assertion challenge / verify
-      handshake. New per-store toggle
-      ``Store.timeclock_require_passkey`` defaults off.
-      Roster members register their passkey from the Settings
-      page (today only User accounts can; punch needs roster
-      → passkey linkage, so add a ``StoreEmployee.passkey_ids``
-      list). Windows Hello / Touch ID / Face ID all flow
-      through this same path natively.
+- [x] **Time clock v2 — passkey-required punch** — landed.
+      Per-store ``timeclock_require_passkey`` toggle (default
+      off) + new ``store_employee_passkey`` table that mirrors
+      the existing user-side ``Passkey`` shape but keys on
+      ``StoreEmployee.id`` (since cashiers share an
+      ``employee`` ``User`` login). Migration
+      ``b3d5e7f9a2c1`` adds both columns idempotently.
+      Endpoints:
+      ``POST /api/v2/timeclock/passkey/challenge`` (mints a
+      WebAuthn assertion challenge for a roster member),
+      and roster-credential management at
+      ``GET/POST/DELETE /api/v2/admin/timeclock/credentials/*``
+      (list, register/begin, register/finish, delete).
+      Clock-in / clock-out gained optional ``assert_token`` +
+      ``assertion`` body fields — required when the store
+      toggle is on, ignored otherwise. The server verifies
+      the assertion via ``webauthn.verify_authentication_response``
+      against the roster member's stored credential, updates
+      ``sign_count`` + ``last_used_at`` on success, and
+      rejects backwards sign counts (cloned authenticator
+      detection per WebAuthn §6.1.2).
+      SPA: new ``/app/admin/timeclock/credentials`` page with
+      a per-roster Enroll / Re-enroll / Remove flow that
+      drives ``navigator.credentials.create()`` /
+      ``.get()``. Settings → Store gains a "Block time-clock
+      punches without a passkey" toggle, sitting under the
+      business-hours enforce checkbox. The punch page does
+      the WebAuthn round-trip transparently when the gate
+      is on, and surfaces a helpful "ask admin to enroll
+      your device" 422 when the cashier isn't registered.
+      Windows Hello / Touch ID / Face ID / hardware key all
+      flow through this same path natively — WebAuthn is the
+      OS-level glue.
 - [ ] **Time clock v2 — geofence** — refuse clock-in when
       ``navigator.geolocation`` is more than X meters from
       ``Store.address`` (geocode the address once at save

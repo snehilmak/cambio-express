@@ -1101,3 +1101,246 @@ def test_admin_update_history_records_status_change(client, test_store_id):
         )
         assert "status" in audit.summary
         assert "approved" in audit.summary
+
+
+# ── Passkey gate (v2 anti-buddy-punching) ───────────────────
+
+
+def _enable_passkey_gate(store_id: int) -> None:
+    from api.Modules.Tenancy.Models import Store
+    with db_session():
+        s = db.session.get(Store, store_id)
+        s.timeclock_require_passkey = True
+        db.session.commit()
+
+
+def _seed_passkey(store_id: int, emp_id: int, *, name: str = "Test PK") -> int:
+    """Seed a StoreEmployeePasskey row with placeholder credential
+    bytes. The verify flow is bypassed by the gate tests by
+    omitting / breaking the assert_token + assertion fields."""
+    from api.Modules.TimeClock.Models import StoreEmployeePasskey
+    with db_session():
+        pk = StoreEmployeePasskey(
+            store_id=store_id,
+            store_employee_id=emp_id,
+            credential_id=b"test-cred-" + str(emp_id).encode(),
+            public_key=b"test-pub-" + str(emp_id).encode(),
+            sign_count=0,
+            name=name,
+        )
+        db.session.add(pk); db.session.commit()
+        return pk.id
+
+
+def test_clock_in_works_when_passkey_gate_off(client, test_store_id):
+    """Default-off behavior: existing punches work without any
+    assertion fields. Guards against a regression that
+    unconditionally requires WebAuthn."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate Off")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+
+
+def test_clock_in_blocked_when_passkey_gate_on_and_assertion_missing(
+    client, test_store_id,
+):
+    """Gate flipped on + no assertion in the body → 401."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate On Miss")
+    _enable_passkey_gate(test_store_id)
+    _seed_passkey(test_store_id, emp_id)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 401
+    assert "passkey" in resp.get_data(as_text=True).lower()
+
+
+def test_clock_in_blocked_when_assert_token_invalid(client, test_store_id):
+    """A garbage token → 401 even with the assertion field
+    populated."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Bad Token")
+    _enable_passkey_gate(test_store_id)
+    _seed_passkey(test_store_id, emp_id)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={
+            "store_employee_id": emp_id, "notes": "",
+            "assert_token": "not-a-real-jwt",
+            "assertion": {"id": "x"},
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 401
+
+
+def test_clock_in_blocked_when_assert_token_for_different_employee(
+    client, test_store_id,
+):
+    """A token minted for employee A can't be replayed against
+    employee B's punch. Pins the (store_id, store_employee_id)
+    binding in the token claims."""
+    from api.Modules.TimeClock.Services.passkey import issue_assert_token
+    with db_session():
+        emp_a = _seed_employee(test_store_id, name="Emp A")
+        emp_b = _seed_employee(test_store_id, name="Emp B")
+    _enable_passkey_gate(test_store_id)
+    _seed_passkey(test_store_id, emp_a)
+    _seed_passkey(test_store_id, emp_b)
+    bad_token = issue_assert_token(
+        store_id=test_store_id,
+        store_employee_id=emp_a,
+        challenge_b64="dGVzdA",
+    )
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={
+            "store_employee_id": emp_b, "notes": "",
+            "assert_token": bad_token,
+            "assertion": {"id": "x"},
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 401
+    assert "does not match" in resp.get_data(as_text=True).lower()
+
+
+# ── Admin credentials list ──────────────────────────────────
+
+
+def test_admin_credentials_list_marks_pending_vs_registered(
+    client, test_store_id,
+):
+    """The credentials endpoint returns every active roster
+    member with a ``has_passkey`` flag so the admin sees at a
+    glance who still needs to enroll."""
+    with db_session():
+        emp_a = _seed_employee(test_store_id, name="A Roster")
+        emp_b = _seed_employee(test_store_id, name="B Roster")
+    _seed_passkey(test_store_id, emp_a, name="A's iPhone")
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/timeclock/credentials",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    rows = resp.get_json()["rows"]
+    by_emp = {r["store_employee_id"]: r for r in rows}
+    assert by_emp[emp_a]["has_passkey"] is True
+    assert by_emp[emp_a]["name"] == "A's iPhone"
+    assert by_emp[emp_b]["has_passkey"] is False
+
+
+def test_admin_credentials_list_rejects_employee_role(
+    client, test_store_id,
+):
+    token = _employee_login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/timeclock/credentials",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_credentials_delete_removes_passkey(client, test_store_id):
+    """Admin can remove a stale passkey when a cashier swaps
+    devices."""
+    from api.Modules.TimeClock.Models import StoreEmployeePasskey
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Swap Device")
+    _seed_passkey(test_store_id, emp_id)
+    token = _login(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/admin/timeclock/credentials/{emp_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    with db_session():
+        assert (
+            db.session.query(StoreEmployeePasskey)
+              .filter_by(store_employee_id=emp_id).first()
+        ) is None
+
+
+def test_admin_credentials_delete_404s_when_no_passkey(
+    client, test_store_id,
+):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Never Registered")
+    token = _login(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/admin/timeclock/credentials/{emp_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+# ── Punch challenge endpoint ────────────────────────────────
+
+
+def test_punch_challenge_422s_when_no_passkey_registered(
+    client, test_store_id,
+):
+    """Asking for a challenge for a roster member with no
+    registered passkey returns 422 so the SPA can surface a
+    helpful "ask the admin to enroll" message."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="No Passkey")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/passkey/challenge",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    assert "passkey" in resp.get_data(as_text=True).lower()
+
+
+def test_punch_challenge_404s_cross_tenant_roster_id(
+    client, test_store_id,
+):
+    with db_session():
+        other_store_id = _seed_other_store()
+        other_emp = _seed_employee(other_store_id, name="Foreign Challenge")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/passkey/challenge",
+        json={"store_employee_id": other_emp},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_punch_challenge_returns_options_and_token(client, test_store_id):
+    """Happy path: roster member with a passkey gets back a
+    valid options blob + a JWT that decodes to the same
+    (store, employee) and a valid purpose."""
+    from api.Modules.TimeClock.Services.passkey import decode_assert_token
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Have Passkey")
+    _seed_passkey(test_store_id, emp_id)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/passkey/challenge",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["options_json"]  # non-empty JSON
+    assert body["assert_token"]
+    claims = decode_assert_token(body["assert_token"])
+    assert claims["store_id"] == test_store_id
+    assert claims["store_employee_id"] == emp_id

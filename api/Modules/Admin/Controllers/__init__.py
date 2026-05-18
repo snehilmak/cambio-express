@@ -92,6 +92,9 @@ def _to_row(s) -> StoreInfoRow:
         # NULL or malformed.
         store_hours=parse_stored_hours(s.store_hours),
         enforce_business_hours=bool(s.enforce_business_hours),
+        timeclock_require_passkey=bool(
+            getattr(s, "timeclock_require_passkey", False)
+        ),
     )
 
 

@@ -47,8 +47,10 @@ STORE_OWNED_MODELS: list[str] = [
     "DailyLineItem", "MoneyTransferSummary", "ReturnCheck",
     "MonthlyFinancial", "BankRule", "BankTransaction",
     "StripeBankAccount", "StoreOwnerLink",
-    # TimeClockEntry must purge before StoreEmployee (FK to it).
+    # TimeClockEntry + StoreEmployeePasskey must purge before
+    # StoreEmployee (both FK to it).
     "TimeClockEntry",
+    "StoreEmployeePasskey",
     "StoreEmployee", "Customer",
     "ReferralCode", "ReferralRedemption",
     "TVDisplay",
@@ -86,7 +88,9 @@ def _store_owned_models() -> list[tuple[type, str]]:
     from api.Modules.Tenancy.Models import (
         StoreEmployee, StoreOwnerLink, User,
     )
-    from api.Modules.TimeClock.Models import TimeClockEntry
+    from api.Modules.TimeClock.Models import (
+        StoreEmployeePasskey, TimeClockEntry,
+    )
     from api.Modules.Transfers.Models import Transfer
     from api.Modules.TVDisplay.Models import TVDisplay
 
@@ -110,9 +114,11 @@ def _store_owned_models() -> list[tuple[type, str]]:
         (BankTransaction, "store_id"),
         (StripeBankAccount, "store_id"),
         (StoreOwnerLink, "store_id"),
-        # TimeClockEntry FKs to StoreEmployee, so it must
-        # purge before the roster table empties.
+        # TimeClockEntry + StoreEmployeePasskey FK to
+        # StoreEmployee, so both purge before the roster table
+        # empties.
         (TimeClockEntry, "store_id"),
+        (StoreEmployeePasskey, "store_id"),
         (StoreEmployee, "store_id"),
         (Customer, "store_id"),
         # Referral tables key on a different column.

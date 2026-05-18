@@ -13,12 +13,21 @@ TimeClockStatus = Literal["pending", "approved", "rejected"]
 class ClockPunchRequest(BaseModel):
     """Body for ``/timeclock/clock-in`` and
     ``/timeclock/clock-out``. Both use the same shape — the
-    operator picks a roster member and optionally adds a note."""
+    operator picks a roster member and optionally adds a note.
+
+    ``assert_token`` + ``assertion`` carry the WebAuthn
+    authentication round-trip when the store has
+    ``timeclock_require_passkey`` turned on. Both are optional
+    at the schema level (so a store that doesn't require
+    passkeys keeps the simple body) — the server promotes the
+    check to "required" based on the store's toggle."""
 
     model_config = ConfigDict(extra="forbid")
 
     store_employee_id: int = Field(..., ge=1)
     notes:             str = Field("", max_length=500)
+    assert_token:      str | None = Field(None, max_length=2000)
+    assertion:         dict | None = None
 
 
 class TimeClockEntryRow(BaseModel):
@@ -143,3 +152,46 @@ class TimeClockHistoryResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     rows: list[TimeClockHistoryRow]
+
+
+# ── Roster passkey credentials ──────────────────────────────
+
+
+class TimeClockCredentialRow(BaseModel):
+    """One row per roster member's registered passkey, shown
+    on the admin credentials page. ``has_passkey=False`` rows
+    are included so the admin sees who still needs to enroll."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int
+    employee_name:     str
+    has_passkey:       bool
+    name:              str = ""   # display label admin assigned
+    registered_at:     str = ""
+    last_used_at:      str = ""
+
+
+class TimeClockCredentialList(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    rows: list[TimeClockCredentialRow]
+
+
+class PunchChallengeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int = Field(..., ge=1)
+
+
+class PunchChallengeResponse(BaseModel):
+    """``options_json`` is the WebAuthn assertion options the
+    browser passes to ``navigator.credentials.get()``;
+    ``assert_token`` is the short-lived JWT the SPA echoes back
+    on the clock-in / clock-out call so the server can verify
+    against the same challenge."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    options_json: str
+    assert_token: str

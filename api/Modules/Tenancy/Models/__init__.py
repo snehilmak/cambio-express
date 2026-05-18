@@ -118,6 +118,14 @@ class Store(Base):
     # into a hard 422 gate. Default False so existing stores
     # keep working without opt-in.
     enforce_business_hours = Column(Boolean, default=False)
+    # Anti-buddy-punching gate — when True, every clock-in /
+    # clock-out demands a fresh WebAuthn assertion from the
+    # roster member's registered passkey (Windows Hello,
+    # Touch ID, Face ID, hardware key). Default False so
+    # existing stores keep working without enrollment; the
+    # admin flips it on once every active roster member has
+    # registered via /app/admin/timeclock/credentials.
+    timeclock_require_passkey = Column(Boolean, default=False)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

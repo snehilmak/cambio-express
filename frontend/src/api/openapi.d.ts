@@ -286,6 +286,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/timeclock/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Credentials List Route
+         * @description List every active roster member at the store with a
+         *     has_passkey flag. Powers the admin enrollment page so the
+         *     operator sees who's pending vs registered.
+         */
+        get: operations["admin_credentials_list_route_admin_timeclock_credentials_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/credentials/{store_employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Admin Credentials Delete Route
+         * @description Remove the roster member's passkey. Used when the
+         *     cashier swaps devices or leaves.
+         */
+        delete: operations["admin_credentials_delete_route_admin_timeclock_credentials__store_employee_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/credentials/{store_employee_id}/register/begin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Credentials Register Begin Route
+         * @description Start a WebAuthn registration ceremony for the picked
+         *     roster member. The admin walks the cashier through the
+         *     OS-level prompt; the SPA passes ``options_json`` to
+         *     ``navigator.credentials.create()`` and echoes
+         *     ``register_token`` back on /register/finish.
+         */
+        post: operations["admin_credentials_register_begin_route_admin_timeclock_credentials__store_employee_id__register_begin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/credentials/{store_employee_id}/register/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Admin Credentials Register Finish Route
+         * @description Verify the authenticator's attestation + persist the new
+         *     StoreEmployeePasskey row. Replaces any existing row for the
+         *     same roster member (v1 caps at one passkey per cashier).
+         */
+        post: operations["admin_credentials_register_finish_route_admin_timeclock_credentials__store_employee_id__register_finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/timeclock/{entry_id}": {
         parameters: {
             query?: never;
@@ -3045,7 +3134,8 @@ export interface paths {
          * @description Open a new shift for the picked roster member at the
          *     current user's store. 409 when the employee already has an
          *     open shift; 404 when the roster id doesn't belong to this
-         *     store.
+         *     store; 401 when the store requires a passkey and the
+         *     assertion is missing / invalid.
          */
         post: operations["clock_in_route_timeclock_clock_in_post"];
         delete?: never;
@@ -3067,9 +3157,37 @@ export interface paths {
          * Clock Out Route
          * @description Close the picked roster member's open shift. 409 when
          *     nobody's clocked in for that name; 404 when the roster id
-         *     doesn't belong to this store.
+         *     doesn't belong to this store; 401 when the store requires
+         *     a passkey and the assertion is missing / invalid.
          */
         post: operations["clock_out_route_timeclock_clock_out_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timeclock/passkey/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Punch Challenge Route
+         * @description Mint a WebAuthn assertion challenge for the picked
+         *     roster member. The SPA passes ``options_json`` to
+         *     ``navigator.credentials.get()`` and echoes ``assert_token``
+         *     back on the clock-in / clock-out call.
+         *
+         *     422 when the roster member doesn't have a passkey
+         *     registered yet — the SPA surfaces a "ask the admin to
+         *     enroll your device" message.
+         */
+        post: operations["punch_challenge_route_timeclock_passkey_challenge_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4391,8 +4509,21 @@ export interface components {
          * @description Body for ``/timeclock/clock-in`` and
          *     ``/timeclock/clock-out``. Both use the same shape — the
          *     operator picks a roster member and optionally adds a note.
+         *
+         *     ``assert_token`` + ``assertion`` carry the WebAuthn
+         *     authentication round-trip when the store has
+         *     ``timeclock_require_passkey`` turned on. Both are optional
+         *     at the schema level (so a store that doesn't require
+         *     passkeys keeps the simple body) — the server promotes the
+         *     check to "required" based on the store's toggle.
          */
         ClockPunchRequest: {
+            /** Assert Token */
+            assert_token?: string | null;
+            /** Assertion */
+            assertion?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Notes
              * @default
@@ -6004,6 +6135,25 @@ export interface components {
             /** Timezone */
             timezone?: string | null;
         };
+        /** PunchChallengeRequest */
+        PunchChallengeRequest: {
+            /** Store Employee Id */
+            store_employee_id: number;
+        };
+        /**
+         * PunchChallengeResponse
+         * @description ``options_json`` is the WebAuthn assertion options the
+         *     browser passes to ``navigator.credentials.get()``;
+         *     ``assert_token`` is the short-lived JWT the SPA echoes back
+         *     on the clock-in / clock-out call so the server can verify
+         *     against the same challenge.
+         */
+        PunchChallengeResponse: {
+            /** Assert Token */
+            assert_token: string;
+            /** Options Json */
+            options_json: string;
+        };
         /**
          * ReceiptStore
          * @description Store header — branding + identifiers printed at the top
@@ -6612,6 +6762,11 @@ export interface components {
              */
             store_hours: components["schemas"]["StoreHourEntry"][];
             /**
+             * Timeclock Require Passkey
+             * @default false
+             */
+            timeclock_require_passkey: boolean;
+            /**
              * Timezone
              * @default
              */
@@ -6648,6 +6803,8 @@ export interface components {
             receipt_tax_id?: string | null;
             /** Store Hours */
             store_hours?: components["schemas"]["StoreHourEntry"][] | null;
+            /** Timeclock Require Passkey */
+            timeclock_require_passkey?: boolean | null;
             /** Timezone */
             timezone?: string | null;
         };
@@ -7219,6 +7376,40 @@ export interface components {
             is_active?: boolean | null;
             /** Name */
             name?: string | null;
+        };
+        /** TimeClockCredentialList */
+        TimeClockCredentialList: {
+            /** Rows */
+            rows: components["schemas"]["TimeClockCredentialRow"][];
+        };
+        /**
+         * TimeClockCredentialRow
+         * @description One row per roster member's registered passkey, shown
+         *     on the admin credentials page. ``has_passkey=False`` rows
+         *     are included so the admin sees who still needs to enroll.
+         */
+        TimeClockCredentialRow: {
+            /** Employee Name */
+            employee_name: string;
+            /** Has Passkey */
+            has_passkey: boolean;
+            /**
+             * Last Used At
+             * @default
+             */
+            last_used_at: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /**
+             * Registered At
+             * @default
+             */
+            registered_at: string;
+            /** Store Employee Id */
+            store_employee_id: number;
         };
         /**
          * TimeClockEntryList
@@ -8214,6 +8405,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_credentials_list_route_admin_timeclock_credentials_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockCredentialList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_credentials_delete_route_admin_timeclock_credentials__store_employee_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_credentials_register_begin_route_admin_timeclock_credentials__store_employee_id__register_begin_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_credentials_register_finish_route_admin_timeclock_credentials__store_employee_id__register_finish_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockCredentialRow"];
                 };
             };
             /** @description Validation Error */
@@ -13264,6 +13599,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    punch_challenge_route_timeclock_passkey_challenge_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PunchChallengeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PunchChallengeResponse"];
                 };
             };
             /** @description Validation Error */
