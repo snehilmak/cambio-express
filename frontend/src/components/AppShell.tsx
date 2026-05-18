@@ -122,7 +122,8 @@ const NAV: NavGroup[] = [
       { to: "/owner/pl-rollup",      label: "P&L rollup",  icon: iconRollup() },
       { to: "/owner/reports",        label: "Reports",     icon: iconReports() },
       { to: "/owner/connect",        label: "Connect",     icon: iconBanner() },
-      { to: "/owner/bulk-add-user",  label: "Bulk add user", icon: iconOwner() },
+      { to: "/owner/bulk-add-user",          label: "Bulk add user",     icon: iconOwner() },
+      { to: "/owner/cross-store-defaults",   label: "Cross-store defaults", icon: iconRollup() },
     ],
   },
   {

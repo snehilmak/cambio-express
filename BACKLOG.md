@@ -1040,8 +1040,25 @@ gaps. Ordered by "what I'd do next" at the top.
       columns.
 
 ### Owner umbrella (`/owner/settings` — doesn't exist yet)
-- [ ] **Cross-store defaults** — apply a fed-tax rate / company list /
-      receipt template to all my stores at once.
+- [x] **Cross-store defaults** — landed.
+      ``POST /api/v2/owner/cross-store-defaults`` pushes the
+      same field defaults (fed-tax-rate, timezone, business
+      hours, enforce-hours, timeclock-require-passkey, phone,
+      address) to every store in the owner's umbrella that
+      the operator selects. Each store update goes through
+      the same ``Admin.Services.store_info.update_store_info``
+      guard the per-store settings page uses, so identical
+      validation applies — bogus values surface as per-store
+      ``rejected`` rows rather than failing the whole batch.
+      Owner / superadmin only. Each successful update writes
+      an ``OperatorAuditLog`` row (target_type=store,
+      action=cross_store_update) so the per-store admin
+      audit-log view shows when an owner pushed defaults.
+      SPA: ``/app/owner/cross-store-defaults`` (sidebar entry
+      under Owner). Form picks fields via per-field "Apply"
+      checkboxes — unchecked fields stay untouched on every
+      store. Result table renders per-store outcomes after
+      submit, same pattern as Bulk add user.
 - [x] **Bulk user management** — landed.
       ``POST /api/v2/owner/bulk-add-user`` creates the same
       login (username + password) at every store in the

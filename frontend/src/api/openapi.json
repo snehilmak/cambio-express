@@ -4225,6 +4225,172 @@
         "title": "OwnerConnectCodeRow",
         "type": "object"
       },
+      "OwnerCrossStoreDefaultsRequest": {
+        "additionalProperties": false,
+        "description": "POST body for ``/owner/cross-store-defaults``. Every\nfield is optional \u2014 the operator picks which ones to push.\nValidation mirrors the per-store\n``Admin.Requests.store_info.StoreInfoUpdateRequest`` since\neach store's update goes through the same service guard.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "enforce_business_hours": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enforce Business Hours"
+          },
+          "federal_tax_rate": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Federal Tax Rate"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "store_hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StoreHourEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Store Hours"
+          },
+          "store_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Store Ids",
+            "type": "array"
+          },
+          "timeclock_require_passkey": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Require Passkey"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timezone"
+          }
+        },
+        "required": [
+          "store_ids"
+        ],
+        "title": "OwnerCrossStoreDefaultsRequest",
+        "type": "object"
+      },
+      "OwnerCrossStoreResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerCrossStoreResultRow"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated",
+          "rejected",
+          "results"
+        ],
+        "title": "OwnerCrossStoreResponse",
+        "type": "object"
+      },
+      "OwnerCrossStoreResultRow": {
+        "additionalProperties": false,
+        "description": "One row per requested store_id, ordered same as the\nrequest payload.",
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "updated",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "default": "",
+            "title": "Store Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_id",
+          "status"
+        ],
+        "title": "OwnerCrossStoreResultRow",
+        "type": "object"
+      },
       "OwnerLocationsResponse": {
         "additionalProperties": false,
         "description": "Per-store rows for /api/v2/owner/locations.\n\n`total` is the unfiltered umbrella size (so the SPA can\ndistinguish \"owner has no stores connected yet\" from \"search\nreturned zero matches\").",
@@ -16117,6 +16283,82 @@
           }
         },
         "summary": "Owner Connect Codes Revoke Route",
+        "tags": [
+          "owner"
+        ]
+      }
+    },
+    "/owner/cross-store-defaults": {
+      "post": {
+        "description": "Push the picked field defaults (fed-tax-rate, timezone,\nbusiness hours, etc.) to every store in ``body.store_ids``\nthat's in the owner's umbrella. Per-store outcomes\n(updated / rejected) come back in the response so the SPA\ncan show a result table; one validation failure doesn't\nfail the whole batch. Stores outside the umbrella surface\nas ``rejected``.",
+        "operationId": "owner_cross_store_defaults_route_owner_cross_store_defaults_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerCrossStoreDefaultsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerCrossStoreResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Cross Store Defaults Route",
         "tags": [
           "owner"
         ]
