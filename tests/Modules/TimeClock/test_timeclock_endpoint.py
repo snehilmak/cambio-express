@@ -497,3 +497,389 @@ def test_clock_punch_writes_audit_log(client, test_store_id):
               .all()
         )
         assert actions == ["clock_in", "clock_out"]
+
+
+# ── Admin CRUD ──────────────────────────────────────────────
+
+
+def _employee_login(client, store_id):
+    """Sign in as a non-admin employee — used to verify the
+    admin gate. Reuses the test fixture's admin to create the
+    employee row first."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = User(
+            store_id=store_id, username="cashier_tc_admin@x.com",
+            role="employee", is_active=True,
+        )
+        u.set_password("emppass1234")
+        db.session.add(u); db.session.commit()
+    resp = client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "cashier_tc_admin@x.com",
+            "password": "emppass1234",
+            "store_id": store_id,
+        },
+    )
+    return resp.get_json()["access_token"]
+
+
+def test_admin_create_backfills_entry(client, test_store_id):
+    """Admin can create an entry from scratch — used when a
+    cashier forgot to punch and the admin reconstructs the
+    shift later."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Backfill Bob")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": emp_id,
+            "clock_in_at":  "2026-05-15T09:00:00",
+            "clock_out_at": "2026-05-15T17:00:00",
+            "notes": "back-filled — forgot to punch",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    row = resp.get_json()["entry"]
+    assert row["store_employee_id"] == emp_id
+    assert row["hours_worked"] == 8.0
+    assert row["notes"] == "back-filled — forgot to punch"
+
+
+def test_admin_create_open_entry(client, test_store_id):
+    """``clock_out_at`` omitted → entry stays open. Used when
+    the admin needs to retroactively start a shift the cashier
+    is still working."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Open Olga")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": emp_id,
+            "clock_in_at": "2026-05-15T09:00:00",
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    row = resp.get_json()["entry"]
+    assert row["clock_out_at"] is None
+    assert row["hours_worked"] is None
+
+
+def test_admin_create_rejects_inverted_timestamps(client, test_store_id):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Backwards")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": emp_id,
+            "clock_in_at":  "2026-05-15T18:00:00",
+            "clock_out_at": "2026-05-15T09:00:00",
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_admin_create_rejects_employee_role(client, test_store_id):
+    """Only admin / owner / superadmin can back-fill — cashiers
+    can't bypass the normal clock-in flow."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Gate Test")
+    token = _employee_login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": emp_id,
+            "clock_in_at": "2026-05-15T09:00:00",
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_create_rejects_cross_tenant_employee(client, test_store_id):
+    with db_session():
+        other_store_id = _seed_other_store()
+        other_emp = _seed_employee(other_store_id, name="Far Far Away")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/timeclock",
+        json={
+            "store_employee_id": other_emp,
+            "clock_in_at": "2026-05-15T09:00:00",
+            "notes": "",
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_admin_update_recomputes_hours(client, test_store_id):
+    """Edit the clock_out_at — server recomputes hours_worked
+    from the new pair, and the audit row carries the diff."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    from api.Modules.Audit.Models import OperatorAuditLog
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Edit Eve")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"clock_out_at": "2026-05-15T18:00:00"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    row = resp.get_json()["entry"]
+    assert row["hours_worked"] == 9.0
+    # Audit row carries the field-level diff.
+    with db_session():
+        audit = (
+            db.session.query(OperatorAuditLog)
+              .filter_by(
+                  store_id=test_store_id,
+                  target_type="time_clock_entry",
+                  target_id=str(entry_id),
+                  action="admin_update",
+              )
+              .one()
+        )
+        assert "clock_out_at" in audit.summary
+        assert "hours_worked" in audit.summary
+        assert "9.0" in audit.summary or "9" in audit.summary
+
+
+def test_admin_update_can_reopen_closed_entry(client, test_store_id):
+    """Setting ``clock_out_at: null`` re-opens a previously
+    closed shift. Edge case for "ended the shift by mistake"."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Reopen Rita")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"clock_out_at": None},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    row = resp.get_json()["entry"]
+    assert row["clock_out_at"] is None
+    assert row["hours_worked"] is None
+
+
+def test_admin_update_partial_leaves_unrelated_fields(client, test_store_id):
+    """Only the keys in the JSON body land on the row — omitted
+    fields stay put. PUT-as-PATCH semantics."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Patch Pat")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+            notes="original",
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"notes": "updated"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    row = resp.get_json()["entry"]
+    assert row["notes"] == "updated"
+    assert row["hours_worked"] == 8.0
+    assert row["clock_out_at"] is not None
+
+
+def test_admin_update_rejects_inverted_clock_pair(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Inverted")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"clock_in_at": "2026-05-15T20:00:00"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_admin_update_404s_for_cross_tenant_entry(client, test_store_id):
+    """An entry belonging to another store returns 404 (same
+    shape as a missing row) so the SPA can't enumerate
+    cross-tenant ids."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        other_store_id = _seed_other_store()
+        emp = _seed_employee(other_store_id, name="Foreign Entry")
+        entry = TimeClockEntry(
+            store_id=other_store_id, store_employee_id=emp,
+            clock_in_at=datetime(2026, 5, 15, 9),
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"notes": "drift"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_admin_delete_removes_entry_and_audits(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    from api.Modules.Audit.Models import OperatorAuditLog
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Delete Dave")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+            clock_out_at=datetime(2026, 5, 15, 17),
+            hours_worked=8.0,
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 204
+    with db_session():
+        assert db.session.get(TimeClockEntry, entry_id) is None
+        # Audit row survives — that's the whole point of the
+        # per-entry history view.
+        audit = (
+            db.session.query(OperatorAuditLog)
+              .filter_by(
+                  store_id=test_store_id,
+                  target_type="time_clock_entry",
+                  target_id=str(entry_id),
+                  action="admin_delete",
+              )
+              .one()
+        )
+        assert "Delete Dave" in audit.summary
+
+
+def test_admin_delete_rejects_employee_role(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Lock Down")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _employee_login(client, test_store_id)
+    resp = client.delete(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_history_returns_chain(client, test_store_id):
+    """Per-entry history surfaces clock-in, admin edit, and
+    every other audit row tied to that entry id, newest-first."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="History Helga")
+    token = _login(client, test_store_id)
+    # Clock-in via the normal endpoint to seed an audit row.
+    resp_in = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    entry_id = resp_in.get_json()["entry"]["id"]
+    # Admin edit to add a second row.
+    client.put(
+        f"/api/v2/admin/timeclock/{entry_id}",
+        json={"notes": "fixed up after the fact"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # History query.
+    resp = client.get(
+        f"/api/v2/admin/timeclock/{entry_id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    rows = resp.get_json()["rows"]
+    # Two rows: clock_in then admin_update. Newest-first.
+    assert [r["action"] for r in rows] == ["admin_update", "clock_in"]
+    # The admin_update row carries the field-level diff.
+    assert "notes" in rows[0]["summary"]
+
+
+def test_admin_history_404s_for_cross_tenant_entry(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        other_store_id = _seed_other_store()
+        emp = _seed_employee(other_store_id, name="Hist Foreign")
+        entry = TimeClockEntry(
+            store_id=other_store_id, store_employee_id=emp,
+            clock_in_at=datetime(2026, 5, 15, 9),
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/admin/timeclock/{entry_id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_admin_history_rejects_employee_role(client, test_store_id):
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="History Gate")
+        entry = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 15, 9),
+        )
+        db.session.add(entry); db.session.commit()
+        entry_id = entry.id
+    token = _employee_login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/admin/timeclock/{entry_id}/history",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -29,16 +29,24 @@ from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Services import resolve_store_scope
 from api.Modules.TimeClock.Models import TimeClockEntry
 from api.Modules.TimeClock.Requests import (
+    AdminCreateEntryRequest,
+    AdminUpdateEntryRequest,
     ClockPunchRequest,
     TimeClockEntryList,
     TimeClockEntryRow,
+    TimeClockHistoryResponse,
+    TimeClockHistoryRow,
     TimeClockPunchResponse,
     TimeClockStatusResponse,
 )
 from api.Modules.TimeClock.Services import (
     AlreadyClockedInError,
+    EntryNotFoundError,
     NotClockedInError,
     RosterEmployeeNotFoundError,
+    admin_create_entry,
+    admin_delete_entry,
+    admin_update_entry,
     clock_in,
     clock_out,
     entries_for_period,
@@ -245,6 +253,218 @@ def admin_entries_route(
     )
 
 
+# ── Admin CRUD (back-fill / edit / delete) ──────────────────
+
+
+def _require_admin_role(claims: dict) -> None:
+    if claims.get("role") not in ("admin", "owner", "superadmin"):
+        raise HTTPException(
+            status_code=403,
+            detail="Only store admins can edit time-clock entries.",
+        )
+
+
+def _parse_iso(value: str, field: str) -> datetime:
+    """Accept SPA-friendly ISO-8601 strings (``2026-05-18T14:30``
+    or with trailing ``Z``). Raises 422 on parse failure with a
+    helpful field name."""
+    raw = (value or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=422, detail=f"{field} is required.",
+        )
+    # Normalize trailing 'Z' to '+00:00' so fromisoformat accepts it.
+    if raw.endswith("Z"):
+        raw = raw[:-1] + "+00:00"
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{field} is not a valid ISO-8601 datetime.",
+        )
+    # Drop tzinfo for comparison with the (naive UTC) column —
+    # matches the storage convention used by the normal punch
+    # endpoints.
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(tz=None).replace(tzinfo=None)
+    return dt
+
+
+@admin_router.post(
+    "/timeclock", response_model=TimeClockPunchResponse, status_code=201,
+)
+def admin_create_route(
+    body: AdminCreateEntryRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockPunchResponse:
+    """Admin back-fill: create a TimeClockEntry from scratch.
+    Use case: cashier forgot to punch and the admin reconstructs
+    the shift from memory / camera footage / a paper sign-in."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    clock_in_at  = _parse_iso(body.clock_in_at, "clock_in_at")
+    clock_out_at = (
+        _parse_iso(body.clock_out_at, "clock_out_at")
+        if body.clock_out_at else None
+    )
+    try:
+        entry, audit_summary = admin_create_entry(
+            db,
+            store_id=store_id,
+            store_employee_id=body.store_employee_id,
+            clock_in_at=clock_in_at,
+            clock_out_at=clock_out_at,
+            notes=body.notes,
+        )
+    except RosterEmployeeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _write_audit(
+        db,
+        store_id=store_id, claims=claims,
+        entry_id=entry.id,
+        store_employee_id=body.store_employee_id,
+        action="admin_create",
+        summary=audit_summary,
+    )
+    db.commit()
+    return TimeClockPunchResponse(
+        entry=_to_row(entry, _names_for(db, [entry])),
+    )
+
+
+@admin_router.put(
+    "/timeclock/{entry_id}", response_model=TimeClockPunchResponse,
+)
+def admin_update_route(
+    body: AdminUpdateEntryRequest,
+    entry_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockPunchResponse:
+    """Admin edit: replace timestamps / notes on an existing
+    entry. Hours are recomputed. Field-level diff lands in the
+    audit summary."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    patch: dict = {}
+    set_fields = body.model_fields_set
+    if "clock_in_at" in set_fields:
+        if body.clock_in_at is None:
+            raise HTTPException(
+                status_code=422,
+                detail="clock_in_at cannot be null — every shift has a start.",
+            )
+        patch["clock_in_at"] = _parse_iso(body.clock_in_at, "clock_in_at")
+    if "clock_out_at" in set_fields:
+        patch["clock_out_at"] = (
+            _parse_iso(body.clock_out_at, "clock_out_at")
+            if body.clock_out_at else None
+        )
+    if "notes" in set_fields:
+        patch["notes"] = (body.notes or "")[:500]
+    try:
+        entry, audit_summary = admin_update_entry(
+            db,
+            entry_id=entry_id, store_id=store_id, patch=patch,
+        )
+    except EntryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    _write_audit(
+        db,
+        store_id=store_id, claims=claims,
+        entry_id=entry.id,
+        store_employee_id=entry.store_employee_id,
+        action="admin_update",
+        summary=audit_summary,
+    )
+    db.commit()
+    return TimeClockPunchResponse(
+        entry=_to_row(entry, _names_for(db, [entry])),
+    )
+
+
+@admin_router.delete(
+    "/timeclock/{entry_id}", status_code=204,
+)
+def admin_delete_route(
+    entry_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Admin remove. Rare — typically only for entries that
+    were back-filled in error. The audit chain still surfaces
+    the deletion."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    try:
+        store_employee_id, audit_summary = admin_delete_entry(
+            db, entry_id=entry_id, store_id=store_id,
+        )
+    except EntryNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    _write_audit(
+        db,
+        store_id=store_id, claims=claims,
+        entry_id=entry_id,
+        store_employee_id=store_employee_id,
+        action="admin_delete",
+        summary=audit_summary,
+    )
+    db.commit()
+    return None
+
+
+@admin_router.get(
+    "/timeclock/{entry_id}/history",
+    response_model=TimeClockHistoryResponse,
+)
+def admin_entry_history_route(
+    entry_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockHistoryResponse:
+    """Per-entry audit chain — every clock-in, clock-out, and
+    admin mutation that touched this row. Reverse-chronological."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    # Verify the entry belongs to this store before exposing the
+    # chain — keeps a cross-tenant probe from leaking history.
+    entry = db.get(TimeClockEntry, entry_id)
+    if entry is None or entry.store_id != store_id:
+        raise HTTPException(
+            status_code=404,
+            detail="That time-clock entry does not belong to this store.",
+        )
+    from api.Modules.Audit.Models import OperatorAuditLog
+    rows = (
+        db.query(OperatorAuditLog)
+          .filter(
+              OperatorAuditLog.store_id == store_id,
+              OperatorAuditLog.target_type == "time_clock_entry",
+              OperatorAuditLog.target_id == str(entry_id),
+          )
+          .order_by(OperatorAuditLog.id.desc())
+          .all()
+    )
+    return TimeClockHistoryResponse(rows=[
+        TimeClockHistoryRow(
+            id=r.id,
+            at=r.created_at.isoformat() if r.created_at else "",
+            actor=r.user_name or "",
+            actor_role=r.user_role or "",
+            action=r.action or "",
+            summary=r.summary or "",
+        )
+        for r in rows
+    ])
+
+
 # ── Internal helpers ────────────────────────────────────────
 
 
@@ -268,15 +488,46 @@ def _audit_punch(
     store_employee_id: int,
     action: str,
 ) -> None:
-    """Write an OperatorAuditLog row for every clock-in /
-    clock-out. ``target_type`` is "time_clock_entry"; the
-    audit log already supports arbitrary target types."""
-    from api.Modules.Audit.Services import record_operator_action
-    # Pull the roster name so the audit row reads naturally
-    # even after the entry is deleted.
+    """Audit a clock-in or clock-out. Summary is auto-generated
+    from the action + roster name."""
     from api.Modules.Tenancy.Models import StoreEmployee
     emp = db.get(StoreEmployee, store_employee_id)
     emp_name = emp.name if emp else f"#{store_employee_id}"
+    _write_audit(
+        db,
+        store_id=store_id, claims=claims,
+        entry_id=entry_id,
+        store_employee_id=store_employee_id,
+        action=action,
+        summary=f"{action.replace('_', ' ').title()}: {emp_name}",
+        explicit_user_id=user_id,
+    )
+
+
+def _write_audit(
+    db: Session,
+    *,
+    store_id: int,
+    claims: dict,
+    entry_id: int,
+    store_employee_id: int,
+    action: str,
+    summary: str,
+    explicit_user_id: int | None = None,
+) -> None:
+    """Write a single ``OperatorAuditLog`` row tagged
+    ``target_type=time_clock_entry``. Reused by every endpoint
+    that mutates an entry — the per-entry history view replays
+    these rows."""
+    from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.get(StoreEmployee, store_employee_id)
+    emp_name = emp.name if emp else f"#{store_employee_id}"
+    user_id = (
+        explicit_user_id
+        if explicit_user_id is not None
+        else _user_id_from(claims)
+    )
     record_operator_action(
         db,
         store_id=store_id,
@@ -287,5 +538,5 @@ def _audit_punch(
         target_id=str(entry_id),
         target_label=emp_name,
         action=action,
-        summary=f"{action.replace('_', ' ').title()}: {emp_name}",
+        summary=summary,
     )

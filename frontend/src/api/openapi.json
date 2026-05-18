@@ -326,6 +326,91 @@
         "title": "AdminAuditUserOption",
         "type": "object"
       },
+      "AdminCreateEntryRequest": {
+        "additionalProperties": false,
+        "description": "Admin-side back-fill payload. Picks the roster member,\nsets the clock-in time, optionally the clock-out time\n(skip for an open / in-progress entry the admin will close\nlater) and an explanatory note.\n\nTimestamps are ISO-8601 strings the SPA writes from a\n``<input type=datetime-local>`` \u2014 server parses them as\nUTC ``datetime`` objects to match the normal punch path.",
+        "properties": {
+          "clock_in_at": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Clock In At",
+            "type": "string"
+          },
+          "clock_out_at": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Out At"
+          },
+          "notes": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Notes",
+            "type": "string"
+          },
+          "store_employee_id": {
+            "minimum": 1.0,
+            "title": "Store Employee Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "store_employee_id",
+          "clock_in_at"
+        ],
+        "title": "AdminCreateEntryRequest",
+        "type": "object"
+      },
+      "AdminUpdateEntryRequest": {
+        "additionalProperties": false,
+        "description": "Admin-side edit. Every field is optional \u2014 a partial\nPUT leaves omitted fields alone. ``clock_out_at`` may be\nexplicitly set to None (use ``clock_out_at: null`` in JSON)\nto re-open a closed shift; the server distinguishes\n\"not in payload\" from \"set to null\" via ``model_fields_set``.\n\nNotes is replace-not-append (it's an admin override \u2014\ncashier-supplied notes survive only when the admin leaves\nthe field out of the patch).",
+        "properties": {
+          "clock_in_at": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock In At"
+          },
+          "clock_out_at": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Out At"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "title": "AdminUpdateEntryRequest",
+        "type": "object"
+      },
       "AdminUserCreateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -7170,6 +7255,64 @@
         "title": "TimeClockEntryRow",
         "type": "object"
       },
+      "TimeClockHistoryResponse": {
+        "additionalProperties": false,
+        "description": "The audit chain for one entry \u2014 wired to\n``GET /admin/timeclock/{id}/history``.",
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/TimeClockHistoryRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "TimeClockHistoryResponse",
+        "type": "object"
+      },
+      "TimeClockHistoryRow": {
+        "additionalProperties": false,
+        "description": "One audit-log row for a time-clock entry. Returned in\nreverse-chronological order so the most recent change\nsurfaces first in the SPA panel.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "actor_role": {
+            "title": "Actor Role",
+            "type": "string"
+          },
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "actor_role",
+          "action",
+          "summary"
+        ],
+        "title": "TimeClockHistoryRow",
+        "type": "object"
+      },
       "TimeClockPunchResponse": {
         "additionalProperties": false,
         "description": "Returned by both clock-in and clock-out \u2014 the freshly-\nmodified entry. Keeps the SPA from needing a follow-up\nGET to refresh the row.",
@@ -8881,6 +9024,309 @@
           }
         },
         "summary": "Admin Entries Route",
+        "tags": [
+          "timeclock"
+        ]
+      },
+      "post": {
+        "description": "Admin back-fill: create a TimeClockEntry from scratch.\nUse case: cashier forgot to punch and the admin reconstructs\nthe shift from memory / camera footage / a paper sign-in.",
+        "operationId": "admin_create_route_admin_timeclock_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminCreateEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeClockPunchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Create Route",
+        "tags": [
+          "timeclock"
+        ]
+      }
+    },
+    "/admin/timeclock/{entry_id}": {
+      "delete": {
+        "description": "Admin remove. Rare \u2014 typically only for entries that\nwere back-filled in error. The audit chain still surfaces\nthe deletion.",
+        "operationId": "admin_delete_route_admin_timeclock__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Delete Route",
+        "tags": [
+          "timeclock"
+        ]
+      },
+      "put": {
+        "description": "Admin edit: replace timestamps / notes on an existing\nentry. Hours are recomputed. Field-level diff lands in the\naudit summary.",
+        "operationId": "admin_update_route_admin_timeclock__entry_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminUpdateEntryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeClockPunchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Update Route",
+        "tags": [
+          "timeclock"
+        ]
+      }
+    },
+    "/admin/timeclock/{entry_id}/history": {
+      "get": {
+        "description": "Per-entry audit chain \u2014 every clock-in, clock-out, and\nadmin mutation that touched this row. Reverse-chronological.",
+        "operationId": "admin_entry_history_route_admin_timeclock__entry_id__history_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimeClockHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Entry History Route",
         "tags": [
           "timeclock"
         ]

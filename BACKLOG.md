@@ -925,20 +925,31 @@ gaps. Ordered by "what I'd do next" at the top.
       picker. Today cashiers print from the browser dialog.
 
 ### Time clock / payroll
-- [~] **Time clock v1** — landed. Per-StoreEmployee shift
-      tracking (``TimeClockEntry`` table, migration
+- [~] **Time clock v1 + admin CRUD** — landed. Per-StoreEmployee
+      shift tracking (``TimeClockEntry`` table, migration
       ``f6e7a8b9c0d1``). Endpoints:
-      ``POST /api/v2/timeclock/clock-in``,
-      ``POST /api/v2/timeclock/clock-out``,
-      ``GET  /api/v2/timeclock/status``,
-      ``GET  /api/v2/admin/timeclock?from=&to=&store_employee_id=``.
-      Server-side guards: one open shift per employee at a
-      time (409 on double-tap), inactive roster members can't
-      punch, cross-tenant ids → 404. Audit row per punch.
+      ``POST   /api/v2/timeclock/clock-in``,
+      ``POST   /api/v2/timeclock/clock-out``,
+      ``GET    /api/v2/timeclock/status``,
+      ``GET    /api/v2/admin/timeclock?from=&to=&store_employee_id=``,
+      ``POST   /api/v2/admin/timeclock`` (admin back-fill),
+      ``PUT    /api/v2/admin/timeclock/{id}`` (admin edit),
+      ``DELETE /api/v2/admin/timeclock/{id}`` (admin remove),
+      ``GET    /api/v2/admin/timeclock/{id}/history`` (per-entry
+      audit chain).
+      Server-side guards: one open shift per employee (409 on
+      double-tap), inactive roster members can't punch,
+      cross-tenant ids → 404, admin edits validate open<close,
+      hours_worked recomputed on every clock-out / admin edit.
+      Audit row per punch + per admin mutation; the admin
+      ``admin_update`` summary carries a field-level diff
+      ("clock_out_at: 17:00 → 18:00; hours_worked: 8.0 → 9.0")
+      so the per-entry history view replays what changed.
       SPA: ``/app/timeclock`` punch page for all roles,
-      ``/app/admin/timeclock`` payroll history for admin /
-      owner. Sidebar entries under Workspace (Time clock) and
-      Finance (Payroll).
+      ``/app/admin/timeclock`` payroll history with inline
+      Edit / Delete / History buttons + a "+ New entry"
+      modal for admin / owner. Sidebar entries under
+      Workspace (Time clock) and Finance (Payroll).
       v2 items below.
 - [ ] **Time clock v2 — passkey-required punch** — buddy-punching
       defense. Reuse the existing WebAuthn ``Passkey``
