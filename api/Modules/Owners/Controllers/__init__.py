@@ -21,6 +21,9 @@ from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Owners.Requests import (
+    OwnerBulkAddUserRequest,
+    OwnerBulkAddUserResponse,
+    OwnerBulkAddUserResultRow,
     OwnerConnectCodeListResponse,
     OwnerConnectCodeResponse,
     OwnerConnectCodeRow,
@@ -33,6 +36,7 @@ from api.Modules.Owners.Requests import (
     OwnerUnlinkRequest,
 )
 from api.Modules.Owners.Services import (
+    bulk_add_user_to_stores,
     owner_locations_payload,
     owner_store_ids,
 )
@@ -311,6 +315,66 @@ def owner_connect_codes_revoke_route(
         c.revoked_at = datetime.utcnow()
     db.commit()
     return OwnerConnectCodeResponse(code=_adapt_code(c))
+
+
+@router.post(
+    "/bulk-add-user", response_model=OwnerBulkAddUserResponse,
+)
+def owner_bulk_add_user_route(
+    body: OwnerBulkAddUserRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> OwnerBulkAddUserResponse:
+    """Create the same login at every store in ``body.store_ids``
+    that's actually in the owner's umbrella. Per-store outcomes
+    (created / skipped / rejected) come back in the response so
+    the SPA can show a result table; we don't 4xx the whole
+    request just because one store collided."""
+    user = _require_owner_principal(db, claims)
+    try:
+        raw_results = bulk_add_user_to_stores(
+            db,
+            owner_id=user.id,
+            store_ids=list(body.store_ids),
+            username=body.username,
+            password=body.password,
+            full_name=body.full_name,
+            role=body.role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Audit one row per successful create. Skipped / rejected
+    # don't get audit entries — nothing mutated.
+    from api.Modules.Audit.Services import record_operator_action
+    for r in raw_results:
+        if r["status"] != "created":
+            continue
+        record_operator_action(
+            db,
+            store_id=r["store_id"],
+            user_id=user.id,
+            user_name=user.full_name or user.username,
+            user_role=user.role,
+            target_type="user",
+            target_id="",
+            target_label=body.username,
+            action="create",
+            summary=(
+                f"Owner bulk-added {body.role} '{body.username}'"
+            ),
+        )
+    db.commit()
+
+    counts = {"created": 0, "skipped": 0, "rejected": 0}
+    for r in raw_results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return OwnerBulkAddUserResponse(
+        created=counts["created"],
+        skipped=counts["skipped"],
+        rejected=counts["rejected"],
+        results=[OwnerBulkAddUserResultRow(**r) for r in raw_results],
+    )
 
 
 @router.post("/unlink/{store_id}", status_code=204)

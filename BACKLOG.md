@@ -924,11 +924,80 @@ gaps. Ordered by "what I'd do next" at the top.
 - [ ] **Receipt printer setup** — USB / Bluetooth thermal printer
       picker. Today cashiers print from the browser dialog.
 
+### Time clock / payroll
+- [~] **Time clock v1** — landed. Per-StoreEmployee shift
+      tracking (``TimeClockEntry`` table, migration
+      ``f6e7a8b9c0d1``). Endpoints:
+      ``POST /api/v2/timeclock/clock-in``,
+      ``POST /api/v2/timeclock/clock-out``,
+      ``GET  /api/v2/timeclock/status``,
+      ``GET  /api/v2/admin/timeclock?from=&to=&store_employee_id=``.
+      Server-side guards: one open shift per employee at a
+      time (409 on double-tap), inactive roster members can't
+      punch, cross-tenant ids → 404. Audit row per punch.
+      SPA: ``/app/timeclock`` punch page for all roles,
+      ``/app/admin/timeclock`` payroll history for admin /
+      owner. Sidebar entries under Workspace (Time clock) and
+      Finance (Payroll).
+      v2 items below.
+- [ ] **Time clock v2 — passkey-required punch** — buddy-punching
+      defense. Reuse the existing WebAuthn ``Passkey``
+      infrastructure: extend the punch endpoints with a
+      pre-flight WebAuthn assertion challenge / verify
+      handshake. New per-store toggle
+      ``Store.timeclock_require_passkey`` defaults off.
+      Roster members register their passkey from the Settings
+      page (today only User accounts can; punch needs roster
+      → passkey linkage, so add a ``StoreEmployee.passkey_ids``
+      list). Windows Hello / Touch ID / Face ID all flow
+      through this same path natively.
+- [ ] **Time clock v2 — geofence** — refuse clock-in when
+      ``navigator.geolocation`` is more than X meters from
+      ``Store.address`` (geocode the address once at save
+      time, store lat/lng). Per-store opt-in. The browser
+      permission prompt makes this a "soft" defense — a
+      cashier who denies geolocation can still punch — so it
+      pairs with the passkey check above for a real anti-
+      buddy-punch story.
+- [ ] **Time clock v2 — break tracking** — paid short break
+      vs unpaid meal break. State machine on the open entry
+      (``in_break`` flag, ``break_minutes`` accumulator).
+      Affects ``hours_worked`` at clock-out (subtracts meal-
+      break minutes).
+- [ ] **Time clock v2 — shift scheduling** — planned shift
+      table + late-arrival / no-show flags on the
+      ``TimeClockEntry`` row when actual diverges from
+      planned by > X minutes.
+- [ ] **Payroll check printing** — generate printable
+      paycheck PDFs from a date-range rollup of
+      ``TimeClockEntry`` × ``hourly_rate`` (new
+      ``StoreEmployee.hourly_rate`` column). MICR routing
+      line template per ``Store`` (bank account / routing).
+      Reuses the print-CSS technique from the (now-hidden)
+      receipt printing feature — straight port.
+
 ### Owner umbrella (`/owner/settings` — doesn't exist yet)
 - [ ] **Cross-store defaults** — apply a fed-tax rate / company list /
       receipt template to all my stores at once.
-- [ ] **Bulk user management** — add an admin to multiple stores at
-      once.
+- [x] **Bulk user management** — landed.
+      ``POST /api/v2/owner/bulk-add-user`` creates the same
+      login (username + password) at every store in the
+      owner's umbrella that the operator selects. Per-store
+      outcomes (created / skipped / rejected) come back in the
+      response so the SPA can render a result table; one store
+      collision doesn't fail the whole batch. Stores outside
+      the umbrella surface as ``rejected`` rather than 403'ing
+      the call. Each successful create writes an
+      ``OperatorAuditLog`` row.
+      SPA page at ``/app/owner/bulk-add-user`` (new sidebar
+      entry under Owner). Form takes username + password +
+      full name + role (admin / employee) + a multi-select of
+      the owner's stores. Results table shows per-store
+      status after submit.
+      Today this creates N independent User rows sharing the
+      same credentials — a single-row multi-store user (one
+      ``User`` with many ``store_id`` values) is a separate
+      architectural item.
 - [ ] **Consolidated billing** — one Stripe customer for N stores
       instead of one-per-store. Big architectural change, meaningful
       revenue upside.

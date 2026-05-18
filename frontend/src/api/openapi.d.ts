@@ -254,6 +254,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/timeclock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Entries Route
+         * @description Shifts that started inside ``[from, to)`` for the
+         *     current user's store. ``to`` is half-open — pass the day
+         *     AFTER the period end (a "May 1 – May 14" biweekly window
+         *     is ``from=2026-05-01&to=2026-05-15``).
+         *
+         *     Admin / owner only. The window is required to keep a
+         *     runaway query from pulling the whole history.
+         */
+        get: operations["admin_entries_route_admin_timeclock_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -1958,6 +1984,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/bulk-add-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner Bulk Add User Route
+         * @description Create the same login at every store in ``body.store_ids``
+         *     that's actually in the owner's umbrella. Per-store outcomes
+         *     (created / skipped / rejected) come back in the response so
+         *     the SPA can show a result table; we don't 4xx the whole
+         *     request just because one store collided.
+         */
+        post: operations["owner_bulk_add_user_route_owner_bulk_add_user_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/connect-codes": {
         parameters: {
             query?: never;
@@ -2924,6 +2974,73 @@ export interface paths {
          *     timer reset, etc.).
          */
         patch: operations["update_store_route_superadmin_stores__store_id__patch"];
+        trace?: never;
+    };
+    "/timeclock/clock-in": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clock In Route
+         * @description Open a new shift for the picked roster member at the
+         *     current user's store. 409 when the employee already has an
+         *     open shift; 404 when the roster id doesn't belong to this
+         *     store.
+         */
+        post: operations["clock_in_route_timeclock_clock_in_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timeclock/clock-out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clock Out Route
+         * @description Close the picked roster member's open shift. 409 when
+         *     nobody's clocked in for that name; 404 when the roster id
+         *     doesn't belong to this store.
+         */
+        post: operations["clock_out_route_timeclock_clock_out_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/timeclock/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Status Route
+         * @description Currently-open shifts at the principal's store — feeds
+         *     the live "who's on the clock?" panel + powers the
+         *     Clock-in/Clock-out button toggle.
+         */
+        get: operations["status_route_timeclock_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/transfers": {
@@ -4167,6 +4284,21 @@ export interface components {
         CheckoutSessionResponse: {
             /** Url */
             url: string;
+        };
+        /**
+         * ClockPunchRequest
+         * @description Body for ``/timeclock/clock-in`` and
+         *     ``/timeclock/clock-out``. Both use the same shape — the
+         *     operator picks a roster member and optionally adds a note.
+         */
+        ClockPunchRequest: {
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Store Employee Id */
+            store_employee_id: number;
         };
         /** CompanyRow */
         CompanyRow: {
@@ -5437,6 +5569,68 @@ export interface components {
             notify_locked_day_digest?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
+        };
+        /**
+         * OwnerBulkAddUserRequest
+         * @description POST body for ``/owner/bulk-add-user``. Creates the same
+         *     login (username + password) at every store in ``store_ids``
+         *     that's actually in the owner's umbrella. Stores outside the
+         *     umbrella are reported as ``rejected`` rather than 403'd so
+         *     the operator sees the full result table.
+         */
+        OwnerBulkAddUserRequest: {
+            /**
+             * Full Name
+             * @default
+             */
+            full_name: string;
+            /** Password */
+            password: string;
+            /**
+             * Role
+             * @default employee
+             * @enum {string}
+             */
+            role: "admin" | "employee";
+            /** Store Ids */
+            store_ids: number[];
+            /** Username */
+            username: string;
+        };
+        /** OwnerBulkAddUserResponse */
+        OwnerBulkAddUserResponse: {
+            /** Created */
+            created: number;
+            /** Rejected */
+            rejected: number;
+            /** Results */
+            results: components["schemas"]["OwnerBulkAddUserResultRow"][];
+            /** Skipped */
+            skipped: number;
+        };
+        /**
+         * OwnerBulkAddUserResultRow
+         * @description One row per requested store_id, ordered same as the
+         *     request payload.
+         */
+        OwnerBulkAddUserResultRow: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "created" | "skipped" | "rejected";
+            /** Store Id */
+            store_id: number;
+            /**
+             * Store Name
+             * @default
+             */
+            store_name: string;
         };
         /** OwnerConnectCodeListResponse */
         OwnerConnectCodeListResponse: {
@@ -6925,6 +7119,61 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /**
+         * TimeClockEntryList
+         * @description Payroll history page — paginated by date range, not
+         *     cursor (a single biweekly window for a store is small).
+         */
+        TimeClockEntryList: {
+            /** Rows */
+            rows: components["schemas"]["TimeClockEntryRow"][];
+            /** Total Hours */
+            total_hours: number;
+        };
+        /**
+         * TimeClockEntryRow
+         * @description One shift row. ``clock_out_at`` / ``hours_worked`` are
+         *     None while the shift is in progress.
+         */
+        TimeClockEntryRow: {
+            /** Clock In At */
+            clock_in_at: string;
+            /** Clock Out At */
+            clock_out_at?: string | null;
+            /** Employee Name */
+            employee_name: string;
+            /** Hours Worked */
+            hours_worked?: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Store Employee Id */
+            store_employee_id: number;
+        };
+        /**
+         * TimeClockPunchResponse
+         * @description Returned by both clock-in and clock-out — the freshly-
+         *     modified entry. Keeps the SPA from needing a follow-up
+         *     GET to refresh the row.
+         */
+        TimeClockPunchResponse: {
+            entry: components["schemas"]["TimeClockEntryRow"];
+        };
+        /**
+         * TimeClockStatusResponse
+         * @description Live "who's on the clock right now?" payload for the
+         *     punch page. Returns every open entry at the user's store
+         *     so a cashier can see if their name is already punched
+         *     before clicking Clock In.
+         */
+        TimeClockStatusResponse: {
+            /** Open Entries */
+            open_entries: components["schemas"]["TimeClockEntryRow"][];
+        };
         /** TopCustomersResponse */
         TopCustomersResponse: {
             /** Rows */
@@ -7735,6 +7984,43 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_entries_route_admin_timeclock_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                store_employee_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockEntryList"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -10667,6 +10953,43 @@ export interface operations {
             };
         };
     };
+    owner_bulk_add_user_route_owner_bulk_add_user_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerBulkAddUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerBulkAddUserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     owner_connect_codes_list_route_owner_connect_codes_get: {
         parameters: {
             query?: never;
@@ -12566,6 +12889,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuperadminStoreDetailResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clock_in_route_timeclock_clock_in_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClockPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clock_out_route_timeclock_clock_out_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClockPunchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_route_timeclock_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockStatusResponse"];
                 };
             };
             /** @description Validation Error */

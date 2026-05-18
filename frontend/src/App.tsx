@@ -22,6 +22,7 @@ const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminTaxExport = lazy(() => import("./routes/AdminTaxExport"));
+const AdminTimeClock = lazy(() => import("./routes/AdminTimeClock"));
 const AdminUserForm = lazy(() => import("./routes/AdminUserForm"));
 const AdminUsers = lazy(() => import("./routes/AdminUsers"));
 const Bank = lazy(() => import("./routes/Bank"));
@@ -40,6 +41,7 @@ const Login = lazy(() => import("./routes/Login"));
 const LoginStore = lazy(() => import("./routes/LoginStore"));
 const Monthly = lazy(() => import("./routes/Monthly"));
 const NewTransfer = lazy(() => import("./routes/NewTransfer"));
+const OwnerBulkAddUser = lazy(() => import("./routes/OwnerBulkAddUser"));
 const OwnerConnect = lazy(() => import("./routes/OwnerConnect"));
 const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
 const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
@@ -62,6 +64,7 @@ const SuperadminControls = lazy(() => import("./routes/SuperadminControls"));
 const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
 const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
 const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
+const TimeClock = lazy(() => import("./routes/TimeClock"));
 const TransferDetail = lazy(() => import("./routes/TransferDetail"));
 // Receipt printing surface is hidden until we decide we need it —
 // this is a ledger-only product, so customer-facing receipts don't
@@ -210,11 +213,12 @@ export default function App() {
           <Route path="return-checks"          element={<ReturnChecks />} />
           <Route path="return-checks/new"      element={<ReturnCheckForm />} />
           <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
-          <Route path="owner/connect"   element={<OwnerConnect />} />
-          <Route path="owner/dashboard" element={<OwnerDashboard />} />
-          <Route path="owner/locations" element={<OwnerLocations />} />
-          <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
-          <Route path="owner/reports"   element={<OwnerReports />} />
+          <Route path="owner/connect"        element={<OwnerConnect />} />
+          <Route path="owner/dashboard"      element={<OwnerDashboard />} />
+          <Route path="owner/locations"      element={<OwnerLocations />} />
+          <Route path="owner/pl-rollup"      element={<OwnerPLRollup />} />
+          <Route path="owner/reports"        element={<OwnerReports />} />
+          <Route path="owner/bulk-add-user"  element={<OwnerBulkAddUser />} />
           <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
           <Route path="superadmin/stores"        element={<SuperadminStores />} />
           <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
@@ -227,10 +231,12 @@ export default function App() {
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
           <Route path="admin/subscription"    element={<AdminSubscription />} />
           <Route path="admin/tax-export"      element={<AdminTaxExport />} />
+          <Route path="admin/timeclock"       element={<AdminTimeClock />} />
           <Route path="admin/audit-log"       element={<AdminAuditLog />} />
           <Route path="admin/users"             element={<AdminUsers />} />
           <Route path="admin/users/new"         element={<AdminUserForm />} />
           <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
+          <Route path="timeclock"             element={<TimeClock />} />
           <Route path="account/referrals"     element={<AdminReferrals />} />
           <Route path="account/profile"       element={<AccountProfile />} />
           <Route path="account/notifications" element={<AccountNotifications />} />

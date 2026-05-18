@@ -543,6 +543,7 @@ router in `api/main.py`.
 | `ReturnChecks` | Returned-check tracking + payments |
 | `Superadmin` | `/superadmin/*` controls, anomalies, BI reports |
 | `Tenancy` | `Store`, `User`, `StoreEmployee`, `StoreOwnerLink`, `OwnerConnectCode` |
+| `TimeClock` | Employee shift clock-in / clock-out + admin payroll history |
 | `Transfers` | Transfer CRUD + cancellation flow |
 | `TVDisplay` | Rate-board addon, public display, Fire TV pairing |
 | `Webhooks` | Stripe + Resend ingest |
