@@ -25,6 +25,7 @@ import {
   tokens,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
+import { PeakHoursHeatmap } from "../components/PeakHoursHeatmap";
 import { getOpenStatus } from "../lib/datetime";
 
 // Role-shaped dashboard. /api/v2/dashboard/summary returns one
@@ -125,6 +126,7 @@ function AdminPanel({ d }: { d: AdminDashboard }) {
   const monthName = monthShort(d.today);
   return (
     <>
+      <PeakHoursHeatmap days={30} />
       <KpiGrid>
         <KpiCard label="Total Transfers" value={d.kpis.total_transfers.toLocaleString()} sub="All time" />
         <KpiCard

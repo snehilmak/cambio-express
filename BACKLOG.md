@@ -885,8 +885,14 @@ gaps. Ordered by "what I'd do next" at the top.
       create / update with 422 when the toggle is on and
       outside hours. Settings page exposes the toggle right
       under the 7-day editor.
-      Pending follow-ups (own backlog items): peak-hour
-      heatmap on the dashboard.
+      Peak-hour heatmap landed too: new
+      ``GET /api/v2/dashboard/peak-hours?days=N`` aggregates
+      transfers into a 7×24 grid keyed on (weekday, hour-of-day)
+      in the store's local timezone. Admin dashboard renders
+      it via ``PeakHoursHeatmap`` — neon-green intensity ramp,
+      dashed amber outline on cells outside the configured
+      ``store_hours`` window so off-hours activity stands out.
+      Excludes canceled / rejected transfers from the counts.
 - [~] **Receipt customization** — built but currently HIDDEN.
       DineroBook is a ledger, not a money-transmitter, so the
       customer-facing receipt surface doesn't fit the product

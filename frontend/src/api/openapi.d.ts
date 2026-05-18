@@ -1966,6 +1966,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/dashboard/peak-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dashboard Peak Hours
+         * @description 7×24 heatmap of transfer activity over the last ``days``
+         *     days (default 30). Bucketed by weekday × hour-of-day in
+         *     the store's local timezone — feeds the dashboard heatmap
+         *     card.
+         *
+         *     Admin / employee roles tied to a single store. Owners and
+         *     superadmin without a store_id get 400 (they aggregate
+         *     across umbrellas via /owner/* instead).
+         */
+        get: operations["dashboard_peak_hours_dashboard_peak_hours_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/dashboard/summary": {
         parameters: {
             query?: never;
@@ -11380,6 +11407,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DailyReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dashboard_peak_hours_dashboard_peak_hours_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -279,3 +279,41 @@ def dashboard_summary(
         status_code=403,
         detail=f"Dashboard not available for role={role!r}.",
     )
+
+
+@router.get("/peak-hours")
+def dashboard_peak_hours(
+    days: int = 30,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+):
+    """7×24 heatmap of transfer activity over the last ``days``
+    days (default 30). Bucketed by weekday × hour-of-day in
+    the store's local timezone — feeds the dashboard heatmap
+    card.
+
+    Admin / employee roles tied to a single store. Owners and
+    superadmin without a store_id get 400 (they aggregate
+    across umbrellas via /owner/* instead).
+    """
+    role = claims.get("role")
+    store_id = claims.get("store_id")
+    if not store_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No store context — owners use /api/v2/owner/*.",
+        )
+    if role not in ("admin", "employee", "owner", "superadmin"):
+        raise HTTPException(status_code=403, detail="Role not allowed.")
+    if days < 1 or days > 365:
+        raise HTTPException(
+            status_code=422,
+            detail="``days`` must be between 1 and 365.",
+        )
+    from api.Modules.Dashboard.Services import compute_peak_hours
+    from datetime import timedelta
+    now = datetime.utcnow()
+    start = now - timedelta(days=days)
+    return compute_peak_hours(
+        db, store_id=int(store_id), start=start, end=now,
+    )
