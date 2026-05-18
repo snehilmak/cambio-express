@@ -289,9 +289,10 @@ export async function updateStoreInfo(
 // ── Team roster ────────────────────────────────────────────
 
 export interface TeamMemberRow {
-  id: number;
-  name: string;
-  is_active: boolean;
+  id:          number;
+  name:        string;
+  is_active:   boolean;
+  hourly_rate: number;
 }
 
 export function useTeam() {
@@ -304,16 +305,18 @@ export function useTeam() {
   });
 }
 
-export async function createTeamMember(name: string): Promise<TeamMemberRow> {
+export async function createTeamMember(
+  name: string, hourly_rate = 0,
+): Promise<TeamMemberRow> {
   return api<TeamMemberRow>(
     "/api/v2/admin/team",
-    { method: "POST", json: { name } },
+    { method: "POST", json: { name, hourly_rate } },
   );
 }
 
 export async function updateTeamMember(
   id: number,
-  body: { name?: string; is_active?: boolean },
+  body: { name?: string; is_active?: boolean; hourly_rate?: number },
 ): Promise<TeamMemberRow> {
   return api<TeamMemberRow>(
     `/api/v2/admin/team/${id}`,

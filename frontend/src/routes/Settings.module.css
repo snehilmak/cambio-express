@@ -196,3 +196,15 @@
   color: var(--db-text-muted, #a3a3a3);
   font-weight: 400;
 }
+
+.rateGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0.4rem;
+}
+
+.rateLabel {
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+}

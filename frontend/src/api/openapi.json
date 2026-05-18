@@ -4562,6 +4562,116 @@
         "title": "OwnerUnlinkRequest",
         "type": "object"
       },
+      "PaystubResponse": {
+        "additionalProperties": false,
+        "description": "Pay summary for one roster member over a date range.\n\n``approved_hours \u00d7 hourly_rate = gross_pay``. Pending /\nrejected shifts are listed alongside but don't count\ntoward gross pay \u2014 the admin approves them on the payroll\npage first.",
+        "properties": {
+          "approved_hours": {
+            "title": "Approved Hours",
+            "type": "number"
+          },
+          "employee_name": {
+            "title": "Employee Name",
+            "type": "string"
+          },
+          "from_date": {
+            "title": "From Date",
+            "type": "string"
+          },
+          "gross_pay": {
+            "title": "Gross Pay",
+            "type": "number"
+          },
+          "hourly_rate": {
+            "title": "Hourly Rate",
+            "type": "number"
+          },
+          "shifts": {
+            "items": {
+              "$ref": "#/components/schemas/PaystubShiftRow"
+            },
+            "title": "Shifts",
+            "type": "array"
+          },
+          "store_employee_id": {
+            "title": "Store Employee Id",
+            "type": "integer"
+          },
+          "to_date": {
+            "title": "To Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_employee_id",
+          "employee_name",
+          "hourly_rate",
+          "approved_hours",
+          "gross_pay",
+          "from_date",
+          "to_date",
+          "shifts"
+        ],
+        "title": "PaystubResponse",
+        "type": "object"
+      },
+      "PaystubShiftRow": {
+        "additionalProperties": false,
+        "description": "One shift line on the printable paystub. Mirrors the\nTime-clock entry shape but tightened so the print view\ndoesn't have to defend against nulls.",
+        "properties": {
+          "clock_in_at": {
+            "title": "Clock In At",
+            "type": "string"
+          },
+          "clock_out_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clock Out At"
+          },
+          "hours_worked": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours Worked"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "notes": {
+            "default": "",
+            "title": "Notes",
+            "type": "string"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "approved",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "clock_in_at"
+        ],
+        "title": "PaystubShiftRow",
+        "type": "object"
+      },
       "PeriodSummaryResponse": {
         "additionalProperties": false,
         "description": "Date-range payload. `rows` are per-day; summary fields are\nsums across them.",
@@ -7197,6 +7307,13 @@
       "TeamMemberCreateRequest": {
         "additionalProperties": false,
         "properties": {
+          "hourly_rate": {
+            "default": 0.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Hourly Rate",
+            "type": "number"
+          },
           "name": {
             "maxLength": 120,
             "minLength": 1,
@@ -7213,6 +7330,11 @@
       "TeamMemberRow": {
         "additionalProperties": false,
         "properties": {
+          "hourly_rate": {
+            "default": 0.0,
+            "title": "Hourly Rate",
+            "type": "number"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -7238,6 +7360,19 @@
         "additionalProperties": false,
         "description": "PATCH-style update \u2014 fields omitted are left alone.",
         "properties": {
+          "hourly_rate": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Rate"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -9572,6 +9707,102 @@
           }
         },
         "summary": "Admin Credentials Register Finish Route",
+        "tags": [
+          "timeclock"
+        ]
+      }
+    },
+    "/admin/timeclock/paystub/{store_employee_id}": {
+      "get": {
+        "description": "Paystub for the picked roster member over ``[from, to)``.\n\nReturns the approved hours, the hourly rate from the\ncashier's roster row, and the resulting gross pay. The\nshifts list itemizes every entry that started in the\nwindow (any status) so the admin can spot pending /\nrejected rows that aren't counted.\n\nAdmin / owner / superadmin only \u2014 payroll data is\nsensitive enough that cashiers can't pull each other's\nsummary.",
+        "operationId": "admin_paystub_route_admin_timeclock_paystub__store_employee_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store_employee_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Store Employee Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaystubResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Admin Paystub Route",
         "tags": [
           "timeclock"
         ]

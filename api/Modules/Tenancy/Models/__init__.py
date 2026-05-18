@@ -224,6 +224,12 @@ class StoreEmployee(Base):
     name       = Column(String(120), nullable=False)
     is_active  = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Pay rate in USD/hour for the paystub computation. Default
+    # 0.0 means "rate not configured" — the paystub view shows
+    # the gross-pay column as a dash and the admin sets the
+    # value from the Team settings page. A negative rate doesn't
+    # make sense; the admin endpoint enforces ``>= 0``.
+    hourly_rate = Column(Float, default=0.0, nullable=False)
 
 
 class StoreOwnerLink(Base):

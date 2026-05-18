@@ -1,0 +1,143 @@
+/* Page-specific styles for TimeClockPaystub.tsx. Print-CSS
+ * strips the chrome so the sheet fills an 8.5x11 page when
+ * the operator clicks Print.
+ */
+
+.paystub {
+  background: var(--db-surface, #0d0d0d);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.75rem;
+  padding: 1.75rem 2rem;
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--db-border, #262626);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.headerLeft {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.headerSub {
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.summaryTile {
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.summaryLabel {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-bottom: 0.25rem;
+}
+
+.summaryValue {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.grossPay {
+  color: var(--db-accent, #3fff00);
+}
+
+.shifts {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.shifts th,
+.shifts td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--db-border, #262626);
+  text-align: left;
+}
+
+.shifts th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  color: var(--db-text-muted, #a3a3a3);
+  letter-spacing: 0.05em;
+}
+
+.mono {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+}
+
+.statusPending  { color: #ffb800; }
+.statusApproved { color: var(--db-accent, #3fff00); }
+.statusRejected { color: #ff4141; }
+
+.footer {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--db-border, #262626);
+  font-size: 0.78rem;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.printbar {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+/* Print-only overrides so the operator gets a clean letter-sized
+ * page without the SPA chrome. Inspired by the (now-hidden)
+ * transfer receipt print path. */
+@media print {
+  :global(body),
+  :global(html) {
+    background: white !important;
+    color: black !important;
+  }
+  :global(.app-sidebar),
+  :global(.app-topbar),
+  :global(nav),
+  .printbar {
+    display: none !important;
+  }
+  .paystub {
+    background: white !important;
+    color: black !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .summaryTile {
+    border-color: #ccc !important;
+  }
+  .summaryValue,
+  .grossPay,
+  .statusApproved,
+  .statusPending,
+  .statusRejected {
+    color: black !important;
+  }
+  .shifts th,
+  .shifts td {
+    border-color: #ccc !important;
+  }
+}

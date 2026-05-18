@@ -1344,3 +1344,191 @@ def test_punch_challenge_returns_options_and_token(client, test_store_id):
     claims = decode_assert_token(body["assert_token"])
     assert claims["store_id"] == test_store_id
     assert claims["store_employee_id"] == emp_id
+
+
+# ── Paystub (v2 payroll) ────────────────────────────────────
+
+
+def _set_rate(emp_id: int, rate: float) -> None:
+    from api.Modules.Tenancy.Models import StoreEmployee
+    with db_session():
+        emp = db.session.get(StoreEmployee, emp_id)
+        emp.hourly_rate = rate
+        db.session.commit()
+
+
+def test_paystub_computes_gross_pay_from_approved_hours(
+    client, test_store_id,
+):
+    """Approved closed shifts × hourly_rate = gross pay.
+    Pending / rejected / open shifts are excluded from the
+    total but still appear in the itemized list."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    today_dt = datetime.combine(date.today(), datetime.min.time())
+    anchor   = today_dt + timedelta(hours=12)
+    with db_session():
+        emp = _seed_employee(test_store_id, name="Paystub Patty")
+    _set_rate(emp, 18.50)
+    with db_session():
+        # Approved: 2.0 hours
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=4),
+            clock_out_at=anchor - timedelta(hours=2),
+            hours_worked=2.0, status="approved",
+        ))
+        # Approved: 3.5 hours
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=8),
+            clock_out_at=anchor - timedelta(hours=4, minutes=30),
+            hours_worked=3.5, status="approved",
+        ))
+        # Pending — excluded from gross.
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=10),
+            clock_out_at=anchor - timedelta(hours=9),
+            hours_worked=1.0, status="pending",
+        ))
+        # Rejected — excluded from gross.
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=11),
+            clock_out_at=anchor - timedelta(hours=10),
+            hours_worked=1.0, status="rejected",
+        ))
+        # Open — excluded from gross even when status=approved
+        # (no clock_out_at yet).
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(minutes=30),
+            status="approved",
+        ))
+        db.session.commit()
+    token = _login(client, test_store_id)
+    today    = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    resp = client.get(
+        f"/api/v2/admin/timeclock/paystub/{emp}?from={today}&to={tomorrow}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["employee_name"] == "Paystub Patty"
+    assert body["hourly_rate"]    == 18.5
+    assert body["approved_hours"] == 5.5
+    assert body["gross_pay"]      == 101.75
+    assert len(body["shifts"])    == 5
+
+
+def test_paystub_zero_rate_yields_zero_pay(client, test_store_id):
+    """A roster member without an hourly rate set returns
+    gross_pay = 0.0 — the print view shows a dash."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    today_dt = datetime.combine(date.today(), datetime.min.time())
+    anchor   = today_dt + timedelta(hours=12)
+    with db_session():
+        emp = _seed_employee(test_store_id, name="No Rate")
+        db.session.add(TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp,
+            clock_in_at=anchor - timedelta(hours=2),
+            clock_out_at=anchor - timedelta(hours=1),
+            hours_worked=1.0, status="approved",
+        ))
+        db.session.commit()
+    token = _login(client, test_store_id)
+    today    = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    resp = client.get(
+        f"/api/v2/admin/timeclock/paystub/{emp}?from={today}&to={tomorrow}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    body = resp.get_json()
+    assert body["hourly_rate"]    == 0.0
+    assert body["approved_hours"] == 1.0
+    assert body["gross_pay"]      == 0.0
+
+
+def test_paystub_404s_cross_tenant_roster(client, test_store_id):
+    with db_session():
+        other_store_id = _seed_other_store()
+        other_emp = _seed_employee(other_store_id, name="Far Paystub")
+    token = _login(client, test_store_id)
+    today    = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    resp = client.get(
+        f"/api/v2/admin/timeclock/paystub/{other_emp}?from={today}&to={tomorrow}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
+def test_paystub_rejects_employee_role(client, test_store_id):
+    """Cashiers can't pull other cashiers' paystubs — payroll
+    data is sensitive."""
+    with db_session():
+        emp = _seed_employee(test_store_id, name="Locked Down")
+    token = _employee_login(client, test_store_id)
+    today    = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+    resp = client.get(
+        f"/api/v2/admin/timeclock/paystub/{emp}?from={today}&to={tomorrow}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_paystub_rejects_inverted_window(client, test_store_id):
+    with db_session():
+        emp = _seed_employee(test_store_id, name="Invert")
+    token = _login(client, test_store_id)
+    resp = client.get(
+        f"/api/v2/admin/timeclock/paystub/{emp}"
+        f"?from=2026-05-15&to=2026-05-01",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+
+
+# ── Team hourly_rate plumbing ───────────────────────────────
+
+
+def test_team_create_accepts_hourly_rate(client, test_store_id):
+    """The Settings → Team create endpoint accepts hourly_rate
+    so the admin can set it at the same time as the cashier
+    name."""
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/team",
+        json={"name": "Rate Setter", "hourly_rate": 22.75},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["hourly_rate"] == 22.75
+
+
+def test_team_update_changes_hourly_rate(client, test_store_id):
+    """A PATCH on the team endpoint can flip the rate without
+    touching the name."""
+    with db_session():
+        emp = _seed_employee(test_store_id, name="Bump Rate")
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/admin/team/{emp}",
+        json={"hourly_rate": 30.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.get_json()["hourly_rate"] == 30.0
+
+
+def test_team_rejects_negative_rate(client, test_store_id):
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/admin/team",
+        json={"name": "Neg Rate", "hourly_rate": -1.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

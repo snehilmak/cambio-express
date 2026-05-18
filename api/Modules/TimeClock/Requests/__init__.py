@@ -195,3 +195,42 @@ class PunchChallengeResponse(BaseModel):
 
     options_json: str
     assert_token: str
+
+
+# ── Paystub ─────────────────────────────────────────────────
+
+
+class PaystubShiftRow(BaseModel):
+    """One shift line on the printable paystub. Mirrors the
+    Time-clock entry shape but tightened so the print view
+    doesn't have to defend against nulls."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id:            int
+    clock_in_at:   str
+    clock_out_at:  str | None = None
+    hours_worked:  float | None = None
+    status:        TimeClockStatus = "pending"
+    notes:         str = ""
+
+
+class PaystubResponse(BaseModel):
+    """Pay summary for one roster member over a date range.
+
+    ``approved_hours × hourly_rate = gross_pay``. Pending /
+    rejected shifts are listed alongside but don't count
+    toward gross pay — the admin approves them on the payroll
+    page first.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int
+    employee_name:     str
+    hourly_rate:       float
+    approved_hours:    float
+    gross_pay:         float
+    from_date:         str           # YYYY-MM-DD
+    to_date:           str           # YYYY-MM-DD (half-open)
+    shifts:            list[PaystubShiftRow]

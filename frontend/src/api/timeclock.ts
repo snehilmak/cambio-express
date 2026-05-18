@@ -242,3 +242,46 @@ export function adminDeleteCredential(
     { method: "DELETE" },
   );
 }
+
+
+// ── Paystub (v2 payroll) ────────────────────────────────────
+
+export interface PaystubShiftRow {
+  id:            number;
+  clock_in_at:   string;
+  clock_out_at:  string | null;
+  hours_worked:  number | null;
+  status:        TimeClockStatus;
+  notes:         string;
+}
+
+export interface PaystubResponse {
+  store_employee_id: number;
+  employee_name:     string;
+  hourly_rate:       number;
+  approved_hours:    number;
+  gross_pay:         number;
+  from_date:         string;
+  to_date:           string;
+  shifts:            PaystubShiftRow[];
+}
+
+export function usePaystub(
+  storeEmployeeId: number | null, from: string, to: string,
+) {
+  return useQuery<PaystubResponse>({
+    queryKey: [
+      "timeclock", "paystub",
+      storeEmployeeId ?? 0, from, to,
+    ],
+    queryFn: () =>
+      api<PaystubResponse>(
+        `/api/v2/admin/timeclock/paystub/${storeEmployeeId}`
+        + `?from=${encodeURIComponent(from)}`
+        + `&to=${encodeURIComponent(to)}`,
+      ),
+    enabled: storeEmployeeId != null
+             && storeEmployeeId > 0
+             && Boolean(from && to),
+  });
+}
