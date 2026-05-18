@@ -74,9 +74,15 @@ export default function HomeHub() {
                 >
                   <span className={styles.tileIcon}>{item.icon}</span>
                   <span>{item.label}</span>
-                  <span className={styles.tileCount}>
-                    {count === 1 ? "1 visit" : `${count} visits`}
-                  </span>
+                  {/* Only surface the visit counter once a route
+                      reads as a real habit (3+ visits).  Below
+                      that the number is noise — every first-day
+                      user would see "1 visit" on every tile. */}
+                  {count >= 3 && (
+                    <span className={styles.tileCount}>
+                      {`${count} visits`}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>
