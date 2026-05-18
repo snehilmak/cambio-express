@@ -5,6 +5,7 @@ import { useProfile } from "../api/account";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { InstallAppButton } from "./InstallAppButton";
 import ThemeToggle from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
@@ -110,6 +111,7 @@ const NAV: NavGroup[] = [
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
       { to: "/admin/timeclock",              label: "Payroll",            icon: iconClock() },
       { to: "/admin/timeclock/credentials",  label: "Punch credentials",  icon: iconClock() },
+      { to: "/admin/data-export",            label: "Data export",        icon: iconReports() },
     ],
   },
   {
@@ -352,6 +354,7 @@ function Topbar({
         </svg>
       </button>
       <span style={topbarSpacer} />
+      <InstallAppButton />
       <ThemeToggle />
       <UserMenu identity={identity} onSignOut={onSignOut} />
     </header>

@@ -1,0 +1,43 @@
+/* Topbar "Install app" button — only renders when the
+ * ``beforeinstallprompt`` event has fired (Chrome / Edge /
+ * Brave on desktop + Android). On iOS Safari + macOS Safari
+ * the OS-level Share menu handles install, so the button
+ * stays hidden — we surface a tooltip-style hint instead via
+ * the ``title`` attribute.
+ */
+
+.button {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--db-border, #262626);
+  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
+  color: var(--db-text, #f5f5f5);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, transform 120ms ease,
+              border-color 120ms ease;
+}
+
+.button:hover {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.15));
+  color: var(--db-accent, #3fff00);
+  border-color: var(--db-accent, #3fff00);
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+/* Hide the label on narrow screens — keep just the icon. */
+.label {
+  white-space: nowrap;
+}
+
+@media (max-width: 30rem) {
+  .label { display: none; }
+}
