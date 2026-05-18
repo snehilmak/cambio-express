@@ -198,10 +198,187 @@ def _require_roster_member(
     return emp
 
 
+# ── Admin CRUD ──────────────────────────────────────────────
+
+
+class EntryNotFoundError(ValueError):
+    """The targeted ``TimeClockEntry`` does not exist or
+    belongs to a different store than the caller's JWT scope."""
+
+
+def _compute_hours(
+    clock_in_at: datetime, clock_out_at: datetime | None,
+) -> float | None:
+    """Mirrors ``clock_out`` math so an admin-edited entry
+    matches what a normal punch would produce. Returns None
+    when the entry is still open."""
+    if clock_out_at is None:
+        return None
+    delta = clock_out_at - clock_in_at
+    return round(delta.total_seconds() / 3600, 4)
+
+
+def admin_create_entry(
+    db: Session,
+    *,
+    store_id: int,
+    store_employee_id: int,
+    clock_in_at: datetime,
+    clock_out_at: datetime | None,
+    notes: str = "",
+) -> tuple[TimeClockEntry, str]:
+    """Back-fill an entry for the roster member at the given
+    timestamps. Used when an operator forgot to punch and the
+    admin reconstructs the shift after the fact.
+
+    Returns ``(entry, audit_summary)`` — the controller writes
+    the audit row. The summary captures the seed values so the
+    later history view can replay how the row got created.
+
+    Caller commits.
+    """
+    emp = _require_roster_member(db, store_id, store_employee_id)
+    if clock_out_at is not None and clock_out_at <= clock_in_at:
+        raise ValueError("clock_out_at must be after clock_in_at.")
+    entry = TimeClockEntry(
+        store_id=store_id,
+        store_employee_id=store_employee_id,
+        clock_in_at=clock_in_at,
+        clock_out_at=clock_out_at,
+        hours_worked=_compute_hours(clock_in_at, clock_out_at),
+        notes=(notes or "")[:500],
+    )
+    db.add(entry)
+    db.flush()
+    hours_str = (
+        f"{entry.hours_worked:.2f}h"
+        if entry.hours_worked is not None else "open"
+    )
+    summary = (
+        f"Admin create · {emp.name} · "
+        f"{clock_in_at.isoformat()} → "
+        f"{clock_out_at.isoformat() if clock_out_at else 'open'} "
+        f"({hours_str})"
+    )
+    return entry, summary
+
+
+# Fields the admin can edit on an existing entry. Anything else
+# (store_id, store_employee_id) requires deleting + recreating —
+# moving an entry to a different person is a different concept
+# than fixing its times.
+_ADMIN_EDITABLE_FIELDS: tuple[str, ...] = (
+    "clock_in_at", "clock_out_at", "notes",
+)
+
+
+def admin_update_entry(
+    db: Session,
+    *,
+    entry_id: int,
+    store_id: int,
+    patch: dict,
+) -> tuple[TimeClockEntry, str]:
+    """Apply admin edits to an entry. ``patch`` is a dict keyed
+    on the editable fields (``clock_in_at`` / ``clock_out_at``
+    as ``datetime`` or None, ``notes`` as str). Unknown keys
+    raise ``ValueError``; missing keys are left untouched.
+
+    Recomputes ``hours_worked`` whenever either timestamp
+    changes (or when the row is opened by clearing
+    ``clock_out_at``). Captures a field-level diff in the
+    returned summary so the audit view shows what changed.
+
+    Caller commits.
+    """
+    entry = db.get(TimeClockEntry, entry_id)
+    if entry is None or entry.store_id != store_id:
+        raise EntryNotFoundError(
+            "That time-clock entry does not belong to this store.",
+        )
+    diffs: list[str] = []
+    for k, v in patch.items():
+        if k not in _ADMIN_EDITABLE_FIELDS:
+            raise ValueError(f"Field {k!r} is not admin-editable.")
+        old = getattr(entry, k)
+        if old == v:
+            continue
+        diffs.append(f"{k}: {_fmt(old)} → {_fmt(v)}")
+        setattr(entry, k, v)
+    # Always re-validate the open<close invariant after the
+    # patch — a partial patch could land an out-of-order pair.
+    if entry.clock_out_at is not None and entry.clock_out_at <= entry.clock_in_at:
+        raise ValueError("clock_out_at must be after clock_in_at.")
+    # Recompute hours whenever the times could have changed.
+    new_hours = _compute_hours(entry.clock_in_at, entry.clock_out_at)
+    if new_hours != entry.hours_worked:
+        diffs.append(
+            f"hours_worked: {_fmt(entry.hours_worked)} → {_fmt(new_hours)}",
+        )
+        entry.hours_worked = new_hours
+    db.flush()
+    if not diffs:
+        summary = "Admin update · no-op (no fields changed)"
+    else:
+        summary = "Admin update · " + "; ".join(diffs)
+    return entry, summary
+
+
+def admin_delete_entry(
+    db: Session,
+    *,
+    entry_id: int,
+    store_id: int,
+) -> tuple[int, str]:
+    """Remove an entry. Returns ``(store_employee_id,
+    audit_summary)`` so the controller can write the audit row
+    against the still-known roster id (the entry's gone after
+    commit). Caller commits.
+    """
+    entry = db.get(TimeClockEntry, entry_id)
+    if entry is None or entry.store_id != store_id:
+        raise EntryNotFoundError(
+            "That time-clock entry does not belong to this store.",
+        )
+    emp = db.get(StoreEmployee, entry.store_employee_id)
+    emp_name = emp.name if emp else f"#{entry.store_employee_id}"
+    hours_str = (
+        f"{entry.hours_worked:.2f}h"
+        if entry.hours_worked is not None else "open"
+    )
+    summary = (
+        f"Admin delete · {emp_name} · "
+        f"{entry.clock_in_at.isoformat()} → "
+        f"{entry.clock_out_at.isoformat() if entry.clock_out_at else 'open'} "
+        f"({hours_str})"
+    )
+    store_employee_id = entry.store_employee_id
+    db.delete(entry)
+    db.flush()
+    return store_employee_id, summary
+
+
+def _fmt(value) -> str:
+    """Audit-summary formatter — keeps ``None`` legible and
+    trims long strings so the audit row stays readable."""
+    if value is None:
+        return "—"
+    if isinstance(value, datetime):
+        return value.isoformat()
+    s = str(value)
+    if len(s) > 60:
+        return s[:57] + "…"
+    return s
+
+
 __all__ = [
     "AlreadyClockedInError",
+    "EntryNotFoundError",
     "NotClockedInError",
     "RosterEmployeeNotFoundError",
+    "admin_create_entry",
+    "admin_delete_entry",
+    "admin_update_entry",
     "clock_in",
     "clock_out",
     "entries_for_period",

@@ -34,3 +34,95 @@
   color: var(--db-text-muted, #a3a3a3);
   font-style: italic;
 }
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.rowActions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.historyRow {
+  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
+}
+
+.historyList {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.historyItem {
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.4rem;
+}
+
+.historyHeader {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.historyAction {
+  font-family: var(--db-font-mono, "JetBrains Mono", monospace);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--db-accent, #3fff00);
+}
+
+.historyActor {
+  color: var(--db-text-muted, #a3a3a3);
+  font-size: 0.78rem;
+}
+
+.historySummary {
+  margin-top: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--db-text, #f5f5f5);
+}
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modalCard {
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 32rem;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modalGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}

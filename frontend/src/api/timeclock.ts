@@ -85,3 +85,68 @@ export function useAdminTimeClock(
     enabled: Boolean(from && to),
   });
 }
+
+
+// ── Admin CRUD ──────────────────────────────────────────────
+
+export interface AdminCreateEntryBody {
+  store_employee_id: number;
+  clock_in_at:       string;          // ISO-8601, e.g. "2026-05-15T09:00"
+  clock_out_at:      string | null;   // omit / null → open entry
+  notes:             string;
+}
+
+export interface AdminUpdateEntryBody {
+  /** Set explicitly to ``null`` (not undefined) to re-open the entry. */
+  clock_in_at?:  string;
+  clock_out_at?: string | null;
+  notes?:        string;
+}
+
+export function adminCreateEntry(
+  body: AdminCreateEntryBody,
+): Promise<TimeClockPunchResponse> {
+  return api<TimeClockPunchResponse>("/api/v2/admin/timeclock", {
+    method: "POST",
+    json: body,
+  });
+}
+
+export function adminUpdateEntry(
+  id: number, body: AdminUpdateEntryBody,
+): Promise<TimeClockPunchResponse> {
+  return api<TimeClockPunchResponse>(`/api/v2/admin/timeclock/${id}`, {
+    method: "PUT",
+    json: body,
+  });
+}
+
+export function adminDeleteEntry(id: number): Promise<void> {
+  return api<void>(`/api/v2/admin/timeclock/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export interface TimeClockHistoryRow {
+  id:         number;
+  at:         string;     // ISO-8601 UTC
+  actor:      string;
+  actor_role: string;
+  action:     string;
+  summary:    string;
+}
+
+export interface TimeClockHistoryResponse {
+  rows: TimeClockHistoryRow[];
+}
+
+export function useTimeClockHistory(entryId: number | null) {
+  return useQuery<TimeClockHistoryResponse>({
+    queryKey: ["timeclock", "history", entryId ?? 0],
+    queryFn: () =>
+      api<TimeClockHistoryResponse>(
+        `/api/v2/admin/timeclock/${entryId}/history`,
+      ),
+    enabled: entryId != null && entryId > 0,
+  });
+}

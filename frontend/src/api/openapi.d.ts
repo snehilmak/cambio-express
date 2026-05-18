@@ -273,6 +273,61 @@ export interface paths {
          */
         get: operations["admin_entries_route_admin_timeclock_get"];
         put?: never;
+        /**
+         * Admin Create Route
+         * @description Admin back-fill: create a TimeClockEntry from scratch.
+         *     Use case: cashier forgot to punch and the admin reconstructs
+         *     the shift from memory / camera footage / a paper sign-in.
+         */
+        post: operations["admin_create_route_admin_timeclock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Admin Update Route
+         * @description Admin edit: replace timestamps / notes on an existing
+         *     entry. Hours are recomputed. Field-level diff lands in the
+         *     audit summary.
+         */
+        put: operations["admin_update_route_admin_timeclock__entry_id__put"];
+        post?: never;
+        /**
+         * Admin Delete Route
+         * @description Admin remove. Rare — typically only for entries that
+         *     were back-filled in error. The audit chain still surfaces
+         *     the deletion.
+         */
+        delete: operations["admin_delete_route_admin_timeclock__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/{entry_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Entry History Route
+         * @description Per-entry audit chain — every clock-in, clock-out, and
+         *     admin mutation that touched this row. Reverse-chronological.
+         */
+        get: operations["admin_entry_history_route_admin_timeclock__entry_id__history_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3537,6 +3592,50 @@ export interface components {
             label: string;
             /** Role */
             role: string;
+        };
+        /**
+         * AdminCreateEntryRequest
+         * @description Admin-side back-fill payload. Picks the roster member,
+         *     sets the clock-in time, optionally the clock-out time
+         *     (skip for an open / in-progress entry the admin will close
+         *     later) and an explanatory note.
+         *
+         *     Timestamps are ISO-8601 strings the SPA writes from a
+         *     ``<input type=datetime-local>`` — server parses them as
+         *     UTC ``datetime`` objects to match the normal punch path.
+         */
+        AdminCreateEntryRequest: {
+            /** Clock In At */
+            clock_in_at: string;
+            /** Clock Out At */
+            clock_out_at?: string | null;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /** Store Employee Id */
+            store_employee_id: number;
+        };
+        /**
+         * AdminUpdateEntryRequest
+         * @description Admin-side edit. Every field is optional — a partial
+         *     PUT leaves omitted fields alone. ``clock_out_at`` may be
+         *     explicitly set to None (use ``clock_out_at: null`` in JSON)
+         *     to re-open a closed shift; the server distinguishes
+         *     "not in payload" from "set to null" via ``model_fields_set``.
+         *
+         *     Notes is replace-not-append (it's an admin override —
+         *     cashier-supplied notes survive only when the admin leaves
+         *     the field out of the patch).
+         */
+        AdminUpdateEntryRequest: {
+            /** Clock In At */
+            clock_in_at?: string | null;
+            /** Clock Out At */
+            clock_out_at?: string | null;
+            /** Notes */
+            notes?: string | null;
         };
         /** AdminUserCreateRequest */
         AdminUserCreateRequest: {
@@ -7155,6 +7254,35 @@ export interface components {
             store_employee_id: number;
         };
         /**
+         * TimeClockHistoryResponse
+         * @description The audit chain for one entry — wired to
+         *     ``GET /admin/timeclock/{id}/history``.
+         */
+        TimeClockHistoryResponse: {
+            /** Rows */
+            rows: components["schemas"]["TimeClockHistoryRow"][];
+        };
+        /**
+         * TimeClockHistoryRow
+         * @description One audit-log row for a time-clock entry. Returned in
+         *     reverse-chronological order so the most recent change
+         *     surfaces first in the SPA panel.
+         */
+        TimeClockHistoryRow: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /** Actor Role */
+            actor_role: string;
+            /** At */
+            at: string;
+            /** Id */
+            id: number;
+            /** Summary */
+            summary: string;
+        };
+        /**
          * TimeClockPunchResponse
          * @description Returned by both clock-in and clock-out — the freshly-
          *     modified entry. Keeps the SPA from needing a follow-up
@@ -8020,6 +8148,150 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimeClockEntryList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_create_route_admin_timeclock_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminCreateEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_update_route_admin_timeclock__entry_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUpdateEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_delete_route_admin_timeclock__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_entry_history_route_admin_timeclock__entry_id__history_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                entry_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TimeClockHistoryResponse"];
                 };
             };
             /** @description Validation Error */
