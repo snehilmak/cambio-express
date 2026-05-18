@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- PWA: links the manifest + theme color so the SPA can be
+         installed as a standalone app on Chrome / Edge / Safari.
+         The service worker registers from src/lib/installPrompt.ts
+         once the app boots. -->
+    <link rel="manifest" href="/static/manifest.webmanifest" />
+    <meta name="theme-color" content="#0f1f3d" />
     <!--
       Design-system tokens (colors, fonts, spacing) live in
       /static/design-tokens.css. Both [data-theme="dark"] and

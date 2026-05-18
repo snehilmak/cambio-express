@@ -4,12 +4,20 @@ import { BrowserRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import App from "./App";
+import { registerServiceWorker } from "./lib/installPrompt";
 import { initSentry } from "./lib/sentry";
 import "./styles.css";
 
 // No-op when VITE_SENTRY_DSN is empty (CI, local dev). Activates and
 // hooks browserTracing + ErrorBoundary integrations otherwise.
 initSentry();
+
+// Wire the PWA service worker. Idempotent — the browser dedups
+// the registration if a logged-out Jinja page already kicked
+// it off. Required for the install prompt to fire on Chrome /
+// Edge (the SPA shell needs an active SW + manifest before
+// ``beforeinstallprompt`` is dispatched).
+registerServiceWorker();
 
 // Single QueryClient for the SPA. Defaults are conservative: we don't
 // auto-refetch on window focus (financial data is rarely stale enough

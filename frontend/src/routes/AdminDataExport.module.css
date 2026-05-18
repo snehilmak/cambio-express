@@ -1,0 +1,47 @@
+/* Data export catalog page. */
+
+.intro {
+  font-size: 0.9rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin: 0 0 1.5rem;
+}
+
+.exportRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--db-border, #262626);
+  flex-wrap: wrap;
+}
+
+.exportRow:last-child {
+  border-bottom: 0;
+}
+
+.exportText {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.exportName {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.exportDesc {
+  font-size: 0.85rem;
+  color: var(--db-text-muted, #a3a3a3);
+  margin-top: 0.25rem;
+}
+
+.exportControls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.errorRow {
+  margin: 0.4rem 0;
+}
