@@ -245,8 +245,11 @@ function TeamCard() {
   const identity = getCurrentIdentity();
   const { data, isLoading, isError } = useTeam();
   const [newName, setNewName] = useState("");
+  const [newRate, setNewRate] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [rateDraftById, setRateDraftById] =
+    useState<Record<number, string>>({});
   const canEdit =
     identity?.role === "admin" ||
     identity?.role === "owner" ||
@@ -263,13 +266,39 @@ function TeamCard() {
     setErr(null);
     setBusy(true);
     try {
-      await createTeamMember(newName);
-      setNewName("");
+      const rate = Number(newRate);
+      await createTeamMember(
+        newName,
+        Number.isFinite(rate) && rate >= 0 ? rate : 0,
+      );
+      setNewName(""); setNewRate("");
       refetch();
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : "Couldn't add member");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function saveRate(m: TeamMemberRow) {
+    setErr(null);
+    const raw = rateDraftById[m.id];
+    if (raw == null) return;
+    const rate = Number(raw);
+    if (!Number.isFinite(rate) || rate < 0) {
+      setErr("Hourly rate must be a non-negative number.");
+      return;
+    }
+    try {
+      await updateTeamMember(m.id, { hourly_rate: rate });
+      setRateDraftById((prev) => {
+        const next = { ...prev };
+        delete next[m.id];
+        return next;
+      });
+      refetch();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : "Couldn't update rate");
     }
   }
 
@@ -317,32 +346,58 @@ function TeamCard() {
           {data.members.length === 0 && (
             <li className={styles.emptyRow}>No team members yet.</li>
           )}
-          {data.members.map((m) => (
-            <li key={m.id} className={styles.rowTeam}>
-              <span className={m.is_active ? styles.memberActive : styles.memberInactive}>
-                {m.name}
-              </span>
-              {canEdit && (
-                <>
-                  <Button
-                    tone="secondary" size="sm"
-                    onClick={() => toggle(m)}
-                    title={m.is_active ? "Deactivate" : "Reactivate"}
-                  >
-                    {m.is_active ? "Deactivate" : "Reactivate"}
-                  </Button>
-                  {m.is_active && (
+          {data.members.map((m) => {
+            const draft = rateDraftById[m.id];
+            const displayRate = draft != null
+              ? draft
+              : (m.hourly_rate || 0).toFixed(2);
+            return (
+              <li key={m.id} className={styles.rowTeam}>
+                <span className={m.is_active ? styles.memberActive : styles.memberInactive}>
+                  {m.name}
+                </span>
+                {canEdit && (
+                  <>
+                    <span className={styles.rateGroup}>
+                      <span className={styles.rateLabel}>$/hr</span>
+                      <Input
+                        type="number" min="0" step="0.25"
+                        value={displayRate}
+                        onChange={(e) => setRateDraftById((prev) => ({
+                          ...prev, [m.id]: e.target.value,
+                        }))}
+                        disabled={!m.is_active}
+                        style={{ width: "5.5rem" }}
+                      />
+                      {draft != null && (
+                        <Button
+                          tone="secondary" size="sm"
+                          onClick={() => saveRate(m)}
+                        >
+                          Save
+                        </Button>
+                      )}
+                    </span>
                     <Button
                       tone="secondary" size="sm"
-                      onClick={() => remove(m)}
+                      onClick={() => toggle(m)}
+                      title={m.is_active ? "Deactivate" : "Reactivate"}
                     >
-                      ✕
+                      {m.is_active ? "Deactivate" : "Reactivate"}
                     </Button>
-                  )}
-                </>
-              )}
-            </li>
-          ))}
+                    {m.is_active && (
+                      <Button
+                        tone="secondary" size="sm"
+                        onClick={() => remove(m)}
+                      >
+                        ✕
+                      </Button>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -359,6 +414,13 @@ function TeamCard() {
                 add();
               }
             }}
+          />
+          <Input
+            type="number" min="0" step="0.25"
+            value={newRate}
+            onChange={(e) => setNewRate(e.target.value)}
+            placeholder="$/hr (optional)"
+            style={{ width: "9rem" }}
           />
           <Button
             onClick={add}

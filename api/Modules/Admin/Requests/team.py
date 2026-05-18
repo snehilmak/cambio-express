@@ -8,6 +8,10 @@ class TeamMemberRow(BaseModel):
     id: int
     name: str
     is_active: bool
+    # USD/hour pay rate used by the time-clock paystub view.
+    # 0.0 means "not configured yet" — the paystub shows a dash
+    # in the gross-pay column.
+    hourly_rate: float = 0.0
 
 
 class TeamListResponse(BaseModel):
@@ -19,7 +23,8 @@ class TeamListResponse(BaseModel):
 class TeamMemberCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(..., min_length=1, max_length=120)
+    name:        str   = Field(..., min_length=1, max_length=120)
+    hourly_rate: float = Field(0.0, ge=0.0, le=10_000.0)
 
 
 class TeamMemberUpdateRequest(BaseModel):
@@ -27,5 +32,6 @@ class TeamMemberUpdateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name:      str | None  = Field(None, min_length=1, max_length=120)
-    is_active: bool | None = None
+    name:        str   | None = Field(None, min_length=1, max_length=120)
+    is_active:   bool  | None = None
+    hourly_rate: float | None = Field(None, ge=0.0, le=10_000.0)

@@ -168,6 +168,7 @@ export default function AdminTimeClock() {
       {data.data && groups.map((g) => (
         <Card key={g.storeEmployeeId}>
           <EmployeeGroupHeader
+            storeEmployeeId={g.storeEmployeeId}
             employeeName={g.employeeName}
             from={from} to={to}
             onOverview={() => setEmpFilter(g.storeEmployeeId)}
@@ -336,13 +337,14 @@ function KpiTile({
 
 
 function EmployeeGroupHeader({
-  employeeName, from, to, onOverview, isFiltered,
+  storeEmployeeId, employeeName, from, to, onOverview, isFiltered,
 }: {
-  employeeName: string;
-  from: string;
-  to: string;
-  onOverview: () => void;
-  isFiltered: boolean;
+  storeEmployeeId: number;
+  employeeName:    string;
+  from:            string;
+  to:              string;
+  onOverview:      () => void;
+  isFiltered:      boolean;
 }) {
   return (
     <div className={styles.groupHeader}>
@@ -352,11 +354,23 @@ function EmployeeGroupHeader({
           {" — "}{from} to {to}
         </span>
       </div>
-      {!isFiltered && (
-        <Button size="sm" tone="secondary" onClick={onOverview}>
-          Overview only
+      <div className={styles.rowActions}>
+        {!isFiltered && (
+          <Button size="sm" tone="secondary" onClick={onOverview}>
+            Overview only
+          </Button>
+        )}
+        <Button
+          size="sm" tone="secondary"
+          onClick={() => {
+            const url = `/app/admin/timeclock/paystub/${storeEmployeeId}`
+              + `?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
+            window.open(url, "_blank", "noopener");
+          }}
+        >
+          Print paystub
         </Button>
-      )}
+      </div>
     </div>
   );
 }

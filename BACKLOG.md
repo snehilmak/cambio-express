@@ -1017,13 +1017,27 @@ gaps. Ordered by "what I'd do next" at the top.
       table + late-arrival / no-show flags on the
       ``TimeClockEntry`` row when actual diverges from
       planned by > X minutes.
-- [ ] **Payroll check printing** — generate printable
-      paycheck PDFs from a date-range rollup of
-      ``TimeClockEntry`` × ``hourly_rate`` (new
-      ``StoreEmployee.hourly_rate`` column). MICR routing
-      line template per ``Store`` (bank account / routing).
-      Reuses the print-CSS technique from the (now-hidden)
-      receipt printing feature — straight port.
+- [~] **Payroll check / paystub printing** — partial.
+      Printable paystub view landed; check printing with MICR
+      lines stays a separate item (needs Store-level bank
+      account + routing).
+      Shipped:
+        * ``StoreEmployee.hourly_rate`` column + admin
+          create / update plumbing (migration
+          ``c4f8a2e6d3b9``, idempotent). Settings → Team gains
+          a $/hr input per row.
+        * ``GET /api/v2/admin/timeclock/paystub/{id}?from=&to=``
+          returns the paystub payload (approved hours × rate
+          = gross pay, plus the itemized shift list).
+        * ``/app/admin/timeclock/paystub/:id`` print-CSS-clean
+          paystub view; the AdminTimeClock employee group
+          header has a "Print paystub" button that opens it
+          in a new tab.
+      Pending: MICR / check-number sequence for actual check
+      printing (operator currently hand-writes the check
+      from the paystub summary). Needs ``Store.bank_account``
+      + ``Store.bank_routing`` + ``Store.check_number_next``
+      columns.
 
 ### Owner umbrella (`/owner/settings` — doesn't exist yet)
 - [ ] **Cross-store defaults** — apply a fed-tax rate / company list /

@@ -152,6 +152,7 @@ def _require_admin_role(claims: dict) -> None:
 def _team_row(e) -> TeamMemberRow:
     return TeamMemberRow(
         id=e.id, name=e.name or "", is_active=bool(e.is_active),
+        hourly_rate=float(getattr(e, "hourly_rate", 0.0) or 0.0),
     )
 
 
@@ -182,7 +183,9 @@ def create_team_member_route(
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
     try:
-        row = add_team_member(db, store_id, body.name)
+        row = add_team_member(
+            db, store_id, body.name, hourly_rate=body.hourly_rate,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     db.commit()
@@ -211,6 +214,7 @@ def update_team_member_route(
             db, member,
             name=fields.get("name"),
             is_active=fields.get("is_active"),
+            hourly_rate=fields.get("hourly_rate"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

@@ -68,6 +68,7 @@ const SuperadminReports = lazy(() => import("./routes/SuperadminReports"));
 const SuperadminStoreForm = lazy(() => import("./routes/SuperadminStoreForm"));
 const SuperadminStores = lazy(() => import("./routes/SuperadminStores"));
 const TimeClock = lazy(() => import("./routes/TimeClock"));
+const TimeClockPaystub = lazy(() => import("./routes/TimeClockPaystub"));
 const TransferDetail = lazy(() => import("./routes/TransferDetail"));
 // Receipt printing surface is hidden until we decide we need it —
 // this is a ledger-only product, so customer-facing receipts don't
@@ -234,8 +235,9 @@ export default function App() {
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
           <Route path="admin/subscription"    element={<AdminSubscription />} />
           <Route path="admin/tax-export"      element={<AdminTaxExport />} />
-          <Route path="admin/timeclock"             element={<AdminTimeClock />} />
-          <Route path="admin/timeclock/credentials" element={<AdminTimeClockCredentials />} />
+          <Route path="admin/timeclock"               element={<AdminTimeClock />} />
+          <Route path="admin/timeclock/credentials"   element={<AdminTimeClockCredentials />} />
+          <Route path="admin/timeclock/paystub/:id"   element={<TimeClockPaystub />} />
           <Route path="admin/audit-log"       element={<AdminAuditLog />} />
           <Route path="admin/users"             element={<AdminUsers />} />
           <Route path="admin/users/new"         element={<AdminUserForm />} />

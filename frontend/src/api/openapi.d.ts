@@ -375,6 +375,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/timeclock/paystub/{store_employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Paystub Route
+         * @description Paystub for the picked roster member over ``[from, to)``.
+         *
+         *     Returns the approved hours, the hourly rate from the
+         *     cashier's roster row, and the resulting gross pay. The
+         *     shifts list itemizes every entry that started in the
+         *     window (any status) so the admin can spot pending /
+         *     rejected rows that aren't counted.
+         *
+         *     Admin / owner / superadmin only — payroll data is
+         *     sensitive enough that cashiers can't pull each other's
+         *     summary.
+         */
+        get: operations["admin_paystub_route_admin_timeclock_paystub__store_employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/timeclock/{entry_id}": {
         parameters: {
             query?: never;
@@ -6067,6 +6097,60 @@ export interface components {
          */
         OwnerUnlinkRequest: Record<string, never>;
         /**
+         * PaystubResponse
+         * @description Pay summary for one roster member over a date range.
+         *
+         *     ``approved_hours × hourly_rate = gross_pay``. Pending /
+         *     rejected shifts are listed alongside but don't count
+         *     toward gross pay — the admin approves them on the payroll
+         *     page first.
+         */
+        PaystubResponse: {
+            /** Approved Hours */
+            approved_hours: number;
+            /** Employee Name */
+            employee_name: string;
+            /** From Date */
+            from_date: string;
+            /** Gross Pay */
+            gross_pay: number;
+            /** Hourly Rate */
+            hourly_rate: number;
+            /** Shifts */
+            shifts: components["schemas"]["PaystubShiftRow"][];
+            /** Store Employee Id */
+            store_employee_id: number;
+            /** To Date */
+            to_date: string;
+        };
+        /**
+         * PaystubShiftRow
+         * @description One shift line on the printable paystub. Mirrors the
+         *     Time-clock entry shape but tightened so the print view
+         *     doesn't have to defend against nulls.
+         */
+        PaystubShiftRow: {
+            /** Clock In At */
+            clock_in_at: string;
+            /** Clock Out At */
+            clock_out_at?: string | null;
+            /** Hours Worked */
+            hours_worked?: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected";
+        };
+        /**
          * PeriodSummaryResponse
          * @description Date-range payload. `rows` are per-day; summary fields are
          *     sums across them.
@@ -7355,11 +7439,21 @@ export interface components {
         };
         /** TeamMemberCreateRequest */
         TeamMemberCreateRequest: {
+            /**
+             * Hourly Rate
+             * @default 0
+             */
+            hourly_rate: number;
             /** Name */
             name: string;
         };
         /** TeamMemberRow */
         TeamMemberRow: {
+            /**
+             * Hourly Rate
+             * @default 0
+             */
+            hourly_rate: number;
             /** Id */
             id: number;
             /** Is Active */
@@ -7372,6 +7466,8 @@ export interface components {
          * @description PATCH-style update — fields omitted are left alone.
          */
         TeamMemberUpdateRequest: {
+            /** Hourly Rate */
+            hourly_rate?: number | null;
             /** Is Active */
             is_active?: boolean | null;
             /** Name */
@@ -8549,6 +8645,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimeClockCredentialRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_paystub_route_admin_timeclock_paystub__store_employee_id__get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                store_employee_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaystubResponse"];
                 };
             };
             /** @description Validation Error */

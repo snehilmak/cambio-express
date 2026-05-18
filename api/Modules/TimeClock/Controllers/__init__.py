@@ -32,6 +32,7 @@ from api.Modules.TimeClock.Requests import (
     AdminCreateEntryRequest,
     AdminUpdateEntryRequest,
     ClockPunchRequest,
+    PaystubResponse,
     PunchChallengeRequest,
     PunchChallengeResponse,
     TimeClockCredentialList,
@@ -977,3 +978,56 @@ def admin_credentials_delete_route(
     db.delete(pk)
     db.commit()
     return None
+
+
+# ── Paystub ─────────────────────────────────────────────────
+
+
+@admin_router.get(
+    "/timeclock/paystub/{store_employee_id}",
+    response_model=PaystubResponse,
+)
+def admin_paystub_route(
+    store_employee_id: int = Path(..., ge=1),
+    from_: date = Query(..., alias="from"),
+    to: date = Query(...),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> PaystubResponse:
+    """Paystub for the picked roster member over ``[from, to)``.
+
+    Returns the approved hours, the hourly rate from the
+    cashier's roster row, and the resulting gross pay. The
+    shifts list itemizes every entry that started in the
+    window (any status) so the admin can spot pending /
+    rejected rows that aren't counted.
+
+    Admin / owner / superadmin only — payroll data is
+    sensitive enough that cashiers can't pull each other's
+    summary.
+    """
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    if to <= from_:
+        raise HTTPException(
+            status_code=422, detail="'to' must be after 'from'.",
+        )
+    if (to - from_) > timedelta(days=370):
+        raise HTTPException(
+            status_code=422,
+            detail="Date window cannot exceed 370 days.",
+        )
+    from api.Modules.TimeClock.Services.paystub import compute_paystub
+    start_dt = datetime.combine(from_, datetime.min.time())
+    end_dt   = datetime.combine(to,   datetime.min.time())
+    try:
+        payload = compute_paystub(
+            db,
+            store_id=store_id,
+            store_employee_id=store_employee_id,
+            start=start_dt,
+            end=end_dt,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return PaystubResponse(**payload)
