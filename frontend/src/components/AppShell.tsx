@@ -1,48 +1,40 @@
 import { useEffect, useState } from "react";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { useProfile } from "../api/account";
 import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
 import { InstallAppButton } from "./InstallAppButton";
+import { SlimSidebar, type NavGroup, type NavItem } from "./SlimSidebar";
 import ThemeToggle from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
-// App chrome wrapping every authed page: sidebar + topbar.
+// App chrome wrapping every authed page: slim icon sidebar + topbar.
 //
 // Layout:
 //
-//   ┌─────────┬──────────────────────────────────┐
-//   │ Sidebar │ Topbar (user chrome / sign-out)  │
-//   │ (icons  ├──────────────────────────────────┤
-//   │ + nav)  │  Page content (children)         │
-//   │         │                                  │
-//   └─────────┴──────────────────────────────────┘
+//   ┌───┬──────────────────────────────────────┐
+//   │   │ Topbar (user chrome / sign-out)      │
+//   │ s ├──────────────────────────────────────┤
+//   │ l │ Page content (children)              │
+//   │ i │                                      │
+//   │ m │  (fly-out panel slides in from the   │
+//   │   │   slim column when a group is        │
+//   │   │   tapped — see SlimSidebar)          │
+//   └───┴──────────────────────────────────────┘
 //
-// Sidebar items mirror the legacy sidebar groupings (CLAUDE.md
-// "Sidebar groupings"): Workspace · Books · Finance · Account.
-// We register each migrated route under the same group so the
-// SPA's nav structure converges with the legacy site.
+// Groups are: Daily · Finance · Owner · Platform · Account
+// (Workspace + Books merged into Daily — the day-to-day flow
+// of running a store).  Each group renders as an icon in the
+// 4.75rem slim column; clicking opens a fly-out with that
+// group's items as colored tiles.  On mobile the slim column +
+// fly-out collapse into the AppShell hamburger drawer instead,
+// which renders the same data as one scrollable column.
 //
 // Stays inside RequireAuth in App.tsx — the shell is only
 // rendered on authed routes. Login + the bare landing don't
 // get the chrome.
-
-interface NavItem {
-  to: string;
-  label: string;
-  icon: React.ReactNode;
-  /** Roles that should see this item. Omit for "everyone authed". */
-  roles?: string[];
-}
-
-interface NavGroup {
-  title: string;
-  items: NavItem[];
-  /** Roles that should see this group. Omit for "everyone authed". */
-  roles?: string[];
-}
 
 // Role-by-role nav so each persona only sees the surfaces they
 // can actually use:
@@ -65,7 +57,11 @@ interface NavGroup {
 
 const NAV: NavGroup[] = [
   {
-    title: "Workspace",
+    title: "Daily",
+    // Workspace + Books merged — the day-to-day flow for store
+    // staff.  Superadmin sees only its Dashboard / Platform link
+    // (the rest 403 without a store-scoped JWT).
+    icon: iconDaily(),
     items: [
       {
         to: "/dashboard", label: "Dashboard",
@@ -82,21 +78,31 @@ const NAV: NavGroup[] = [
         roles: ["superadmin"],
         icon: iconDashboard(),
       },
-    ],
-  },
-  {
-    title: "Books",
-    // Superadmin doesn't see Books / Finance / Owner — those
-    // surfaces need a ``store_id`` JWT scope, which superadmin
-    // doesn't carry. Platform-level views (stores list,
-    // anomalies, audit log) live under the Platform section.
-    roles: ["admin", "employee"],
-    items: [
-      { to: "/transfers",     label: "Transfers",     icon: iconTransfers() },
-      { to: "/customers",     label: "Customers",     icon: iconCustomers() },
-      { to: "/daily",         label: "Daily book",    icon: iconDaily() },
-      { to: "/return-checks", label: "Return checks", icon: iconReturnChecks() },
-      { to: "/timeclock",     label: "Time clock",    icon: iconClock() },
+      {
+        to: "/transfers", label: "Transfers",
+        roles: ["admin", "employee"],
+        icon: iconTransfers(),
+      },
+      {
+        to: "/customers", label: "Customers",
+        roles: ["admin", "employee"],
+        icon: iconCustomers(),
+      },
+      {
+        to: "/daily", label: "Daily book",
+        roles: ["admin", "employee"],
+        icon: iconDaily(),
+      },
+      {
+        to: "/return-checks", label: "Return checks",
+        roles: ["admin", "employee"],
+        icon: iconReturnChecks(),
+      },
+      {
+        to: "/timeclock", label: "Time clock",
+        roles: ["admin", "employee"],
+        icon: iconClock(),
+      },
     ],
   },
   {
@@ -104,6 +110,7 @@ const NAV: NavGroup[] = [
     // Admin only — employees don't reconcile bank or close
     // monthly, and superadmin works at the platform level.
     roles: ["admin"],
+    icon: iconReports(),
     items: [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
@@ -119,6 +126,7 @@ const NAV: NavGroup[] = [
     // Owner umbrella surfaces — superadmin uses Platform > Stores
     // to drill into individual owners' shops instead.
     roles: ["owner"],
+    icon: iconOwner(),
     items: [
       { to: "/owner/locations",      label: "Locations",   icon: iconOwner() },
       { to: "/owner/pl-rollup",      label: "P&L rollup",  icon: iconRollup() },
@@ -131,6 +139,7 @@ const NAV: NavGroup[] = [
   {
     title: "Platform",
     roles: ["superadmin"],
+    icon: iconPlatform(),
     items: [
       { to: "/superadmin/stores",        label: "Stores",        icon: iconPlatform() },
       { to: "/superadmin/audit-log",     label: "Audit log",     icon: iconAudit() },
@@ -141,6 +150,7 @@ const NAV: NavGroup[] = [
   },
   {
     title: "Account",
+    icon: iconSettings(),
     items: [
       // Settings is admin-only — needs a store-scoped JWT.
       // Employees + owners use ``/account/profile`` for personal
@@ -186,6 +196,18 @@ const NAV: NavGroup[] = [
   },
 ];
 
+// Filter NAV down to the groups + items that the current role
+// can see. A group is dropped entirely if its `roles` excludes
+// this user OR if every item gets filtered out (so we don't
+// render an empty icon-only button).
+function filterNavForRole(role: string): NavGroup[] {
+  const visible = (i: NavItem) => !i.roles || i.roles.includes(role);
+  return NAV
+    .filter((g) => !g.roles || g.roles.includes(role))
+    .map((g) => ({ ...g, items: g.items.filter(visible) }))
+    .filter((g) => g.items.length > 0);
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -218,9 +240,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     navigate("/login", { replace: true });
   }
 
+  const role = identity?.role ?? "";
+  const groups = filterNavForRole(role);
   return (
     <div className="app-shell">
-      <Sidebar drawerOpen={drawerOpen} />
+      <SlimSidebar groups={groups} drawerOpen={drawerOpen} />
       <Topbar
         identity={identity}
         onSignOut={onSignOut}
@@ -235,98 +259,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         onClick={() => setDrawerOpen(false)}
       />
     </div>
-  );
-}
-
-function Sidebar({ drawerOpen }: { drawerOpen: boolean }) {
-  const identity = getCurrentIdentity();
-  const role = identity?.role ?? "";
-  // Filter at both levels: drop the whole group if its `roles`
-  // excludes this user, then drop individual items that have their
-  // own `roles` filter (e.g. the per-role Dashboard variants). A
-  // group that ends up empty after item filtering is hidden too so
-  // we don't render a section heading with nothing under it.
-  const visible = (i: NavItem) => !i.roles || i.roles.includes(role);
-  const groups = NAV
-    .filter((g) => !g.roles || g.roles.includes(role))
-    .map((g) => ({ ...g, items: g.items.filter(visible) }))
-    .filter((g) => g.items.length > 0);
-  return (
-    <aside
-      className={`app-sidebar${drawerOpen ? " is-open" : ""}`}
-      aria-label="Primary navigation"
-    >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.6rem",
-          padding: "0 0.5rem",
-        }}
-      >
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "1.75rem",
-            height: "1.75rem",
-            borderRadius: "0.4rem",
-            background: "var(--db-brand, #3fff00)",
-            color: "var(--db-brand-ink, #001a0f)",
-            fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-            fontWeight: 700,
-            fontSize: "1rem",
-          }}
-        >
-          $
-        </span>
-        <span
-          style={{
-            fontFamily: "var(--db-font-display, 'Space Grotesk', sans-serif)",
-            fontWeight: 600,
-            fontSize: "1.05rem",
-          }}
-        >
-          DineroBook
-        </span>
-      </div>
-
-      {groups.map((group) => (
-        <div key={group.title}>
-          <p
-            style={{
-              margin: "0 0.5rem 0.5rem",
-              fontSize: "0.72rem",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              color: "var(--db-text-muted, #a3a3a3)",
-            }}
-          >
-            {group.title}
-          </p>
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.15rem",
-            }}
-          >
-            {group.items.map((item) => (
-              <li key={item.to}>
-                <NavLink to={item.to} style={navLinkStyle} end={false}>
-                  {item.icon}
-                  <span>{item.label}</span>
-                </NavLink>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </aside>
   );
 }
 
@@ -371,36 +303,6 @@ function ContentColumn({ children }: { children: React.ReactNode }) {
 }
 
 const topbarSpacer: React.CSSProperties = { flex: 1 };
-
-const navLinkStyle = ({
-  isActive,
-}: { isActive: boolean }): React.CSSProperties => ({
-  display: "flex",
-  alignItems: "center",
-  gap: "0.65rem",
-  padding: "0.55rem 0.7rem 0.55rem 0.55rem",
-  borderRadius: "0.55rem",
-  textDecoration: "none",
-  color: isActive
-    ? "var(--db-text, #f5f5f5)"
-    : "var(--db-text-muted, #a3a3a3)",
-  // Active-row treatment: neon glow fades from the left edge across
-  // the row instead of a flat surface inversion. Reads as "this is
-  // the live page" not "this row was clicked once." The glow color
-  // pulls from ``--db-neon-glow-25`` so it darkens with the accent
-  // when light mode is on (a bright neon tint on white was too
-  // washed-out to read as "active").
-  background: isActive
-    ? "linear-gradient(90deg, var(--db-neon-glow-25, rgba(63, 255, 0, 0.25)), transparent 65%)"
-    : "transparent",
-  fontFamily: "var(--db-font-body, 'Inter', system-ui, sans-serif)",
-  fontSize: "0.92rem",
-  fontWeight: isActive ? 600 : 500,
-  borderLeft: isActive
-    ? "3px solid var(--db-accent, #3fff00)"
-    : "3px solid transparent",
-  transition: "background 120ms ease, color 120ms ease",
-});
 
 // Inline stroke SVGs per CLAUDE.md design system: stroke-width 2,
 // round caps, currentColor, no fill. Match the legacy sidebar's

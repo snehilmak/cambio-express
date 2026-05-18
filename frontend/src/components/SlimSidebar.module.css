@@ -1,0 +1,259 @@
+/* Slim icon-only sidebar + fly-out panel.
+ *
+ * Desktop (≥768px): a permanent 4.75rem column of group icons.
+ * Click a group → fly-out panel (~17rem) slides in from the
+ * left edge of the content column, showing that group's items
+ * as a colored tile grid. Dismisses on click-outside, ESC, or
+ * tapping a tile (the route change auto-closes it).
+ *
+ * Mobile (<768px): the existing AppShell drawer renders the
+ * groups as collapsible accordion sections with tiles inside —
+ * no separate fly-out, no two-pane split, no cramped icons.
+ *
+ * Inspired by the grocery-store POS layout the user shared:
+ * a slim left rail + tile grids in fly-out panels keeps the
+ * SPA from feeling cluttered as we add features.
+ */
+
+.shell {
+  display: contents;   /* let the parent grid place us */
+}
+
+/* ── Slim icon column ─────────────────────────────────── */
+
+.iconCol {
+  grid-row: 1 / -1;
+  grid-column: 1;
+  width: 4.75rem;
+  background: var(--db-surface-2, #141414);
+  border-right: 1px solid var(--db-border, #262626);
+  padding: 0.6rem 0.4rem;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.3rem;
+  overflow-y: auto;
+  position: relative;   /* anchors the brand wordmark */
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.4rem 0;
+  margin-bottom: 0.25rem;
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: var(--db-brand, #3fff00);
+  color: var(--db-brand-ink, #001a0f);
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.brandName {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted, #a3a3a3);
+}
+
+.groupBtn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.55rem 0.25rem;
+  border-radius: 0.55rem;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.groupBtn:hover {
+  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
+  color: var(--db-text, #f5f5f5);
+}
+
+.groupBtn.isActive {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+  color: var(--db-accent, #3fff00);
+}
+
+.groupBtn:active {
+  transform: scale(0.97);
+}
+
+.groupIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+}
+
+.groupLabel {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  text-align: center;
+}
+
+/* ── Fly-out panel (desktop) ──────────────────────────── */
+
+.flyoutBackdrop {
+  /* Click-catcher behind the panel — closes on outside click. */
+  position: fixed;
+  inset: 0 0 0 4.75rem;   /* leave the icon column tappable */
+  background: transparent;
+  z-index: 39;
+}
+
+.flyoutPanel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 4.75rem;
+  width: 17rem;
+  background: var(--db-surface-2, #141414);
+  border-right: 1px solid var(--db-border, #262626);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 1rem;
+  overflow-y: auto;
+  animation: db-flyout-in 160ms ease-out;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+
+.flyoutHeader {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted, #a3a3a3);
+  padding: 0 0.2rem;
+}
+
+.tileGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.85rem 0.35rem;
+  border-radius: 0.65rem;
+  background: var(--db-fill-neutral, rgba(255,255,255,0.04));
+  color: var(--db-text, #f5f5f5);
+  text-decoration: none;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.15;
+  border: 1px solid transparent;
+  transition: background 120ms ease, border-color 120ms ease,
+              transform 120ms ease;
+}
+
+.tile:hover {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+  border-color: var(--db-accent, #3fff00);
+  color: var(--db-accent, #3fff00);
+}
+
+.tile:active {
+  transform: scale(0.97);
+}
+
+.tile.isActive {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+  border-color: var(--db-accent, #3fff00);
+  color: var(--db-accent, #3fff00);
+}
+
+.tileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+}
+
+@keyframes db-flyout-in {
+  from { transform: translateX(-12px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+/* ── Mobile drawer ─────────────────────────────────────
+ *
+ * On viewports ≤768px the AppShell hides the slim icon
+ * column entirely; the hamburger button opens a drawer that
+ * renders the SAME group/tile data but as a single scrollable
+ * column with accordion sections. No fly-out panel — one
+ * column, big tap targets, no risk of cramped icons.
+ */
+
+.drawer {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .iconCol      { display: none; }
+  .flyoutPanel,
+  .flyoutBackdrop { display: none !important; }
+  .drawer       {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem 1rem;
+    overflow-y: auto;
+    height: 100%;
+  }
+}
+
+.drawerBrand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.drawerBrandName {
+  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
+  font-weight: 600;
+  font-size: 1.05rem;
+}
+
+.drawerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.drawerGroupTitle {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--db-text-muted, #a3a3a3);
+  padding: 0 0.15rem;
+}
