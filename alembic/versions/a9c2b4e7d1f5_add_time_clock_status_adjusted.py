@@ -45,23 +45,40 @@ def _has_column(table: str, column: str) -> bool:
     return column in cols
 
 
+def _safe_add_column(table: str, column_name: str, column) -> None:
+    """Idempotent ``add_column``. Belt-and-suspenders: checks
+    the live DB via ``inspect`` first AND catches a
+    ``DuplicateColumn`` error if the inspector misses the
+    column. Seen in prod: a partial deploy left the schema
+    ahead of the ``alembic_version`` row, the inspector
+    cache returned stale data, and the bare ``add_column``
+    crashed."""
+    if _has_column(table, column_name):
+        return
+    try:
+        op.add_column(table, column)
+    except Exception as exc:
+        msg = str(exc).lower()
+        if "already exists" in msg or "duplicate column" in msg:
+            return
+        raise
+
+
 def upgrade() -> None:
-    if not _has_column("time_clock_entry", "status"):
-        op.add_column(
-            "time_clock_entry",
-            sa.Column(
-                "status", sa.String(20),
-                nullable=True, server_default="pending",
-            ),
-        )
-    if not _has_column("time_clock_entry", "adjusted"):
-        op.add_column(
-            "time_clock_entry",
-            sa.Column(
-                "adjusted", sa.Boolean(),
-                nullable=True, server_default=sa.false(),
-            ),
-        )
+    _safe_add_column(
+        "time_clock_entry", "status",
+        sa.Column(
+            "status", sa.String(20),
+            nullable=True, server_default="pending",
+        ),
+    )
+    _safe_add_column(
+        "time_clock_entry", "adjusted",
+        sa.Column(
+            "adjusted", sa.Boolean(),
+            nullable=True, server_default=sa.false(),
+        ),
+    )
 
 
 def downgrade() -> None:
