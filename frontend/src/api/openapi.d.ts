@@ -405,6 +405,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/timeclock/shifts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Admin Shifts List Route
+         * @description Planned shifts with ``shift_date`` in ``[from, to)``.
+         *     Half-open window matches the payroll history endpoint above
+         *     so the SPA can share its biweekly-window picker.
+         */
+        get: operations["admin_shifts_list_route_admin_timeclock_shifts_get"];
+        put?: never;
+        /** Admin Shift Create Route */
+        post: operations["admin_shift_create_route_admin_timeclock_shifts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock/shifts/{shift_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Admin Shift Delete Route */
+        delete: operations["admin_shift_delete_route_admin_timeclock_shifts__shift_id__delete"];
+        options?: never;
+        head?: never;
+        /** Admin Shift Update Route */
+        patch: operations["admin_shift_update_route_admin_timeclock_shifts__shift_id__patch"];
+        trace?: never;
+    };
     "/admin/timeclock/{entry_id}": {
         parameters: {
             query?: never;
@@ -6855,6 +6896,86 @@ export interface components {
             revoked: number;
         };
         /**
+         * ShiftCreateRequest
+         * @description Body for ``POST /api/v2/admin/timeclock/shifts`` —
+         *     admin schedules a planned shift for a roster member.
+         *     All times are **store-local** (Date + Time), matching how
+         *     operators think about schedules.
+         */
+        ShiftCreateRequest: {
+            /**
+             * End Time
+             * Format: time
+             */
+            end_time: string;
+            /**
+             * Notes
+             * @default
+             */
+            notes: string;
+            /**
+             * Shift Date
+             * Format: date
+             */
+            shift_date: string;
+            /**
+             * Start Time
+             * Format: time
+             */
+            start_time: string;
+            /** Store Employee Id */
+            store_employee_id: number;
+        };
+        /** ShiftList */
+        ShiftList: {
+            /** Rows */
+            rows: components["schemas"]["ShiftRow"][];
+        };
+        /** ShiftRow */
+        ShiftRow: {
+            /** Employee Name */
+            employee_name: string;
+            /**
+             * End Time
+             * Format: time
+             */
+            end_time: string;
+            /** Id */
+            id: number;
+            /** Notes */
+            notes: string;
+            /**
+             * Shift Date
+             * Format: date
+             */
+            shift_date: string;
+            /**
+             * Start Time
+             * Format: time
+             */
+            start_time: string;
+            /** Store Employee Id */
+            store_employee_id: number;
+        };
+        /**
+         * ShiftUpdateRequest
+         * @description Partial-update payload for
+         *     ``PATCH /api/v2/admin/timeclock/shifts/{id}``.  Every field
+         *     is optional; omitted fields keep their existing value.
+         */
+        ShiftUpdateRequest: {
+            /** End Time */
+            end_time?: string | null;
+            /** Notes */
+            notes?: string | null;
+            /** Shift Date */
+            shift_date?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Store Employee Id */
+            store_employee_id?: number | null;
+        };
+        /**
          * SignupRequest
          * @description POST body for /auth/signup. Mirrors the legacy /signup
          *     Jinja form. Returns a JWT on success so the SPA can drop
@@ -8888,6 +9009,152 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PaystubResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_shifts_list_route_admin_timeclock_shifts_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                store_employee_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_shift_create_route_admin_timeclock_shifts_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftRow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_shift_delete_route_admin_timeclock_shifts__shift_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                shift_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    admin_shift_update_route_admin_timeclock_shifts__shift_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                shift_id: number;
+            };
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShiftUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShiftRow"];
                 };
             };
             /** @description Validation Error */

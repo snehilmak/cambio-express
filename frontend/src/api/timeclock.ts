@@ -321,3 +321,69 @@ export function useStopBreakMutation() {
       }),
   });
 }
+
+
+// ── Shift scheduling (v2) ──────────────────────────────────
+
+export interface ShiftRow {
+  id:                number;
+  store_employee_id: number;
+  employee_name:     string;
+  shift_date:        string;  // "YYYY-MM-DD"
+  start_time:        string;  // "HH:MM:SS"
+  end_time:          string;  // "HH:MM:SS"
+  notes:             string;
+}
+
+export interface ShiftList {
+  rows: ShiftRow[];
+}
+
+export interface ShiftCreateInput {
+  store_employee_id: number;
+  shift_date:        string;  // "YYYY-MM-DD"
+  start_time:        string;  // "HH:MM" or "HH:MM:SS"
+  end_time:          string;
+  notes?:            string;
+}
+
+export interface ShiftUpdateInput {
+  store_employee_id?: number;
+  shift_date?:        string;
+  start_time?:        string;
+  end_time?:          string;
+  notes?:             string;
+}
+
+export function useShifts(from: string, to: string) {
+  return useQuery<ShiftList>({
+    queryKey: ["timeclock", "shifts", from, to],
+    queryFn: () => api<ShiftList>(
+      `/api/v2/admin/timeclock/shifts?from=${encodeURIComponent(from)}`
+      + `&to=${encodeURIComponent(to)}`,
+    ),
+    enabled: Boolean(from && to),
+  });
+}
+
+export function createShift(input: ShiftCreateInput): Promise<ShiftRow> {
+  return api<ShiftRow>("/api/v2/admin/timeclock/shifts", {
+    method: "POST",
+    json: input,
+  });
+}
+
+export function updateShift(
+  id: number, input: ShiftUpdateInput,
+): Promise<ShiftRow> {
+  return api<ShiftRow>(`/api/v2/admin/timeclock/shifts/${id}`, {
+    method: "PATCH",
+    json: input,
+  });
+}
+
+export function deleteShift(id: number): Promise<void> {
+  return api<void>(`/api/v2/admin/timeclock/shifts/${id}`, {
+    method: "DELETE",
+  });
+}

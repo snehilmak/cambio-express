@@ -11,8 +11,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer,
-    LargeBinary, String,
+    Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer,
+    LargeBinary, String, Time,
 )
 
 from api.Core.Database import Base
@@ -127,4 +127,55 @@ class StoreEmployeePasskey(Base):
     )
 
 
-__all__ = ["StoreEmployeePasskey", "TimeClockEntry"]
+class TimeClockShift(Base):
+    """A planned shift for a roster member — "Maria, Monday May 18,
+    9:00 to 17:00".  Decoupled from ``TimeClockEntry`` (the actual
+    punches): a cashier can clock in without a planned shift, and
+    a planned shift without a matching punch is a no-show.  v1
+    ships the data + CRUD; late-arrival / no-show derivation
+    against ``TimeClockEntry`` is a follow-up.
+
+    All times are **store-local** (Date + Time, no timezone),
+    matching how operators think about schedules ("9am Monday"
+    is meaningful in the store's tz, not in UTC).  The
+    server-side helper for "is this shift starting now?" reads
+    ``Store.timezone`` to compare against the wall-clock.
+
+    No ``UniqueConstraint`` on ``(store_employee_id, shift_date)``
+    — split shifts (open + reopen at lunch) are a real pattern
+    operators want to schedule.  The admin UI surfaces overlaps
+    as a warning, not a hard reject.
+    """
+
+    __tablename__ = "time_clock_shift"
+
+    id                = Column(Integer, primary_key=True)
+    store_id          = Column(
+        Integer, ForeignKey("store.id"),
+        nullable=False, index=True,
+    )
+    store_employee_id = Column(
+        Integer, ForeignKey("store_employee.id"),
+        nullable=False, index=True,
+    )
+    shift_date        = Column(Date, nullable=False)
+    start_time        = Column(Time, nullable=False)
+    end_time          = Column(Time, nullable=False)
+    notes             = Column(String(500), default="")
+    created_at        = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by_user_id = Column(
+        Integer, ForeignKey("user.id"), nullable=True,
+    )
+
+    __table_args__ = (
+        # Date-window scans for the week / month grid are the hot
+        # path — every admin schedule page lists "shifts in this
+        # period" and joins them against the roster.
+        Index(
+            "ix_time_clock_shift_store_date",
+            "store_id", "shift_date",
+        ),
+    )
+
+
+__all__ = ["StoreEmployeePasskey", "TimeClockEntry", "TimeClockShift"]

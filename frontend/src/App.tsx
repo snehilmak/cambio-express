@@ -27,6 +27,9 @@ const AdminTimeClock = lazy(() => import("./routes/AdminTimeClock"));
 const AdminTimeClockCredentials = lazy(
   () => import("./routes/AdminTimeClockCredentials"),
 );
+const AdminTimeClockSchedule = lazy(
+  () => import("./routes/AdminTimeClockSchedule"),
+);
 const AdminUserForm = lazy(() => import("./routes/AdminUserForm"));
 const AdminUsers = lazy(() => import("./routes/AdminUsers"));
 const Bank = lazy(() => import("./routes/Bank"));
@@ -245,6 +248,7 @@ export default function App() {
           <Route path="admin/tax-export"      element={<AdminTaxExport />} />
           <Route path="admin/timeclock"               element={<AdminTimeClock />} />
           <Route path="admin/timeclock/credentials"   element={<AdminTimeClockCredentials />} />
+          <Route path="admin/timeclock/schedule"      element={<AdminTimeClockSchedule />} />
           <Route path="admin/timeclock/paystub/:id"   element={<TimeClockPaystub />} />
           <Route path="admin/audit-log"       element={<AdminAuditLog />} />
           <Route path="admin/users"             element={<AdminUsers />} />
