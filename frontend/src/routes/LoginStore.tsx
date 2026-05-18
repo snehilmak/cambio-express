@@ -67,7 +67,7 @@ export default function LoginStore() {
         },
       });
       setAccessToken(result.access_token);
-      navigate("/dashboard", { replace: true });
+      navigate("/home", { replace: true });
     } catch (err) {
       setError(
         err instanceof ApiError

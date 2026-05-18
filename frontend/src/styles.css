@@ -43,22 +43,26 @@ body {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 16rem 1fr;
+  /* Desktop: 4.75rem slim icon column + content. The fly-out
+     panel that opens off the slim column is `position: fixed`,
+     so it overlays the content column rather than reserving
+     grid space. See SlimSidebar.module.css. */
+  grid-template-columns: 4.75rem 1fr;
   grid-template-rows: auto 1fr;
   min-height: 100vh;
   background: var(--db-surface, #0a0a0a);
 }
 
 .app-sidebar {
+  /* The slim icon column + fly-out panel + mobile drawer all
+     live inside the <aside class="app-sidebar"> rendered by
+     SlimSidebar.  This rule only carries the mobile-drawer
+     slide animation (see the @media block below) — every other
+     visual rule lives in SlimSidebar.module.css. */
   grid-row: 1 / -1;
   grid-column: 1;
-  background: var(--db-surface-2, #141414);
-  border-right: 1px solid var(--db-border, #262626);
-  padding: 1.25rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  overflow-y: auto;
 }
 
 .app-topbar {
