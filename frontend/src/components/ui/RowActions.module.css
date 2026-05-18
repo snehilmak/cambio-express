@@ -1,0 +1,130 @@
+/* RowActions — kit primitive for per-row action buttons that
+ * collapse into a bottom-sheet on mobile.
+ *
+ * Desktop (wider than ``$breakpoint``): inline button row.
+ * Mobile (narrower):                   single "Actions" button
+ *                                       that opens a bottom-sheet
+ *                                       menu rendered through a
+ *                                       portal so ``position: fixed``
+ *                                       pins to the viewport.
+ *
+ * The breakpoint matches the rest of the SPA (36rem ≈ tablet
+ * portrait).
+ */
+
+.desktopRow {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mobileTrigger {
+  display: none;
+}
+
+@media (max-width: 36rem) {
+  .desktopRow    { display: none; }
+  .mobileTrigger { display: flex; }
+}
+
+.triggerIcon {
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.sheetBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+  animation: db-sheet-fade-in 140ms ease-out;
+}
+
+.sheetCard {
+  background: var(--db-surface-2, #141414);
+  border-top-left-radius: 1.5rem;
+  border-top-right-radius: 1.5rem;
+  padding: 1rem 1rem 1.5rem;
+  width: 100%;
+  max-width: 32rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  animation: db-sheet-up 180ms ease-out;
+}
+
+.sheetGrip {
+  width: 3rem;
+  height: 0.25rem;
+  background: var(--db-text-muted, #a3a3a3);
+  opacity: 0.5;
+  border-radius: 999px;
+  margin: 0 auto 0.5rem;
+}
+
+.sheetHeader {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--db-text-muted, #a3a3a3);
+  padding: 0 0.5rem 0.4rem;
+}
+
+.sheetItem {
+  appearance: none;
+  border: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
+  background: var(--db-fill-neutral, rgba(255,255,255,0.06));
+  color: var(--db-text, #f5f5f5);
+}
+
+.sheetItem:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.sheetItem:not(:disabled):active {
+  transform: scale(0.98);
+  opacity: 0.85;
+}
+
+/* Per-tone tints — match the AdminTimeClock inspiration. */
+.sheetTone_primary {
+  background: rgba(63, 255, 0, 0.12);
+  color:      #3fff00;
+}
+.sheetTone_warning {
+  background: rgba(255, 184, 0, 0.12);
+  color:      #ffb800;
+}
+.sheetTone_info {
+  background: rgba(184, 95, 255, 0.12);
+  color:      #b85fff;
+}
+.sheetTone_logs {
+  background: rgba(255, 142, 71, 0.12);
+  color:      #ff8e47;
+}
+.sheetTone_danger {
+  background: rgba(255, 65, 65, 0.12);
+  color:      #ff4141;
+}
+
+@keyframes db-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes db-sheet-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}

@@ -72,7 +72,18 @@ Non-negotiables:
   `PageHeader`, `Section`, `Card`, `Field`, `Input`, `Select`,
   `Textarea`, `Button`, `ButtonLink`, `Alert`, `Pill`, `Pager`,
   `Table`, `EmptyState`, `ErrorState`, `KpiCard`, `KpiGrid`,
-  `FormActions`. Reach for these before writing inline styles.
+  `FormActions`, `RowActions`. Reach for these before writing
+  inline styles.
+- **Per-row actions** use `<RowActions>` — the kit primitive
+  that renders inline buttons on desktop and collapses into a
+  bottom-sheet menu on narrow viewports (`@media (max-width:
+  36rem)`). The sheet renders through `createPortal` so
+  `position: fixed` pins to the viewport (the `.ds-page`
+  entry animation otherwise establishes a containing block
+  and traps the sheet inside the page flow). Use this anywhere
+  a table or list row has 2+ actions — keeps mobile UX
+  consistent across the SPA. `AdminTimeClock.tsx` is the
+  canonical example.
 - **Inline styles vs CSS Modules.** New routes should reach for
   kit primitives first. Anything left over (page-specific layouts,
   one-off treatments) goes into a co-located `<Route>.module.css`

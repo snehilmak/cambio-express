@@ -65,4 +65,9 @@ export { Pager } from "./Pager";
 export { Pill, type PillTone } from "./Pill";
 export { Alert, type AlertTone } from "./Alert";
 export { Button, ButtonLink, type ButtonTone } from "./Button";
+export {
+  RowActions,
+  type RowActionItem,
+  type RowActionTone,
+} from "./RowActions";
 export { FormActions } from "./FormActions";
