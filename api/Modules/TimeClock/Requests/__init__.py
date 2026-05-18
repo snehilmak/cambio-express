@@ -28,6 +28,13 @@ class ClockPunchRequest(BaseModel):
     notes:             str = Field("", max_length=500)
     assert_token:      str | None = Field(None, max_length=2000)
     assertion:         dict | None = None
+    # Browser geolocation — required when the store has
+    # ``timeclock_require_geofence`` on. Tight bounds catch
+    # garbage from a tampered client. Optional at the schema
+    # layer; the server promotes to "required" based on the
+    # store toggle.
+    geo_lat: float | None = Field(None, ge=-90, le=90)
+    geo_lng: float | None = Field(None, ge=-180, le=180)
 
 
 class TimeClockEntryRow(BaseModel):

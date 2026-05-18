@@ -126,6 +126,18 @@ class Store(Base):
     # admin flips it on once every active roster member has
     # registered via /app/admin/timeclock/credentials.
     timeclock_require_passkey = Column(Boolean, default=False)
+    # Geofence gate (anti-buddy-punching companion to the
+    # passkey toggle). When ``timeclock_require_geofence`` is
+    # True, every clock-in / clock-out has to include the
+    # cashier's lat/lng and land within ``radius_m`` of the
+    # store's pinned location. The passkey gate proves "this
+    # is the right person"; the geofence proves "they're
+    # physically at the store". Admin pins the location once
+    # by tapping "Use current location" at the store terminal.
+    timeclock_geofence_lat       = Column(Float, nullable=True)
+    timeclock_geofence_lng       = Column(Float, nullable=True)
+    timeclock_geofence_radius_m  = Column(Integer, default=100)
+    timeclock_require_geofence   = Column(Boolean, default=False)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both

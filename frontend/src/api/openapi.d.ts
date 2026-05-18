@@ -4661,6 +4661,10 @@ export interface components {
             assertion?: {
                 [key: string]: unknown;
             } | null;
+            /** Geo Lat */
+            geo_lat?: number | null;
+            /** Geo Lng */
+            geo_lng?: number | null;
             /**
              * Notes
              * @default
@@ -7011,6 +7015,20 @@ export interface components {
              * @default []
              */
             store_hours: components["schemas"]["StoreHourEntry"][];
+            /** Timeclock Geofence Lat */
+            timeclock_geofence_lat?: number | null;
+            /** Timeclock Geofence Lng */
+            timeclock_geofence_lng?: number | null;
+            /**
+             * Timeclock Geofence Radius M
+             * @default 100
+             */
+            timeclock_geofence_radius_m: number;
+            /**
+             * Timeclock Require Geofence
+             * @default false
+             */
+            timeclock_require_geofence: boolean;
             /**
              * Timeclock Require Passkey
              * @default false
@@ -7053,6 +7071,14 @@ export interface components {
             receipt_tax_id?: string | null;
             /** Store Hours */
             store_hours?: components["schemas"]["StoreHourEntry"][] | null;
+            /** Timeclock Geofence Lat */
+            timeclock_geofence_lat?: number | null;
+            /** Timeclock Geofence Lng */
+            timeclock_geofence_lng?: number | null;
+            /** Timeclock Geofence Radius M */
+            timeclock_geofence_radius_m?: number | null;
+            /** Timeclock Require Geofence */
+            timeclock_require_geofence?: boolean | null;
             /** Timeclock Require Passkey */
             timeclock_require_passkey?: boolean | null;
             /** Timezone */

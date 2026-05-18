@@ -167,6 +167,10 @@ export interface StoreInfoRow {
   store_hours:      StoreHourEntry[];
   enforce_business_hours: boolean;
   timeclock_require_passkey: boolean;
+  timeclock_geofence_lat:       number | null;
+  timeclock_geofence_lng:       number | null;
+  timeclock_geofence_radius_m:  number;
+  timeclock_require_geofence:   boolean;
 }
 
 export interface StoreHourEntry {
@@ -189,6 +193,10 @@ export interface StoreInfoUpdateBody {
   store_hours?:      StoreHourEntry[];
   enforce_business_hours?: boolean;
   timeclock_require_passkey?: boolean;
+  timeclock_geofence_lat?:       number | null;
+  timeclock_geofence_lng?:       number | null;
+  timeclock_geofence_radius_m?:  number;
+  timeclock_require_geofence?:   boolean;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

@@ -1741,3 +1741,172 @@ def test_break_status_visible_in_status_endpoint(client, test_store_id):
     rows = resp.get_json()["open_entries"]
     on_break = next(r for r in rows if r["store_employee_id"] == emp_id)
     assert on_break["break_started_at"] is not None
+
+
+# ── Geofence gate (v2 anti-buddy-punching) ──────────────────
+
+
+def _enable_geofence(
+    store_id: int, *, lat: float, lng: float, radius_m: int = 100,
+) -> None:
+    from api.Modules.Tenancy.Models import Store
+    with db_session():
+        s = db.session.get(Store, store_id)
+        s.timeclock_require_geofence  = True
+        s.timeclock_geofence_lat      = lat
+        s.timeclock_geofence_lng      = lng
+        s.timeclock_geofence_radius_m = radius_m
+        db.session.commit()
+
+
+def test_clock_in_works_when_geofence_off(client, test_store_id):
+    """Default-off behavior: punches without coords still
+    succeed when the gate isn't on."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Geofence Off")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+
+
+def test_clock_in_401s_when_geofence_on_but_no_coords(
+    client, test_store_id,
+):
+    """Gate on + missing coords → 401 with the helpful
+    'allow the browser location prompt' message."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Geofence Missing")
+    _enable_geofence(test_store_id, lat=29.7604, lng=-95.3698)  # Houston
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 401
+    assert "location" in resp.get_data(as_text=True).lower()
+
+
+def test_clock_in_422s_when_geofence_on_but_unpinned(
+    client, test_store_id,
+):
+    """Gate on but the admin never pinned the store location →
+    422 (data-not-ready)."""
+    from api.Modules.Tenancy.Models import Store
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Unpinned")
+        s = db.session.get(Store, test_store_id)
+        # Toggle on but leave lat/lng NULL.
+        s.timeclock_require_geofence = True
+        s.timeclock_geofence_lat = None
+        s.timeclock_geofence_lng = None
+        db.session.commit()
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={
+            "store_employee_id": emp_id, "notes": "",
+            "geo_lat": 29.7604, "geo_lng": -95.3698,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422
+    body = resp.get_data(as_text=True).lower()
+    assert "pinned" in body or "settings" in body
+
+
+def test_clock_in_403s_when_out_of_range(client, test_store_id):
+    """Coords outside the radius → 403 with the distance in
+    the error detail so the SPA can surface it inline."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Far Away")
+    # Houston pin, 100m radius. Punch from San Francisco
+    # (thousands of km away).
+    _enable_geofence(test_store_id, lat=29.7604, lng=-95.3698, radius_m=100)
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={
+            "store_employee_id": emp_id, "notes": "",
+            "geo_lat": 37.7749, "geo_lng": -122.4194,   # San Francisco
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+    body = resp.get_data(as_text=True).lower()
+    assert "geofence" in body or "away" in body
+
+
+def test_clock_in_passes_within_radius(client, test_store_id):
+    """Within the configured radius → punch succeeds. Use a
+    point ~10 meters from the pin (well inside a 100m radius)."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="In Range")
+    # Houston pin.
+    _enable_geofence(test_store_id, lat=29.7604, lng=-95.3698, radius_m=100)
+    token = _login(client, test_store_id)
+    # ~10m north of the pin (1 deg of latitude is ~111 km, so
+    # 0.0001 deg is ~11m).
+    resp = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={
+            "store_employee_id": emp_id, "notes": "",
+            "geo_lat": 29.7604 + 0.0001, "geo_lng": -95.3698,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201, resp.get_data(as_text=True)
+
+
+def test_haversine_math_sanity():
+    """The haversine helper itself — quick guard against a
+    units bug in the radius check."""
+    from api.Modules.TimeClock.Services.geofence import haversine_meters
+    # ~1 degree of latitude ≈ 111 km at the equator.
+    d = haversine_meters(0.0, 0.0, 1.0, 0.0)
+    assert 110_000 < d < 112_000
+    # Same point → zero.
+    assert haversine_meters(29.76, -95.37, 29.76, -95.37) < 0.001
+
+
+def test_admin_store_info_round_trips_geofence(client, test_store_id):
+    """Admin PUT then GET preserves the lat/lng/radius/toggle —
+    needed so the Settings page can hydrate the form."""
+    from api.Modules.Tenancy.Models import Store
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={
+            "timeclock_geofence_lat":      29.7604,
+            "timeclock_geofence_lng":     -95.3698,
+            "timeclock_geofence_radius_m": 250,
+            "timeclock_require_geofence":  True,
+        },
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()["store"]
+    assert body["timeclock_geofence_lat"] == 29.7604
+    assert body["timeclock_geofence_lng"] == -95.3698
+    assert body["timeclock_geofence_radius_m"] == 250
+    assert body["timeclock_require_geofence"] is True
+    with db_session():
+        s = db.session.get(Store, test_store_id)
+        assert s.timeclock_require_geofence is True
+        assert s.timeclock_geofence_radius_m == 250
+
+
+def test_admin_store_info_rejects_invalid_lat(client, test_store_id):
+    """Out-of-range lat → 422 from Pydantic. Defends against
+    a bad SPA write (or a CLI typo)."""
+    token = _login(client, test_store_id)
+    resp = client.put(
+        "/api/v2/admin/store-info",
+        json={"timeclock_geofence_lat": 999.0},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

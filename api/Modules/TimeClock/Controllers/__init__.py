@@ -146,6 +146,12 @@ def clock_in_route(
         assert_token=body.assert_token,
         assertion=body.assertion,
     )
+    _enforce_geofence_gate(
+        db,
+        store_id=store_id,
+        geo_lat=body.geo_lat,
+        geo_lng=body.geo_lng,
+    )
     try:
         entry = clock_in(
             db,
@@ -192,6 +198,12 @@ def clock_out_route(
         store_employee_id=body.store_employee_id,
         assert_token=body.assert_token,
         assertion=body.assertion,
+    )
+    _enforce_geofence_gate(
+        db,
+        store_id=store_id,
+        geo_lat=body.geo_lat,
+        geo_lng=body.geo_lng,
     )
     try:
         entry = clock_out(
@@ -1117,3 +1129,40 @@ def admin_paystub_route(
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     return PaystubResponse(**payload)
+
+
+# ── Geofence gate ───────────────────────────────────────────
+
+
+def _enforce_geofence_gate(
+    db: Session,
+    *,
+    store_id: int,
+    geo_lat: float | None,
+    geo_lng: float | None,
+) -> None:
+    """Refuses the punch when the store has
+    ``timeclock_require_geofence`` on AND the cashier's
+    coordinates aren't within the configured radius. No-op
+    for stores with the toggle off. Map the typed errors to
+    the right HTTP code so the SPA can surface them cleanly."""
+    from api.Modules.Tenancy.Models import Store
+    from api.Modules.TimeClock.Services.geofence import (
+        GeofenceMissingCoordsError,
+        GeofenceNotConfiguredError,
+        GeofenceOutOfRangeError,
+        verify_punch_location,
+    )
+    store = db.get(Store, store_id)
+    if store is None:
+        return
+    try:
+        verify_punch_location(
+            store, geo_lat=geo_lat, geo_lng=geo_lng,
+        )
+    except GeofenceMissingCoordsError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except GeofenceNotConfiguredError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except GeofenceOutOfRangeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))

@@ -1734,6 +1734,32 @@
             ],
             "title": "Assertion"
           },
+          "geo_lat": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geo Lat"
+          },
+          "geo_lng": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geo Lng"
+          },
           "notes": {
             "default": "",
             "maxLength": 500,
@@ -6186,6 +6212,38 @@
             "title": "Store Hours",
             "type": "array"
           },
+          "timeclock_geofence_lat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Geofence Lat"
+          },
+          "timeclock_geofence_lng": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Geofence Lng"
+          },
+          "timeclock_geofence_radius_m": {
+            "default": 100,
+            "title": "Timeclock Geofence Radius M",
+            "type": "integer"
+          },
+          "timeclock_require_geofence": {
+            "default": false,
+            "title": "Timeclock Require Geofence",
+            "type": "boolean"
+          },
           "timeclock_require_passkey": {
             "default": false,
             "title": "Timeclock Require Passkey",
@@ -6338,6 +6396,56 @@
               }
             ],
             "title": "Store Hours"
+          },
+          "timeclock_geofence_lat": {
+            "anyOf": [
+              {
+                "maximum": 90.0,
+                "minimum": -90.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Geofence Lat"
+          },
+          "timeclock_geofence_lng": {
+            "anyOf": [
+              {
+                "maximum": 180.0,
+                "minimum": -180.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Geofence Lng"
+          },
+          "timeclock_geofence_radius_m": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 10.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Geofence Radius M"
+          },
+          "timeclock_require_geofence": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Require Geofence"
           },
           "timeclock_require_passkey": {
             "anyOf": [
