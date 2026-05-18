@@ -197,82 +197,11 @@
   color: var(--db-accent, #3fff00);
 }
 
-/* ── Mobile bottom-sheet ───────────────────────────────── */
-
-.mobileActions {
-  display: none;
-}
-
+/* Narrow-viewport stack for the filter toolbar. The per-row
+ * action collapse is owned by the shared ``<RowActions>`` kit
+ * primitive — see frontend/src/components/ui/RowActions.tsx.
+ */
 @media (max-width: 36rem) {
-  .rowActions    { display: none; }
-  .mobileActions { display: flex; }
   .filterRow     { flex-direction: column; align-items: stretch; }
   .filterRow > * { width: 100%; }
-}
-
-.sheetBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 100;
-}
-
-.sheetCard {
-  background: var(--db-surface-2, #141414);
-  border-top-left-radius: 1.5rem;
-  border-top-right-radius: 1.5rem;
-  padding: 1rem 1rem 1.5rem;
-  width: 100%;
-  max-width: 32rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  animation: db-sheet-up 180ms ease-out;
-}
-
-.sheetGrip {
-  width: 3rem;
-  height: 0.25rem;
-  background: var(--db-text-muted, #a3a3a3);
-  opacity: 0.5;
-  border-radius: 999px;
-  margin: 0 auto 0.5rem;
-}
-
-.sheetItem {
-  appearance: none;
-  border: 0;
-  padding: 0.85rem 1rem;
-  border-radius: 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
-}
-
-.sheetItem:active {
-  transform: scale(0.98);
-  opacity: 0.85;
-}
-
-.sheetLogs     {
-  background: rgba(255, 142, 71, 0.12); color: #ff8e47;
-}
-.sheetOverview {
-  background: rgba(184, 95, 255, 0.12); color: #b85fff;
-}
-.sheetEdit     {
-  background: rgba(255, 184, 0, 0.12); color: #ffb800;
-}
-.sheetDelete   {
-  background: rgba(255, 65, 65, 0.12); color: #ff4141;
-}
-
-@keyframes db-sheet-up {
-  from { transform: translateY(100%); }
-  to   { transform: translateY(0); }
 }

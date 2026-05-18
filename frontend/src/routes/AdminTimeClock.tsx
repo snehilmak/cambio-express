@@ -13,8 +13,8 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, Card, EmptyState, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Pill, Select, Table, TableSkeleton,
-  Textarea, tdStyle, thStyle,
+  Loading, PageHeader, PageShell, Pill, RowActions, Select, Table,
+  TableSkeleton, Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
 import styles from "./AdminTimeClock.module.css";
@@ -29,20 +29,16 @@ import styles from "./AdminTimeClock.module.css";
 //   • Delete entries (audit chain survives)
 //   • Inspect the per-entry audit chain (clock-in / -out /
 //     admin_* rows, newest-first) via Logs
-// On narrow viewports the inline Edit / Logs / Delete buttons
-// collapse into a single "Actions" button that opens a bottom
-// sheet. The status column flips between pending / approved /
-// rejected pills; ``Adjusted: Yes`` lights up on any row an
-// admin has touched after the fact.
+// Per-row actions go through the shared ``<RowActions>``
+// primitive — inline buttons on desktop, bottom-sheet on
+// narrow viewports. The status column flips between pending /
+// approved / rejected pills; ``Adjusted: Yes`` lights up on
+// any row an admin has touched after the fact.
 
 type ModalState =
   | { kind: "closed" }
   | { kind: "create" }
   | { kind: "edit"; row: TimeClockEntryRow };
-
-type SheetState =
-  | { kind: "closed" }
-  | { kind: "open"; row: TimeClockEntryRow };
 
 export default function AdminTimeClock() {
   const identity      = getCurrentIdentity();
@@ -62,7 +58,6 @@ export default function AdminTimeClock() {
   const [empFilter, setEmpFilter] = useState<number | "">("");
 
   const [modal, setModal] = useState<ModalState>({ kind: "closed" });
-  const [sheet, setSheet] = useState<SheetState>({ kind: "closed" });
   const [expandedHistoryId, setExpandedHistoryId] =
     useState<number | null>(null);
 
@@ -219,33 +214,42 @@ export default function AdminTimeClock() {
                       <AdjustedBadge adjusted={r.adjusted} />
                     </td>
                     <td style={tdStyle}>
-                      {/* Desktop: inline buttons */}
-                      <div className={styles.rowActions}>
-                        <Button
-                          size="sm" tone="secondary"
-                          onClick={() => setModal({ kind: "edit", row: r })}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm" tone="secondary"
-                          onClick={() => setExpandedHistoryId(
-                            expandedHistoryId === r.id ? null : r.id,
-                          )}
-                        >
-                          {expandedHistoryId === r.id ? "Hide logs" : "Logs"}
-                        </Button>
-                        <DeleteEntryButton entryId={r.id} onDone={refresh} />
-                      </div>
-                      {/* Mobile: single button → bottom sheet */}
-                      <div className={styles.mobileActions}>
-                        <Button
-                          size="sm" tone="secondary"
-                          onClick={() => setSheet({ kind: "open", row: r })}
-                        >
-                          Actions
-                        </Button>
-                      </div>
+                      <RowActions
+                        title={`${r.employee_name} · ${r.clock_in_at.slice(0, 10)}`}
+                        actions={[
+                          {
+                            label: "Edit", tone: "warning",
+                            onClick: () => setModal({ kind: "edit", row: r }),
+                          },
+                          {
+                            label: expandedHistoryId === r.id ? "Hide logs" : "Logs",
+                            tone: "logs",
+                            onClick: () => setExpandedHistoryId(
+                              expandedHistoryId === r.id ? null : r.id,
+                            ),
+                          },
+                          {
+                            label: "Overview", tone: "info",
+                            onClick: () => setEmpFilter(r.store_employee_id),
+                          },
+                          {
+                            label: "Delete", tone: "danger",
+                            onClick: async () => {
+                              if (!window.confirm(
+                                "Delete this time-clock entry? The audit row will survive.",
+                              )) return;
+                              try {
+                                await adminDeleteEntry(r.id);
+                                refresh();
+                              } catch (e) {
+                                window.alert(
+                                  e instanceof ApiError ? e.message : "Couldn't delete.",
+                                );
+                              }
+                            },
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                   {expandedHistoryId === r.id && (
@@ -274,26 +278,6 @@ export default function AdminTimeClock() {
         />
       )}
 
-      {sheet.kind === "open" && (
-        <ActionSheet
-          row={sheet.row}
-          onClose={() => setSheet({ kind: "closed" })}
-          onOverview={() => {
-            setEmpFilter(sheet.row.store_employee_id);
-            setSheet({ kind: "closed" });
-          }}
-          onEdit={() => {
-            const row = sheet.row;
-            setSheet({ kind: "closed" });
-            setModal({ kind: "edit", row });
-          }}
-          onLogs={() => {
-            setExpandedHistoryId(sheet.row.id);
-            setSheet({ kind: "closed" });
-          }}
-          onDeleted={refresh}
-        />
-      )}
     </PageShell>
   );
 }
@@ -439,118 +423,6 @@ function _formatHistoryDate(iso: string): string {
 
 
 // ── Delete button ───────────────────────────────────────────
-
-
-function DeleteEntryButton({
-  entryId, onDone,
-}: { entryId: number; onDone: () => void }) {
-  const [busy, setBusy] = useState(false);
-  async function onClick() {
-    if (!window.confirm(
-      "Delete this time-clock entry? The audit row will survive "
-      + "so the history view keeps a record of the deletion.",
-    )) return;
-    setBusy(true);
-    try {
-      await adminDeleteEntry(entryId);
-      onDone();
-    } catch (e) {
-      window.alert(
-        e instanceof ApiError ? e.message : "Couldn't delete the entry.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <Button
-      size="sm" tone="secondary"
-      busy={busy} disabled={busy}
-      onClick={onClick}
-    >
-      Delete
-    </Button>
-  );
-}
-
-
-// ── Mobile action sheet ─────────────────────────────────────
-
-
-function ActionSheet({
-  row, onClose, onOverview, onEdit, onLogs, onDeleted,
-}: {
-  row: TimeClockEntryRow;
-  onClose: () => void;
-  onOverview: () => void;
-  onEdit: () => void;
-  onLogs: () => void;
-  onDeleted: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  async function onDelete() {
-    if (!window.confirm(
-      "Delete this time-clock entry? The audit row will survive.",
-    )) return;
-    setBusy(true);
-    try {
-      await adminDeleteEntry(row.id);
-      onDeleted();
-      onClose();
-    } catch (e) {
-      window.alert(
-        e instanceof ApiError ? e.message : "Couldn't delete.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-  // Portal out to document.body so the sheet's ``position: fixed``
-  // pins to the viewport rather than the PageShell wrapper. The
-  // ``.ds-page`` class on PageShell sets ``transform`` via its
-  // entry animation, which would otherwise establish a containing
-  // block and trap the sheet inside the page flow.
-  return createPortal(
-    <div className={styles.sheetBackdrop} onClick={onClose}>
-      <div
-        className={styles.sheetCard}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className={styles.sheetGrip} />
-        <button
-          type="button"
-          className={`${styles.sheetItem} ${styles.sheetLogs}`}
-          onClick={onLogs}
-        >
-          Logs
-        </button>
-        <button
-          type="button"
-          className={`${styles.sheetItem} ${styles.sheetOverview}`}
-          onClick={onOverview}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          className={`${styles.sheetItem} ${styles.sheetEdit}`}
-          onClick={onEdit}
-        >
-          Edit
-        </button>
-        <button
-          type="button"
-          className={`${styles.sheetItem} ${styles.sheetDelete}`}
-          onClick={onDelete}
-          disabled={busy}
-        >
-          {busy ? "Deleting…" : "Delete"}
-        </button>
-      </div>
-    </div>,
-    document.body,
-  );
-}
 
 
 // ── Create / edit modal ─────────────────────────────────────
