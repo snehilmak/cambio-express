@@ -135,3 +135,43 @@ class OwnerUnlinkRequest(BaseModel):
     (the store_id is in the path), but `extra="forbid"` keeps it
     explicit + future-extensible."""
     model_config = ConfigDict(extra="forbid")
+
+
+from typing import Literal
+
+from pydantic import Field
+
+
+class OwnerBulkAddUserRequest(BaseModel):
+    """POST body for ``/owner/bulk-add-user``. Creates the same
+    login (username + password) at every store in ``store_ids``
+    that's actually in the owner's umbrella. Stores outside the
+    umbrella are reported as ``rejected`` rather than 403'd so
+    the operator sees the full result table."""
+    model_config = ConfigDict(extra="forbid")
+
+    username:  str = Field(..., min_length=1, max_length=80)
+    password:  str = Field(..., min_length=8, max_length=200)
+    full_name: str = Field("", max_length=120)
+    role:      Literal["admin", "employee"] = "employee"
+    store_ids: list[int] = Field(..., min_length=1, max_length=50)
+
+
+class OwnerBulkAddUserResultRow(BaseModel):
+    """One row per requested store_id, ordered same as the
+    request payload."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id:   int
+    store_name: str = ""
+    status:     Literal["created", "skipped", "rejected"]
+    detail:     str = ""
+
+
+class OwnerBulkAddUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    created:  int
+    skipped:  int
+    rejected: int
+    results:  list[OwnerBulkAddUserResultRow]

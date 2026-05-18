@@ -927,8 +927,25 @@ gaps. Ordered by "what I'd do next" at the top.
 ### Owner umbrella (`/owner/settings` — doesn't exist yet)
 - [ ] **Cross-store defaults** — apply a fed-tax rate / company list /
       receipt template to all my stores at once.
-- [ ] **Bulk user management** — add an admin to multiple stores at
-      once.
+- [x] **Bulk user management** — landed.
+      ``POST /api/v2/owner/bulk-add-user`` creates the same
+      login (username + password) at every store in the
+      owner's umbrella that the operator selects. Per-store
+      outcomes (created / skipped / rejected) come back in the
+      response so the SPA can render a result table; one store
+      collision doesn't fail the whole batch. Stores outside
+      the umbrella surface as ``rejected`` rather than 403'ing
+      the call. Each successful create writes an
+      ``OperatorAuditLog`` row.
+      SPA page at ``/app/owner/bulk-add-user`` (new sidebar
+      entry under Owner). Form takes username + password +
+      full name + role (admin / employee) + a multi-select of
+      the owner's stores. Results table shows per-store
+      status after submit.
+      Today this creates N independent User rows sharing the
+      same credentials — a single-row multi-store user (one
+      ``User`` with many ``store_id`` values) is a separate
+      architectural item.
 - [ ] **Consolidated billing** — one Stripe customer for N stores
       instead of one-per-store. Big architectural change, meaningful
       revenue upside.

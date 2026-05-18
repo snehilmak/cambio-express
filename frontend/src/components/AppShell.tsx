@@ -115,10 +115,11 @@ const NAV: NavGroup[] = [
     // to drill into individual owners' shops instead.
     roles: ["owner"],
     items: [
-      { to: "/owner/locations", label: "Locations",   icon: iconOwner() },
-      { to: "/owner/pl-rollup", label: "P&L rollup",  icon: iconRollup() },
-      { to: "/owner/reports",   label: "Reports",     icon: iconReports() },
-      { to: "/owner/connect",   label: "Connect",     icon: iconBanner() },
+      { to: "/owner/locations",      label: "Locations",   icon: iconOwner() },
+      { to: "/owner/pl-rollup",      label: "P&L rollup",  icon: iconRollup() },
+      { to: "/owner/reports",        label: "Reports",     icon: iconReports() },
+      { to: "/owner/connect",        label: "Connect",     icon: iconBanner() },
+      { to: "/owner/bulk-add-user",  label: "Bulk add user", icon: iconOwner() },
     ],
   },
   {

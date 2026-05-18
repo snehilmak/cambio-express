@@ -1958,6 +1958,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/bulk-add-user": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner Bulk Add User Route
+         * @description Create the same login at every store in ``body.store_ids``
+         *     that's actually in the owner's umbrella. Per-store outcomes
+         *     (created / skipped / rejected) come back in the response so
+         *     the SPA can show a result table; we don't 4xx the whole
+         *     request just because one store collided.
+         */
+        post: operations["owner_bulk_add_user_route_owner_bulk_add_user_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/connect-codes": {
         parameters: {
             query?: never;
@@ -5437,6 +5461,68 @@ export interface components {
             notify_locked_day_digest?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
+        };
+        /**
+         * OwnerBulkAddUserRequest
+         * @description POST body for ``/owner/bulk-add-user``. Creates the same
+         *     login (username + password) at every store in ``store_ids``
+         *     that's actually in the owner's umbrella. Stores outside the
+         *     umbrella are reported as ``rejected`` rather than 403'd so
+         *     the operator sees the full result table.
+         */
+        OwnerBulkAddUserRequest: {
+            /**
+             * Full Name
+             * @default
+             */
+            full_name: string;
+            /** Password */
+            password: string;
+            /**
+             * Role
+             * @default employee
+             * @enum {string}
+             */
+            role: "admin" | "employee";
+            /** Store Ids */
+            store_ids: number[];
+            /** Username */
+            username: string;
+        };
+        /** OwnerBulkAddUserResponse */
+        OwnerBulkAddUserResponse: {
+            /** Created */
+            created: number;
+            /** Rejected */
+            rejected: number;
+            /** Results */
+            results: components["schemas"]["OwnerBulkAddUserResultRow"][];
+            /** Skipped */
+            skipped: number;
+        };
+        /**
+         * OwnerBulkAddUserResultRow
+         * @description One row per requested store_id, ordered same as the
+         *     request payload.
+         */
+        OwnerBulkAddUserResultRow: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "created" | "skipped" | "rejected";
+            /** Store Id */
+            store_id: number;
+            /**
+             * Store Name
+             * @default
+             */
+            store_name: string;
         };
         /** OwnerConnectCodeListResponse */
         OwnerConnectCodeListResponse: {
@@ -10654,6 +10740,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthlyResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_bulk_add_user_route_owner_bulk_add_user_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerBulkAddUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerBulkAddUserResponse"];
                 };
             };
             /** @description Validation Error */

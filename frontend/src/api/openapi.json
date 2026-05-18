@@ -3867,6 +3867,122 @@
         "title": "NotificationsUpdateRequest",
         "type": "object"
       },
+      "OwnerBulkAddUserRequest": {
+        "additionalProperties": false,
+        "description": "POST body for ``/owner/bulk-add-user``. Creates the same\nlogin (username + password) at every store in ``store_ids``\nthat's actually in the owner's umbrella. Stores outside the\numbrella are reported as ``rejected`` rather than 403'd so\nthe operator sees the full result table.",
+        "properties": {
+          "full_name": {
+            "default": "",
+            "maxLength": 120,
+            "title": "Full Name",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "role": {
+            "default": "employee",
+            "enum": [
+              "admin",
+              "employee"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "store_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Store Ids",
+            "type": "array"
+          },
+          "username": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password",
+          "store_ids"
+        ],
+        "title": "OwnerBulkAddUserRequest",
+        "type": "object"
+      },
+      "OwnerBulkAddUserResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "integer"
+          },
+          "rejected": {
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/OwnerBulkAddUserResultRow"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "created",
+          "skipped",
+          "rejected",
+          "results"
+        ],
+        "title": "OwnerBulkAddUserResponse",
+        "type": "object"
+      },
+      "OwnerBulkAddUserResultRow": {
+        "additionalProperties": false,
+        "description": "One row per requested store_id, ordered same as the\nrequest payload.",
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "created",
+              "skipped",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "store_id": {
+            "title": "Store Id",
+            "type": "integer"
+          },
+          "store_name": {
+            "default": "",
+            "title": "Store Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "store_id",
+          "status"
+        ],
+        "title": "OwnerBulkAddUserResultRow",
+        "type": "object"
+      },
       "OwnerConnectCodeListResponse": {
         "additionalProperties": false,
         "properties": {
@@ -14334,6 +14450,82 @@
         "summary": "Update Monthly Route",
         "tags": [
           "monthly"
+        ]
+      }
+    },
+    "/owner/bulk-add-user": {
+      "post": {
+        "description": "Create the same login at every store in ``body.store_ids``\nthat's actually in the owner's umbrella. Per-store outcomes\n(created / skipped / rejected) come back in the response so\nthe SPA can show a result table; we don't 4xx the whole\nrequest just because one store collided.",
+        "operationId": "owner_bulk_add_user_route_owner_bulk_add_user_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OwnerBulkAddUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnerBulkAddUserResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Owner Bulk Add User Route",
+        "tags": [
+          "owner"
         ]
       }
     },

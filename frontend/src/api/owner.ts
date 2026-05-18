@@ -249,3 +249,37 @@ export function useOwnerStoreDetail(
     enabled: storeId > 0,
   });
 }
+
+
+// ── Bulk add user ───────────────────────────────────────────
+
+export interface OwnerBulkAddUserBody {
+  username:  string;
+  password:  string;
+  full_name: string;
+  role:      "admin" | "employee";
+  store_ids: number[];
+}
+
+export interface OwnerBulkAddUserResultRow {
+  store_id:   number;
+  store_name: string;
+  status:     "created" | "skipped" | "rejected";
+  detail:     string;
+}
+
+export interface OwnerBulkAddUserResponse {
+  created:  number;
+  skipped:  number;
+  rejected: number;
+  results:  OwnerBulkAddUserResultRow[];
+}
+
+export async function bulkAddUser(
+  body: OwnerBulkAddUserBody,
+): Promise<OwnerBulkAddUserResponse> {
+  return api<OwnerBulkAddUserResponse>("/api/v2/owner/bulk-add-user", {
+    method: "POST",
+    json: body,
+  });
+}

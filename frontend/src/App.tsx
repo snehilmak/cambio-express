@@ -40,6 +40,7 @@ const Login = lazy(() => import("./routes/Login"));
 const LoginStore = lazy(() => import("./routes/LoginStore"));
 const Monthly = lazy(() => import("./routes/Monthly"));
 const NewTransfer = lazy(() => import("./routes/NewTransfer"));
+const OwnerBulkAddUser = lazy(() => import("./routes/OwnerBulkAddUser"));
 const OwnerConnect = lazy(() => import("./routes/OwnerConnect"));
 const OwnerDashboard = lazy(() => import("./routes/OwnerDashboard"));
 const OwnerLocations = lazy(() => import("./routes/OwnerLocations"));
@@ -210,11 +211,12 @@ export default function App() {
           <Route path="return-checks"          element={<ReturnChecks />} />
           <Route path="return-checks/new"      element={<ReturnCheckForm />} />
           <Route path="return-checks/:id/edit" element={<ReturnCheckForm />} />
-          <Route path="owner/connect"   element={<OwnerConnect />} />
-          <Route path="owner/dashboard" element={<OwnerDashboard />} />
-          <Route path="owner/locations" element={<OwnerLocations />} />
-          <Route path="owner/pl-rollup" element={<OwnerPLRollup />} />
-          <Route path="owner/reports"   element={<OwnerReports />} />
+          <Route path="owner/connect"        element={<OwnerConnect />} />
+          <Route path="owner/dashboard"      element={<OwnerDashboard />} />
+          <Route path="owner/locations"      element={<OwnerLocations />} />
+          <Route path="owner/pl-rollup"      element={<OwnerPLRollup />} />
+          <Route path="owner/reports"        element={<OwnerReports />} />
+          <Route path="owner/bulk-add-user"  element={<OwnerBulkAddUser />} />
           <Route path="owner/store/:storeId" element={<OwnerStoreDetail />} />
           <Route path="superadmin/stores"        element={<SuperadminStores />} />
           <Route path="superadmin/stores/new"    element={<SuperadminStoreForm />} />
