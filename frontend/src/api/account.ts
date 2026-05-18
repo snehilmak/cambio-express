@@ -166,6 +166,7 @@ export interface StoreInfoRow {
   timezone_choices: string[];
   store_hours:      StoreHourEntry[];
   enforce_business_hours: boolean;
+  timeclock_require_passkey: boolean;
 }
 
 export interface StoreHourEntry {
@@ -187,6 +188,7 @@ export interface StoreInfoUpdateBody {
   timezone?:         string;
   store_hours?:      StoreHourEntry[];
   enforce_business_hours?: boolean;
+  timeclock_require_passkey?: boolean;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

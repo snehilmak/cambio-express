@@ -30,6 +30,13 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # Default False on the column; flips on from the Settings
     # page only.
     "enforce_business_hours",
+    # Anti-buddy-punching gate on the time-clock punch flow.
+    # When True, every clock-in / clock-out requires a fresh
+    # WebAuthn assertion from the roster member's registered
+    # passkey (Windows Hello / Touch ID / Face ID / hardware
+    # key). Roster members register via the admin credentials
+    # page first.
+    "timeclock_require_passkey",
 )
 
 
@@ -94,6 +101,8 @@ def update_store_info(
         if k == "enforce_business_hours":
             # Coerce truthy values so a CLI / curl POST with "1"
             # or "true" still writes a Boolean column cleanly.
+            v = bool(v)
+        if k == "timeclock_require_passkey":
             v = bool(v)
         setattr(store, k, v)
     db.flush()

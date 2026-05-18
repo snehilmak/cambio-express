@@ -390,6 +390,7 @@ function StoreInfoCard() {
   const [timezone, setTimezone] = useState("");
   const [hours, setHours] = useState<StoreHourEntry[]>(() => defaultHours());
   const [enforceHours, setEnforceHours] = useState(false);
+  const [requirePasskey, setRequirePasskey] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -415,6 +416,7 @@ function StoreInfoCard() {
         : defaultHours(),
     );
     setEnforceHours(Boolean(data.store.enforce_business_hours));
+    setRequirePasskey(Boolean(data.store.timeclock_require_passkey));
   }, [data]);
 
   const canEdit =
@@ -437,6 +439,7 @@ function StoreInfoCard() {
         timezone,
         store_hours: hours,
         enforce_business_hours: enforceHours,
+        timeclock_require_passkey: requirePasskey,
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -561,6 +564,22 @@ function StoreInfoCard() {
               {" "}— refuses transfer saves with an error when
               outside the open window. The soft warning on the New
               Transfer form fires regardless of this toggle.
+            </span>
+          </label>
+          <label className={styles.enforceRow}>
+            <input
+              type="checkbox"
+              checked={requirePasskey}
+              disabled={!canEdit}
+              onChange={(e) => setRequirePasskey(e.target.checked)}
+            />{" "}
+            Block time-clock punches without a passkey
+            <span className={styles.enforceHint}>
+              {" "}— anti-buddy-punching: every clock-in / clock-out
+              demands a fresh Windows Hello / Touch ID / Face ID
+              prompt. Enroll each cashier's device from
+              {" "}<code>/app/admin/timeclock/credentials</code>
+              {" "}before flipping this on.
             </span>
           </label>
         </div>

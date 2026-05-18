@@ -51,9 +51,21 @@ export function useTimeClockStatus() {
 }
 
 
+export interface PunchInput {
+  store_employee_id: number;
+  notes:             string;
+  /** WebAuthn assertion (from ``navigator.credentials.get()``)
+   *  + the matching ``assert_token`` that came back from
+   *  ``/timeclock/passkey/challenge``. Required only when
+   *  ``store.timeclock_require_passkey`` is True. */
+  assert_token?:     string;
+  assertion?:        unknown;
+}
+
+
 export function useClockInMutation() {
   return useMutation({
-    mutationFn: (input: { store_employee_id: number; notes: string }) =>
+    mutationFn: (input: PunchInput) =>
       api<TimeClockPunchResponse>("/api/v2/timeclock/clock-in", {
         method: "POST",
         json: input,
@@ -64,7 +76,7 @@ export function useClockInMutation() {
 
 export function useClockOutMutation() {
   return useMutation({
-    mutationFn: (input: { store_employee_id: number; notes: string }) =>
+    mutationFn: (input: PunchInput) =>
       api<TimeClockPunchResponse>("/api/v2/timeclock/clock-out", {
         method: "POST",
         json: input,
@@ -156,4 +168,77 @@ export function useTimeClockHistory(entryId: number | null) {
       ),
     enabled: entryId != null && entryId > 0,
   });
+}
+
+
+// ── Passkey-required punch (v2 anti-buddy-punching) ─────────
+
+export interface TimeClockCredentialRow {
+  store_employee_id: number;
+  employee_name:     string;
+  has_passkey:       boolean;
+  name:              string;
+  registered_at:     string;
+  last_used_at:      string;
+}
+
+export interface TimeClockCredentialList {
+  rows: TimeClockCredentialRow[];
+}
+
+export interface PunchChallengeResponse {
+  options_json: string;
+  assert_token: string;
+}
+
+export interface RegisterBeginResponse {
+  options_json:   string;
+  register_token: string;
+}
+
+export function useTimeClockCredentials() {
+  return useQuery<TimeClockCredentialList>({
+    queryKey: ["timeclock", "credentials"],
+    queryFn: () =>
+      api<TimeClockCredentialList>(
+        "/api/v2/admin/timeclock/credentials",
+      ),
+  });
+}
+
+export function fetchPunchChallenge(
+  store_employee_id: number,
+): Promise<PunchChallengeResponse> {
+  return api<PunchChallengeResponse>(
+    "/api/v2/timeclock/passkey/challenge",
+    { method: "POST", json: { store_employee_id } },
+  );
+}
+
+export function adminRegisterCredentialBegin(
+  store_employee_id: number,
+): Promise<RegisterBeginResponse> {
+  return api<RegisterBeginResponse>(
+    `/api/v2/admin/timeclock/credentials/${store_employee_id}/register/begin`,
+    { method: "POST", json: {} },
+  );
+}
+
+export function adminRegisterCredentialFinish(
+  store_employee_id: number,
+  body: { register_token: string; credential: unknown; name?: string },
+): Promise<TimeClockCredentialRow> {
+  return api<TimeClockCredentialRow>(
+    `/api/v2/admin/timeclock/credentials/${store_employee_id}/register/finish`,
+    { method: "POST", json: body },
+  );
+}
+
+export function adminDeleteCredential(
+  store_employee_id: number,
+): Promise<void> {
+  return api<void>(
+    `/api/v2/admin/timeclock/credentials/${store_employee_id}`,
+    { method: "DELETE" },
+  );
 }

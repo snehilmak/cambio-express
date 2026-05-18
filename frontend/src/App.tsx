@@ -23,6 +23,9 @@ const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminTaxExport = lazy(() => import("./routes/AdminTaxExport"));
 const AdminTimeClock = lazy(() => import("./routes/AdminTimeClock"));
+const AdminTimeClockCredentials = lazy(
+  () => import("./routes/AdminTimeClockCredentials"),
+);
 const AdminUserForm = lazy(() => import("./routes/AdminUserForm"));
 const AdminUsers = lazy(() => import("./routes/AdminUsers"));
 const Bank = lazy(() => import("./routes/Bank"));
@@ -231,7 +234,8 @@ export default function App() {
           <Route path="subscribe/success"     element={<SubscribeSuccess />} />
           <Route path="admin/subscription"    element={<AdminSubscription />} />
           <Route path="admin/tax-export"      element={<AdminTaxExport />} />
-          <Route path="admin/timeclock"       element={<AdminTimeClock />} />
+          <Route path="admin/timeclock"             element={<AdminTimeClock />} />
+          <Route path="admin/timeclock/credentials" element={<AdminTimeClockCredentials />} />
           <Route path="admin/audit-log"       element={<AdminAuditLog />} />
           <Route path="admin/users"             element={<AdminUsers />} />
           <Route path="admin/users/new"         element={<AdminUserForm />} />

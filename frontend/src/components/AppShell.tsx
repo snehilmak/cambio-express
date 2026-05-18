@@ -108,7 +108,8 @@ const NAV: NavGroup[] = [
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
-      { to: "/admin/timeclock",    label: "Payroll",     icon: iconClock() },
+      { to: "/admin/timeclock",              label: "Payroll",            icon: iconClock() },
+      { to: "/admin/timeclock/credentials",  label: "Punch credentials",  icon: iconClock() },
     ],
   },
   {

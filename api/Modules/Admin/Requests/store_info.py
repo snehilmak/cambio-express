@@ -52,6 +52,7 @@ class StoreInfoRow(BaseModel):
     # can render a complete schedule without nullability checks.
     store_hours:      list[StoreHourEntry] = []
     enforce_business_hours: bool = False
+    timeclock_require_passkey: bool = False
 
 
 class StoreInfoResponse(BaseModel):
@@ -77,3 +78,4 @@ class StoreInfoUpdateRequest(BaseModel):
     timezone:         str | None = Field(None, max_length=60)
     store_hours:      list[StoreHourEntry] | None = None
     enforce_business_hours: bool | None = None
+    timeclock_require_passkey: bool | None = None

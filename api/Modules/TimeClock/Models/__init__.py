@@ -11,7 +11,8 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String,
+    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer,
+    LargeBinary, String,
 )
 
 from api.Core.Database import Base
@@ -66,4 +67,55 @@ class TimeClockEntry(Base):
     )
 
 
-__all__ = ["TimeClockEntry"]
+class StoreEmployeePasskey(Base):
+    """One row per roster member's registered WebAuthn passkey.
+
+    Distinct from the user-side ``Passkey`` table because
+    multiple cashiers commonly share a single ``employee``
+    ``User`` login in this codebase — user→passkey doesn't
+    identify the cashier, roster→passkey does. The admin
+    registers each active roster member's device once from the
+    Settings → Time clock credentials page; afterwards every
+    clock-in / clock-out demands a fresh assertion against the
+    same credential when ``Store.timeclock_require_passkey``
+    is True.
+
+    v1 caps at one passkey per roster row (the unique
+    constraint on ``store_employee_id`` enforces that). If a
+    cashier swaps devices the admin deletes the old row and
+    re-registers.
+    """
+
+    __tablename__ = "store_employee_passkey"
+
+    id                    = Column(Integer, primary_key=True)
+    store_id              = Column(
+        Integer, ForeignKey("store.id"),
+        nullable=False, index=True,
+    )
+    store_employee_id     = Column(
+        Integer, ForeignKey("store_employee.id"),
+        nullable=False, unique=True,
+    )
+    # WebAuthn credential metadata — same shape as the user-side
+    # ``Passkey`` table. ``credential_id`` is up to 1023 bytes per
+    # spec; we store the raw bytes (LargeBinary, not text-encoded).
+    credential_id         = Column(
+        LargeBinary, unique=True, nullable=False,
+    )
+    public_key            = Column(LargeBinary, nullable=False)
+    sign_count            = Column(Integer, default=0, nullable=False)
+    aaguid                = Column(String(64), default="")
+    # Display name the admin assigns at registration time
+    # ("Maria's iPhone", "Punch terminal Touch ID", etc.).
+    name                  = Column(String(120), default="")
+    registered_at         = Column(DateTime, default=datetime.utcnow)
+    last_used_at          = Column(DateTime, nullable=True)
+    # User session that walked the cashier through registration —
+    # for the admin audit-trail view.
+    registered_by_user_id = Column(
+        Integer, ForeignKey("user.id"), nullable=True,
+    )
+
+
+__all__ = ["StoreEmployeePasskey", "TimeClockEntry"]

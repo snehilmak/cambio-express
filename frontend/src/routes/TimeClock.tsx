@@ -2,13 +2,15 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  fetchPunchChallenge,
   useClockInMutation, useClockOutMutation, useTimeClockStatus,
-  type TimeClockEntryRow,
+  type PunchInput, type TimeClockEntryRow,
 } from "../api/timeclock";
 import { useEmployees } from "../api/transfers";
 import { useStoreInfo, useProfile } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
+import { passkeysSupported, performPasskeyAssert } from "../lib/webauthn";
 import {
   Alert, Button, Card, EmptyState, Empty, ErrorState, Field, Input,
   Loading, PageHeader, PageShell, Select, Table, tdStyle, thStyle,
@@ -51,6 +53,12 @@ export default function TimeClock() {
     queryClient.invalidateQueries({ queryKey: ["timeclock", "status"] });
   }
 
+  // True when the store has flipped on the passkey gate.
+  // Determines whether the punch flow runs the extra WebAuthn
+  // round-trip before hitting clock-in / clock-out.
+  const passkeyRequired =
+    Boolean(storeInfo?.store?.timeclock_require_passkey);
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setFlash(null);
@@ -60,15 +68,34 @@ export default function TimeClock() {
       roster.data?.employees.find((m) => m.id === empId)?.name
         ?? `roster #${empId}`;
     try {
+      // Optional WebAuthn pre-step. When the store requires a
+      // passkey, fetch a challenge → run the OS prompt → echo
+      // the assertion back on the punch call. Skipped entirely
+      // when the toggle is off so the existing punch flow keeps
+      // its zero-prompt UX.
+      const punch: PunchInput = {
+        store_employee_id: empId, notes,
+      };
+      if (passkeyRequired) {
+        if (!passkeysSupported()) {
+          throw new Error(
+            "This store requires a passkey for time-clock punches, "
+            + "but this browser doesn't support WebAuthn. Use a modern "
+            + "Chrome / Safari / Firefox / Edge build.",
+          );
+        }
+        const challenge = await fetchPunchChallenge(empId);
+        const assertion = await performPasskeyAssert(
+          challenge.options_json,
+        );
+        punch.assert_token = challenge.assert_token;
+        punch.assertion    = assertion;
+      }
       if (pickedIsOpen) {
-        await clockOut.mutateAsync({
-          store_employee_id: empId, notes,
-        });
+        await clockOut.mutateAsync(punch);
         setFlash({ kind: "ok", msg: `${empName} clocked out.` });
       } else {
-        await clockIn.mutateAsync({
-          store_employee_id: empId, notes,
-        });
+        await clockIn.mutateAsync(punch);
         setFlash({ kind: "ok", msg: `${empName} clocked in.` });
       }
       setNotes("");
@@ -78,7 +105,9 @@ export default function TimeClock() {
         kind: "err",
         msg: err instanceof ApiError
           ? err.message
-          : "Couldn't record the punch.",
+          : err instanceof Error
+            ? err.message
+            : "Couldn't record the punch.",
       });
     }
   }

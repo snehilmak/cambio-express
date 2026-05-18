@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -32,6 +32,10 @@ from api.Modules.TimeClock.Requests import (
     AdminCreateEntryRequest,
     AdminUpdateEntryRequest,
     ClockPunchRequest,
+    PunchChallengeRequest,
+    PunchChallengeResponse,
+    TimeClockCredentialList,
+    TimeClockCredentialRow,
     TimeClockEntryList,
     TimeClockEntryRow,
     TimeClockHistoryResponse,
@@ -113,15 +117,24 @@ def _names_for(
 )
 def clock_in_route(
     body: ClockPunchRequest,
+    request: Request,
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Open a new shift for the picked roster member at the
     current user's store. 409 when the employee already has an
     open shift; 404 when the roster id doesn't belong to this
-    store."""
+    store; 401 when the store requires a passkey and the
+    assertion is missing / invalid."""
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
+    _enforce_passkey_gate(
+        request, db,
+        store_id=store_id,
+        store_employee_id=body.store_employee_id,
+        assert_token=body.assert_token,
+        assertion=body.assertion,
+    )
     try:
         entry = clock_in(
             db,
@@ -152,14 +165,23 @@ def clock_in_route(
 )
 def clock_out_route(
     body: ClockPunchRequest,
+    request: Request,
     db: Session = Depends(get_db),
     claims: dict = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Close the picked roster member's open shift. 409 when
     nobody's clocked in for that name; 404 when the roster id
-    doesn't belong to this store."""
+    doesn't belong to this store; 401 when the store requires
+    a passkey and the assertion is missing / invalid."""
     store_id = resolve_store_scope(claims)
     user_id = _user_id_from(claims)
+    _enforce_passkey_gate(
+        request, db,
+        store_id=store_id,
+        store_employee_id=body.store_employee_id,
+        assert_token=body.assert_token,
+        assertion=body.assertion,
+    )
     try:
         entry = clock_out(
             db,
@@ -567,3 +589,391 @@ def _write_audit(
         action=action,
         summary=summary,
     )
+
+
+# ── Passkey-gated punch (anti-buddy-punching) ───────────────
+
+
+def _enforce_passkey_gate(
+    request: Request,
+    db: Session,
+    *,
+    store_id: int,
+    store_employee_id: int,
+    assert_token: str | None,
+    assertion: dict | None,
+) -> None:
+    """When the store has ``timeclock_require_passkey=True``,
+    refuse the punch unless a fresh WebAuthn assertion lands
+    alongside the body. No-op for stores with the toggle off
+    (the SPA omits the assertion fields entirely in that
+    mode)."""
+    from api.Modules.Tenancy.Models import Store
+    store = db.get(Store, store_id)
+    if store is None or not getattr(store, "timeclock_require_passkey", False):
+        return
+    if not assert_token or assertion is None:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "This store requires a passkey on every punch. "
+                "Use the Time-clock punch page (which prompts the "
+                "OS-level authenticator) instead of a direct API call."
+            ),
+        )
+    import jwt as _jwt
+    from webauthn import verify_authentication_response
+    from webauthn.helpers import base64url_to_bytes
+    from api.Modules.Auth.Services.passkey import rp_id as _rp_id, origin as _origin
+    from api.Modules.TimeClock.Models import StoreEmployeePasskey
+    from api.Modules.TimeClock.Services.passkey import (
+        PasskeyNotRegisteredError,
+        decode_assert_token,
+        passkey_for_employee,
+    )
+    try:
+        claims = decode_assert_token(assert_token)
+    except _jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Punch challenge expired or invalid: {exc}",
+        )
+    # Pin the assertion to the exact roster + store the SPA
+    # picked — a token reissued for a different employee can't
+    # be replayed against this one.
+    if (
+        int(claims.get("store_id") or 0) != store_id
+        or int(claims.get("store_employee_id") or 0) != store_employee_id
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Punch challenge does not match this punch.",
+        )
+    expected_challenge = base64url_to_bytes(claims["challenge"])
+    pk = passkey_for_employee(db, store_id, store_employee_id)
+    if pk is None:
+        raise PasskeyNotRegisteredError  # turned into 422 below
+    host   = request.url.netloc
+    scheme = request.url.scheme
+    try:
+        verification = verify_authentication_response(
+            credential=assertion,
+            expected_challenge=expected_challenge,
+            expected_rp_id=_rp_id(host),
+            expected_origin=_origin(scheme, host),
+            credential_public_key=pk.public_key,
+            credential_current_sign_count=pk.sign_count,
+            require_user_verification=False,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Passkey assertion did not verify: {exc}",
+        )
+    # Accept equal-or-greater sign counts — cloned authenticator
+    # detection (cf. WebAuthn §6.1.2). Reject backwards counts.
+    new_count = int(getattr(verification, "new_sign_count", pk.sign_count))
+    if new_count < pk.sign_count:
+        raise HTTPException(
+            status_code=401,
+            detail="Authenticator clone suspected (sign count reset).",
+        )
+    pk.sign_count   = new_count
+    pk.last_used_at = datetime.utcnow()
+    db.flush()
+
+
+@router.post(
+    "/passkey/challenge", response_model=PunchChallengeResponse,
+)
+def punch_challenge_route(
+    body: PunchChallengeRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> PunchChallengeResponse:
+    """Mint a WebAuthn assertion challenge for the picked
+    roster member. The SPA passes ``options_json`` to
+    ``navigator.credentials.get()`` and echoes ``assert_token``
+    back on the clock-in / clock-out call.
+
+    422 when the roster member doesn't have a passkey
+    registered yet — the SPA surfaces a "ask the admin to
+    enroll your device" message."""
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.get(StoreEmployee, body.store_employee_id)
+    if emp is None or emp.store_id != store_id:
+        raise HTTPException(
+            status_code=404,
+            detail="That roster member doesn't belong to this store.",
+        )
+    from webauthn import generate_authentication_options, options_to_json
+    from webauthn.helpers import bytes_to_base64url
+    from api.Modules.Auth.Services.passkey import rp_id as _rp_id
+    from api.Modules.TimeClock.Services.passkey import (
+        allow_credentials_for, issue_assert_token,
+    )
+    creds = allow_credentials_for(db, store_id, body.store_employee_id)
+    if not creds:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{emp.name} has no passkey registered yet. "
+                "Ask an admin to enroll their device on "
+                "/app/admin/timeclock/credentials before requiring "
+                "passkey punches."
+            ),
+        )
+    options = generate_authentication_options(
+        rp_id=_rp_id(request.url.netloc),
+        allow_credentials=creds,
+    )
+    return PunchChallengeResponse(
+        options_json=options_to_json(options),
+        assert_token=issue_assert_token(
+            store_id=store_id,
+            store_employee_id=body.store_employee_id,
+            challenge_b64=bytes_to_base64url(options.challenge),
+        ),
+    )
+
+
+# ── Admin: roster passkey enrollment ────────────────────────
+
+
+@admin_router.get(
+    "/timeclock/credentials", response_model=TimeClockCredentialList,
+)
+def admin_credentials_list_route(
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockCredentialList:
+    """List every active roster member at the store with a
+    has_passkey flag. Powers the admin enrollment page so the
+    operator sees who's pending vs registered."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Tenancy.Models import StoreEmployee
+    from api.Modules.TimeClock.Services.passkey import list_passkeys_for_store
+    employees = (
+        db.query(StoreEmployee)
+          .filter(
+              StoreEmployee.store_id == store_id,
+              StoreEmployee.is_active == True,  # noqa: E712
+          )
+          .order_by(StoreEmployee.name.asc())
+          .all()
+    )
+    passkeys_by_emp = {
+        pk.store_employee_id: pk
+        for pk in list_passkeys_for_store(db, store_id)
+    }
+    rows = []
+    for emp in employees:
+        pk = passkeys_by_emp.get(emp.id)
+        rows.append(TimeClockCredentialRow(
+            store_employee_id=emp.id,
+            employee_name=emp.name,
+            has_passkey=pk is not None,
+            name=(pk.name if pk else ""),
+            registered_at=(
+                pk.registered_at.isoformat()
+                if pk and pk.registered_at else ""
+            ),
+            last_used_at=(
+                pk.last_used_at.isoformat()
+                if pk and pk.last_used_at else ""
+            ),
+        ))
+    return TimeClockCredentialList(rows=rows)
+
+
+@admin_router.post("/timeclock/credentials/{store_employee_id}/register/begin")
+def admin_credentials_register_begin_route(
+    request: Request,
+    store_employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> dict:
+    """Start a WebAuthn registration ceremony for the picked
+    roster member. The admin walks the cashier through the
+    OS-level prompt; the SPA passes ``options_json`` to
+    ``navigator.credentials.create()`` and echoes
+    ``register_token`` back on /register/finish."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.get(StoreEmployee, store_employee_id)
+    if emp is None or emp.store_id != store_id:
+        raise HTTPException(
+            status_code=404,
+            detail="That roster member doesn't belong to this store.",
+        )
+    from webauthn import generate_registration_options, options_to_json
+    from webauthn.helpers import bytes_to_base64url
+    from webauthn.helpers.structs import (
+        AuthenticatorSelectionCriteria,
+        UserVerificationRequirement,
+    )
+    from api.Modules.Auth.Services.passkey import (
+        rp_id as _rp_id, rp_name as _rp_name,
+    )
+    from api.Modules.TimeClock.Services.passkey import (
+        emp_handle, issue_register_token, passkey_for_employee,
+    )
+    # Surface existing registration as an excludeCredentials
+    # entry so the OS picker offers a fresh authenticator
+    # (the v1 cap is one passkey per roster row, but seeing
+    # the existing one in the picker prevents accidental
+    # duplicate-create flows).
+    existing = passkey_for_employee(db, store_id, store_employee_id)
+    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+    exclude = (
+        [PublicKeyCredentialDescriptor(id=existing.credential_id)]
+        if existing else []
+    )
+    options = generate_registration_options(
+        rp_id=_rp_id(request.url.netloc),
+        rp_name=_rp_name(),
+        user_id=emp_handle(store_employee_id),
+        user_name=emp.name,
+        user_display_name=emp.name,
+        exclude_credentials=exclude,
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            user_verification=UserVerificationRequirement.PREFERRED,
+        ),
+    )
+    return {
+        "options_json":   options_to_json(options),
+        "register_token": issue_register_token(
+            store_id=store_id,
+            store_employee_id=store_employee_id,
+            challenge_b64=bytes_to_base64url(options.challenge),
+        ),
+    }
+
+
+@admin_router.post(
+    "/timeclock/credentials/{store_employee_id}/register/finish",
+    response_model=TimeClockCredentialRow,
+)
+def admin_credentials_register_finish_route(
+    body: dict,
+    request: Request,
+    store_employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> TimeClockCredentialRow:
+    """Verify the authenticator's attestation + persist the new
+    StoreEmployeePasskey row. Replaces any existing row for the
+    same roster member (v1 caps at one passkey per cashier)."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    from api.Modules.Tenancy.Models import StoreEmployee
+    emp = db.get(StoreEmployee, store_employee_id)
+    if emp is None or emp.store_id != store_id:
+        raise HTTPException(
+            status_code=404,
+            detail="That roster member doesn't belong to this store.",
+        )
+    register_token = (body or {}).get("register_token") or ""
+    credential = (body or {}).get("credential")
+    name = ((body or {}).get("name") or "").strip()[:120] or emp.name
+    if not register_token or credential is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing register_token or credential.",
+        )
+    import jwt as _jwt
+    from webauthn import verify_registration_response
+    from webauthn.helpers import base64url_to_bytes
+    from api.Modules.Auth.Services.passkey import rp_id as _rp_id, origin as _origin
+    from api.Modules.TimeClock.Models import StoreEmployeePasskey
+    from api.Modules.TimeClock.Services.passkey import (
+        decode_register_token, passkey_for_employee,
+    )
+    try:
+        token_claims = decode_register_token(register_token)
+    except _jwt.InvalidTokenError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Registration challenge expired or invalid: {exc}",
+        )
+    if (
+        int(token_claims.get("store_id") or 0) != store_id
+        or int(token_claims.get("store_employee_id") or 0) != store_employee_id
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Registration challenge does not match this roster member.",
+        )
+    expected_challenge = base64url_to_bytes(token_claims["challenge"])
+    host   = request.url.netloc
+    scheme = request.url.scheme
+    try:
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=expected_challenge,
+            expected_rp_id=_rp_id(host),
+            expected_origin=_origin(scheme, host),
+            require_user_verification=False,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Passkey registration did not verify: {exc}",
+        )
+    # Replace any existing row — v1 keeps one passkey per
+    # roster member. The unique constraint on
+    # ``store_employee_id`` would 500 otherwise.
+    existing = passkey_for_employee(db, store_id, store_employee_id)
+    if existing is not None:
+        db.delete(existing)
+        db.flush()
+    aaguid = getattr(verification, "aaguid", "") or ""
+    pk = StoreEmployeePasskey(
+        store_id=store_id,
+        store_employee_id=store_employee_id,
+        credential_id=verification.credential_id,
+        public_key=verification.credential_public_key,
+        sign_count=int(getattr(verification, "sign_count", 0) or 0),
+        aaguid=str(aaguid)[:64],
+        name=name,
+        registered_at=datetime.utcnow(),
+        registered_by_user_id=_user_id_from(claims),
+    )
+    db.add(pk)
+    db.commit()
+    return TimeClockCredentialRow(
+        store_employee_id=store_employee_id,
+        employee_name=emp.name,
+        has_passkey=True,
+        name=pk.name or emp.name,
+        registered_at=pk.registered_at.isoformat() if pk.registered_at else "",
+        last_used_at="",
+    )
+
+
+@admin_router.delete(
+    "/timeclock/credentials/{store_employee_id}", status_code=204,
+)
+def admin_credentials_delete_route(
+    store_employee_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> None:
+    """Remove the roster member's passkey. Used when the
+    cashier swaps devices or leaves."""
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    from api.Modules.TimeClock.Services.passkey import passkey_for_employee
+    pk = passkey_for_employee(db, store_id, store_employee_id)
+    if pk is None:
+        raise HTTPException(
+            status_code=404,
+            detail="That roster member has no passkey to remove.",
+        )
+    db.delete(pk)
+    db.commit()
+    return None

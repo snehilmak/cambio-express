@@ -1,4 +1,5 @@
 import { Fragment, useMemo, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -490,7 +491,12 @@ function ActionSheet({
       setBusy(false);
     }
   }
-  return (
+  // Portal out to document.body so the sheet's ``position: fixed``
+  // pins to the viewport rather than the PageShell wrapper. The
+  // ``.ds-page`` class on PageShell sets ``transform`` via its
+  // entry animation, which would otherwise establish a containing
+  // block and trap the sheet inside the page flow.
+  return createPortal(
     <div className={styles.sheetBackdrop} onClick={onClose}>
       <div
         className={styles.sheetCard}
@@ -527,7 +533,8 @@ function ActionSheet({
           {busy ? "Deleting…" : "Delete"}
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -603,7 +610,8 @@ function EntryModal({
     }
   }
 
-  return (
+  // Portal to body — same reason as the ActionSheet above.
+  return createPortal(
     <div className={styles.modalBackdrop} onClick={onClose}>
       <div
         className={styles.modalCard}
@@ -688,7 +696,8 @@ function EntryModal({
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
