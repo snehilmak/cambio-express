@@ -37,6 +37,13 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     # key). Roster members register via the admin credentials
     # page first.
     "timeclock_require_passkey",
+    # Geofence gate. ``timeclock_require_geofence`` is the
+    # toggle; the lat/lng/radius columns store the pinned
+    # location + tolerance the server checks at punch time.
+    "timeclock_geofence_lat",
+    "timeclock_geofence_lng",
+    "timeclock_geofence_radius_m",
+    "timeclock_require_geofence",
 )
 
 
@@ -103,6 +110,8 @@ def update_store_info(
             # or "true" still writes a Boolean column cleanly.
             v = bool(v)
         if k == "timeclock_require_passkey":
+            v = bool(v)
+        if k == "timeclock_require_geofence":
             v = bool(v)
         setattr(store, k, v)
     db.flush()

@@ -12,6 +12,7 @@ import { useEmployees } from "../api/transfers";
 import { useStoreInfo, useProfile } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
+import { getCurrentCoordinates } from "../lib/geolocation";
 import { passkeysSupported, performPasskeyAssert } from "../lib/webauthn";
 import {
   Alert, Button, Card, EmptyState, Empty, ErrorState, Field, Input,
@@ -65,6 +66,8 @@ export default function TimeClock() {
   // round-trip before hitting clock-in / clock-out.
   const passkeyRequired =
     Boolean(storeInfo?.store?.timeclock_require_passkey);
+  const geofenceRequired =
+    Boolean(storeInfo?.store?.timeclock_require_geofence);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -97,6 +100,14 @@ export default function TimeClock() {
         );
         punch.assert_token = challenge.assert_token;
         punch.assertion    = assertion;
+      }
+      if (geofenceRequired) {
+        // Browser GPS prompt — throws GeolocationDeniedError if
+        // the user blocks it. The error message bubbles up to
+        // the flash banner via the catch below.
+        const coords = await getCurrentCoordinates();
+        punch.geo_lat = coords.lat;
+        punch.geo_lng = coords.lng;
       }
       if (pickedIsOpen) {
         await clockOut.mutateAsync(punch);

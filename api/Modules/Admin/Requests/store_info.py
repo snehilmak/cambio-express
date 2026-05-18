@@ -53,6 +53,10 @@ class StoreInfoRow(BaseModel):
     store_hours:      list[StoreHourEntry] = []
     enforce_business_hours: bool = False
     timeclock_require_passkey: bool = False
+    timeclock_geofence_lat:       float | None = None
+    timeclock_geofence_lng:       float | None = None
+    timeclock_geofence_radius_m:  int  = 100
+    timeclock_require_geofence:   bool = False
 
 
 class StoreInfoResponse(BaseModel):
@@ -79,3 +83,7 @@ class StoreInfoUpdateRequest(BaseModel):
     store_hours:      list[StoreHourEntry] | None = None
     enforce_business_hours: bool | None = None
     timeclock_require_passkey: bool | None = None
+    timeclock_geofence_lat:       float | None = Field(None, ge=-90, le=90)
+    timeclock_geofence_lng:       float | None = Field(None, ge=-180, le=180)
+    timeclock_geofence_radius_m:  int   | None = Field(None, ge=10, le=10_000)
+    timeclock_require_geofence:   bool  | None = None

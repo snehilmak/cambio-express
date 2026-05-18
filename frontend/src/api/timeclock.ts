@@ -68,6 +68,11 @@ export interface PunchInput {
    *  ``store.timeclock_require_passkey`` is True. */
   assert_token?:     string;
   assertion?:        unknown;
+  /** Browser geolocation. Required only when
+   *  ``store.timeclock_require_geofence`` is True; ignored
+   *  otherwise. */
+  geo_lat?:          number;
+  geo_lng?:          number;
 }
 
 

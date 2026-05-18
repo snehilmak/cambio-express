@@ -95,6 +95,14 @@ def _to_row(s) -> StoreInfoRow:
         timeclock_require_passkey=bool(
             getattr(s, "timeclock_require_passkey", False)
         ),
+        timeclock_geofence_lat=getattr(s, "timeclock_geofence_lat", None),
+        timeclock_geofence_lng=getattr(s, "timeclock_geofence_lng", None),
+        timeclock_geofence_radius_m=int(
+            getattr(s, "timeclock_geofence_radius_m", 100) or 100
+        ),
+        timeclock_require_geofence=bool(
+            getattr(s, "timeclock_require_geofence", False)
+        ),
     )
 
 
