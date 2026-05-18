@@ -1532,3 +1532,212 @@ def test_team_rejects_negative_rate(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── Break tracking (v2) ─────────────────────────────────────
+
+
+def test_break_start_409s_when_not_clocked_in(client, test_store_id):
+    """Can't start a break without an open shift."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="No Shift")
+    token = _login(client, test_store_id)
+    resp = client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+
+
+def test_break_start_sets_break_started_at(client, test_store_id):
+    """Happy path: clock-in then break/start → entry has
+    ``break_started_at`` set + ``break_minutes`` still zero."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="On Break Bob")
+    token = _login(client, test_store_id)
+    client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    row = resp.get_json()["entry"]
+    assert row["break_started_at"] is not None
+    assert row["break_minutes"] == 0.0
+
+
+def test_break_start_twice_409s(client, test_store_id):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Already Break")
+    token = _login(client, test_store_id)
+    client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+    assert "already on break" in resp.get_data(as_text=True).lower()
+
+
+def test_break_stop_accumulates_minutes(client, test_store_id):
+    """break/stop adds the elapsed time to ``break_minutes``
+    and clears ``break_started_at``. Backdate the break-start
+    by 15 minutes so the elapsed delta is deterministic."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Stop Break")
+    token = _login(client, test_store_id)
+    client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    # Backdate break_started_at by 15 minutes.
+    with db_session():
+        from api.Modules.TimeClock.Services import open_entry_for
+        from tests._app import db as _db
+        sess = _db.session
+        entry = open_entry_for(sess, test_store_id, emp_id)
+        entry.break_started_at = datetime.utcnow() - timedelta(minutes=15)
+        sess.commit()
+    resp = client.post(
+        "/api/v2/timeclock/break/stop",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    row = resp.get_json()["entry"]
+    assert row["break_started_at"] is None
+    # ~15 minutes, allow slack.
+    assert 14.5 <= row["break_minutes"] <= 15.5
+
+
+def test_break_stop_409s_when_not_on_break(client, test_store_id):
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Not On Break")
+    token = _login(client, test_store_id)
+    client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.post(
+        "/api/v2/timeclock/break/stop",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 409
+
+
+def test_clock_out_subtracts_break_minutes_from_hours(
+    client, test_store_id,
+):
+    """A 90-min shift with a 30-min break should record
+    1.0 hours_worked, not 1.5."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Shift Break Math")
+    token = _login(client, test_store_id)
+    resp_in = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    entry_id = resp_in.get_json()["entry"]["id"]
+    # Manually backdate clock_in_at AND seed a 30-min break.
+    with db_session():
+        entry = db.session.get(TimeClockEntry, entry_id)
+        entry.clock_in_at  = datetime.utcnow() - timedelta(minutes=90)
+        entry.break_minutes = 30.0
+        db.session.commit()
+    resp_out = client.post(
+        "/api/v2/timeclock/clock-out",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp_out.get_json()["entry"]
+    # 90 min - 30 min = 60 min = 1.0 hour. Allow a few-second
+    # scheduler slack.
+    assert 0.99 <= row["hours_worked"] <= 1.02
+
+
+def test_clock_out_auto_ends_open_break(client, test_store_id):
+    """If the cashier forgets to tap "End break" before
+    clocking out, the open break time should still be
+    accounted for in ``break_minutes`` (so it doesn't
+    accidentally inflate ``hours_worked``)."""
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Forgot Break End")
+    token = _login(client, test_store_id)
+    resp_in = client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    entry_id = resp_in.get_json()["entry"]["id"]
+    # Backdate clock_in 2 hours, set break_started_at 30 min ago.
+    with db_session():
+        entry = db.session.get(TimeClockEntry, entry_id)
+        entry.clock_in_at = datetime.utcnow() - timedelta(hours=2)
+        entry.break_started_at = datetime.utcnow() - timedelta(minutes=30)
+        db.session.commit()
+    resp_out = client.post(
+        "/api/v2/timeclock/clock-out",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    row = resp_out.get_json()["entry"]
+    # Total elapsed: 120 min. Break: 30 min. hours_worked: 1.5.
+    assert 1.49 <= row["hours_worked"] <= 1.51
+    # break_started_at should be cleared.
+    assert row["break_started_at"] is None
+    # break_minutes should be ~30.
+    assert 29.5 <= row["break_minutes"] <= 30.5
+
+
+def test_break_status_visible_in_status_endpoint(client, test_store_id):
+    """The currently-open ``/timeclock/status`` payload
+    surfaces the break state so the punch page can show
+    "On break for X minutes"."""
+    with db_session():
+        emp_id = _seed_employee(test_store_id, name="Status Break")
+    token = _login(client, test_store_id)
+    client.post(
+        "/api/v2/timeclock/clock-in",
+        json={"store_employee_id": emp_id, "notes": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    client.post(
+        "/api/v2/timeclock/break/start",
+        json={"store_employee_id": emp_id},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    resp = client.get(
+        "/api/v2/timeclock/status",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    rows = resp.get_json()["open_entries"]
+    on_break = next(r for r in rows if r["store_employee_id"] == emp_id)
+    assert on_break["break_started_at"] is not None

@@ -1014,11 +1014,27 @@ gaps. Ordered by "what I'd do next" at the top.
       cashier who denies geolocation can still punch — so it
       pairs with the passkey check above for a real anti-
       buddy-punch story.
-- [ ] **Time clock v2 — break tracking** — paid short break
-      vs unpaid meal break. State machine on the open entry
-      (``in_break`` flag, ``break_minutes`` accumulator).
-      Affects ``hours_worked`` at clock-out (subtracts meal-
-      break minutes).
+- [x] **Time clock v2 — break tracking** — landed.
+      ``TimeClockEntry.break_started_at`` (DateTime, nullable;
+      non-null = currently paused) + ``break_minutes`` (Float
+      accumulator across pause/resume cycles within a shift),
+      migration ``d2e6a4f1b8c3``. Endpoints:
+      ``POST /api/v2/timeclock/break/start`` (opens a break;
+      409 if not clocked in or already on break) +
+      ``POST /api/v2/timeclock/break/stop`` (ends a break;
+      409 if no break in progress). ``clock_out`` subtracts
+      ``break_minutes / 60`` from elapsed wall-clock when
+      computing ``hours_worked``, so a 9-to-5 shift with a
+      60-min lunch records 7.0 hours. Auto-ends an open break
+      at clock-out if the cashier forgot to tap "End break"
+      so the time still gets accounted for. Audit rows for
+      both ``break_start`` + ``break_stop`` actions.
+      SPA: punch page shows "Start break" / "End break"
+      button when the picked roster member is clocked in,
+      labeled to match the current state; dropdown options
+      flip to "(on break)" while paused. Paid-vs-unpaid
+      distinction stays operator-managed via the notes field
+      — uniform "break" semantics keeps the math simple.
 - [ ] **Time clock v2 — shift scheduling** — planned shift
       table + late-arrival / no-show flags on the
       ``TimeClockEntry`` row when actual diverges from

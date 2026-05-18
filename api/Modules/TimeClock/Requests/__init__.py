@@ -32,7 +32,13 @@ class ClockPunchRequest(BaseModel):
 
 class TimeClockEntryRow(BaseModel):
     """One shift row. ``clock_out_at`` / ``hours_worked`` are
-    None while the shift is in progress."""
+    None while the shift is in progress.
+
+    Break tracking: ``break_started_at`` is non-null while the
+    cashier is on break; ``break_minutes`` is the running
+    total accumulated across pause/resume cycles. The
+    ``hours_worked`` value at clock-out already subtracts
+    ``break_minutes``."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -45,6 +51,8 @@ class TimeClockEntryRow(BaseModel):
     notes:             str = ""
     status:            TimeClockStatus = "pending"
     adjusted:          bool = False
+    break_started_at:  str | None = None
+    break_minutes:     float = 0.0
 
 
 class TimeClockStatusResponse(BaseModel):
@@ -234,3 +242,15 @@ class PaystubResponse(BaseModel):
     from_date:         str           # YYYY-MM-DD
     to_date:           str           # YYYY-MM-DD (half-open)
     shifts:            list[PaystubShiftRow]
+
+
+# ── Break tracking ──────────────────────────────────────────
+
+
+class BreakPunchRequest(BaseModel):
+    """Body for ``/timeclock/break/start`` and
+    ``/timeclock/break/stop`` — just identifies which roster
+    member is taking / ending the break."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_employee_id: int = Field(..., ge=1)

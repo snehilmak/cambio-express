@@ -3,7 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import {
   fetchPunchChallenge,
-  useClockInMutation, useClockOutMutation, useTimeClockStatus,
+  useClockInMutation, useClockOutMutation,
+  useStartBreakMutation, useStopBreakMutation,
+  useTimeClockStatus,
   type PunchInput, type TimeClockEntryRow,
 } from "../api/timeclock";
 import { useEmployees } from "../api/transfers";
@@ -30,8 +32,10 @@ export default function TimeClock() {
   const { data: storeInfo } = useStoreInfo();
   const userTz   = profile?.timezone ?? "";
   const storeTz  = storeInfo?.store?.timezone ?? "";
-  const clockIn  = useClockInMutation();
-  const clockOut = useClockOutMutation();
+  const clockIn   = useClockInMutation();
+  const clockOut  = useClockOutMutation();
+  const startBrk  = useStartBreakMutation();
+  const stopBrk   = useStopBreakMutation();
 
   const [pickedEmpId, setPickedEmpId] = useState<number | "">("");
   const [notes, setNotes]             = useState("");
@@ -46,8 +50,11 @@ export default function TimeClock() {
     return map;
   }, [status.data]);
 
-  const pickedIsOpen =
-    pickedEmpId !== "" && openByEmp.has(Number(pickedEmpId));
+  const pickedEntry = pickedEmpId !== ""
+    ? openByEmp.get(Number(pickedEmpId)) ?? null
+    : null;
+  const pickedIsOpen   = pickedEntry !== null;
+  const pickedOnBreak  = pickedEntry?.break_started_at != null;
 
   function refresh() {
     queryClient.invalidateQueries({ queryKey: ["timeclock", "status"] });
@@ -167,7 +174,11 @@ export default function TimeClock() {
                   const open = openByEmp.get(m.id);
                   return (
                     <option key={m.id} value={m.id}>
-                      {m.name}{open ? "  (clocked in)" : ""}
+                      {m.name}{open ? (
+                        open.break_started_at
+                          ? "  (on break)"
+                          : "  (clocked in)"
+                      ) : ""}
                     </option>
                   );
                 })}
@@ -189,6 +200,48 @@ export default function TimeClock() {
               </Alert>
             )}
             <div className={styles.actions}>
+              {pickedIsOpen && (
+                <Button
+                  type="button"
+                  tone="secondary"
+                  busy={startBrk.isPending || stopBrk.isPending}
+                  disabled={
+                    pickedEmpId === ""
+                    || startBrk.isPending
+                    || stopBrk.isPending
+                  }
+                  onClick={async () => {
+                    if (pickedEmpId === "") return;
+                    setFlash(null);
+                    const empId = Number(pickedEmpId);
+                    try {
+                      if (pickedOnBreak) {
+                        await stopBrk.mutateAsync({
+                          store_employee_id: empId,
+                        });
+                        setFlash({ kind: "ok", msg: "Back from break." });
+                      } else {
+                        await startBrk.mutateAsync({
+                          store_employee_id: empId,
+                        });
+                        setFlash({ kind: "ok", msg: "Break started." });
+                      }
+                      refresh();
+                    } catch (err) {
+                      setFlash({
+                        kind: "err",
+                        msg: err instanceof ApiError
+                          ? err.message
+                          : err instanceof Error
+                            ? err.message
+                            : "Couldn't update break.",
+                      });
+                    }
+                  }}
+                >
+                  {pickedOnBreak ? "End break" : "Start break"}
+                </Button>
+              )}
               <Button
                 type="submit"
                 tone={pickedIsOpen ? "secondary" : "primary"}
