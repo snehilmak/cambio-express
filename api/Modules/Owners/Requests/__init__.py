@@ -175,3 +175,48 @@ class OwnerBulkAddUserResponse(BaseModel):
     skipped:  int
     rejected: int
     results:  list[OwnerBulkAddUserResultRow]
+
+
+# ── Cross-store defaults ────────────────────────────────────
+
+
+from api.Modules.Admin.Requests.store_info import StoreHourEntry
+
+
+class OwnerCrossStoreDefaultsRequest(BaseModel):
+    """POST body for ``/owner/cross-store-defaults``. Every
+    field is optional — the operator picks which ones to push.
+    Validation mirrors the per-store
+    ``Admin.Requests.store_info.StoreInfoUpdateRequest`` since
+    each store's update goes through the same service guard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    store_ids: list[int] = Field(..., min_length=1, max_length=50)
+
+    federal_tax_rate:          float | None = Field(None, ge=0, le=1)
+    timezone:                  str   | None = Field(None, max_length=60)
+    store_hours:               list[StoreHourEntry] | None = None
+    enforce_business_hours:    bool  | None = None
+    timeclock_require_passkey: bool  | None = None
+    phone:                     str   | None = Field(None, max_length=40)
+    address:                   str   | None = Field(None, max_length=255)
+
+
+class OwnerCrossStoreResultRow(BaseModel):
+    """One row per requested store_id, ordered same as the
+    request payload."""
+    model_config = ConfigDict(extra="forbid")
+
+    store_id:   int
+    store_name: str = ""
+    status:     Literal["updated", "rejected"]
+    detail:     str = ""
+
+
+class OwnerCrossStoreResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    updated:  int
+    rejected: int
+    results:  list[OwnerCrossStoreResultRow]

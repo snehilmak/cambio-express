@@ -283,3 +283,49 @@ export async function bulkAddUser(
     json: body,
   });
 }
+
+
+// ── Cross-store defaults ────────────────────────────────────
+
+export interface OwnerStoreHourEntry {
+  day:    number;
+  open:   string;
+  close:  string;
+  closed: boolean;
+}
+
+export interface OwnerCrossStoreDefaultsBody {
+  store_ids: number[];
+  /** Every field below is optional — the operator picks which
+   *  ones to push. The server treats undefined as "don't
+   *  touch this field". */
+  federal_tax_rate?:          number;
+  timezone?:                  string;
+  store_hours?:               OwnerStoreHourEntry[];
+  enforce_business_hours?:    boolean;
+  timeclock_require_passkey?: boolean;
+  phone?:                     string;
+  address?:                   string;
+}
+
+export interface OwnerCrossStoreResultRow {
+  store_id:   number;
+  store_name: string;
+  status:     "updated" | "rejected";
+  detail:     string;
+}
+
+export interface OwnerCrossStoreResponse {
+  updated:  number;
+  rejected: number;
+  results:  OwnerCrossStoreResultRow[];
+}
+
+export async function applyCrossStoreDefaults(
+  body: OwnerCrossStoreDefaultsBody,
+): Promise<OwnerCrossStoreResponse> {
+  return api<OwnerCrossStoreResponse>(
+    "/api/v2/owner/cross-store-defaults",
+    { method: "POST", json: body },
+  );
+}

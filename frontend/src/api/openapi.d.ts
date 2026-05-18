@@ -2232,6 +2232,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/owner/cross-store-defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Owner Cross Store Defaults Route
+         * @description Push the picked field defaults (fed-tax-rate, timezone,
+         *     business hours, etc.) to every store in ``body.store_ids``
+         *     that's in the owner's umbrella. Per-store outcomes
+         *     (updated / rejected) come back in the response so the SPA
+         *     can show a result table; one validation failure doesn't
+         *     fail the whole batch. Stores outside the umbrella surface
+         *     as ``rejected``.
+         */
+        post: operations["owner_cross_store_defaults_route_owner_cross_store_defaults_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/owner/dashboard": {
         parameters: {
             query?: never;
@@ -5931,6 +5957,65 @@ export interface components {
             used_at: string;
             /** Used By Store Name */
             used_by_store_name: string;
+        };
+        /**
+         * OwnerCrossStoreDefaultsRequest
+         * @description POST body for ``/owner/cross-store-defaults``. Every
+         *     field is optional — the operator picks which ones to push.
+         *     Validation mirrors the per-store
+         *     ``Admin.Requests.store_info.StoreInfoUpdateRequest`` since
+         *     each store's update goes through the same service guard.
+         */
+        OwnerCrossStoreDefaultsRequest: {
+            /** Address */
+            address?: string | null;
+            /** Enforce Business Hours */
+            enforce_business_hours?: boolean | null;
+            /** Federal Tax Rate */
+            federal_tax_rate?: number | null;
+            /** Phone */
+            phone?: string | null;
+            /** Store Hours */
+            store_hours?: components["schemas"]["StoreHourEntry"][] | null;
+            /** Store Ids */
+            store_ids: number[];
+            /** Timeclock Require Passkey */
+            timeclock_require_passkey?: boolean | null;
+            /** Timezone */
+            timezone?: string | null;
+        };
+        /** OwnerCrossStoreResponse */
+        OwnerCrossStoreResponse: {
+            /** Rejected */
+            rejected: number;
+            /** Results */
+            results: components["schemas"]["OwnerCrossStoreResultRow"][];
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * OwnerCrossStoreResultRow
+         * @description One row per requested store_id, ordered same as the
+         *     request payload.
+         */
+        OwnerCrossStoreResultRow: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "updated" | "rejected";
+            /** Store Id */
+            store_id: number;
+            /**
+             * Store Name
+             * @default
+             */
+            store_name: string;
         };
         /**
          * OwnerLocationsResponse
@@ -11848,6 +11933,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnerConnectCodeResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    owner_cross_store_defaults_route_owner_cross_store_defaults_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerCrossStoreDefaultsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OwnerCrossStoreResponse"];
                 };
             };
             /** @description Validation Error */

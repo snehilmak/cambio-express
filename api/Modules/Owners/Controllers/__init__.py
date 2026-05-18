@@ -27,6 +27,9 @@ from api.Modules.Owners.Requests import (
     OwnerConnectCodeListResponse,
     OwnerConnectCodeResponse,
     OwnerConnectCodeRow,
+    OwnerCrossStoreDefaultsRequest,
+    OwnerCrossStoreResponse,
+    OwnerCrossStoreResultRow,
     OwnerLocationsResponse,
     OwnerPLRollupResponse,
     OwnerPLRollupRow,
@@ -36,6 +39,7 @@ from api.Modules.Owners.Requests import (
     OwnerUnlinkRequest,
 )
 from api.Modules.Owners.Services import (
+    apply_cross_store_defaults,
     bulk_add_user_to_stores,
     owner_locations_payload,
     owner_store_ids,
@@ -374,6 +378,73 @@ def owner_bulk_add_user_route(
         skipped=counts["skipped"],
         rejected=counts["rejected"],
         results=[OwnerBulkAddUserResultRow(**r) for r in raw_results],
+    )
+
+
+@router.post(
+    "/cross-store-defaults", response_model=OwnerCrossStoreResponse,
+)
+def owner_cross_store_defaults_route(
+    body: OwnerCrossStoreDefaultsRequest,
+    db: Session = Depends(get_db),
+    claims: dict = Depends(get_principal),
+) -> OwnerCrossStoreResponse:
+    """Push the picked field defaults (fed-tax-rate, timezone,
+    business hours, etc.) to every store in ``body.store_ids``
+    that's in the owner's umbrella. Per-store outcomes
+    (updated / rejected) come back in the response so the SPA
+    can show a result table; one validation failure doesn't
+    fail the whole batch. Stores outside the umbrella surface
+    as ``rejected``."""
+    user = _require_owner_principal(db, claims)
+    # Convert the Pydantic body to the dict the service wants,
+    # skipping unset fields (so ``omit field`` differs from
+    # ``set to null``).
+    defaults = body.model_dump(exclude_unset=True, exclude={"store_ids"})
+    if not defaults:
+        raise HTTPException(
+            status_code=422,
+            detail="Pick at least one field to apply.",
+        )
+    try:
+        raw_results = apply_cross_store_defaults(
+            db,
+            owner_id=user.id,
+            store_ids=list(body.store_ids),
+            defaults=defaults,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    # Audit the bulk push as one OperatorAuditLog row per
+    # updated store — keeps the per-store admin audit log
+    # consistent with the rest of the surface.
+    from api.Modules.Audit.Services import record_operator_action
+    field_summary = ", ".join(sorted(defaults.keys()))
+    for r in raw_results:
+        if r["status"] != "updated":
+            continue
+        record_operator_action(
+            db,
+            store_id=r["store_id"],
+            user_id=user.id,
+            user_name=user.full_name or user.username,
+            user_role=user.role,
+            target_type="store",
+            target_id=str(r["store_id"]),
+            target_label=r["store_name"],
+            action="cross_store_update",
+            summary=f"Owner bulk-updated fields: {field_summary}",
+        )
+    db.commit()
+
+    counts = {"updated": 0, "rejected": 0}
+    for r in raw_results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return OwnerCrossStoreResponse(
+        updated=counts["updated"],
+        rejected=counts["rejected"],
+        results=[OwnerCrossStoreResultRow(**r) for r in raw_results],
     )
 
 
