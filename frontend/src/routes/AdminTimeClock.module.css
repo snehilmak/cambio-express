@@ -121,6 +121,15 @@
   gap: 0.75rem;
 }
 
+@media (max-width: 30rem) {
+  /* On phones the modal pops up at ~95vw — a 2-column form
+     leaves no room for an actual ``HH:MM`` time input + a
+     readable label, so collapse to single-column. */
+  .modalGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .modalActions {
   display: flex;
   gap: 0.5rem;

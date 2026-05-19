@@ -27,6 +27,10 @@ from api.Modules.Notifications.Services.locked_day_digest import (
     LOCKED_DAY_SUBJECT,
     eligible_recipients as locked_day_digest_recipients,
 )
+from api.Modules.Notifications.Services.missed_shifts import (
+    find_missed_shifts,
+    send_missed_shift_digest,
+)
 from api.Modules.Notifications.Services.trial_reminders import (
     TRIAL_REMINDER_BODY,
     TRIAL_REMINDER_SUBJECT,
@@ -47,10 +51,12 @@ __all__ = [
     "daily_summary_recipients",
     "derive_broadcast_subject",
     "eligible_recipients",
+    "find_missed_shifts",
     "locked_day_digest_recipients",
     "push_is_enabled",
     "send_daily_summary",
     "send_email",
+    "send_missed_shift_digest",
     "send_push",
     "smtp_health_check",
     "stores_due_for_reminder",

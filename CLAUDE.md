@@ -161,6 +161,8 @@ uvicorn asgi:asgi_app --reload --port 5000   # dev server on :5000
 pytest tests/                                # full suite
 python -m scripts.purge_expired_stores       # deletes inactive stores past retention
 python -m scripts.send_trial_reminders       # daily cron — trial-ending emails
+python -m scripts.send_daily_summaries       # daily cron — per-store close-out summary
+python -m scripts.send_missed_shift_digest   # daily cron — missed planned shifts
 python -m scripts.broadcast_announcement N   # resend announcement #N
 python -m scripts.backfill_federal_tax       # one-shot — recompute Transfer.federal_tax
 ```

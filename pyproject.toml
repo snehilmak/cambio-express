@@ -152,6 +152,7 @@ files = [
     "api/Modules/Notifications/Services/broadcasts.py",
     "api/Modules/Notifications/Services/daily_summary.py",
     "api/Modules/Notifications/Services/locked_day_digest.py",
+    "api/Modules/Notifications/Services/missed_shifts.py",
     "api/Modules/Notifications/Services/push.py",
     "api/Modules/Notifications/Services/smtp.py",
     "api/Modules/Notifications/Services/templates.py",

@@ -1081,8 +1081,10 @@ gaps. Ordered by "what I'd do next" at the top.
       Remaining: late-arrival / no-show flags derived from
       joining ``TimeClockShift`` against ``TimeClockEntry`` at
       read time (admin payroll view + a "missed shift" digest).
-- [~] **Time clock v2 — late-arrival / no-show derivation** —
-      partial.  Phase 1 (late-arrival badge) landed:
+- [x] **Time clock v2 — late-arrival / no-show derivation** —
+      shipped in two phases.
+
+      Phase 1 (late-arrival badge):
         * Per-store ``timeclock_late_minutes_threshold``
           column (default 5) + Settings → Time clock input.
         * ``api/Modules/TimeClock/Services/lateness.py`` —
@@ -1098,10 +1100,27 @@ gaps. Ordered by "what I'd do next" at the top.
           entry crosses the threshold ("Late 8m"), "On time"
           when at or below, and "—" when the entry has no
           planned shift (admin back-fill).
-      Remaining for phase 2: daily "missed shift" digest email
-      — enumerate shifts with no overlapping entry on the prior
-      day and notify admins via the existing
-      ``Notifications/Services/daily_summary`` scheduler.
+
+      Phase 2 (missed-shift digest):
+        * ``api/Modules/Notifications/Services/missed_shifts.py``
+          — pure-function ``find_missed_shifts(session,
+          store_id, on_date)`` returns the ``TimeClockShift``
+          rows on ``on_date`` with no matching
+          ``TimeClockEntry`` for the same employee+date.  A
+          late clock-in still counts as "showed up" — phase 1's
+          late-arrival pill handles that.
+        * ``run(session, on_date)`` orchestrator iterates
+          active stores, finds misses, sends email + push per
+          recipient (audience gated on the existing
+          ``notify_daily_summary`` opt-out so a user opted out
+          of daily summaries is also opted out of this digest).
+          Idempotent at the per-store level via
+          ``Store.missed_shifts_sent_for``.
+        * ``scripts/send_missed_shift_digest`` is the Render
+          cron entry point — defaults to yesterday UTC, accepts
+          ``--date YYYY-MM-DD`` for backfill.
+        * ``send_missed_shift_digest(on_date_iso)`` is the RQ
+          worker entry for the D5 enqueue pattern.
 - [~] **Notifications v1 — preferences UI** — partial.
       Email side was already shipped: ``/app/account/notifications``
       renders four per-user boolean toggles (trial-ending,
