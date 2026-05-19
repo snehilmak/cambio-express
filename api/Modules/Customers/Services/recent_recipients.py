@@ -34,7 +34,7 @@ class RecentRecipient:
     country: str
     phone: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, str]:
         return {
             "name": self.name,
             "country": self.country or "",

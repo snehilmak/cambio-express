@@ -17,8 +17,10 @@ Pure — no DB / framework / context dependency.
 """
 from __future__ import annotations
 
+from typing import Any
 
-REPORT_CATEGORIES: list[dict] = [
+
+REPORT_CATEGORIES: list[dict[str, Any]] = [
     {
         "key":   "sales",
         "label": "Sales",
@@ -145,7 +147,7 @@ REPORT_CATEGORIES: list[dict] = [
 ]
 
 
-SUPERADMIN_REPORT_CATEGORIES: list[dict] = [
+SUPERADMIN_REPORT_CATEGORIES: list[dict[str, Any]] = [
     {
         "key":   "platform_health",
         "label": "Platform Health",
@@ -297,7 +299,7 @@ def url_from_endpoint(endpoint: str) -> str | None:
     return None
 
 
-def resolved_categories(registry: list[dict], endpoint_prefix: str = "") -> list[dict]:
+def resolved_categories(registry: list[dict[str, Any]], endpoint_prefix: str = "") -> list[dict[str, Any]]:
     """Return ``registry`` with each report enriched with a rendered
     URL plus a ``status`` flag the template uses to swap between
     "View" button and "Coming soon" pill.

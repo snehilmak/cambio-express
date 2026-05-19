@@ -9,7 +9,7 @@ every code path mutates the same data.
 from typing import Generator
 
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from api.Core.Config import settings
 
@@ -86,7 +86,13 @@ def SessionLocal() -> Session:
     return _session_factory()
 
 
-Base = declarative_base()
+class Base(DeclarativeBase):
+    """SQLAlchemy 2.0 declarative base.  Switching from the
+    1.x ``declarative_base()`` callable gives every ``class
+    Foo(Base)`` proper typing (the callable returns ``Any``,
+    which trips mypy's ``cannot subclass Any`` on every model).
+    Runtime behavior is identical."""
+    pass
 
 
 def get_db() -> Generator[Session, None, None]:
