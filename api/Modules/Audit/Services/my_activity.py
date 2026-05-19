@@ -46,10 +46,10 @@ def list_my_activity(
         op_q = op_q.filter_by(action=action_filter)
         tx_q = tx_q.filter_by(action=action_filter)
 
-    op_rows = (
+    op_rows: list[Any] = (
         op_q.order_by(OperatorAuditLog.created_at.desc()).limit(500).all()
     )
-    tx_rows = (
+    tx_rows: list[Any] = (
         tx_q.order_by(TransferAudit.created_at.desc()).limit(500).all()
     )
 
@@ -57,8 +57,8 @@ def list_my_activity(
         {r.store_id for r in op_rows if r.store_id}
         | {r.store_id for r in tx_rows if r.store_id}
     )
-    stores = (
-        {s.id: s for s in db.query(Store).filter(Store.id.in_(store_ids)).all()}
+    stores: dict[int, Any] = (
+        {int(s.id): s for s in db.query(Store).filter(Store.id.in_(store_ids)).all()}
         if store_ids else {}
     )
 
@@ -66,9 +66,9 @@ def list_my_activity(
         if sid is None:
             return ""
         s = stores.get(sid)
-        return (s.name if s else "") or ""
+        return str(s.name if s else "") or ""
 
-    merged: list[dict] = []
+    merged: list[dict[str, Any]] = []
     for r in op_rows:
         merged.append({
             "ts":           r.created_at.isoformat() if r.created_at else "",
@@ -79,7 +79,7 @@ def list_my_activity(
             "summary":      r.summary or "",
             "source":       "operator",
             "store_id":     int(r.store_id) if r.store_id else 0,
-            "store_name":   _store_name(r.store_id),
+            "store_name":   _store_name(int(r.store_id) if r.store_id else None),
         })
     for r in tx_rows:
         merged.append({
@@ -93,7 +93,7 @@ def list_my_activity(
             "summary":      r.summary or "",
             "source":       "transfer",
             "store_id":     int(r.store_id) if r.store_id else 0,
-            "store_name":   _store_name(r.store_id),
+            "store_name":   _store_name(int(r.store_id) if r.store_id else None),
         })
     merged.sort(key=lambda x: x["ts"], reverse=True)
 

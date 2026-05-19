@@ -66,6 +66,7 @@ files = [
     # ── api/Modules/Announcements ────────────────────────────
     "api/Modules/Announcements/Services/visibility.py",
     # ── api/Modules/Audit ────────────────────────────────────
+    "api/Modules/Audit/Services/my_activity.py",
     "api/Modules/Audit/Services/recorder.py",
     # ── api/Modules/Auth ─────────────────────────────────────
     "api/Modules/Auth/Repositories/users.py",
@@ -190,6 +191,7 @@ files = [
     # ── api/Modules/Tenancy ──────────────────────────────────
     "api/Modules/Tenancy/Models/__init__.py",
     # ── api/Modules/TimeClock ────────────────────────────────
+    "api/Modules/TimeClock/Services/__init__.py",
     "api/Modules/TimeClock/Services/geofence.py",
     "api/Modules/TimeClock/Services/passkey.py",
     "api/Modules/TimeClock/Services/paystub.py",
