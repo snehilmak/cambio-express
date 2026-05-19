@@ -210,8 +210,26 @@ infrastructure that's still relevant in the FastAPI-only world.
 - [x] **E3. Build SPA in CI.** Landed (PR #426).
 - [x] **E4. Coverage tracks `api/` too.** Landed (PR #425) —
       `coverage --source=app,api`.
-- [ ] **E5. mypy strict on `api/Modules/*`** — Pydantic types make
-      this easy.
+- [~] **E5. mypy strict on `api/Modules/*`** — partial.  Ratchet
+      pattern lives in ``pyproject.toml`` — strict on a curated
+      list of files; CI re-runs the same command (``python -m
+      mypy``) on every push.  See CLAUDE.md "mypy — strict
+      ratchet" for the workflow to add a file.
+      Currently in the ratchet (9 files):
+        * ``api/Core/Config/settings.py``
+        * ``api/Core/Observability/logging.py``
+        * ``api/Core/Observability/sentry.py``
+        * ``api/Core/PasswordHash.py``
+        * ``api/Core/RateLimit.py``
+        * ``api/Modules/DailyBook/Services/kinds.py``
+        * ``api/Modules/TimeClock/Services/geofence.py``
+        * ``api/Modules/TimeClock/Services/paystub.py``
+        * ``api/Modules/Transfers/Services/tax.py``
+      Remaining: most of the FastAPI tree.  Biggest blockers
+      are SQLAlchemy 1.x ``Column(...)``-style models
+      (``Mapped[T] = mapped_column(...)`` migration is a
+      separate effort) and the ``untyped-decorator`` flood from
+      FastAPI's older type stubs.
 - [x] **E6. eslint --max-warnings 0** in CI on frontend. Landed
       (PR #426).
 - [x] **E7. Generate TS types from FastAPI OpenAPI.** Landed
@@ -1055,6 +1073,45 @@ gaps. Ordered by "what I'd do next" at the top.
       Remaining: late-arrival / no-show flags derived from
       joining ``TimeClockShift`` against ``TimeClockEntry`` at
       read time (admin payroll view + a "missed shift" digest).
+- [ ] **Time clock v2 — late-arrival / no-show derivation**
+      Joins ``TimeClockShift`` against ``TimeClockEntry`` at
+      read time:
+        * "Late by X min" badge on the payroll history page —
+          for each shift, find the matching closed entry on
+          the same date+employee, compute
+          ``entry.clock_in_at - shift.start_time`` in
+          store-local minutes. Surface as a pill on
+          ``TimeClockEntryRow`` and as a "Late" filter on the
+          /app/admin/timeclock list.
+        * Daily "missed shift" digest — at end of each day,
+          enumerate shifts with no overlapping entry and
+          email the admin a per-store summary. Reuses the
+          existing notifications pipeline (``Notifications``
+          module) and the locked-day digest scheduler.
+      Threshold (e.g. "late = > 5 min") becomes a per-store
+      setting alongside the geofence radius — same Settings
+      → Time clock section.
+- [ ] **Notifications v1 — preferences UI**
+      ``/app/account/notifications`` is registered in the nav
+      and the topbar UserMenu but the page itself is currently
+      a thin stub. v1 builds the toggle table:
+        * Per-channel toggles (email + push) for each
+          notification kind the SPA can produce: trial-ending
+          reminder, daily missed-shift digest (above),
+          locked-day digest, announcement broadcast,
+          subscription receipt, password reset confirmation.
+        * Backed by a new ``UserNotificationPref`` table keyed
+          on ``(user_id, kind, channel)`` with a default-allow
+          fallback so an opt-in matrix is the source of truth
+          but unset entries still send (avoids a silent
+          comms-blackout regression).
+        * Push channel uses the existing service-worker
+          subscription stored on the user row; UI shows a
+          "Enable browser notifications" CTA when the
+          subscription is missing.
+      Backend: every emitting site (notifications dispatcher
+      + scheduled jobs) reads through
+      ``user_wants(kind, channel)`` before sending.
 - [~] **Payroll check / paystub printing** — partial.
       Printable paystub view landed; check printing with MICR
       lines stays a separate item (needs Store-level bank

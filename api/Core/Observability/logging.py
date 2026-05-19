@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from typing import Any
 
 import structlog
 
@@ -52,7 +53,7 @@ def init_logging() -> None:
     #      "exception" field with the rendered traceback.
     #   4. format_exc_info copies the exception to "exception" and
     #      removes exc_info so the JSON encoder doesn't choke.
-    shared_processors: list = [
+    shared_processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.StackInfoRenderer(),
@@ -118,4 +119,8 @@ def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     underlying logger; structlog's key/value rendering doesn't print
     it by default.
     """
-    return structlog.get_logger(name)  # type: ignore[return-value]
+    # structlog.get_logger returns Any until the wrapper class is
+    # configured at module load; we know the configured wrapper is
+    # ``stdlib.BoundLogger`` from ``init_logging`` above.
+    logger: Any = structlog.get_logger(name)
+    return logger  # type: ignore[no-any-return]

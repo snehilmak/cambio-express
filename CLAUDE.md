@@ -645,6 +645,34 @@ a seeded superadmin + one trial store. **When I add features via chat
 smoke tests, those need to graduate into committed tests** — tracked in
 BACKLOG.md.
 
+## mypy — strict ratchet
+
+```bash
+python -m mypy   # runs against the curated file list in pyproject.toml
+```
+
+E5 (BACKLOG.md) — `pyproject.toml` enumerates the files held to
+`--strict`. The rest of the tree is unchecked.  **Adding a file to the
+ratchet** is the workflow:
+
+1. Run `python -m mypy --strict --follow-imports=silent path/to/file.py`
+   from the repo root.
+2. Fix what fires (or add targeted `# type: ignore[error-code]` for
+   the genuinely-untyped third-party seams).
+3. Append the path to the `files = [...]` list in `pyproject.toml`.
+4. `python -m mypy` (no args) re-runs the full ratchet — CI runs the
+   same command.
+
+Known traps:
+- **SQLAlchemy 1.x `Column(...)` declarations** report attributes as
+  `Column[T]` instead of `T`, which trips every assignment on a service
+  that touches ORM rows. Either migrate the model to `Mapped[T] =
+  mapped_column(...)` first (own PR) or keep the service out of the
+  ratchet for now.
+- **FastAPI `@router.<verb>(...)` decorators** fire `untyped-decorator`
+  in older FastAPI stubs. Quarantined until we pin a newer FastAPI or
+  selectively `# type: ignore[misc]`.
+
 ## Git & PR workflow
 - Work on `claude/add-subscription-management-LdGPx` (the project's
   long-running feature branch) unless told otherwise. Sync from `main`
