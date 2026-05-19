@@ -18,6 +18,7 @@ Rules (per CLAUDE.md invariant #9):
 
 Pure functions — no DB, no Stripe, no side-effects.
 """
+from typing import Any
 
 
 # All recognized service types. The transfer form's dropdown
@@ -29,14 +30,14 @@ SERVICE_TYPES: tuple[str, ...] = (
 # Service types that don't carry the federal-tax remittance.
 # Money Transfer is the only taxable kind; everything else
 # is exempt.
-TAX_EXEMPT_SERVICES: frozenset = frozenset(SERVICE_TYPES) - {
+TAX_EXEMPT_SERVICES: frozenset[str] = frozenset(SERVICE_TYPES) - {
     "Money Transfer",
 }
 
 # Recipient countries that don't carry the federal-tax
 # remittance. Domestic transfers (within the US) skip the tax
 # entirely — it's the IRS levy on money sent abroad.
-DOMESTIC_COUNTRIES: frozenset = frozenset({"United States"})
+DOMESTIC_COUNTRIES: frozenset[str] = frozenset({"United States"})
 
 # Countries shown in the recipient-country dropdown on the
 # transfer form. Single source so server validation, template,
@@ -62,7 +63,7 @@ def normalize_service_type(raw: str | None) -> str:
 def federal_tax_for(
     send_amount: float | None,
     service_type: str,
-    store,
+    store: Any,
     country: str | None = None,
 ) -> float:
     """Compute the federal tax on a transfer.

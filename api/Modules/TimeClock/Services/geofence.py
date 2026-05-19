@@ -15,6 +15,7 @@ haversine formula and refuses outside the radius.
 from __future__ import annotations
 
 from math import asin, cos, radians, sin, sqrt
+from typing import Any
 
 
 # Earth's mean radius in meters. Good enough for store-radius
@@ -63,7 +64,7 @@ def haversine_meters(
 
 
 def verify_punch_location(
-    store, *, geo_lat: float | None, geo_lng: float | None,
+    store: Any, *, geo_lat: float | None, geo_lng: float | None,
 ) -> None:
     """Raise the appropriate error when the punch can't proceed.
 

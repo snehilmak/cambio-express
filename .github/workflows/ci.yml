@@ -70,6 +70,16 @@ jobs:
           coverage run --source=api -m pytest --tb=short -rfE --ignore=tests/smoke
           coverage report --fail-under=80
 
+      # ── mypy strict on the ratchet subset ─────────────────────
+      # E5 (BACKLOG.md).  ``pyproject.toml`` enumerates the files
+      # currently held to ``--strict``; the rest of the tree is
+      # checked permissively (or not at all).  New files are added
+      # to the ratchet as each module gets cleaned up — this step
+      # exists so a regression on the already-clean subset can't
+      # land silently.
+      - name: Type check (mypy strict ratchet)
+        run: python -m mypy
+
       # ── SPA build + lint gate ─────────────────────────────────
       # Catches TS regressions and eslint violations before they
       # ship. The SPA is served as static assets out of

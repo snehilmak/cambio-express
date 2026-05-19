@@ -1,0 +1,47 @@
+[tool.mypy]
+# E5 (BACKLOG.md) — type-check the FastAPI tree.  Ratchet pattern:
+# strict on a curated list of files, expand as each module is
+# cleaned up.  Adding a file here is the gate — new files default
+# to whatever ``follow_imports=silent`` lets through (which is
+# effectively "don't check").  See ``files = [...]`` below.
+#
+# Why ratchet instead of "strict on everything, fix later":
+#   - SQLAlchemy 1.x-style ``Column(...)`` declarations report
+#     attributes as ``Column[T]`` instead of ``T``, which trips
+#     ~every assignment + comparison in services that touch ORM
+#     rows.  Migrating to ``Mapped[T] = mapped_column(...)`` is
+#     its own multi-PR effort; until then the strict subset
+#     stays away from ORM-heavy code.
+#   - Many FastAPI ``@router.<verb>(...)`` decorators are seen as
+#     ``Any``-returning in older versions of FastAPI's stubs, so
+#     every controller fires ``untyped-decorator``.  Quarantined
+#     until we either pin a newer FastAPI or sprinkle
+#     ``# type: ignore[misc]`` selectively.
+#
+# Ratcheting in: add a file path to ``files`` below, run
+# ``python -m mypy``, fix what fires.  CI re-runs the same
+# subset.  Goal is to grow this list toward whole-module coverage.
+
+python_version = "3.11"
+strict = true
+follow_imports = "silent"
+# Don't fail just because a third-party lib lacks type stubs.
+# We type-check our code, not theirs.
+ignore_missing_imports = true
+warn_unused_ignores = true
+# Pydantic adds a runtime metaclass that mypy can't see through —
+# this plugin teaches it the schema-aware attribute typing.
+plugins = ["pydantic.mypy"]
+
+# Files in the strict subset.  See "Ratcheting in" above.
+files = [
+    "api/Core/Config/settings.py",
+    "api/Core/Observability/logging.py",
+    "api/Core/Observability/sentry.py",
+    "api/Core/PasswordHash.py",
+    "api/Core/RateLimit.py",
+    "api/Modules/DailyBook/Services/kinds.py",
+    "api/Modules/TimeClock/Services/geofence.py",
+    "api/Modules/TimeClock/Services/paystub.py",
+    "api/Modules/Transfers/Services/tax.py",
+]

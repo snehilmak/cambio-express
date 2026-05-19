@@ -44,3 +44,10 @@ slowapi==0.1.9
 # tests + the default dev loop running on SQLite without Redis.
 rq==1.16.2
 redis==5.0.7
+
+# ── Dev / CI tooling ────────────────────────────────────────
+# mypy (E5) — strict type-check on a curated subset of files,
+# see ``pyproject.toml`` for the ratchet list.  Pinned because
+# strict-mode behavior shifts between minor versions; bump
+# deliberately when expanding the ratchet to a tricky module.
+mypy==1.10.0
