@@ -2,10 +2,21 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
-  updateNotifications, useNotifications,
+  subscribePush,
+  unsubscribePush,
+  updateNotifications,
+  useNotifications,
+  usePushStatus,
   type NotificationsUpdateBody,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import {
+  getPushPermission,
+  hasLocalSubscription,
+  pushSupported,
+  subscribeBrowser,
+  unsubscribeBrowser,
+} from "../lib/push";
 import {
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
   Table, tdStyle, thStyle, tokens,
@@ -187,6 +198,10 @@ export default function AccountNotifications() {
           </Card>
         </Section>
 
+        <Section title="Browser notifications">
+          <BrowserPushCard />
+        </Section>
+
         <Section title="What DineroBook sends you">
           <Card>
             <p className={styles.lead}>
@@ -230,9 +245,8 @@ export default function AccountNotifications() {
                 />
                 <Row
                   channel="Browser push"
-                  what="Test pings only (announcement push in roadmap)"
-                  control="Enable/disable from the top-right bell in your avatar menu."
-                  muted
+                  what="Platform announcements + future delivery alerts"
+                  control={'"Browser notifications" section above.'}
                 />
                 <Row
                   channel="In-app banner"
@@ -297,5 +311,160 @@ function Row({
       <td style={tdStyle}>{what}</td>
       <td style={ctrlStyle}>{control}</td>
     </tr>
+  );
+}
+
+
+function BrowserPushCard() {
+  const queryClient = useQueryClient();
+  const { data: status, isLoading } = usePushStatus();
+  const [localSubscribed, setLocalSubscribed] = useState<boolean>(false);
+  const [permission, setPermission] = useState(getPushPermission());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const supported = pushSupported();
+
+  // Sync local "is this browser subscribed?" once on mount + after
+  // every action.  The server cross-device count comes from
+  // ``usePushStatus``; this hook is purely about THIS browser.
+  useEffect(() => {
+    void (async () => {
+      const has = await hasLocalSubscription();
+      setLocalSubscribed(has);
+    })();
+  }, []);
+
+  if (!supported) {
+    return (
+      <Card>
+        <p className={styles.pushUnsupported}>
+          Your browser doesn't support push notifications.  Try a
+          modern Chrome / Firefox / Edge / Safari 16.4+ build.
+        </p>
+      </Card>
+    );
+  }
+
+  if (isLoading) {
+    return <Card><Loading /></Card>;
+  }
+
+  if (!status?.enabled) {
+    return (
+      <Card>
+        <p className={styles.pushUnsupported}>
+          Push notifications aren't configured on this server yet.
+          Once the operator sets the VAPID keys, this section will
+          flip to an "Enable" button.
+        </p>
+      </Card>
+    );
+  }
+
+  async function onEnable() {
+    if (!status?.public_key) return;
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      const env = await subscribeBrowser(status.public_key);
+      await subscribePush({
+        endpoint:   env.endpoint,
+        p256dh:     env.p256dh,
+        auth:       env.auth,
+        user_agent: env.userAgent,
+      });
+      setLocalSubscribed(true);
+      setPermission(getPushPermission());
+      setSuccess("Browser notifications enabled on this device.");
+      queryClient.invalidateQueries({ queryKey: ["account", "push-status"] });
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message
+        : err instanceof Error  ? err.message
+        : "Couldn't enable browser notifications.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onDisable() {
+    setBusy(true); setError(null); setSuccess(null);
+    try {
+      const endpoint = await unsubscribeBrowser();
+      if (endpoint) {
+        await unsubscribePush({ endpoint });
+      }
+      setLocalSubscribed(false);
+      setSuccess("Browser notifications disabled on this device.");
+      queryClient.invalidateQueries({ queryKey: ["account", "push-status"] });
+    } catch (err) {
+      setError(
+        err instanceof ApiError ? err.message
+        : err instanceof Error  ? err.message
+        : "Couldn't disable browser notifications.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className={styles.pushRow}>
+        <div className={styles.pushStatus}>
+          <span
+            className={`${styles.pushDot} ${localSubscribed ? styles.pushDotOn : styles.pushDotOff}`}
+            aria-hidden="true"
+          />
+          {localSubscribed
+            ? "Browser notifications are enabled on this device."
+            : "Browser notifications are off on this device."}
+          {status.device_count > 0 && (
+            <span className={styles.pushDeviceHint}>
+              {" "}({status.device_count} {status.device_count === 1 ? "device" : "devices"} on file)
+            </span>
+          )}
+        </div>
+
+        {error && <Alert tone="error">{error}</Alert>}
+        {success && <Alert tone="success">{success}</Alert>}
+        {permission === "denied" && (
+          <Alert tone="info">
+            Notifications are blocked for this site.  Allow them in
+            your browser's site-settings, then click Enable.
+          </Alert>
+        )}
+
+        <div className={styles.pushActions}>
+          {!localSubscribed && (
+            <Button
+              type="button"
+              busy={busy}
+              disabled={busy || permission === "denied"}
+              onClick={() => { void onEnable(); }}
+            >
+              {busy ? "Enabling…" : "Enable browser notifications"}
+            </Button>
+          )}
+          {localSubscribed && (
+            <Button
+              type="button" tone="secondary"
+              busy={busy} disabled={busy}
+              onClick={() => { void onDisable(); }}
+            >
+              {busy ? "Disabling…" : "Disable on this device"}
+            </Button>
+          )}
+        </div>
+
+        <p className={styles.pushDeviceHint}>
+          You'll get a small system notification for platform
+          announcements (and future delivery / payroll alerts).
+          Disabling here only affects this device — you can re-
+          enable on a different browser without losing the others.
+        </p>
+      </div>
+    </Card>
   );
 }

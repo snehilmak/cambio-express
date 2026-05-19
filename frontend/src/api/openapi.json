@@ -5095,6 +5095,90 @@
         "title": "PunchChallengeResponse",
         "type": "object"
       },
+      "PushStatusResponse": {
+        "additionalProperties": false,
+        "description": "Status of the push channel for the current user.\n\n* ``enabled`` \u2014 VAPID keys are configured server-side, so the\n  backend can actually deliver pushes (False when the operator\n  hasn't set ``VAPID_PUBLIC_KEY`` / ``VAPID_PRIVATE_KEY`` env\n  vars; the UI hides the section).\n* ``public_key`` \u2014 VAPID public key the browser passes to\n  ``PushManager.subscribe({applicationServerKey: ...})``.  Empty\n  when ``enabled`` is False.\n* ``subscribed`` \u2014 whether at least one ``PushSubscription``\n  row exists for this user across all devices.  The SPA only\n  tracks \"subscribed on THIS browser\" client-side via\n  ``localStorage`` \u2014 this flag is the cross-device server view\n  used for the UI badge (\"subscribed on N devices\").\n* ``device_count`` \u2014 how many distinct subscriptions this user\n  has on file.",
+        "properties": {
+          "device_count": {
+            "title": "Device Count",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "public_key": {
+            "title": "Public Key",
+            "type": "string"
+          },
+          "subscribed": {
+            "title": "Subscribed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "public_key",
+          "subscribed",
+          "device_count"
+        ],
+        "title": "PushStatusResponse",
+        "type": "object"
+      },
+      "PushSubscribeRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``POST /api/v2/push/subscribe`` \u2014 the envelope the\nbrowser returns from ``PushManager.subscribe()`` flattened into\nits three relevant fields.\n\n* ``endpoint`` \u2014 push provider URL the server delivers to.\n  Cap at 2KB; FCM endpoints are ~200 chars but the spec doesn't\n  pin an upper bound.\n* ``p256dh`` \u2014 base64-URL public key the browser generated for\n  the subscription.  Used to encrypt the payload.\n* ``auth``  \u2014 base64-URL auth secret, also from the browser.\n* ``user_agent`` \u2014 optional UA string for the \"manage devices\"\n  UI follow-up (currently unused but cheap to capture).",
+        "properties": {
+          "auth": {
+            "maxLength": 80,
+            "minLength": 4,
+            "title": "Auth",
+            "type": "string"
+          },
+          "endpoint": {
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "p256dh": {
+            "maxLength": 200,
+            "minLength": 10,
+            "title": "P256Dh",
+            "type": "string"
+          },
+          "user_agent": {
+            "default": "",
+            "maxLength": 255,
+            "title": "User Agent",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint",
+          "p256dh",
+          "auth"
+        ],
+        "title": "PushSubscribeRequest",
+        "type": "object"
+      },
+      "PushUnsubscribeRequest": {
+        "additionalProperties": false,
+        "description": "Body for ``DELETE /api/v2/push/subscribe`` \u2014 identify\nwhich subscription to drop by its endpoint URL.\n\nEndpoint is the only field PushManager exposes that's\nstable + unique across the subscription's lifetime, so the\nSPA always has it.",
+        "properties": {
+          "endpoint": {
+            "maxLength": 2000,
+            "minLength": 10,
+            "title": "Endpoint",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoint"
+        ],
+        "title": "PushUnsubscribeRequest",
+        "type": "object"
+      },
       "ReceiptStore": {
         "additionalProperties": false,
         "description": "Store header \u2014 branding + identifiers printed at the top\nof the receipt.",
@@ -12683,6 +12767,222 @@
           }
         },
         "summary": "Update Profile Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/push/status": {
+      "get": {
+        "description": "Whether the push channel is server-enabled (VAPID keys set)\nplus the current user's subscription count across devices.\nPowers the \"Enable browser notifications\" section on\n``/app/account/notifications``.",
+        "operationId": "get_push_status_route_auth_push_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Push Status Route",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/auth/push/subscribe": {
+      "delete": {
+        "description": "Drop the current user's subscription matching the supplied\nendpoint.  Idempotent \u2014 a second DELETE returns the same\nstatus payload without 4xx'ing.",
+        "operationId": "push_unsubscribe_route_auth_push_subscribe_delete",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushUnsubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Push Unsubscribe Route",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "Register a Web Push subscription for the current user.\nIdempotent on ``(user_id, endpoint)`` \u2014 re-subscribing on the\nsame device updates the crypto material in place.\n\n409 when push isn't server-enabled (VAPID keys missing) so the\nSPA can surface \"ask your admin to configure push\" instead of\nsilently storing an unusable row.",
+        "operationId": "push_subscribe_route_auth_push_subscribe_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscribeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Push Subscribe Route",
         "tags": [
           "auth"
         ]

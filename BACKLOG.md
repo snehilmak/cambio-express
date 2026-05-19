@@ -1099,27 +1099,33 @@ gaps. Ordered by "what I'd do next" at the top.
       Threshold (e.g. "late = > 5 min") becomes a per-store
       setting alongside the geofence radius — same Settings
       → Time clock section.
-- [ ] **Notifications v1 — preferences UI**
-      ``/app/account/notifications`` is registered in the nav
-      and the topbar UserMenu but the page itself is currently
-      a thin stub. v1 builds the toggle table:
-        * Per-channel toggles (email + push) for each
-          notification kind the SPA can produce: trial-ending
-          reminder, daily missed-shift digest (above),
-          locked-day digest, announcement broadcast,
-          subscription receipt, password reset confirmation.
-        * Backed by a new ``UserNotificationPref`` table keyed
-          on ``(user_id, kind, channel)`` with a default-allow
-          fallback so an opt-in matrix is the source of truth
-          but unset entries still send (avoids a silent
-          comms-blackout regression).
-        * Push channel uses the existing service-worker
-          subscription stored on the user row; UI shows a
-          "Enable browser notifications" CTA when the
-          subscription is missing.
-      Backend: every emitting site (notifications dispatcher
-      + scheduled jobs) reads through
-      ``user_wants(kind, channel)`` before sending.
+- [~] **Notifications v1 — preferences UI** — partial.
+      Email side was already shipped: ``/app/account/notifications``
+      renders four per-user boolean toggles (trial-ending,
+      announcement, locked-day digest, daily summary) backed by
+      ``User.notify_*`` columns + ``Auth/Services/notifications``
+      service.  Push channel landed in this pass:
+        * ``GET /api/v2/auth/push/status`` returns the VAPID
+          public key + the user's subscription count.
+        * ``POST /api/v2/auth/push/subscribe`` registers a
+          browser subscription (idempotent on
+          ``(user_id, endpoint)``).
+        * ``DELETE /api/v2/auth/push/subscribe`` removes it.
+        * ``frontend/src/lib/push.ts`` wraps ``PushManager
+          .subscribe`` + service-worker registration; the
+          AccountNotifications page now has a "Browser
+          notifications" card with Enable / Disable buttons
+          + a device counter.
+        * Announcement broadcasts now fan out via Web Push in
+          addition to email — best-effort, no-ops cleanly when
+          VAPID isn't configured.
+      Remaining for v2: per-kind push toggles (currently the
+      Enable button is on/off for the channel as a whole).
+      The ``UserNotificationPref`` table approach was deferred
+      — current 4-kind set is small enough that adding
+      ``User.notify_*_push`` boolean columns next to the email
+      ones is cheaper than a new keyed table.  Revisit when the
+      kind list grows past ~8.
 - [~] **Payroll check / paystub printing** — partial.
       Printable paystub view landed; check printing with MICR
       lines stays a separate item (needs Store-level bank
