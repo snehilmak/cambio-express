@@ -6,6 +6,7 @@ import { clearAccessToken, getCurrentIdentity } from "../lib/auth";
 import { clearVisits, recordVisit } from "../lib/recency";
 import { reconcileTheme } from "../lib/theme";
 import { AnnouncementBanner } from "./AnnouncementBanner";
+import { HelpCenter } from "./HelpCenter";
 import { HomeButton } from "./HomeButton";
 import { InstallAppButton } from "./InstallAppButton";
 import { filterNavForRole } from "./navConfig";
@@ -103,6 +104,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         className={`app-backdrop${drawerOpen ? " is-open" : ""}`}
         onClick={() => setDrawerOpen(false)}
       />
+      {/* Floating help bubble — only inside ``RequireAuth`` so
+          the bottom-right CTA never bleeds onto the marketing
+          landing or login pages. */}
+      <HelpCenter />
     </div>
   );
 }
