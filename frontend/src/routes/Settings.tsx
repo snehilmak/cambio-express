@@ -467,6 +467,7 @@ function StoreInfoCard() {
   const [geoRadiusM, setGeoRadiusM] = useState("100");
   const [geoBusy,    setGeoBusy]    = useState(false);
   const [geoErr,     setGeoErr]     = useState<string | null>(null);
+  const [lateThreshold, setLateThreshold] = useState("5");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
@@ -503,6 +504,9 @@ function StoreInfoCard() {
         ? "" : String(data.store.timeclock_geofence_lng),
     );
     setGeoRadiusM(String(data.store.timeclock_geofence_radius_m ?? 100));
+    setLateThreshold(
+      String(data.store.timeclock_late_minutes_threshold ?? 5),
+    );
   }, [data]);
 
   const canEdit =
@@ -551,6 +555,9 @@ function StoreInfoCard() {
         timeclock_geofence_lat:     latNum,
         timeclock_geofence_lng:     lngNum,
         timeclock_geofence_radius_m: radiusNum,
+        timeclock_late_minutes_threshold: Math.max(
+          0, Math.min(240, Math.round(Number(lateThreshold) || 5)),
+        ),
       });
       await queryClient.invalidateQueries({
         queryKey: ["admin", "store-info"],
@@ -704,6 +711,17 @@ function StoreInfoCard() {
             geoBusy={geoBusy} setGeoBusy={setGeoBusy}
             geoErr={geoErr}   setGeoErr={setGeoErr}
           />
+          <Field
+            label="Lateness threshold (store-local minutes)"
+            hint="The payroll page flags an entry as 'Late' only when clock-in exceeds the planned shift's start by this many minutes. 0–240. Default 5."
+          >
+            <Input
+              type="number" step="1" min="0" max="240"
+              value={lateThreshold}
+              onChange={(e) => setLateThreshold(e.target.value)}
+              disabled={!canEdit}
+            />
+          </Field>
         </div>
         {err && (
           <div className={styles.spanFull}>

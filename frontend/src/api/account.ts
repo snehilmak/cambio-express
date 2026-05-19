@@ -171,6 +171,7 @@ export interface StoreInfoRow {
   timeclock_geofence_lng:       number | null;
   timeclock_geofence_radius_m:  number;
   timeclock_require_geofence:   boolean;
+  timeclock_late_minutes_threshold: number;
 }
 
 export interface StoreHourEntry {
@@ -197,6 +198,7 @@ export interface StoreInfoUpdateBody {
   timeclock_geofence_lng?:       number | null;
   timeclock_geofence_radius_m?:  number;
   timeclock_require_geofence?:   boolean;
+  timeclock_late_minutes_threshold?: number;
 }
 
 // Allowed values for the per-user theme toggle. Dark is the

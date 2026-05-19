@@ -61,6 +61,13 @@ class TimeClockEntryRow(BaseModel):
     adjusted:          bool = False
     break_started_at:  str | None = None
     break_minutes:     float = 0.0
+    # Late-arrival pill: minutes ``clock_in_at`` lagged the
+    # matching ``TimeClockShift.start_time`` in store-local time.
+    # Negative = early, 0 = on the dot, None = no planned shift
+    # to compare against (admin back-fill or unscheduled punch).
+    # The SPA only flags as "late" when this exceeds
+    # ``Store.timeclock_late_minutes_threshold``.
+    late_minutes:      int | None = None
 
 
 class TimeClockStatusResponse(BaseModel):
@@ -103,6 +110,11 @@ class TimeClockEntryList(BaseModel):
     total_hours:    float
     approved_hours: float = 0.0
     pending_hours:  float = 0.0
+    # Lateness threshold from the store config — the SPA only
+    # surfaces a "Late" pill when ``row.late_minutes`` exceeds
+    # this many store-local minutes.  Default 5 matches the
+    # column default.
+    late_threshold_minutes: int = 5
 
 
 # ── Admin CRUD ──────────────────────────────────────────────

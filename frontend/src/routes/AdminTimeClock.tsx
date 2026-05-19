@@ -174,7 +174,7 @@ export default function AdminTimeClock() {
               <tr>
                 {[
                   "Time in", "Time out", "Total hours",
-                  "Status", "Adjusted", "",
+                  "Late", "Status", "Adjusted", "",
                 ].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
@@ -206,6 +206,12 @@ export default function AdminTimeClock() {
                           ? "—"
                           : r.hours_worked.toFixed(2)}
                       </span>
+                    </td>
+                    <td style={tdStyle}>
+                      <LateBadge
+                        lateMinutes={r.late_minutes}
+                        threshold={data.data?.late_threshold_minutes ?? 5}
+                      />
                     </td>
                     <td style={tdStyle}>
                       <StatusPill status={r.status} />
@@ -254,7 +260,7 @@ export default function AdminTimeClock() {
                   </tr>
                   {expandedHistoryId === r.id && (
                     <tr className={styles.historyRow}>
-                      <td colSpan={6} style={tdStyle}>
+                      <td colSpan={7} style={tdStyle}>
                         <HistoryPanel entryId={r.id} />
                       </td>
                     </tr>
@@ -373,6 +379,22 @@ function StatusPill({ status }: { status: TimeClockStatus }) {
 function AdjustedBadge({ adjusted }: { adjusted: boolean }) {
   if (adjusted) return <Pill tone="info">Yes</Pill>;
   return <span className={styles.subtle}>No</span>;
+}
+
+
+function LateBadge({
+  lateMinutes, threshold,
+}: { lateMinutes: number | null; threshold: number }) {
+  // No planned shift to compare against — the entry was a back-fill
+  // or an unscheduled punch.  Show "—" so the column reads cleanly.
+  if (lateMinutes == null) {
+    return <span className={styles.subtle}>—</span>;
+  }
+  // On time or early — a single muted glyph keeps the column quiet.
+  if (lateMinutes <= threshold) {
+    return <span className={styles.subtle}>On time</span>;
+  }
+  return <Pill tone="warning">{`Late ${lateMinutes}m`}</Pill>;
 }
 
 

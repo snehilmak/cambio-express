@@ -87,12 +87,15 @@ admin_router = APIRouter()
 
 
 def _to_row(
-    entry: TimeClockEntry, name_lookup: dict[int, str],
+    entry: TimeClockEntry,
+    name_lookup: dict[int, str],
+    lateness: dict[int, int] | None = None,
 ) -> TimeClockEntryRow:
     # Default-coerce ``status`` / ``adjusted`` so a row that
     # predates the migration (column-NULL on legacy data) still
     # renders consistently in the SPA.
     status = entry.status if entry.status in ("pending", "approved", "rejected") else "pending"
+    late_minutes = (lateness or {}).get(int(entry.id))
     return TimeClockEntryRow(
         id=entry.id,
         store_employee_id=entry.store_employee_id,
@@ -112,6 +115,7 @@ def _to_row(
             if entry.break_started_at else None
         ),
         break_minutes=float(entry.break_minutes or 0.0),
+        late_minutes=late_minutes,
     )
 
 
@@ -398,11 +402,34 @@ def admin_entries_route(
         2,
     )
     names = _names_for(db, rows)
+    # Late-arrival join: pull the planned shifts for the same
+    # ``(employee, date)`` keys + bucket them so each entry can
+    # be matched against its closest-start shift.  ``store_tz``
+    # falls back to "" → ``compute_lateness_map`` treats every
+    # ``clock_in_at`` as UTC.
+    from api.Modules.TimeClock.Services.lateness import (
+        compute_lateness_map,
+        shifts_for_entries,
+    )
+    from api.Modules.Tenancy.Models import Store
+    store = db.get(Store, store_id)
+    store_tz = str(store.timezone or "") if store is not None else ""
+    threshold = (
+        int(getattr(store, "timeclock_late_minutes_threshold", 5) or 5)
+        if store is not None else 5
+    )
+    shifts = shifts_for_entries(
+        db, store_id=store_id, entries=rows, store_timezone=store_tz,
+    )
+    lateness = compute_lateness_map(
+        rows, shifts, store_timezone=store_tz,
+    )
     return TimeClockEntryList(
-        rows=[_to_row(r, names) for r in rows],
+        rows=[_to_row(r, names, lateness) for r in rows],
         total_hours=total_hours,
         approved_hours=approved_hours,
         pending_hours=pending_hours,
+        late_threshold_minutes=threshold,
     )
 
 

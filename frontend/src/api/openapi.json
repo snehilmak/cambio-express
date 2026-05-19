@@ -6557,6 +6557,11 @@
             "title": "Timeclock Geofence Radius M",
             "type": "integer"
           },
+          "timeclock_late_minutes_threshold": {
+            "default": 5,
+            "title": "Timeclock Late Minutes Threshold",
+            "type": "integer"
+          },
           "timeclock_require_geofence": {
             "default": false,
             "title": "Timeclock Require Geofence",
@@ -6753,6 +6758,19 @@
               }
             ],
             "title": "Timeclock Geofence Radius M"
+          },
+          "timeclock_late_minutes_threshold": {
+            "anyOf": [
+              {
+                "maximum": 240.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeclock Late Minutes Threshold"
           },
           "timeclock_require_geofence": {
             "anyOf": [
@@ -8075,6 +8093,11 @@
             "title": "Approved Hours",
             "type": "number"
           },
+          "late_threshold_minutes": {
+            "default": 5,
+            "title": "Late Threshold Minutes",
+            "type": "integer"
+          },
           "pending_hours": {
             "default": 0.0,
             "title": "Pending Hours",
@@ -8157,6 +8180,17 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Minutes"
           },
           "notes": {
             "default": "",

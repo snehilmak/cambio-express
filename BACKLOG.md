@@ -1081,24 +1081,27 @@ gaps. Ordered by "what I'd do next" at the top.
       Remaining: late-arrival / no-show flags derived from
       joining ``TimeClockShift`` against ``TimeClockEntry`` at
       read time (admin payroll view + a "missed shift" digest).
-- [ ] **Time clock v2 — late-arrival / no-show derivation**
-      Joins ``TimeClockShift`` against ``TimeClockEntry`` at
-      read time:
-        * "Late by X min" badge on the payroll history page —
-          for each shift, find the matching closed entry on
-          the same date+employee, compute
-          ``entry.clock_in_at - shift.start_time`` in
-          store-local minutes. Surface as a pill on
-          ``TimeClockEntryRow`` and as a "Late" filter on the
-          /app/admin/timeclock list.
-        * Daily "missed shift" digest — at end of each day,
-          enumerate shifts with no overlapping entry and
-          email the admin a per-store summary. Reuses the
-          existing notifications pipeline (``Notifications``
-          module) and the locked-day digest scheduler.
-      Threshold (e.g. "late = > 5 min") becomes a per-store
-      setting alongside the geofence radius — same Settings
-      → Time clock section.
+- [~] **Time clock v2 — late-arrival / no-show derivation** —
+      partial.  Phase 1 (late-arrival badge) landed:
+        * Per-store ``timeclock_late_minutes_threshold``
+          column (default 5) + Settings → Time clock input.
+        * ``api/Modules/TimeClock/Services/lateness.py`` —
+          pure-function ``compute_lateness_map`` matches each
+          entry to the closest-start shift on the same date+
+          employee (handles split shifts) and reports lag in
+          store-local minutes (negative = early, 0 = on time).
+        * ``GET /api/v2/admin/timeclock`` response now carries
+          ``late_minutes`` per row + ``late_threshold_minutes``
+          at the list level.
+        * ``/app/admin/timeclock`` payroll history table gets a
+          new "Late" column with a neon-warning pill when an
+          entry crosses the threshold ("Late 8m"), "On time"
+          when at or below, and "—" when the entry has no
+          planned shift (admin back-fill).
+      Remaining for phase 2: daily "missed shift" digest email
+      — enumerate shifts with no overlapping entry on the prior
+      day and notify admins via the existing
+      ``Notifications/Services/daily_summary`` scheduler.
 - [~] **Notifications v1 — preferences UI** — partial.
       Email side was already shipped: ``/app/account/notifications``
       renders four per-user boolean toggles (trial-ending,

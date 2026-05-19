@@ -7287,6 +7287,11 @@ export interface components {
              */
             timeclock_geofence_radius_m: number;
             /**
+             * Timeclock Late Minutes Threshold
+             * @default 5
+             */
+            timeclock_late_minutes_threshold: number;
+            /**
              * Timeclock Require Geofence
              * @default false
              */
@@ -7339,6 +7344,8 @@ export interface components {
             timeclock_geofence_lng?: number | null;
             /** Timeclock Geofence Radius M */
             timeclock_geofence_radius_m?: number | null;
+            /** Timeclock Late Minutes Threshold */
+            timeclock_late_minutes_threshold?: number | null;
             /** Timeclock Require Geofence */
             timeclock_require_geofence?: boolean | null;
             /** Timeclock Require Passkey */
@@ -7979,6 +7986,11 @@ export interface components {
              */
             approved_hours: number;
             /**
+             * Late Threshold Minutes
+             * @default 5
+             */
+            late_threshold_minutes: number;
+            /**
              * Pending Hours
              * @default 0
              */
@@ -8022,6 +8034,8 @@ export interface components {
             hours_worked?: number | null;
             /** Id */
             id: number;
+            /** Late Minutes */
+            late_minutes?: number | null;
             /**
              * Notes
              * @default
