@@ -41,6 +41,17 @@ export default function AdminDataExport() {
   const [transBusy, setTransBusy] = useState(false);
   const [transErr,  setTransErr]  = useState("");
 
+  // Time-clock entries CSV — same default window as transfers.
+  const [tcFrom, setTcFrom] = useState(_isoDate(lastMonth));
+  const [tcTo,   setTcTo]   = useState(_isoDate(today));
+  const [tcBusy, setTcBusy] = useState(false);
+  const [tcErr,  setTcErr]  = useState("");
+
+  // Audit log CSV — one click, no picker (server applies
+  // the same filters as the audit page on its own).
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditErr,  setAuditErr]  = useState("");
+
   if (identity?.role !== "admin"
       && identity?.role !== "owner"
       && identity?.role !== "superadmin") {
@@ -101,6 +112,34 @@ export default function AdminDataExport() {
       setTransErr(e instanceof Error ? e.message : "Download failed.");
     } finally {
       setTransBusy(false);
+    }
+  }
+
+  async function onDownloadTimeClock() {
+    setTcBusy(true); setTcErr("");
+    try {
+      const url = `/api/v2/admin/timeclock.csv`
+        + `?from=${encodeURIComponent(tcFrom)}`
+        + `&to=${encodeURIComponent(tcTo)}`;
+      await downloadCsv(url, `timeclock-${tcFrom}-to-${tcTo}.csv`);
+    } catch (e) {
+      setTcErr(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setTcBusy(false);
+    }
+  }
+
+  async function onDownloadAuditLog() {
+    setAuditBusy(true); setAuditErr("");
+    try {
+      await downloadCsv(
+        "/api/v2/admin/audit-log.csv",
+        `audit-log-${_isoDate(today)}.csv`,
+      );
+    } catch (e) {
+      setAuditErr(e instanceof Error ? e.message : "Download failed.");
+    } finally {
+      setAuditBusy(false);
     }
   }
 
@@ -220,6 +259,81 @@ export default function AdminDataExport() {
                 busy={transBusy} disabled={transBusy}
               >
                 {transBusy ? "Preparing…" : "Download CSV"}
+              </Button>
+            </div>
+          </div>
+        </Section>
+      </Card>
+
+      <Card>
+        <Section title="Time-clock entries (custom range)">
+          <p className={styles.intro}>
+            Every clock-in / clock-out in the window plus the
+            derived late-minutes and adjusted-after-the-fact
+            flags. Plugs straight into a payroll spreadsheet.
+          </p>
+          {tcErr && (
+            <Alert tone="error">{tcErr}</Alert>
+          )}
+          <div className={styles.exportRow}>
+            <div className={styles.exportText}>
+              <div className={styles.exportName}>Time-clock CSV</div>
+              <div className={styles.exportDesc}>
+                Defaults to the last 30 days.
+              </div>
+            </div>
+            <div className={styles.exportControls}>
+              <Field label="From" style={{ minWidth: "9rem" }}>
+                <Input
+                  type="date"
+                  value={tcFrom}
+                  onChange={(e) => setTcFrom(e.target.value)}
+                />
+              </Field>
+              <Field label="To" style={{ minWidth: "9rem" }}>
+                <Input
+                  type="date"
+                  value={tcTo}
+                  onChange={(e) => setTcTo(e.target.value)}
+                />
+              </Field>
+              <Button
+                tone="primary"
+                onClick={() => { void onDownloadTimeClock(); }}
+                busy={tcBusy} disabled={tcBusy}
+              >
+                {tcBusy ? "Preparing…" : "Download CSV"}
+              </Button>
+            </div>
+          </div>
+        </Section>
+      </Card>
+
+      <Card>
+        <Section title="Audit log">
+          <p className={styles.intro}>
+            Every operator + transfer audit row for this store —
+            who did what, when, with the before/after summary
+            line. Useful for compliance or for investigating a
+            disputed change.
+          </p>
+          {auditErr && (
+            <Alert tone="error">{auditErr}</Alert>
+          )}
+          <div className={styles.exportRow}>
+            <div className={styles.exportText}>
+              <div className={styles.exportName}>Audit log CSV</div>
+              <div className={styles.exportDesc}>
+                Full operator + transfer audit trail.
+              </div>
+            </div>
+            <div className={styles.exportControls}>
+              <Button
+                tone="primary"
+                onClick={() => { void onDownloadAuditLog(); }}
+                busy={auditBusy} disabled={auditBusy}
+              >
+                {auditBusy ? "Preparing…" : "Download CSV"}
               </Button>
             </div>
           </div>

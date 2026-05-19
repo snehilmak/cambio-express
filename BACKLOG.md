@@ -958,8 +958,22 @@ gaps. Ordered by "what I'd do next" at the top.
       three columns (Alembic migration required).
 - [ ] **Currency / locale** — hardcoded USD today. Needed before any
       non-US expansion.
-- [ ] **Data export (`/admin/settings/export`)** — consolidate the
-      scattered CSV exports. Useful for GDPR-style requests too.
+- [x] **Data export (`/app/admin/data-export`)** — shipped.
+      Single hub for every authed CSV / ZIP download:
+        * Year-end tax pack (ZIP) — bundles transfers + monthly
+          P&L + closed daily books for a calendar year.
+        * Customer directory CSV — every customer row across the
+          owner umbrella.
+        * Transfers CSV — custom date range.
+        * Time-clock entries CSV — custom date range, includes
+          derived ``late_minutes`` from the lateness Service.
+        * Audit log CSV — full operator + transfer audit feed
+          for the principal's store, honors the same filters as
+          the SPA audit-log page.
+        * Pointer card to the per-report CSV exports on
+          ``/app/reports/*`` (each renders its own toolbar).
+      All endpoints share the JWT-scoped tenancy + role gating
+      pattern (admin / owner / superadmin only).
 - [ ] **Webhooks** — "notify my POS / accounting app when a transfer
       is saved."
 - [ ] **Integrations (QuickBooks, Square, Zapier)** — big-ticket

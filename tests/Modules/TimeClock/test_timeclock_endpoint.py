@@ -1910,3 +1910,73 @@ def test_admin_store_info_rejects_invalid_lat(client, test_store_id):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 422
+
+
+# ── CSV export ────────────────────────────────────────────
+
+
+def test_admin_timeclock_csv_requires_admin_role(client, test_store_id):
+    """Employees can punch but can't pull the payroll CSV."""
+    from api.Modules.Tenancy.Models import User
+    with db_session():
+        u = User(
+            store_id=test_store_id, username="cashier-csv@test.com",
+            full_name="Cashier", role="employee",
+        )
+        u.set_password("testpass123!")
+        db.session.add(u); db.session.commit()
+    from tests.conftest import login_employee
+    token = login_employee(
+        client, store_id=test_store_id,
+        username="cashier-csv@test.com", password="testpass123!",
+    )
+    resp = client.get(
+        "/api/v2/admin/timeclock.csv?from=2026-05-01&to=2026-05-15",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 403
+
+
+def test_admin_timeclock_csv_returns_rows(client, test_store_id):
+    """CSV export carries one row per entry in the window with
+    the same columns the SPA payroll page renders."""
+    from datetime import date as _date
+
+    emp_id = _seed_employee(test_store_id, name="Maria")
+    # Closed entry on May 18 within the requested window.
+    from api.Modules.TimeClock.Models import TimeClockEntry
+    from datetime import timedelta as _td
+    with db_session():
+        e = TimeClockEntry(
+            store_id=test_store_id, store_employee_id=emp_id,
+            clock_in_at=datetime(2026, 5, 18, 9, 0),
+            clock_out_at=datetime(2026, 5, 18, 17, 0),
+            hours_worked=8.0, notes="Opening", status="approved",
+        )
+        db.session.add(e); db.session.commit()
+
+    from tests.conftest import login_admin
+    token = login_admin(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/timeclock.csv?from=2026-05-18&to=2026-05-19",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    assert resp.headers["content-type"].startswith("text/csv")
+    body = resp.text
+    lines = [ln for ln in body.split("\n") if ln.strip()]
+    assert lines[0].startswith("Employee,Clock in")
+    assert len(lines) == 2  # header + 1 entry
+    assert "Maria" in lines[1]
+    assert "Opening" in lines[1]
+
+
+def test_admin_timeclock_csv_window_validation(client, test_store_id):
+    from tests.conftest import login_admin
+    token = login_admin(client, test_store_id)
+    # to <= from rejects.
+    resp = client.get(
+        "/api/v2/admin/timeclock.csv?from=2026-05-18&to=2026-05-18",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 422

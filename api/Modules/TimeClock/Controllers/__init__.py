@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -430,6 +430,103 @@ def admin_entries_route(
         approved_hours=approved_hours,
         pending_hours=pending_hours,
         late_threshold_minutes=threshold,
+    )
+
+
+@admin_router.get("/timeclock.csv")
+def export_admin_entries_csv_route(
+    from_: date = Query(..., alias="from"),
+    to:    date = Query(...),
+    store_employee_id: int | None = Query(None, ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> Response:
+    """CSV export of the time-clock entries in ``[from, to)`` for
+    the principal's store.  Mirrors the JSON list endpoint's
+    filter signature; intended as a one-click payroll-history
+    dump.
+
+    Includes the closed-shift columns operators rely on
+    (clock-in / clock-out / hours / status / late minutes /
+    notes) so the file plugs into a payroll spreadsheet without
+    a JSON-to-CSV translation step.
+    """
+    import csv as csv_lib
+    import io as _io
+
+    _require_admin_role(claims)
+    store_id = resolve_store_scope(claims)
+    if to <= from_:
+        raise HTTPException(
+            status_code=422, detail="'to' must be after 'from'.",
+        )
+    if (to - from_) > timedelta(days=370):
+        raise HTTPException(
+            status_code=422,
+            detail="Date window cannot exceed 370 days.",
+        )
+    start_dt = datetime.combine(from_, datetime.min.time())
+    end_dt   = datetime.combine(to,   datetime.min.time())
+    rows = entries_for_period(
+        db,
+        store_id=store_id,
+        start=start_dt,
+        end=end_dt,
+        store_employee_id=store_employee_id,
+    )
+    names = _names_for(db, rows)
+
+    # Reuse the lateness join so the CSV carries the same "Late"
+    # column shown on the payroll page.
+    from api.Modules.TimeClock.Services.lateness import (
+        compute_lateness_map,
+        shifts_for_entries,
+    )
+    from api.Modules.Tenancy.Models import Store
+    store = db.get(Store, store_id)
+    store_tz = str(store.timezone or "") if store is not None else ""
+    shifts = shifts_for_entries(
+        db, store_id=store_id, entries=rows, store_timezone=store_tz,
+    )
+    lateness = compute_lateness_map(
+        rows, shifts, store_timezone=store_tz,
+    )
+
+    buf = _io.StringIO()
+    w = csv_lib.writer(buf)
+    w.writerow([
+        "Employee",
+        "Clock in (UTC)",
+        "Clock out (UTC)",
+        "Hours worked",
+        "Status",
+        "Adjusted",
+        "Break minutes",
+        "Late minutes",
+        "Notes",
+    ])
+    for r in rows:
+        w.writerow([
+            names.get(int(r.store_employee_id), ""),
+            r.clock_in_at.isoformat() if r.clock_in_at else "",
+            r.clock_out_at.isoformat() if r.clock_out_at else "",
+            f"{(r.hours_worked or 0):.2f}" if r.hours_worked is not None else "",
+            r.status or "pending",
+            "yes" if r.adjusted else "no",
+            f"{float(r.break_minutes or 0.0):.0f}",
+            (
+                str(lateness[int(r.id)])
+                if int(r.id) in lateness else ""
+            ),
+            (r.notes or "").replace("\n", " ").strip(),
+        ])
+    fname = f"timeclock_{from_.isoformat()}_to_{to.isoformat()}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{fname}"',
+        },
     )
 
 

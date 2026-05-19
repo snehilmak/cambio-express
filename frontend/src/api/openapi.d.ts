@@ -74,6 +74,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/audit-log.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Admin Audit Log Csv Route
+         * @description CSV export of the operator audit feed for the principal's
+         *     store.  Honors the same filter triplet as the paginated
+         *     JSON endpoint above so the operator can preview filters in
+         *     the UI, then click "Download CSV" to pull the same slice.
+         *
+         *     Streams the full filtered set (no pagination) so a year-end
+         *     compliance pull is one click — typical store has a few
+         *     thousand rows / year which fits in memory comfortably.
+         */
+        get: operations["export_admin_audit_log_csv_route_admin_audit_log_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/referrals": {
         parameters: {
             query?: never;
@@ -280,6 +307,34 @@ export interface paths {
          *     the shift from memory / camera footage / a paper sign-in.
          */
         post: operations["admin_create_route_admin_timeclock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/timeclock.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Admin Entries Csv Route
+         * @description CSV export of the time-clock entries in ``[from, to)`` for
+         *     the principal's store.  Mirrors the JSON list endpoint's
+         *     filter signature; intended as a one-click payroll-history
+         *     dump.
+         *
+         *     Includes the closed-shift columns operators rely on
+         *     (clock-in / clock-out / hours / status / late minutes /
+         *     notes) so the file plugs into a payroll spreadsheet without
+         *     a JSON-to-CSV translation step.
+         */
+        get: operations["export_admin_entries_csv_route_admin_timeclock_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8574,6 +8629,43 @@ export interface operations {
             };
         };
     };
+    export_admin_audit_log_csv_route_admin_audit_log_csv_get: {
+        parameters: {
+            query?: {
+                target?: string;
+                action?: string;
+                user?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_admin_referrals_route_admin_referrals_get: {
         parameters: {
             query?: never;
@@ -8982,6 +9074,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TimeClockPunchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_admin_entries_csv_route_admin_timeclock_csv_get: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                store_employee_id?: number | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
