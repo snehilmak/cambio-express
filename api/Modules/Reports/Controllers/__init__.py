@@ -50,6 +50,7 @@ from api.Modules.Reports.Services import (
     top_customers,
     top_recipients,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -486,7 +487,7 @@ def _build_report_list(prefix: str = "") -> ReportListResponse:
 @router.get("", response_model=ReportListResponse)
 def list_reports_route(
     db: Session = Depends(get_db),  # noqa: ARG001 — kept for symmetry
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReportListResponse:
     """Per-store report-center categories for the admin Reports page.
 

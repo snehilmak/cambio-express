@@ -258,9 +258,9 @@ def rename_maxi_transfer_to_maxi(
             Store.companies.like("%Maxi Transfer%"),
         ).all():
             parts = [p.strip() for p in (s.companies or "").split(",") if p.strip()]
-            s.companies = ",".join(
+            setattr(s, "companies", ",".join(
                 ["Maxi" if p == "Maxi Transfer" else p for p in parts],
-            )
+            ))
         session.commit()
     except Exception as e:
         session.rollback()

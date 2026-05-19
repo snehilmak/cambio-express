@@ -17,6 +17,7 @@ Rows are NOT sorted here — Services own the sort order so report-
 specific decisions (sort by sent desc, by count desc, alphabetical,
 etc.) live one layer up.
 """
+from datetime import date
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
@@ -25,7 +26,9 @@ from sqlalchemy import func
 from api.Modules.Reports.Models import Transfer, _OWNER_TRANSFER_EXCLUDED
 
 
-def period_filters(store_ids: Iterable[int], d_from, d_to) -> tuple:
+def period_filters(
+    store_ids: Iterable[int], d_from: date, d_to: date,
+) -> tuple[Any, ...]:
     """Standard filter set every Transfer-based report uses: scoped
     to `store_ids` (list — accepts admin's `[single_id]` or owner's
     umbrella), posted in the period, and excluding Canceled / Rejected
@@ -46,17 +49,17 @@ def period_filters(store_ids: Iterable[int], d_from, d_to) -> tuple:
 def aggregate(
     db: Session,
     store_ids: Iterable[int],
-    d_from,
-    d_to,
+    d_from: date,
+    d_to: date,
     group_col: Any,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group active transfers in the period by `group_col`.
 
     Returns `(rows, totals)`:
 
-      rows:  list of dicts with keys `key`, `count`, `sent`,
+      rows:  list[Any] of dicts with keys `key`, `count`, `sent`,
              `fees`, `tax`, `avg`. Unsorted — caller decides.
-      totals: dict with `sent`, `fees`, `tax`, `count` summed
+      totals: dict[str, Any] with `sent`, `fees`, `tax`, `count` summed
              across every row.
 
     Single GROUP BY query — O(distinct keys) memory, never loads
@@ -75,7 +78,7 @@ def aggregate(
         .all()
     )
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     totals = {"sent": 0.0, "fees": 0.0, "tax": 0.0, "count": 0}
     for key, count, sent, fees, tax in rows_q:
         c = int(count or 0)

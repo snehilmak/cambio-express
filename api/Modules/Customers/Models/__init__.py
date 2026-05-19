@@ -10,6 +10,7 @@ imports keep working.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Column, Date, DateTime, ForeignKey, Index, Integer, String,
@@ -53,7 +54,11 @@ class Customer(Base):
         Index("ix_customer_phone", "phone_country", "phone_number"),
     )
 
-    def to_dict(self, current_store_id=None, home_names=None):
+    def to_dict(
+        self,
+        current_store_id: int | None = None,
+        home_names: dict[int, str] | None = None,
+    ) -> dict[str, Any]:
         """JSON payload for the autocomplete.
 
         When ``current_store_id`` is passed and doesn't match this
@@ -72,7 +77,7 @@ class Customer(Base):
             "home_store_name": "",
         }
         if current_store_id is not None and self.store_id != current_store_id:
-            d["home_store_name"] = (home_names or {}).get(self.store_id, "")
+            d["home_store_name"] = (home_names or {}).get(int(self.store_id), "")
         return d
 
 

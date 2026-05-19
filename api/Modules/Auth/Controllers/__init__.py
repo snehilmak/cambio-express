@@ -83,6 +83,7 @@ from api.Modules.Auth.Services.login import (
     TotpEnrollmentRequired,
 )
 from api.Modules.Auth.Services.signup import SignupConflictError
+from typing import Any
 
 
 router = APIRouter()
@@ -163,7 +164,7 @@ def _clear_access_token_cookie(response: Response) -> None:
 def get_principal(
     authorization: str | None = Header(default=None),
     db_access_token: str | None = Cookie(default=None),
-) -> dict:
+) -> dict[str, Any]:
     """FastAPI dependency: decode + verify a JWT and return the
     claims dict. Accepts the token from either the
     ``Authorization: Bearer <token>`` header (used by scripts,
@@ -646,7 +647,7 @@ def refresh_route(
 
 
 @router.get("/me")
-def me_route(claims: dict = Depends(get_principal)) -> dict:
+def me_route(claims: dict[str, Any] = Depends(get_principal)) -> dict[str, Any]:
     """Echo the verified JWT claims. Useful for the React app's first
     paint to confirm the token is still valid + render user chrome
     without a separate DB roundtrip."""
@@ -663,7 +664,7 @@ def me_route(claims: dict = Depends(get_principal)) -> dict:
 @router.get("/profile", response_model=ProfileResponse)
 def get_profile_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ProfileResponse:
     """Full Profile-page payload for the authed user. Includes
     editable fields (full_name, email, phone, timezone), read-only
@@ -679,7 +680,7 @@ def get_profile_route(
 def update_profile_route(
     body: ProfileUpdateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ProfileResponse:
     """Update one or more profile fields. Field-level validation
     errors come back as 422 with a `field_errors` dict the SPA
@@ -708,7 +709,7 @@ def update_profile_route(
 @router.get("/notifications", response_model=NotificationsResponse)
 def get_notifications_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> NotificationsResponse:
     """Per-user notification preferences. Powers
     /app/account/notifications. `trial_toggle_applies` tells the
@@ -724,7 +725,7 @@ def get_notifications_route(
 def update_notifications_route(
     body: NotificationsUpdateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> NotificationsResponse:
     """Apply notification preference changes. Both fields
     optional — None means 'don't touch'. Returns the canonical
@@ -749,7 +750,7 @@ def get_my_activity_route(
     action: str = Query("", max_length=40),
     page:   int = Query(1, ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MyActivityResponse:
     """Cross-store activity feed for the current user. Returns
     every `OperatorAuditLog` + `TransferAudit` row authored by
@@ -786,8 +787,8 @@ def get_my_activity_route(
 def change_password_route(
     body: ChangePasswordRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
-) -> dict:
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
     """Self-service password change. Authed via JWT — the user
     proves identity twice (current via password, ownership via
     bearer token). Returns either `{"status": "ok"}` on success
@@ -1031,7 +1032,7 @@ def forgot_password_route(
     request: Request,
     body: ForgotPasswordRequest,
     db: Session = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Issue a reset token for the user identified by `email`.
 
     Per the CLAUDE.md security invariant the response is always
@@ -1145,7 +1146,7 @@ def reset_password_route(
     request: Request,
     body: ResetPasswordRequest,
     db: Session = Depends(get_db),
-) -> dict:
+) -> dict[str, Any]:
     """Consume a one-time reset token and set a new password.
     Same validation rules as change_password (length ≥ 8 +
     matching confirm)."""
@@ -1185,8 +1186,8 @@ def reset_password_route(
 def passkey_register_begin_route(
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
-) -> dict:
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
     """Mint a WebAuthn registration challenge for the authed
     user. Returns the challenge-options JSON that the SPA passes
     to `navigator.credentials.create()`, plus a `register_token`
@@ -1247,11 +1248,11 @@ def passkey_register_begin_route(
 
 @router.post("/passkeys/register/finish")
 def passkey_register_finish_route(
-    body: dict,
+    body: dict[str, Any],
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
-) -> dict:
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
     """Verify the credential the browser produced + the still-valid
     register_token, then persist the new Passkey row. Returns the
     new passkey's metadata (matches the GET /passkeys row shape so
@@ -1338,8 +1339,8 @@ def passkey_register_finish_route(
 @router.get("/passkeys")
 def list_passkeys_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
-) -> dict:
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
     """List the authenticated user's registered passkeys.
     Returns only the metadata the SPA renders — never the raw
     credential_id or public_key (those stay server-side)."""
@@ -1373,7 +1374,7 @@ def list_passkeys_route(
 def delete_passkey_route(
     passkey_id: int,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Remove one of the authenticated user's passkeys. 404 if it
     doesn't belong to them — never confirms existence of a passkey
@@ -1403,7 +1404,7 @@ def delete_passkey_route(
 @router.get("/sessions", response_model=ActiveSessionsResponse)
 def list_sessions_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ActiveSessionsResponse:
     """Active sessions (one per refresh-token chain) for the
     caller. The current session is flagged with ``is_current``
@@ -1444,7 +1445,7 @@ def list_sessions_route(
 )
 def revoke_other_sessions_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SessionRevokeResponse:
     """Revoke every active session for the caller EXCEPT the one
     that signed this request. Useful when the user spots an
@@ -1476,7 +1477,7 @@ def revoke_other_sessions_route(
 def revoke_session_route(
     session_id: str,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SessionRevokeResponse:
     """Revoke a single session by its UUID. The user_id filter is
     the security boundary — a caller can only revoke their OWN

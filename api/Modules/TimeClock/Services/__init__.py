@@ -7,7 +7,7 @@ records the audit row. No HTTP concerns leak in here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -149,13 +149,13 @@ def clock_out(
     # total so it doesn't accidentally inflate hours_worked.
     if entry.break_started_at is not None:
         elapsed_break_sec = (now - entry.break_started_at).total_seconds()
-        entry.break_minutes = round(
+        setattr(entry, "break_minutes", round(
             float(entry.break_minutes or 0.0) + elapsed_break_sec / 60, 4,
-        )
-        entry.break_started_at = None
+        ))
+        setattr(entry, "break_started_at", None)
     delta = now - entry.clock_in_at
-    entry.clock_out_at      = now
-    entry.clock_out_user_id = user_id
+    setattr(entry, "clock_out_at", now)
+    setattr(entry, "clock_out_user_id", user_id)
     # Subtract break minutes from the elapsed wall-clock so a
     # 9-to-5 shift with a 60-min lunch records 7.0 hours.
     elapsed_hours = delta.total_seconds() / 3600
@@ -167,7 +167,7 @@ def clock_out(
         suffix = (notes_append or "")[:500]
         existing = (entry.notes or "").strip()
         combined = f"{existing}\n{suffix}" if existing else suffix
-        entry.notes = combined[:500]
+        setattr(entry, "notes", combined[:500])
     db.flush()
     return entry
 
@@ -225,10 +225,10 @@ def end_break(
             f"{emp.name} is not currently on break.",
         )
     elapsed_sec = (datetime.utcnow() - entry.break_started_at).total_seconds()
-    entry.break_minutes = round(
+    setattr(entry, "break_minutes", round(
         float(entry.break_minutes or 0.0) + elapsed_sec / 60, 4,
-    )
-    entry.break_started_at = None
+    ))
+    setattr(entry, "break_started_at", None)
     db.flush()
     return entry
 
@@ -367,7 +367,7 @@ def admin_update_entry(
     *,
     entry_id: int,
     store_id: int,
-    patch: dict,
+    patch: dict[str, Any],
 ) -> tuple[TimeClockEntry, str]:
     """Apply admin edits to an entry. ``patch`` is a dict keyed
     on the editable fields (``clock_in_at`` / ``clock_out_at``
@@ -409,18 +409,21 @@ def admin_update_entry(
     if entry.clock_out_at is not None and entry.clock_out_at <= entry.clock_in_at:
         raise ValueError("clock_out_at must be after clock_in_at.")
     # Recompute hours whenever the times could have changed.
-    new_hours = _compute_hours(entry.clock_in_at, entry.clock_out_at)
+    new_hours = _compute_hours(
+        entry.clock_in_at,  # type: ignore[arg-type]
+        entry.clock_out_at,  # type: ignore[arg-type]
+    )
     if new_hours != entry.hours_worked:
         diffs.append(
             f"hours_worked: {_fmt(entry.hours_worked)} → {_fmt(new_hours)}",
         )
-        entry.hours_worked = new_hours
+        setattr(entry, "hours_worked", new_hours)
     if diffs:
         # Stamp the "edited after the fact" flag so the
         # admin view's "Adjusted: Yes" badge lights up. A
         # no-op patch leaves the flag alone.
         if not entry.adjusted:
-            entry.adjusted = True
+            setattr(entry, "adjusted", True)
     db.flush()
     if not diffs:
         summary = "Admin update · no-op (no fields changed)"
@@ -457,13 +460,13 @@ def admin_delete_entry(
         f"{entry.clock_out_at.isoformat() if entry.clock_out_at else 'open'} "
         f"({hours_str})"
     )
-    store_employee_id = entry.store_employee_id
+    store_employee_id = int(entry.store_employee_id)
     db.delete(entry)
     db.flush()
     return store_employee_id, summary
 
 
-def _fmt(value) -> str:
+def _fmt(value: Any) -> str:
     """Audit-summary formatter — keeps ``None`` legible and
     trims long strings so the audit row stays readable."""
     if value is None:

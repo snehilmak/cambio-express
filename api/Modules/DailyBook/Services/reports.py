@@ -91,8 +91,8 @@ class PeriodSummary:
 
 def _summarize(r: DailyReport) -> DailyReportSummary:
     return DailyReportSummary(
-        id=r.id,
-        store_id=r.store_id,
+        id=int(r.id),
+        store_id=int(r.store_id),
         report_date=r.report_date.isoformat() if r.report_date else "",
         taxable_sales=float(r.taxable_sales or 0),
         non_taxable=float(r.non_taxable or 0),
@@ -121,7 +121,7 @@ def _summarize(r: DailyReport) -> DailyReportSummary:
         other_cash_out=float(r.other_cash_out or 0),
         over_short=float(r.over_short or 0),
         locked=r.locked_at is not None,
-        notes=r.notes or "",
+        notes=str(r.notes or ""),
         locked_at=r.locked_at.isoformat() if r.locked_at else "",
         total_receipts=float(r.total_receipts or 0),
         total_disbursements=float(r.total_disbursements or 0),
@@ -260,8 +260,8 @@ def unlock_report(
     report = find_report_by_date(db, store_id, report_date)
     if report is None or report.locked_at is None:
         return report
-    report.locked_at = None
-    report.locked_by = None
-    report.updated_at = datetime.utcnow()
+    setattr(report, "locked_at", None)
+    setattr(report, "locked_by", None)
+    setattr(report, "updated_at", datetime.utcnow())
     db.flush()
     return report

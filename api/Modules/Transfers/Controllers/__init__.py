@@ -55,6 +55,7 @@ from api.Modules.Transfers.Services import (
     parse_dob,
     update_transfer,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -102,7 +103,7 @@ def _to_row(t) -> TransferRow:
 @router.get("/employees", response_model=RosterResponse)
 def employees_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> RosterResponse:
     """Active store-employee roster for the JWT principal's store.
     Powers the "Processed by" dropdown on the SPA's create + edit
@@ -205,7 +206,7 @@ def _enforce_business_hours_gate(db: Session, store_id: int) -> None:
 def create_route(
     body: CreateTransferRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransferResponse:
     """Create a transfer in the JWT principal's store. Server
     recomputes federal_tax server-side from
@@ -367,7 +368,7 @@ def update_route(
     transfer_id: int = Path(..., ge=1),
     body: CreateTransferRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransferResponse:
     """Update an existing transfer in the JWT principal's store.
     Same body shape as POST /transfers — every field is replaceable
@@ -439,7 +440,7 @@ def update_route(
 def delete_transfer_route(
     transfer_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Hard-delete a transfer + cascade its TransferAudit history.
 

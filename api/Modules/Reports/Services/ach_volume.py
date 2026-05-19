@@ -11,6 +11,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def ach_volume(
@@ -18,7 +19,7 @@ def ach_volume(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group ACHBatch rows in the window by company.
 
     Returns `(rows, totals)`:
@@ -44,7 +45,7 @@ def ach_volume(
         .group_by(ACHBatch.company)
         .all()
     )
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     totals = {"count": 0, "amount": 0.0}
     for company, count, amount in rows_q:
         c = int(count or 0)

@@ -18,6 +18,7 @@ from api.Modules.Reports.Services.period_comparison import (
     PL_EXPENSE_LINES,
     PL_INCOME_LINES,
 )
+from typing import Any
 
 
 def period_pl(
@@ -25,7 +26,7 @@ def period_pl(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Build the period P&L rows + totals.
 
     Returns `(rows, totals)`:
@@ -54,7 +55,7 @@ def period_pl(
           .scalar()
     ) or 0.0
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     income_total = 0.0
     for label, attr in PL_INCOME_LINES:
         v = sum(float(getattr(r, attr) or 0.0) for r in daily)

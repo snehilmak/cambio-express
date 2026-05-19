@@ -16,6 +16,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from api.Modules.Reports.Services.date_helpers import day_end, day_start
+from typing import Any
 
 
 def bank_charges_by_account(
@@ -23,7 +24,7 @@ def bank_charges_by_account(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Sum `BankTransaction` rows tagged as bank charges,
     grouped by account.
 
@@ -72,7 +73,7 @@ def bank_charges_by_account(
         if acct_ids else {}
     )
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     totals = {"count": 0, "amount": 0.0}
     for aid, count, cents in rows_q:
         c = int(count or 0)

@@ -159,7 +159,7 @@ def _encode_token(
 
 
 def _decode_token(token: str, *, expected_purpose: str) -> dict[str, Any]:
-    claims = jwt.decode(
+    claims: dict[str, Any] = jwt.decode(
         token, _jwt_secret(), algorithms=[JWT_ALGORITHM],
     )
     if claims.get("purpose") != expected_purpose:
@@ -180,7 +180,7 @@ def allow_credentials_for(
     row = passkey_for_employee(db, store_id, store_employee_id)
     if row is None:
         return []
-    return [PublicKeyCredentialDescriptor(id=row.credential_id)]
+    return [PublicKeyCredentialDescriptor(id=bytes(row.credential_id))]
 
 
 def emp_handle(store_employee_id: int) -> bytes:

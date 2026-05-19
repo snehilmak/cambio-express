@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional
+from typing import Optional, cast
+
+from sqlalchemy.engine import Engine
 
 
 def warn_default_seed_passwords(
@@ -65,9 +67,13 @@ def init_db(logger: Optional[logging.Logger] = None) -> None:
     from api.Core.Database import SessionLocal, engine
     from api.Modules.Tenancy.Models import User
 
-    apply_schema(engine, log)
-    ensure_added_indexes(engine, log)
-    drop_legacy_tables(engine, log)
+    # ``engine`` is a lazy proxy that resolves to the real
+    # SQLAlchemy ``Engine`` on first attribute access — cast at
+    # the boundary so mypy sees the Engine type expected by the
+    # bootstrap helpers.
+    apply_schema(cast(Engine, engine), log)
+    ensure_added_indexes(cast(Engine, engine), log)
+    drop_legacy_tables(cast(Engine, engine), log)
 
     with SessionLocal() as session:
         rename_maxi_transfer_to_maxi(session, log)

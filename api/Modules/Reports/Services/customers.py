@@ -8,7 +8,8 @@ Walk-in transfers (no `customer_id`) get bucketed as `"(walk-in)"`
 — they can't be tracked across visits, but their volume should
 still appear so the totals row matches the dashboard.
 """
-from typing import Iterable
+from datetime import date
+from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -19,12 +20,12 @@ from api.Modules.Reports.Repositories.transfers import aggregate
 def top_customers(
     db: Session,
     store_ids: Iterable[int],
-    d_from,
-    d_to,
+    d_from: date,
+    d_to: date,
     *,
     sort_by: str = "sent",
     limit: int = 50,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Top `limit` customers by `sort_by` (defaults to `sent`).
 
     `sort_by="sent"` → biggest spenders first. `sort_by="count"` →

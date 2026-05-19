@@ -27,6 +27,8 @@ Built-in rules NEVER post to the daily book regardless — the
 
 Caller commits.
 """
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from api.Modules.BankSync.Services.builtin_rules import (
@@ -42,7 +44,7 @@ from api.Modules.BankSync.Services.matcher import find_matching_rule
 
 
 def apply_rules_to_uncategorized_row(
-    db: Session, row, account, *, allow_auto_post: bool,
+    db: Session, row: Any, account: Any, *, allow_auto_post: bool,
 ) -> bool:
     """Apply the rule chain to `row`. Returns True iff the row
     was tagged.

@@ -19,6 +19,7 @@ before the route stores them on a `Transfer` row:
 from datetime import date, datetime
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def parse_dob(raw: str | None) -> date | None:
@@ -34,7 +35,7 @@ def parse_dob(raw: str | None) -> date | None:
         return None
 
 
-def active_roster(db: Session, store_id: int) -> list:
+def active_roster(db: Session, store_id: int) -> list[Any]:
     """Names available in the "Processed by" dropdown.
 
     Inactive roster rows are hidden so cashiers can't credit
@@ -50,8 +51,8 @@ def active_roster(db: Session, store_id: int) -> list:
 
 
 def pick_employee(
-    db: Session, store_id: int, raw_id,
-) -> tuple:
+    db: Session, store_id: int, raw_id: Any,
+) -> tuple[Any, str]:
     """Resolve a form `employee_id` value against the store's
     roster.
 
@@ -74,4 +75,4 @@ def pick_employee(
           .filter_by(id=eid, store_id=store_id)
           .first()
     )
-    return (emp, emp.name) if emp else (None, "")
+    return (emp, str(emp.name)) if emp else (None, "")

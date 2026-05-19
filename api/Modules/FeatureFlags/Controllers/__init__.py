@@ -35,6 +35,7 @@ from api.Modules.FeatureFlags.Requests import (
     StoreOverrideResponse,
     StoreOverrideRow,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -66,7 +67,7 @@ def _adapt(f) -> FeatureFlagRow:
 @router.get("", response_model=FeatureFlagListResponse)
 def list_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> FeatureFlagListResponse:
     resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
@@ -82,7 +83,7 @@ def list_route(
 def create_route(
     body: FeatureFlagCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> FeatureFlagResponse:
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
@@ -115,7 +116,7 @@ def toggle_route(
     body: FeatureFlagToggleRequest,
     key: str = Path(..., min_length=1, max_length=60),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> FeatureFlagResponse:
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag
@@ -136,7 +137,7 @@ def toggle_route(
 def delete_route(
     key: str = Path(..., min_length=1, max_length=60),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Billing.Models import FeatureFlag, StoreFeatureOverride
@@ -176,7 +177,7 @@ def _adapt_override(o, *, store) -> StoreOverrideRow:
 def list_overrides_route(
     key: str = Path(..., min_length=1, max_length=60),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> StoreOverrideListResponse:
     """Every store-level override for a given flag, ordered by
     store name. Useful for the superadmin to see which customers
@@ -210,7 +211,7 @@ def upsert_override_route(
     key: str = Path(..., min_length=1, max_length=60),
     store_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> StoreOverrideResponse:
     """Set (or update) a per-store override. The flag must exist
     globally; the target store must exist. Idempotent."""
@@ -256,7 +257,7 @@ def clear_override_route(
     key: str = Path(..., min_length=1, max_length=60),
     store_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Clear a per-store override — the store reverts to the
     flag's global default. 404 only when no override exists, so

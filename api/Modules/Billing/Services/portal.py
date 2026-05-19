@@ -40,9 +40,9 @@ def create_billing_portal_session(
         )
     try:
         portal = stripe.billing_portal.Session.create(
-            customer=store.stripe_customer_id,
+            customer=str(store.stripe_customer_id),
             return_url=return_url,
         )
-    except stripe.error.StripeError as e:
+    except stripe.error.StripeError as e:  # type: ignore[attr-defined]
         raise StripeServiceError("Stripe billing portal failed") from e
-    return portal.url
+    return str(portal.url)

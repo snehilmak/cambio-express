@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from api.Modules.Admin.Repositories import find_store
 from api.Modules.Admin.Services.store_info import update_store_info
 from api.Modules.Tenancy.Models import Store, StoreOwnerLink
+from typing import Any
 
 
 # Fields the owner can push cross-store. Subset of
@@ -41,8 +42,8 @@ def apply_cross_store_defaults(
     *,
     owner_id: int,
     store_ids: list[int],
-    defaults: dict,
-) -> list[dict]:
+    defaults: dict[str, Any],
+) -> list[dict[str, Any]]:
     """Push ``defaults`` to every requested store that's in the
     owner's umbrella.
 
@@ -77,7 +78,7 @@ def apply_cross_store_defaults(
     allowed = _owner_store_ids(db, owner_id)
     name_lookup = _store_names_by_id(db, list(set(store_ids)))
 
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for sid in store_ids:
         store_name = name_lookup.get(sid, "")
         if sid not in allowed:

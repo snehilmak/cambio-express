@@ -10,6 +10,7 @@ sites keep working.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String,
@@ -36,7 +37,7 @@ class ACHBatch(Base):
     __table_args__ = (UniqueConstraint("store_id", "batch_ref"),)
 
     @property
-    def transfers_total(self):
+    def transfers_total(self) -> float:
         """Sum of what the ACH actually debits: send amount + federal
         tax. The store fee stays with the store, so it's excluded from
         this total."""
@@ -50,26 +51,26 @@ class ACHBatch(Base):
               + func.coalesce(func.sum(Transfer.federal_tax), 0.0))
              .filter_by(store_id=self.store_id, batch_id=self.batch_ref)
              .scalar())
-        return v or 0.0
+        return float(v or 0.0)
 
     @property
-    def variance(self):
-        return round(self.ach_amount - self.transfers_total, 2)
+    def variance(self) -> float:
+        return round(float(self.ach_amount) - self.transfers_total, 2)
 
     @property
-    def transfer_count(self):
+    def transfer_count(self) -> int:
         from api.Modules.Transfers.Models import Transfer
         s = Session.object_session(self)
         if s is None:
             return 0
-        return s.query(Transfer).filter_by(
+        return int(s.query(Transfer).filter_by(
             store_id=self.store_id, batch_id=self.batch_ref,
-        ).count()
+        ).count())
 
 
 # Re-export Transfer so existing
 # ``from api.Modules.Batches.Models import Transfer`` keeps working.
-def __getattr__(name):
+def __getattr__(name: str) -> Any:
     # Lazy fallthrough avoids the Batches ↔ Transfers module cycle
     # at import time. Only fires the first time ``Transfer`` is
     # looked up on this module.

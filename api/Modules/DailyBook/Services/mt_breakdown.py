@@ -121,16 +121,20 @@ def read_mt_breakdown(
     # for (saved or auto). Preserve configured order; trailing
     # extras alphabetical.
     configured = list(auto_summary.companies)
+    # Coerce dict keys to ``str`` — ``saved_by_co`` may be keyed
+    # off Column[str] values; mypy can't see SQLAlchemy's runtime
+    # equality semantics, but ``str(col)`` round-trips cleanly.
+    saved_keys: set[str] = {str(k) for k in saved_by_co.keys()}
+    auto_keys:  set[str] = {str(k) for k in auto_by_co.keys()}
     extras = sorted(
-        {c for c in (set(saved_by_co) | set(auto_by_co))
-         if c not in configured},
+        {c for c in (saved_keys | auto_keys) if c not in configured},
         key=str.lower,
     )
     company_order = configured + extras
 
     rows: list[MTRow] = []
     for co in company_order:
-        saved = saved_by_co.get(co)
+        saved = saved_by_co.get(co)  # type: ignore[call-overload]
         auto = auto_by_co.get(co)
         rows.append(MTRow(
             company=co,

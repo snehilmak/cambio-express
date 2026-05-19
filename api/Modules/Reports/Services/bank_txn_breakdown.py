@@ -13,6 +13,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def bank_txn_breakdown(
@@ -20,7 +21,7 @@ def bank_txn_breakdown(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate BankTransaction rows by category_slug.
 
     Returns `(rows, totals)`:
@@ -52,7 +53,7 @@ def bank_txn_breakdown(
         .group_by(BankTransaction.category_slug)
         .all()
     )
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     totals = {"count": 0, "amount": 0.0, "inflow": 0.0, "outflow": 0.0}
     for slug, count, cents in rows_q:
         c = int(count or 0)

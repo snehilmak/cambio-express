@@ -54,7 +54,7 @@ def verify_totp_token(user: User | None, token: str) -> bool:
     if not (user and user.totp_secret and token):
         return False
     try:
-        return pyotp.TOTP(user.totp_secret).verify(
+        return pyotp.TOTP(str(user.totp_secret)).verify(
             str(token).strip(),
             valid_window=TOTP_VALID_WINDOW,
         )
@@ -120,6 +120,6 @@ def consume_recovery_code(
     if row is None:
         return False
     from datetime import datetime
-    row.used_at = datetime.utcnow()
+    setattr(row, "used_at", datetime.utcnow())
     db.flush()
     return True

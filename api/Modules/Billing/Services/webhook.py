@@ -29,6 +29,7 @@ from api.Modules.Billing.Services.referrals import (
     apply_pending_referral_credits,
     ensure_referral_code,
 )
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class InvalidWebhookSignatureError(Exception):
 
 def verify_webhook_signature(
     payload: bytes, sig_header: str, secret: str,
-) -> dict:
+) -> dict[str, Any]:
     """Verify the Stripe-Signature header against `payload` using
     `secret`. Returns the parsed event (dict). Raises
     InvalidWebhookSignatureError when the signature doesn't match
@@ -53,8 +54,11 @@ def verify_webhook_signature(
     if not secret:
         raise InvalidWebhookSignatureError("Webhook secret not configured")
     try:
-        return stripe.Webhook.construct_event(payload, sig_header, secret)
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        event: dict[str, Any] = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
+            payload, sig_header, secret,
+        )
+        return event
+    except (ValueError, stripe.error.SignatureVerificationError) as e:  # type: ignore[attr-defined]
         raise InvalidWebhookSignatureError(str(e)) from e
 
 
@@ -85,7 +89,7 @@ def derive_plan_from_price(
 
 
 def handle_stripe_event(
-    db: Session, event: dict, *,
+    db: Session, event: dict[str, Any], *,
     retention_days: int = DEFAULT_RETENTION_DAYS,
 ) -> None:
     """Dispatch a verified Stripe event to the right per-event
@@ -120,7 +124,7 @@ def handle_stripe_event(
 
 
 def _handle_checkout_session_completed(
-    db: Session, event: dict,
+    db: Session, event: dict[str, Any],
 ) -> None:
     """Returning customer or first-time checkout completed: flip
     the store onto the paid plan, persist Stripe IDs, clear any
@@ -142,14 +146,16 @@ def _handle_checkout_session_completed(
     try:
         sub = stripe.Subscription.retrieve(sub_id)
         price_id = sub["items"]["data"][0]["price"]["id"]
-        store.plan, store.billing_cycle = derive_plan_from_price(price_id)
+        plan_val, cycle_val = derive_plan_from_price(price_id)
+        setattr(store, "plan", plan_val)
+        setattr(store, "billing_cycle", cycle_val)
     except Exception as e:
         logger.error("Stripe sub retrieve error: %s", e)
-        store.plan = "pro"
-        store.billing_cycle = "monthly"
+        setattr(store, "plan", "pro")
+        setattr(store, "billing_cycle", "monthly")
 
-    store.stripe_customer_id = customer_id
-    store.stripe_subscription_id = sub_id
+    setattr(store, "stripe_customer_id", customer_id)
+    setattr(store, "stripe_subscription_id", sub_id)
 
     # Returning customer: clear cancellation + retention timer +
     # trial-reminder dedup flag. Idempotent on first-time
@@ -170,7 +176,7 @@ def _handle_checkout_session_completed(
 
 
 def _handle_subscription_deleted(
-    db: Session, event: dict, *, retention_days: int,
+    db: Session, event: dict[str, Any], *, retention_days: int,
 ) -> None:
     """Subscription cancellation: mark the store inactive, set the
     retention countdown."""

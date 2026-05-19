@@ -61,6 +61,7 @@ from api.Modules.Admin.Services import (
     update_store_user,
     update_team_member,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -109,7 +110,7 @@ def _to_row(s) -> StoreInfoRow:
 @router.get("/store-info", response_model=StoreInfoResponse)
 def get_store_info(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> StoreInfoResponse:
     store_id = resolve_store_scope(claims)
     store = find_store(db, store_id)
@@ -122,7 +123,7 @@ def get_store_info(
 def update_store_info_route(
     body: StoreInfoUpdateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> StoreInfoResponse:
     """Update operator-editable store fields. Only the role
     `admin` (or superadmin / owner) is allowed — the legacy
@@ -149,7 +150,7 @@ def update_store_info_route(
 # ── Team roster ─────────────────────────────────────────────
 
 
-def _require_admin_role(claims: dict) -> None:
+def _require_admin_role(claims: dict[str, Any]) -> None:
     if claims.get("role") not in ("admin", "owner", "superadmin"):
         raise HTTPException(
             status_code=403,
@@ -167,7 +168,7 @@ def _team_row(e) -> TeamMemberRow:
 @router.get("/team", response_model=TeamListResponse)
 def list_team_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TeamListResponse:
     """All StoreEmployee rows for the JWT principal's store
     (active + inactive). Inactive rows are surfaced so the
@@ -184,7 +185,7 @@ def list_team_route(
 def create_team_member_route(
     body: TeamMemberCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TeamMemberRow:
     """Create a new active StoreEmployee row. Admin role
     required."""
@@ -207,7 +208,7 @@ def update_team_member_route(
     employee_id: int = Path(..., ge=1),
     body: TeamMemberUpdateRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TeamMemberRow:
     """Rename and/or toggle active. Cross-store IDs → 404
     (opaque tenancy)."""
@@ -236,7 +237,7 @@ def update_team_member_route(
 def deactivate_team_member_route(
     employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Soft-delete: flips is_active=False. We never hard-delete
     StoreEmployee rows so historical employee_name / employee_id
@@ -253,7 +254,7 @@ def deactivate_team_member_route(
 # ── Subscription add-ons ────────────────────────────────────
 
 
-def _adapt_addon(key: str, addon: dict, *, is_active: bool) -> "AddonRow":
+def _adapt_addon(key: str, addon: dict[str, Any], *, is_active: bool) -> "AddonRow":
     return AddonRow(
         key=key,
         name=addon.get("name", key),
@@ -267,7 +268,7 @@ def _adapt_addon(key: str, addon: dict, *, is_active: bool) -> "AddonRow":
 @router.get("/subscription")
 def subscription_summary_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Subscription page header data: current plan, trial status,
     retention countdown, account-snapshot fields, and the add-on
@@ -340,7 +341,7 @@ def subscription_summary_route(
 @router.get("/addons", response_model=AddonListResponse)
 def list_addons_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AddonListResponse:
     """List every available add-on for the principal's store with
     its is_active flag. has_paid_plan tells the SPA whether the
@@ -373,7 +374,7 @@ def list_addons_route(
 def toggle_addon_route(
     addon_key: str,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AddonToggleResponse:
     """Toggle an add-on for the principal's store. Mirrors the
     legacy /admin/subscription/addons/<key> form. Requires an
@@ -415,7 +416,7 @@ def toggle_addon_route(
 @router.get("/tax-export/years", response_model=TaxExportYearsResponse)
 def list_tax_export_years_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TaxExportYearsResponse:
     """Years offered in the tax-pack year picker, plus the default
     selection (last calendar year). Powers the year dropdown on
@@ -434,7 +435,7 @@ def download_tax_pack_route(
         description="Calendar year to pack (inclusive both ends).",
     ),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Bundle a calendar year of store data into a ZIP and stream
     the bytes.
@@ -480,7 +481,7 @@ def get_admin_audit_log_route(
     user:   str = Query("", max_length=20),
     page:   int = Query(1, ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminAuditLogResponse:
     """Merged operator + transfer audit feed for the principal's
     store. Powers /app/admin/audit-log. Filters mirror the legacy
@@ -525,7 +526,7 @@ def _user_row(u) -> AdminUserRow:
 
 
 def _audit_user_action(
-    db: Session, *, claims: dict, action: str,
+    db: Session, *, claims: dict[str, Any], action: str,
     target_user, summary: str,
 ) -> None:
     """Record a per-store operator-audit row for a user mutation.
@@ -555,7 +556,7 @@ def _audit_user_action(
 @router.get("/users", response_model=AdminUserListResponse)
 def list_users_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminUserListResponse:
     """All User rows for the JWT principal's store. Powers the
     /app/admin/users roster. Includes inactive rows so admins
@@ -573,7 +574,7 @@ def list_users_route(
 def create_user_route(
     body: AdminUserCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminUserRow:
     """Create a new User in the principal's store. Username must
     be unique within the store; password is hashed via
@@ -614,7 +615,7 @@ def create_user_route(
 def get_user_route(
     user_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminUserDetailResponse:
     """Single-user fetch for the Edit form prefill. Cross-store
     IDs and unknown IDs both return 404 — opaque tenancy."""
@@ -633,7 +634,7 @@ def update_user_route(
     user_id: int = Path(..., ge=1),
     body: AdminUserUpdateRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AdminUserRow:
     """Edit full_name, role, is_active, and (optionally) password.
     Self-edit guard: an admin cannot demote / deactivate their
@@ -692,7 +693,7 @@ def update_user_route(
 def get_admin_referrals_route(
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReferralCodeResponse:
     """Self-service referral payload for the principal's store.
     Lazily mints a ReferralCode if missing (per CLAUDE.md

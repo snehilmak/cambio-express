@@ -89,10 +89,14 @@ class Transfer(Base):
     )
 
     @property
-    def total_collected(self):
+    def total_collected(self) -> float:
         """What the customer actually handed over: send amount +
         store fee + federal tax."""
-        return (self.send_amount or 0) + (self.fee or 0) + (self.federal_tax or 0)
+        return float(
+            (self.send_amount or 0)
+            + (self.fee or 0)
+            + (self.federal_tax or 0)
+        )
 
 
 # Re-export the surrounding entities the Transfers services touch.

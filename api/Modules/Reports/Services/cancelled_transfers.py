@@ -11,6 +11,7 @@ Pure DB read — no commits, no side-effects.
 from datetime import date
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def cancelled_transfers(
@@ -18,7 +19,7 @@ def cancelled_transfers(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """List Canceled / Rejected transfers in the window.
 
     Returns `(rows, totals)`:
@@ -60,7 +61,9 @@ def cancelled_transfers(
     ]
     totals = {
         "count":    len(rows),
-        "amount":   sum(r["amount"] for r in rows),
+        # Inner expression returns ``Any`` (heterogeneous dict),
+        # mypy can't see it's a number — cast at the boundary.
+        "amount":   sum(float(r["amount"]) for r in rows),
         "canceled": sum(1 for r in rows if r["status"] == "Canceled"),
         "rejected": sum(1 for r in rows if r["status"] == "Rejected"),
     }

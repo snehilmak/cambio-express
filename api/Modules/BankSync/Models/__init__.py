@@ -51,17 +51,17 @@ class StripeBankAccount(Base):
     nickname             = Column(String(60), default="")
 
     @property
-    def label(self):
+    def label(self) -> str:
         """Display label: nickname when set, else ••last4, else 'Account'."""
         if self.nickname:
-            return self.nickname
+            return str(self.nickname)
         if self.last4:
             return f"••{self.last4}"
         return "Account"
 
     @property
-    def last_balance(self):
-        return (self.last_balance_cents or 0) / 100.0
+    def last_balance(self) -> float:
+        return float((self.last_balance_cents or 0) / 100.0)
 
 
 class BankTransaction(Base):
@@ -107,8 +107,8 @@ class BankTransaction(Base):
     )
 
     @property
-    def amount(self):
-        return (self.amount_cents or 0) / 100.0
+    def amount(self) -> float:
+        return float((self.amount_cents or 0) / 100.0)
 
 
 class BankRule(Base):

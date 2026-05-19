@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 # Plan pricing in dollars. Yearly buckets are amortised to /12
@@ -51,7 +52,7 @@ def compute_mrr(
     return bm, by_, pm, py_, bm + by_ + pm + py_
 
 
-def superadmin_dashboard_context(db: Session) -> dict:
+def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
     """Platform-wide BI metrics for the superadmin Dashboard tab.
 
     Returns the kwargs dict that `dashboard_superadmin.html`
@@ -235,8 +236,8 @@ def superadmin_dashboard_context(db: Session) -> dict:
          "total": float(tot or 0)}
         for co, cnt, tot in volume_rows
     ]
-    total_volume_30d = sum(v["total"] for v in volume_by_company)
-    total_transfers_30d = sum(v["count"] for v in volume_by_company)
+    total_volume_30d = sum(float(v["total"]) for v in volume_by_company)
+    total_transfers_30d = sum(int(v["count"]) for v in volume_by_company)
 
     # Merged activity feed — signups + cancels, newest first,
     # capped at 12 so the card stays scannable.
@@ -250,7 +251,7 @@ def superadmin_dashboard_context(db: Session) -> dict:
           .limit(10)
           .all()
     )
-    activity: list[dict] = []
+    activity: list[dict[str, Any]] = []
     for s in recent_signups:
         activity.append({
             "when": s.created_at,

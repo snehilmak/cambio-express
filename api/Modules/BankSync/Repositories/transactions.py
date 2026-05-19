@@ -7,7 +7,7 @@ Service layer composes them into the rendered list.
 """
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Iterable, Literal
+from typing import Any, Iterable, Literal
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -28,7 +28,7 @@ class BankTransactionFilters:
     uncategorized_only: bool = False
 
     @classmethod
-    def from_query(cls, args) -> "BankTransactionFilters":
+    def from_query(cls, args: Any) -> "BankTransactionFilters":
         def _date(s: str) -> date | None:
             if not s:
                 return None
@@ -45,8 +45,13 @@ class BankTransactionFilters:
             except ValueError:
                 return None
 
-        sign = (args.get("sign") or "").strip().lower()
-        if sign not in ("", "credit", "debit"):
+        sign_raw = (args.get("sign") or "").strip().lower()
+        sign: Literal["", "credit", "debit"]
+        if sign_raw == "credit":
+            sign = "credit"
+        elif sign_raw == "debit":
+            sign = "debit"
+        else:
             sign = ""
         return cls(
             posted_from=_date(args.get("posted_from", "")),

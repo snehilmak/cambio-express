@@ -27,6 +27,7 @@ plus the FK-override map if the column isn't literally
 `store_id`.
 """
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -132,7 +133,7 @@ def _store_owned_models() -> list[tuple[type, str]]:
     ]
 
 
-def _expired_stores(db: Session, now: datetime):
+def _expired_stores(db: Session, now: datetime) -> list[Any]:
     """Stores that crossed their retention deadline."""
     from api.Modules.Tenancy.Models import Store
     return (

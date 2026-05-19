@@ -13,7 +13,7 @@ Validation failures surface as `RuleValidationError` carrying a
 human-readable message (the same string the legacy form flashed).
 """
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 
 from sqlalchemy.orm import Session
 
@@ -51,7 +51,7 @@ class RuleFields:
     auto_post: bool
     description: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
             "priority": self.priority,
@@ -79,7 +79,7 @@ class RuleNotFoundError(LookupError):
     cross-tenant" via the response."""
 
 
-def _parse_dollars(form: dict, label: str) -> int | None:
+def _parse_dollars(form: dict[str, Any], label: str) -> int | None:
     raw = (form.get(label) or "").strip()
     if not raw:
         return None
@@ -93,7 +93,7 @@ def _parse_dollars(form: dict, label: str) -> int | None:
 
 
 def parse_rule_form(
-    db: Session, form: dict, store_id: int,
+    db: Session, form: dict[str, Any], store_id: int,
     is_valid_category: Callable[[str, int], bool],
 ) -> RuleFields:
     """Parse + validate the form payload posted to /bank/rules/new
@@ -213,7 +213,7 @@ def toggle_rule(
     rule = get_rule_by_id(db, rule_id, store_id)
     if rule is None:
         raise RuleNotFoundError(f"BankRule id={rule_id}")
-    rule.enabled = not rule.enabled
+    setattr(rule, "enabled", not rule.enabled)
     db.flush()
     return rule
 

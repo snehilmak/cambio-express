@@ -34,6 +34,7 @@ from api.Modules.Auth.Services.totp import (
     is_enrolled,
     needs_totp,
 )
+from typing import Any
 
 
 # Permissions per role. Embedded as JWT claims so subsequent
@@ -276,7 +277,7 @@ def _user_for_pending(db: Session, pending_token: str) -> User:
 
 def start_totp_enrollment(
     db: Session, *, pending_token: str,
-) -> dict:
+) -> dict[str, Any]:
     """Mint a TOTP secret for `user` (if none pending) and return the
     payload the SPA renders on its enrollment page: QR SVG, raw
     secret, secret split into 4-char chunks, username, issuer.

@@ -26,11 +26,12 @@ Conditions left unset are treated as "any" — the rule still
 fires on a transaction that doesn't pin them.
 """
 import re
+from typing import Any
 
 from sqlalchemy.orm import Session
 
 
-def rule_matches(rule, txn) -> bool:
+def rule_matches(rule: Any, txn: Any) -> bool:
     """Pure predicate: does `rule` fire on `txn`?
 
     Disabled rules (`rule.enabled is False`) never match.
@@ -93,7 +94,7 @@ def rule_matches(rule, txn) -> bool:
     return True
 
 
-def find_matching_rule(db: Session, store_id: int, txn):
+def find_matching_rule(db: Session, store_id: int, txn: Any) -> Any:
     """First enabled rule (lowest priority first) that matches
     `txn` for the given store. None when no rule applies.
 

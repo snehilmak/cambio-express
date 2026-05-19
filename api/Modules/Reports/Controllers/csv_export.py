@@ -94,7 +94,7 @@ def _parse_threshold(args: dict[str, str | None], default: float = 3000.0) -> fl
 
 
 def _authorize_store_scope(
-    db: Session, claims: dict, requested_store_ids: list[int],
+    db: Session, claims: dict[str, Any], requested_store_ids: list[int],
 ) -> list[int]:
     """Resolve the final list of store_ids the caller is allowed to query.
 
@@ -149,7 +149,7 @@ def _csv_response(buf: io.StringIO, fname: str) -> Response:
 
 
 def _emit_csv(
-    *, rows: list, totals: Any,
+    *, rows: list[Any], totals: Any,
     columns: list[str] | Callable[[Any], list[str]],
     row_fn: Callable[[Any], list],
     totals_fn: Callable[[Any], list] | None,
@@ -334,7 +334,7 @@ def store_csv_export(
     compare_from: str | None,
     compare_to: str | None,
     db: Session,
-    claims: dict,
+    claims: dict[str, Any],
 ) -> Response:
     """Dispatcher used by the FastAPI route. Splits out so tests
     can reach it without spinning up the full ASGI stack."""
@@ -379,7 +379,7 @@ def register(router) -> None:
         compare_from: str | None = Query(None),
         compare_to: str | None = Query(None),
         db: Session = Depends(get_db),
-        claims: dict = Depends(get_principal),
+        claims: dict[str, Any] = Depends(get_principal),
     ) -> Response:
         return store_csv_export(
             slug,
@@ -528,7 +528,7 @@ _SA_REGISTRY: dict[str, dict] = {
 
 def superadmin_csv_export(
     slug: str, *, from_: str | None, to: str | None,
-    db: Session, claims: dict,
+    db: Session, claims: dict[str, Any],
 ) -> Response:
     """Dispatcher for /api/v2/superadmin/reports/<slug>.csv."""
     if claims.get("role") != "superadmin":
@@ -560,7 +560,7 @@ def register_superadmin(router) -> None:
         from_: str | None = Query(None, alias="from"),
         to: str | None = Query(None),
         db: Session = Depends(get_db),
-        claims: dict = Depends(get_principal),
+        claims: dict[str, Any] = Depends(get_principal),
     ) -> Response:
         return superadmin_csv_export(
             slug, from_=from_, to=to, db=db, claims=claims,

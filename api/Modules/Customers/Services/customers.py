@@ -14,6 +14,7 @@ controls that scope.
 """
 from datetime import datetime
 from difflib import SequenceMatcher
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -53,7 +54,7 @@ _FUZZY_SKIP_IF_MATCHES_GE = 5
 def upsert(
     db: Session, store_id: int, full_name: str,
     phone_country: str, phone_number: str,
-    *, address: str = "", dob=None, customer_id: int | None = None,
+    *, address: str = "", dob: Any = None, customer_id: int | None = None,
 ) -> Customer:
     """Return the Customer row for this sender, creating / updating as needed.
 
@@ -84,12 +85,12 @@ def upsert(
             phone_number=phone_number or "",
         )
         db.add(cust)
-    if full_name:     cust.full_name     = full_name
-    if address:       cust.address       = address
-    if dob:           cust.dob           = dob
-    if phone_country: cust.phone_country = phone_country
-    if phone_number:  cust.phone_number  = phone_number
-    cust.updated_at = datetime.utcnow()
+    if full_name:     setattr(cust, "full_name",     full_name)
+    if address:       setattr(cust, "address",       address)
+    if dob:           setattr(cust, "dob",           dob)
+    if phone_country: setattr(cust, "phone_country", phone_country)
+    if phone_number:  setattr(cust, "phone_number",  phone_number)
+    setattr(cust, "updated_at", datetime.utcnow())
     db.flush()
     return cust
 

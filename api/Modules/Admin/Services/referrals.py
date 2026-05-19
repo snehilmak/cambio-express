@@ -7,6 +7,7 @@ to-paid stores get a code on their first visit. Caller commits.
 from urllib.parse import quote
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 class TrialPlanError(Exception):
@@ -18,7 +19,7 @@ class TrialPlanError(Exception):
 
 def get_referral_payload(
     db: Session, *, store_id: int, host_origin: str,
-) -> dict:
+) -> dict[str, Any]:
     """Return the self-service referral payload for the given store.
     Lazily mints a ReferralCode if missing (paid plans only — trial
     stores raise TrialPlanError).

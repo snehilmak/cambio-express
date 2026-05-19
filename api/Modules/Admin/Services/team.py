@@ -47,11 +47,11 @@ def update_team_member(
         name = name.strip()[:120]
         if not name:
             raise ValueError("Name cannot be blank.")
-        employee.name = name
+        setattr(employee, "name", name)
     if is_active is not None:
-        employee.is_active = bool(is_active)
+        setattr(employee, "is_active", bool(is_active))
     if hourly_rate is not None:
-        employee.hourly_rate = _validate_rate(hourly_rate)
+        setattr(employee, "hourly_rate", _validate_rate(hourly_rate))
     db.flush()
     return employee
 
@@ -74,6 +74,6 @@ def deactivate_team_member(
     """Soft-delete: flip is_active=False. We never hard-delete
     StoreEmployee rows so the historical employee_name + employee_id
     attribution on past Transfer rows survives."""
-    employee.is_active = False
+    setattr(employee, "is_active", False)
     db.flush()
     return employee

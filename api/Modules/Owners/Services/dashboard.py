@@ -18,6 +18,7 @@ functions stay in app.py for now — they pull in the return-check
 rollup helpers (`_return_check_*`) that aren't extracted yet.
 """
 from datetime import date, timedelta
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -63,7 +64,7 @@ def owner_period_window(
     )
 
 
-def owner_store_ids(db: Session, user) -> list[int]:
+def owner_store_ids(db: Session, user: Any) -> list[int]:
     """Store IDs the given owner is linked to. Empty if none."""
     from api.Modules.Tenancy.Models import StoreOwnerLink
     links = (
@@ -71,7 +72,7 @@ def owner_store_ids(db: Session, user) -> list[int]:
           .filter_by(owner_id=user.id)
           .all()
     )
-    return [l.store_id for l in links]
+    return [int(l.store_id) for l in links]
 
 
 def owner_kpis(

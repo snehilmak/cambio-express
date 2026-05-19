@@ -8,6 +8,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 # Hard-coded plan price table. Used by MRR/ARR. When Stripe pricing
@@ -624,12 +625,12 @@ def _stripe_period_unix(d_from: date, d_to: date) -> tuple[int, int]:
 
 
 def _stripe_iter(list_call, *, limit_per_call=100, max_total=500,
-                 **kwargs) -> list:
+                 **kwargs) -> list[Any]:
     """Page through a Stripe `list` API up to `max_total` rows."""
     import stripe
     if not stripe.api_key:
         raise RuntimeError("Stripe API key not configured")
-    items: list = []
+    items: list[Any] = []
     for obj in list_call(**kwargs, limit=limit_per_call).auto_paging_iter():
         items.append(obj)
         if len(items) >= max_total:

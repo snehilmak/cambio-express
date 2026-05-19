@@ -11,15 +11,16 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def _by_report_date(
     db: Session,
-    model,
+    model: Any,
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group `model` rows by `report_date` and sum amount + count.
     `model` must expose `store_id`, `report_date`, `id`, `amount`."""
     rows_q = (
@@ -60,7 +61,7 @@ def daily_drops(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate `DailyDrop` rows in the period, grouped by date."""
     from api.Modules.DailyBook.Models import DailyDrop
     return _by_report_date(db, DailyDrop, store_ids, d_from, d_to)
@@ -71,7 +72,7 @@ def check_deposits(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate `CheckDeposit` rows in the period, grouped by date."""
     from api.Modules.DailyBook.Models import CheckDeposit
     return _by_report_date(db, CheckDeposit, store_ids, d_from, d_to)

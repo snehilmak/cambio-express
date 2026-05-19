@@ -49,6 +49,7 @@ from api.Modules.DailyBook.Services import (
     unlock_report,
     update_daily_report,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -143,7 +144,7 @@ def update_daily_route(
     report_date: str = Path(...),
     body: DailyReportUpdateRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DailyReportResponse:
     """Save the editable totals for one daily report.
 
@@ -239,7 +240,7 @@ def lock_daily_route(
     store_id: int = Path(..., ge=1),
     report_date: str = Path(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DailyReportResponse:
     """Mark a daily report as locked. Auto-creates the row when
     missing so a cashier can lock an empty day on purpose.
@@ -316,7 +317,7 @@ def unlock_daily_route(
     store_id: int = Path(..., ge=1),
     report_date: str = Path(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DailyReportResponse:
     """Clear the lock on a daily report. Cross-store /
     superadmin → 403. Returns 404 if the date never had a report
@@ -371,7 +372,7 @@ def _line_item_row(item: DailyLineItem) -> LineItemRow:
     )
 
 
-def _require_store_match(claims: dict, store_id: int) -> None:
+def _require_store_match(claims: dict[str, Any], store_id: int) -> None:
     """Reject when the JWT's store_id claim doesn't match the URL.
     Cross-store + superadmin both → 403 with the same opaque
     message — never leak which case tripped."""
@@ -401,7 +402,7 @@ def line_items_list_route(
         ),
     ),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> LineItemListResponse:
     """Read-side endpoint for the daily book's line-item table.
     Auth + tenancy gate is the same as the rest of the daily-
@@ -429,7 +430,7 @@ def line_items_create_route(
     report_date: str = Path(...),
     body: LineItemCreateRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> LineItemRow:
     """Insert one line item under (store_id, report_date, kind).
     Server validates kind, time format, and positive amount via
@@ -498,7 +499,7 @@ def line_items_delete_route(
     store_id: int = Path(..., ge=1),
     item_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Delete one line item. The Service rejects deletes for rows
     linked to a ReturnCheck (see DailyLineItem.return_check_id) —
@@ -541,7 +542,7 @@ def transfers_summary_route(
     store_id: int = Path(..., ge=1),
     report_date: str = Path(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TransfersSummaryResponse:
     """Auto-fill summary for the Daily Book's Money Transfers tab.
 
@@ -586,7 +587,7 @@ def mt_breakdown_get_route(
     store_id: int = Path(..., ge=1),
     report_date: str = Path(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MTBreakdownResponse:
     """Read the per-company Money Transfer breakdown for a day.
 
@@ -632,7 +633,7 @@ def mt_breakdown_put_route(
     report_date: str = Path(...),
     body: MTBreakdownWriteRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MTBreakdownResponse:
     """Bulk-replace the per-company breakdown for one day.
 

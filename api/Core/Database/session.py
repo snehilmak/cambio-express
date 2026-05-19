@@ -6,7 +6,7 @@ in `app.py`) and the FastAPI side bind to this same engine, so
 in-memory SQLite tests see one consistent connection pool and
 every code path mutates the same data.
 """
-from typing import Generator
+from typing import Any, Generator
 
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -29,8 +29,8 @@ def _build_engine_from_settings() -> Engine:
     """
     from sqlalchemy import create_engine
 
-    connect_args: dict = {}
-    engine_kwargs: dict = {"future": True}
+    connect_args: dict[str, Any] = {}
+    engine_kwargs: dict[str, Any] = {"future": True}
 
     if settings.database_url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
@@ -60,10 +60,10 @@ class _EngineProxy:
     """Tiny proxy so `engine` looks like a module-level value but
     defers resolution until first attribute access."""
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(_get_engine(), name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(_get_engine())
 
 
@@ -71,7 +71,7 @@ engine = _EngineProxy()
 
 
 # Session factory — each call to SessionLocal() yields a fresh session.
-_session_factory: sessionmaker | None = None
+_session_factory: sessionmaker[Session] | None = None
 
 
 def SessionLocal() -> Session:

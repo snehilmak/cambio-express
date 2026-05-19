@@ -1,6 +1,6 @@
 """Pydantic request / response schemas for the TimeClock module."""
 from datetime import date as _date, time as _time
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -28,7 +28,7 @@ class ClockPunchRequest(BaseModel):
     store_employee_id: int = Field(..., ge=1)
     notes:             str = Field("", max_length=500)
     assert_token:      str | None = Field(None, max_length=2000)
-    assertion:         dict | None = None
+    assertion:         dict[str, Any] | None = None
     # Browser geolocation — required when the store has
     # ``timeclock_require_geofence`` on. Tight bounds catch
     # garbage from a tampered client. Optional at the schema

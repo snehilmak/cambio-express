@@ -9,6 +9,7 @@ config (or rate-rounding) bug is the likely culprit.
 Pure DB read — no commits, no side-effects.
 """
 from datetime import date
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -19,7 +20,7 @@ def fees_vs_tax(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Total fees + federal tax in the window.
 
     Returns `(rows, totals)`:

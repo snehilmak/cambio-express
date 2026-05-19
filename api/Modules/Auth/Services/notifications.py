@@ -5,7 +5,7 @@ which toggles render as interactive vs. greyed-out informational
 on the SPA — keeps the UI honest about which channels actually
 apply to the current role + store state.
 """
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -43,7 +43,7 @@ def daily_summary_applies(user: User) -> bool:
     return user.role in ("admin", "owner")
 
 
-def get_notifications_payload(db: Session, user: User) -> dict:
+def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
     """Return the GET payload for the notifications page."""
     return {
         "notify_trial_reminders":    bool(user.notify_trial_reminders),
@@ -70,11 +70,11 @@ def update_notifications(
     boundary; a non-bool gets rejected with 422 before reaching
     this layer."""
     if notify_trial_reminders is not None:
-        user.notify_trial_reminders = bool(notify_trial_reminders)
+        setattr(user, "notify_trial_reminders", bool(notify_trial_reminders))
     if notify_announcement_email is not None:
-        user.notify_announcement_email = bool(notify_announcement_email)
+        setattr(user, "notify_announcement_email", bool(notify_announcement_email))
     if notify_locked_day_digest is not None:
-        user.notify_locked_day_digest = bool(notify_locked_day_digest)
+        setattr(user, "notify_locked_day_digest", bool(notify_locked_day_digest))
     if notify_daily_summary is not None:
-        user.notify_daily_summary = bool(notify_daily_summary)
+        setattr(user, "notify_daily_summary", bool(notify_daily_summary))
     db.flush()

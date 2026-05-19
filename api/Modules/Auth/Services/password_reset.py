@@ -136,6 +136,6 @@ def consume_password_reset_token(
     if user is None:
         raise LookupError(f"User id={token.user_id} no longer exists")
     user.set_password(new_password)
-    token.used_at = datetime.utcnow()
+    setattr(token, "used_at", datetime.utcnow())
     db.flush()
     return user

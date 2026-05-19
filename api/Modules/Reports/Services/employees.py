@@ -15,7 +15,8 @@ Two services with deliberately different group keys (per the ADR):
 Both resolve their FKs to display names. Cashier flavor adds an
 `is_active` flag so the template can tag deactivated roster rows.
 """
-from typing import Iterable
+from datetime import date
+from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -24,8 +25,8 @@ from api.Modules.Reports.Repositories.transfers import aggregate
 
 
 def sales_by_employee(
-    db: Session, store_ids: Iterable[int], d_from, d_to,
-) -> tuple[list[dict], dict]:
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.created_by`, resolve to User display names.
 
     Transfers with no `created_by` are bucketed as `"(unattributed)"`
@@ -51,8 +52,8 @@ def sales_by_employee(
 
 
 def cashier_productivity(
-    db: Session, store_ids: Iterable[int], d_from, d_to,
-) -> tuple[list[dict], dict]:
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.employee_id` (the cashier on duty), resolve
     to `StoreEmployee` roster rows.
 

@@ -126,6 +126,6 @@ def recompute_line_items_total(
     ) or 0.0
     report = ensure_daily_report(db, store_id, report_date)
     setattr(report, daily_report_field, float(total))
-    report.updated_at = datetime.utcnow()
+    setattr(report, "updated_at", datetime.utcnow())
     db.flush()
     return float(total)

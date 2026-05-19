@@ -136,20 +136,20 @@ def update_monthly(
         )
 
     # 3) Overwrite return_check_gl from the workflow.
-    row.return_check_gl = _auto_return_check_gl(
+    setattr(row, "return_check_gl", _auto_return_check_gl(
         db, store_id, year, month,
-    )
+    ))
 
     # 4) Bank charges total: lock only when there's bank-sync data,
     #    matching the legacy "stores without bank sync keep manual
     #    entry" semantics.
     auto_bc = _auto_bank_charges_total(db, store_id, year, month)
     if auto_bc > 0:
-        row.bank_charges_total = auto_bc
+        setattr(row, "bank_charges_total", auto_bc)
     elif "bank_charges_total" in fields and fields["bank_charges_total"] is not None:
-        row.bank_charges_total = float(fields["bank_charges_total"])
+        setattr(row, "bank_charges_total", float(fields["bank_charges_total"]))
 
-    row.notes = notes or ""
-    row.updated_at = datetime.utcnow()
+    setattr(row, "notes", notes or "")
+    setattr(row, "updated_at", datetime.utcnow())
     db.flush()
     return row

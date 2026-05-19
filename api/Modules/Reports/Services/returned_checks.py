@@ -10,6 +10,7 @@ Pure DB read — no commits, no side-effects.
 from datetime import date
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def returned_check_status(
@@ -17,7 +18,7 @@ def returned_check_status(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate ReturnCheck rows by status with display-ready
     rows + cross-bucket totals.
 
@@ -40,13 +41,13 @@ def returned_check_status(
           )
           .all()
     )
-    buckets: dict[str, dict] = {
+    buckets: dict[str, dict[str, Any]] = {
         s: {"count": 0, "amount": 0.0, "recovered": 0.0}
         for s in RETURN_CHECK_STATUSES
     }
     for rc in rows_q:
         b = buckets.setdefault(
-            rc.status,
+            str(rc.status),
             {"count": 0, "amount": 0.0, "recovered": 0.0},
         )
         b["count"]  += 1
@@ -55,7 +56,7 @@ def returned_check_status(
             b["recovered"] += float(rc.recovered_total or 0)
 
     display_order = ["pending", "recovered", "loss", "fraud"]
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     for status in display_order:
         b = buckets.get(
             status, {"count": 0, "amount": 0.0, "recovered": 0.0},

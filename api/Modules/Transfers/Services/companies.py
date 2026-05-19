@@ -17,13 +17,14 @@ one config change rather than a code change.
 
 Pure read — no DB writes, no I/O.
 """
+from typing import Any
 
 
 # Default money-transfer companies for a fresh store.
 DEFAULT_MT_COMPANIES: list[str] = ["Intermex", "Maxi", "Barri"]
 
 
-def store_mt_companies(store) -> list[str]:
+def store_mt_companies(store: Any) -> list[str]:
     """The active list of money-transfer companies for a store.
 
     Falls back to `DEFAULT_MT_COMPANIES` when:

@@ -54,6 +54,7 @@ from api.Modules.Customers.Services import (
     search,
     upsert,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -81,7 +82,7 @@ def _row(c, current_store_id: int, home_names: dict[int, str]) -> CustomerRow:
     )
 
 
-def _resolve_home_names(db: Session, rows, current_store_id: int) -> dict:
+def _resolve_home_names(db: Session, rows, current_store_id: int) -> dict[str, Any]:
     """Bulk-fetch the Store names for every cross-store row in one query.
     Mirrors `app.py::api_customers_search`'s precompute step."""
     other_ids = {c.store_id for c in rows if c.store_id != current_store_id}
@@ -148,7 +149,7 @@ def upsert_route(
 @router.get("/export.csv")
 def export_csv_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Admin-only CSV dump of every customer in the caller's owner
     umbrella.
@@ -287,7 +288,7 @@ def merge_route(
     body: CustomerMergeRequest,
     winner_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CustomerMergeResponse:
     """Merge ``body.loser_id`` into ``winner_id``.
 

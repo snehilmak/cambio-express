@@ -35,7 +35,7 @@ def sibling_store_ids(db: Session, store_id: int) -> list[int]:
           .filter(StoreOwnerLink.owner_id.in_(owner_ids))
           .all()
     )
-    ids = {r.store_id for r in sibling_rows}
+    ids: set[int] = {int(r.store_id) for r in sibling_rows}
     ids.add(store_id)
     return sorted(ids)
 

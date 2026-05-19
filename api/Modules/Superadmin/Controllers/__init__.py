@@ -40,6 +40,7 @@ from api.Modules.Superadmin.Requests import (
     SuperadminStoreRow,
     SuperadminStoreUpdateRequest,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -55,7 +56,7 @@ from api.Modules.Reports.Controllers.csv_export import (  # noqa: E402
 _register_superadmin_csv(router)
 
 
-def _require_superadmin(claims: dict) -> None:
+def _require_superadmin(claims: dict[str, Any]) -> None:
     if claims.get("role") != "superadmin":
         raise HTTPException(
             status_code=403,
@@ -116,7 +117,7 @@ def _adapt_detail(s) -> SuperadminStoreDetailRow:
 @router.get("/stores", response_model=SuperadminStoreListResponse)
 def list_stores_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminStoreListResponse:
     _require_superadmin(claims)
     from api.Modules.Tenancy.Models import Store
@@ -147,7 +148,7 @@ def list_stores_route(
 def get_store_route(
     store_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminStoreDetailResponse:
     """Single-store payload for the SPA edit form.
 
@@ -170,7 +171,7 @@ def get_store_route(
 def create_store_route(
     body: SuperadminStoreCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminStoreDetailResponse:
     """Mint a new store + its initial admin user in one transaction.
 
@@ -233,7 +234,7 @@ def update_store_route(
     body: SuperadminStoreUpdateRequest,
     store_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminStoreDetailResponse:
     """Update an existing store's identity / plan fields.
 
@@ -319,7 +320,7 @@ def list_audit_route(
     per_page: int = Query(50, ge=1, le=200),
     action: str = Query("", description="Optional substring filter on action"),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminAuditListResponse:
     """Paginated platform-wide audit log. Newest entries first.
     `action` is a case-insensitive substring filter so the
@@ -363,7 +364,7 @@ def list_audit_route(
 @router.get("/anomalies", response_model=SuperadminAnomalyListResponse)
 def list_anomalies_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminAnomalyListResponse:
     """Read-only feed of platform-wide anomalies (quiet stores,
     big over/short variances) computed against today's date.
@@ -425,7 +426,7 @@ def _adapt_discount(d) -> DiscountCodeRow:
 @router.get("/discounts", response_model=DiscountCodeListResponse)
 def list_discounts_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DiscountCodeListResponse:
     """List every minted promo code (newest first). Read-only by
     design — Stripe coupon mint + new-code generation stays on the
@@ -452,7 +453,7 @@ def toggle_discount_route(
     body: DiscountCodeToggleRequest,
     discount_id: int,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> DiscountCodeResponse:
     """Flip a discount's `is_active` flag without touching Stripe.
     Inactive codes still exist in the DB + Stripe (so historical
@@ -489,7 +490,7 @@ def toggle_discount_route(
 @router.get("/reports", response_model=SuperadminReportListResponse)
 def list_reports_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> SuperadminReportListResponse:
     """Platform-wide report-center categories (Platform Health,
     Revenue, Stripe, Trial Funnel, Feature Adoption, Support / Audit).
@@ -569,7 +570,7 @@ def superadmin_report_drilldown_route(
     from_: str | None = Query(None, alias="from"),
     to: str | None = Query(None),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Generic drilldown for all superadmin BI reports. Dispatches by
     slug into the matching Service function in

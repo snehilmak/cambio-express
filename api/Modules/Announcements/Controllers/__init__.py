@@ -36,6 +36,7 @@ from api.Modules.Audit.Services import record_superadmin_action
 from api.Modules.Auth.Controllers import get_principal
 from api.Modules.Auth.Models import User
 from api.Modules.Auth.Services import resolve_superadmin_user
+from typing import Any
 
 
 router = APIRouter()
@@ -94,7 +95,7 @@ def _adapt(a) -> AnnouncementRow:
 @router.get("/active", response_model=ActiveAnnouncementsResponse)
 def active_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ActiveAnnouncementsResponse:
     """Currently visible banners for the authed user's SPA chrome.
 
@@ -125,7 +126,7 @@ def active_route(
 @router.get("", response_model=AnnouncementListResponse)
 def list_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AnnouncementListResponse:
     """Every announcement, newest first. Includes inactive + expired
     rows so the superadmin has the full history; the SPA can dim
@@ -146,7 +147,7 @@ def list_route(
 def create_route(
     body: AnnouncementCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AnnouncementResponse:
     """Mint a new banner. `expires_days=0` (or omitted) means no
     expiry.
@@ -251,7 +252,7 @@ def toggle_route(
     body: AnnouncementToggleRequest,
     ann_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> AnnouncementResponse:
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
@@ -272,7 +273,7 @@ def toggle_route(
 def delete_route(
     ann_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     user = resolve_superadmin_user(db, claims)
     from api.Modules.Announcements.Models import Announcement
