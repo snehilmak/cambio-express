@@ -6013,12 +6013,20 @@ export interface components {
             locked_day_digest_applies: boolean;
             /** Notify Announcement Email */
             notify_announcement_email: boolean;
+            /** Notify Announcement Push */
+            notify_announcement_push: boolean;
             /** Notify Daily Summary */
             notify_daily_summary: boolean;
+            /** Notify Daily Summary Push */
+            notify_daily_summary_push: boolean;
             /** Notify Locked Day Digest */
             notify_locked_day_digest: boolean;
+            /** Notify Locked Day Digest Push */
+            notify_locked_day_digest_push: boolean;
             /** Notify Trial Reminders */
             notify_trial_reminders: boolean;
+            /** Notify Trial Reminders Push */
+            notify_trial_reminders_push: boolean;
             /** Role */
             role: string;
             /** Trial Toggle Applies */
@@ -6032,12 +6040,20 @@ export interface components {
         NotificationsUpdateRequest: {
             /** Notify Announcement Email */
             notify_announcement_email?: boolean | null;
+            /** Notify Announcement Push */
+            notify_announcement_push?: boolean | null;
             /** Notify Daily Summary */
             notify_daily_summary?: boolean | null;
+            /** Notify Daily Summary Push */
+            notify_daily_summary_push?: boolean | null;
             /** Notify Locked Day Digest */
             notify_locked_day_digest?: boolean | null;
+            /** Notify Locked Day Digest Push */
+            notify_locked_day_digest_push?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
+            /** Notify Trial Reminders Push */
+            notify_trial_reminders_push?: boolean | null;
         };
         /**
          * OwnerBulkAddUserRequest

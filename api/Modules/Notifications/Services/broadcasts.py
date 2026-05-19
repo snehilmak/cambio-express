@@ -137,17 +137,23 @@ def run(
         # block the email send if VAPID isn't configured (the helper
         # short-circuits returning 0) or pywebpush isn't installed.
         # ``push.send_push`` cleans up dead subscriptions itself so
-        # we don't accumulate stale rows.
+        # we don't accumulate stale rows.  Honors the per-kind push
+        # toggle so a user who opted out of announcement pushes
+        # still gets the email (default-allow keeps existing users
+        # on the same flow).
         try:
-            from api.Modules.Notifications.Services.push import send_push
-            send_push(
-                session,
-                user_id=int(u.id),
-                title=subject,
-                body=ann.message[:200],
-                url="/app/dashboard",
-                tag=f"announcement:{ann.id}",
+            from api.Modules.Notifications.Services.push import (
+                send_push, user_wants_push,
             )
+            if user_wants_push(u, "announcement"):
+                send_push(
+                    session,
+                    user_id=int(u.id),
+                    title=subject,
+                    body=ann.message[:200],
+                    url="/app/dashboard",
+                    tag=f"announcement:{ann.id}",
+                )
         except Exception as exc:  # pragma: no cover — push is best-effort
             # Never let a push failure 5xx the broadcast job.
             import logging

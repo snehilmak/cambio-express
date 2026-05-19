@@ -197,6 +197,15 @@ class User(Base):
     # over/short. Goes to admins + linked owners. Opt-out (default
     # True) so close-out numbers reach owners by morning.
     notify_daily_summary = Column(Boolean, default=True)
+    # Per-kind push-channel toggles. Default True — once a user
+    # enables browser notifications at the channel level (via
+    # ``/api/v2/auth/push/subscribe``), every kind is on by
+    # default and the user opts out individually. Mirrors the
+    # email pattern above so the two channels stay symmetric.
+    notify_trial_reminders_push    = Column(Boolean, default=True)
+    notify_announcement_push       = Column(Boolean, default=True)
+    notify_locked_day_digest_push  = Column(Boolean, default=True)
+    notify_daily_summary_push      = Column(Boolean, default=True)
     # Deliverability suppression — stamped when Resend reports a hard
     # bounce on this user's email. ``_send_email()`` skips suppressed
     # recipients.

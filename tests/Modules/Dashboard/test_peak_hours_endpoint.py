@@ -123,14 +123,32 @@ def test_peak_hours_empty_grid_when_no_transfers(
 # ── Bucketing ───────────────────────────────────────────────
 
 
+def _recent_monday_at(hour: int, minute: int = 0) -> datetime:
+    """Most recent Monday at ``hour:minute`` UTC.  Computed relative
+    to ``utcnow`` so the trailing-window filter on ``days=365``
+    never drops the test row regardless of when the suite runs.
+
+    Previously these tests hard-coded ``datetime(2025, 5, 19, ...)``
+    which silently expired once ``now`` was more than a year past
+    that anchor.
+    """
+    now = datetime.utcnow()
+    # ``weekday()``: Monday = 0, Sunday = 6.  Walk back to the
+    # most recent Monday (going further back than 7 days only if
+    # today IS Monday but the time-of-day is earlier than ``hour``
+    # — that boundary case isn't worth handling, the test data
+    # ages by a week which is fine inside a 365-day window).
+    back = now.weekday()
+    monday = now - timedelta(days=back)
+    return datetime(monday.year, monday.month, monday.day, hour, minute)
+
+
 def test_peak_hours_buckets_in_utc_when_timezone_unset(
     client, test_store_id,
 ):
     """A store with no ``timezone`` column treats every
     ``created_at`` as UTC — no conversion."""
-    # Anchor in the past so the < now filter doesn't drop the
-    # row. 2025-05-19 (Monday) 14:30 UTC.
-    moment = datetime(2025, 5, 19, 14, 30)
+    moment = _recent_monday_at(14, 30)
     with db_session():
         emp = _seed_employee(test_store_id)
         _seed_transfer(test_store_id, emp, created_at=moment)
@@ -152,7 +170,7 @@ def test_peak_hours_buckets_in_store_local_time(
     """A New York store sees 14:30 UTC as 10:30 EDT (UTC-4
     in May) → bucket 10. Validates the timezone-aware
     conversion."""
-    moment = datetime(2025, 5, 19, 14, 30)  # Mon 14:30 UTC (past)
+    moment = _recent_monday_at(14, 30)  # most recent Mon 14:30 UTC
     with db_session():
         _set_store_tz(test_store_id, "America/New_York")
         emp = _seed_employee(test_store_id)
@@ -172,7 +190,7 @@ def test_peak_hours_excludes_canceled_transfers(
 ):
     """Canceled / Rejected status doesn't count toward
     activity — the heatmap should show real workload only."""
-    moment = datetime(2025, 5, 19, 14, 30)
+    moment = _recent_monday_at(14, 30)
     with db_session():
         emp = _seed_employee(test_store_id)
         _seed_transfer(test_store_id, emp, created_at=moment, status="Sent")
@@ -207,10 +225,14 @@ def test_peak_hours_respects_window(client, test_store_id):
 def test_peak_hours_busiest_cell_picks_max(client, test_store_id):
     """Heatmap reports the busiest (weekday, hour) cell so
     the SPA can call it out in the headline."""
-    # Past Monday + Tuesday so they fall inside the trailing
-    # 365-day window regardless of when the test runs.
-    monday_3pm  = datetime(2025, 5, 19, 15, 0)
-    tuesday_9am = datetime(2025, 5, 20,  9, 0)
+    # Most recent Monday + the Tuesday after, so they fall inside
+    # the trailing 365-day window regardless of when the test runs.
+    monday_3pm  = _recent_monday_at(15, 0)
+    tuesday_9am = monday_3pm + timedelta(days=1, hours=-6)
+    # Force tuesday to 09:00 UTC on the day after monday.
+    tuesday_9am = datetime(
+        tuesday_9am.year, tuesday_9am.month, tuesday_9am.day, 9, 0,
+    )
     with db_session():
         emp = _seed_employee(test_store_id)
         # 3 on Mon 15:00 UTC, 1 on Tue 09:00 UTC.

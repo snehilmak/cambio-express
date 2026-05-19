@@ -15,6 +15,7 @@ from api.Modules.Notifications.Services.daily_summary import (
 from api.Modules.Notifications.Services.push import (
     is_enabled as push_is_enabled,
     send_push,
+    user_wants_push,
     vapid_public_key,
 )
 from api.Modules.Notifications.Services.smtp import (
@@ -54,5 +55,6 @@ __all__ = [
     "smtp_health_check",
     "stores_due_for_reminder",
     "stores_with_activity",
+    "user_wants_push",
     "vapid_public_key",
 ]

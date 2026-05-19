@@ -3970,16 +3970,32 @@
             "title": "Notify Announcement Email",
             "type": "boolean"
           },
+          "notify_announcement_push": {
+            "title": "Notify Announcement Push",
+            "type": "boolean"
+          },
           "notify_daily_summary": {
             "title": "Notify Daily Summary",
+            "type": "boolean"
+          },
+          "notify_daily_summary_push": {
+            "title": "Notify Daily Summary Push",
             "type": "boolean"
           },
           "notify_locked_day_digest": {
             "title": "Notify Locked Day Digest",
             "type": "boolean"
           },
+          "notify_locked_day_digest_push": {
+            "title": "Notify Locked Day Digest Push",
+            "type": "boolean"
+          },
           "notify_trial_reminders": {
             "title": "Notify Trial Reminders",
+            "type": "boolean"
+          },
+          "notify_trial_reminders_push": {
+            "title": "Notify Trial Reminders Push",
             "type": "boolean"
           },
           "role": {
@@ -3996,6 +4012,10 @@
           "notify_announcement_email",
           "notify_locked_day_digest",
           "notify_daily_summary",
+          "notify_trial_reminders_push",
+          "notify_announcement_push",
+          "notify_locked_day_digest_push",
+          "notify_daily_summary_push",
           "trial_toggle_applies",
           "locked_day_digest_applies",
           "daily_summary_applies",
@@ -4019,6 +4039,17 @@
             ],
             "title": "Notify Announcement Email"
           },
+          "notify_announcement_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Announcement Push"
+          },
           "notify_daily_summary": {
             "anyOf": [
               {
@@ -4029,6 +4060,17 @@
               }
             ],
             "title": "Notify Daily Summary"
+          },
+          "notify_daily_summary_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Daily Summary Push"
           },
           "notify_locked_day_digest": {
             "anyOf": [
@@ -4041,6 +4083,17 @@
             ],
             "title": "Notify Locked Day Digest"
           },
+          "notify_locked_day_digest_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Locked Day Digest Push"
+          },
           "notify_trial_reminders": {
             "anyOf": [
               {
@@ -4051,6 +4104,17 @@
               }
             ],
             "title": "Notify Trial Reminders"
+          },
+          "notify_trial_reminders_push": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notify Trial Reminders Push"
           }
         },
         "title": "NotificationsUpdateRequest",

@@ -27,6 +27,13 @@ class NotificationsResponse(BaseModel):
     notify_announcement_email:     bool
     notify_locked_day_digest:      bool
     notify_daily_summary:          bool
+    # Per-kind push-channel toggles — symmetrical to the email
+    # toggles above.  Default-True so flipping the channel on
+    # immediately delivers every kind; users opt out per-kind.
+    notify_trial_reminders_push:    bool
+    notify_announcement_push:       bool
+    notify_locked_day_digest_push:  bool
+    notify_daily_summary_push:      bool
     trial_toggle_applies:          bool
     locked_day_digest_applies:     bool
     daily_summary_applies:         bool
@@ -39,7 +46,11 @@ class NotificationsUpdateRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    notify_trial_reminders:    Optional[bool] = None
-    notify_announcement_email: Optional[bool] = None
-    notify_locked_day_digest:  Optional[bool] = None
-    notify_daily_summary:      Optional[bool] = None
+    notify_trial_reminders:        Optional[bool] = None
+    notify_announcement_email:     Optional[bool] = None
+    notify_locked_day_digest:      Optional[bool] = None
+    notify_daily_summary:          Optional[bool] = None
+    notify_trial_reminders_push:   Optional[bool] = None
+    notify_announcement_push:      Optional[bool] = None
+    notify_locked_day_digest_push: Optional[bool] = None
+    notify_daily_summary_push:     Optional[bool] = None

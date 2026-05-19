@@ -48,6 +48,33 @@ def is_enabled() -> bool:
     return bool(VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY)
 
 
+# Notification kinds the per-user push-toggle gate recognises.
+# Adding a kind: append to this Literal + map it to the matching
+# ``User.notify_<kind>_push`` column in ``_PUSH_KIND_COLUMN``.
+_PUSH_KIND_COLUMN: dict[str, str] = {
+    "trial_reminder":    "notify_trial_reminders_push",
+    "announcement":      "notify_announcement_push",
+    "locked_day_digest": "notify_locked_day_digest_push",
+    "daily_summary":     "notify_daily_summary_push",
+}
+
+
+def user_wants_push(user: object, kind: str) -> bool:
+    """Per-kind opt-out gate.  Returns True iff the user has the
+    push toggle for ``kind`` turned on.  Unknown ``kind`` is
+    treated as opt-in (default-allow) so a new caller can ship
+    its sender before the toggle UI lands.
+
+    Looks up ``User.notify_<kind>_push`` via getattr with a True
+    fallback so a row that pre-dates the migration (column
+    missing on the SQLAlchemy mapper, e.g. during the upgrade
+    window) still delivers."""
+    column = _PUSH_KIND_COLUMN.get(kind)
+    if column is None:
+        return True
+    return bool(getattr(user, column, True))
+
+
 def vapid_public_key() -> str:
     """The pub key the frontend uses to build a PushManager
     subscription. Empty string when push isn't configured."""
