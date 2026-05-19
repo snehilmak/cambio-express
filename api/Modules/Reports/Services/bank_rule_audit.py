@@ -15,6 +15,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def bank_rule_audit(
@@ -22,7 +23,7 @@ def bank_rule_audit(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate BankTransaction rows by `matched_rule_id`.
 
     Returns `(rows, totals)`:
@@ -65,7 +66,7 @@ def bank_rule_audit(
         if rule_ids else {}
     )
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     for rid, count, cents in rows_q:
         rule = rules.get(rid)
         if rule is None:

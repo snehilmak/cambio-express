@@ -1,6 +1,6 @@
 """Transfers module.
 
-Owns the per-store transfer ledger: list with filters/pagination,
+Owns the per-store transfer ledger: list[Any] with filters/pagination,
 get-by-id, create, edit, delete, batch operations. Full transfer-
 form business logic — federal_tax calculation, fee handling,
 customer upsert, audit-log emission — lives in the Service layer.
@@ -14,3 +14,4 @@ because they answer different questions about the same table.
 Layer rules (ADR):
     Controller → Service → Repository → Model
 """
+from typing import Any

@@ -2,7 +2,7 @@
 
 Two read-side context builders for the multi-store owner views:
 
-  - `dashboard_context(db, user, period) -> dict`
+  - `dashboard_context(db, user, period) -> dict[str, Any]`
     Rich metrics for /owner/dashboard. KPI cards with prior-period
     deltas, a fixed 30-day daily-volume area chart, per-company
     donut for the selected window, per-store volume comparison,
@@ -35,9 +35,10 @@ from api.Modules.Owners.Services.return_checks import (
     monthly_series as return_check_monthly_series,
     period_aggregates as return_check_period_aggregates,
 )
+from typing import Any
 
 
-def dashboard_context(db: Session, user, period: str) -> dict:
+def dashboard_context(db: Session, user, period: str) -> dict[str, Any]:
     """Rich metrics for the owner dashboard view.
 
     Mirrors the superadmin dashboard pattern: KPI cards with
@@ -221,7 +222,7 @@ def dashboard_context(db: Session, user, period: str) -> dict:
 
 def locations_payload(
     db: Session, user, period: str, query: str | None,
-) -> tuple[list[dict], int]:
+) -> tuple[list[dict[str, Any]], int]:
     """Per-store rows for the /owner/locations view.
 
     Each row has the basic period-scoped stats (transfers,
@@ -308,7 +309,7 @@ def locations_payload(
         .group_by(Transfer.store_id, Transfer.company)
         .all()
     )
-    co_by_store: dict[int, list[dict]] = {}
+    co_by_store: dict[int, list[dict[str, Any]]] = {}
     for sid, co, c, v in co_rows:
         co_by_store.setdefault(sid, []).append({
             "company": (co or "—"),
@@ -318,7 +319,7 @@ def locations_payload(
     for sid in co_by_store:
         co_by_store[sid].sort(key=lambda x: x["volume"], reverse=True)
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     for s in stores:
         c, v = transfer_stat.get(s.id, (0, 0.0))
         os_v, rc = daily_stat.get(s.id, (0.0, 0))

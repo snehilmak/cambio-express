@@ -18,7 +18,7 @@ Per CLAUDE.md "Bank-charge automation": built-ins NEVER auto-post
 to the daily book (`post_to_daily=False` at the call site).
 Adding a new built-in rule = appending a 3-tuple here.
 """
-from typing import Iterable
+from typing import Any, Iterable
 
 
 # Description substring + optional account last4 + target slug.
@@ -63,7 +63,7 @@ def _resolve_per_account_slug(last4: str) -> str | None:
     return f"bank_charge_{stripped}"
 
 
-def match_builtin_bank_rule(txn, account) -> str | None:
+def match_builtin_bank_rule(txn: Any, account: Any) -> str | None:
     """Return the target slug from `BUILTIN_BANK_RULES` that matches
     `txn`, or None if nothing matches.
 

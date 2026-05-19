@@ -35,6 +35,7 @@ from api.Modules.Batches.Services import (
     update_batch,
 )
 from api.Modules.Batches.Services.batches import BatchSummary
+from typing import Any
 
 
 router = APIRouter()
@@ -72,7 +73,7 @@ def list_route(
         "desc", pattern="^(asc|desc)$",
     ),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchListResponse:
     """List ACH batches in the JWT principal's store. Superadmin
     JWTs (no store_id claim) → 403 — this endpoint is store-
@@ -92,7 +93,7 @@ def list_route(
     return BatchListResponse(rows=[_row(r) for r in rows])
 
 
-def _require_admin_scope(claims: dict) -> int:
+def _require_admin_scope(claims: dict[str, Any]) -> int:
     """Both store_id (write is store-scoped) AND admin role
     (cashiers can't manage batches in the legacy admin_required
     path)."""
@@ -137,7 +138,7 @@ def _audit_batch(db, claims, action, batch, *, summary):
     )
 
 
-def _diff_summary(before: dict, after: dict) -> str:
+def _diff_summary(before: dict[str, Any], after: dict[str, Any]) -> str:
     """Format a `field old→new; field old→new` summary string for
     the operator audit log, matching the legacy /batches/<id>/edit
     handler's output. Only fields that actually changed appear."""
@@ -208,7 +209,7 @@ def _row_with_totals(
 def get_batch_route(
     batch_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchResponse:
     """Single-batch detail. Cross-tenant lookups → 404."""
     sid = claims.get("store_id")
@@ -227,7 +228,7 @@ def get_batch_route(
 def create_batch_route(
     body: BatchWriteRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchResponse:
     """Create an ACH batch. Admin role + store scope required.
 
@@ -259,7 +260,7 @@ def update_batch_route(
     batch_id: int = Path(..., ge=1),
     body: BatchWriteRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchResponse:
     """Update an ACH batch. Admin role + store scope required.
     Cross-tenant updates → 404. Writes an `OperatorAuditLog` row
@@ -309,7 +310,7 @@ def update_batch_route(
 def batch_transfers_route(
     batch_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BatchTransfersResponse:
     """List the transfers linked to one ACH batch by
     `batch_id == batch_ref`. Mirrors the legacy

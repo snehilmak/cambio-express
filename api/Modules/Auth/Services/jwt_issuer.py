@@ -73,7 +73,7 @@ def issue_access_token(
         "sub": str(issuer.sub),
         "role": issuer.role,
         "store_id": issuer.store_id,
-        "perms": list(issuer.permissions),
+        "perms": list[Any](issuer.permissions),
         "name": issuer.full_name,
         "username": issuer.username,
         "iat": int(now.timestamp()),

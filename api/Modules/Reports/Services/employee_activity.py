@@ -12,6 +12,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def employee_activity(
@@ -19,7 +20,7 @@ def employee_activity(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate transfers by `Transfer.created_by` employee.
 
     Returns `(rows, totals)`:
@@ -76,7 +77,7 @@ def employee_activity(
         if all_uids else {}
     )
 
-    rows_by_uid: dict = {}
+    rows_by_uid: dict[str, Any] = {}
     for uid, count, sent, last_date in active_q:
         rows_by_uid[uid] = {
             "uid":           uid,
@@ -95,7 +96,7 @@ def employee_activity(
                 "last_activity": None,
             }
 
-    rows: list[dict] = []
+    rows: list[dict[str, Any]] = []
     for uid, r in rows_by_uid.items():
         if uid is None:
             r["employee"] = "(unattributed)"

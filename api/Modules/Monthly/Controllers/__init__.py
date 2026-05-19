@@ -8,7 +8,7 @@ Mounts at `/api/v2/monthly/*`. Read-side endpoints:
 JWT-required, scoped to the principal's store. Superadmin (no
 store scope) → 403. Write-side stays on Flask.
 """
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Body, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
@@ -28,6 +28,7 @@ from api.Modules.Monthly.Services import (
     summarize_monthly,
     update_monthly,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -38,7 +39,7 @@ def _to_row(s: MonthlySummary) -> MonthlyRow:
     # Build a kwarg dict for every Pydantic field by introspecting
     # MonthlyRow's annotations — keeps the adapter from drifting
     # if a column is added / removed.
-    kw: dict = {
+    kw: dict[str, Any] = {
         "id": r.id, "store_id": r.store_id,
         "year": int(r.year), "month": int(r.month),
         "notes": r.notes or "",
@@ -56,7 +57,7 @@ def _to_row(s: MonthlySummary) -> MonthlyRow:
 @router.get("/months", response_model=MonthsLoggedResponse)
 def months_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MonthsLoggedResponse:
     store_id = resolve_store_scope(claims)
     pairs = list_logged_months(db, store_id)
@@ -73,7 +74,7 @@ def monthly_route(
     year: int = Path(..., ge=2000, le=2100),
     month: int = Path(..., ge=1, le=12),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MonthlyResponse:
     store_id = resolve_store_scope(claims)
     summary = summarize_monthly(db, store_id, int(year), int(month))
@@ -92,9 +93,9 @@ def monthly_route(
 def update_monthly_route(
     year: int = Path(..., ge=2000, le=2100),
     month: int = Path(..., ge=1, le=12),
-    body: MonthlyUpdateRequest = ...,
+    body: MonthlyUpdateRequest = Body(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> MonthlyResponse:
     """Save the editable monthly P&L fields. Server auto-derives
     daily-summed + return-check-net + bank-charge fields and

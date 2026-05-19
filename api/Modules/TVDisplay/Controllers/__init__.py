@@ -46,12 +46,13 @@ from api.Modules.TVDisplay.Requests import (
     TVDisplaySettingsUpdateRequest,
     TVPairingSummary,
 )
+from typing import Any
 
 
 router = APIRouter()
 
 
-def _require_tv_store(claims: dict, db: Session):
+def _require_tv_store(claims: dict[str, Any], db: Session):
     """Mirrors legacy `_tv_required()`: store-scoped JWT, admin or
     employee role, store has the tv_display add-on active."""
     sid = claims.get("store_id")
@@ -102,7 +103,7 @@ def _ensure_display(db: Session, store):
 @router.get("/overview", response_model=TVDisplayOverviewResponse)
 def overview_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TVDisplayOverviewResponse:
     """Per-store TV display config + countries with stats + active
     Fire TV pairing (if any). Same data the legacy /tv-display
@@ -186,7 +187,7 @@ def overview_route(
 def country_detail_route(
     country_id: int,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TVDisplayCountryDetailResponse:
     """Drill-down for one country: bank list with their filled-in
     rate cells. Cross-store country IDs return 404 (opaque tenancy)
@@ -252,7 +253,7 @@ _ALLOWED_THEMES = {"light", "dark"}
 def save_settings_route(
     payload: TVDisplaySettingsUpdateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Update title/subtitle/orientation/theme. Mirrors the legacy
     /tv-display/settings POST: invalid orientation/theme falls back
@@ -281,7 +282,7 @@ def save_settings_route(
 )
 def regenerate_token_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TVDisplayRegenerateTokenResponse:
     """Rotate the public_token. Anyone holding the old URL stops
     seeing the board on the next page load — operators rotate after
@@ -302,7 +303,7 @@ def regenerate_token_route(
 def claim_pair_code_route(
     payload: TVDisplayClaimRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Bind a Fire TV's 6-char code to this store's TVDisplay.
     Mirrors the legacy /tv-display/claim POST: revokes any prior
@@ -374,7 +375,7 @@ def claim_pair_code_route(
 def revoke_pairing_route(
     pairing_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Manually unpair a Fire TV. Sets revoked_at = now; the device's
     URL 404s on its next 30-second refresh and routes back to the
@@ -404,7 +405,7 @@ def revoke_pairing_route(
 def create_country_route(
     payload: TVDisplayCountryCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TVDisplayCountryCreateResponse:
     """Add a new country section. Mirrors the legacy
     /tv-display/countries/new POST: country_code is uppercased + cap
@@ -449,7 +450,7 @@ def create_country_route(
 def delete_country_route(
     country_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> Response:
     """Remove a country section. Manual cascade across banks → rates
     (mirrors the retention purge pattern). Tenant-scoped — countries

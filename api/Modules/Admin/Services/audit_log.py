@@ -9,6 +9,7 @@ added here must be added to the ``AdminAuditRow`` Pydantic schema
 in lockstep or the response validator will trip.
 """
 from sqlalchemy.orm import Session
+from typing import Any
 
 PER_PAGE = 50
 
@@ -19,7 +20,7 @@ def list_audit_rows(
     user_filter:   str = "",
     action_filter: str = "",
     page: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Return a page of merged audit rows for the store, plus the
     user-filter roster + the resolved page number. Pure read; no
     commit. Mirrors the legacy `admin_audit_log` route's logic:

@@ -11,6 +11,7 @@ Pure DB read — no commits, no side-effects.
 from datetime import date
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def high_value_transfers(
@@ -19,7 +20,7 @@ def high_value_transfers(
     d_from: date,
     d_to: date,
     threshold: float,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """List active transfers ≥ `threshold` in the window.
 
     Returns `(rows, totals)`:

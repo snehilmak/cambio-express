@@ -30,6 +30,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def _models():
@@ -89,7 +90,7 @@ def writeoff_total(
 
 def period_aggregates(
     db: Session, store_ids: list[int], start: date, end: date,
-) -> dict:
+) -> dict[str, Any]:
     """Sum recoveries (by payment date) and losses+fraud (by parent
     status-change date), plus the still-pending balance.
 
@@ -173,7 +174,7 @@ def period_aggregates(
 
 def aging_buckets(
     db: Session, store_ids: list[int], today: date | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Pending balance sliced into 0–30 / 31–60 / 61–90 / 90+
     buckets by `bounced_on`. Helps the owner spot stale
     receivables that probably won't recover."""

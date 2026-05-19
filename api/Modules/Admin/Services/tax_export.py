@@ -5,6 +5,7 @@ The year-picker dropdown on ``/app/admin/tax-export`` consumes
 offer. The actual ZIP build lives in ``tax_pack.py`` next door.
 """
 from datetime import date
+from typing import Any
 
 from sqlalchemy import distinct, extract
 from sqlalchemy.orm import Session
@@ -23,10 +24,14 @@ def list_year_choices(db: Session, store_id: int) -> list[int]:
 
     today = date.today()
     years: set[int] = {today.year, today.year - 1}
-    for col, model in (
+    # ``model`` is a class; mypy reads ``type[Base]`` and can't see
+    # the SQLAlchemy ``store_id`` Column at class-access position.
+    # Loop variable typed ``Any`` keeps the filter call typed.
+    pairs: list[tuple[Any, Any]] = [
         (Transfer.send_date,    Transfer),
         (DailyReport.report_date, DailyReport),
-    ):
+    ]
+    for col, model in pairs:
         rows = (
             db.query(distinct(extract("year", col)))
               .filter(model.store_id == store_id)

@@ -47,6 +47,7 @@ from api.Modules.BankSync.Services import (
     list_transactions_page,
     uncategorize_transaction,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -77,7 +78,7 @@ def list_transactions_route(
     page: int = Query(1, ge=1),
     per_page: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankTransactionListResponse:
     sid = resolve_store_scope(claims)
     filters = BankTransactionFilters.from_query({
@@ -122,7 +123,7 @@ def list_transactions_route(
 def list_rules_route(
     enabled_only: bool = Query(False),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleListResponse:
     """Operator-managed BankRule list. Order matches the auto-
     categorize sync's evaluation order (priority asc, id tie-break)
@@ -164,7 +165,7 @@ def list_rules_route(
 @router.get("/accounts", response_model=BankAccountListResponse)
 def list_accounts_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankAccountListResponse:
     """All connected Stripe Financial Connections accounts for the
     principal's store. Includes both enabled + disconnected accounts
@@ -245,7 +246,7 @@ def categorize_route(
     body: CategorizeRequest,
     txn_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CategorizeResponse:
     """Tag a transaction with a category and (when the kind is a
     daily-book line item) auto-create the matching DailyLineItem.
@@ -275,7 +276,7 @@ def categorize_route(
 def uncategorize_route(
     txn_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CategorizeResponse:
     """Clear a transaction's category and remove any auto-created
     DailyLineItem. The row stays in the table — it just goes back
@@ -383,7 +384,7 @@ def _validate_account_owned(db: Session, store_id: int, account_id: int | None):
 def create_rule_route(
     body: BankRuleWriteRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
     sid = resolve_store_scope(claims)
     _validate_rule_body(body)
@@ -412,7 +413,7 @@ def update_rule_route(
     body: BankRuleWriteRequest,
     rule_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
     sid = resolve_store_scope(claims)
     _validate_rule_body(body)
@@ -438,7 +439,7 @@ def toggle_rule_route(
     body: BankRuleToggleRequest,
     rule_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BankRuleResponse:
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)
@@ -451,7 +452,7 @@ def toggle_rule_route(
 def delete_rule_route(
     rule_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     sid = resolve_store_scope(claims)
     r = _find_owned_rule(db, sid, rule_id)

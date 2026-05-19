@@ -12,6 +12,7 @@ from datetime import date
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def new_vs_returning(
@@ -19,7 +20,7 @@ def new_vs_returning(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Aggregate senders into new / returning / walk-in buckets.
 
     Returns `(rows, totals)`:
@@ -83,7 +84,7 @@ def new_vs_returning(
             new_sent  += sent
             new_txns  += count
 
-    rows: list[dict] = [
+    rows: list[dict[str, Any]] = [
         {"bucket": "New senders",       "customers": new_count,
          "txns":   new_txns,            "sent":      new_sent,
          "tone":   "primary"},

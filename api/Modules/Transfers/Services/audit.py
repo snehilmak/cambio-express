@@ -21,6 +21,7 @@ Pure-ish: only `record_audit` touches the DB, and even it just
 adds the row (the surrounding transaction commits in the route).
 """
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 # Audited column → human-readable label. Order is the order
@@ -49,7 +50,7 @@ TRANSFER_AUDIT_FIELDS: list[tuple[str, str]] = [
 ]
 
 
-def transfer_snapshot(transfer) -> dict:
+def transfer_snapshot(transfer) -> dict[str, Any]:
     """Capture the audited subset of `transfer` as a dict.
 
     The shape matches `TRANSFER_AUDIT_FIELDS` so a `summarize_
@@ -63,7 +64,7 @@ def transfer_snapshot(transfer) -> dict:
 
 
 def summarize_changes(
-    before: dict, after: dict, max_fields: int = 4,
+    before: dict[str, Any], after: dict[str, Any], max_fields: int = 4,
 ) -> str:
     """Format a before/after diff into the audit-log summary.
 

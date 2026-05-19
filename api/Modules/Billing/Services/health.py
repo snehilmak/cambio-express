@@ -19,9 +19,10 @@ import os
 import stripe
 
 from api.Modules.Billing.Services.checkout import resolve_price_ids
+from typing import Any
 
 
-def check_stripe_integration() -> dict:
+def check_stripe_integration() -> dict[str, Any]:
     """Probe Stripe and return a structured health report.
 
     Shape (all keys always present so the template can render

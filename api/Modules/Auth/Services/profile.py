@@ -5,7 +5,7 @@ commits — the Service flushes but doesn't commit so a multi-
 field edit can roll back atomically on error.
 """
 import re
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -70,7 +70,7 @@ def normalize_theme(raw: str | None) -> str:
     return raw if raw in _THEME_CHOICES else "dark"
 
 
-def get_profile_payload(user: User) -> dict:
+def get_profile_payload(user: User) -> dict[str, Any]:
     """Pure read — no DB access beyond what's already on `user`.
     Returns the payload for the Profile React page."""
     return {

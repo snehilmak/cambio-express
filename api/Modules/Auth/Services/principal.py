@@ -15,9 +15,10 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from api.Modules.Auth.Models import User
+from typing import Any
 
 
-def resolve_store_scope(claims: dict) -> int:
+def resolve_store_scope(claims: dict[str, Any]) -> int:
     """Extract the JWT principal's `store_id`, or 403.
 
     Used by the Admin / Monthly / BankSync controllers (and any
@@ -38,7 +39,7 @@ def resolve_store_scope(claims: dict) -> int:
     return int(sid)
 
 
-def resolve_superadmin_user(db: Session, claims: dict) -> User:
+def resolve_superadmin_user(db: Session, claims: dict[str, Any]) -> User:
     """Resolve JWT claims → ``User`` row, gated on role=superadmin.
 
     Used by the mutation endpoints across the Superadmin /

@@ -27,6 +27,7 @@ from api.Modules.Billing.Requests import (
     CheckoutSessionRequest,
     CheckoutSessionResponse,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -35,7 +36,7 @@ router = APIRouter()
 _BILLING_ROLES = ("admin", "owner", "superadmin")
 
 
-def _require_billing_scope(claims: dict) -> int:
+def _require_billing_scope(claims: dict[str, Any]) -> int:
     if claims.get("role") not in _BILLING_ROLES:
         raise HTTPException(
             status_code=403,
@@ -50,7 +51,7 @@ def _require_billing_scope(claims: dict) -> int:
     return int(sid)
 
 
-def _current_store(db: Session, store_id: int):
+def _current_store(db: Session, store_id: int) -> Any:
     from api.Modules.Tenancy.Models import Store
     store = db.get(Store, store_id)
     if store is None:
@@ -62,7 +63,7 @@ def _current_store(db: Session, store_id: int):
 def checkout_route(
     body: CheckoutSessionRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> CheckoutSessionResponse:
     """Mint a Stripe Checkout Session for `plan` and return the
     hosted Checkout URL. The SPA does `window.location.assign(url)`.
@@ -94,7 +95,7 @@ def checkout_route(
 @router.post("/portal", response_model=BillingPortalResponse)
 def portal_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> BillingPortalResponse:
     """Mint a Stripe Billing Portal Session and return its URL.
 

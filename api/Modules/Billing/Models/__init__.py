@@ -99,7 +99,7 @@ class DiscountCode(Base):
     created_by                = Column(Integer, ForeignKey("user.id"), nullable=True)
 
     @property
-    def value_label(self):
+    def value_label(self) -> str:
         if self.percent_off:
             return f"{self.percent_off}% off"
         if self.amount_off_cents:

@@ -54,9 +54,9 @@ def aggregate(
 
     Returns `(rows, totals)`:
 
-      rows:  list of dicts with keys `key`, `count`, `sent`,
+      rows:  list[Any] of dicts with keys `key`, `count`, `sent`,
              `fees`, `tax`, `avg`. Unsorted — caller decides.
-      totals: dict with `sent`, `fees`, `tax`, `count` summed
+      totals: dict[str, Any] with `sent`, `fees`, `tax`, `count` summed
              across every row.
 
     Single GROUP BY query — O(distinct keys) memory, never loads

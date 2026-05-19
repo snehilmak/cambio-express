@@ -7,6 +7,7 @@ slug/plan/billing/retention server-managed.
 from sqlalchemy.orm import Session
 
 from api.Modules.Admin.Models import Store
+from typing import Any
 
 
 # Whitelist of fields the admin tab can write. Slug + billing +
@@ -74,7 +75,7 @@ ALLOWED_TIMEZONES: tuple[str, ...] = (
 
 
 def update_store_info(
-    db: Session, store: Store, fields: dict,
+    db: Session, store: Store, fields: dict[str, Any],
 ) -> Store:
     """Apply `fields` to the Store row, restricted to
     EDITABLE_STORE_FIELDS. Raises ValueError if the caller

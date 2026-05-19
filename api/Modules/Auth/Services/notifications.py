@@ -5,7 +5,7 @@ which toggles render as interactive vs. greyed-out informational
 on the SPA — keeps the UI honest about which channels actually
 apply to the current role + store state.
 """
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -43,7 +43,7 @@ def daily_summary_applies(user: User) -> bool:
     return user.role in ("admin", "owner")
 
 
-def get_notifications_payload(db: Session, user: User) -> dict:
+def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
     """Return the GET payload for the notifications page."""
     return {
         "notify_trial_reminders":    bool(user.notify_trial_reminders),

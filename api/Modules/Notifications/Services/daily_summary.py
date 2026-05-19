@@ -30,7 +30,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -141,7 +141,7 @@ def compute_daily_totals(
     )
 
 
-def eligible_recipients(db: Session, store) -> list:
+def eligible_recipients(db: Session, store) -> list[Any]:
     """Admins + linked owners with email set + the daily-summary
     toggle on + no recent hard bounce.
 
@@ -172,7 +172,7 @@ def eligible_recipients(db: Session, store) -> list:
     return list({u.id: u for u in candidates}.values())
 
 
-def stores_with_activity(db: Session, on_date: date) -> list:
+def stores_with_activity(db: Session, on_date: date) -> list[Any]:
     """Active stores that had at least one Transfer OR DailyReport
     row on ``on_date``. The cron iterates these — skipping idle
     stores keeps the inbox clean (no 0/0/0 summary emails for a

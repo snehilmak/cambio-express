@@ -13,6 +13,8 @@ password to access them all. Multi-store users (one row, many
 """
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy.orm import Session
 
 from api.Modules.Admin.Services.users import (
@@ -33,7 +35,7 @@ def bulk_add_user_to_stores(
     password: str,
     full_name: str = "",
     role: str = "employee",
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Create the same User across every requested store that's
     in the owner's umbrella. Returns one result row per
     requested store with one of three statuses:
@@ -63,7 +65,7 @@ def bulk_add_user_to_stores(
     allowed = _owner_store_ids(db, owner_id)
     name_lookup = _store_names_by_id(db, list(set(store_ids)))
 
-    results: list[dict] = []
+    results: list[dict[str, Any]] = []
     for sid in store_ids:
         store_name = name_lookup.get(sid, "")
         if sid not in allowed:

@@ -18,6 +18,7 @@ Differences from `Admin.Services.audit_log.list_audit_rows`:
 Pure read; no commits.
 """
 from sqlalchemy.orm import Session
+from typing import Any
 
 PER_PAGE = 50
 
@@ -27,7 +28,7 @@ def list_my_activity(
     target_filter: str = "",
     action_filter: str = "",
     page: int = 1,
-) -> dict:
+) -> dict[str, Any]:
     """Return a page of audit rows authored by `user_id`."""
     from api.Modules.Audit.Models import OperatorAuditLog, TransferAudit
     from api.Modules.Tenancy.Models import Store

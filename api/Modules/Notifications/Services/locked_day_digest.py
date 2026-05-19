@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from api.Modules.Notifications.Services.smtp import send_email
 from api.Modules.Notifications.Services.templates import render_email_template
+from typing import Any
 
 
 _log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ admin of {store_name}. Turn it off on your notifications page:
 """
 
 
-def eligible_recipients(db: Session, store) -> list:
+def eligible_recipients(db: Session, store) -> list[Any]:
     """Users who should get the digest for this store: admins +
     linked owners (via StoreOwnerLink) with `email` set and
     `notify_locked_day_digest=True`.

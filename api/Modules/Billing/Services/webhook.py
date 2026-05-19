@@ -29,6 +29,7 @@ from api.Modules.Billing.Services.referrals import (
     apply_pending_referral_credits,
     ensure_referral_code,
 )
+from typing import Any
 
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ class InvalidWebhookSignatureError(Exception):
 
 def verify_webhook_signature(
     payload: bytes, sig_header: str, secret: str,
-) -> dict:
+) -> dict[str, Any]:
     """Verify the Stripe-Signature header against `payload` using
     `secret`. Returns the parsed event (dict). Raises
     InvalidWebhookSignatureError when the signature doesn't match
@@ -85,7 +86,7 @@ def derive_plan_from_price(
 
 
 def handle_stripe_event(
-    db: Session, event: dict, *,
+    db: Session, event: dict[str, Any], *,
     retention_days: int = DEFAULT_RETENTION_DAYS,
 ) -> None:
     """Dispatch a verified Stripe event to the right per-event
@@ -120,7 +121,7 @@ def handle_stripe_event(
 
 
 def _handle_checkout_session_completed(
-    db: Session, event: dict,
+    db: Session, event: dict[str, Any],
 ) -> None:
     """Returning customer or first-time checkout completed: flip
     the store onto the paid plan, persist Stripe IDs, clear any
@@ -170,7 +171,7 @@ def _handle_checkout_session_completed(
 
 
 def _handle_subscription_deleted(
-    db: Session, event: dict, *, retention_days: int,
+    db: Session, event: dict[str, Any], *, retention_days: int,
 ) -> None:
     """Subscription cancellation: mark the store inactive, set the
     retention countdown."""

@@ -13,7 +13,7 @@ straight to `Repositories.transfers.aggregate` — services exist
 specifically because the rename + sort is presentation-layer logic
 that doesn't belong in the repository.
 """
-from typing import Iterable
+from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +23,7 @@ from api.Modules.Reports.Repositories.transfers import aggregate
 
 def sales_by_company(
     db: Session, store_ids: Iterable[int], d_from, d_to,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group active transfers by `Transfer.company`.
 
     Returns rows tagged with a `company` field (renamed from the
@@ -40,7 +40,7 @@ def sales_by_company(
 
 def sales_by_service(
     db: Session, store_ids: Iterable[int], d_from, d_to,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.service_type` (Money Transfer / Bill
     Payment / Top Up / Recharge)."""
     rows, totals = aggregate(db, store_ids, d_from, d_to, Transfer.service_type)
@@ -52,7 +52,7 @@ def sales_by_service(
 
 def by_destination_country(
     db: Session, store_ids: Iterable[int], d_from, d_to,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.country`. Rows with empty country are
     bucketed as `"(no country)"`."""
     rows, totals = aggregate(db, store_ids, d_from, d_to, Transfer.country)
@@ -64,7 +64,7 @@ def by_destination_country(
 
 def top_recipients(
     db: Session, store_ids: Iterable[int], d_from, d_to, *, limit: int = 50,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.recipient_name` string.
 
     Recipients aren't stored in their own table — `Transfer.recipient_name`

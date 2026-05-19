@@ -119,7 +119,7 @@ def merge_customers(
     db.delete(loser)
     db.flush()
     return CustomerMergeResult(
-        winner_id=winner.id,
+        winner_id=int(winner.id),
         loser_id=loser_id,
         transfers_repointed=int(repointed or 0),
     )

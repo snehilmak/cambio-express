@@ -19,6 +19,7 @@ before the route stores them on a `Transfer` row:
 from datetime import date, datetime
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def parse_dob(raw: str | None) -> date | None:
@@ -34,7 +35,7 @@ def parse_dob(raw: str | None) -> date | None:
         return None
 
 
-def active_roster(db: Session, store_id: int) -> list:
+def active_roster(db: Session, store_id: int) -> list[Any]:
     """Names available in the "Processed by" dropdown.
 
     Inactive roster rows are hidden so cashiers can't credit

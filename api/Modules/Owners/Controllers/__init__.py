@@ -44,12 +44,13 @@ from api.Modules.Owners.Services import (
     owner_locations_payload,
     owner_store_ids,
 )
+from typing import Any
 
 
 router = APIRouter()
 
 
-def _require_owner_principal(db: Session, claims: dict) -> User:
+def _require_owner_principal(db: Session, claims: dict[str, Any]) -> User:
     """Resolve the JWT subject to a real User and gate on the owner
     role. Superadmin can hit owner endpoints too — useful for
     support / debug.
@@ -83,7 +84,7 @@ def owner_locations_route(
     period: str = Query("month", pattern="^(today|month|year)$"),
     q: str = Query("", description="Case-insensitive substring on store name"),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerLocationsResponse:
     user = _require_owner_principal(db, claims)
     rows, total = owner_locations_payload(db, user, period, q.strip() or None)
@@ -117,7 +118,7 @@ def owner_pl_rollup_route(
     year: int | None = Query(None, ge=2000, le=2100),
     month: int | None = Query(None, ge=1, le=12),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerPLRollupResponse:
     """Side-by-side monthly P&L for every store in the owner umbrella.
     Mirrors the legacy /owner/pl-rollup view — one row per store with
@@ -234,7 +235,7 @@ def _adapt_code(c, *, store_name: str = "") -> "OwnerConnectCodeRow":
 @router.get("/connect-codes", response_model=OwnerConnectCodeListResponse)
 def owner_connect_codes_list_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerConnectCodeListResponse:
     """Every code the owner has minted (active + redeemed +
     revoked + expired). Newest first."""
@@ -264,7 +265,7 @@ def owner_connect_codes_list_route(
 )
 def owner_connect_codes_generate_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerConnectCodeResponse:
     """Mint a new 8-character connect code with a 7-day TTL.
     Owner shares the code with the store admin out of band; the
@@ -292,7 +293,7 @@ def owner_connect_codes_generate_route(
 def owner_connect_codes_revoke_route(
     code_id: int,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerConnectCodeResponse:
     """Revoke an unredeemed code so the recipient can't use it.
     Already-redeemed codes can't be revoked — that disconnect
@@ -327,7 +328,7 @@ def owner_connect_codes_revoke_route(
 def owner_bulk_add_user_route(
     body: OwnerBulkAddUserRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerBulkAddUserResponse:
     """Create the same login at every store in ``body.store_ids``
     that's actually in the owner's umbrella. Per-store outcomes
@@ -387,7 +388,7 @@ def owner_bulk_add_user_route(
 def owner_cross_store_defaults_route(
     body: OwnerCrossStoreDefaultsRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> OwnerCrossStoreResponse:
     """Push the picked field defaults (fed-tax-rate, timezone,
     business hours, etc.) to every store in ``body.store_ids``
@@ -453,7 +454,7 @@ def owner_unlink_store_route(
     body: OwnerUnlinkRequest,
     store_id: int,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Disconnect a store from the owner umbrella. Removes the
     StoreOwnerLink row; the store keeps all its data (transfers,
@@ -482,7 +483,7 @@ def owner_unlink_store_route(
 @router.get("/reports")
 def owner_reports_route(
     db: Session = Depends(get_db),  # noqa: ARG001 — kept for symmetry
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Owner-prefixed report-center index. Same `_REPORT_CATEGORIES`
     registry the admin index uses, but with `endpoint_prefix='owner_'`
@@ -518,7 +519,7 @@ def _safe_value(v):
     return v
 
 
-def _require_owner(db: Session, claims: dict):
+def _require_owner(db: Session, claims: dict[str, Any]):
     if claims.get("role") != "owner":
         raise HTTPException(
             status_code=403, detail="Owner scope required.",
@@ -536,7 +537,7 @@ def _require_owner(db: Session, claims: dict):
 def owner_dashboard_route(
     period: str = "month",
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Owner dashboard payload — KPIs, multi-store rollup, daily
     series, return-check aging. Delegates to the existing
@@ -562,7 +563,7 @@ def owner_store_detail_route(
     store_id: int = Path(..., ge=1),
     period: str = "month",
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Drill-down view for a single store the owner is linked to.
     Read-only. Returns period KPIs, the company breakdown, the

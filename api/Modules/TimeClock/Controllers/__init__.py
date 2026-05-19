@@ -73,6 +73,7 @@ from api.Modules.TimeClock.Services.shifts import (
     shifts_for_period,
     update_shift,
 )
+from typing import Any
 
 
 router = APIRouter()
@@ -141,7 +142,7 @@ def clock_in_route(
     body: ClockPunchRequest,
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Open a new shift for the picked roster member at the
     current user's store. 409 when the employee already has an
@@ -195,7 +196,7 @@ def clock_out_route(
     body: ClockPunchRequest,
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Close the picked roster member's open shift. 409 when
     nobody's clocked in for that name; 404 when the roster id
@@ -247,7 +248,7 @@ def clock_out_route(
 def break_start_route(
     body: BreakPunchRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Pause the picked roster member's open shift. Sets
     ``break_started_at`` to now. 409 when nobody's clocked in
@@ -285,7 +286,7 @@ def break_start_route(
 def break_stop_route(
     body: BreakPunchRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Resume the picked roster member's shift. Adds the
     elapsed break time to ``break_minutes`` and clears
@@ -322,7 +323,7 @@ def break_stop_route(
 )
 def status_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockStatusResponse:
     """Currently-open shifts at the principal's store — feeds
     the live "who's on the clock?" panel + powers the
@@ -346,7 +347,7 @@ def admin_entries_route(
     to: date = Query(...),
     store_employee_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockEntryList:
     """Shifts that started inside ``[from, to)`` for the
     current user's store. ``to`` is half-open — pass the day
@@ -408,7 +409,7 @@ def admin_entries_route(
 # ── Admin CRUD (back-fill / edit / delete) ──────────────────
 
 
-def _require_admin_role(claims: dict) -> None:
+def _require_admin_role(claims: dict[str, Any]) -> None:
     if claims.get("role") not in ("admin", "owner", "superadmin"):
         raise HTTPException(
             status_code=403,
@@ -449,7 +450,7 @@ def _parse_iso(value: str, field: str) -> datetime:
 def admin_create_route(
     body: AdminCreateEntryRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Admin back-fill: create a TimeClockEntry from scratch.
     Use case: cashier forgot to punch and the admin reconstructs
@@ -495,14 +496,14 @@ def admin_update_route(
     body: AdminUpdateEntryRequest,
     entry_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockPunchResponse:
     """Admin edit: replace timestamps / notes on an existing
     entry. Hours are recomputed. Field-level diff lands in the
     audit summary."""
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
-    patch: dict = {}
+    patch: dict[str, Any] = {}
     set_fields = body.model_fields_set
     if "clock_in_at" in set_fields:
         if body.clock_in_at is None:
@@ -554,7 +555,7 @@ def admin_update_route(
 def admin_delete_route(
     entry_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Admin remove. Rare — typically only for entries that
     were back-filled in error. The audit chain still surfaces
@@ -586,7 +587,7 @@ def admin_delete_route(
 def admin_entry_history_route(
     entry_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockHistoryResponse:
     """Per-entry audit chain — every clock-in, clock-out, and
     admin mutation that touched this row. Reverse-chronological."""
@@ -664,7 +665,7 @@ def admin_shifts_list_route(
     to:    date = Query(...),
     store_employee_id: int | None = Query(None, ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ShiftList:
     """Planned shifts with ``shift_date`` in ``[from, to)``.
     Half-open window matches the payroll history endpoint above
@@ -694,7 +695,7 @@ def admin_shifts_list_route(
 def admin_shift_create_route(
     body: ShiftCreateRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ShiftRow:
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
@@ -726,7 +727,7 @@ def admin_shift_update_route(
     shift_id: int = Path(..., ge=1),
     body: ShiftUpdateRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ShiftRow:
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
@@ -759,7 +760,7 @@ def admin_shift_update_route(
 def admin_shift_delete_route(
     shift_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     _require_admin_role(claims)
     store_id = resolve_store_scope(claims)
@@ -773,7 +774,7 @@ def admin_shift_delete_route(
 # ── Internal helpers ────────────────────────────────────────
 
 
-def _user_id_from(claims: dict) -> int | None:
+def _user_id_from(claims: dict[str, Any]) -> int | None:
     sub = claims.get("sub")
     if sub is None:
         return None
@@ -788,7 +789,7 @@ def _audit_punch(
     *,
     store_id: int,
     user_id: int | None,
-    claims: dict,
+    claims: dict[str, Any],
     entry_id: int,
     store_employee_id: int,
     action: str,
@@ -813,7 +814,7 @@ def _write_audit(
     db: Session,
     *,
     store_id: int,
-    claims: dict,
+    claims: dict[str, Any],
     entry_id: int,
     store_employee_id: int,
     action: str,
@@ -857,7 +858,7 @@ def _enforce_passkey_gate(
     store_id: int,
     store_employee_id: int,
     assert_token: str | None,
-    assertion: dict | None,
+    assertion: dict[str, Any] | None,
 ) -> None:
     """When the store has ``timeclock_require_passkey=True``,
     refuse the punch unless a fresh WebAuthn assertion lands
@@ -946,7 +947,7 @@ def punch_challenge_route(
     body: PunchChallengeRequest,
     request: Request,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> PunchChallengeResponse:
     """Mint a WebAuthn assertion challenge for the picked
     roster member. The SPA passes ``options_json`` to
@@ -1003,7 +1004,7 @@ def punch_challenge_route(
 )
 def admin_credentials_list_route(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockCredentialList:
     """List every active roster member at the store with a
     has_passkey flag. Powers the admin enrollment page so the
@@ -1050,8 +1051,8 @@ def admin_credentials_register_begin_route(
     request: Request,
     store_employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
-) -> dict:
+    claims: dict[str, Any] = Depends(get_principal),
+) -> dict[str, Any]:
     """Start a WebAuthn registration ceremony for the picked
     roster member. The admin walks the cashier through the
     OS-level prompt; the SPA passes ``options_json`` to
@@ -1115,11 +1116,11 @@ def admin_credentials_register_begin_route(
     response_model=TimeClockCredentialRow,
 )
 def admin_credentials_register_finish_route(
-    body: dict,
+    body: dict[str, Any],
     request: Request,
     store_employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> TimeClockCredentialRow:
     """Verify the authenticator's attestation + persist the new
     StoreEmployeePasskey row. Replaces any existing row for the
@@ -1217,7 +1218,7 @@ def admin_credentials_register_finish_route(
 def admin_credentials_delete_route(
     store_employee_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> None:
     """Remove the roster member's passkey. Used when the
     cashier swaps devices or leaves."""
@@ -1247,7 +1248,7 @@ def admin_paystub_route(
     from_: date = Query(..., alias="from"),
     to: date = Query(...),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> PaystubResponse:
     """Paystub for the picked roster member over ``[from, to)``.
 

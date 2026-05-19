@@ -11,6 +11,7 @@ Pure DB read — no commits, no side-effects.
 from datetime import date
 
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 def cancelled_transfers(
@@ -18,7 +19,7 @@ def cancelled_transfers(
     store_ids: list[int],
     d_from: date,
     d_to: date,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """List Canceled / Rejected transfers in the window.
 
     Returns `(rows, totals)`:

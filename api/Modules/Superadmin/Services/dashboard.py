@@ -22,6 +22,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 # Plan pricing in dollars. Yearly buckets are amortised to /12
@@ -51,7 +52,7 @@ def compute_mrr(
     return bm, by_, pm, py_, bm + by_ + pm + py_
 
 
-def superadmin_dashboard_context(db: Session) -> dict:
+def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
     """Platform-wide BI metrics for the superadmin Dashboard tab.
 
     Returns the kwargs dict that `dashboard_superadmin.html`

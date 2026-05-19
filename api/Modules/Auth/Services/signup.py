@@ -143,7 +143,7 @@ def create_store_and_admin(
         trial_ends_at=trial_end, grace_ends_at=grace_end,
     )
     if referred_by_code_id is not None:
-        store.referred_by_code_id = referred_by_code_id
+        setattr(store, "referred_by_code_id", referred_by_code_id)
     db.add(store)
     db.flush()  # so store.id exists for the User FK
 

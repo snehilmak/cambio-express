@@ -20,12 +20,13 @@ from sqlalchemy.orm import Session
 
 from api.Core.Database import get_db
 from api.Modules.Auth.Controllers import get_principal
+from typing import Any
 
 
 router = APIRouter()
 
 
-def _admin_summary(db: Session, store_id: int) -> dict:
+def _admin_summary(db: Session, store_id: int) -> dict[str, Any]:
     from api.Modules.BankSync.Models import StripeBankAccount
     from api.Modules.Batches.Models import ACHBatch
     from api.Modules.DailyBook.Models import DailyReport
@@ -144,7 +145,7 @@ def _admin_summary(db: Session, store_id: int) -> dict:
     }
 
 
-def _employee_summary(db: Session, store_id: int) -> dict:
+def _employee_summary(db: Session, store_id: int) -> dict[str, Any]:
     from api.Modules.Transfers.Models import Transfer
     today = date.today()
     rows = (
@@ -179,7 +180,7 @@ def _employee_summary(db: Session, store_id: int) -> dict:
     }
 
 
-def _superadmin_summary(db: Session) -> dict:
+def _superadmin_summary(db: Session) -> dict[str, Any]:
     """Delegate to the existing service. Two responsibilities:
 
       1. Map ORM rows + datetimes into JSON-native primitives so
@@ -255,7 +256,7 @@ def _superadmin_summary(db: Session) -> dict:
 @router.get("/summary")
 def dashboard_summary(
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """Role-shaped landing payload for /app/dashboard.
 
@@ -285,7 +286,7 @@ def dashboard_summary(
 def dashboard_peak_hours(
     days: int = 30,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ):
     """7×24 heatmap of transfer activity over the last ``days``
     days (default 30). Bucketed by weekday × hour-of-day in

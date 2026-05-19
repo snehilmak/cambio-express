@@ -55,12 +55,13 @@ from api.Modules.ReturnChecks.Services import (
     reopen,
     update_return_check,
 )
+from typing import Any
 
 
 router = APIRouter()
 
 
-def _require_admin_scope(claims: dict) -> int:
+def _require_admin_scope(claims: dict[str, Any]) -> int:
     sid = claims.get("store_id")
     if sid is None:
         raise HTTPException(
@@ -121,7 +122,7 @@ def _parse_payload(body: ReturnCheckWriteRequest) -> ReturnCheckWriteInput:
 def list_route(
     status: str = Query("", description="Optional filter: pending, recovered, loss, fraud"),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckListResponse:
     sid = claims.get("store_id")
     if sid is None:
@@ -137,7 +138,7 @@ def list_route(
 def get_route(
     rc_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = claims.get("store_id")
     if sid is None:
@@ -155,7 +156,7 @@ def get_route(
 def create_route(
     body: ReturnCheckWriteRequest,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
@@ -172,7 +173,7 @@ def update_route(
     rc_id: int = Path(..., ge=1),
     body: ReturnCheckWriteRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
     payload = _parse_payload(body)
@@ -206,7 +207,7 @@ def _transition(
 def mark_loss_route(
     rc_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
     return _transition(db, sid, rc_id, mark_loss)
@@ -219,7 +220,7 @@ def mark_loss_route(
 def mark_fraud_route(
     rc_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
     return _transition(db, sid, rc_id, mark_fraud)
@@ -232,7 +233,7 @@ def mark_fraud_route(
 def reopen_route(
     rc_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckResponse:
     sid = _require_admin_scope(claims)
     return _transition(db, sid, rc_id, reopen)
@@ -256,7 +257,7 @@ def _payment_row(p) -> ReturnCheckPaymentRow:
 def payments_route(
     rc_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckPaymentsResponse:
     sid = claims.get("store_id")
     if sid is None:
@@ -282,7 +283,7 @@ def record_payment_route(
     rc_id: int = Path(..., ge=1),
     body: ReturnCheckPaymentWriteRequest = ...,
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckPaymentResponse:
     """Record one installment payment against a pending or
     recovered return check. Auto-creates the matching
@@ -332,7 +333,7 @@ def delete_payment_route(
     rc_id: int = Path(..., ge=1),
     payment_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    claims: dict = Depends(get_principal),
+    claims: dict[str, Any] = Depends(get_principal),
 ) -> ReturnCheckPaymentResponse:
     sid = _require_admin_scope(claims)
     try:

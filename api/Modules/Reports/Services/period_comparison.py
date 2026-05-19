@@ -15,6 +15,7 @@ from datetime import date, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from typing import Any
 
 
 # Daily-book P&L line items. Income lines flow from `DailyReport`
@@ -42,7 +43,7 @@ PL_EXPENSE_LINES: list[tuple[str, str]] = [
 ]
 
 
-def _bundle(db: Session, store_ids: list[int], s: date, e: date) -> dict:
+def _bundle(db: Session, store_ids: list[int], s: date, e: date) -> dict[str, Any]:
     """Aggregate a single period into the metric dict the
     comparison view consumes."""
     from api.Modules.DailyBook.Models import DailyReport
@@ -97,7 +98,7 @@ def period_comparison(
     *,
     compare_from: date | None = None,
     compare_to: date | None = None,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Compare the chosen period against another period.
 
     Defaults to the immediately-prior period of the same length

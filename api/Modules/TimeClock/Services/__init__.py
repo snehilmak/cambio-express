@@ -7,7 +7,7 @@ records the audit row. No HTTP concerns leak in here.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
@@ -367,7 +367,7 @@ def admin_update_entry(
     *,
     entry_id: int,
     store_id: int,
-    patch: dict,
+    patch: dict[str, Any],
 ) -> tuple[TimeClockEntry, str]:
     """Apply admin edits to an entry. ``patch`` is a dict keyed
     on the editable fields (``clock_in_at`` / ``clock_out_at``
