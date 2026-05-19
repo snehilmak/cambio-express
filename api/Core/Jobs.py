@@ -78,7 +78,7 @@ def _queue_enabled() -> bool:
 _queue = None
 
 
-def _get_queue():
+def _get_queue() -> Any:
     """Lazily construct + cache the RQ Queue. Raises if the queue
     is enabled but ``rq`` / ``redis`` aren't importable, since
     that's a misconfiguration."""
@@ -86,8 +86,8 @@ def _get_queue():
     if _queue is not None:
         return _queue
     try:
-        import redis  # type: ignore[import-not-found]
-        from rq import Queue  # type: ignore[import-not-found]
+        import redis
+        from rq import Queue
     except ImportError as exc:  # pragma: no cover - exercised in prod-shape
         raise RuntimeError(
             "JOB_QUEUE_ENABLED=1 but 'rq' / 'redis' packages "
@@ -95,7 +95,7 @@ def _get_queue():
             "unset JOB_QUEUE_ENABLED.",
         ) from exc
     redis_url = os.environ["REDIS_URL"]
-    conn = redis.from_url(redis_url)
+    conn = redis.from_url(redis_url)  # type: ignore[no-untyped-call]
     _queue = Queue("default", connection=conn)
     return _queue
 

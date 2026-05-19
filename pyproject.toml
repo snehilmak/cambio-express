@@ -36,9 +36,11 @@ plugins = ["pydantic.mypy"]
 # Files in the strict subset.  See "Ratcheting in" above.
 files = [
     # ── api/Core ─────────────────────────────────────────────
+    "api/Core/Boot.py",
     "api/Core/Bootstrap.py",
     "api/Core/Config/settings.py",
     "api/Core/Database/session.py",
+    "api/Core/Jobs.py",
     "api/Core/Observability/logging.py",
     "api/Core/Observability/request_id.py",
     "api/Core/Observability/sentry.py",
@@ -105,7 +107,10 @@ files = [
     "api/Modules/Billing/Services/addons_catalog.py",
     "api/Modules/Billing/Services/config.py",
     "api/Modules/Billing/Services/feature_flags.py",
+    "api/Modules/Billing/Services/health.py",
+    "api/Modules/Billing/Services/portal.py",
     "api/Modules/Billing/Services/retention.py",
+    "api/Modules/Billing/Services/store_state.py",
     "api/Modules/Billing/Services/trial.py",
     # ── api/Modules/Customers ────────────────────────────────
     "api/Modules/Customers/Models/__init__.py",
@@ -123,6 +128,7 @@ files = [
     "api/Modules/DailyBook/Services/kinds.py",
     "api/Modules/DailyBook/Services/line_items.py",
     "api/Modules/DailyBook/Services/locks.py",
+    "api/Modules/DailyBook/Services/mt_breakdown.py",
     "api/Modules/DailyBook/Services/transfers_summary.py",
     # ── api/Modules/Dashboard ────────────────────────────────
     "api/Modules/Dashboard/Services/peak_hours.py",
@@ -132,6 +138,7 @@ files = [
     "api/Modules/Monthly/Repositories/monthly.py",
     "api/Modules/Monthly/Requests/monthly.py",
     "api/Modules/Monthly/Services/monthly.py",
+    "api/Modules/Monthly/Services/write.py",
     # ── api/Modules/Notifications ────────────────────────────
     "api/Modules/Notifications/Services/broadcasts.py",
     "api/Modules/Notifications/Services/daily_summary.py",
@@ -145,6 +152,7 @@ files = [
     "api/Modules/Owners/Services/cross_store.py",
     "api/Modules/Owners/Services/dashboard.py",
     # ── api/Modules/Reports ──────────────────────────────────
+    "api/Modules/Reports/Repositories/transfers.py",
     "api/Modules/Reports/Requests/common.py",
     "api/Modules/Reports/Requests/customers.py",
     "api/Modules/Reports/Requests/employees.py",
@@ -181,6 +189,7 @@ files = [
     "api/Modules/TimeClock/Services/paystub.py",
     # ── api/Modules/TVDisplay ────────────────────────────────
     "api/Modules/TVDisplay/Services/pair_code.py",
+    "api/Modules/TVDisplay/Services/seed.py",
     # ── api/Modules/Transfers ────────────────────────────────
     "api/Modules/Transfers/Models/__init__.py",
     "api/Modules/Transfers/Repositories/transfers.py",

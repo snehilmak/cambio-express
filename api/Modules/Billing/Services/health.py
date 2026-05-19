@@ -60,7 +60,7 @@ def check_stripe_integration() -> dict[str, Any]:
     env["basic_yearly_price_id"] = bool(prices["basic_yearly"])
     env["pro_price_id"]          = bool(prices["pro"])
     env["pro_yearly_price_id"]   = bool(prices["pro_yearly"])
-    result = {
+    result: dict[str, Any] = {
         "env": env,
         "ok": False,
         "error": "",
@@ -129,7 +129,7 @@ def check_stripe_integration() -> dict[str, Any]:
                 filters={"countries": ["US"]},
             )
             result["fc_ok"] = True
-        except stripe.error.InvalidRequestError as e:
+        except stripe.error.InvalidRequestError as e:  # type: ignore[attr-defined]
             # "No such customer" / "resource_missing" is the
             # expected branch — FC is enabled, key is good, only
             # the placeholder customer was rejected. Anything

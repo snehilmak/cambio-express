@@ -311,7 +311,7 @@ def seed_logos_from_disk(session: Session, repo_root: str) -> int:
             # so non-superadmin code can resolve without a logo-table
             # lookup. Hardcoded path because the seed runs outside a
             # Flask request context.
-            parent.logo_url = f"/tv/logo/{catalog_type}/{slug}"
+            setattr(parent, "logo_url", f"/tv/logo/{catalog_type}/{slug}")
             imported += 1
     if imported:
         session.commit()
@@ -347,7 +347,7 @@ def backfill_country_codes(session: Session) -> int:
     for row in rows:
         guess = name_to_iso.get((row.country_name or "").strip().lower())
         if guess:
-            row.country_code = guess
+            setattr(row, "country_code", guess)
             fixed += 1
     if fixed:
         session.commit()

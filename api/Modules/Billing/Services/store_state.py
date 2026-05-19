@@ -40,7 +40,9 @@ def store_has_paid_plan(store: Store | None) -> bool:
     (referrals page, paid-only reports, etc.) to keep the contract
     in one place.
     """
-    return bool(store) and store.plan in _PAID_PLAN_NAMES
+    if store is None:
+        return False
+    return str(store.plan) in _PAID_PLAN_NAMES
 
 
 def data_retention_days_left(store: Store | None) -> int | None:
@@ -56,4 +58,4 @@ def data_retention_days_left(store: Store | None) -> int | None:
     if not store or not store.data_retention_until:
         return None
     delta = store.data_retention_until - datetime.utcnow()
-    return max(0, delta.days)
+    return int(max(0, delta.days))
