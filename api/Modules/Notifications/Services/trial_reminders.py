@@ -18,6 +18,7 @@ second trial (post-reactivation) gets its own fresh reminder.
 """
 import os
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -53,7 +54,7 @@ notifications page:
 """
 
 
-def stores_due_for_reminder(db: Session, now: datetime | None = None):
+def stores_due_for_reminder(db: Session, now: datetime | None = None) -> list[Any]:
     """Trial stores whose trial ends within
     `EXPIRING_SOON_THRESHOLD_DAYS` (3) days and haven't been
     reminded yet. Returns a list of `Store` rows.
@@ -76,7 +77,7 @@ def stores_due_for_reminder(db: Session, now: datetime | None = None):
     return [s for s in candidates if get_trial_status(s) == "expiring_soon"]
 
 
-def eligible_recipients(db: Session, store) -> list:
+def eligible_recipients(db: Session, store: Any) -> list[Any]:
     """Users who should get the reminder for this store: admins +
     owners with `email` set and `notify_trial_reminders=True`.
 

@@ -215,21 +215,29 @@ infrastructure that's still relevant in the FastAPI-only world.
       list of files; CI re-runs the same command (``python -m
       mypy``) on every push.  See CLAUDE.md "mypy — strict
       ratchet" for the workflow to add a file.
-      Currently in the ratchet (9 files):
-        * ``api/Core/Config/settings.py``
-        * ``api/Core/Observability/logging.py``
-        * ``api/Core/Observability/sentry.py``
-        * ``api/Core/PasswordHash.py``
-        * ``api/Core/RateLimit.py``
-        * ``api/Modules/DailyBook/Services/kinds.py``
-        * ``api/Modules/TimeClock/Services/geofence.py``
-        * ``api/Modules/TimeClock/Services/paystub.py``
-        * ``api/Modules/Transfers/Services/tax.py``
-      Remaining: most of the FastAPI tree.  Biggest blockers
-      are SQLAlchemy 1.x ``Column(...)``-style models
-      (``Mapped[T] = mapped_column(...)`` migration is a
-      separate effort) and the ``untyped-decorator`` flood from
-      FastAPI's older type stubs.
+      Currently in the ratchet: **74 files clean** across
+      ``api/Core``, ``Admin``, ``Announcements``, ``Audit``,
+      ``Auth``, ``BankSync``, ``Batches``, ``Billing``,
+      ``Customers``, ``DailyBook``, ``Dashboard``, ``Monthly``,
+      ``Notifications``, ``Reports``, ``Superadmin``,
+      ``TVDisplay``, ``Tenancy``, ``TimeClock``, ``Transfers``.
+      Mostly Repositories, Requests (Pydantic schemas), and
+      Services that don't mutate ORM rows.
+      Switched ``api/Core/Database/session.py`` to the
+      SQLAlchemy 2.0 ``class Base(DeclarativeBase)`` style —
+      eliminated the "cannot subclass Any" error on every
+      model declaration (5+ Models files immediately gained
+      proper class-level typing).
+      Remaining blockers for full strict coverage:
+        * Controllers — ``@router.<verb>(...)`` decorators trip
+          ``untyped-decorator`` on the current FastAPI stubs.
+          Pin a newer FastAPI or selectively
+          ``# type: ignore[misc]``.
+        * Services that write to ORM rows — SQLAlchemy 1.x
+          ``Column(...)`` declarations type assignments as
+          ``Column[T]`` instead of ``T``. Migrating to
+          ``Mapped[T] = mapped_column(...)`` is its own
+          multi-PR effort.
 - [x] **E6. eslint --max-warnings 0** in CI on frontend. Landed
       (PR #426).
 - [x] **E7. Generate TS types from FastAPI OpenAPI.** Landed

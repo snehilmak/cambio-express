@@ -16,6 +16,7 @@ etc.) return 0.
 """
 import os
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -54,7 +55,7 @@ def derive_broadcast_subject(message: str | None) -> str:
     return first_line[:_BROADCAST_SUBJECT_MAX] or _GENERIC_BROADCAST_SUBJECT
 
 
-def eligible_recipients(db: Session) -> list:
+def eligible_recipients(db: Session) -> list[Any]:
     """Active users who should receive announcement broadcasts.
 
     Filters:

@@ -29,6 +29,7 @@ import os
 import smtplib
 from datetime import datetime, timedelta
 from email.message import EmailMessage
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Mutable module-level state — the Overview health card reads
 # this instead of round-tripping the SMTP server. Reset between
 # test runs via `reset_last_attempt()`.
-last_attempt: dict = {
+last_attempt: dict[str, Any] = {
     "status": "unknown", "error": "", "when": None,
     "last_to_domain": "", "last_subject": "",
 }
@@ -162,7 +163,7 @@ def send_email(
         return False
 
 
-def health_check(db: Session) -> dict:
+def health_check(db: Session) -> dict[str, Any]:
     """Return a dict describing email-delivery state.
 
     Matches the shape of `stripe_health_check` so the template

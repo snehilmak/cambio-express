@@ -212,11 +212,18 @@ class User(Base):
         # scan the table without this index.
         Index("ix_user_username", "username"),
     )
-    def set_password(self, pw):
-        self.password_hash = generate_password_hash(pw)
+    def set_password(self, pw: str) -> None:
+        # ``password_hash`` is declared via SQLAlchemy 1.x
+        # ``Column[str]``; the instrumented attribute accepts a
+        # bare string at runtime but mypy reads the class-level
+        # declaration. setattr keeps the assignment typed.
+        setattr(self, "password_hash", generate_password_hash(pw))
 
-    def check_password(self, pw):
-        return check_password_hash(self.password_hash, pw)
+    def check_password(self, pw: str) -> bool:
+        # SQLAlchemy 1.x-style ``Column[str]`` reads as ``Column[str]``
+        # instead of ``str``, even though the runtime value is a
+        # bare string. Cast at the boundary to keep callers typed.
+        return check_password_hash(str(self.password_hash), pw)
 
 
 class StoreEmployee(Base):
