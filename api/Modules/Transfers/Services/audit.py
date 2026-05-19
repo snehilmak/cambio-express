@@ -50,7 +50,7 @@ TRANSFER_AUDIT_FIELDS: list[tuple[str, str]] = [
 ]
 
 
-def transfer_snapshot(transfer) -> dict[str, Any]:
+def transfer_snapshot(transfer: Any) -> dict[str, Any]:
     """Capture the audited subset of `transfer` as a dict.
 
     The shape matches `TRANSFER_AUDIT_FIELDS` so a `summarize_
@@ -93,8 +93,8 @@ def summarize_changes(
 
 def record_audit(
     db: Session,
-    transfer,
-    user,
+    transfer: Any,
+    user: Any,
     action: str,
     employee_id: int | None,
     employee_name: str,

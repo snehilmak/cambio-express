@@ -141,7 +141,7 @@ def compute_daily_totals(
     )
 
 
-def eligible_recipients(db: Session, store) -> list[Any]:
+def eligible_recipients(db: Session, store: Any) -> list[Any]:
     """Admins + linked owners with email set + the daily-summary
     toggle on + no recent hard bounce.
 
@@ -227,7 +227,8 @@ def run(
         on_date = date.today() - timedelta(days=1)
     base_url = (
         base_url
-        or os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+        or os.environ.get("APP_BASE_URL")
+        or "https://dinerobook.com"
     ).rstrip("/")
 
     sent_total = 0

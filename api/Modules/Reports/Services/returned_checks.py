@@ -41,13 +41,13 @@ def returned_check_status(
           )
           .all()
     )
-    buckets: dict[str, dict] = {
+    buckets: dict[str, dict[str, Any]] = {
         s: {"count": 0, "amount": 0.0, "recovered": 0.0}
         for s in RETURN_CHECK_STATUSES
     }
     for rc in rows_q:
         b = buckets.setdefault(
-            rc.status,
+            str(rc.status),
             {"count": 0, "amount": 0.0, "recovered": 0.0},
         )
         b["count"]  += 1

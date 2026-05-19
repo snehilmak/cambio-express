@@ -51,8 +51,8 @@ def active_roster(db: Session, store_id: int) -> list[Any]:
 
 
 def pick_employee(
-    db: Session, store_id: int, raw_id,
-) -> tuple:
+    db: Session, store_id: int, raw_id: Any,
+) -> tuple[Any, str]:
     """Resolve a form `employee_id` value against the store's
     roster.
 
@@ -75,4 +75,4 @@ def pick_employee(
           .filter_by(id=eid, store_id=store_id)
           .first()
     )
-    return (emp, emp.name) if emp else (None, "")
+    return (emp, str(emp.name)) if emp else (None, "")

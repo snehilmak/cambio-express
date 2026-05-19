@@ -16,7 +16,7 @@ from typing import Any
 
 def _by_report_date(
     db: Session,
-    model,
+    model: Any,
     store_ids: list[int],
     d_from: date,
     d_to: date,

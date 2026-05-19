@@ -73,9 +73,11 @@ files = [
     "api/Modules/Auth/Services/principal.py",
     "api/Modules/Auth/Services/refresh.py",
     "api/Modules/Auth/Services/signup.py",
+    "api/Modules/Auth/Services/totp.py",
     # ── api/Modules/BankSync ─────────────────────────────────
     "api/Modules/BankSync/Repositories/accounts.py",
     "api/Modules/BankSync/Repositories/rules.py",
+    "api/Modules/BankSync/Repositories/transactions.py",
     "api/Modules/BankSync/Requests/accounts.py",
     "api/Modules/BankSync/Requests/rules.py",
     "api/Modules/BankSync/Requests/transactions.py",
@@ -85,6 +87,7 @@ files = [
     "api/Modules/BankSync/Services/rules.py",
     "api/Modules/BankSync/Services/transactions.py",
     # ── api/Modules/Batches ──────────────────────────────────
+    "api/Modules/Batches/Repositories/batches.py",
     "api/Modules/Batches/Requests/batches.py",
     # ── api/Modules/Billing ──────────────────────────────────
     "api/Modules/Billing/Controllers/__init__.py",
@@ -96,6 +99,7 @@ files = [
     "api/Modules/Billing/Services/trial.py",
     # ── api/Modules/Customers ────────────────────────────────
     "api/Modules/Customers/Models/__init__.py",
+    "api/Modules/Customers/Repositories/customers.py",
     "api/Modules/Customers/Requests/customers.py",
     "api/Modules/Customers/Requests/merge.py",
     "api/Modules/Customers/Requests/recent_recipients.py",
@@ -119,6 +123,7 @@ files = [
     "api/Modules/Monthly/Services/monthly.py",
     # ── api/Modules/Notifications ────────────────────────────
     "api/Modules/Notifications/Services/broadcasts.py",
+    "api/Modules/Notifications/Services/daily_summary.py",
     "api/Modules/Notifications/Services/push.py",
     "api/Modules/Notifications/Services/smtp.py",
     "api/Modules/Notifications/Services/templates.py",
@@ -126,6 +131,7 @@ files = [
     # ── api/Modules/Owners ───────────────────────────────────
     "api/Modules/Owners/Services/bulk_users.py",
     "api/Modules/Owners/Services/cross_store.py",
+    "api/Modules/Owners/Services/dashboard.py",
     # ── api/Modules/Reports ──────────────────────────────────
     "api/Modules/Reports/Requests/common.py",
     "api/Modules/Reports/Requests/customers.py",
@@ -133,14 +139,20 @@ files = [
     "api/Modules/Reports/Requests/sales.py",
     "api/Modules/Reports/Services/ach_volume.py",
     "api/Modules/Reports/Services/bank_charges.py",
+    "api/Modules/Reports/Services/bank_rule_audit.py",
     "api/Modules/Reports/Services/bank_txn_breakdown.py",
+    "api/Modules/Reports/Services/cancelled_transfers.py",
     "api/Modules/Reports/Services/categories.py",
     "api/Modules/Reports/Services/customer_segments.py",
+    "api/Modules/Reports/Services/customers.py",
+    "api/Modules/Reports/Services/daily_aggregates.py",
     "api/Modules/Reports/Services/date_helpers.py",
     "api/Modules/Reports/Services/employee_activity.py",
+    "api/Modules/Reports/Services/employees.py",
     "api/Modules/Reports/Services/fees_vs_tax.py",
     "api/Modules/Reports/Services/period_comparison.py",
     "api/Modules/Reports/Services/period_pl.py",
+    "api/Modules/Reports/Services/returned_checks.py",
     # ── api/Modules/Superadmin ───────────────────────────────
     "api/Modules/Superadmin/Requests/discounts.py",
     "api/Modules/Superadmin/Requests/stores.py",
@@ -155,6 +167,8 @@ files = [
     "api/Modules/Transfers/Models/__init__.py",
     "api/Modules/Transfers/Requests/receipt.py",
     "api/Modules/Transfers/Requests/transfers.py",
+    "api/Modules/Transfers/Services/audit.py",
     "api/Modules/Transfers/Services/companies.py",
+    "api/Modules/Transfers/Services/form_inputs.py",
     "api/Modules/Transfers/Services/tax.py",
 ]

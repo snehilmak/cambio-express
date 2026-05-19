@@ -75,7 +75,7 @@ def bank_rule_audit(
             match  = ""
         else:
             label  = f"Rule #{rule.id}"
-            target = bank_category_label(rule.target_kind or "")
+            target = bank_category_label(str(rule.target_kind or ""))
             match  = (
                 f'{rule.desc_match_type or "any"}: '
                 f'"{rule.desc_match_value or ""}"'

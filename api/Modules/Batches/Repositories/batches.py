@@ -4,6 +4,8 @@ Read-side queries the SPA's /app/batches page consumes via the
 controller. We pre-compute the per-batch transfers_total + count
 in two bulk queries so we don't N+1 across rows.
 """
+from typing import Any
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -12,7 +14,7 @@ from api.Modules.Batches.Models import ACHBatch, Transfer
 
 # Sortable columns the controller exposes. Slugs match the
 # legacy /batches route's `sort` query string for cutover parity.
-SORT_COLUMNS = {
+SORT_COLUMNS: dict[str, Any] = {
     "ach_date":   ACHBatch.ach_date,
     "company":    ACHBatch.company,
     "batch_ref":  ACHBatch.batch_ref,

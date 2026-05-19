@@ -61,7 +61,9 @@ def cancelled_transfers(
     ]
     totals = {
         "count":    len(rows),
-        "amount":   sum(r["amount"] for r in rows),
+        # Inner expression returns ``Any`` (heterogeneous dict),
+        # mypy can't see it's a number — cast at the boundary.
+        "amount":   sum(float(r["amount"]) for r in rows),
         "canceled": sum(1 for r in rows if r["status"] == "Canceled"),
         "rejected": sum(1 for r in rows if r["status"] == "Rejected"),
     }
