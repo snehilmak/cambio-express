@@ -73,11 +73,18 @@ export function SlimSidebar({
       className={`app-sidebar${drawerOpen ? " is-open" : ""}`}
       aria-label="Primary navigation"
     >
-      {/* Slim icon column — desktop only (CSS hides on mobile). */}
+      {/* Slim icon column — desktop only (CSS hides on mobile).
+          Brand is a single ``$`` tile; the wordmark would overflow
+          the 4.75rem column and the tile is recognizable on its
+          own.  See ``DrawerBrand`` below for the mobile drawer
+          where there's room for the full wordmark. */}
       <div className={styles.iconCol}>
-        <div className={styles.brand}>
+        <div
+          className={styles.brand}
+          title={brandName}
+          aria-label={brandName}
+        >
           <span className={styles.brandMark}>$</span>
-          <span className={styles.brandName}>{brandName.toUpperCase()}</span>
         </div>
         {groups.map((group) => {
           const isActive = openGroup === group.title

@@ -38,27 +38,30 @@
 
 .brand {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.4rem 0;
-  margin-bottom: 0.25rem;
+  justify-content: center;
+  padding: 0.25rem 0 0.55rem;
+  margin-bottom: 0.4rem;
+  border-bottom: 1px solid var(--db-border, #262626);
 }
 
 .brandMark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.55rem;
   background: var(--db-brand, #3fff00);
   color: var(--db-brand-ink, #001a0f);
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
   font-weight: 700;
-  font-size: 1.05rem;
+  font-size: 1.2rem;
 }
 
+/* Mobile drawer wordmark — full name fits when the column is
+   no longer 4.75rem wide.  Falls back to the muted-uppercase
+   treatment used elsewhere in the chrome. */
 .brandName {
   font-size: 0.6rem;
   font-weight: 600;
