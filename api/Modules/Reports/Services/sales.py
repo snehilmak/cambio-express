@@ -13,6 +13,7 @@ straight to `Repositories.transfers.aggregate` — services exist
 specifically because the rename + sort is presentation-layer logic
 that doesn't belong in the repository.
 """
+from datetime import date
 from typing import Any, Iterable
 
 from sqlalchemy.orm import Session
@@ -22,7 +23,7 @@ from api.Modules.Reports.Repositories.transfers import aggregate
 
 
 def sales_by_company(
-    db: Session, store_ids: Iterable[int], d_from, d_to,
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group active transfers by `Transfer.company`.
 
@@ -39,7 +40,7 @@ def sales_by_company(
 
 
 def sales_by_service(
-    db: Session, store_ids: Iterable[int], d_from, d_to,
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.service_type` (Money Transfer / Bill
     Payment / Top Up / Recharge)."""
@@ -51,7 +52,7 @@ def sales_by_service(
 
 
 def by_destination_country(
-    db: Session, store_ids: Iterable[int], d_from, d_to,
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.country`. Rows with empty country are
     bucketed as `"(no country)"`."""
@@ -63,7 +64,7 @@ def by_destination_country(
 
 
 def top_recipients(
-    db: Session, store_ids: Iterable[int], d_from, d_to, *, limit: int = 50,
+    db: Session, store_ids: Iterable[int], d_from: date, d_to: date, *, limit: int = 50,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Group by `Transfer.recipient_name` string.
 

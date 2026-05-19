@@ -24,7 +24,7 @@ leading underscores so call sites in the passkey routes don't
 move during the migration window.
 """
 import os
-from typing import Iterable, Sequence
+from typing import Any, Iterable, Sequence
 
 from sqlalchemy.orm import Session
 
@@ -71,7 +71,7 @@ def origin(scheme: str, host: str) -> str:
 
 
 def exclude_credentials(
-    db: Session, user,
+    db: Session, user: Any,
 ) -> list[PublicKeyCredentialDescriptor]:
     """Existing credential descriptors for `user`, sized for the
     browser's `excludeCredentials` parameter so the same physical
@@ -84,12 +84,12 @@ def exclude_credentials(
           .all()
     )
     return [
-        PublicKeyCredentialDescriptor(id=p.credential_id)
+        PublicKeyCredentialDescriptor(id=bytes(p.credential_id))
         for p in rows
     ]
 
 
-def is_eligible(user) -> bool:
+def is_eligible(user: Any) -> bool:
     """Whether `user` may enroll a passkey.
 
     Today: any logged-in user. Kept as a single predicate so

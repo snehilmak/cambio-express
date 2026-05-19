@@ -60,10 +60,10 @@ class _EngineProxy:
     """Tiny proxy so `engine` looks like a module-level value but
     defers resolution until first attribute access."""
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         return getattr(_get_engine(), name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(_get_engine())
 
 
@@ -71,7 +71,7 @@ engine = _EngineProxy()
 
 
 # Session factory — each call to SessionLocal() yields a fresh session.
-_session_factory: sessionmaker | None = None
+_session_factory: sessionmaker[Session] | None = None
 
 
 def SessionLocal() -> Session:

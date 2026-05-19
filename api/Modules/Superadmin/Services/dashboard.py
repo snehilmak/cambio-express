@@ -236,8 +236,8 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
          "total": float(tot or 0)}
         for co, cnt, tot in volume_rows
     ]
-    total_volume_30d = sum(v["total"] for v in volume_by_company)
-    total_transfers_30d = sum(v["count"] for v in volume_by_company)
+    total_volume_30d = sum(float(v["total"]) for v in volume_by_company)
+    total_transfers_30d = sum(int(v["count"]) for v in volume_by_company)
 
     # Merged activity feed — signups + cancels, newest first,
     # capped at 12 so the card stays scannable.
@@ -251,7 +251,7 @@ def superadmin_dashboard_context(db: Session) -> dict[str, Any]:
           .limit(10)
           .all()
     )
-    activity: list[dict] = []
+    activity: list[dict[str, Any]] = []
     for s in recent_signups:
         activity.append({
             "when": s.created_at,

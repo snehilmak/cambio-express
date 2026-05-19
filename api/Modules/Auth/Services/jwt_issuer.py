@@ -94,7 +94,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
     tokens. A pending token slipped into an Authorization header
     must NOT authorise an authenticated request.
     """
-    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    claims: dict[str, Any] = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
     if claims.get("purpose"):
         raise jwt.InvalidTokenError(
             "Token has a purpose claim and cannot authorise access",
@@ -136,7 +136,7 @@ def decode_pending_2fa_token(token: str) -> dict[str, Any]:
     """Verify + decode a 2FA-pending token. Raises
     `jwt.InvalidTokenError` if the token is invalid, expired, or
     isn't a pending token (wrong / missing purpose claim)."""
-    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    claims: dict[str, Any] = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
     if claims.get("purpose") != "totp-pending":
         raise jwt.InvalidTokenError("Not a 2FA-pending token")
     return claims
@@ -175,7 +175,7 @@ def decode_passkey_register_token(token: str) -> dict[str, Any]:
     tokens. The challenge sits in `claims["challenge"]` as
     base64url; the caller decodes it back to bytes via
     `webauthn.helpers.base64url_to_bytes`."""
-    claims = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
+    claims: dict[str, Any] = jwt.decode(token, _secret(), algorithms=[JWT_ALGORITHM])
     if claims.get("purpose") != "passkey-register":
         raise jwt.InvalidTokenError("Not a passkey-register token")
     return claims

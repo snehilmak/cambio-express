@@ -67,22 +67,22 @@ class MonthlyFinancial(Base):
     __table_args__ = (UniqueConstraint("store_id", "year", "month"),)
 
     @property
-    def total_revenue(self):
-        return sum([
+    def total_revenue(self) -> float:
+        return float(sum([
             self.taxable_sales, self.non_taxable, self.bill_payment_charge,
             self.phone_recargas, self.boost_mobile, self.check_cashing_fees,
             self.return_check_hold_fees, self.rebates_commissions,
             self.mt_commission_in_bank, self.other_income_1,
             self.other_income_2, self.other_income_3,
-        ])
+        ]))
 
     @property
-    def total_purchases(self):
-        return self.cash_purchases + self.check_purchases
+    def total_purchases(self) -> float:
+        return float(self.cash_purchases + self.check_purchases)
 
     @property
-    def total_expenses(self):
-        return sum([
+    def total_expenses(self) -> float:
+        return float(sum([
             self.cash_expenses, self.check_expenses, self.cash_payroll,
             self.bank_charges_210, self.bank_charges_230,
             self.credit_card_fees, self.money_order_rent,
@@ -90,12 +90,12 @@ class MonthlyFinancial(Base):
             self.texas_workforce, self.other_taxes, self.accounting_charges,
             self.return_check_gl, self.other_expense_1, self.other_expense_2,
             self.other_expense_3, self.other_expense_4, self.other_expense_5,
-        ])
+        ]))
 
     @property
-    def net_income(self):
-        return (self.total_revenue - self.total_purchases
-                - self.total_expenses + self.over_short)
+    def net_income(self) -> float:
+        return float(self.total_revenue - self.total_purchases
+                     - self.total_expenses + self.over_short)
 
 
 __all__ = ["MonthlyFinancial"]

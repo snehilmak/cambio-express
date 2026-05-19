@@ -11,7 +11,7 @@ smoke.
 """
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Iterable, Literal
+from typing import Any, Iterable, Literal
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -23,7 +23,7 @@ from api.Modules.Transfers.Models import Transfer
 # match the existing `?sort=` query strings (and the column-header
 # links in `_transfers_table.html`) — don't rename without updating
 # the template too.
-SORT_COLUMNS = {
+SORT_COLUMNS: dict[str, Any] = {
     "date":      Transfer.send_date,
     "sender":    Transfer.sender_name,
     "company":   Transfer.company,
@@ -57,7 +57,7 @@ class TransferFilters:
     sort_dir: Literal["asc", "desc"] = "desc"
 
     @classmethod
-    def from_query(cls, args) -> "TransferFilters":
+    def from_query(cls, args: Any) -> "TransferFilters":
         """Build a `TransferFilters` from a Flask `request.args` (or a
         Werkzeug MultiDict, or a plain dict). Tolerates malformed
         date strings — bad input drops the filter rather than raising,
@@ -69,9 +69,10 @@ class TransferFilters:
                 return datetime.strptime(s, "%Y-%m-%d").date()
             except ValueError:
                 return None
-        sort_dir = (args.get("dir") or "desc").strip().lower()
-        if sort_dir not in ("asc", "desc"):
-            sort_dir = "desc"
+        sort_dir_raw = (args.get("dir") or "desc").strip().lower()
+        sort_dir: Literal["asc", "desc"] = (
+            "asc" if sort_dir_raw == "asc" else "desc"
+        )
         return cls(
             company=args.get("company", ""),
             status=args.get("status", ""),

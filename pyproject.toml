@@ -38,6 +38,7 @@ files = [
     # ── api/Core ─────────────────────────────────────────────
     "api/Core/Bootstrap.py",
     "api/Core/Config/settings.py",
+    "api/Core/Database/session.py",
     "api/Core/Observability/logging.py",
     "api/Core/Observability/request_id.py",
     "api/Core/Observability/sentry.py",
@@ -57,6 +58,8 @@ files = [
     "api/Modules/Admin/Services/store_hours.py",
     "api/Modules/Admin/Services/store_info.py",
     "api/Modules/Admin/Services/tax_export.py",
+    "api/Modules/Admin/Services/team.py",
+    "api/Modules/Admin/Services/users.py",
     # ── api/Modules/Announcements ────────────────────────────
     "api/Modules/Announcements/Services/visibility.py",
     # ── api/Modules/Audit ────────────────────────────────────
@@ -68,6 +71,9 @@ files = [
     "api/Modules/Auth/Requests/notifications.py",
     "api/Modules/Auth/Requests/profile.py",
     "api/Modules/Auth/Requests/sessions.py",
+    "api/Modules/Auth/Services/jwt_issuer.py",
+    "api/Modules/Auth/Services/notifications.py",
+    "api/Modules/Auth/Services/passkey.py",
     "api/Modules/Auth/Services/password_change.py",
     "api/Modules/Auth/Services/password_reset.py",
     "api/Modules/Auth/Services/principal.py",
@@ -75,6 +81,7 @@ files = [
     "api/Modules/Auth/Services/signup.py",
     "api/Modules/Auth/Services/totp.py",
     # ── api/Modules/BankSync ─────────────────────────────────
+    "api/Modules/BankSync/Models/__init__.py",
     "api/Modules/BankSync/Repositories/accounts.py",
     "api/Modules/BankSync/Repositories/rules.py",
     "api/Modules/BankSync/Repositories/transactions.py",
@@ -84,9 +91,12 @@ files = [
     "api/Modules/BankSync/Services/applier.py",
     "api/Modules/BankSync/Services/builtin_rules.py",
     "api/Modules/BankSync/Services/categories.py",
+    "api/Modules/BankSync/Services/charges.py",
+    "api/Modules/BankSync/Services/matcher.py",
     "api/Modules/BankSync/Services/rules.py",
     "api/Modules/BankSync/Services/transactions.py",
     # ── api/Modules/Batches ──────────────────────────────────
+    "api/Modules/Batches/Models/__init__.py",
     "api/Modules/Batches/Repositories/batches.py",
     "api/Modules/Batches/Requests/batches.py",
     # ── api/Modules/Billing ──────────────────────────────────
@@ -118,12 +128,14 @@ files = [
     "api/Modules/Dashboard/Services/peak_hours.py",
     # ── api/Modules/Monthly ──────────────────────────────────
     "api/Modules/Monthly/Controllers/__init__.py",
+    "api/Modules/Monthly/Models/__init__.py",
     "api/Modules/Monthly/Repositories/monthly.py",
     "api/Modules/Monthly/Requests/monthly.py",
     "api/Modules/Monthly/Services/monthly.py",
     # ── api/Modules/Notifications ────────────────────────────
     "api/Modules/Notifications/Services/broadcasts.py",
     "api/Modules/Notifications/Services/daily_summary.py",
+    "api/Modules/Notifications/Services/locked_day_digest.py",
     "api/Modules/Notifications/Services/push.py",
     "api/Modules/Notifications/Services/smtp.py",
     "api/Modules/Notifications/Services/templates.py",
@@ -150,21 +162,28 @@ files = [
     "api/Modules/Reports/Services/employee_activity.py",
     "api/Modules/Reports/Services/employees.py",
     "api/Modules/Reports/Services/fees_vs_tax.py",
+    "api/Modules/Reports/Services/high_value_transfers.py",
     "api/Modules/Reports/Services/period_comparison.py",
     "api/Modules/Reports/Services/period_pl.py",
     "api/Modules/Reports/Services/returned_checks.py",
+    "api/Modules/Reports/Services/sales.py",
+    # ── api/Modules/ReturnChecks ─────────────────────────────
+    "api/Modules/ReturnChecks/Models/__init__.py",
     # ── api/Modules/Superadmin ───────────────────────────────
     "api/Modules/Superadmin/Requests/discounts.py",
     "api/Modules/Superadmin/Requests/stores.py",
+    "api/Modules/Superadmin/Services/dashboard.py",
     # ── api/Modules/Tenancy ──────────────────────────────────
     "api/Modules/Tenancy/Models/__init__.py",
     # ── api/Modules/TimeClock ────────────────────────────────
     "api/Modules/TimeClock/Services/geofence.py",
+    "api/Modules/TimeClock/Services/passkey.py",
     "api/Modules/TimeClock/Services/paystub.py",
     # ── api/Modules/TVDisplay ────────────────────────────────
     "api/Modules/TVDisplay/Services/pair_code.py",
     # ── api/Modules/Transfers ────────────────────────────────
     "api/Modules/Transfers/Models/__init__.py",
+    "api/Modules/Transfers/Repositories/transfers.py",
     "api/Modules/Transfers/Requests/receipt.py",
     "api/Modules/Transfers/Requests/transfers.py",
     "api/Modules/Transfers/Services/audit.py",

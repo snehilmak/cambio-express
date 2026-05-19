@@ -16,6 +16,7 @@ FastAPI controllers).
 """
 from calendar import monthrange
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import or_, func
 from sqlalchemy.orm import Session
@@ -72,7 +73,7 @@ def bank_charges_for_month(
 
 def bank_charges_breakdown_for_month(
     db: Session, store_id: int, year: int, month: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Two-level breakdown feeding the expandable Bank Charges
     block on the monthly P&L.
 
@@ -135,9 +136,9 @@ def bank_charges_breakdown_for_month(
     # — operators want each variant visible (e.g. "REMOTE DEPOSIT
     # FEE 04/29" and "REMOTE DEPOSIT FEE 05/02" group separately
     # if the bank includes the date in the string).
-    groups: dict[str, dict] = {}
+    groups: dict[str, dict[str, Any]] = {}
     for r in rows:
-        key = r.description or "(no description)"
+        key = str(r.description or "(no description)")
         g = groups.setdefault(key, {
             "description": key,
             "total": 0.0,

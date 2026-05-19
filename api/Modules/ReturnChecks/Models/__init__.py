@@ -105,20 +105,20 @@ class ReturnCheck(Base):
     )
 
     @property
-    def recovered_total(self):
+    def recovered_total(self) -> float:
         """Sum of all installment payments. Source of truth for
         'how much have we got back so far'."""
         return float(sum((p.amount or 0.0) for p in (self.payments or [])))
 
     @property
-    def remaining(self):
+    def remaining(self) -> float:
         """Outstanding balance. When ``status='loss'`` / ``'fraud'``
         the write-off equals this value. Never goes negative because
         the payment endpoint caps each installment at remaining."""
         return max(0.0, float(self.amount or 0.0) - self.recovered_total)
 
     @property
-    def days_outstanding(self):
+    def days_outstanding(self) -> int:
         """Calendar days since the check bounced. Used for aging
         buckets on the list and owner dashboard. Closed rows freeze
         at the days-to-close so the value is meaningful for fraud /
@@ -126,7 +126,7 @@ class ReturnCheck(Base):
         end = self.status_changed_on if self.status != "pending" else date.today()
         if not self.bounced_on or not end:
             return 0
-        return (end - self.bounced_on).days
+        return int((end - self.bounced_on).days)
 
 
 class ReturnCheckPayment(Base):

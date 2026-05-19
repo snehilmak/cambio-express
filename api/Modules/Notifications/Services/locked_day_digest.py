@@ -72,7 +72,7 @@ admin of {store_name}. Turn it off on your notifications page:
 """
 
 
-def eligible_recipients(db: Session, store) -> list[Any]:
+def eligible_recipients(db: Session, store: Any) -> list[Any]:
     """Users who should get the digest for this store: admins +
     linked owners (via StoreOwnerLink) with `email` set and
     `notify_locked_day_digest=True`.
@@ -105,7 +105,7 @@ def eligible_recipients(db: Session, store) -> list[Any]:
     return list({u.id: u for u in candidates}.values())
 
 
-def run(session: Session, report, base_url: str | None = None) -> int:
+def run(session: Session, report: Any, base_url: str | None = None) -> int:
     """Mail the daily-book close-out summary to every eligible
     recipient (admins + linked owners with the toggle on). Returns
     the count of emails actually sent.
@@ -126,7 +126,8 @@ def run(session: Session, report, base_url: str | None = None) -> int:
         return 0
     base_url = (
         base_url
-        or os.environ.get("APP_BASE_URL", "https://dinerobook.com")
+        or os.environ.get("APP_BASE_URL")
+        or "https://dinerobook.com"
     ).rstrip("/")
     date_iso = report.report_date.isoformat() if report.report_date else ""
     date_human = (

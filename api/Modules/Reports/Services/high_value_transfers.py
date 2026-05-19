@@ -62,8 +62,8 @@ def high_value_transfers(
     ]
     totals = {
         "count":  len(rows),
-        "amount": sum(r["amount"] for r in rows),
-        "fees":   sum(r["fee"]    for r in rows),
-        "tax":    sum(r["tax"]    for r in rows),
+        "amount": sum(float(r["amount"]) for r in rows),
+        "fees":   sum(float(r["fee"])    for r in rows),
+        "tax":    sum(float(r["tax"])    for r in rows),
     }
     return rows, totals

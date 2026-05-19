@@ -105,7 +105,7 @@ def update_store_user(
     flipping is_active=False raises SelfDemotionError so a
     single-admin store can't lock itself out via the Edit form."""
     if full_name is not None:
-        user.full_name = (full_name or "").strip()[:120]
+        setattr(user, "full_name", (full_name or "").strip()[:120])
 
     if role is not None:
         role_clean = (role or "").strip()
@@ -120,7 +120,7 @@ def update_store_user(
                 "You cannot change your own role. "
                 "Ask another admin to do it.",
             )
-        user.role = role_clean
+        setattr(user, "role", role_clean)
 
     if is_active is not None:
         new_active = bool(is_active)
@@ -133,7 +133,7 @@ def update_store_user(
                 "You cannot deactivate your own account. "
                 "Ask another admin to do it.",
             )
-        user.is_active = new_active
+        setattr(user, "is_active", new_active)
 
     if password is not None and password != "":
         user.set_password(password)
