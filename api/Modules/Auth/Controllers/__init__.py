@@ -35,6 +35,9 @@ from api.Modules.Auth.Requests import (
     OwnerSignupResponse,
     ProfileResponse,
     ProfileUpdateRequest,
+    PushStatusResponse,
+    PushSubscribeRequest,
+    PushUnsubscribeRequest,
     RecoveryLoginRequest,
     ReferralPreviewResponse,
     ResetPasswordRequest,
@@ -742,6 +745,91 @@ def update_notifications_route(
     )
     db.commit()
     return NotificationsResponse(**get_notifications_payload(db, user))
+
+
+# ── Push subscriptions ─────────────────────────────────────
+
+
+@router.get("/push/status", response_model=PushStatusResponse)
+def get_push_status_route(
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PushStatusResponse:
+    """Whether the push channel is server-enabled (VAPID keys set)
+    plus the current user's subscription count across devices.
+    Powers the "Enable browser notifications" section on
+    ``/app/account/notifications``."""
+    user = db.get(User, int(claims["sub"]))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    from api.Modules.Auth.Services import push_status_payload
+    return PushStatusResponse(**push_status_payload(db, user))
+
+
+@router.post(
+    "/push/subscribe",
+    response_model=PushStatusResponse,
+    status_code=201,
+)
+def push_subscribe_route(
+    body: PushSubscribeRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PushStatusResponse:
+    """Register a Web Push subscription for the current user.
+    Idempotent on ``(user_id, endpoint)`` — re-subscribing on the
+    same device updates the crypto material in place.
+
+    409 when push isn't server-enabled (VAPID keys missing) so the
+    SPA can surface "ask your admin to configure push" instead of
+    silently storing an unusable row.
+    """
+    from api.Modules.Auth.Services import (
+        push_status_payload,
+        upsert_push_subscription,
+    )
+    from api.Modules.Notifications.Services.push import is_enabled
+    if not is_enabled():
+        raise HTTPException(
+            status_code=409,
+            detail="Push notifications are not enabled on this server.",
+        )
+    user = db.get(User, int(claims["sub"]))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    upsert_push_subscription(
+        db, user,
+        endpoint=body.endpoint,
+        p256dh=body.p256dh,
+        auth=body.auth,
+        user_agent=body.user_agent,
+    )
+    db.commit()
+    return PushStatusResponse(**push_status_payload(db, user))
+
+
+@router.delete(
+    "/push/subscribe",
+    response_model=PushStatusResponse,
+)
+def push_unsubscribe_route(
+    body: PushUnsubscribeRequest,
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> PushStatusResponse:
+    """Drop the current user's subscription matching the supplied
+    endpoint.  Idempotent — a second DELETE returns the same
+    status payload without 4xx'ing."""
+    from api.Modules.Auth.Services import (
+        delete_push_subscription,
+        push_status_payload,
+    )
+    user = db.get(User, int(claims["sub"]))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    delete_push_subscription(db, user, endpoint=body.endpoint)
+    db.commit()
+    return PushStatusResponse(**push_status_payload(db, user))
 
 
 @router.get("/activity", response_model=MyActivityResponse)

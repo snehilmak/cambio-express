@@ -133,8 +133,29 @@ def run(
             base_url=base_url,
         )
         send_email(session, u.email, subject, plain_body, html)
+        # Fan out a Web Push notification too — best-effort, doesn't
+        # block the email send if VAPID isn't configured (the helper
+        # short-circuits returning 0) or pywebpush isn't installed.
+        # ``push.send_push`` cleans up dead subscriptions itself so
+        # we don't accumulate stale rows.
+        try:
+            from api.Modules.Notifications.Services.push import send_push
+            send_push(
+                session,
+                user_id=int(u.id),
+                title=subject,
+                body=ann.message[:200],
+                url="/app/dashboard",
+                tag=f"announcement:{ann.id}",
+            )
+        except Exception as exc:  # pragma: no cover — push is best-effort
+            # Never let a push failure 5xx the broadcast job.
+            import logging
+            logging.getLogger(__name__).warning(
+                "announcement push failed for user %s: %s", u.id, exc,
+            )
         sent += 1
-    ann.broadcast_sent_at = now
+    setattr(ann, "broadcast_sent_at", now)
     session.commit()
     return sent
 

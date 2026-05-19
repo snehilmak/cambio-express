@@ -1096,6 +1096,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/push/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Push Status Route
+         * @description Whether the push channel is server-enabled (VAPID keys set)
+         *     plus the current user's subscription count across devices.
+         *     Powers the "Enable browser notifications" section on
+         *     ``/app/account/notifications``.
+         */
+        get: operations["get_push_status_route_auth_push_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/push/subscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Subscribe Route
+         * @description Register a Web Push subscription for the current user.
+         *     Idempotent on ``(user_id, endpoint)`` — re-subscribing on the
+         *     same device updates the crypto material in place.
+         *
+         *     409 when push isn't server-enabled (VAPID keys missing) so the
+         *     SPA can surface "ask your admin to configure push" instead of
+         *     silently storing an unusable row.
+         */
+        post: operations["push_subscribe_route_auth_push_subscribe_post"];
+        /**
+         * Push Unsubscribe Route
+         * @description Drop the current user's subscription matching the supplied
+         *     endpoint.  Idempotent — a second DELETE returns the same
+         *     status payload without 4xx'ing.
+         */
+        delete: operations["push_unsubscribe_route_auth_push_subscribe_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/referral/{code}": {
         parameters: {
             query?: never;
@@ -6450,6 +6505,76 @@ export interface components {
             options_json: string;
         };
         /**
+         * PushStatusResponse
+         * @description Status of the push channel for the current user.
+         *
+         *     * ``enabled`` — VAPID keys are configured server-side, so the
+         *       backend can actually deliver pushes (False when the operator
+         *       hasn't set ``VAPID_PUBLIC_KEY`` / ``VAPID_PRIVATE_KEY`` env
+         *       vars; the UI hides the section).
+         *     * ``public_key`` — VAPID public key the browser passes to
+         *       ``PushManager.subscribe({applicationServerKey: ...})``.  Empty
+         *       when ``enabled`` is False.
+         *     * ``subscribed`` — whether at least one ``PushSubscription``
+         *       row exists for this user across all devices.  The SPA only
+         *       tracks "subscribed on THIS browser" client-side via
+         *       ``localStorage`` — this flag is the cross-device server view
+         *       used for the UI badge ("subscribed on N devices").
+         *     * ``device_count`` — how many distinct subscriptions this user
+         *       has on file.
+         */
+        PushStatusResponse: {
+            /** Device Count */
+            device_count: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Public Key */
+            public_key: string;
+            /** Subscribed */
+            subscribed: boolean;
+        };
+        /**
+         * PushSubscribeRequest
+         * @description Body for ``POST /api/v2/push/subscribe`` — the envelope the
+         *     browser returns from ``PushManager.subscribe()`` flattened into
+         *     its three relevant fields.
+         *
+         *     * ``endpoint`` — push provider URL the server delivers to.
+         *       Cap at 2KB; FCM endpoints are ~200 chars but the spec doesn't
+         *       pin an upper bound.
+         *     * ``p256dh`` — base64-URL public key the browser generated for
+         *       the subscription.  Used to encrypt the payload.
+         *     * ``auth``  — base64-URL auth secret, also from the browser.
+         *     * ``user_agent`` — optional UA string for the "manage devices"
+         *       UI follow-up (currently unused but cheap to capture).
+         */
+        PushSubscribeRequest: {
+            /** Auth */
+            auth: string;
+            /** Endpoint */
+            endpoint: string;
+            /** P256Dh */
+            p256dh: string;
+            /**
+             * User Agent
+             * @default
+             */
+            user_agent: string;
+        };
+        /**
+         * PushUnsubscribeRequest
+         * @description Body for ``DELETE /api/v2/push/subscribe`` — identify
+         *     which subscription to drop by its endpoint URL.
+         *
+         *     Endpoint is the only field PushManager exposes that's
+         *     stable + unique across the subscription's lifetime, so the
+         *     SPA always has it.
+         */
+        PushUnsubscribeRequest: {
+            /** Endpoint */
+            endpoint: string;
+        };
+        /**
          * ReceiptStore
          * @description Store header — branding + identifiers printed at the top
          *     of the receipt.
@@ -10271,6 +10396,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_push_status_route_auth_push_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_subscribe_route_auth_push_subscribe_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushStatusResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    push_unsubscribe_route_auth_push_subscribe_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                db_access_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushUnsubscribeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushStatusResponse"];
                 };
             };
             /** @description Validation Error */

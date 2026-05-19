@@ -62,6 +62,11 @@ from api.Modules.Auth.Services.profile import (
     get_profile_payload,
     update_profile,
 )
+from api.Modules.Auth.Services.push_subscriptions import (
+    delete_push_subscription,
+    push_status_payload,
+    upsert_push_subscription,
+)
 from api.Modules.Auth.Services.signup import (
     DEFAULT_GRACE_DAYS,
     DEFAULT_TRIAL_DAYS,
@@ -114,6 +119,7 @@ __all__ = [
     "decode_access_token",
     "decode_passkey_register_token",
     "decode_pending_2fa_token",
+    "delete_push_subscription",
     "finalize_2fa_with_recovery_code",
     "finalize_2fa_with_totp",
     "finish_totp_enrollment",
@@ -121,6 +127,8 @@ __all__ = [
     "generate_recovery_codes",
     "get_notifications_payload",
     "get_profile_payload",
+    "push_status_payload",
+    "upsert_push_subscription",
     "hash_recovery_code",
     "hash_token",
     "is_enrolled",

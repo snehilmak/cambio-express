@@ -275,6 +275,41 @@ export async function updateNotifications(
 }
 
 
+// ── Push subscriptions ────────────────────────────────────
+
+export interface PushStatusResponse {
+  enabled:      boolean;
+  public_key:   string;
+  subscribed:   boolean;
+  device_count: number;
+}
+
+export function usePushStatus() {
+  return useQuery<PushStatusResponse>({
+    queryKey: ["account", "push-status"],
+    queryFn:  () => api<PushStatusResponse>("/api/v2/auth/push/status"),
+  });
+}
+
+export function subscribePush(input: {
+  endpoint: string; p256dh: string; auth: string; user_agent?: string;
+}): Promise<PushStatusResponse> {
+  return api<PushStatusResponse>("/api/v2/auth/push/subscribe", {
+    method: "POST",
+    json: { user_agent: "", ...input },
+  });
+}
+
+export function unsubscribePush(
+  input: { endpoint: string },
+): Promise<PushStatusResponse> {
+  return api<PushStatusResponse>("/api/v2/auth/push/subscribe", {
+    method: "DELETE",
+    json: input,
+  });
+}
+
+
 export function useStoreInfo() {
   const identity = getCurrentIdentity();
   return useQuery<{ store: StoreInfoRow }>({
