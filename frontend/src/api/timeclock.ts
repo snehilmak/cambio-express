@@ -25,6 +25,12 @@ export interface TimeClockEntryRow {
    *  subtracts this from elapsed wall-clock before computing
    *  ``hours_worked``. */
   break_minutes:     number;
+  /** Minutes the ``clock_in_at`` lagged the matching planned
+   *  shift's ``start_time`` in store-local time. Negative =
+   *  early, 0 = on time, ``null`` = no planned shift to
+   *  compare against. The SPA only paints a "Late" pill when
+   *  this exceeds ``late_threshold_minutes`` on the list. */
+  late_minutes:      number | null;
 }
 
 export interface TimeClockStatusResponse {
@@ -36,10 +42,11 @@ export interface TimeClockPunchResponse {
 }
 
 export interface TimeClockEntryList {
-  rows:           TimeClockEntryRow[];
-  total_hours:    number;
-  approved_hours: number;
-  pending_hours:  number;
+  rows:                   TimeClockEntryRow[];
+  total_hours:            number;
+  approved_hours:         number;
+  pending_hours:          number;
+  late_threshold_minutes: number;
 }
 
 

@@ -195,6 +195,7 @@ files = [
     # ── api/Modules/TimeClock ────────────────────────────────
     "api/Modules/TimeClock/Services/__init__.py",
     "api/Modules/TimeClock/Services/geofence.py",
+    "api/Modules/TimeClock/Services/lateness.py",
     "api/Modules/TimeClock/Services/passkey.py",
     "api/Modules/TimeClock/Services/paystub.py",
     # ── api/Modules/TVDisplay ────────────────────────────────

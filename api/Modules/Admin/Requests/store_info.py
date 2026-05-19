@@ -57,6 +57,7 @@ class StoreInfoRow(BaseModel):
     timeclock_geofence_lng:       float | None = None
     timeclock_geofence_radius_m:  int  = 100
     timeclock_require_geofence:   bool = False
+    timeclock_late_minutes_threshold: int = 5
 
 
 class StoreInfoResponse(BaseModel):
@@ -87,3 +88,4 @@ class StoreInfoUpdateRequest(BaseModel):
     timeclock_geofence_lng:       float | None = Field(None, ge=-180, le=180)
     timeclock_geofence_radius_m:  int   | None = Field(None, ge=10, le=10_000)
     timeclock_require_geofence:   bool  | None = None
+    timeclock_late_minutes_threshold: int | None = Field(None, ge=0, le=240)

@@ -104,6 +104,9 @@ def _to_row(s) -> StoreInfoRow:
         timeclock_require_geofence=bool(
             getattr(s, "timeclock_require_geofence", False)
         ),
+        timeclock_late_minutes_threshold=int(
+            getattr(s, "timeclock_late_minutes_threshold", 5) or 5
+        ),
     )
 
 

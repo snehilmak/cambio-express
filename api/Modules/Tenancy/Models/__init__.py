@@ -138,6 +138,13 @@ class Store(Base):
     timeclock_geofence_lng       = Column(Float, nullable=True)
     timeclock_geofence_radius_m  = Column(Integer, default=100)
     timeclock_require_geofence   = Column(Boolean, default=False)
+    # Lateness threshold in store-local minutes: the payroll
+    # history page flags an entry as "late" only when the
+    # ``entry.clock_in_at`` exceeds the matching shift's
+    # ``start_time`` by this many minutes.  Default 5 — small
+    # enough to catch real lateness, big enough to absorb the
+    # cashier walking from the door to the terminal.
+    timeclock_late_minutes_threshold = Column(Integer, default=5)
     # Referral: the ReferralCode this store used when signing up (if any).
     # Set once at signup from ?ref=<code>, never mutated afterwards. We
     # use this on the first paid conversion to apply credits to both
@@ -197,6 +204,15 @@ class User(Base):
     # over/short. Goes to admins + linked owners. Opt-out (default
     # True) so close-out numbers reach owners by morning.
     notify_daily_summary = Column(Boolean, default=True)
+    # Per-kind push-channel toggles. Default True — once a user
+    # enables browser notifications at the channel level (via
+    # ``/api/v2/auth/push/subscribe``), every kind is on by
+    # default and the user opts out individually. Mirrors the
+    # email pattern above so the two channels stay symmetric.
+    notify_trial_reminders_push    = Column(Boolean, default=True)
+    notify_announcement_push       = Column(Boolean, default=True)
+    notify_locked_day_digest_push  = Column(Boolean, default=True)
+    notify_daily_summary_push      = Column(Boolean, default=True)
     # Deliverability suppression — stamped when Resend reports a hard
     # bounce on this user's email. ``_send_email()`` skips suppressed
     # recipients.

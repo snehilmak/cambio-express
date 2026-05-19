@@ -45,6 +45,9 @@ EDITABLE_STORE_FIELDS: tuple[str, ...] = (
     "timeclock_geofence_lng",
     "timeclock_geofence_radius_m",
     "timeclock_require_geofence",
+    # Lateness threshold (store-local minutes) for the
+    # "Late by Xm" pill on the payroll history view.  Default 5.
+    "timeclock_late_minutes_threshold",
 )
 
 
@@ -114,6 +117,8 @@ def update_store_info(
             v = bool(v)
         if k == "timeclock_require_geofence":
             v = bool(v)
+        if k == "timeclock_late_minutes_threshold":
+            v = max(0, min(240, int(v)))
         setattr(store, k, v)
     db.flush()
     return store

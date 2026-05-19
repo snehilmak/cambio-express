@@ -6013,12 +6013,20 @@ export interface components {
             locked_day_digest_applies: boolean;
             /** Notify Announcement Email */
             notify_announcement_email: boolean;
+            /** Notify Announcement Push */
+            notify_announcement_push: boolean;
             /** Notify Daily Summary */
             notify_daily_summary: boolean;
+            /** Notify Daily Summary Push */
+            notify_daily_summary_push: boolean;
             /** Notify Locked Day Digest */
             notify_locked_day_digest: boolean;
+            /** Notify Locked Day Digest Push */
+            notify_locked_day_digest_push: boolean;
             /** Notify Trial Reminders */
             notify_trial_reminders: boolean;
+            /** Notify Trial Reminders Push */
+            notify_trial_reminders_push: boolean;
             /** Role */
             role: string;
             /** Trial Toggle Applies */
@@ -6032,12 +6040,20 @@ export interface components {
         NotificationsUpdateRequest: {
             /** Notify Announcement Email */
             notify_announcement_email?: boolean | null;
+            /** Notify Announcement Push */
+            notify_announcement_push?: boolean | null;
             /** Notify Daily Summary */
             notify_daily_summary?: boolean | null;
+            /** Notify Daily Summary Push */
+            notify_daily_summary_push?: boolean | null;
             /** Notify Locked Day Digest */
             notify_locked_day_digest?: boolean | null;
+            /** Notify Locked Day Digest Push */
+            notify_locked_day_digest_push?: boolean | null;
             /** Notify Trial Reminders */
             notify_trial_reminders?: boolean | null;
+            /** Notify Trial Reminders Push */
+            notify_trial_reminders_push?: boolean | null;
         };
         /**
          * OwnerBulkAddUserRequest
@@ -7271,6 +7287,11 @@ export interface components {
              */
             timeclock_geofence_radius_m: number;
             /**
+             * Timeclock Late Minutes Threshold
+             * @default 5
+             */
+            timeclock_late_minutes_threshold: number;
+            /**
              * Timeclock Require Geofence
              * @default false
              */
@@ -7323,6 +7344,8 @@ export interface components {
             timeclock_geofence_lng?: number | null;
             /** Timeclock Geofence Radius M */
             timeclock_geofence_radius_m?: number | null;
+            /** Timeclock Late Minutes Threshold */
+            timeclock_late_minutes_threshold?: number | null;
             /** Timeclock Require Geofence */
             timeclock_require_geofence?: boolean | null;
             /** Timeclock Require Passkey */
@@ -7963,6 +7986,11 @@ export interface components {
              */
             approved_hours: number;
             /**
+             * Late Threshold Minutes
+             * @default 5
+             */
+            late_threshold_minutes: number;
+            /**
              * Pending Hours
              * @default 0
              */
@@ -8006,6 +8034,8 @@ export interface components {
             hours_worked?: number | null;
             /** Id */
             id: number;
+            /** Late Minutes */
+            late_minutes?: number | null;
             /**
              * Notes
              * @default

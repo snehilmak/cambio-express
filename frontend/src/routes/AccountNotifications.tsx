@@ -45,10 +45,14 @@ export default function AccountNotifications() {
     if (!data) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched notifications once GET resolves
     setDraft({
-      notify_trial_reminders:    data.notify_trial_reminders,
-      notify_announcement_email: data.notify_announcement_email,
-      notify_locked_day_digest:  data.notify_locked_day_digest,
-      notify_daily_summary:      data.notify_daily_summary,
+      notify_trial_reminders:        data.notify_trial_reminders,
+      notify_announcement_email:     data.notify_announcement_email,
+      notify_locked_day_digest:      data.notify_locked_day_digest,
+      notify_daily_summary:          data.notify_daily_summary,
+      notify_trial_reminders_push:   data.notify_trial_reminders_push,
+      notify_announcement_push:      data.notify_announcement_push,
+      notify_locked_day_digest_push: data.notify_locked_day_digest_push,
+      notify_daily_summary_push:     data.notify_daily_summary_push,
     });
   }, [data]);
 
@@ -115,14 +119,22 @@ export default function AccountNotifications() {
             {saved && <Alert tone="success">Notification preferences saved.</Alert>}
 
             <form onSubmit={onSubmit} autoComplete="off">
-              <PrefRow
-                id="ntr"
-                checked={draft.notify_trial_reminders ?? false}
+              <div className={styles.kindHeader}>
+                <span />
+                <span className={styles.channelLabel}>Email</span>
+                <span className={styles.channelLabel}>Push</span>
+              </div>
+
+              <PrefKindRow
+                id="trial"
+                title="Trial-ending reminder"
                 disabled={busy || !trialApplies}
-                onChange={(v) => set("notify_trial_reminders", v)}
-                title="Trial-ending reminder email"
+                emailChecked={draft.notify_trial_reminders ?? false}
+                emailOnChange={(v) => set("notify_trial_reminders", v)}
+                pushChecked={draft.notify_trial_reminders_push ?? false}
+                pushOnChange={(v) => set("notify_trial_reminders_push", v)}
               >
-                Send me one email during the last 3 days of my trial so I
+                One reminder during the last 3 days of my trial so I
                 can subscribe before the books lock. Turned off means
                 you'll only see the in-app banner.
                 {!trialApplies && (
@@ -133,30 +145,36 @@ export default function AccountNotifications() {
                     </em>
                   </>
                 )}
-              </PrefRow>
+              </PrefKindRow>
 
-              <PrefRow
-                id="nae"
-                checked={draft.notify_announcement_email ?? false}
+              <PrefKindRow
+                id="announcement"
+                title="Platform announcements"
                 disabled={busy}
-                onChange={(v) => set("notify_announcement_email", v)}
-                title="Announcement emails"
+                emailChecked={draft.notify_announcement_email ?? false}
+                emailOnChange={(v) => set("notify_announcement_email", v)}
+                pushChecked={draft.notify_announcement_push ?? false}
+                pushOnChange={(v) => set("notify_announcement_push", v)}
               >
-                Get a copy of platform announcements (new features,
-                outages, policy changes) by email. Off by default — you'll
-                still see every announcement as a banner when you sign in.
-              </PrefRow>
+                New features, outages, policy changes. Email is off
+                by default; push is on for users who enabled the
+                browser-notifications channel below. You'll still see
+                every announcement as a banner when you sign in.
+              </PrefKindRow>
 
-              <PrefRow
-                id="nldd"
-                checked={draft.notify_locked_day_digest ?? false}
-                disabled={busy || !digestApplies}
-                onChange={(v) => set("notify_locked_day_digest", v)}
+              <PrefKindRow
+                id="digest"
                 title="Daily book close-out digest"
+                disabled={busy || !digestApplies}
+                emailChecked={draft.notify_locked_day_digest ?? false}
+                emailOnChange={(v) => set("notify_locked_day_digest", v)}
+                pushChecked={draft.notify_locked_day_digest_push ?? false}
+                pushOnChange={(v) => set("notify_locked_day_digest_push", v)}
               >
-                One email when a daily book is locked, with the receipts /
-                disbursements / over-short totals so you can cross-check
-                against the bank. Sent to admins + linked owners only.
+                Notification when a daily book is locked, with the
+                receipts / disbursements / over-short totals so you can
+                cross-check against the bank. Sent to admins + linked
+                owners only.
                 {!digestApplies && (
                   <>
                     <br />
@@ -165,20 +183,22 @@ export default function AccountNotifications() {
                     </em>
                   </>
                 )}
-              </PrefRow>
+              </PrefKindRow>
 
-              <PrefRow
-                id="nds"
-                checked={draft.notify_daily_summary ?? false}
+              <PrefKindRow
+                id="summary"
+                title="Daily summary"
                 disabled={busy || !summaryApplies}
-                onChange={(v) => set("notify_daily_summary", v)}
-                title="Daily summary email"
+                emailChecked={draft.notify_daily_summary ?? false}
+                emailOnChange={(v) => set("notify_daily_summary", v)}
+                pushChecked={draft.notify_daily_summary_push ?? false}
+                pushOnChange={(v) => set("notify_daily_summary_push", v)}
               >
-                Nightly per-store email with the prior day's transfer
+                Nightly per-store summary of the prior day's transfer
                 count, send volume, receipts, disbursements, and
-                over-short — so you see the close-out numbers by morning
-                without logging in. Quiet days don't generate an email.
-                Sent to admins + linked owners only.
+                over-short — so you see the close-out numbers by
+                morning without logging in. Quiet days don't generate
+                a notification. Sent to admins + linked owners only.
                 {!summaryApplies && (
                   <>
                     <br />
@@ -187,7 +207,7 @@ export default function AccountNotifications() {
                     </em>
                   </>
                 )}
-              </PrefRow>
+              </PrefKindRow>
 
               <div style={{ marginTop: "1.25rem" }}>
                 <Button type="submit" busy={busy} disabled={busy}>
@@ -269,29 +289,55 @@ export default function AccountNotifications() {
 }
 
 
-function PrefRow({
-  id, checked, disabled, onChange, title, children,
+function PrefKindRow({
+  id, title, disabled,
+  emailChecked, emailOnChange,
+  pushChecked,  pushOnChange,
+  children,
 }: {
-  id:       string;
-  checked:  boolean;
-  disabled: boolean;
-  onChange: (v: boolean) => void;
-  title:    string;
-  children: React.ReactNode;
+  id:            string;
+  title:         string;
+  disabled:      boolean;
+  emailChecked:  boolean;
+  emailOnChange: (v: boolean) => void;
+  pushChecked:   boolean;
+  pushOnChange:  (v: boolean) => void;
+  children:      React.ReactNode;
 }) {
+  const emailId = `${id}-email`;
+  const pushId  = `${id}-push`;
   return (
-    <div className={styles.prefRow}>
-      <input
-        id={id} type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-        className={styles.checkbox}
-      />
+    <div className={styles.kindRow}>
       <div className={styles.prefBody}>
-        <label htmlFor={id} className={styles.prefTitle}>{title}</label>
+        <div className={styles.prefTitle}>{title}</div>
         <div className={styles.prefDesc}>{children}</div>
       </div>
+      <label
+        htmlFor={emailId}
+        className={styles.channelCell}
+        aria-label={`Email — ${title}`}
+      >
+        <input
+          id={emailId} type="checkbox"
+          checked={emailChecked}
+          disabled={disabled}
+          onChange={(e) => emailOnChange(e.target.checked)}
+          className={styles.checkbox}
+        />
+      </label>
+      <label
+        htmlFor={pushId}
+        className={styles.channelCell}
+        aria-label={`Push — ${title}`}
+      >
+        <input
+          id={pushId} type="checkbox"
+          checked={pushChecked}
+          disabled={disabled}
+          onChange={(e) => pushOnChange(e.target.checked)}
+          className={styles.checkbox}
+        />
+      </label>
     </div>
   );
 }

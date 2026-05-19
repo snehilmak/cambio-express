@@ -50,6 +50,18 @@ def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
         "notify_announcement_email": bool(user.notify_announcement_email),
         "notify_locked_day_digest":  bool(user.notify_locked_day_digest),
         "notify_daily_summary":      bool(user.notify_daily_summary),
+        "notify_trial_reminders_push":   bool(
+            getattr(user, "notify_trial_reminders_push", True),
+        ),
+        "notify_announcement_push":      bool(
+            getattr(user, "notify_announcement_push", True),
+        ),
+        "notify_locked_day_digest_push": bool(
+            getattr(user, "notify_locked_day_digest_push", True),
+        ),
+        "notify_daily_summary_push":     bool(
+            getattr(user, "notify_daily_summary_push", True),
+        ),
         "trial_toggle_applies":      trial_toggle_applies(db, user),
         "locked_day_digest_applies": locked_day_digest_applies(user),
         "daily_summary_applies":     daily_summary_applies(user),
@@ -59,10 +71,14 @@ def get_notifications_payload(db: Session, user: User) -> dict[str, Any]:
 
 def update_notifications(
     db: Session, user: User, *,
-    notify_trial_reminders:    Optional[bool] = None,
-    notify_announcement_email: Optional[bool] = None,
-    notify_locked_day_digest:  Optional[bool] = None,
-    notify_daily_summary:      Optional[bool] = None,
+    notify_trial_reminders:        Optional[bool] = None,
+    notify_announcement_email:     Optional[bool] = None,
+    notify_locked_day_digest:      Optional[bool] = None,
+    notify_daily_summary:          Optional[bool] = None,
+    notify_trial_reminders_push:   Optional[bool] = None,
+    notify_announcement_push:      Optional[bool] = None,
+    notify_locked_day_digest_push: Optional[bool] = None,
+    notify_daily_summary_push:     Optional[bool] = None,
 ) -> None:
     """Apply changes. None = don't touch. Caller commits.
 
@@ -77,4 +93,12 @@ def update_notifications(
         setattr(user, "notify_locked_day_digest", bool(notify_locked_day_digest))
     if notify_daily_summary is not None:
         setattr(user, "notify_daily_summary", bool(notify_daily_summary))
+    if notify_trial_reminders_push is not None:
+        setattr(user, "notify_trial_reminders_push", bool(notify_trial_reminders_push))
+    if notify_announcement_push is not None:
+        setattr(user, "notify_announcement_push", bool(notify_announcement_push))
+    if notify_locked_day_digest_push is not None:
+        setattr(user, "notify_locked_day_digest_push", bool(notify_locked_day_digest_push))
+    if notify_daily_summary_push is not None:
+        setattr(user, "notify_daily_summary_push", bool(notify_daily_summary_push))
     db.flush()
