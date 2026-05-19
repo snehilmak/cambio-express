@@ -18,6 +18,7 @@ Five classes that own the per-day close-out book:
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Column, Date, DateTime, Float, ForeignKey, Integer, String, Text,
@@ -70,23 +71,23 @@ class DailyReport(Base):
     __table_args__ = (UniqueConstraint("store_id", "report_date"),)
 
     @property
-    def total_receipts(self):
-        return sum([
+    def total_receipts(self) -> float:
+        return float(sum([
             self.taxable_sales, self.non_taxable, self.sales_tax,
             self.bill_payment_charge, self.phone_recargas,
             self.boost_mobile, self.money_transfer, self.money_order,
             self.check_cashing_fees, self.return_check_hold_fees,
             self.return_check_paid_back, self.forward_balance,
             self.from_bank, self.other_cash_in, self.rebates_commissions,
-        ])
+        ]))
 
     @property
-    def total_disbursements(self):
-        return sum([
+    def total_disbursements(self) -> float:
+        return float(sum([
             self.cash_purchases, self.cash_expense, self.check_purchases,
             self.check_expense, self.outside_cash_drops, self.cash_deposit,
             self.checks_deposit, self.payroll_expense, self.other_cash_out,
-        ])
+        ]))
 
 
 class DailyDrop(Base):
@@ -109,7 +110,7 @@ class DailyDrop(Base):
     created_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "time": self.drop_time.strftime("%H:%M") if self.drop_time else "",
@@ -139,7 +140,7 @@ class CheckDeposit(Base):
     created_by   = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at   = Column(DateTime, default=datetime.utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "time": self.deposit_time.strftime("%H:%M") if self.deposit_time else "",
@@ -185,7 +186,7 @@ class DailyLineItem(Base):
     created_by  = Column(Integer, ForeignKey("user.id"), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
 
-    def to_dict(self):
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "time": self.at_time.strftime("%H:%M") if self.at_time else "",
@@ -210,9 +211,9 @@ class MoneyTransferSummary(Base):
     __table_args__ = (UniqueConstraint("store_id", "report_date", "company"),)
 
     @property
-    def individual_total(self):
-        return ((self.amount or 0) + (self.fees or 0)
-                + (self.commission or 0) + (self.federal_tax or 0))
+    def individual_total(self) -> float:
+        return float((self.amount or 0) + (self.fees or 0)
+                     + (self.commission or 0) + (self.federal_tax or 0))
 
 
 # Re-export sibling models the DailyBook services touch.

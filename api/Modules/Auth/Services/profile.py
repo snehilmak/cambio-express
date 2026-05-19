@@ -81,7 +81,9 @@ def get_profile_payload(user: User) -> dict[str, Any]:
         "email":            user.email or "",
         "phone":            user.phone or "",
         "timezone":         user.timezone or "",
-        "theme_preference": normalize_theme(user.theme_preference),
+        "theme_preference": normalize_theme(
+            str(user.theme_preference) if user.theme_preference else None,
+        ),
         "created_at":       user.created_at.isoformat() if user.created_at else "",
         "last_login_at":    user.last_login_at.isoformat() if user.last_login_at else "",
         "timezone_choices": TIMEZONE_CHOICES,
@@ -143,13 +145,13 @@ def update_profile(
         raise ProfileValidationError(errors)
 
     if full_name is not None:
-        user.full_name = full_name.strip()
+        setattr(user, "full_name", full_name.strip())
     if email is not None:
-        user.email = email.strip().lower()
+        setattr(user, "email", email.strip().lower())
     if phone is not None:
-        user.phone = _PHONE_STRIP_RE.sub("", phone or "")
+        setattr(user, "phone", _PHONE_STRIP_RE.sub("", phone or ""))
     if timezone is not None:
-        user.timezone = timezone.strip()
+        setattr(user, "timezone", timezone.strip())
     if theme_preference is not None:
-        user.theme_preference = theme_preference
+        setattr(user, "theme_preference", theme_preference)
     db.flush()

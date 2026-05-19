@@ -57,10 +57,10 @@ def list_audit_rows(
         op_q = op_q.filter_by(action=action_filter)
         tx_q = tx_q.filter_by(action=action_filter)
 
-    op_rows = (
+    op_rows: list[Any] = (
         op_q.order_by(OperatorAuditLog.created_at.desc()).limit(500).all()
     )
-    tx_rows = (
+    tx_rows: list[Any] = (
         tx_q.order_by(TransferAudit.created_at.desc()).limit(500).all()
     )
 
@@ -73,13 +73,13 @@ def list_audit_rows(
         if user_ids else {}
     )
 
-    merged: list[dict] = []
+    merged: list[dict[str, Any]] = []
     for r in op_rows:
+        _u = users.get(r.user_id) if r.user_id else None
         merged.append({
             "ts":           r.created_at.isoformat() if r.created_at else "",
             "user_name":    r.user_name or (
-                users.get(r.user_id).username
-                if r.user_id and users.get(r.user_id) else ""
+                _u.username if _u is not None else ""
             ),
             "user_role":    r.user_role or "",
             "action":       r.action or "",

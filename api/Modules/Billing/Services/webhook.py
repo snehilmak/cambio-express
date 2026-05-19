@@ -54,8 +54,11 @@ def verify_webhook_signature(
     if not secret:
         raise InvalidWebhookSignatureError("Webhook secret not configured")
     try:
-        return stripe.Webhook.construct_event(payload, sig_header, secret)
-    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        event: dict[str, Any] = stripe.Webhook.construct_event(  # type: ignore[no-untyped-call]
+            payload, sig_header, secret,
+        )
+        return event
+    except (ValueError, stripe.error.SignatureVerificationError) as e:  # type: ignore[attr-defined]
         raise InvalidWebhookSignatureError(str(e)) from e
 
 
@@ -143,14 +146,16 @@ def _handle_checkout_session_completed(
     try:
         sub = stripe.Subscription.retrieve(sub_id)
         price_id = sub["items"]["data"][0]["price"]["id"]
-        store.plan, store.billing_cycle = derive_plan_from_price(price_id)
+        plan_val, cycle_val = derive_plan_from_price(price_id)
+        setattr(store, "plan", plan_val)
+        setattr(store, "billing_cycle", cycle_val)
     except Exception as e:
         logger.error("Stripe sub retrieve error: %s", e)
-        store.plan = "pro"
-        store.billing_cycle = "monthly"
+        setattr(store, "plan", "pro")
+        setattr(store, "billing_cycle", "monthly")
 
-    store.stripe_customer_id = customer_id
-    store.stripe_subscription_id = sub_id
+    setattr(store, "stripe_customer_id", customer_id)
+    setattr(store, "stripe_subscription_id", sub_id)
 
     # Returning customer: clear cancellation + retention timer +
     # trial-reminder dedup flag. Idempotent on first-time
