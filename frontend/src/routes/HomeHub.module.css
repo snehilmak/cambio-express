@@ -40,10 +40,16 @@
   color: var(--db-accent, #3fff00);
 }
 
+/* Fixed 6-column grid on desktop so every section reads as a
+ * consistent rhythm (instead of auto-fill which left Daily at
+ * 6 tiles and Finance at 8 on a wide window).  Tiles get a
+ * slightly larger minimum so the layout breathes; the grid
+ * shrinks gracefully on narrow viewports via the media queries
+ * at the bottom of the file. */
 .tileGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
-  gap: 0.65rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.7rem;
 }
 
 .tile {
@@ -64,7 +70,7 @@
   border: 1px solid var(--db-border, #262626);
   transition: background 120ms ease, border-color 120ms ease,
               transform 120ms ease, color 120ms ease;
-  min-height: 5.5rem;
+  min-height: 5.75rem;
 }
 
 .tile:hover {
@@ -110,4 +116,32 @@
 .tile:hover .tileCount {
   color: var(--db-accent, #3fff00);
   opacity: 0.85;
+}
+
+/* ── Responsive tile grid ─────────────────────────────────
+ * Step the column count down as the viewport shrinks so the
+ * tiles never get so narrow the label wraps mid-word.
+ * Breakpoints picked to match common laptop / tablet / phone
+ * sizes:
+ *   - >= 1100px : 6 cols (default)
+ *   - >= 900px  : 5 cols
+ *   - >= 720px  : 4 cols
+ *   - >= 540px  : 3 cols
+ *   - <  540px  : 2 cols (phones)
+ * The mobile drawer (≤768px) hides the slim sidebar entirely,
+ * so /app/home rendered on a phone gets the full content width
+ * — 2 cols keeps the tiles big enough to tap. */
+
+@media (max-width: 1099px) {
+  .tileGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 899px) {
+  .tileGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 719px) {
+  .tileGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 539px) {
+  .tileGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tile { min-height: 5.25rem; padding: 0.95rem 0.5rem; }
 }

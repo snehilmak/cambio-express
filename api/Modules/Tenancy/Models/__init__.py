@@ -69,6 +69,10 @@ class Store(Base):
     # re-run on the same date is a no-op. Set NEVER cleared (once
     # we've sent for a date, we've sent).
     daily_summary_sent_for = Column(Date, nullable=True)
+    # Same idempotency marker for the missed-shift digest cron.
+    # Set by ``Notifications/Services/missed_shifts.run`` after a
+    # store's digest is processed for a given date.
+    missed_shifts_sent_for = Column(Date, nullable=True)
     # Comma-separated list of money-transfer companies this store works
     # with. Empty string falls through to DEFAULT_MT_COMPANIES. Resolve
     # via store_mt_companies(store) — never read this column directly.
