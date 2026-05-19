@@ -723,17 +723,28 @@ impact ÷ effort. Numbers are an estimate.
       tokens via co-located CSS Modules.
 
 ## AI helper bot ("Dino")
-- [ ] **v1 — searchable help center (no LLM, $0 forever).** Floating
-      bubble bottom-right on every authenticated page that opens a
-      modal panel. Hard-coded Q&A pairs in a JSON/Python registry
-      keyed by intent ("how do I add a transfer", "what does
-      over/short mean", "how do I lock a daily book", etc.). Fuzzy
-      client-side search (Fuse.js or a 30-line Levenshtein), render
-      the answer with deep-links into the right page. Covers ~80% of
-      "how do I X" questions and feels instant. This is the right
-      first step — we get the UI surface, the muscle memory, and a
-      structured answer registry that the LLM-backed v2 can also use
-      as ground-truth context.
+- [x] **v1 — searchable help center (no LLM, $0 forever).**
+      Shipped.  Floating green ``?`` bubble bottom-right on
+      every authenticated route (mounted in ``AppShell`` inside
+      ``RequireAuth`` so it never bleeds onto landing / login).
+      Click → modal panel with a search input + ranked answer
+      cards.  Backdrop click / ESC / × button close.
+        * Registry: ``frontend/src/lib/help/registry.ts`` —
+          ~26 Q&A entries covering daily workflow, reports,
+          time clock, customers, notifications, billing.
+          Each carries a title, hidden ``keywords`` (synonyms),
+          inline HTML body, optional ``deepLink``, and an
+          authored ``weight`` for the empty-query fallback
+          ordering.
+        * Search: ``frontend/src/lib/help/search.ts`` —
+          token-overlap + whole-query-substring scoring.  No
+          Fuse.js dep; ~30-line scoring function ships fewer
+          KB than the library for a 26-entry corpus.  Empty
+          query returns top-N by weight so the panel is never
+          blank.
+        * Adding a new Q&A is a one-file edit; no plumbing
+          changes.  The same registry feeds the v2 LLM
+          fallback's system prompt as ground-truth.
 - [ ] **v2 — Claude Haiku 4.5 fallback** when the FAQ search has no
       good match. Single-turn Q&A; system prompt embeds the same
       answer registry plus DineroBook product facts (sidebar map,
