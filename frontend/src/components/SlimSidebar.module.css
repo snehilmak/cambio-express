@@ -30,6 +30,12 @@
 
 .iconCol {
   width: 4.75rem;
+  /* `border-box` so the explicit width includes the horizontal
+     padding.  With the default content-box, total width would
+     be 4.75rem + 0.4rem + 0.4rem = 5.55rem — wider than the
+     grid cell, so flex-stretched buttons paint their hover
+     background past the sidebar's right border. */
+  box-sizing: border-box;
   /* No top padding — the brand block owns the topbar-aligned
      height itself.  Side + bottom padding still apply to the
      group buttons. Background + border live on `.app-sidebar`
