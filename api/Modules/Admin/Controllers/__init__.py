@@ -514,6 +514,81 @@ def get_admin_audit_log_route(
     )
 
 
+@router.get("/audit-log.csv")
+def export_admin_audit_log_csv_route(
+    target: str = Query("", max_length=40),
+    action: str = Query("", max_length=40),
+    user:   str = Query("", max_length=20),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> Response:
+    """CSV export of the operator audit feed for the principal's
+    store.  Honors the same filter triplet as the paginated
+    JSON endpoint above so the operator can preview filters in
+    the UI, then click "Download CSV" to pull the same slice.
+
+    Streams the full filtered set (no pagination) so a year-end
+    compliance pull is one click — typical store has a few
+    thousand rows / year which fits in memory comfortably.
+    """
+    import csv as csv_lib
+    import io
+    from datetime import datetime as _datetime
+
+    store_id = resolve_store_scope(claims)
+    # Walk pagination to assemble the full filtered set —
+    # ``list_audit_rows`` caps at 50 / page.
+    page = 1
+    all_rows: list[dict[str, Any]] = []
+    while True:
+        payload = list_audit_rows(
+            db, store_id=store_id,
+            target_filter=target.strip(),
+            action_filter=action.strip(),
+            user_filter=user.strip(),
+            page=page,
+        )
+        all_rows.extend(payload["rows"])
+        if page >= int(payload["total_pages"] or 1):
+            break
+        page += 1
+
+    buf = io.StringIO()
+    w = csv_lib.writer(buf)
+    w.writerow([
+        "Timestamp",
+        "User",
+        "Role",
+        "Action",
+        "Target type",
+        "Target id",
+        "Target label",
+        "Summary",
+        "Source",
+    ])
+    for r in all_rows:
+        w.writerow([
+            r.get("ts") or "",
+            r.get("user_name") or "",
+            r.get("user_role") or "",
+            r.get("action") or "",
+            r.get("target_type") or "",
+            r.get("target_id") or "",
+            r.get("target_label") or "",
+            r.get("summary") or "",
+            r.get("source") or "",
+        ])
+    today = _datetime.utcnow().strftime("%Y-%m-%d")
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition":
+                f'attachment; filename="audit_log_{today}.csv"',
+        },
+    )
+
+
 # ── Per-store user management ───────────────────────────────
 
 

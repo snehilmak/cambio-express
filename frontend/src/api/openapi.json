@@ -9187,6 +9187,103 @@
         ]
       }
     },
+    "/admin/audit-log.csv": {
+      "get": {
+        "description": "CSV export of the operator audit feed for the principal's\nstore.  Honors the same filter triplet as the paginated\nJSON endpoint above so the operator can preview filters in\nthe UI, then click \"Download CSV\" to pull the same slice.\n\nStreams the full filtered set (no pagination) so a year-end\ncompliance pull is one click \u2014 typical store has a few\nthousand rows / year which fits in memory comfortably.",
+        "operationId": "export_admin_audit_log_csv_route_admin_audit_log_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "target",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 40,
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 40,
+              "title": "Action",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "user",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 20,
+              "title": "User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Admin Audit Log Csv Route",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/admin/referrals": {
       "get": {
         "description": "Self-service referral payload for the principal's store.\nLazily mints a ReferralCode if missing (per CLAUDE.md\ninvariant #12 \u2014 paid plans only; trial \u2192 409). Powers\n/app/account/referrals.",
@@ -10064,6 +10161,107 @@
           }
         },
         "summary": "Admin Create Route",
+        "tags": [
+          "timeclock"
+        ]
+      }
+    },
+    "/admin/timeclock.csv": {
+      "get": {
+        "description": "CSV export of the time-clock entries in ``[from, to)`` for\nthe principal's store.  Mirrors the JSON list endpoint's\nfilter signature; intended as a one-click payroll-history\ndump.\n\nIncludes the closed-shift columns operators rely on\n(clock-in / clock-out / hours / status / late minutes /\nnotes) so the file plugs into a payroll spreadsheet without\na JSON-to-CSV translation step.",
+        "operationId": "export_admin_entries_csv_route_admin_timeclock_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "store_employee_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Employee Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "db_access_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Db Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Admin Entries Csv Route",
         "tags": [
           "timeclock"
         ]

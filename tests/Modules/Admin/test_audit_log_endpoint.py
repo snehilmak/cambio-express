@@ -264,6 +264,59 @@ def test_legacy_admin_audit_log_redirects_to_app(
     assert resp.headers["Location"].startswith("/app/admin/audit-log")
 
 
+# ── CSV export ────────────────────────────────────────────
+
+
+def test_audit_log_csv_requires_jwt(client):
+    resp = client.get("/api/v2/admin/audit-log.csv")
+    assert resp.status_code == 401
+
+
+def test_audit_log_csv_returns_csv_with_header_and_rows(
+    client, test_store_id,
+):
+    """CSV export carries the header row + one CSV row per
+    audit entry.  Same filter signature as the JSON endpoint."""
+    with db_session():
+        _seed_op_row(test_store_id, action="lock", target_type="daily_report")
+        _seed_op_row(test_store_id, action="update", target_type="batch")
+
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/audit-log.csv",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    body = resp.text
+    # Header row + 2 data rows + a trailing newline.
+    lines = [ln for ln in body.split("\n") if ln.strip()]
+    assert lines[0].startswith("Timestamp,User,Role,Action,")
+    assert len(lines) == 3  # header + 2 audit entries
+
+
+def test_audit_log_csv_honors_action_filter(
+    client, test_store_id,
+):
+    """Server-side filter narrows the CSV the same way it narrows
+    the JSON view."""
+    with db_session():
+        _seed_op_row(test_store_id, action="lock", target_type="daily_report")
+        _seed_op_row(test_store_id, action="update", target_type="batch")
+
+    token = _login(client, test_store_id)
+    resp = client.get(
+        "/api/v2/admin/audit-log.csv?action=lock",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    lines = [ln for ln in resp.text.split("\n") if ln.strip()]
+    # Header + the one "lock" row.
+    assert len(lines) == 2
+    assert "lock" in lines[1]
+
+
 def test_legacy_admin_audit_log_preserves_query_string(
     logged_in_client,
 ):

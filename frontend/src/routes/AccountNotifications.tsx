@@ -309,7 +309,14 @@ function PrefKindRow({
   return (
     <div className={styles.kindRow}>
       <div className={styles.prefBody}>
-        <div className={styles.prefTitle}>{title}</div>
+        <div className={styles.prefTitleRow}>
+          <span className={styles.prefTitle}>{title}</span>
+          <ChannelStatusBadge
+            disabled={disabled}
+            emailOn={emailChecked}
+            pushOn={pushChecked}
+          />
+        </div>
         <div className={styles.prefDesc}>{children}</div>
       </div>
       <label
@@ -512,5 +519,38 @@ function BrowserPushCard() {
         </p>
       </div>
     </Card>
+  );
+}
+
+
+/** Inline pill on each notification kind summarizing which
+ *  channels are active.  Helps users see "I'll get this as
+ *  push only" without parsing two adjacent checkboxes.
+ *
+ *  Suppressed when the row is disabled (inapplicable kind) —
+ *  showing "Both off" on an irrelevant row reads as a problem
+ *  to fix, but it's actually correct + intentional. */
+function ChannelStatusBadge({
+  disabled, emailOn, pushOn,
+}: { disabled: boolean; emailOn: boolean; pushOn: boolean }) {
+  if (disabled) return null;
+  const both = emailOn && pushOn;
+  const none = !emailOn && !pushOn;
+  let label: string;
+  let kind: "on" | "off" | "mixed";
+  if (both)        { label = "Email + push"; kind = "on"; }
+  else if (none)   { label = "Both off";     kind = "off"; }
+  else if (emailOn){ label = "Email only";   kind = "mixed"; }
+  else             { label = "Push only";    kind = "mixed"; }
+  return (
+    <span
+      className={`${styles.statusBadge} ${
+        kind === "on"   ? styles.statusBadgeOn
+      : kind === "off"  ? styles.statusBadgeOff
+                        : styles.statusBadgeMixed
+      }`}
+    >
+      {label}
+    </span>
   );
 }
