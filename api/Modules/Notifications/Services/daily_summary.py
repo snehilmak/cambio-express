@@ -325,6 +325,34 @@ def run(
                     "daily-summary: send_email failed for "
                     "store_id=%s user_id=%s", store.id, user.id,
                 )
+            # Fan out a Web Push too — best-effort, doesn't block the
+            # email path if VAPID isn't configured (helper short-
+            # circuits to 0).  Honors the per-kind push toggle so a
+            # user who opted out of daily-summary pushes still gets
+            # the email.  Tagged so multi-device deliveries coalesce
+            # into one notification per device.
+            try:
+                from api.Modules.Notifications.Services.push import (
+                    send_push, user_wants_push,
+                )
+                if user_wants_push(user, "daily_summary"):
+                    send_push(
+                        session,
+                        user_id=int(user.id),
+                        title=subject,
+                        body=(
+                            f"{totals.transfer_count} transfers · "
+                            f"{_fmt_money_2(totals.send_volume)} sent · "
+                            f"net {_fmt_money_2(net)}"
+                        ),
+                        url=f"/app/daily/edit?date={date_iso}",
+                        tag=f"daily_summary:{store.id}:{date_iso}",
+                    )
+            except Exception as exc:  # pragma: no cover — push best-effort
+                _log.warning(
+                    "daily-summary push failed for user %s: %s",
+                    user.id, exc,
+                )
 
         store.daily_summary_sent_for = on_date
         session.commit()

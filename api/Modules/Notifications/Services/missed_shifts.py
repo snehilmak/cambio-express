@@ -242,7 +242,16 @@ def run(
         for u in recipients:
             send_email(db, str(u.email), subject, body)
             try:
-                if user_wants_push(u, "missed_shift"):
+                # Ride the `daily_summary` push toggle — the
+                # missed-shift digest is gated on
+                # `notify_daily_summary` for the EMAIL audience
+                # (see `eligible_recipients` above), so reusing the
+                # same key here keeps the email + push opt-out in
+                # lock-step.  The previously-passed `"missed_shift"`
+                # kind wasn't registered in `_PUSH_KIND_COLUMN`, so
+                # the gate fell through to default-allow and the
+                # user's opt-out was silently bypassed.
+                if user_wants_push(u, "daily_summary"):
                     send_push(
                         db,
                         user_id=int(u.id),

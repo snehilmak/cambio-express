@@ -172,6 +172,33 @@ def run(
             )
             subject = TRIAL_REMINDER_SUBJECT.format(days=days_left)
             send_email(session, u.email, subject, body, html)
+            # Fan out a Web Push too — best-effort, gated on the
+            # per-kind toggle so a user who opted out of trial-
+            # reminder pushes still gets the email.  Tag scoped to
+            # the store so a later reminder for the same store
+            # coalesces with the earlier one.
+            try:
+                from api.Modules.Notifications.Services.push import (
+                    send_push, user_wants_push,
+                )
+                if user_wants_push(u, "trial_reminder"):
+                    send_push(
+                        session,
+                        user_id=int(u.id),
+                        title=subject,
+                        body=(
+                            f"Your DineroBook trial for "
+                            f"{store.name} ends on {trial_end_str}."
+                        ),
+                        url="/app/admin/subscription",
+                        tag=f"trial_reminder:{store.id}",
+                    )
+            except Exception as exc:  # pragma: no cover — push best-effort
+                import logging
+                logging.getLogger(__name__).warning(
+                    "trial-reminder push failed for user %s: %s",
+                    u.id, exc,
+                )
             any_sent = True
             sent += 1
         if any_sent:
