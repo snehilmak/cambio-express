@@ -195,6 +195,30 @@ def run(session: Session, report: Any, base_url: str | None = None) -> int:
             )
             if send_email(session, u.email, subject, body, html):
                 sent += 1
+            # Fan out a Web Push too — gated on the per-kind toggle.
+            # Tag is scoped to (store, date) so a re-lock (rare,
+            # admin reopens + relocks) coalesces with the original.
+            try:
+                from api.Modules.Notifications.Services.push import (
+                    send_push, user_wants_push,
+                )
+                if user_wants_push(u, "locked_day_digest"):
+                    send_push(
+                        session,
+                        user_id=int(u.id),
+                        title=subject,
+                        body=(
+                            f"Locked by {locked_by_name}. "
+                            f"Net {_fmt_money_2(net)}."
+                        ),
+                        url=f"/app/daily/edit?date={date_iso}",
+                        tag=f"locked_day_digest:{store.id}:{date_iso}",
+                    )
+            except Exception as exc:  # pragma: no cover — push best-effort
+                _log.warning(
+                    "locked-day digest push failed for user %s: %s",
+                    u.id, exc,
+                )
         except Exception:
             _log.exception(
                 "locked-day digest: send failed for user_id=%s", u.id,
