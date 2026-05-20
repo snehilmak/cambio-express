@@ -104,6 +104,13 @@
      [data-theme="light"]. */
   --db-brand:      #3fff00;
   --db-brand-ink:  #001a0f;
+
+  /* App-shell topbar height — shared by `.app-topbar`, the slim
+     sidebar's brand block, and the slim-sidebar fly-out panel so
+     all three horizontal hairlines (topbar bottom, under-logo
+     line, fly-out top edge) meet on the same Y. Changing this
+     reflows the chrome — see frontend/src/styles.css. */
+  --db-topbar-h:   3.5rem;
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
