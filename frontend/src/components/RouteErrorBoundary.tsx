@@ -45,6 +45,20 @@ export class RouteErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // Stale-chunk recovery safety net.  `main.tsx` already wires a
+    // global `vite:preloadError` listener that reloads before the
+    // error reaches React — this branch catches the (rare) case
+    // where the error arrives via a different path (e.g. a
+    // user-land `import()` that bypasses Vite's preloader).
+    // Symptom is identical: the user's in-memory `index.js`
+    // references a chunk hash that no longer exists on the server.
+    // Only a full reload fetches the new `index.html` + the new
+    // hashes, so we trigger it ourselves rather than offering a
+    // Retry button that can't recover.
+    if (isStaleChunkError(error)) {
+      window.location.reload();
+      return;
+    }
     captureException(error, {
       tags: { boundary: this.props.routeName || "route" },
       extra: { componentStack: info.componentStack },
@@ -80,3 +94,19 @@ const fallbackStyle: React.CSSProperties = {
   margin: "0 auto",
   boxSizing: "border-box",
 };
+
+// Recognise the family of errors that mean "the chunk hash this
+// build remembers no longer exists on the server" — i.e. a deploy
+// happened while the tab was open.  Different browsers + bundler
+// versions phrase it differently; we match all the common ones
+// rather than try to pin a specific message.
+function isStaleChunkError(error: Error): boolean {
+  const name = error.name || "";
+  const message = error.message || "";
+  return (
+    name === "ChunkLoadError"
+    || /Failed to fetch dynamically imported module/i.test(message)
+    || /Loading chunk \d+ failed/i.test(message)
+    || /Importing a module script failed/i.test(message)
+  );
+}
