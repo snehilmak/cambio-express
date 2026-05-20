@@ -1,6 +1,7 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { tokens } from "./tokens";
+import { Button } from "./Button";
 
 /** Prev/next pagination footer. ``leading`` is for an optional
  *  left-aligned label (e.g. "Page total: $123.45"). */
@@ -26,45 +27,26 @@ export function Pager({
     >
       {leading}
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-        <button
-          type="button"
+        <Button
+          tone="secondary"
+          size="sm"
           onClick={() => onPage(page - 1)}
           disabled={page <= 1}
-          style={{
-            ...pagerBtnStyle,
-            opacity: page <= 1 ? 0.4 : 1,
-            cursor: page <= 1 ? "not-allowed" : "pointer",
-          }}
         >
           ← Prev
-        </button>
+        </Button>
         <span style={{ color: tokens.textMuted, fontSize: "0.85rem" }}>
           {page} / {totalPages}
         </span>
-        <button
-          type="button"
+        <Button
+          tone="secondary"
+          size="sm"
           onClick={() => onPage(page + 1)}
           disabled={page >= totalPages}
-          style={{
-            ...pagerBtnStyle,
-            opacity: page >= totalPages ? 0.4 : 1,
-            cursor: page >= totalPages ? "not-allowed" : "pointer",
-          }}
         >
           Next →
-        </button>
+        </Button>
       </div>
     </div>
   );
 }
-
-
-const pagerBtnStyle: CSSProperties = {
-  background: "transparent",
-  color: tokens.text,
-  border: `1px solid ${tokens.border}`,
-  borderRadius: "0.5rem",
-  padding: "0.4rem 0.9rem",
-  fontFamily: tokens.fontBody,
-  fontSize: "0.85rem",
-};
