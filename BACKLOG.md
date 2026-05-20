@@ -315,15 +315,27 @@ Honest review of the SPA migration architecture. Top of the list = highest
 impact ÷ effort. Numbers are an estimate.
 
 ### P0 — do before public launch
-1. [ ] **Cookie-based JWT** (httpOnly + Secure + SameSite=Strict) instead
-       of localStorage. Closes the XSS-exfil risk — XSS would be able to
-       read the access token from `localStorage` today. With Flask gone
-       there's no "share with legacy Flask" angle; the only audience is
-       the React SPA. ~1 PR.
-2. [ ] **Refresh tokens.** Today access tokens are 30 min with no refresh
-       — users get bumped mid-workflow. Add `/auth/refresh` endpoint +
-       rotation; SPA fetches a new access token before the old one
-       expires. ~1 PR.
+1. [x] **Cookie-based JWT** (httpOnly + Secure + SameSite=Lax) —
+       landed in PR #559.  The access token lives in the
+       `db_access_token` httpOnly cookie; localStorage now holds
+       only the non-secret identity claims (role, store_id,
+       permissions) for chrome rendering.  XSS-exfil vector
+       closed — even an attacker with JS execution can't read the
+       cookie.  Auth dependency accepts EITHER the cookie (SPA
+       flow) OR an `Authorization: Bearer` header (scripts /
+       tests / external API callers) so non-browser clients are
+       unaffected.  See `frontend/src/lib/auth.ts` and
+       `api/Modules/Auth/Controllers/__init__.py::get_principal`.
+2. [x] **Refresh tokens** — landed in PR #560.  `/auth/refresh`
+       rotates an opaque refresh secret (stored as a separate
+       `db_refresh_token` httpOnly cookie scoped to
+       `/api/v2/auth`) and mints a fresh 30-min access token.
+       SPA's `api()` helper does a silent refresh on any 401 and
+       retries the original request once — users no longer get
+       bumped mid-workflow.  Single in-flight refresh promise so
+       concurrent 401s share one round-trip.  See
+       `frontend/src/lib/api.ts::_silentRefresh` +
+       `api/Modules/Auth/Controllers/__init__.py::refresh_route`.
 3. [x] **CI builds the SPA.** Landed (PR #426). `npm ci && npm run lint
        --max-warnings 0 && npm run build` runs in `.github/workflows/
        ci.yml`; a TypeScript regression fails the PR.
@@ -336,11 +348,13 @@ impact ÷ effort. Numbers are an estimate.
 5. [x] **Coverage tracks `api/` too.** Landed in PR #550 — coverage
        source is now `--source=api` (app.py is gone). Total coverage
        is ~93% as of the last run.
-6. [ ] **Generate TS types from FastAPI OpenAPI schema.**
-       `frontend/src/api/*.ts` has hand-written interfaces mirroring
-       `Requests/*.py` Pydantic — drift is inevitable. Add
-       `openapi-typescript` to the SPA build, single source of truth.
-       ~1 PR.
+6. [x] **Generate TS types from FastAPI OpenAPI schema** — landed.
+       `frontend/src/api/openapi.d.ts` is generated from the
+       FastAPI runtime spec via `npm run generate-types`
+       (`scripts/dump_openapi.py` → `openapi-typescript`).  Both
+       files are checked in so the SPA build doesn't need a live
+       backend.  Regenerate after any Pydantic-schema edit — see
+       CLAUDE.md "OpenAPI → TypeScript types" for the contract.
 7. [x] **Retire the WSGI-wraps-ASGI bridge.** Closed by the Flask
        removal (PR #550). `asgi.py` is the production entrypoint —
        FastAPI runs as native ASGI under uvicorn; no a2wsgi anywhere
@@ -353,16 +367,22 @@ impact ÷ effort. Numbers are an estimate.
        `99691740424c_baseline_2026_05` pins the current schema;
        `_ADDED_COLUMNS` is now a safety net rather than the primary
        schema mechanism.
-9. [ ] **Shared SPA component library.** Every route file re-declares
-       `cardStyle`, `inputStyle`, `pageStyle`, `pagerBtn`, etc. (~200
-       lines of token boilerplate per route). Extract `<Card>`,
-       `<Pill>`, `<EmptyState>`, `<Pager>`, `<Field>` into
-       `frontend/src/components/`. Big readability win, no behavior
-       change. ~1 PR.
-10. [ ] **`react-hook-form` + Zod for forms.** Hand-rolled `useState`
-       forms work for now; transfers has 10+ fields and the
-       validation/dirty/error mapping bugs will start. Zod schemas
-       can be generated from OpenAPI too — composes with #6. ~1 PR.
+9. [x] **Shared SPA component library** — landed across the UI
+       polish series (most recently PRs #631 / #634 / #635).  Every
+       route reaches for the primitives in
+       `frontend/src/components/ui/index.tsx` (`Button`, `Input`,
+       `Select`, `Textarea`, `Card`, `Field`, `Alert`, `Pill`,
+       `Pager`, `Table`, `EmptyState`, `ErrorState`, `KpiCard`,
+       `RowActions`, `PageShell`, `PageHeader`, `Section`,
+       `FormActions`) instead of redeclaring inline style blocks.
+       Hover ≠ active vocabulary, `:focus-visible` rings, and the
+       shared `--db-tone-*` palette ship with the kit.
+10. [x] **`react-hook-form` + Zod for forms** — landed in PR #562.
+       Standard stack across the SPA; one `useForm()` per page,
+       schema co-located with the route.  Canonical example for
+       the full layout-+-form pattern is
+       `frontend/src/routes/NewTransfer.tsx`.  See CLAUDE.md's
+       "Forms" invariant.
 
 ### P3 — defer until traffic / scale
 11. [x] **Postgres in dev** (docker-compose). Landed — see the
