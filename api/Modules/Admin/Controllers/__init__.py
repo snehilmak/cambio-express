@@ -146,6 +146,19 @@ def update_store_info_route(
         update_store_info(db, store, fields)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if fields:
+        # Summary lists the field names the operator touched (not the
+        # values — addresses + tax rates are sensitive).  Materially-
+        # important fields like `federal_tax_rate` + `timezone` need
+        # a paper trail so a "wait, why are transfers calculating
+        # differently?" question has an answer.
+        _audit_admin_action(
+            db, claims=claims, action="update_store_info",
+            target_type="store",
+            target_id=str(store.id),
+            target_label=(store.name or "")[:160],
+            summary=f"changed: {', '.join(sorted(fields.keys()))}",
+        )
     db.commit()
     return StoreInfoResponse(store=_to_row(store))
 
@@ -200,6 +213,13 @@ def create_team_member_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    _audit_admin_action(
+        db, claims=claims, action="create_team_member",
+        target_type="team_member",
+        target_id=str(row.id),
+        target_label=(row.name or "")[:160],
+        summary=f"created at hourly_rate={float(row.hourly_rate or 0.0):.2f}",
+    )
     db.commit()
     return _team_row(row)
 
@@ -230,6 +250,24 @@ def update_team_member_route(
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    if fields:
+        # Audit reflects which keys the operator submitted (rename /
+        # reactivate / rate-change distinguish themselves cleanly in
+        # the audit feed) without dumping sensitive values.
+        action = (
+            "reactivate_team_member"
+            if fields.get("is_active") is True
+            else "deactivate_team_member"
+            if fields.get("is_active") is False
+            else "update_team_member"
+        )
+        _audit_admin_action(
+            db, claims=claims, action=action,
+            target_type="team_member",
+            target_id=str(member.id),
+            target_label=(member.name or "")[:160],
+            summary=f"changed: {', '.join(sorted(fields.keys()))}",
+        )
     db.commit()
     return _team_row(member)
 
@@ -251,6 +289,13 @@ def deactivate_team_member_route(
     if member is None:
         raise HTTPException(status_code=404, detail="Team member not found")
     deactivate_team_member(db, member)
+    _audit_admin_action(
+        db, claims=claims, action="deactivate_team_member",
+        target_type="team_member",
+        target_id=str(member.id),
+        target_label=(member.name or "")[:160],
+        summary="soft-deleted (is_active=False)",
+    )
     db.commit()
 
 
@@ -407,9 +452,21 @@ def toggle_addon_route(
     keys = store_addon_keys(store)
     if addon_key in keys:
         keys.discard(addon_key)
+        new_state = "disabled"
     else:
         keys.add(addon_key)
+        new_state = "enabled"
     store.addons = ",".join(sorted(keys))
+    # Add-ons have a price — toggling them is a billable change, so
+    # it deserves a paper trail even when the operator can flip it
+    # themselves.
+    _audit_admin_action(
+        db, claims=claims, action=f"addon_{new_state}",
+        target_type="addon",
+        target_id=addon_key,
+        target_label=str(addon.get("name") or addon_key)[:160],
+        summary=f"{new_state} for store {store.slug or store.id}",
+    )
     db.commit()
     return AddonToggleResponse(
         addon=_adapt_addon(addon_key, addon, is_active=(addon_key in keys)),
@@ -615,6 +672,29 @@ def _audit_user_action(
     is the SPA's cutover-time addition. target_type 'user' is
     truncated to 30 chars by the recorder, well under the limit.
     """
+    _audit_admin_action(
+        db, claims=claims, action=action,
+        target_type="user",
+        target_id=str(target_user.id),
+        target_label=(target_user.username or "")[:160],
+        summary=summary,
+    )
+
+
+def _audit_admin_action(
+    db: Session, *, claims: dict[str, Any], action: str,
+    target_type: str, target_id: str, target_label: str,
+    summary: str,
+) -> None:
+    """Generic per-store operator-audit row.  CLAUDE.md invariant
+    #7 — every mutating admin endpoint records audit — applies to
+    the Admin module too, not just superadmin.  Callers that audit
+    a User specifically should use the thinner `_audit_user_action`
+    above so the call site reads at a glance.
+
+    Use this for `Store` field edits, `StoreEmployee` roster CRUD,
+    and the add-on toggle — any mutation that touches per-store
+    operational state without going through the User path."""
     from api.Modules.Audit.Services import record_operator_action
     sid = int(claims.get("store_id") or 0)
     record_operator_action(
@@ -623,9 +703,9 @@ def _audit_user_action(
         user_id=int(claims.get("sub") or 0) or None,
         user_name=str(claims.get("username") or claims.get("full_name") or ""),
         user_role=str(claims.get("role") or ""),
-        target_type="user",
-        target_id=str(target_user.id),
-        target_label=(target_user.username or "")[:160],
+        target_type=target_type,
+        target_id=target_id,
+        target_label=target_label,
         action=action,
         summary=summary,
     )

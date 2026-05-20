@@ -473,6 +473,27 @@ def owner_unlink_store_route(
     if link is None:
         raise HTTPException(status_code=404, detail="Store not in umbrella")
     db.delete(link)
+    # CLAUDE.md invariant #7 — store-scoped mutation needs an audit
+    # row.  Disconnecting a store from the owner umbrella materially
+    # changes who can see it, so the affected store's admin audit
+    # feed should show that an owner unlinked them.
+    from api.Modules.Audit.Services import record_operator_action
+    from api.Modules.Tenancy.Models import Store
+    target_store = db.get(Store, store_id)
+    record_operator_action(
+        db,
+        store_id=store_id,
+        user_id=int(user.id),
+        user_name=user.full_name or user.username or "",
+        user_role=user.role or "owner",
+        target_type="store_owner_link",
+        target_id=str(store_id),
+        target_label=(getattr(target_store, "name", "") or "")[:160],
+        action="owner_unlink_store",
+        summary=(
+            f"owner '{user.username}' removed this store from their umbrella"
+        ),
+    )
     db.commit()
     return None
 
