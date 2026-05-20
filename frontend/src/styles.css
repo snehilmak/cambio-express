@@ -51,18 +51,26 @@ body {
   grid-template-rows: auto 1fr;
   min-height: 100vh;
   background: var(--db-surface, #0a0a0a);
+  /* Shared topbar/brand-block height so the slim column's
+     under-logo hairline lines up with the topbar's
+     border-bottom + the fly-out panel can dock just under
+     the topbar. */
+  --db-topbar-h: 3.5rem;
 }
 
 .app-sidebar {
   /* The slim icon column + fly-out panel + mobile drawer all
      live inside the <aside class="app-sidebar"> rendered by
-     SlimSidebar.  This rule only carries the mobile-drawer
-     slide animation (see the @media block below) — every other
-     visual rule lives in SlimSidebar.module.css. */
+     SlimSidebar.  The background + right border live here (not
+     on the inner SlimSidebar .iconCol) so the dark column fills
+     the full grid-row height — `grid-row: 1/-1` spans header +
+     content rows, regardless of how tall the content gets. */
   grid-row: 1 / -1;
   grid-column: 1;
   display: flex;
   flex-direction: column;
+  background: var(--db-surface-2, #141414);
+  border-right: 1px solid var(--db-border, #262626);
 }
 
 .app-topbar {
@@ -72,7 +80,9 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 1rem;
-  padding: 0.85rem 1.5rem;
+  min-height: var(--db-topbar-h, 3.5rem);
+  box-sizing: border-box;
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--db-border, #262626);
   background: var(--db-surface-2, #141414);
 }
@@ -120,14 +130,9 @@ body {
   .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
-    /* Mobile drawer needs an opaque surface — the page content
-       sits underneath in the same grid cell and would bleed
-       through the (now-transparent) slim-column aside.  Setting
-       the background only inside the mobile media query so the
-       desktop slim icon column stays styled by
-       SlimSidebar.module.css. */
-    background: var(--db-surface-2, #141414);
-    border-right: 1px solid var(--db-border, #262626);
+    /* background + border-right inherited from the desktop rule
+       above — they now also serve as the opaque drawer surface
+       so page content underneath doesn't bleed through. */
     width: 18rem;
     max-width: 86vw;
     z-index: 50;
@@ -142,6 +147,7 @@ body {
     grid-column: 1;
     grid-row: 1;
     justify-content: space-between;
+    min-height: 0;
     padding: 0.7rem 1rem;
     position: sticky;
     top: 0;

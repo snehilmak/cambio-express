@@ -22,26 +22,34 @@
 /* ── Slim icon column ─────────────────────────────────── */
 
 .iconCol {
-  grid-row: 1 / -1;
-  grid-column: 1;
   width: 4.75rem;
-  background: var(--db-surface-2, #141414);
-  border-right: 1px solid var(--db-border, #262626);
-  padding: 0.6rem 0.4rem;
+  /* No top padding — the brand block owns the topbar-aligned
+     height itself.  Side + bottom padding still apply to the
+     group buttons. Background + border live on `.app-sidebar`
+     (styles.css) so the dark column fills the full viewport
+     height regardless of group count. */
+  padding: 0 0.4rem 0.6rem;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 0.3rem;
+  flex: 1;
   overflow-y: auto;
-  position: relative;   /* anchors the brand wordmark */
+  position: relative;
 }
 
 .brand {
+  /* Match the topbar's height + border so the two horizontal
+     hairlines line up across the top of the app. Negative
+     horizontal margin breaks out of `.iconCol`'s padding so
+     the hairline spans the full slim-column width. */
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.25rem 0 0.55rem;
-  margin-bottom: 0.4rem;
+  min-height: var(--db-topbar-h, 3.5rem);
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0 -0.4rem 0.4rem;
   border-bottom: 1px solid var(--db-border, #262626);
 }
 
@@ -142,8 +150,14 @@
 }
 
 .flyoutPanel {
+  /* Dock just under the topbar so the panel reads as an
+     expansion of the slim column (sibling of the content
+     area), not as a floating popover that's overlapping the
+     header.  `top: var(--db-topbar-h)` lines the panel up with
+     the topbar's border-bottom; the slim column's brand-block
+     border-bottom is at the same Y so all three borders meet. */
   position: fixed;
-  top: 0;
+  top: var(--db-topbar-h, 3.5rem);
   bottom: 0;
   left: 4.75rem;
   width: 17rem;
@@ -156,7 +170,10 @@
   padding: 1rem;
   overflow-y: auto;
   animation: db-flyout-in 160ms ease-out;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  /* Right-only shadow so the panel feels attached to the slim
+     column on its left edge (no shadow gap between them) and
+     casts onto the content column on the right. */
+  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.32);
 }
 
 .flyoutHeader {
