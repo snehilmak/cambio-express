@@ -7,7 +7,7 @@ export type KpiTone =
 
 const kpiAccent: Record<KpiTone, string> = {
   neutral:  tokens.border,
-  primary:  "#63a6ff",            // info-ish blue used in legacy
+  primary:  tokens.info,
   neon:     tokens.accent,
   positive: tokens.accent,
   warning:  tokens.warning,

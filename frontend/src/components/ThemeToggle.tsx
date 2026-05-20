@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { updateProfile } from "../api/account";
 import { applyTheme, getCurrentTheme, type Theme } from "../lib/theme";
+import styles from "./ThemeToggle.module.css";
 
 // Topbar button that flips dark ↔ light.
 //
@@ -40,26 +41,12 @@ export default function ThemeToggle() {
       onClick={onToggle}
       aria-label={label}
       title={label}
-      style={buttonStyle}
+      className={styles.button}
     >
       {theme === "dark" ? <SunIcon /> : <MoonIcon />}
     </button>
   );
 }
-
-const buttonStyle: React.CSSProperties = {
-  appearance: "none",
-  background: "transparent",
-  border: "1px solid var(--db-border, #262626)",
-  color: "var(--db-text, #f5f5f5)",
-  borderRadius: "0.5rem",
-  padding: "0.4rem 0.55rem",
-  cursor: "pointer",
-  display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  lineHeight: 0,
-};
 
 function SunIcon() {
   return (

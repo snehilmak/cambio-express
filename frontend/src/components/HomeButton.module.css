@@ -1,6 +1,11 @@
 /* Topbar "Home" button — quick jump back to /app/home from
  * any page.  Same visual language as InstallAppButton +
  * ThemeToggle so the topbar reads as one toolbar.
+ *
+ * Hover is neutral (not neon) — these buttons are tools, not
+ * active-state indicators.  Neon stays reserved for the
+ * selected sidebar group, the active NavLink, and "you are
+ * here" treatments across the SPA.
  */
 
 .button {
@@ -22,9 +27,13 @@
 }
 
 .button:hover {
-  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.15));
-  color: var(--db-accent, #3fff00);
-  border-color: var(--db-accent, #3fff00);
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.06));
+  border-color: var(--db-border-strong, #404040);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
 }
 
 .button:active {
