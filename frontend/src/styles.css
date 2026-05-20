@@ -51,11 +51,6 @@ body {
   grid-template-rows: auto 1fr;
   min-height: 100vh;
   background: var(--db-surface, #0a0a0a);
-  /* Shared topbar/brand-block height so the slim column's
-     under-logo hairline lines up with the topbar's
-     border-bottom + the fly-out panel can dock just under
-     the topbar. */
-  --db-topbar-h: 3.5rem;
 }
 
 .app-sidebar {
