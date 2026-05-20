@@ -1,18 +1,25 @@
 /* Slim icon-only sidebar + fly-out panel.
  *
  * Desktop (≥768px): a permanent 4.75rem column of group icons.
- * Click a group → fly-out panel (~17rem) slides in from the
+ * Click a group → fly-out panel (~16rem) slides in from the
  * left edge of the content column, showing that group's items
- * as a colored tile grid. Dismisses on click-outside, ESC, or
- * tapping a tile (the route change auto-closes it).
+ * as single-column nav rows. Dismisses on click-outside, ESC,
+ * or tapping a row (the route change auto-closes it).
  *
  * Mobile (<768px): the existing AppShell drawer renders the
- * groups as collapsible accordion sections with tiles inside —
+ * groups as collapsible accordion sections with rows inside —
  * no separate fly-out, no two-pane split, no cramped icons.
  *
- * Inspired by the grocery-store POS layout the user shared:
- * a slim left rail + tile grids in fly-out panels keeps the
- * SPA from feeling cluttered as we add features.
+ * Visual language (unified pass, BACKLOG sidebar polish):
+ *   - Single neon accent (`--db-accent`) on the active row /
+ *     group only; hover is a subtle background tint with no
+ *     color change.  Hover ≠ active everywhere.
+ *   - 1.25rem icons everywhere (group, header, item rows).
+ *   - No drop shadows on the fly-out; the slim column + panel
+ *     share `--db-surface-2` and meet at a 1px border so the
+ *     panel reads as part of the rail, not a popover.
+ *   - `:focus-visible` rings on every interactive surface so
+ *     keyboard nav doesn't fall back to the browser default.
  */
 
 .shell {
@@ -86,37 +93,28 @@
   flex-direction: column;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.6rem 0.25rem;
+  padding: 0.55rem 0.25rem;
   border-radius: 0.55rem;
   cursor: pointer;
   position: relative;
-  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 
+/* Hover only changes the background — no transform, no color
+ * change — so an inactive group never gets mistaken for the
+ * selected one when the cursor passes over it. */
 .groupBtn:hover {
   background: var(--db-fill-neutral, rgba(255,255,255,0.04));
-  color: var(--db-text, #f5f5f5);
-  transform: translateY(-1px);
+}
+
+.groupBtn:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
 }
 
 .groupBtn.isActive {
   background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
   color: var(--db-accent, #3fff00);
-}
-
-/* Left-edge accent bar on the active group — same neon
- * vocabulary as the active row in NavLink + tile borders.
- * Slim 3px so it reads as "you're here" without crowding
- * the icon column. */
-.groupBtn.isActive::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0.35rem;
-  bottom: 0.35rem;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--db-accent, #3fff00);
 }
 
 .groupBtn:active {
@@ -127,8 +125,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
+  width: 1.25rem;
+  height: 1.25rem;
 }
 
 .groupLabel {
@@ -155,25 +153,23 @@
      area), not as a floating popover that's overlapping the
      header.  `top: var(--db-topbar-h)` lines the panel up with
      the topbar's border-bottom; the slim column's brand-block
-     border-bottom is at the same Y so all three borders meet. */
+     border-bottom is at the same Y so all three borders meet.
+     No drop shadow — the 1px `border-right` is enough to
+     separate the panel from the content column. */
   position: fixed;
   top: var(--db-topbar-h, 3.5rem);
   bottom: 0;
   left: 4.75rem;
-  width: 17rem;
+  width: 16rem;
   background: var(--db-surface-2, #141414);
   border-right: 1px solid var(--db-border, #262626);
   z-index: 40;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  padding: 1rem;
+  gap: 0.6rem;
+  padding: 0.9rem 0.55rem;
   overflow-y: auto;
   animation: db-flyout-in 160ms ease-out;
-  /* Right-only shadow so the panel feels attached to the slim
-     column on its left edge (no shadow gap between them) and
-     casts onto the content column on the right. */
-  box-shadow: 6px 0 24px rgba(0, 0, 0, 0.32);
 }
 
 .flyoutHeader {
@@ -184,7 +180,7 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   color: var(--db-text, #f5f5f5);
-  padding: 0 0.2rem 0.55rem;
+  padding: 0 0.4rem 0.55rem;
   border-bottom: 1px solid var(--db-border, #262626);
 }
 
@@ -192,59 +188,64 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.15rem;
-  height: 1.15rem;
+  width: 1.25rem;
+  height: 1.25rem;
   color: var(--db-accent, #3fff00);
 }
 
-.tileGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.tile {
+/* Item list — single-column rows.  Replaced the 2-column tile
+ * grid; long labels ("Owner cross-store defaults", etc.) now
+ * fit without wrapping and the visual language matches the
+ * NavLink rows used elsewhere in the SPA. */
+.itemList {
   display: flex;
   flex-direction: column;
+  gap: 0.1rem;
+}
+
+.itemRow {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  padding: 0.85rem 0.35rem;
-  border-radius: 0.65rem;
+  gap: 0.7rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  text-decoration: none;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.2;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.itemRow:hover {
   background: var(--db-fill-neutral, rgba(255,255,255,0.04));
   color: var(--db-text, #f5f5f5);
-  text-decoration: none;
-  text-align: center;
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1.15;
-  border: 1px solid transparent;
-  transition: background 120ms ease, border-color 120ms ease,
-              transform 120ms ease;
 }
 
-.tile:hover {
+.itemRow:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
+}
+
+.itemRow:active {
+  transform: scale(0.99);
+}
+
+.itemRow.isActive {
   background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
-  border-color: var(--db-accent, #3fff00);
   color: var(--db-accent, #3fff00);
 }
 
-.tile:active {
-  transform: scale(0.97);
-}
-
-.tile.isActive {
-  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
-  border-color: var(--db-accent, #3fff00);
-  color: var(--db-accent, #3fff00);
-}
-
-.tileIcon {
+.itemIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
 }
 
 @keyframes db-flyout-in {
@@ -295,7 +296,7 @@
 .drawerGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: 0.15rem;
 }
 
 .drawerGroupTitle {
@@ -304,5 +305,5 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--db-text-muted, #a3a3a3);
-  padding: 0 0.15rem;
+  padding: 0.5rem 0.55rem 0.25rem;
 }
