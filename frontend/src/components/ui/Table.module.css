@@ -1,0 +1,31 @@
+/* Table wrapper — adds hover + active row styling.
+ *
+ * Vocabulary matches the slim sidebar's hover-row pattern:
+ *   - hover: subtle background tint, nothing else
+ *   - active (.is-active class on the <tr>): neon-tinted
+ *     background + neon-accented left border so a selected
+ *     row reads as "you are here" without crowding the layout
+ *
+ * Rules are scoped to `.wrap > table > tbody tr` so they only
+ * affect data rows — not <thead>, not nested tables, not
+ * skeleton placeholders rendered before <tbody> exists.
+ *
+ * `transition` is on background-color only — no transform — so
+ * row hover doesn't cause layout shift on long lists.
+ */
+
+.wrap > table > tbody > tr {
+  transition: background 120ms ease;
+}
+
+.wrap > table > tbody > tr:hover {
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
+}
+
+.wrap > table > tbody > tr.is-active {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+}
+
+.wrap > table > tbody > tr.is-active > td:first-child {
+  box-shadow: inset 3px 0 0 0 var(--db-accent, #3fff00);
+}

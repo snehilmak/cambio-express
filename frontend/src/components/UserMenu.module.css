@@ -130,8 +130,12 @@
   color: var(--db-text-muted, #a3a3a3);
 }
 
+/* Use the shared `--db-tone-error-*` palette so sign-out hover
+ * paints the same red as `<Alert tone="error">` + `<Pill
+ * tone="negative">` — stops the previous rgba(255, 59, 48, ...)
+ * drift toward iOS-red. */
 .signOut:hover,
 .signOut:focus-visible {
-  color: var(--db-negative, #ff3b30);
-  background: rgba(255, 59, 48, 0.06);
+  color: var(--db-tone-error-fg, #ff4d6d);
+  background: var(--db-tone-error-bg, rgba(255, 77, 109, 0.08));
 }

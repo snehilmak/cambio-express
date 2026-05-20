@@ -1,13 +1,21 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import { fontSize, space } from "./tokens";
+import styles from "./Table.module.css";
 
 // `thStyle` + `tdStyle` are imported from ./tokens.ts directly by
 // route callers (re-exported from the ./index.tsx barrel).
 
 /** Auto-styled ``<table>`` with DS th/td defaults. Children pattern
  *  is the standard ``<thead>…<tbody>…``; this just sets borders +
- *  fonts uniformly. */
+ *  fonts uniformly.
+ *
+ *  The wrapper applies a `tbody tr:hover` rule so rows respond
+ *  visibly when the cursor passes over them — same vocabulary as
+ *  the sidebar's hover rows (background tint only, no transform).
+ *  Routes that want a row to feel "active" (e.g. a selected
+ *  transfer) can add an `.is-active` class to the `<tr>` itself
+ *  — see Table.module.css for the hook. */
 export function Table({
   children, style,
 }: {
@@ -15,7 +23,7 @@ export function Table({
   style?: CSSProperties;
 }) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div className={styles.wrap} style={{ overflowX: "auto" }}>
       <table
         style={{
           width: "100%",

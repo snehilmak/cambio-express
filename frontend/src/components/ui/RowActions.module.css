@@ -97,14 +97,19 @@
   opacity: 0.85;
 }
 
-/* Per-tone tints — match the AdminTimeClock inspiration. */
+/* Per-tone tints — share the Phase-2 `--db-tone-*` palette so a
+ * "Delete" row action paints the same red as `<Alert tone="error">`
+ * + `<Pill tone="negative">`.  Two tones (info / logs) keep their
+ * jewel-tone backgrounds because they map to category colors
+ * (purple = info-style metadata, orange = logs / audit trail) that
+ * the semantic state palette doesn't cover. */
 .sheetTone_primary {
-  background: rgba(63, 255, 0, 0.12);
-  color:      #3fff00;
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+  color:      var(--db-accent, #3fff00);
 }
 .sheetTone_warning {
-  background: rgba(255, 184, 0, 0.12);
-  color:      #ffb800;
+  background: var(--db-tone-warning-bg, rgba(255, 176, 32, 0.08));
+  color:      var(--db-tone-warning-fg, #ffb020);
 }
 .sheetTone_info {
   background: rgba(184, 95, 255, 0.12);
@@ -115,8 +120,8 @@
   color:      #ff8e47;
 }
 .sheetTone_danger {
-  background: rgba(255, 65, 65, 0.12);
-  color:      #ff4141;
+  background: var(--db-tone-error-bg, rgba(255, 77, 109, 0.08));
+  color:      var(--db-tone-error-fg, #ff4d6d);
 }
 
 @keyframes db-sheet-up {
