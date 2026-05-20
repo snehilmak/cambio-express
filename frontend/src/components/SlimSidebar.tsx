@@ -107,14 +107,17 @@ export function SlimSidebar({
         })}
       </div>
 
-      {/* Fly-out panel — desktop only. */}
+      {/* Fly-out panel — desktop only.  Backdrop is a plain
+          div + onClick (not a <button>) so it doesn't grab a
+          tab stop or announce itself to screen readers — it's
+          purely a click-catcher behind the modal panel.  ESC
+          closes the panel via the keydown listener above. */}
       {activeGroup && (
         <>
-          <button
-            type="button"
+          <div
             className={styles.flyoutBackdrop}
-            aria-label="Close menu"
             onClick={() => setOpenGroup(null)}
+            aria-hidden="true"
           />
           <div className={styles.flyoutPanel} role="menu">
             <div className={styles.flyoutHeader}>
@@ -123,18 +126,18 @@ export function SlimSidebar({
               </span>
               {activeGroup.title}
             </div>
-            <div className={styles.tileGrid}>
+            <div className={styles.itemList}>
               {activeGroup.items.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `${styles.tile}${isActive ? " " + styles.isActive : ""}`
+                    `${styles.itemRow}${isActive ? " " + styles.isActive : ""}`
                   }
                   end={false}
                   role="menuitem"
                 >
-                  <span className={styles.tileIcon}>{item.icon}</span>
+                  <span className={styles.itemIcon}>{item.icon}</span>
                   <span>{item.label}</span>
                 </NavLink>
               ))}
@@ -154,17 +157,17 @@ export function SlimSidebar({
         {groups.map((group) => (
           <div key={group.title} className={styles.drawerGroup}>
             <div className={styles.drawerGroupTitle}>{group.title}</div>
-            <div className={styles.tileGrid}>
+            <div className={styles.itemList}>
               {group.items.map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
                   className={({ isActive }) =>
-                    `${styles.tile}${isActive ? " " + styles.isActive : ""}`
+                    `${styles.itemRow}${isActive ? " " + styles.isActive : ""}`
                   }
                   end={false}
                 >
-                  <span className={styles.tileIcon}>{item.icon}</span>
+                  <span className={styles.itemIcon}>{item.icon}</span>
                   <span>{item.label}</span>
                 </NavLink>
               ))}
