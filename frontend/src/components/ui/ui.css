@@ -29,27 +29,38 @@
   --ds-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* ── Cards: hover lift + accent border on hover ────────────── */
+/* ── Cards: subtle hover affordance on interactive cards ──── */
 
 .ds-card {
   transition:
-    transform var(--ds-dur-base) var(--ds-ease),
     border-color var(--ds-dur-base) var(--ds-ease),
-    box-shadow var(--ds-dur-base) var(--ds-ease);
-  will-change: transform;
+    background var(--ds-dur-base) var(--ds-ease);
+}
+
+/* Interactive cards (clickable quick-link tiles, dashboard
+ * panels with a primary CTA, etc.) get a border-color hover +
+ * a barely-perceptible background lighten — same vocabulary
+ * the slim sidebar uses for hover ≠ active.  No shadow, no
+ * translate; persistent surfaces shouldn't float.
+ *
+ * Active (selected/current) state is set explicitly via the
+ * `.is-active` class by the caller — same neon-tint + neon-text
+ * language used everywhere else in the SPA. */
+.ds-card.ds-card--interactive {
+  cursor: pointer;
 }
 
 .ds-card.ds-card--interactive:hover {
-  transform: translateY(-2px);
-  border-color: rgba(63, 255, 0, 0.4);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  border-color: var(--db-border-strong, #404040);
+  background: color-mix(in srgb, var(--db-surface-2, #141414) 92%, white);
 }
 
-.ds-card.ds-card--interactive:active {
-  transform: translateY(0);
+.ds-card.ds-card--interactive:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
 }
 
-/* ── Buttons: scale-press + hover tint ─────────────────────── */
+/* ── Buttons: scale-press + background tint on hover ───────── */
 
 .ds-btn {
   transition:
@@ -60,8 +71,15 @@
     opacity var(--ds-dur-base) var(--ds-ease);
 }
 
-.ds-btn:not(:disabled):hover { transform: translateY(-1px); }
+/* Hover only changes the background (Linear/shadcn vocabulary);
+ * the lift on hover is gone — kept the scale-press on :active
+ * because that's a tactile cue, not a visual claim of state. */
 .ds-btn:not(:disabled):active { transform: scale(0.97); }
+
+.ds-btn:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
+}
 
 .ds-btn--primary:not(:disabled):hover {
   background: color-mix(in srgb, var(--db-accent, #3fff00) 88%, white);
@@ -69,7 +87,7 @@
 
 .ds-btn--secondary:not(:disabled):hover {
   background: var(--db-fill-subtle, rgba(255, 255, 255, 0.04));
-  border-color: rgba(63, 255, 0, 0.4);
+  border-color: var(--db-border-strong, #404040);
 }
 
 .ds-btn--danger:not(:disabled):hover {
@@ -84,7 +102,12 @@
     box-shadow var(--ds-dur-base) var(--ds-ease);
 }
 
-.ds-input:focus {
+/* `:focus-visible` instead of `:focus` so the neon glow only
+ * appears for keyboard navigation — a click already places the
+ * caret in the field and the cursor is the affordance.  This is
+ * shadcn / Linear / Geist's convention.  Click-focused inputs
+ * stay quiet; tab-focused inputs glow. */
+.ds-input:focus-visible {
   border-color: var(--db-accent, #3fff00);
   box-shadow: 0 0 0 3px rgba(63, 255, 0, 0.12);
   outline: none;
@@ -113,6 +136,12 @@
 
 .ds-link:hover::after {
   transform: scaleX(1);
+}
+
+.ds-link:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
+  border-radius: 0.2rem;
 }
 
 /* ── Page entry: subtle fade-up on mount ───────────────────── */
@@ -179,15 +208,20 @@
 /* ── Fallback motion baseline ──────────────────────────────────
  *
  * The .ds-btn / .ds-input / .ds-card / .ds-link classes give the
- * design system its motion, but the SPA still has pages that
- * hand-roll <button style={{...}}> instead of using <Button>. To
- * avoid those raw elements feeling dead, give every common
- * interactive element a baseline transition on the cheap (color +
- * background + border + box-shadow + opacity — never transform,
- * to avoid colliding with `.ds-card--interactive` hover lifts).
+ * design system its motion.  For hand-rolled <button> / <a> /
+ * <input> elements that haven't been migrated to the primitives
+ * yet, this universal selector adds a baseline transition so they
+ * don't pop instantly between states.
+ *
+ * The previous global `opacity: 0.92` hover on raw <button>
+ * elements was retired — it was a noisy fallback that competed
+ * with route-specific hover styles + made every interactive
+ * surface in the SPA dim slightly on hover, which is the opposite
+ * of the Linear/shadcn vocabulary we now follow.  Routes that
+ * still ship raw <button>s should migrate to <Button>.
  *
  * Inline `style={{ transition: ... }}` still wins (CSS specificity
- * favors inline). The `prefers-reduced-motion: reduce` rule in
+ * favors inline).  The `prefers-reduced-motion: reduce` rule in
  * `styles.css` strips this universally for users who asked for it.
  */
 button,
@@ -203,12 +237,15 @@ textarea {
     opacity var(--ds-dur-base) var(--ds-ease);
 }
 
-/* Raw <button> hover/active feedback when no .ds-btn variant is
- * attached. Subtle — we don't want to override the page's own
- * hover styles, just give a hint of life. */
-button:not(.ds-btn):not(:disabled):hover {
-  opacity: 0.92;
-}
-button:not(.ds-btn):not(:disabled):active {
-  opacity: 0.85;
+/* Universal `:focus-visible` ring for hand-rolled buttons / links /
+ * inputs that haven't migrated to a `.ds-*` primitive yet — keeps
+ * keyboard nav consistent across the whole SPA without forcing a
+ * top-down migration. */
+button:not(.ds-btn):not(:disabled):focus-visible,
+a:not(.ds-btn):not(.ds-link):focus-visible,
+input:not(.ds-input):focus-visible,
+select:focus-visible,
+textarea:not(.ds-input):focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
 }

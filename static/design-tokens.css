@@ -88,6 +88,11 @@
   --db-text-muted:     var(--db-gray-7);
   --db-border:         var(--db-gray-3);
   --db-border-subtle:  var(--db-gray-2);
+  /* One step stronger than `--db-border` — used on hover states
+     (buttons, cards) where we want a clear "you can interact"
+     cue without painting the neon accent on a non-active
+     surface (neon stays reserved for the selected/active row). */
+  --db-border-strong:  var(--db-gray-4);
   --db-accent:         var(--db-neon);
   --db-on-accent:      var(--db-neon-ink);
 
