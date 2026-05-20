@@ -348,10 +348,12 @@ def test_refresh_replay_burns_the_chain(test_store_id, client):
     assert rot1.status_code == 200
 
     # Replay the original jti directly via the session client.
-    replay = _starlette_client.request(
-        "POST", "/api/v2/auth/refresh",
-        cookies={"db_refresh_token": first_jti},
-    )
+    # `_starlette_client.cookies.set(...)` (rather than the
+    # per-request `cookies=` kwarg httpx is deprecating) puts the
+    # cookie on the client jar; the conftest cookie-clear between
+    # tests handles cleanup.
+    _starlette_client.cookies.set("db_refresh_token", first_jti)
+    replay = _starlette_client.post("/api/v2/auth/refresh")
     assert replay.status_code == 401, replay.text
 
 
@@ -382,10 +384,11 @@ def test_logout_revokes_refresh_token(test_store_id, client):
     assert any(c.startswith("db_access_token=") for c in clears)
     assert any(c.startswith("db_refresh_token=") for c in clears)
 
-    replay = _starlette_client.request(
-        "POST", "/api/v2/auth/refresh",
-        cookies={"db_refresh_token": captured_jti},
-    )
+    # See test_refresh_replay_burns_the_chain above for the
+    # cookies-on-client pattern (avoids the httpx deprecation
+    # warning on the per-request cookies kwarg).
+    _starlette_client.cookies.set("db_refresh_token", captured_jti)
+    replay = _starlette_client.post("/api/v2/auth/refresh")
     assert replay.status_code == 401
 
 

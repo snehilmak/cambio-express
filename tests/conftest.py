@@ -153,7 +153,17 @@ class AsgiTestClient:
         if json is not None:
             kwargs["json"] = json
         if data is not None:
-            kwargs["data"] = data
+            # httpx splits the Flask-style ``data=`` kwarg into two:
+            # ``data=<dict>`` for form-encoded fields, ``content=
+            # <bytes|str>`` for a raw body.  Passing raw bytes through
+            # ``data=`` works but emits a DeprecationWarning ("Use
+            # `content=<...>` to upload raw bytes/text content") on
+            # every call.  Coerce here so test sites can keep using
+            # the Flask-ish vocabulary without polluting CI logs.
+            if isinstance(data, (bytes, bytearray, str)):
+                kwargs["content"] = data
+            else:
+                kwargs["data"] = data
         if content is not None:
             kwargs["content"] = content
         return AsgiTestResponse(
