@@ -25,11 +25,42 @@ export const tokens = {
   textMuted:      "var(--db-text-muted, #a3a3a3)",
   accent:         "var(--db-accent, #3fff00)",
   onAccent:       "var(--db-on-accent, #0a0a0a)",
-  negative:       "var(--db-negative, #ff3b30)",
-  warning:        "#ffb800",
+  negative:       "var(--db-negative, #ff4d6d)",
+  warning:        "var(--db-warning, #ffb020)",
+  info:           "var(--db-info, #5ea9ff)",
+  positive:       "var(--db-positive, #3fff00)",
   fontDisplay:    "var(--db-font-display, 'Space Grotesk', sans-serif)",
   fontBody:       "var(--db-font-body, 'Inter', system-ui, sans-serif)",
   fontMono:       "var(--db-font-mono, 'JetBrains Mono', monospace)",
+} as const;
+
+// Tone palette — shared by Alert, ErrorState, Pill, Field error
+// surfaces.  Each tone resolves to three layered colors (background
+// tint + border + foreground saturation) defined in
+// `static/design-tokens.css`.  Adding a new tone means adding the
+// three `--db-tone-<name>-{bg,border,fg}` tokens there + extending
+// this map.
+export const toneTokens = {
+  error: {
+    bg:     "var(--db-tone-error-bg, rgba(255,77,109,0.08))",
+    border: "var(--db-tone-error-border, rgba(255,77,109,0.32))",
+    fg:     "var(--db-tone-error-fg, #ff4d6d)",
+  },
+  warning: {
+    bg:     "var(--db-tone-warning-bg, rgba(255,176,32,0.08))",
+    border: "var(--db-tone-warning-border, rgba(255,176,32,0.32))",
+    fg:     "var(--db-tone-warning-fg, #ffb020)",
+  },
+  success: {
+    bg:     "var(--db-tone-success-bg, rgba(63,255,0,0.08))",
+    border: "var(--db-tone-success-border, rgba(63,255,0,0.32))",
+    fg:     "var(--db-tone-success-fg, #3fff00)",
+  },
+  info: {
+    bg:     "var(--db-tone-info-bg, rgba(94,169,255,0.08))",
+    border: "var(--db-tone-info-border, rgba(94,169,255,0.32))",
+    fg:     "var(--db-tone-info-fg, #5ea9ff)",
+  },
 } as const;
 
 export const monoStyle: CSSProperties = { fontFamily: tokens.fontMono };
