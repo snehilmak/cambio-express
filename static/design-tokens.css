@@ -52,6 +52,36 @@
   --db-warning:     #ffb020;
   --db-info:        #5ea9ff;
 
+  /* RGB triplets of the four semantic state colors — so components
+     can build translucent backgrounds + borders via
+     `rgba(var(--db-negative-rgb), 0.08)` without having to redeclare
+     the hex each time.  Stops the drift we had: Alert / ErrorState /
+     Pill each baked in slightly different (255,59,48) reds instead of
+     `--db-negative` (#ff4d6d, which is 255,77,109). */
+  --db-positive-rgb: 63, 255, 0;
+  --db-negative-rgb: 255, 77, 109;
+  --db-warning-rgb:  255, 176, 32;
+  --db-info-rgb:     94, 169, 255;
+
+  /* Tone tints — shared by Alert, ErrorState, EmptyState, Pill, and
+     the field-level error states.  Each tone has a translucent
+     background, a slightly stronger border, and a saturated
+     foreground for icons + small text.  Everything that wants to
+     render an "error" / "warning" / "success" / "info" surface
+     should reach for these tokens instead of redefining the rgba. */
+  --db-tone-error-bg:       rgba(var(--db-negative-rgb), 0.08);
+  --db-tone-error-border:   rgba(var(--db-negative-rgb), 0.32);
+  --db-tone-error-fg:       var(--db-negative);
+  --db-tone-warning-bg:     rgba(var(--db-warning-rgb), 0.08);
+  --db-tone-warning-border: rgba(var(--db-warning-rgb), 0.32);
+  --db-tone-warning-fg:     var(--db-warning);
+  --db-tone-success-bg:     rgba(var(--db-positive-rgb), 0.08);
+  --db-tone-success-border: rgba(var(--db-positive-rgb), 0.32);
+  --db-tone-success-fg:     var(--db-positive);
+  --db-tone-info-bg:        rgba(var(--db-info-rgb), 0.08);
+  --db-tone-info-border:    rgba(var(--db-info-rgb), 0.32);
+  --db-tone-info-fg:        var(--db-info);
+
   /* ── Company accents (muted jewel tones) ── */
   --db-co-intermex: #5ea9ff;
   --db-co-maxi:     #b48cff;

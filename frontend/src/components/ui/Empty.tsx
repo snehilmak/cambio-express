@@ -30,7 +30,14 @@ export function Empty({
 
 /** Full block empty state with icon + title + body + optional CTA.
  *  Use when the WHOLE region (a table, a card body, a tab pane)
- *  has zero content, not for inline "Loading…" messages. */
+ *  has zero content, not for inline "Loading…" messages.
+ *
+ *  Visual language (Linear / Notion / shadcn): empty isn't a
+ *  failure or a celebration — it's just neutral.  The icon container
+ *  uses a muted surface tint instead of the neon accent it had
+ *  before so empty tables don't shout "look at me" the moment they
+ *  load.  Neon stays reserved for active / selected state across
+ *  the SPA. */
 export function EmptyState({
   icon, title, body, cta,
 }: {
@@ -54,14 +61,14 @@ export function EmptyState({
     >
       <span
         style={{
-          width: "3rem", height: "3rem",
-          borderRadius: "0.75rem",
-          background: "rgba(63, 255, 0, 0.08)",
-          border: "1px solid rgba(63, 255, 0, 0.25)",
+          width: "2.75rem", height: "2.75rem",
+          borderRadius: "0.7rem",
+          background: tokens.surface3,
+          border: `1px solid ${tokens.border}`,
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          color: tokens.accent,
+          color: tokens.textMuted,
           marginBottom: space.xs,
         }}
         aria-hidden
@@ -70,7 +77,14 @@ export function EmptyState({
       </span>
       <div style={{ fontWeight: 600, fontSize: fontSize.lg }}>{title}</div>
       {body && (
-        <div style={{ color: tokens.textMuted, maxWidth: "32rem" }}>
+        <div
+          style={{
+            color: tokens.textMuted,
+            maxWidth: "32rem",
+            fontSize: fontSize.sm,
+            lineHeight: 1.5,
+          }}
+        >
           {body}
         </div>
       )}
