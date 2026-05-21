@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useCountUp } from "../lib/useCountUp";
+import { useReveal } from "../lib/useReveal";
+
 // Marketing landing page. Translated 1:1 from templates/landing.html
 // (the legacy Jinja version still served at `/`). Always renders —
 // signed-in visitors see the same marketing copy and can click
@@ -78,56 +81,55 @@ export default function Landing() {
         </div>
       </section>
 
-      <FeaturesSection />
+      <RevealSection><FeaturesSection /></RevealSection>
 
-      <section className="stat-strip">
-        <div className="stat-strip-inner">
-          <div className="stat-cell"><div className="stat-k">2,400+</div><div className="stat-v">MSB shops using daily</div></div>
-          <div className="stat-cell"><div className="stat-k">$4.2B</div><div className="stat-v">transactions logged</div></div>
-          <div className="stat-cell"><div className="stat-k">12 min</div><div className="stat-v">avg daily close time</div></div>
-          <div className="stat-cell"><div className="stat-k">99.9%</div><div className="stat-v">uptime · 12 months</div></div>
-        </div>
-      </section>
+      <AnimatedStatStrip />
 
-      <section className="how" id="how">
-        <div className="how-inner">
-          <div className="section-eye">// HOW IT WORKS</div>
-          <h2 className="section-heading" style={{ marginBottom: 64 }}>From paper to profitable<br /><span className="accent">in three steps.</span></h2>
-          <div className="how-grid">
-            <div className="how-step"><div className="n">01</div><div className="t">Sign up</div><div className="b">Create your store in 60 seconds. No credit card, no sales call.</div><div className="arrow">→</div></div>
-            <div className="how-step"><div className="n">02</div><div className="t">Log your day</div><div className="b">Cash in/out, money orders, check cashing, transfers. One screen, auto-saves.</div><div className="arrow">→</div></div>
-            <div className="how-step"><div className="n">03</div><div className="t">Close the month</div><div className="b">P&L auto-populates. Export for your accountant. Spot variances before they bite.</div></div>
+      <RevealSection>
+        <section className="how" id="how">
+          <div className="how-inner">
+            <div className="section-eye">// HOW IT WORKS</div>
+            <h2 className="section-heading" style={{ marginBottom: 64 }}>From paper to profitable<br /><span className="accent">in three steps.</span></h2>
+            <div className="how-grid">
+              <div className="how-step"><div className="n">01</div><div className="t">Sign up</div><div className="b">Create your store in 60 seconds. No credit card, no sales call.</div><div className="arrow">→</div></div>
+              <div className="how-step"><div className="n">02</div><div className="t">Log your day</div><div className="b">Cash in/out, money orders, check cashing, transfers. One screen, auto-saves.</div><div className="arrow">→</div></div>
+              <div className="how-step"><div className="n">03</div><div className="t">Close the month</div><div className="b">P&L auto-populates. Export for your accountant. Spot variances before they bite.</div></div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </RevealSection>
 
-      <PricingSection />
+      <RevealSection><PricingSection /></RevealSection>
 
-      <section className="faq">
-        <div className="faq-inner">
-          <div className="section-eye">// QUESTIONS</div>
-          <h2 className="faq-title-plain">Answered.</h2>
-          {FAQS.map(([q, a], idx) => (
-            <details className="faq-item" key={idx} open={idx === 0}>
-              <summary>{q} <span className="plus">+</span></summary>
-              <p>{a}</p>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      <section className="cta-band">
-        <div className="cta-glow" aria-hidden="true" />
-        <div className="cta-inner">
-          <div className="section-eye">// READY?</div>
-          <h2 className="cta-title">Your first daily book<br />takes <span className="accent">ten minutes.</span></h2>
-          <p className="cta-p">No credit card. 7-day Pro trial. Cancel anytime, keep your data.</p>
-          <div className="cta-ctas">
-            <Link to="/signup" className="btn-primary">Start free trial →</Link>
-            <Link to="/login" className="btn-ghost">Sign in</Link>
+      <RevealSection>
+        <section className="faq">
+          <div className="faq-inner">
+            <div className="section-eye">// QUESTIONS</div>
+            <h2 className="faq-title-plain">Answered.</h2>
+            {FAQS.map(([q, a], idx) => (
+              <details className="faq-item" key={idx} open={idx === 0}>
+                <summary>{q} <span className="plus">+</span></summary>
+                <p>{a}</p>
+              </details>
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
+      </RevealSection>
+
+      <RevealSection>
+        <section className="cta-band">
+          <div className="cta-glow" aria-hidden="true" />
+          <div className="cta-inner">
+            <div className="section-eye">// READY?</div>
+            <h2 className="cta-title">Your first daily book<br />takes <span className="accent">ten minutes.</span></h2>
+            <p className="cta-p">No credit card. 7-day Pro trial. Cancel anytime, keep your data.</p>
+            <div className="cta-ctas">
+              <Link to="/signup" className="btn-primary">Start free trial →</Link>
+              <Link to="/login" className="btn-ghost">Sign in</Link>
+            </div>
+          </div>
+        </section>
+      </RevealSection>
 
       <footer className="site">
         <div className="foot-inner">
@@ -143,6 +145,58 @@ export default function Landing() {
         </div>
       </footer>
     </>
+  );
+}
+
+
+/** Wrapper that fades + slides its children in once they enter the
+ *  viewport.  Uses `useReveal` to flip a `.is-revealed` class; the
+ *  actual transition lives in LANDING_CSS so reduced-motion users
+ *  see the static content immediately. */
+function RevealSection({ children }: { children: React.ReactNode }) {
+  const { ref, revealed } = useReveal<HTMLDivElement>();
+  return (
+    <div
+      ref={ref}
+      className={`reveal${revealed ? " is-revealed" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+
+/** Stat strip with numbers that count up from zero as soon as the
+ *  strip enters the viewport.  Each cell shares the `revealed`
+ *  trigger from the same Intersection Observer so the four
+ *  counters fire together in sync. */
+function AnimatedStatStrip() {
+  const { ref, revealed } = useReveal<HTMLElement>();
+  const shops    = useCountUp(2400, { trigger: revealed });
+  const dollars  = useCountUp(4.2,  { trigger: revealed });
+  const closeMin = useCountUp(12,   { trigger: revealed });
+  const uptime   = useCountUp(99.9, { trigger: revealed });
+  return (
+    <section ref={ref} className={`stat-strip reveal${revealed ? " is-revealed" : ""}`}>
+      <div className="stat-strip-inner">
+        <div className="stat-cell">
+          <div className="stat-k">{Math.round(shops).toLocaleString()}+</div>
+          <div className="stat-v">MSB shops using daily</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-k">${dollars.toFixed(1)}B</div>
+          <div className="stat-v">transactions logged</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-k">{Math.round(closeMin)} min</div>
+          <div className="stat-v">avg daily close time</div>
+        </div>
+        <div className="stat-cell">
+          <div className="stat-k">{uptime.toFixed(1)}%</div>
+          <div className="stat-v">uptime · 12 months</div>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -526,6 +580,82 @@ const LANDING_CSS = `
 html,body{font-family:var(--db-font-body);background:var(--db-bg);color:var(--db-gray-9);-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
 a{color:inherit}
 ::selection{background:var(--db-neon);color:var(--db-neon-ink)}
+
+/* ── Scroll-reveal animation (OnePlus-style fade + slide up
+   as sections enter viewport).  Driven by the useReveal hook
+   in src/lib/useReveal.ts; this CSS only owns the transition
+   between states.  Reduced-motion users get .is-revealed
+   set immediately by the hook so they see the static content
+   with no transition. ─────────────────────────────────────── */
+.reveal{
+  opacity:0;
+  transform:translateY(40px);
+  transition:opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
+             transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change:opacity,transform;
+}
+.reveal.is-revealed{opacity:1;transform:translateY(0)}
+
+/* Stat strip's stat cells get a tiny stagger so the four
+   numbers don't all fly in at the exact same instant.
+   The .is-revealed nth-child rules below delay each cell
+   without per-cell JS. */
+.reveal.is-revealed .stat-strip-inner .stat-cell{
+  transition:transform 600ms cubic-bezier(0.22, 1, 0.36, 1),
+             opacity 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* "How it works" steps stagger in too — gives a nice cascade
+   effect as the section reveals. */
+.reveal .how-step{
+  opacity:0;transform:translateY(20px);
+  transition:opacity 500ms cubic-bezier(0.22, 1, 0.36, 1),
+             transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.reveal.is-revealed .how-step:nth-child(1){opacity:1;transform:translateY(0);transition-delay:80ms}
+.reveal.is-revealed .how-step:nth-child(2){opacity:1;transform:translateY(0);transition-delay:200ms}
+.reveal.is-revealed .how-step:nth-child(3){opacity:1;transform:translateY(0);transition-delay:320ms}
+
+/* Hero glow: gentle breathing animation so the page feels
+   alive even before the user scrolls.  ≤8s cycle keeps it
+   from being distracting; 0.92→1.0 opacity range stays subtle. */
+@keyframes db-hero-glow-pulse{
+  0%,100%{opacity:.92;transform:scale(1)}
+  50%{opacity:1;transform:scale(1.04)}
+}
+.hero-glow{
+  animation:db-hero-glow-pulse 7s ease-in-out infinite;
+  transform-origin:center;
+  will-change:opacity,transform;
+}
+
+/* How-step + faq cards: lift on hover — same vocabulary as
+   the kit's interactive cards.  Marketing pages can afford
+   a more pronounced lift than the app chrome. */
+.how-step{
+  transition:transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+             border-color 200ms ease,
+             box-shadow 200ms ease;
+}
+.how-step:hover{
+  transform:translateY(-4px);
+  border-color:var(--db-neon-glow-40, rgba(63,255,0,0.4));
+  box-shadow:0 12px 32px rgba(0,0,0,0.4);
+}
+
+/* Honor prefers-reduced-motion globally for this page so
+   scroll-driven motion + the hero pulse + hover lifts all
+   collapse to instant transitions. */
+@media (prefers-reduced-motion: reduce){
+  .reveal,.reveal.is-revealed,.reveal .how-step,
+  .reveal.is-revealed .how-step{
+    opacity:1!important;transform:none!important;
+    transition:none!important;animation:none!important;
+  }
+  .hero-glow{animation:none!important}
+  .how-step{transition:none!important}
+  .how-step:hover{transform:none!important}
+}
 
 nav.site{position:sticky;top:0;z-index:100;background:rgba(11,13,18,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);padding:0 48px;height:64px;display:flex;align-items:center;gap:20px;border-bottom:1px solid var(--db-gray-2)}
 .nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none}
