@@ -10,7 +10,8 @@ import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
-  Pager, Select, Table, TableSkeleton, tdStyle, thStyle,
+  Pager, Pill, Select, Table, TableSkeleton, tdStyle, thStyle,
+  type PillTone,
 } from "../components/ui";
 import styles from "./AdminAuditLog.module.css";
 
@@ -223,24 +224,21 @@ function AuditTable({
 
 
 function ActionBadge({ action }: { action: string }) {
-  const palette: Record<string, { bg: string; fg: string; border: string }> = {
-    create:         { bg: "rgba(63,255,0,0.10)",  fg: "#3fff00", border: "rgba(63,255,0,0.35)" },
-    created:        { bg: "rgba(63,255,0,0.10)",  fg: "#3fff00", border: "rgba(63,255,0,0.35)" },
-    update:         { bg: "rgba(94,169,255,0.10)", fg: "#5ea9ff", border: "rgba(94,169,255,0.35)" },
-    updated:        { bg: "rgba(94,169,255,0.10)", fg: "#5ea9ff", border: "rgba(94,169,255,0.35)" },
-    delete:         { bg: "rgba(255,77,109,0.10)", fg: "#ff4d6d", border: "rgba(255,77,109,0.35)" },
-    deleted:        { bg: "rgba(255,77,109,0.10)", fg: "#ff4d6d", border: "rgba(255,77,109,0.35)" },
-    lock:           { bg: "rgba(255,176,32,0.10)", fg: "#ffb020", border: "rgba(255,176,32,0.35)" },
-    unlock:         { bg: "rgba(255,176,32,0.10)", fg: "#ffb020", border: "rgba(255,176,32,0.35)" },
-    status_changed: { bg: "rgba(255,221,87,0.10)", fg: "#ffdd57", border: "rgba(255,221,87,0.35)" },
+  // Maps audit-action verb → shared Pill tone.  Pre-Phase-2 this
+  // file hand-rolled the same rgba palette AccountActivity did;
+  // both surfaces now inherit the `--db-tone-*` tokens via the
+  // kit primitive — drift-proof going forward.
+  const toneByAction: Record<string, PillTone> = {
+    create:         "success",
+    created:        "success",
+    update:         "info",
+    updated:        "info",
+    delete:         "negative",
+    deleted:        "negative",
+    lock:           "warning",
+    unlock:         "warning",
+    status_changed: "warning",
   };
-  const c = palette[action] ?? { bg: "#1c1c1c", fg: "#a3a3a3", border: "#2a2a2a" };
-  return (
-    <span
-      className={styles.actionBadge}
-      style={{ background: c.bg, color: c.fg, border: `1px solid ${c.border}` }}
-    >
-      {action}
-    </span>
-  );
+  const tone: PillTone = toneByAction[action] ?? "neutral";
+  return <Pill tone={tone}>{action}</Pill>;
 }
