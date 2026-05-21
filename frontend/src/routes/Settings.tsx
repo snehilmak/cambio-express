@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState, type FormEvent } from "react";
+import { Outlet } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -26,12 +27,20 @@ import {
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
   PageHeader, PageShell, SectionTitle, Select,
+  TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./Settings.module.css";
 
-// Account settings page at /app/settings. v1 ships the
-// change-password card; subsequent PRs add profile / preferences /
-// 2FA / passkey management.
+// /app/settings — tabbed admin / account hub.  The route is a
+// LAYOUT route (this default export renders the page chrome +
+// `<Outlet />`); each tab is a child route mounted in App.tsx
+// (`SettingsGeneral`, `SettingsTeam`, `SettingsBilling`,
+// `SettingsSecurity`).  Tab URLs are deep-linkable, browser back
+// works correctly, and each section's form-save logic stays
+// independent.
+//
+// /app/settings (no sub-path) redirects to /app/settings/general
+// so existing inbound links keep working.
 
 export default function Settings() {
   const identity = getCurrentIdentity();
@@ -40,12 +49,41 @@ export default function Settings() {
     <PageShell maxWidth="60rem" gap="1rem">
       <PageHeader title="Settings" subtitle={identity?.username || "—"} />
 
-      <StoreInfoCard />
-      <SubscriptionCard />
-      <TeamCard />
+      <TabsBar>
+        <TabsLink to="/settings/general">General</TabsLink>
+        <TabsLink to="/settings/team">Team</TabsLink>
+        <TabsLink to="/settings/billing">Billing</TabsLink>
+        <TabsLink to="/settings/security">Security</TabsLink>
+      </TabsBar>
+
+      <Outlet />
+    </PageShell>
+  );
+}
+
+
+/** Tab content components.  Each is registered as a child route in
+ *  App.tsx.  They wrap the existing pre-tabs `…Card` components
+ *  unchanged, so the form-save logic + state management didn't have
+ *  to be rewritten — the refactor is purely structural.  */
+export function SettingsGeneral() {
+  return <StoreInfoCard />;
+}
+
+export function SettingsTeam() {
+  return <TeamCard />;
+}
+
+export function SettingsBilling() {
+  return <SubscriptionCard />;
+}
+
+export function SettingsSecurity() {
+  return (
+    <>
       <ChangePasswordCard />
       <PasskeysCard />
-    </PageShell>
+    </>
   );
 }
 
