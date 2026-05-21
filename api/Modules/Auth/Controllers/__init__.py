@@ -103,10 +103,45 @@ _REFRESH_COOKIE_PATH = "/api/v2/auth"
 
 
 def _is_https_prod() -> bool:
-    """``True`` when ``APP_BASE_URL`` points at HTTPS, so cookies
-    get the ``Secure`` flag in prod but stay accessible to dev /
-    CI / test clients running on plain HTTP."""
-    return os.environ.get("APP_BASE_URL", "").startswith("https://")
+    """``True`` when the deployment is HTTPS — cookies need the
+    ``Secure`` flag so iOS PWAs + modern browsers persist them
+    correctly between sessions.
+
+    Detection priority:
+      1. ``APP_BASE_URL`` starts with ``https://`` — explicit prod.
+      2. ``RENDER`` env var is set — Render injects this in every
+         service; the platform always serves over HTTPS.
+      3. ``DATABASE_URL`` starts with ``postgres`` — dev uses
+         SQLite, prod uses Postgres.  Belt + suspenders.
+
+    Without ``Secure``, iOS Safari aggressively drops cookies in
+    PWA mode (the "PWA logs out on cold open" bug), and Chrome's
+    "Lax+POST" + future SameSite tightening could break the
+    refresh-token round-trip too.  Marking cookies Secure on every
+    HTTPS deploy is safe — browsers treat ``localhost`` as
+    Secure-equivalent so dev over plain HTTP still works.
+    """
+    if os.environ.get("APP_BASE_URL", "").startswith("https://"):
+        return True
+    if os.environ.get("RENDER"):
+        return True
+    if os.environ.get("DATABASE_URL", "").startswith("postgres"):
+        return True
+    return False
+
+
+# Log the auth-cookie posture once at import time so the operator
+# can confirm Secure cookies are actually being set in prod without
+# spelunking through individual response headers.  Tagged at INFO
+# so it surfaces in Render's default log filter.
+import logging as _logging  # noqa: E402
+_cookie_posture_log = _logging.getLogger("api.Modules.Auth.cookies")
+_cookie_posture_log.info(
+    "auth.cookie_posture secure=%s app_base_url=%s render=%s",
+    _is_https_prod(),
+    bool(os.environ.get("APP_BASE_URL")),
+    bool(os.environ.get("RENDER")),
+)
 
 
 def _set_access_token_cookie(response: Response, token: str) -> None:
@@ -590,7 +625,14 @@ def refresh_route(
       * Already revoked → replay (legitimate user rotated past it)
       * Expired → past the 14-day TTL
     """
+    import logging
+    _refresh_log = logging.getLogger("api.Modules.Auth.refresh")
+    ua = _client_user_agent(request)[:60]
     if not db_refresh_token:
+        _refresh_log.info(
+            "auth.refresh_no_cookie ua=%r ip=%s",
+            ua, _client_ip_address(request),
+        )
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
         raise HTTPException(
@@ -607,7 +649,11 @@ def refresh_route(
             user_agent=_client_user_agent(request),
             ip_address=_client_ip_address(request),
         )
-    except RefreshTokenInvalid:
+    except RefreshTokenInvalid as exc:
+        _refresh_log.info(
+            "auth.refresh_invalid jti=%s... reason=%s ua=%r",
+            db_refresh_token[:8], type(exc).__name__, ua,
+        )
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
         raise HTTPException(
@@ -618,6 +664,12 @@ def refresh_route(
     # full JWT claim set (role, store_id, permissions, …).
     user = db.get(User, old_row.user_id)
     if user is None or not user.is_active:
+        _refresh_log.warning(
+            "auth.refresh_user_unavailable user_id=%s active=%s ua=%r",
+            old_row.user_id,
+            bool(getattr(user, "is_active", False)) if user else False,
+            ua,
+        )
         _clear_access_token_cookie(response)
         _clear_refresh_token_cookie(response)
         raise HTTPException(status_code=401, detail="User unavailable")
@@ -637,6 +689,10 @@ def refresh_route(
         max_age_seconds=DEFAULT_REFRESH_TOKEN_TTL_SECONDS,
     )
     db.commit()
+    _refresh_log.info(
+        "auth.refresh_ok user_id=%s session_id=%s ua=%r",
+        user.id, new.session_id, ua,
+    )
     return LoginResponse(
         access_token=new_access,
         expires_in=DEFAULT_ACCESS_TOKEN_TTL_SECONDS,
