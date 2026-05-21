@@ -4,7 +4,7 @@ import { useReturnChecks, type ReturnCheckRow } from "../api/returnChecks";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, ButtonLink, Card, Empty, EmptyState, ErrorState, PageHeader,
-  PageShell, TableSkeleton, tokens,
+  PageShell, Pill, TableSkeleton, tokens, type PillTone,
 } from "../components/ui";
 
 // Bounced-check workflow list at /app/return-checks. Filter by
@@ -223,29 +223,18 @@ function Table({ rows }: { rows: ReturnCheckRow[] }) {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const palette: Record<string, { bg: string; fg: string }> = {
-    pending:   { bg: "rgba(255,184,0,0.15)",  fg: "#ffb800" },
-    recovered: { bg: "rgba(63,255,0,0.15)",   fg: "#3fff00" },
-    loss:      { bg: "rgba(255,59,48,0.15)",  fg: "#ff3b30" },
-    fraud:     { bg: "rgba(255,59,48,0.20)",  fg: "#ff6b60" },
+  // Maps return-check status → shared Pill tone so the badge
+  // palette stays in lock-step with every other tone surface in
+  // the SPA (Alert / ErrorState / audit-log badges / plan pills).
+  const toneByStatus: Record<string, PillTone> = {
+    pending:   "warning",
+    recovered: "success",
+    loss:      "negative",
+    fraud:     "negative",
   };
-  const c = palette[status] ?? { bg: "transparent", fg: "#a3a3a3" };
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        background: c.bg,
-        color: c.fg,
-        borderRadius: "999px",
-        padding: "0.2rem 0.6rem",
-        fontSize: "0.78rem",
-        fontWeight: 600,
-        textTransform: "capitalize",
-      }}
-    >
-      {status}
-    </span>
-  );
+  const tone: PillTone = toneByStatus[status] ?? "neutral";
+  const label = status.charAt(0).toUpperCase() + status.slice(1);
+  return <Pill tone={tone}>{label}</Pill>;
 }
 
 const cellStyle: React.CSSProperties = {

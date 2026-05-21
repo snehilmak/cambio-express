@@ -97,11 +97,33 @@ function renderWithLinks(message: string): ReactNode {
   return nodes.length > 0 ? nodes : message;
 }
 
+// Maps announcement level → the shared `--db-tone-*` tokens so
+// the banner palette stays in lock-step with the Alert kit
+// primitive + every other tone surface in the SPA.  Pre-Phase-2
+// this was a hand-rolled rgba palette with lighter "fg" hues
+// for legibility on the tinted backgrounds; the shared tokens
+// already encode the same legibility intent.
 const palette: Record<string, { bg: string; border: string; fg: string }> = {
-  info:    { bg: "rgba(99,166,255,0.12)", border: "rgba(99,166,255,0.35)", fg: "#9ec5ff" },
-  warning: { bg: "rgba(255,184,0,0.12)",  border: "rgba(255,184,0,0.35)",  fg: "#ffd766" },
-  error:   { bg: "rgba(255,59,48,0.12)",  border: "rgba(255,59,48,0.35)",  fg: "#ff8a82" },
-  success: { bg: "rgba(63,255,0,0.10)",   border: "rgba(63,255,0,0.30)",   fg: "#7cff5c" },
+  info: {
+    bg:     "var(--db-tone-info-bg, rgba(94,169,255,0.12))",
+    border: "var(--db-tone-info-border, rgba(94,169,255,0.35))",
+    fg:     "var(--db-tone-info-fg, #5ea9ff)",
+  },
+  warning: {
+    bg:     "var(--db-tone-warning-bg, rgba(255,176,32,0.12))",
+    border: "var(--db-tone-warning-border, rgba(255,176,32,0.35))",
+    fg:     "var(--db-tone-warning-fg, #ffb020)",
+  },
+  error: {
+    bg:     "var(--db-tone-error-bg, rgba(255,77,109,0.12))",
+    border: "var(--db-tone-error-border, rgba(255,77,109,0.35))",
+    fg:     "var(--db-tone-error-fg, #ff4d6d)",
+  },
+  success: {
+    bg:     "var(--db-tone-success-bg, rgba(63,255,0,0.10))",
+    border: "var(--db-tone-success-border, rgba(63,255,0,0.30))",
+    fg:     "var(--db-tone-success-fg, #3fff00)",
+  },
 };
 
 export function AnnouncementBanner() {

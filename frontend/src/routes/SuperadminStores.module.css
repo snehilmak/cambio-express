@@ -36,11 +36,7 @@
   font-size: 0.85rem;
 }
 
-.planPill {
-  display: inline-block;
-  border-radius: 999px;
-  padding: 0.15rem 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
+/* `.planPill` retired — PlanPill now uses the kit `<Pill>`
+ * primitive directly, which carries its own styling via the
+ * shared `--db-tone-*` tokens.  Capitalisation lives in TS
+ * land (`plan.charAt(0).toUpperCase()`). */
