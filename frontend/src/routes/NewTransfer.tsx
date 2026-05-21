@@ -16,6 +16,7 @@ import {
   PageShell,
   Section,
   Select,
+  space,
   tokens,
 } from "../components/ui";
 import { getOpenStatus } from "../lib/datetime";
@@ -522,7 +523,7 @@ function FederalTaxPreview({
       {exempt && (
         <span style={{
           display: "block",
-          marginTop: "0.25rem",
+          marginTop: space.xs,
           fontSize: "0.75rem",
           color: tokens.textMuted,
         }}>

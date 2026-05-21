@@ -5,7 +5,7 @@ import type { MyActivityRow } from "../api/account";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Button, Card, EmptyState, ErrorState, Field, PageHeader, PageShell,
-  Pager, Pill, Select, Table, TableSkeleton, tdStyle, thStyle,
+  Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
   type PillTone,
 } from "../components/ui";
 import styles from "./AccountActivity.module.css";
@@ -43,7 +43,7 @@ export default function AccountActivity() {
     <PageShell>
       <PageHeader title="My activity" />
 
-      <Card style={{ marginBottom: "1rem" }}>
+      <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
           Filters
           <span className={styles.cardHeaderCount}>

@@ -10,7 +10,7 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Alert, Button, Card, ErrorState, Loading, PageHeader, PageShell, Section,
-  Table, tdStyle, thStyle, tokens,
+  space, Table, tdStyle, thStyle, tokens,
 } from "../components/ui";
 import styles from "./AccountSessions.module.css";
 
@@ -117,7 +117,7 @@ export default function AccountSessions() {
       />
 
       {toast && (
-        <div style={{ marginBottom: "1rem" }}>
+        <div style={{ marginBottom: space.lg }}>
           <Alert tone="success">
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <span>{toast}</span>
@@ -134,7 +134,7 @@ export default function AccountSessions() {
       )}
 
       {revokeError && (
-        <div style={{ marginBottom: "1rem" }}>
+        <div style={{ marginBottom: space.lg }}>
           <Alert tone="error">{revokeError}</Alert>
         </div>
       )}

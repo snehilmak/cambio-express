@@ -11,7 +11,7 @@ import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
   Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader,
-  PageShell, Section, Table, tdStyle, thStyle,
+  PageShell, Section, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Customers.module.css";
 
@@ -197,7 +197,7 @@ export default function Customers() {
       />
 
       {toast && (
-        <div style={{ marginBottom: "1rem" }}>
+        <div style={{ marginBottom: space.lg }}>
           <Alert tone="success">
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <span>{toast}</span>
@@ -222,7 +222,7 @@ export default function Customers() {
         />
       )}
 
-      <Card style={{ marginBottom: "1rem" }}>
+      <Card style={{ marginBottom: space.lg }}>
         <Field label="Search">
           <Input
             type="search"
@@ -305,7 +305,7 @@ function MergeBanner({
   onProceed: () => void;
 }) {
   return (
-    <Card style={{ marginBottom: "1rem" }}>
+    <Card style={{ marginBottom: space.lg }}>
       <div className={styles.mergeBanner}>
         <div>
           <strong>Merge mode</strong>

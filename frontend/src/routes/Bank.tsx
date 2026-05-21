@@ -15,7 +15,7 @@ import {
 import { ApiError } from "../lib/api";
 import {
   Alert, Button, ButtonLink, Card, EmptyState, ErrorState, Loading, PageHeader,
-  PageShell, Table, TableSkeleton, tdStyle, thStyle,
+  PageShell, space, Table, TableSkeleton, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Bank.module.css";
 
@@ -243,7 +243,7 @@ export default function Bank() {
               busy={busy === "connect"}
               disabled={busy !== null}
               onClick={() => { void handleConnect(); }}
-              style={{ marginTop: "1rem" }}
+              style={{ marginTop: space.lg }}
             >
               {busy === "connect" ? "Opening Stripe…" : "Connect Bank via Stripe →"}
             </Button>

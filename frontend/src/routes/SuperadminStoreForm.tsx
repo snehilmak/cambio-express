@@ -13,7 +13,7 @@ import { ApiError } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select,
+  PageHeader, PageShell, SectionTitle, Select, space,
 } from "../components/ui";
 import styles from "./SuperadminStoreForm.module.css";
 
@@ -225,7 +225,7 @@ export default function SuperadminStoreForm() {
       <Card padding="1.5rem">
         <SectionTitle>{cardTitle}</SectionTitle>
 
-        <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+        <div style={{ marginTop: space.lg, display: "flex", flexDirection: "column", gap: space.md }}>
           {serverError && <Alert tone="error">{serverError}</Alert>}
           {saved && <Alert tone="success">Store updated.</Alert>}
         </div>
@@ -369,7 +369,7 @@ export default function SuperadminStoreForm() {
             </>
           )}
 
-          <div style={{ marginTop: "1.5rem", display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div style={{ marginTop: space.xl, display: "flex", gap: space.md, flexWrap: "wrap" }}>
             <Button
               type="submit"
               busy={busy}

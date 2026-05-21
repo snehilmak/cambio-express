@@ -10,7 +10,7 @@ import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Button, Card, Empty, EmptyState, ErrorState, Field, PageHeader, PageShell,
-  Pager, Pill, Select, Table, TableSkeleton, tdStyle, thStyle,
+  Pager, Pill, Select, space, Table, TableSkeleton, tdStyle, thStyle,
   type PillTone,
 } from "../components/ui";
 import styles from "./AdminAuditLog.module.css";
@@ -58,7 +58,7 @@ export default function AdminAuditLog() {
     <PageShell>
       <PageHeader title="Activity Log" />
 
-      <Card style={{ marginBottom: "1rem" }}>
+      <Card style={{ marginBottom: space.lg }}>
         <div className={styles.cardHeader}>
           Filters
           <span className={styles.cardHeaderCount}>
