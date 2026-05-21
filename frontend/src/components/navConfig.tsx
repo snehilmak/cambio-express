@@ -124,7 +124,7 @@ export const NAV: NavGroup[] = [
         icon: iconSettings(),
       },
       {
-        to: "/account/profile", label: "Profile",
+        to: "/settings/profile", label: "Profile",
         icon: iconCustomers(),
       },
       {

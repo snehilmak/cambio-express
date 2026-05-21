@@ -19,7 +19,7 @@ import styles from "./AdminUserForm.module.css";
 // surface 1:1 (username on create only, password optional on
 // edit, role pick, is_active checkbox on edit). Field-level
 // errors come back as 422 with `field_errors` (mirroring the
-// AccountProfile pattern).
+// Settings profile-tab pattern).
 
 export default function AdminUserForm() {
   const { uid: uidStr } = useParams();

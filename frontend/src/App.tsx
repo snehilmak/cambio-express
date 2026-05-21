@@ -16,7 +16,6 @@ import NotFound from "./routes/NotFound";
 
 const AccountActivity = lazy(() => import("./routes/AccountActivity"));
 const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
-const AccountProfile = lazy(() => import("./routes/AccountProfile"));
 const AccountSessions = lazy(() => import("./routes/AccountSessions"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
@@ -65,6 +64,11 @@ const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const Settings = lazy(() => import("./routes/Settings"));
+const SettingsProfile = lazy(
+  () => import("./routes/Settings").then(
+    (m) => ({ default: m.SettingsProfile }),
+  ),
+);
 const SettingsGeneral = lazy(
   () => import("./routes/Settings").then(
     (m) => ({ default: m.SettingsGeneral }),
@@ -291,7 +295,11 @@ export default function App() {
           <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
           <Route path="timeclock"             element={<TimeClock />} />
           <Route path="account/referrals"     element={<AdminReferrals />} />
-          <Route path="account/profile"       element={<AccountProfile />} />
+          {/* Legacy /account/profile — profile is now the first
+              tab inside /settings (see the consolidation that
+              moved the standalone page into Settings).  Keep a
+              redirect for bookmarks + the rare deep link. */}
+          <Route path="account/profile"       element={<Navigate to="/settings/profile" replace />} />
           <Route path="account/notifications" element={<AccountNotifications />} />
           <Route path="account/activity"      element={<AccountActivity />} />
           <Route path="account/sessions"      element={<AccountSessions />} />
@@ -303,10 +311,13 @@ export default function App() {
           </Route>
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
           <Route path="settings" element={<Settings />}>
-            {/* index → redirect to /settings/general so legacy
-                links keep working without an explicit /general
-                in the URL. */}
-            <Route index element={<Navigate to="general" replace />} />
+            {/* Profile is the first tab — landing on /settings
+                with no sub-path drops you into Profile so you
+                see "your stuff" first, not the store-wide
+                General tab.  /account/profile redirects here
+                for back-compat. */}
+            <Route index element={<Navigate to="profile" replace />} />
+            <Route path="profile" element={<SettingsProfile />} />
             <Route path="general" element={<SettingsGeneral />} />
             <Route path="team" element={<SettingsTeam />} />
             <Route path="billing" element={<SettingsBilling />} />

@@ -9,15 +9,19 @@ import {
   deletePasskey,
   passkeysSupported,
   registerPasskey,
+  updateProfile,
   updateStoreInfo,
   updateTeamMember,
   usePasskeys,
+  useProfile,
   useStoreInfo,
   useTeam,
+  type ProfileUpdateBody,
   type StoreHourEntry,
   type TeamMemberRow,
 } from "../api/account";
 import { ApiError } from "../lib/api";
+import { formatTimestamp } from "../lib/datetime";
 import { getCurrentIdentity } from "../lib/auth";
 import {
   GeolocationDeniedError,
@@ -26,7 +30,7 @@ import {
 } from "../lib/geolocation";
 import {
   Alert, Button, ButtonLink, Card, ErrorState, Field, Input, Loading,
-  PageHeader, PageShell, SectionTitle, Select,
+  PageHeader, PageShell, SectionTitle, Select, space,
   TabsBar, TabsLink,
 } from "../components/ui";
 import styles from "./Settings.module.css";
@@ -50,6 +54,7 @@ export default function Settings() {
       <PageHeader title="Settings" subtitle={identity?.username || "—"} />
 
       <TabsBar>
+        <TabsLink to="/settings/profile">Profile</TabsLink>
         <TabsLink to="/settings/general">General</TabsLink>
         <TabsLink to="/settings/team">Team</TabsLink>
         <TabsLink to="/settings/billing">Billing</TabsLink>
@@ -66,6 +71,10 @@ export default function Settings() {
  *  App.tsx.  They wrap the existing pre-tabs `…Card` components
  *  unchanged, so the form-save logic + state management didn't have
  *  to be rewritten — the refactor is purely structural.  */
+export function SettingsProfile() {
+  return <ProfileCard />;
+}
+
 export function SettingsGeneral() {
   return <StoreInfoCard />;
 }
@@ -84,6 +93,219 @@ export function SettingsSecurity() {
       <ChangePasswordCard />
       <PasskeysCard />
     </>
+  );
+}
+
+function ProfileCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError, error, refetch } = useProfile();
+  const { data: storeInfo } = useStoreInfo();
+  const storeTz = storeInfo?.store?.timezone ?? "";
+
+  const [draft, setDraft] = useState<ProfileUpdateBody>({});
+  const [busy, setBusy]   = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!data) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate local editable draft from server-fetched profile so inputs are controlled from first paint
+    setDraft({
+      full_name:        data.full_name,
+      email:            data.email,
+      phone:            data.phone,
+      timezone:         data.timezone,
+      theme_preference: data.theme_preference,
+    });
+  }, [data]);
+
+  function set<K extends keyof ProfileUpdateBody>(
+    key: K, value: ProfileUpdateBody[K],
+  ) {
+    setDraft((d) => ({ ...d, [key]: value }));
+    if (saved) setSaved(false);
+    if (fieldErrors[key as string]) {
+      setFieldErrors((e) => {
+        const next = { ...e }; delete next[key as string]; return next;
+      });
+    }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!data) return;
+    setBusy(true);
+    setServerError(null);
+    setFieldErrors({});
+    try {
+      await updateProfile(draft);
+      setSaved(true);
+      queryClient.invalidateQueries({ queryKey: ["account", "profile"] });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 422) {
+        const detail = (err.body as { detail?: { field_errors?: Record<string, string> } })?.detail;
+        if (detail?.field_errors) {
+          setFieldErrors(detail.field_errors);
+        } else {
+          setServerError(err.message);
+        }
+      } else if (err instanceof ApiError) {
+        setServerError(err.message);
+      } else {
+        setServerError("Network error. Try again.");
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isLoading) {
+    return <Card><SectionTitle>Personal info</SectionTitle><Loading /></Card>;
+  }
+  if (isError || !data) {
+    return (
+      <Card>
+        <SectionTitle>Personal info</SectionTitle>
+        <ErrorState
+          message={`Couldn't load your profile.${error instanceof Error ? ` ${error.message}` : ""}`}
+          onRetry={() => { void refetch(); }}
+        />
+      </Card>
+    );
+  }
+
+  const memberSince = data.created_at
+    ? new Date(data.created_at).toLocaleDateString("en-US", {
+        month: "short", day: "2-digit", year: "numeric",
+      })
+    : "—";
+  const lastLogin = data.last_login_at
+    ? formatTimestamp(data.last_login_at, {
+        userTimezone: data.timezone,
+        storeTimezone: storeTz,
+      })
+    : "—";
+
+  return (
+    <Card>
+      <SectionTitle>Personal info</SectionTitle>
+      <p className={styles.profileLead}>
+        Used for things addressed to you personally — receipts,
+        password-reset emails, audit-log attribution. Your
+        username and role are set by your store admin and shown
+        here for reference.
+      </p>
+
+      {serverError && <Alert tone="error">{serverError}</Alert>}
+      {saved && <Alert tone="success">Profile updated.</Alert>}
+
+      <form
+        onSubmit={onSubmit}
+        autoComplete="off"
+        style={{ display: "flex", flexDirection: "column", gap: space.lg, marginTop: space.lg }}
+      >
+        <Field label="Display name *" error={fieldErrors.full_name}>
+          <Input
+            type="text" maxLength={120} required
+            value={draft.full_name ?? ""}
+            onChange={(e) => set("full_name", e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+
+        <Field
+          label="Email"
+          error={fieldErrors.email}
+          hint="We use this for password reset and account notices. Leave blank if you'd rather not receive email."
+        >
+          <Input
+            type="email" maxLength={255}
+            autoComplete="email"
+            placeholder="you@example.com"
+            value={draft.email ?? ""}
+            onChange={(e) => set("email", e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+
+        <Field label="Phone" error={fieldErrors.phone}>
+          <Input
+            type="tel" maxLength={40}
+            autoComplete="tel"
+            placeholder="+1 555 123 4567"
+            value={draft.phone ?? ""}
+            onChange={(e) => set("phone", e.target.value)}
+            disabled={busy}
+          />
+        </Field>
+
+        <Field
+          label="Timezone"
+          error={fieldErrors.timezone}
+          hint="Daily reports + audit timestamps render in this zone for you. Don't see yours? Ask your admin to add it."
+        >
+          <Select
+            value={draft.timezone ?? ""}
+            onChange={(e) => set("timezone", e.target.value)}
+            disabled={busy}
+          >
+            <option value="">— Use store / UTC default —</option>
+            {data.timezone_choices.map((tz) => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field
+          label="Appearance"
+          error={fieldErrors.theme_preference}
+          hint="Follows you to every browser you sign in on. The topbar toggle is a quicker shortcut for the same setting."
+        >
+          <Select
+            value={draft.theme_preference ?? "dark"}
+            onChange={(e) =>
+              set(
+                "theme_preference",
+                e.target.value as "dark" | "light",
+              )
+            }
+            disabled={busy}
+          >
+            <option value="dark">Dark (default)</option>
+            <option value="light">Light</option>
+          </Select>
+        </Field>
+
+        <hr className={styles.profileHr} />
+
+        <div className={styles.profileReadOnlyGrid}>
+          <ProfileReadOnly label="Username" value={data.username} />
+          <ProfileReadOnly label="Role" value={
+            data.role.charAt(0).toUpperCase() + data.role.slice(1)
+          } />
+          <ProfileReadOnly label="Member since" value={memberSince} />
+          <ProfileReadOnly label="Last sign-in" value={lastLogin} />
+        </div>
+
+        <div style={{ marginTop: space.sm, display: "flex", gap: "0.6rem" }}>
+          <Button type="submit" busy={busy} disabled={busy}>
+            {busy ? "Saving…" : "Save profile"}
+          </Button>
+        </div>
+      </form>
+    </Card>
+  );
+}
+
+function ProfileReadOnly({ label, value }: { label: string; value: string }) {
+  return (
+    <Field label={label}>
+      <Input
+        type="text" disabled value={value || "—"}
+        style={{ opacity: 0.7, cursor: "not-allowed" }}
+      />
+    </Field>
   );
 }
 

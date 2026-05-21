@@ -5,7 +5,7 @@ import { toneTokens } from "./tokens";
 // Inline banner for form errors, success confirmations, and
 // neutral notices.  Replaces the ``alertErrorStyle`` /
 // ``serverError`` blocks that were duplicated across ~10 routes
-// (AdminUserForm, SuperadminStoreForm, AccountProfile, etc.).
+// (AdminUserForm, SuperadminStoreForm, Settings, etc.).
 // Use for in-form messaging; for global cross-page announcements
 // ``<AnnouncementBanner>`` (mounted inside ``AppShell``) is the
 // right surface.

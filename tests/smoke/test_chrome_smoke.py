@@ -27,7 +27,9 @@ _ADMIN_SPA_ROUTES = [
     # PR #577 added these to the user-menu dropdown — verify the
     # routes themselves still render. (The dropdown link reachability
     # is covered by `test_admin_user_menu_dropdown_opens` below.)
-    "/app/account/profile",
+    # Profile collapsed from /account/profile into the first
+    # tab of /settings; the old URL still redirects there.
+    "/app/settings/profile",
     "/app/account/notifications",
 ]
 
