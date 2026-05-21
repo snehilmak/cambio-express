@@ -41,7 +41,7 @@ export default function AdminReferrals() {
             Refer another store, both of you get credit. Activate Basic
             or Pro and your referral code mints automatically.
           </p>
-          <ButtonLink href="/app/subscribe" tone="primary" style={{ marginTop: "1rem" }}>
+          <ButtonLink to="/subscribe" tone="primary" style={{ marginTop: "1rem" }}>
             See plans →
           </ButtonLink>
         </Card>

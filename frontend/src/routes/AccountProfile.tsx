@@ -233,7 +233,7 @@ export default function AccountProfile() {
               <Button type="submit" busy={busy} disabled={busy}>
                 {busy ? "Saving…" : "Save profile"}
               </Button>
-              <ButtonLink href="/app/settings" tone="secondary">
+              <ButtonLink to="/settings" tone="secondary">
                 Security →
               </ButtonLink>
             </div>
