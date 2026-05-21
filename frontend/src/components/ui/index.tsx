@@ -71,3 +71,4 @@ export {
   type RowActionTone,
 } from "./RowActions";
 export { FormActions } from "./FormActions";
+export { TabsBar, TabsLink, TabsButton } from "./Tabs";

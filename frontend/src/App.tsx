@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 
 import AppShell from "./components/AppShell";
 import RequireAuth from "./components/RequireAuth";
@@ -65,6 +65,26 @@ const ResetPassword = lazy(() => import("./routes/ResetPassword"));
 const ReturnCheckForm = lazy(() => import("./routes/ReturnCheckForm"));
 const ReturnChecks = lazy(() => import("./routes/ReturnChecks"));
 const Settings = lazy(() => import("./routes/Settings"));
+const SettingsGeneral = lazy(
+  () => import("./routes/Settings").then(
+    (m) => ({ default: m.SettingsGeneral }),
+  ),
+);
+const SettingsTeam = lazy(
+  () => import("./routes/Settings").then(
+    (m) => ({ default: m.SettingsTeam }),
+  ),
+);
+const SettingsBilling = lazy(
+  () => import("./routes/Settings").then(
+    (m) => ({ default: m.SettingsBilling }),
+  ),
+);
+const SettingsSecurity = lazy(
+  () => import("./routes/Settings").then(
+    (m) => ({ default: m.SettingsSecurity }),
+  ),
+);
 const Signup = lazy(() => import("./routes/Signup"));
 const SignupOwner = lazy(() => import("./routes/SignupOwner"));
 const Subscribe = lazy(() => import("./routes/Subscribe"));
@@ -262,7 +282,16 @@ export default function App() {
           <Route path="account/sessions"      element={<AccountSessions />} />
           <Route path="tv-display"            element={<TVDisplayAdmin />} />
           <Route path="tv-display/countries/:countryId" element={<TVDisplayCountry />} />
-          <Route path="settings"         element={<Settings />} />
+          <Route path="settings" element={<Settings />}>
+            {/* index → redirect to /settings/general so legacy
+                links keep working without an explicit /general
+                in the URL. */}
+            <Route index element={<Navigate to="general" replace />} />
+            <Route path="general" element={<SettingsGeneral />} />
+            <Route path="team" element={<SettingsTeam />} />
+            <Route path="billing" element={<SettingsBilling />} />
+            <Route path="security" element={<SettingsSecurity />} />
+          </Route>
           {/* Authed catch-all keeps the AppShell chrome around the 404
               so a stray click doesn't make the user think they got
               signed out (the old top-level catch-all rendered NotFound

@@ -1,0 +1,72 @@
+/* Horizontal tab bar primitive — used to split long pages into
+ * logical areas (Settings, etc.).  Two variants of the tab itself
+ * (URL-routed NavLink + local-state button) share the same `.tab`
+ * class so the visual treatment stays consistent.
+ *
+ * Vocabulary matches the rest of the kit (sidebar / kit buttons /
+ * pills): hover is a subtle background lighten, active is a
+ * neon-tinted background + neon text + a neon underline.
+ * Horizontal scroll on overflow so 6+ tabs on a narrow phone
+ * don't wrap and break the layout.
+ */
+
+.bar {
+  display: flex;
+  gap: 0.25rem;
+  align-items: stretch;
+  padding: 0.2rem;
+  background: var(--db-surface-2, #141414);
+  border: 1px solid var(--db-border, #262626);
+  border-radius: 0.7rem;
+  overflow-x: auto;
+  /* Hide scrollbar on Firefox while still letting it scroll. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--db-border-strong, #404040) transparent;
+}
+
+.bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.bar::-webkit-scrollbar-thumb {
+  background: var(--db-border-strong, #404040);
+  border-radius: 999px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--db-text-muted, #a3a3a3);
+  font-family: var(--db-font-body, "Inter", system-ui, sans-serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.tab:hover {
+  background: var(--db-fill-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--db-text, #f5f5f5);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--db-accent, #3fff00);
+  outline-offset: 2px;
+}
+
+.tab:active {
+  transform: scale(0.98);
+}
+
+.tab.isActive {
+  background: var(--db-neon-glow-15, rgba(63, 255, 0, 0.12));
+  color: var(--db-accent, #3fff00);
+}
