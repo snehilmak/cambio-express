@@ -149,6 +149,7 @@ function PrimaryForm({
   busy: boolean;
   onSubmit: (e: FormEvent) => void;
 }) {
+  const navigate = useNavigate();
   return (
     <>
       <div className="status-pill" aria-hidden="true">
@@ -206,7 +207,18 @@ function PrimaryForm({
           Enter the store code your manager gave you. We'll take you to
           your store's sign-in page.
         </div>
-        <form method="POST" action="/employee-login">
+        {/* Was posting to /employee-login (legacy Flask handler
+            removed in PR #550); now navigates client-side to
+            /login/{slug} which `LoginStore` handles. */}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = e.currentTarget;
+            const raw = (form.elements.namedItem("store_code") as HTMLInputElement | null)?.value || "";
+            const slug = raw.trim().toLowerCase();
+            if (slug) navigate(`/login/${encodeURIComponent(slug)}`);
+          }}
+        >
           <input
             type="text"
             name="store_code"
