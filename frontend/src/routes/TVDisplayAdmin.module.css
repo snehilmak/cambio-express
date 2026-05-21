@@ -94,36 +94,9 @@
   color: var(--text-muted);
 }
 
-.primaryButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 18px;
-  background: var(--db-neon);
-  color: #000;
-  border: 1px solid var(--db-neon);
-  border-radius: 8px;
-  font-family: "Inter", sans-serif;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.dangerOutlineButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
-  background: transparent;
-  color: var(--db-negative);
-  border: 1px solid var(--db-negative);
-  border-radius: 8px;
-  font-family: "Inter", sans-serif;
-  font-weight: 600;
-  font-size: 12.5px;
-  cursor: pointer;
-}
+/* `.primaryButton` + `.dangerOutlineButton` retired — every
+ * caller now uses the kit `<Button>` / `<ButtonLink>` primitives
+ * which carry hover / focus-visible / busy semantics for free. */
 
 .urlBar {
   display: flex;
@@ -158,20 +131,8 @@
   color: var(--text);
 }
 
-.urlBarButton {
-  padding: 0 16px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: transparent;
-  border: 0;
-  border-left: 1px solid var(--border);
-  color: var(--text);
-  cursor: pointer;
-  text-decoration: none;
-}
+/* `.urlBarButton` retired — Copy + Open buttons now use the
+ * kit `<Button>` / `<ButtonLink>` primitives. */
 
 .detailsSummary {
   cursor: pointer;

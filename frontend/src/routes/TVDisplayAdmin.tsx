@@ -13,7 +13,7 @@ import {
 import { useProfile, useStoreInfo } from "../api/account";
 import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
-import { Button, ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
+import { Button, ButtonLink, ErrorState, Loading, TabsBar, TabsLink } from "../components/ui";
 import styles from "./TVDisplayAdmin.module.css";
 
 // /app/tv-display — TV Display add-on operator console.
@@ -243,14 +243,13 @@ function Hero({
         </div>
       </div>
       <div>
-        <a
+        <ButtonLink
           href={data.public_url}
           target="_blank"
           rel="noopener"
-          className={styles.primaryButton}
         >
           Open TV view ↗
-        </a>
+        </ButtonLink>
       </div>
     </section>
   );
@@ -307,14 +306,14 @@ function PublicUrlBar({
             : copyState === "fail" ? "Select + copy"
             : "Copy"}
         </Button>
-        <a
+        <ButtonLink
           href={publicUrl}
+          tone="secondary" size="sm"
           target="_blank"
           rel="noopener"
-          className={styles.urlBarButton}
         >
           Open ↗
-        </a>
+        </ButtonLink>
       </div>
       <details
         style={{ marginTop: 8 }}
@@ -329,14 +328,14 @@ function PublicUrlBar({
             Rotating the token immediately breaks the current URL.
             You'll need to reload every TV in your store after rotating.
           </p>
-          <button
-            type="button"
+          <Button
+            tone="danger" size="sm"
             onClick={regenerate}
+            busy={regenerating}
             disabled={regenerating}
-            className={styles.dangerOutlineButton}
           >
             {regenerating ? "Regenerating…" : "Regenerate display URL"}
-          </button>
+          </Button>
         </div>
       </details>
     </section>
@@ -428,13 +427,13 @@ function PairFireTV({
             aria-label="Code shown on your Fire TV"
             className={styles.pairInput}
           />
-          <button
+          <Button
             type="submit"
+            busy={claimPending}
             disabled={!codeValid || claimPending}
-            className={styles.primaryButton}
           >
             {claimPending ? "Pairing…" : "Pair"}
-          </button>
+          </Button>
         </form>
       </div>
       {flash && (
@@ -458,14 +457,14 @@ function PairFireTV({
               {formatPairTimestamp(activePairing.last_seen_at, userTimezone, storeTimezone)}
             </div>
           </div>
-          <button
-            type="button"
+          <Button
+            tone="danger" size="sm"
             onClick={() => revoke(activePairing.id)}
+            busy={revokePending}
             disabled={revokePending}
-            className={styles.dangerOutlineButton}
           >
             {revokePending ? "Unpairing…" : "Unpair this Fire TV"}
-          </button>
+          </Button>
         </div>
       )}
     </section>

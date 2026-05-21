@@ -7,7 +7,7 @@ import {
 } from "../api/reportDrilldown";
 import { downloadCsv } from "../lib/api";
 import {
-  EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
+  Button, EmptyState, ErrorState, KpiCard, KpiGrid, PageHeader,
   PageShell, TableSkeleton, tdStyle, thStyle,
 } from "./ui";
 import styles from "./ReportDrilldown.module.css";
@@ -123,22 +123,20 @@ export function ReportDrilldown({
                   />
                 </label>
               </form>
-              <button
-                type="button"
-                className={styles.btnOutline}
+              <Button
+                tone="secondary" size="sm"
                 onClick={() => {
                   void downloadCsv(csvHref, csvFilename(csvUrl, from, to));
                 }}
               >
                 Export CSV
-              </button>
-              <button
-                type="button"
-                className={styles.btnOutline}
+              </Button>
+              <Button
+                tone="secondary" size="sm"
                 onClick={() => window.print()}
               >
                 Print / PDF
-              </button>
+              </Button>
             </div>
           )}
         />

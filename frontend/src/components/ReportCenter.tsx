@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 
+import { ButtonLink } from "./ui";
 import styles from "./ReportCenter.module.css";
 
 // Shared report-center accordion used by /app/reports,
@@ -140,7 +141,7 @@ function ReportRowView({ report }: { report: ReportRow }) {
       </div>
       <div>
         {ready
-          ? <a href={report.url ?? "#"} className={styles.primaryButton}>View</a>
+          ? <ButtonLink href={report.url ?? "#"} size="sm">View</ButtonLink>
           : <span className={styles.pill}>Coming soon</span>}
       </div>
     </div>
