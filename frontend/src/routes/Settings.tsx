@@ -862,54 +862,62 @@ function StoreInfoCard() {
   }
 
   return (
-    <Card>
-      <SectionTitle>Store</SectionTitle>
-      <p className={styles.slugRow}>
-        Slug <code className={styles.slug}>{data.store.slug}</code>{" "}
-        · plan {data.store.plan}
-      </p>
-      <form onSubmit={onSubmit} className={styles.storeGrid}>
-        <Field label="Store name">
-          <Input type="text" value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={!canEdit} required />
-        </Field>
-        <Field label="Email">
-          <Input type="email" value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={!canEdit} />
-        </Field>
-        <Field label="Phone">
-          <Input type="tel" value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            disabled={!canEdit} />
-        </Field>
-        <Field label="Address">
-          <Input type="text" value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            disabled={!canEdit} />
-        </Field>
-        <Field label="Federal tax rate (%)">
-          <Input type="number" step="0.01" min="0" max="100"
-            value={taxRatePct}
-            onChange={(e) => setTaxRatePct(e.target.value)}
-            disabled={!canEdit} />
-        </Field>
-        <Field
-          label="Timezone"
-          hint="Default timezone for date / time rendering. Cashiers can override on their personal profile. Empty = use the browser default."
-        >
-          <Select
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-            disabled={!canEdit}
+    // One form wraps all three cards so the operator can edit
+    // anywhere and save the whole tab atomically.  Splitting the
+    // form would create "did I save just this section?" doubt.
+    <form
+      onSubmit={onSubmit}
+      style={{ display: "flex", flexDirection: "column", gap: space.lg }}
+    >
+      <Card>
+        <SectionTitle>Store</SectionTitle>
+        <p className={styles.slugRow}>
+          Slug <code className={styles.slug}>{data.store.slug}</code>{" "}
+          · plan {data.store.plan}
+        </p>
+        <div className={styles.storeGrid}>
+          <Field label="Store name">
+            <Input type="text" value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={!canEdit} required />
+          </Field>
+          <Field label="Email">
+            <Input type="email" value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Phone">
+            <Input type="tel" value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Address">
+            <Input type="text" value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field label="Federal tax rate (%)">
+            <Input type="number" step="0.01" min="0" max="100"
+              value={taxRatePct}
+              onChange={(e) => setTaxRatePct(e.target.value)}
+              disabled={!canEdit} />
+          </Field>
+          <Field
+            label="Timezone"
+            hint="Default timezone for date / time rendering. Cashiers can override on their personal profile. Empty = use the browser default."
           >
-            <option value="">Use browser default</option>
-            {(data.store.timezone_choices ?? []).map((tz) => (
-              <option key={tz} value={tz}>{tz}</option>
-            ))}
-          </Select>
-        </Field>
+            <Select
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              disabled={!canEdit}
+            >
+              <option value="">Use browser default</option>
+              {(data.store.timezone_choices ?? []).map((tz) => (
+                <option key={tz} value={tz}>{tz}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
         {/* Receipt customization fields are intentionally hidden —
            DineroBook is a ledger, not a money-transmitter, so
            customer-facing receipts don't belong here. The columns
@@ -917,91 +925,94 @@ function StoreInfoCard() {
            hydrate / send them (empty strings round-trip cleanly)
            so re-enabling is a single-file revert. See App.tsx
            lazy-import comment for the matching route hide. */}
-        <div className={styles.spanFull}>
-          <SectionTitle>Business hours</SectionTitle>
-          <p className={styles.helpText}>
-            One row per day (Monday-first). Toggle "Closed" to mark
-            the day off; open / close times use 24-hour
-            <code> HH:MM</code> format. Saving with no edits keeps
-            the default Mon-Sat 9-6 / Sun closed template.
-          </p>
-          <StoreHoursEditor
-            hours={hours}
-            onChange={setHours}
+      </Card>
+
+      <Card>
+        <SectionTitle>Business hours</SectionTitle>
+        <p className={styles.helpText}>
+          One row per day (Monday-first). Toggle "Closed" to mark
+          the day off; open / close times use 24-hour
+          <code> HH:MM</code> format. Saving with no edits keeps
+          the default Mon-Sat 9-6 / Sun closed template.
+        </p>
+        <StoreHoursEditor
+          hours={hours}
+          onChange={setHours}
+          disabled={!canEdit}
+        />
+        <label className={styles.enforceRow}>
+          <input
+            type="checkbox"
+            checked={enforceHours}
+            disabled={!canEdit}
+            onChange={(e) => setEnforceHours(e.target.checked)}
+          />{" "}
+          Block transfers outside these hours
+          <span className={styles.enforceHint}>
+            {" "}— refuses transfer saves with an error when
+            outside the open window. The soft warning on the New
+            Transfer form fires regardless of this toggle.
+          </span>
+        </label>
+      </Card>
+
+      <Card>
+        <SectionTitle>Time-clock policy</SectionTitle>
+        <p className={styles.helpText}>
+          Anti-buddy-punching gates for clock-in / clock-out and
+          the lateness threshold used by the payroll view.
+        </p>
+        <label className={styles.enforceRow}>
+          <input
+            type="checkbox"
+            checked={requirePasskey}
+            disabled={!canEdit}
+            onChange={(e) => setRequirePasskey(e.target.checked)}
+          />{" "}
+          Block time-clock punches without a passkey
+          <span className={styles.enforceHint}>
+            {" "}— every clock-in / clock-out demands a fresh
+            Windows Hello / Touch ID / Face ID prompt. Enroll
+            each cashier's device from
+            {" "}<code>/app/admin/timeclock/credentials</code>
+            {" "}before flipping this on.
+          </span>
+        </label>
+        <GeofenceSettingsSection
+          canEdit={canEdit}
+          requireGeofence={requireGeofence}
+          onChangeRequireGeofence={setRequireGeofence}
+          geoLat={geoLat}     onChangeGeoLat={setGeoLat}
+          geoLng={geoLng}     onChangeGeoLng={setGeoLng}
+          geoRadiusM={geoRadiusM}
+          onChangeGeoRadiusM={setGeoRadiusM}
+          geoBusy={geoBusy} setGeoBusy={setGeoBusy}
+          geoErr={geoErr}   setGeoErr={setGeoErr}
+        />
+        <Field
+          label="Lateness threshold (store-local minutes)"
+          hint="The payroll page flags an entry as 'Late' only when clock-in exceeds the planned shift's start by this many minutes. 0–240. Default 5."
+        >
+          <Input
+            type="number" step="1" min="0" max="240"
+            value={lateThreshold}
+            onChange={(e) => setLateThreshold(e.target.value)}
             disabled={!canEdit}
           />
-          <label className={styles.enforceRow}>
-            <input
-              type="checkbox"
-              checked={enforceHours}
-              disabled={!canEdit}
-              onChange={(e) => setEnforceHours(e.target.checked)}
-            />{" "}
-            Block transfers outside these hours
-            <span className={styles.enforceHint}>
-              {" "}— refuses transfer saves with an error when
-              outside the open window. The soft warning on the New
-              Transfer form fires regardless of this toggle.
-            </span>
-          </label>
-          <label className={styles.enforceRow}>
-            <input
-              type="checkbox"
-              checked={requirePasskey}
-              disabled={!canEdit}
-              onChange={(e) => setRequirePasskey(e.target.checked)}
-            />{" "}
-            Block time-clock punches without a passkey
-            <span className={styles.enforceHint}>
-              {" "}— anti-buddy-punching: every clock-in / clock-out
-              demands a fresh Windows Hello / Touch ID / Face ID
-              prompt. Enroll each cashier's device from
-              {" "}<code>/app/admin/timeclock/credentials</code>
-              {" "}before flipping this on.
-            </span>
-          </label>
-          <GeofenceSettingsSection
-            canEdit={canEdit}
-            requireGeofence={requireGeofence}
-            onChangeRequireGeofence={setRequireGeofence}
-            geoLat={geoLat}     onChangeGeoLat={setGeoLat}
-            geoLng={geoLng}     onChangeGeoLng={setGeoLng}
-            geoRadiusM={geoRadiusM}
-            onChangeGeoRadiusM={setGeoRadiusM}
-            geoBusy={geoBusy} setGeoBusy={setGeoBusy}
-            geoErr={geoErr}   setGeoErr={setGeoErr}
-          />
-          <Field
-            label="Lateness threshold (store-local minutes)"
-            hint="The payroll page flags an entry as 'Late' only when clock-in exceeds the planned shift's start by this many minutes. 0–240. Default 5."
-          >
-            <Input
-              type="number" step="1" min="0" max="240"
-              value={lateThreshold}
-              onChange={(e) => setLateThreshold(e.target.value)}
-              disabled={!canEdit}
-            />
-          </Field>
+        </Field>
+      </Card>
+
+      {err && <Alert tone="error">{err}</Alert>}
+      {okMsg && <Alert tone="success">{okMsg}</Alert>}
+
+      {canEdit && (
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Button type="submit" busy={busy} disabled={busy || !name}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
         </div>
-        {err && (
-          <div className={styles.spanFull}>
-            <Alert tone="error">{err}</Alert>
-          </div>
-        )}
-        {okMsg && (
-          <div className={styles.spanFull}>
-            <Alert tone="success">{okMsg}</Alert>
-          </div>
-        )}
-        {canEdit && (
-          <div className={styles.spanFullRight}>
-            <Button type="submit" busy={busy} disabled={busy || !name}>
-              {busy ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        )}
-      </form>
-    </Card>
+      )}
+    </form>
   );
 }
 
@@ -1113,11 +1124,7 @@ function GeofenceSettingsSection({
           </span>
         </div>
       )}
-      {geoErr && (
-        <div className={styles.spanFull}>
-          <Alert tone="error">{geoErr}</Alert>
-        </div>
-      )}
+      {geoErr && <Alert tone="error">{geoErr}</Alert>}
     </>
   );
 }
