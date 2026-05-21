@@ -149,11 +149,22 @@ export const NAV: NavGroup[] = [
     icon: iconOwner(),
     items: [
       { to: "/owner/locations",      label: "Locations",   icon: iconOwner() },
-      { to: "/owner/pl-rollup",      label: "P&L rollup",  icon: iconRollup() },
-      { to: "/owner/reports",        label: "Reports",     icon: iconReports() },
       { to: "/owner/connect",        label: "Connect",     icon: iconBanner() },
       { to: "/owner/bulk-add-user",          label: "Bulk add user",     icon: iconOwner() },
       { to: "/owner/cross-store-defaults",   label: "Cross-store defaults", icon: iconRollup() },
+    ],
+  },
+  {
+    // Owner Reports — the cross-store analytical surfaces lifted
+    // out of the Owner group so the sidebar tells the same
+    // "LOOK at what happened" vs "MOVE money / configure umbrella"
+    // story it does for admins.
+    title: "Reports",
+    roles: ["owner"],
+    icon: iconReports(),
+    items: [
+      { to: "/owner/pl-rollup",  label: "P&L rollup", icon: iconRollup() },
+      { to: "/owner/reports",    label: "Reports",    icon: iconReports() },
     ],
   },
   {
@@ -172,14 +183,15 @@ export const NAV: NavGroup[] = [
     title: "Account",
     icon: iconSettings(),
     items: [
+      // Single "Settings" entry that lands on /settings (which
+      // redirects to /settings/profile, the first tab).  Visible
+      // to every authed role — owners + employees + admins all
+      // have a Profile tab.  Used to be two items here (admin-only
+      // "Settings" → /settings, everyone "Profile" → /settings/profile);
+      // collapsed into one when Profile became a Settings tab.
       {
         to: "/settings", label: "Settings",
-        roles: ["admin"],
         icon: iconSettings(),
-      },
-      {
-        to: "/settings/profile", label: "Profile",
-        icon: iconCustomers(),
       },
       {
         to: "/account/notifications", label: "Notifications",
