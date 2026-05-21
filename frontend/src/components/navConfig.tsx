@@ -78,11 +78,15 @@ export const NAV: NavGroup[] = [
       { to: "/reports",            label: "Reports",     icon: iconReports() },
       { to: "/monthly",            label: "Monthly P&L", icon: iconMonthly() },
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
+      { to: "/bank",               label: "Bank sync",   icon: iconBank() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
       { to: "/admin/timeclock",              label: "Payroll",            icon: iconClock() },
       { to: "/admin/timeclock/schedule",     label: "Schedule",           icon: iconCalendarStar() },
       { to: "/admin/timeclock/credentials",  label: "Punch credentials",  icon: iconClock() },
+      { to: "/admin/users",                  label: "Team users",         icon: iconCustomers() },
+      { to: "/admin/audit-log",              label: "Audit log",          icon: iconAudit() },
       { to: "/admin/data-export",            label: "Data export",        icon: iconReports() },
+      { to: "/tv-display",                   label: "TV display",         icon: iconDevice() },
     ],
   },
   {
@@ -134,6 +138,11 @@ export const NAV: NavGroup[] = [
       {
         to: "/account/sessions", label: "Devices",
         icon: iconDevice(),
+      },
+      {
+        to: "/account/referrals", label: "Referrals",
+        roles: ["admin"],
+        icon: iconBanner(),
       },
     ],
   },
