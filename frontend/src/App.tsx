@@ -18,6 +18,7 @@ const AccountActivity = lazy(() => import("./routes/AccountActivity"));
 const AccountNotifications = lazy(() => import("./routes/AccountNotifications"));
 const AccountSessions = lazy(() => import("./routes/AccountSessions"));
 const AdminAuditLog = lazy(() => import("./routes/AdminAuditLog"));
+const AdminCashiers = lazy(() => import("./routes/AdminCashiers"));
 const AdminReferrals = lazy(() => import("./routes/AdminReferrals"));
 const AdminSubscription = lazy(() => import("./routes/AdminSubscription"));
 const AdminDataExport = lazy(() => import("./routes/AdminDataExport"));
@@ -72,11 +73,6 @@ const SettingsProfile = lazy(
 const SettingsGeneral = lazy(
   () => import("./routes/Settings").then(
     (m) => ({ default: m.SettingsGeneral }),
-  ),
-);
-const SettingsTeam = lazy(
-  () => import("./routes/Settings").then(
-    (m) => ({ default: m.SettingsTeam }),
   ),
 );
 const SettingsBilling = lazy(
@@ -293,6 +289,10 @@ export default function App() {
           <Route path="admin/users"             element={<AdminUsers />} />
           <Route path="admin/users/new"         element={<AdminUserForm />} />
           <Route path="admin/users/:uid/edit"   element={<AdminUserForm />} />
+          {/* Cashier roster — lifted out of the /settings/team tab
+              when HR became its own sidebar group.  The old URL
+              redirects below for bookmarks. */}
+          <Route path="admin/cashiers"          element={<AdminCashiers />} />
           <Route path="timeclock"             element={<TimeClock />} />
           <Route path="account/referrals"     element={<AdminReferrals />} />
           {/* Legacy /account/profile — profile is now the first
@@ -319,7 +319,10 @@ export default function App() {
             <Route index element={<Navigate to="profile" replace />} />
             <Route path="profile" element={<SettingsProfile />} />
             <Route path="general" element={<SettingsGeneral />} />
-            <Route path="team" element={<SettingsTeam />} />
+            {/* Legacy /settings/team — cashier roster moved to
+                /admin/cashiers when HR became its own sidebar
+                section.  Keep a redirect for bookmarks. */}
+            <Route path="team" element={<Navigate to="/admin/cashiers" replace />} />
             <Route path="billing" element={<SettingsBilling />} />
             <Route path="security" element={<SettingsSecurity />} />
           </Route>

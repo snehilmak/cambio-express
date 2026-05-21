@@ -63,10 +63,47 @@ export const NAV: NavGroup[] = [
         roles: ["admin", "employee"],
         icon: iconReturnChecks(),
       },
+    ],
+  },
+  {
+    // HR — anything that's about people / payroll / scheduling
+    // rather than money flow.  Time clock is visible to both
+    // admin AND employee (employees punch in here); the rest
+    // are admin-only management surfaces.  The group disappears
+    // entirely for owners / superadmins since `filterNavForRole`
+    // drops groups whose every item gets filtered out.
+    title: "HR",
+    icon: iconHR(),
+    items: [
       {
         to: "/timeclock", label: "Time clock",
         roles: ["admin", "employee"],
         icon: iconClock(),
+      },
+      {
+        to: "/admin/timeclock", label: "Payroll",
+        roles: ["admin"],
+        icon: iconReports(),
+      },
+      {
+        to: "/admin/timeclock/schedule", label: "Schedule",
+        roles: ["admin"],
+        icon: iconCalendarStar(),
+      },
+      {
+        to: "/admin/timeclock/credentials", label: "Punch credentials",
+        roles: ["admin"],
+        icon: iconClock(),
+      },
+      {
+        to: "/admin/cashiers", label: "Cashiers",
+        roles: ["admin"],
+        icon: iconCustomers(),
+      },
+      {
+        to: "/admin/users", label: "Team users",
+        roles: ["admin"],
+        icon: iconCustomers(),
       },
     ],
   },
@@ -80,13 +117,9 @@ export const NAV: NavGroup[] = [
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
       { to: "/bank",               label: "Bank sync",   icon: iconBank() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
-      { to: "/admin/timeclock",              label: "Payroll",            icon: iconClock() },
-      { to: "/admin/timeclock/schedule",     label: "Schedule",           icon: iconCalendarStar() },
-      { to: "/admin/timeclock/credentials",  label: "Punch credentials",  icon: iconClock() },
-      { to: "/admin/users",                  label: "Team users",         icon: iconCustomers() },
-      { to: "/admin/audit-log",              label: "Audit log",          icon: iconAudit() },
-      { to: "/admin/data-export",            label: "Data export",        icon: iconReports() },
-      { to: "/tv-display",                   label: "TV display",         icon: iconDevice() },
+      { to: "/admin/audit-log",    label: "Audit log",   icon: iconAudit() },
+      { to: "/admin/data-export",  label: "Data export", icon: iconReports() },
+      { to: "/tv-display",         label: "TV display",  icon: iconDevice() },
     ],
   },
   {
@@ -383,6 +416,21 @@ function iconCalendarStar() {
       <path d="M8 3v4" />
       <path d="M16 3v4" />
       <polyline points="9 14 12 17 16 13" />
+    </svg>
+  );
+}
+
+// Briefcase — universal HR / employer / payroll glyph.  Distinct
+// from iconOwner (single person with check) + iconCustomers
+// (two-person group) so the slim sidebar reads cleanly.
+function iconHR() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="13" rx="2" />
+      <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <path d="M2 13h20" />
     </svg>
   );
 }

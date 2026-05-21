@@ -11,8 +11,8 @@ import styles from "./Tabs.module.css";
  *  // URL-routed (preferred for top-level admin pages — deep-linkable,
  *  // browser back button works correctly):
  *  <TabsBar>
+ *    <TabsLink to="/settings/profile">Profile</TabsLink>
  *    <TabsLink to="/settings/general">General</TabsLink>
- *    <TabsLink to="/settings/team">Team</TabsLink>
  *    <TabsLink to="/settings/billing">Billing</TabsLink>
  *  </TabsBar>
  *  // ...then render <Outlet /> below for the active sub-route.
