@@ -281,6 +281,115 @@ def test_sync_transactions_returns_counts(client, test_store_id):
     assert body["error"] == ""
 
 
+# ── Nickname editor ────────────────────────────────────────
+
+
+def test_set_nickname_updates_row_and_audits(client, test_store_id):
+    """Setting a nickname updates the row + writes a rename audit
+    + returns the fresh BankAccountRow envelope so the SPA can
+    swap it into the TanStack-Query cache directly."""
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from api.Modules.BankSync.Models import StripeBankAccount
+    aid = _seed_account(
+        test_store_id, stripe_id="fcacc_nickname", last4="4444",
+    )
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/bank/accounts/{aid}/nickname",
+        json={"nickname": "Operating Account"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200, resp.get_data(as_text=True)
+    body = resp.get_json()
+    assert body["nickname"] == "Operating Account"
+    # Row stored.
+    row = db.session.get(StripeBankAccount, aid)
+    assert row.nickname == "Operating Account"
+    # Audit emitted.
+    audit = (
+        db.session.query(OperatorAuditLog)
+          .filter_by(store_id=test_store_id, action="rename_bank_account")
+          .order_by(OperatorAuditLog.id.desc())
+          .first()
+    )
+    assert audit is not None
+    assert "Operating Account" in (audit.summary or "")
+
+
+def test_set_nickname_clears_when_empty(client, test_store_id):
+    """Empty body clears the nickname — label falls back through
+    display_name → institution_name + last4 read-side."""
+    from api.Modules.BankSync.Models import StripeBankAccount
+    aid = _seed_account(
+        test_store_id, stripe_id="fcacc_nickname_clear", last4="5555",
+    )
+    # Seed with a nickname first.
+    with db_session():
+        row = db.session.get(StripeBankAccount, aid)
+        row.nickname = "Old Nickname"
+        db.session.commit()
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/bank/accounts/{aid}/nickname",
+        json={"nickname": ""},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    row = db.session.get(StripeBankAccount, aid)
+    assert row.nickname == ""
+
+
+def test_set_nickname_no_op_skips_audit(client, test_store_id):
+    """Setting the same nickname back is a no-op (no audit row,
+    no commit churn)."""
+    from api.Modules.Audit.Models import OperatorAuditLog
+    from api.Modules.BankSync.Models import StripeBankAccount
+    aid = _seed_account(
+        test_store_id, stripe_id="fcacc_noop", last4="6666",
+    )
+    with db_session():
+        row = db.session.get(StripeBankAccount, aid)
+        row.nickname = "Same"
+        db.session.commit()
+    before = (
+        db.session.query(OperatorAuditLog)
+          .filter_by(store_id=test_store_id, action="rename_bank_account")
+          .count()
+    )
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/bank/accounts/{aid}/nickname",
+        json={"nickname": "Same"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 200
+    after = (
+        db.session.query(OperatorAuditLog)
+          .filter_by(store_id=test_store_id, action="rename_bank_account")
+          .count()
+    )
+    assert after == before
+
+
+def test_set_nickname_404_cross_tenant(client, test_store_id):
+    """Cross-tenant id → opaque 404."""
+    from api.Modules.Tenancy.Models import Store
+    other_aid: int = -1
+    with db_session():
+        other_store = Store(name="Other2", slug="other-nick", plan="trial")
+        db.session.add(other_store); db.session.flush()
+        other_aid = _seed_account(
+            other_store.id, stripe_id="fcacc_other_nick", last4="0002",
+        )
+    token = _login(client, test_store_id)
+    resp = client.put(
+        f"/api/v2/bank/accounts/{other_aid}/nickname",
+        json={"nickname": "Stolen"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 404
+
+
 # ── Test helpers ───────────────────────────────────────────
 
 

@@ -91,3 +91,15 @@ class BankSyncTransactionsResponse(BaseModel):
     new_rows: int
     total_seen: int
     error: str = ""
+
+
+class BankAccountNicknameRequest(BaseModel):
+    """Body for `PUT /api/v2/bank/accounts/{id}/nickname`.
+
+    Empty string clears the nickname (label falls back to
+    display_name → institution_name + last4).  Server trims +
+    truncates to 60 chars to match the legacy column width."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    nickname: str = Field(default="", max_length=60)

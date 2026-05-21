@@ -1,6 +1,7 @@
 """BankSync — Pydantic request/response schemas."""
 from api.Modules.BankSync.Requests.accounts import (
     BankAccountListResponse,
+    BankAccountNicknameRequest,
     BankAccountRow,
     BankConnectCompleteRequest,
     BankConnectCompleteResponse,

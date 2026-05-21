@@ -291,3 +291,12 @@ export async function syncBankTransactions(): Promise<BankSyncTransactionsRespon
     { method: "POST", json: {} },
   );
 }
+
+export async function setBankAccountNickname(
+  accountId: number, nickname: string,
+): Promise<BankAccountRow> {
+  return api<BankAccountRow>(
+    `/api/v2/bank/accounts/${accountId}/nickname`,
+    { method: "PUT", json: { nickname } },
+  );
+}
