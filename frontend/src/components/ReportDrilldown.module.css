@@ -43,17 +43,8 @@
   font-family: inherit;
 }
 
-.btnOutline {
-  background: transparent;
-  color: inherit;
-  border: 1px solid var(--db-border, #262626);
-  padding: 0.4rem 0.85rem;
-  border-radius: 0.5rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-block;
-}
+/* `.btnOutline` retired — toolbar buttons now use the kit
+ * `<Button tone="secondary" size="sm">` primitive directly. */
 
 .filterRow {
   display: flex;
