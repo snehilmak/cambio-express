@@ -193,6 +193,22 @@ def update_daily_route(
         )
     except DailyReportLockedError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    if fields or notes:
+        # Summary lists the keys the operator touched (not the
+        # values — over_short and total_disbursements are sensitive
+        # so we audit the intent, not the numbers).  `notes`
+        # appears as a separate flag because it doesn't ride
+        # `fields`.
+        changed = list(fields.keys())
+        if notes:
+            changed.append("notes")
+        _audit_daily_action(
+            db, claims, "update_daily_report",
+            target_type="daily_report",
+            target_id=f"{store_id}:{d.isoformat()}",
+            target_label=f"Daily {d.isoformat()}",
+            summary=f"changed: {', '.join(sorted(changed))}",
+        )
     db.commit()
 
     summary = summarize_report(db, int(store_id), d)
@@ -214,6 +230,34 @@ def _audit_daily_lock_action(db, claims, action, report):
     used to make. With those handlers gone (PR #403), the audit row
     needs to land on this side or it silently disappears from the
     operator audit log."""
+    _audit_daily_action(
+        db, claims, action,
+        target_type="daily_report",
+        target_id=str(report.id),
+        target_label=(
+            f"Daily {report.report_date.isoformat()}"
+            if getattr(report, "report_date", None) else ""
+        ),
+        summary="",
+    )
+
+
+def _audit_daily_action(
+    db, claims, action: str,
+    *,
+    target_type: str,
+    target_id: str,
+    target_label: str,
+    summary: str,
+) -> None:
+    """Generic operator-audit emitter for daily-book mutations.
+
+    CLAUDE.md invariant #7 — every mutating endpoint records an
+    audit row.  This helper covers the field edit (`update_daily`),
+    the cash-ledger line-item CRUD, and the per-company MT
+    breakdown replace, all of which were silently mutating state
+    before this helper landed (the lock/unlock pair was the only
+    pre-existing audit emitter on the daily-book surface)."""
     from api.Modules.Audit.Services import record_operator_action
     record_operator_action(
         db,
@@ -221,14 +265,11 @@ def _audit_daily_lock_action(db, claims, action, report):
         user_id=int(claims["sub"]),
         user_name=claims.get("name") or claims.get("username") or "",
         user_role=claims.get("role") or "",
-        target_type="daily_report",
-        target_id=report.id,
-        target_label=(
-            f"Daily {report.report_date.isoformat()}"
-            if getattr(report, "report_date", None) else ""
-        ),
+        target_type=target_type,
+        target_id=target_id,
+        target_label=target_label,
         action=action,
-        summary="",
+        summary=summary,
     )
 
 
@@ -487,6 +528,20 @@ def line_items_create_route(
             )
     except LineItemValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    # Each cash-ledger entry the cashier logs (cash in, cash out,
+    # drop, bank deposit, …) is financially material — "who logged
+    # this $500 drop at 2pm?" should be answerable from the audit
+    # feed, not just the line-item row's `created_by` field.
+    _audit_daily_action(
+        db, claims, "create_line_item",
+        target_type="daily_line_item",
+        target_id=str(row.id),
+        target_label=f"{body.kind} on {d.isoformat()}",
+        summary=(
+            f"kind={body.kind} amount=${float(amt):,.2f} "
+            f"at={at.isoformat() if at else ''}"
+        ),
+    )
     db.commit()
     return _line_item_row(row)
 
@@ -518,6 +573,7 @@ def line_items_delete_route(
 
     report_date = item.report_date
     kind = item.kind
+    deleted_amount = float(getattr(item, "amount", 0) or 0)
     try:
         delete_line_item(db, item)
     except LineItemValidationError as exc:
@@ -528,6 +584,16 @@ def line_items_delete_route(
             db, int(store_id), report_date,
             kind=kind, daily_report_field=target_field,
         )
+    # Deletions are the cash-ledger entries most worth auditing —
+    # "where did that $500 drop go?" should land on a deletion
+    # row, not silence.
+    _audit_daily_action(
+        db, claims, "delete_line_item",
+        target_type="daily_line_item",
+        target_id=str(item_id),
+        target_label=f"{kind} on {report_date.isoformat()}",
+        summary=f"kind={kind} amount=${deleted_amount:,.2f}",
+    )
     db.commit()
 
 
@@ -667,6 +733,25 @@ def mt_breakdown_put_route(
         )
     except DailyReportLockedError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    # Money-transfer breakdown is the receipts attribution table —
+    # changing it changes the daily P&L's company allocation.
+    # Summary lists the companies whose rows were submitted (zero-
+    # amount rows are filtered by the Service so they don't bloat
+    # the audit row either).
+    company_list = sorted({
+        (r.company or "").strip() for r in body.rows
+        if (r.amount or 0) or (r.fees or 0)
+           or (r.federal_tax or 0) or (r.commission or 0)
+    })
+    _audit_daily_action(
+        db, claims, "replace_mt_breakdown",
+        target_type="mt_breakdown",
+        target_id=f"{store_id}:{d.isoformat()}",
+        target_label=f"MT breakdown {d.isoformat()}",
+        summary=(
+            f"companies={','.join(company_list)}" if company_list else "cleared"
+        ),
+    )
     db.commit()
 
     # Re-read so the response carries the fresh saved + auto view.
