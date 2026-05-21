@@ -12,6 +12,14 @@
   gap: 0.75rem;
 }
 
+.tileHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .tileTitle {
   font-family: var(--db-font-display, "Space Grotesk", sans-serif);
   font-size: 1.2rem;

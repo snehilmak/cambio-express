@@ -211,3 +211,75 @@ def test_portal_stripe_error_returns_502(client, test_store_id):
             headers={"Authorization": f"Bearer {token}"},
         )
     assert resp.status_code == 502
+
+
+# ── URL absoluteness regression guard ─────────────────────────
+#
+# Stripe rejects relative `success_url` / `cancel_url` / `return_url`
+# values on Checkout + Billing Portal session creation.  Before the
+# fix that introduced `_absolute_url`, the controllers passed
+# "/subscribe/success" + "/app/settings" directly to the Service,
+# Stripe responded with InvalidRequestError, the Service raised
+# StripeServiceError, and the Controller surfaced "Payment service
+# error. Please try again." to every pilot user.  These tests pin
+# the contract: whatever URLs the Controller hands to the Service
+# MUST start with "https://".
+
+
+def test_checkout_passes_absolute_urls_to_service(
+    client, test_store_id, monkeypatch,
+):
+    """Checkout controller must hand absolute https:// URLs to
+    `create_checkout_session` for both success_url and cancel_url."""
+    captured: dict[str, str] = {}
+
+    def _capture(store, *, plan, success_url, cancel_url):
+        captured["success_url"] = success_url
+        captured["cancel_url"]  = cancel_url
+        return "https://checkout.stripe.com/c/pay/cs_test_abs"
+
+    monkeypatch.setenv("APP_BASE_URL", "https://dinerobook.com")
+    token = _login_admin(client, test_store_id)
+    with patch(
+        "api.Modules.Billing.Services.create_checkout_session",
+        side_effect=_capture,
+    ):
+        resp = client.post(
+            "/api/v2/billing/checkout",
+            json={"plan": "basic"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 200
+    assert captured["success_url"].startswith("https://"), captured
+    assert captured["cancel_url"].startswith("https://"), captured
+    # And specifically: the SPA-relative target must be under
+    # `/app/...` so Stripe's redirect lands inside the React app.
+    assert "/app/subscribe/success" in captured["success_url"]
+    assert "/app/settings" in captured["cancel_url"]
+
+
+def test_portal_passes_absolute_return_url_to_service(
+    client, test_store_id, monkeypatch,
+):
+    """Portal controller must hand an absolute https:// URL to
+    `create_billing_portal_session` as `return_url`."""
+    captured: dict[str, str] = {}
+
+    def _capture(store, *, return_url):
+        captured["return_url"] = return_url
+        return "https://billing.stripe.com/p/session/test_abs"
+
+    _set_store_customer_id(test_store_id, "cus_test_abs")
+    monkeypatch.setenv("APP_BASE_URL", "https://dinerobook.com")
+    token = _login_admin(client, test_store_id)
+    with patch(
+        "api.Modules.Billing.Services.create_billing_portal_session",
+        side_effect=_capture,
+    ):
+        resp = client.post(
+            "/api/v2/billing/portal",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert resp.status_code == 200
+    assert captured["return_url"].startswith("https://"), captured
+    assert "/app/settings" in captured["return_url"]

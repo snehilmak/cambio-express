@@ -17,6 +17,8 @@ hosted-flow redirect.
 Auth: requires JWT principal with role ∈ {`admin`, `owner`,
 `superadmin`} — same gate as legacy `/admin/subscription/*`.
 """
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -34,6 +36,31 @@ router = APIRouter()
 
 
 _BILLING_ROLES = ("admin", "owner", "superadmin")
+
+
+def _absolute_url(path: str) -> str:
+    """Resolve an SPA-relative path to an absolute URL for Stripe.
+
+    Stripe's `checkout.Session.create` (`success_url`, `cancel_url`)
+    and `billing_portal.Session.create` (`return_url`) all REQUIRE
+    fully-qualified HTTPS URLs.  Relative paths trigger an
+    `InvalidRequestError` from the SDK ("URL must include scheme
+    https://") which the Controller surfaces to the user as the
+    generic "Payment service error" — exactly the bug pilot users
+    reported on the Manage-on-Stripe button.
+
+    `APP_BASE_URL` is the env var the rest of the codebase uses
+    (daily-summary email links, locked-day digest, password reset,
+    etc.); falls back to the canonical production host so dev
+    builds without the env var still hit a real URL Stripe will
+    accept.
+    """
+    base = (
+        os.environ.get("APP_BASE_URL") or "https://dinerobook.com"
+    ).rstrip("/")
+    if not path.startswith("/"):
+        path = "/" + path
+    return f"{base}{path}"
 
 
 def _require_billing_scope(claims: dict[str, Any]) -> int:
@@ -79,8 +106,8 @@ def checkout_route(
     try:
         url = create_checkout_session(
             store, plan=body.plan,
-            success_url="/subscribe/success",
-            cancel_url="/app/settings",
+            success_url=_absolute_url("/app/subscribe/success"),
+            cancel_url=_absolute_url("/app/settings"),
         )
     except InvalidPlanError:
         raise HTTPException(status_code=422, detail="Invalid plan selected.")
@@ -118,7 +145,7 @@ def portal_route(
         )
     try:
         url = create_billing_portal_session(
-            store, return_url="/app/settings",
+            store, return_url=_absolute_url("/app/settings"),
         )
     except StripeServiceError:
         raise HTTPException(
