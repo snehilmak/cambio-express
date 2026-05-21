@@ -66,6 +66,11 @@ export { Pill, type PillTone } from "./Pill";
 export { Alert, type AlertTone } from "./Alert";
 export { Button, ButtonLink, type ButtonTone } from "./Button";
 export {
+  IconButton,
+  type IconButtonSize,
+  type IconButtonTone,
+} from "./IconButton";
+export {
   RowActions,
   type RowActionItem,
   type RowActionTone,

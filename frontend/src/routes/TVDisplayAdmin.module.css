@@ -452,23 +452,10 @@
   line-height: 1;
 }
 
-.countryDeleteButton {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
+/* `.countryDeleteButton` retired — visual treatment now comes
+ * from the kit `<IconButton>` primitive (round, outlined, neon
+ * focus ring).  The absolute positioning lives in an inline
+ * `style` at the call site. */
 
 .addCountry {
   display: block;
