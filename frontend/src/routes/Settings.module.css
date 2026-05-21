@@ -148,15 +148,9 @@
   gap: 0.85rem;
 }
 
-.spanFull {
-  grid-column: 1 / -1;
-}
-
-.spanFullRight {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-end;
-}
+/* `.spanFull` + `.spanFullRight` retired — the General tab no
+ * longer wraps its sections in a single grid form, so there's
+ * nothing left to span across. */
 
 .passwordForm {
   display: flex;
