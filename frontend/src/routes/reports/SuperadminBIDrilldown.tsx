@@ -15,7 +15,7 @@ import { Bar, Line } from "react-chartjs-2";
 import { api, downloadCsv } from "../../lib/api";
 import { countChartOptions, moneyChartOptions } from "../../lib/chartOptions";
 import {
-  Card, EmptyState, ErrorState, KpiCard, KpiGrid,
+  Button, Card, EmptyState, ErrorState, KpiCard, KpiGrid,
   PageHeader, PageShell, TableSkeleton, tdStyle, thStyle,
 } from "../../components/ui";
 import styles from "./SuperadminBIDrilldown.module.css";
@@ -187,16 +187,18 @@ export default function SuperadminBIDrilldown() {
                   className={styles.dateInput}
                 />
               </label>
-              <button
-                type="button"
-                className={styles.btnOutline}
+              <Button
+                tone="secondary" size="sm"
                 onClick={() => { void downloadCsv(csvHref, csvFilename); }}
               >
                 Export CSV
-              </button>
-              <button type="button" className={styles.btnOutline} onClick={() => window.print()}>
+              </Button>
+              <Button
+                tone="secondary" size="sm"
+                onClick={() => window.print()}
+              >
                 Print / PDF
-              </button>
+              </Button>
             </div>
           )}
         />

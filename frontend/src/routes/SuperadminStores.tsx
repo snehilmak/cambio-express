@@ -7,7 +7,7 @@ import {
 import { getCurrentIdentity } from "../lib/auth";
 import {
   Card, Empty, EmptyState, ErrorState, Input, PageHeader, PageShell, Pill,
-  Table, TableSkeleton, tdStyle, thStyle,
+  Table, TableSkeleton, tdStyle, thStyle, type PillTone,
 } from "../components/ui";
 import styles from "./SuperadminStores.module.css";
 
@@ -137,20 +137,21 @@ function StoresTable({ rows }: { rows: SuperadminStoreRow[] }) {
 }
 
 function PlanPill({ plan, cycle }: { plan: string; cycle: string }) {
-  const palette: Record<string, { bg: string; fg: string }> = {
-    trial:    { bg: "rgba(255,184,0,0.15)", fg: "#ffb800" },
-    basic:    { bg: "rgba(63,255,0,0.12)",  fg: "#3fff00" },
-    pro:      { bg: "rgba(63,255,0,0.20)",  fg: "#3fff00" },
-    inactive: { bg: "rgba(255,59,48,0.15)", fg: "#ff3b30" },
+  // Maps plan slug → shared Pill tone so the badge palette tracks
+  // the same `--db-tone-*` tokens every other tone surface in the
+  // SPA uses (Alert / ErrorState / audit-log badges / etc.).
+  const toneByPlan: Record<string, PillTone> = {
+    trial:    "warning",
+    basic:    "success",
+    pro:      "accent",
+    inactive: "negative",
   };
-  const c = palette[plan] ?? { bg: "transparent", fg: "#a3a3a3" };
+  const tone: PillTone = toneByPlan[plan] ?? "neutral";
+  const label = plan.charAt(0).toUpperCase() + plan.slice(1);
   return (
-    <span
-      className={styles.planPill}
-      style={{ background: c.bg, color: c.fg }}
-    >
-      {plan}{cycle ? ` · ${cycle}` : ""}
-    </span>
+    <Pill tone={tone}>
+      {label}{cycle ? ` · ${cycle}` : ""}
+    </Pill>
   );
 }
 
