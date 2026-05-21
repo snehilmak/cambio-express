@@ -31,6 +31,7 @@ from api.Modules.BankSync.Repositories import (
 )
 from api.Modules.BankSync.Requests import (
     BankAccountListResponse,
+    BankAccountNicknameRequest,
     BankAccountRow,
     BankConnectCompleteRequest,
     BankConnectCompleteResponse,
@@ -785,4 +786,86 @@ def sync_transactions_route(
         new_rows=new_rows,
         total_seen=total_seen,
         error=last_error or "",
+    )
+
+
+@router.put(
+    "/accounts/{account_id}/nickname",
+    response_model=BankAccountRow,
+)
+def set_account_nickname_route(
+    body: BankAccountNicknameRequest,
+    account_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    claims: dict[str, Any] = Depends(get_principal),
+) -> BankAccountRow:
+    """Set (or clear, with empty string) the nickname on a
+    connected bank account.  Falls back through display_name →
+    institution_name + last4 when blank — the read-side label
+    helper handles it.
+
+    Admin-role + same-store gated; cross-tenant ids opaque 404.
+    """
+    sid = _require_admin_bank_scope(claims)
+    row = (
+        db.query(StripeBankAccount)
+          .filter(
+              StripeBankAccount.id == account_id,
+              StripeBankAccount.store_id == sid,
+          )
+          .one_or_none()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Bank account not found")
+    # Trim + cap to the column width — Pydantic max_length already
+    # caps to 60 but we trim whitespace here to keep stored values
+    # clean.
+    new_nickname = (body.nickname or "").strip()[:60]
+    old_nickname = row.nickname or ""
+    if new_nickname == old_nickname:
+        # No-op: skip audit + commit.
+        return _adapt_account_row(row)
+    row.nickname = new_nickname
+    _audit_bank_action(
+        db, claims=claims, action="rename_bank_account",
+        target_id=str(row.id),
+        target_label=(new_nickname or row.display_name
+                      or row.institution_name or "")[:160],
+        summary=(
+            f"nickname=({old_nickname!r} → {new_nickname!r}) "
+            f"last4={row.last4 or ''}"
+        ),
+    )
+    db.commit()
+    return _adapt_account_row(row)
+
+
+def _adapt_account_row(a) -> BankAccountRow:
+    """Mirror the row shape `list_accounts_route` builds — kept
+    DRY so the nickname endpoint returns the same envelope the
+    accounts list does and the SPA can drop the response right
+    into its TanStack-Query cache."""
+    return BankAccountRow(
+        id=a.id,
+        institution_name=a.institution_name or "",
+        display_name=a.display_name or "",
+        nickname=a.nickname or "",
+        last4=a.last4 or "",
+        label=a.label,
+        category=a.category or "",
+        subcategory=a.subcategory or "",
+        currency=a.currency or "usd",
+        last_balance_cents=a.last_balance_cents or 0,
+        last_balance=a.last_balance,
+        last_balance_as_of=(
+            a.last_balance_as_of.isoformat()
+            if a.last_balance_as_of else ""
+        ),
+        enabled=bool(a.enabled),
+        connected_at=(
+            a.connected_at.isoformat() if a.connected_at else ""
+        ),
+        disconnected_at=(
+            a.disconnected_at.isoformat() if a.disconnected_at else ""
+        ),
     )

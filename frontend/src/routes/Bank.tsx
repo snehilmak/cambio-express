@@ -5,6 +5,7 @@ import {
   completeStripeConnect,
   disconnectBankAccount,
   refreshBankBalances,
+  setBankAccountNickname,
   startStripeConnect,
   syncBankTransactions,
   useBankAccounts,
@@ -137,6 +138,29 @@ export default function Bank() {
     }
   }
 
+  async function handleSaveNickname(acctId: number, nickname: string) {
+    setConnectError(null);
+    setActionMsg(null);
+    setBusy(`nickname:${acctId}`);
+    try {
+      await setBankAccountNickname(acctId, nickname);
+      invalidate();
+      setActionMsg(
+        nickname.trim()
+          ? `Renamed to "${nickname.trim()}".`
+          : "Nickname cleared.",
+      );
+    } catch (e) {
+      setConnectError(
+        e instanceof ApiError ? e.message
+          : e instanceof Error ? e.message
+          : "Couldn't save nickname.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function handleDisconnect(acctId: number, label: string) {
     if (!confirm(`Disconnect ${label}?`)) return;
     setConnectError(null);
@@ -233,7 +257,9 @@ export default function Bank() {
                 key={a.id}
                 acct={a}
                 onDisconnect={() => { void handleDisconnect(a.id, a.label); }}
+                onSaveNickname={(nickname) => handleSaveNickname(a.id, nickname)}
                 disconnectBusy={busy === `disconnect:${a.id}`}
+                nicknameBusy={busy === `nickname:${a.id}`}
                 anyBusy={busy !== null}
               />
             ))}
@@ -308,13 +334,17 @@ export default function Bank() {
 }
 
 function AccountCard({
-  acct, onDisconnect, disconnectBusy, anyBusy,
+  acct, onDisconnect, onSaveNickname,
+  disconnectBusy, nicknameBusy, anyBusy,
 }: {
   acct: BankAccountRow;
   onDisconnect: () => void;
+  onSaveNickname: (nickname: string) => Promise<void>;
   disconnectBusy: boolean;
+  nicknameBusy: boolean;
   anyBusy: boolean;
 }) {
+  const [nickname, setNickname] = useState(acct.nickname || "");
   return (
     <div className={styles.accountCard}>
       <div className={styles.mutedSmall}>
@@ -332,10 +362,31 @@ function AccountCard({
           ? `As of ${new Date(acct.last_balance_as_of).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
           : "Balance not yet refreshed."}
       </div>
-      {/* Nickname editor was a Flask form posting to a route that
-          went away in PR #550 — re-add when the API endpoint
-          ships (separate PR).  For now the row's label falls back
-          to display_name → institution_name + last4. */}
+      <form
+        className={styles.nicknameForm}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void onSaveNickname(nickname);
+        }}
+      >
+        <input
+          type="text"
+          name="nickname"
+          value={nickname}
+          onChange={(e) => setNickname(e.target.value)}
+          placeholder="Set nickname (e.g. MSB Checking)"
+          maxLength={60}
+          className={styles.nicknameInput}
+          disabled={anyBusy}
+        />
+        <Button
+          type="submit" tone="secondary" size="sm"
+          busy={nicknameBusy}
+          disabled={anyBusy || nickname === (acct.nickname || "")}
+        >
+          {nicknameBusy ? "Saving…" : "Save"}
+        </Button>
+      </form>
       <div className={styles.disconnectForm}>
         <Button
           tone="danger" size="sm"
