@@ -43,6 +43,13 @@ import styles from "./Settings.module.css";
 
 export default function Settings() {
   const identity = getCurrentIdentity();
+  // Owners run cross-store via the umbrella — billing happens
+  // per-store inside each connected store's admin context, not
+  // at the owner level.  The /settings/billing route still
+  // exists (SubscriptionCard renders empty for store_id == null),
+  // but the tab is hidden from the bar so owners don't click into
+  // a no-op page.
+  const isOwner = identity?.role === "owner";
 
   return (
     <PageShell maxWidth="60rem" gap="1rem">
@@ -51,7 +58,7 @@ export default function Settings() {
       <TabsBar>
         <TabsLink to="/settings/profile">Profile</TabsLink>
         <TabsLink to="/settings/general">General</TabsLink>
-        <TabsLink to="/settings/billing">Billing</TabsLink>
+        {!isOwner && <TabsLink to="/settings/billing">Billing</TabsLink>}
         <TabsLink to="/settings/security">Security</TabsLink>
       </TabsBar>
 
@@ -622,6 +629,41 @@ function StoreInfoCard() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Owners run the cross-store umbrella, not any single store —
+  // per-store fields (name, hours, tax rate, time-clock policy)
+  // live inside each connected store's own admin sign-in.  Give
+  // them an "Owner umbrella" panel here with shortcuts to the
+  // pages where umbrella-level settings actually exist, so the
+  // tab isn't a dead-end "you're in the wrong role" message.
+  if (identity?.role === "owner") {
+    return (
+      <Card>
+        <SectionTitle>Owner umbrella</SectionTitle>
+        <p className={styles.muted}>
+          Per-store settings (name, address, tax rate, business
+          hours, time-clock policy) live inside each connected
+          store's own admin sign-in.  Umbrella-level controls
+          live on the Owner pages below.
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: space.sm,
+            marginTop: space.md,
+          }}
+        >
+          <ButtonLink to="/owner/cross-store-defaults" tone="secondary">
+            Cross-store defaults →
+          </ButtonLink>
+          <ButtonLink to="/owner/locations" tone="secondary">
+            Locations →
+          </ButtonLink>
+        </div>
+      </Card>
+    );
   }
 
   if (identity?.store_id == null) {
