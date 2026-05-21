@@ -53,6 +53,7 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(
       && window.matchMedia
       && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reduced-motion users get the final state with no transition; that's the entire purpose
       setRevealed(true);
       return;
     }

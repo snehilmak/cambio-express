@@ -34,3 +34,60 @@ class BankAccountListResponse(BaseModel):
 
     rows: list[BankAccountRow] = Field(default_factory=list)
     total: int
+
+
+# ── Stripe Financial Connections connect flow ─────────────
+
+
+class BankConnectResponse(BaseModel):
+    """`POST /api/v2/bank/connect` envelope — minted FC session.
+
+    The SPA hands `clientSecret` to `stripe.collectFinancialConnectionsAccounts()`,
+    then POSTs `sessionId` back to `/connect/complete` to trigger
+    server-side persistence.  `publishableKey` lets the SPA
+    initialise Stripe.js without round-tripping for the env var.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    clientSecret: str
+    sessionId: str
+    publishableKey: str
+
+
+class BankConnectCompleteRequest(BaseModel):
+    """`POST /api/v2/bank/connect/complete` body — the SPA hands
+    back the FC session id after Stripe.js resolves so the
+    server can fetch + persist the linked accounts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sessionId: str
+
+
+class BankConnectCompleteResponse(BaseModel):
+    """Result of persisting an FC session's accounts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accounts_added: int
+    accounts_total: int
+
+
+class BankRefreshResponse(BaseModel):
+    """Result of a manual balance refresh."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    accounts_refreshed: int
+    error: str = ""
+
+
+class BankSyncTransactionsResponse(BaseModel):
+    """Result of a manual transaction sync."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    new_rows: int
+    total_seen: int
+    error: str = ""
