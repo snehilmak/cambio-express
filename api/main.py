@@ -151,6 +151,13 @@ def create_app() -> FastAPI:
     """
     init_logging()
     init_sentry()
+    # Initialize the Stripe SDK key once per process.  The legacy
+    # `app.py` set `stripe.api_key` at module top; the FastAPI
+    # cutover lost that line, which is why fresh `billing_portal.
+    # Session.create` calls were failing with "No API key provided"
+    # on production until the env var got rediscovered the hard way.
+    from api.Modules.Billing.Services.config import init_stripe
+    init_stripe()
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):

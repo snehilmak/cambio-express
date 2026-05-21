@@ -11,8 +11,45 @@ without touching the Stripe SDK. Used by:
     up before issuing a SDK call
 
 Pure reads — no SDK calls, no DB. Cheap to call on every request.
+
+Also exports `init_stripe()` — the one place that assigns
+`stripe.api_key` from the `STRIPE_SECRET_KEY` env var.  Called
+from `create_app()` during boot.  Without this, every Stripe
+SDK call ("No API key provided") fails — the Flask era had
+`stripe.api_key = ...` at module top of `app.py` but the
+FastAPI cutover dropped it; pilot users hit it on the Manage-
+on-Stripe button because the portal endpoint has no other Stripe
+dependency that would have flushed it out earlier.
 """
+import logging
 import os
+
+import stripe
+
+
+_log = logging.getLogger(__name__)
+
+
+def init_stripe() -> None:
+    """Initialize the global Stripe SDK key from the environment.
+
+    Idempotent: safe to call multiple times (tests, lifespan
+    restarts).  No-ops when `STRIPE_SECRET_KEY` is unset so dev /
+    CI runs that don't configure Stripe still boot — the per-call
+    `stripe_is_configured()` gate stops actual Stripe traffic.
+
+    Should be invoked once per process during boot, before any
+    Stripe SDK call.
+    """
+    sk = os.environ.get("STRIPE_SECRET_KEY", "")
+    if not sk:
+        _log.warning(
+            "init_stripe: STRIPE_SECRET_KEY not set; Stripe SDK "
+            "calls will fail with 'No API key provided' until "
+            "the env var is configured.",
+        )
+        return
+    stripe.api_key = sk
 
 
 def stripe_is_configured() -> bool:
