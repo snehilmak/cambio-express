@@ -73,7 +73,7 @@ export function UserMenu({
           </div>
           <div className={styles.divider} />
           <Link
-            to="/account/profile"
+            to="/settings/profile"
             className={styles.item}
             role="menuitem"
             onClick={() => setOpen(false)}

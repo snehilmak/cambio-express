@@ -25,7 +25,7 @@ export default function ThemeToggle() {
     applyTheme(next);
     // Fire-and-forget. If it fails the local + DOM state still
     // reflect the click; we'd surface a real error only on the
-    // /account/profile page where the dropdown shows the value.
+    // /settings/profile page where the dropdown shows the value.
     void updateProfile({ theme_preference: next }).catch(() => {
       /* swallow — see comment above */
     });
