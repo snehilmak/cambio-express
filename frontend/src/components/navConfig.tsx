@@ -63,6 +63,16 @@ export const NAV: NavGroup[] = [
         roles: ["admin", "employee"],
         icon: iconReturnChecks(),
       },
+      {
+        // Storefront rate-board addon — admins configure the
+        // countries / rates / Fire-TV pairing, customers see the
+        // board running on the in-store TV.  Lives in Daily
+        // because it's part of the storefront operation, not the
+        // ledger/finance stack.
+        to: "/tv-display", label: "TV display",
+        roles: ["admin"],
+        icon: iconDevice(),
+      },
     ],
   },
   {
@@ -131,7 +141,6 @@ export const NAV: NavGroup[] = [
       { to: "/batches",            label: "ACH batches", icon: iconBatches() },
       { to: "/bank",               label: "Bank sync",   icon: iconBank() },
       { to: "/bank-transactions",  label: "Bank txns",   icon: iconBank() },
-      { to: "/tv-display",         label: "TV display",  icon: iconDevice() },
     ],
   },
   {
