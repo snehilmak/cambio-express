@@ -57,33 +57,13 @@
 
 /* ── Merge confirmation modal ───────────────────────────── */
 
-.modalBackdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  z-index: 100;
-}
-
-.modalCard {
-  background: var(--db-surface-2, #141414);
-  border: 1px solid var(--db-border, #262626);
-  border-radius: 0.85rem;
-  padding: 1.5rem 1.75rem;
-  max-width: 36rem;
-  width: 100%;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
-}
-
-.modalTitle {
-  margin: 0 0 0.4rem;
-  font-family: var(--db-font-display, "Space Grotesk", sans-serif);
-  font-weight: 600;
-  font-size: 1.25rem;
-}
+/* `.modalBackdrop` + `.modalCard` + `.modalTitle` + `.modalActions`
+ * retired — modal chrome now comes from the kit <Modal> in
+ * components/ui/Modal.tsx (which also wires the title heading
+ * via the `title` prop, so .modalTitle has no remaining caller).
+ * `.modalLead` + `.modalGrid` + `.mergeColKept` / `.mergeColDropped`
+ * stay because they describe the merge-modal body content,
+ * not the chrome itself. */
 
 .modalLead {
   margin: 0 0 1.25rem;
@@ -145,12 +125,6 @@
 
 .mergeColDetails dd {
   margin: 0;
-}
-
-.modalActions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
 }
 
 @media (max-width: 640px) {

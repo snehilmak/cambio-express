@@ -10,8 +10,8 @@ import { ApiError, downloadCsv } from "../lib/api";
 import { getCurrentIdentity } from "../lib/auth";
 import { maskPhone } from "../lib/format";
 import {
-  Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input, PageHeader,
-  PageShell, Section, space, Table, tdStyle, thStyle,
+  Alert, Button, Card, Empty, EmptyState, ErrorState, Field, Input, Modal,
+  PageHeader, PageShell, Section, space, Table, tdStyle, thStyle,
 } from "../components/ui";
 import styles from "./Customers.module.css";
 
@@ -364,36 +364,14 @@ function MergeConfirmModal({
   onConfirm: () => void;
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="merge-modal-title"
-      className={styles.modalBackdrop}
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !busy) onCancel();
-      }}
-    >
-      <div className={styles.modalCard}>
-        <h2 id="merge-modal-title" className={styles.modalTitle}>
-          Merge customers
-        </h2>
-        <p className={styles.modalLead}>
-          This will re-point every transfer logged against the loser
-          to the winner, then delete the loser row. The action is
-          recorded in the operator audit log and can't be undone
-          from the UI.
-        </p>
-
-        <div className={styles.modalGrid}>
-          <MergeColumn label="Winner (kept)" customer={winner} kept />
-          <MergeColumn label="Loser (deleted)" customer={loser} kept={false} />
-        </div>
-
-        {error && (
-          <Alert tone="error">{error}</Alert>
-        )}
-
-        <div className={styles.modalActions}>
+    <Modal
+      open={true}
+      onClose={onCancel}
+      title="Merge customers"
+      size="lg"
+      disabled={busy}
+      actions={
+        <>
           <Button tone="secondary" onClick={onSwap} disabled={busy}>
             Swap winner / loser
           </Button>
@@ -404,9 +382,21 @@ function MergeConfirmModal({
           <Button tone="primary" busy={busy} disabled={busy} onClick={onConfirm}>
             {busy ? "Merging…" : "Merge"}
           </Button>
-        </div>
+        </>
+      }
+    >
+      <p className={styles.modalLead}>
+        This will re-point every transfer logged against the loser
+        to the winner, then delete the loser row. The action is
+        recorded in the operator audit log and can't be undone
+        from the UI.
+      </p>
+      <div className={styles.modalGrid}>
+        <MergeColumn label="Winner (kept)" customer={winner} kept />
+        <MergeColumn label="Loser (deleted)" customer={loser} kept={false} />
       </div>
-    </div>
+      {error && <Alert tone="error">{error}</Alert>}
+    </Modal>
   );
 }
 
