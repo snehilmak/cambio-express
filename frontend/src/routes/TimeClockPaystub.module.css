@@ -61,6 +61,13 @@
   color: var(--db-accent, #3fff00);
 }
 
+.shiftsWrap {
+  /* On phones the table has 5 columns of mono timestamps —
+     wider than the card.  Scroll horizontally inside the
+     card rather than push past the card edge. */
+  overflow-x: auto;
+}
+
 .shifts {
   width: 100%;
   border-collapse: collapse;

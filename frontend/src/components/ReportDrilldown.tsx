@@ -186,6 +186,7 @@ export function ReportDrilldown({
       )}
 
       {data && data.rows.length > 0 && (
+        <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
             <tr>
@@ -227,6 +228,7 @@ export function ReportDrilldown({
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </PageShell>
   );

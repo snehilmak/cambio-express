@@ -60,6 +60,13 @@
   margin: 0;
 }
 
+.tableWrap {
+  /* Reports drilldowns ship 4-8 column tables on average — wide
+     enough to bleed past the card edge on phones.  Scroll
+     horizontally inside the card rather than push past it. */
+  overflow-x: auto;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;

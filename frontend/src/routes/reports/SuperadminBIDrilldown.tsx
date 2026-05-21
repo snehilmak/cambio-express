@@ -251,6 +251,7 @@ export default function SuperadminBIDrilldown() {
               <ChartBlock rows={rows} title={title} />
             )}
             {effectiveMode !== "chart" && (
+              <div className={styles.tableWrap}>
               <table className={styles.table}>
           <thead>
             <tr>
@@ -283,6 +284,7 @@ export default function SuperadminBIDrilldown() {
             ))}
                 </tbody>
               </table>
+              </div>
             )}
           </>
         );

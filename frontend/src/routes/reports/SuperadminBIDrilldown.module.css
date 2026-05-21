@@ -56,6 +56,13 @@
   margin: 0;
 }
 
+.tableWrap {
+  /* BI drilldown tables on the superadmin side can run very wide
+     — N columns of metric values + a row label.  Scroll
+     horizontally inside the card on phones. */
+  overflow-x: auto;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
