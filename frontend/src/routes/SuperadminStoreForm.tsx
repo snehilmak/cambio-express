@@ -217,7 +217,7 @@ export default function SuperadminStoreForm() {
     <PageShell maxWidth="44rem">
       <div className={styles.headerRow}>
         <PageHeader title={heading} />
-        <ButtonLink href="/app/superadmin/stores" tone="secondary">
+        <ButtonLink to="/superadmin/stores" tone="secondary">
           ← Back to stores
         </ButtonLink>
       </div>
@@ -379,7 +379,7 @@ export default function SuperadminStoreForm() {
                 ? (isEdit ? "Saving…" : "Creating…")
                 : (isEdit ? "Save changes" : "Create store")}
             </Button>
-            <ButtonLink href="/app/superadmin/stores" tone="secondary">
+            <ButtonLink to="/superadmin/stores" tone="secondary">
               Cancel
             </ButtonLink>
           </div>

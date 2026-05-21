@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 import { fontSize, tokens } from "./tokens";
 
@@ -86,15 +87,28 @@ export function Button({
 }
 
 
-/** Anchor styled like a Button. For internal navigation, prefer
- *  wrapping ``<Button>`` in a ``<Link>`` instead (gets client-side
- *  routing); reach for ``<ButtonLink>`` when you need an ``href``
- *  for CSV downloads, external URLs, etc. */
+/** Button-styled link.  Renders as either an `<a>` or a React
+ *  Router `<Link>` depending on which prop you pass:
+ *
+ *    - `to`   → internal SPA route (client-side, no full reload).
+ *               React Router prefixes the SPA basename `/app` so
+ *               pass the path WITHOUT it (`to="/dashboard"`, not
+ *               `to="/app/dashboard"`).
+ *    - `href` → external URL or download (full HTTP request).
+ *               Use for CSV downloads, Stripe portal redirects,
+ *               or anything outside the SPA shell.
+ *
+ *  Exactly one of `to` or `href` must be set.  In dev, the
+ *  combination of both will type-error via the discriminated
+ *  union; in prod, `to` wins.
+ */
 export function ButtonLink({
-  tone = "secondary", children, href, style, className, size = "md", ...rest
+  tone = "secondary", children, to, href, style, className, size = "md",
+  ...rest
 }: {
   tone?: ButtonTone;
-  href: string;
+  to?: string;
+  href?: string;
   children: ReactNode;
   style?: CSSProperties;
   className?: string;
@@ -105,27 +119,38 @@ export function ButtonLink({
   const sizing = buttonSizing[size];
   const cls = ["ds-btn", `ds-btn--${tone}`];
   if (className) cls.push(className);
+  const sharedStyle: CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.4rem",
+    textDecoration: "none",
+    borderRadius: "0.5rem",
+    padding: sizing.padding,
+    minHeight: sizing.minHeight,
+    fontFamily: tokens.fontBody,
+    fontSize: sizing.fontSize,
+    fontWeight: tone === "primary" || tone === "danger" ? 600 : 500,
+    whiteSpace: "nowrap",
+    ...palette,
+    ...style,
+  };
+  // Prefer client-side routing when a SPA `to` is provided —
+  // avoids the full-page-reload flash that hurts perceived
+  // perf + drops React-Query / TanStack state on every nav.
+  if (to !== undefined) {
+    return (
+      <Link to={to} className={cls.join(" ")} style={sharedStyle}>
+        {children}
+      </Link>
+    );
+  }
   return (
     <a
       href={href}
       {...rest}
       className={cls.join(" ")}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "0.4rem",
-        textDecoration: "none",
-        borderRadius: "0.5rem",
-        padding: sizing.padding,
-        minHeight: sizing.minHeight,
-        fontFamily: tokens.fontBody,
-        fontSize: sizing.fontSize,
-        fontWeight: tone === "primary" || tone === "danger" ? 600 : 500,
-        whiteSpace: "nowrap",
-        ...palette,
-        ...style,
-      }}
+      style={sharedStyle}
     >
       {children}
     </a>

@@ -266,7 +266,7 @@ function SubscriptionCard() {
         secure billing portal. Trial stores can pick a plan instead.
       </p>
       <div className={styles.actionsRow}>
-        <ButtonLink href="/app/subscribe" tone="primary">
+        <ButtonLink to="/subscribe" tone="primary">
           Choose / change plan
         </ButtonLink>
         <Button

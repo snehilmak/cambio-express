@@ -65,7 +65,7 @@ function Activated({ plan }: { plan: string }) {
         Your account is active. You now have full access to all{" "}
         {planLabel} features.
       </p>
-      <ButtonLink href="/app/dashboard" tone="primary">
+      <ButtonLink to="/dashboard" tone="primary">
         Go to Dashboard →
       </ButtonLink>
     </>
@@ -86,7 +86,7 @@ function Pending() {
         automatically as soon as the upgrade lands.
       </p>
       <div className={styles.actions}>
-        <ButtonLink href="/app/dashboard" tone="primary">
+        <ButtonLink to="/dashboard" tone="primary">
           Go to Dashboard →
         </ButtonLink>
       </div>
