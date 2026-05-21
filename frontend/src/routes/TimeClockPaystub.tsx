@@ -131,10 +131,11 @@ export default function TimeClockPaystub() {
           </div>
         </div>
 
-        <table className={styles.shifts}>
-          <thead>
-            <tr>
-              <th>Time in</th>
+        <div className={styles.shiftsWrap}>
+          <table className={styles.shifts}>
+            <thead>
+              <tr>
+                <th>Time in</th>
               <th>Time out</th>
               <th>Hours</th>
               <th>Status</th>
@@ -175,7 +176,8 @@ export default function TimeClockPaystub() {
               </tr>
             ))}
           </tbody>
-        </table>
+          </table>
+        </div>
 
         <div className={styles.footer}>
           Only <strong>approved</strong> shifts count toward gross pay.
