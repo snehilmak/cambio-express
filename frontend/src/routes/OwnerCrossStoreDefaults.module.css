@@ -25,6 +25,7 @@
   align-items: center;
   gap: 0.85rem;
   margin-bottom: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .toolbarCount {
@@ -70,4 +71,6 @@
   display: flex;
   justify-content: flex-end;
   margin-top: 1rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
