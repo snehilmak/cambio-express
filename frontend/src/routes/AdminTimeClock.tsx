@@ -1,5 +1,4 @@
 import { Fragment, useMemo, useState, type FormEvent } from "react";
-import { createPortal } from "react-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -13,7 +12,7 @@ import { ApiError } from "../lib/api";
 import { formatTimestamp } from "../lib/datetime";
 import {
   Alert, Button, Card, EmptyState, ErrorState, Field, Input,
-  Loading, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
+  Loading, Modal, PageHeader, PageShell, Pill, RowActions, Select, space, Table,
   TableSkeleton, Textarea, tdStyle, thStyle,
 } from "../components/ui";
 import { getCurrentIdentity } from "../lib/auth";
@@ -518,94 +517,89 @@ function EntryModal({
     }
   }
 
-  // Portal to body — same reason as the ActionSheet above.
-  return createPortal(
-    <div className={styles.modalBackdrop} onClick={onClose}>
-      <div
-        className={styles.modalCard}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 style={{ margin: 0 }}>
-          {isEdit ? "Edit entry" : "New entry"}
-        </h2>
-        <form onSubmit={onSubmit}>
-          <div className={styles.modalGrid}>
-            <Field label="Roster name" style={{ gridColumn: "1 / -1" }}>
+  return (
+    <Modal
+      open={true}
+      onClose={onClose}
+      title={isEdit ? "Edit entry" : "New entry"}
+      disabled={busy}
+    >
+      <form onSubmit={onSubmit}>
+        <div className={styles.modalGrid}>
+          <Field label="Roster name" style={{ gridColumn: "1 / -1" }}>
+            <Select
+              value={empId === "" ? "" : String(empId)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEmpId(v === "" ? "" : Number(v));
+              }}
+              required
+              disabled={isEdit}   // can't reattribute on edit
+            >
+              <option value="">— pick a roster member —</option>
+              {roster.map((m) => (
+                <option key={m.id} value={m.id}>{m.name}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Clock in">
+            <Input
+              type="datetime-local" required
+              value={clockIn}
+              onChange={(e) => setClockIn(e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Clock out (optional)"
+            hint="Leave blank for an open / in-progress entry."
+          >
+            <Input
+              type="datetime-local"
+              value={clockOut}
+              onChange={(e) => setClockOut(e.target.value)}
+            />
+          </Field>
+          {isEdit && (
+            <Field
+              label="Status"
+              style={{ gridColumn: "1 / -1" }}
+              hint="Only approved hours count toward payroll totals."
+            >
               <Select
-                value={empId === "" ? "" : String(empId)}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEmpId(v === "" ? "" : Number(v));
-                }}
-                required
-                disabled={isEdit}   // can't reattribute on edit
+                value={status}
+                onChange={(e) =>
+                  setStatus(e.target.value as TimeClockStatus)}
               >
-                <option value="">— pick a roster member —</option>
-                {roster.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name}</option>
-                ))}
+                <option value="pending">pending</option>
+                <option value="approved">approved</option>
+                <option value="rejected">rejected</option>
               </Select>
             </Field>
-            <Field label="Clock in">
-              <Input
-                type="datetime-local" required
-                value={clockIn}
-                onChange={(e) => setClockIn(e.target.value)}
-              />
-            </Field>
-            <Field
-              label="Clock out (optional)"
-              hint="Leave blank for an open / in-progress entry."
-            >
-              <Input
-                type="datetime-local"
-                value={clockOut}
-                onChange={(e) => setClockOut(e.target.value)}
-              />
-            </Field>
-            {isEdit && (
-              <Field
-                label="Status"
-                style={{ gridColumn: "1 / -1" }}
-                hint="Only approved hours count toward payroll totals."
-              >
-                <Select
-                  value={status}
-                  onChange={(e) =>
-                    setStatus(e.target.value as TimeClockStatus)}
-                >
-                  <option value="pending">pending</option>
-                  <option value="approved">approved</option>
-                  <option value="rejected">rejected</option>
-                </Select>
-              </Field>
-            )}
-            <Field label="Notes" style={{ gridColumn: "1 / -1" }}>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                maxLength={500}
-                placeholder="Why this entry was back-filled / edited."
-              />
-            </Field>
-          </div>
-          {err && <Alert tone="error">{err}</Alert>}
-          <div className={styles.modalActions} style={{ marginTop: space.md }}>
-            <Button
-              type="button" tone="secondary"
-              onClick={onClose} disabled={busy}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" busy={busy} disabled={busy}>
-              {isEdit ? "Save changes" : "Create entry"}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body,
+          )}
+          <Field label="Notes" style={{ gridColumn: "1 / -1" }}>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={2}
+              maxLength={500}
+              placeholder="Why this entry was back-filled / edited."
+            />
+          </Field>
+        </div>
+        {err && <Alert tone="error">{err}</Alert>}
+        <div className={styles.modalActions} style={{ marginTop: space.md }}>
+          <Button
+            type="button" tone="secondary"
+            onClick={onClose} disabled={busy}
+          >
+            Cancel
+          </Button>
+          <Button type="submit" busy={busy} disabled={busy}>
+            {isEdit ? "Save changes" : "Create entry"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
